@@ -1,2 +1,3 @@
-// See the Electron documentation for details on how to use preload scripts:
-// https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
+// Electron Forge preload entry point.
+// Delegates to src/preload/preload.ts for actual implementation.
+import './preload/preload';

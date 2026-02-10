@@ -99,3 +99,19 @@ export interface DiffLoadPayload {
 export interface ResumeLoadPayload {
   comments: ReviewComment[];
 }
+
+// ===== Electron API (preload bridge) =====
+
+export interface ElectronAPI {
+  onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => void;
+  onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
+  onConfigLoad: (callback: (payload: AppConfig) => void) => void;
+  submitReview: (state: ReviewState) => void;
+  onRequestReview: (callback: () => void) => void;
+}
+
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI;
+  }
+}
