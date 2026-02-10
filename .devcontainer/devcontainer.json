@@ -1,0 +1,76 @@
+{
+  "name": "Claude Code Sandbox",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "BASE_IMAGE": "node:22",
+      "TZ": "${localEnv:TZ:Europe/Madrid}",
+      "CLAUDE_CODE_VERSION": "latest",
+      "GEMINI_VERSION": "latest",
+      "GIT_DELTA_VERSION": "0.18.2",
+      "ZSH_IN_DOCKER_VERSION": "1.2.0"
+    }
+  },
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "bash",
+            "icon": "terminal-bash"
+          },
+          "zsh": {
+            "path": "zsh"
+          }
+        }
+      }
+    },
+    "phpstorm": {
+      "plugins": [
+        "com.anthropic.code.plugin",
+        "IdeaVIM",
+        "org.jetbrains.IdeaVim-EasyMotion",
+        "org.jetbrains.plugins.github",
+        "com.github.continuedev.continueintellijextension"
+      ]
+    }
+  },
+  "remoteUser": "node",
+  "mounts": [
+    "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=${localEnv:HOME}/.claude/CLAUDE.md,target=/home/node/.claude/CLAUDE.md,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude.json,target=/home/node/.claude.json,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude/settings.json,target=/home/node/.claude/settings.json,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude/skills,target=/home/node/.claude/skills,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude/hooks,target=/home/node/.claude/hooks,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.config/gh/hosts.yml,target=/home/node/.config/gh/hosts.yml,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.gitconfig,target=/home/node/.gitconfig,type=bind,consistency=cached",
+    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+  ],
+  "containerEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+    "SSH_AUTH_SOCK": "/ssh-agent",
+    "LC_ALL": "C.UTF-8"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+  "postCreateCommand": "sudo chown -R node:node /home/node/.claude || true",
+  "waitFor": "postStartCommand"
+}
