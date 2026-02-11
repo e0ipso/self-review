@@ -64,11 +64,11 @@ categories:
 
 - `theme`: light, dark, or system (default: system)
 - `diff-view`: split or unified (default: split)
-- `prism-theme`: syntax highlighting theme name (default: one-dark)
 - `font-size`: editor font size in pixels (default: 14)
 - `ignore`: file patterns to exclude from diff (glob syntax)
 - `categories`: custom comment tags (see example above)
 - `default-diff-args`: default arguments passed to `git diff`
+- `show-untracked`: show new files not yet added to git (default: true)
 
 See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 

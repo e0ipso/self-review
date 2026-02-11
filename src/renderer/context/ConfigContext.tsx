@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { AppConfig } from '../../shared/types';
+import lightThemeCss from 'prismjs/themes/prism.css?raw';
+import darkThemeCss from 'prism-themes/themes/prism-one-dark.css?raw';
 
 const defaultConfig: AppConfig = {
   theme: 'system',
   diffView: 'split',
-  prismTheme: 'one-dark',
   fontSize: 14,
   outputFormat: 'xml',
   ignore: [],
@@ -16,6 +17,7 @@ const defaultConfig: AppConfig = {
     { name: 'nit', description: 'Minor nitpick, low priority', color: '#718096' },
   ],
   defaultDiffArgs: '--staged',
+  showUntracked: true,
 };
 
 interface ConfigContextValue {
@@ -45,24 +47,34 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
     setConfig((prev) => ({ ...prev, ...updates }));
   };
 
-  // Apply theme to document element
+  // Apply theme to document element and swap Prism syntax theme
   useEffect(() => {
-    const applyTheme = (theme: 'light' | 'dark' | 'system') => {
-      if (theme === 'system') {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.classList.toggle('dark', prefersDark);
-      } else {
-        document.documentElement.classList.toggle('dark', theme === 'dark');
+    const applyTheme = (isDark: boolean) => {
+      document.documentElement.classList.toggle('dark', isDark);
+
+      let styleEl = document.getElementById('prism-theme') as HTMLStyleElement | null;
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'prism-theme';
+        document.head.appendChild(styleEl);
       }
+      styleEl.textContent = isDark ? darkThemeCss : lightThemeCss;
     };
 
-    applyTheme(config.theme);
+    const resolveIsDark = (theme: 'light' | 'dark' | 'system') => {
+      if (theme === 'system') {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      return theme === 'dark';
+    };
+
+    applyTheme(resolveIsDark(config.theme));
 
     // Listen for system theme changes when in system mode
     if (config.theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const listener = (e: MediaQueryListEvent) => {
-        document.documentElement.classList.toggle('dark', e.matches);
+        applyTheme(e.matches);
       };
       mediaQuery.addEventListener('change', listener);
       return () => mediaQuery.removeEventListener('change', listener);

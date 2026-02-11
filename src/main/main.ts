@@ -3,7 +3,7 @@
 
 import { app, BrowserWindow } from 'electron';
 import { parseCliArgs, checkEarlyExit } from './cli';
-import { runGitDiffAsync, getRepoRootAsync, validateGitAvailable } from './git';
+import { runGitDiffAsync, getRepoRootAsync, validateGitAvailable, getUntrackedFilesAsync, generateUntrackedDiffs } from './git';
 import { parseDiff } from './diff-parser';
 import { loadConfig } from './config';
 import { parseReviewXml } from './xml-parser';
@@ -122,9 +122,27 @@ async function initializeApp() {
     const files = parseDiff(rawDiff);
     console.error('[main] Diff parsed:', files.length, 'files');
 
+    // Phase 6b: Fetch and parse untracked files
+    console.error('[main] Fetching untracked files');
+    const untrackedPaths = await getUntrackedFilesAsync();
+    console.error('[main] Found', untrackedPaths.length, 'untracked files');
+
+    let allFiles = files;
+    if (untrackedPaths.length > 0) {
+      const untrackedDiffStr = generateUntrackedDiffs(untrackedPaths, repository);
+      if (untrackedDiffStr.length > 0) {
+        const untrackedFiles = parseDiff(untrackedDiffStr);
+        for (const file of untrackedFiles) {
+          file.isUntracked = true;
+        }
+        allFiles = [...files, ...untrackedFiles];
+        console.error('[main] Added', untrackedFiles.length, 'untracked file diffs');
+      }
+    }
+
     // Store diff data for sending to renderer
     diffData = {
-      files,
+      files: allFiles,
       gitDiffArgs: gitDiffArgs.join(' '),
       repository,
     };

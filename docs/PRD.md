@@ -317,6 +317,7 @@ A top toolbar provides global controls:
 |---------|------|-------------|
 | View mode toggle | Segmented button | Switch between Split and Unified diff views |
 | Expand/Collapse all | Button | Expand or collapse all file sections at once |
+| Show/hide untracked | Toggle button | Show or hide untracked files (new files not yet added to git). Default: on. |
 | Diff stats summary | Text | Shows total files changed, additions (+N in green), and deletions (-N in red). Computed from the parsed diff data. |
 | Theme toggle | Button or dropdown | Switch between Light, Dark, and System theme |
 
@@ -457,6 +458,9 @@ font-size: 14
 
 # Default output format (reserved for future multi-format support)
 output-format: xml
+
+# Show untracked files in the diff viewer: true or false
+show-untracked: true
 ```
 
 ### 7.4 Project-Level Configuration
@@ -493,6 +497,9 @@ categories:
 
 # Default git diff arguments for this project
 default-diff-args: "--staged"
+
+# Show untracked files (new files not yet added to git): true or false
+show-untracked: true
 ```
 
 ### 7.5 Configuration Validation
@@ -535,6 +542,8 @@ The CLI runs `git diff` as a child process with the arguments provided by the us
 # Internal execution (simplified)
 const diffOutput = execSync(`git diff ${userArgs.join(' ')}`, { cwd: process.cwd() });
 ```
+
+In addition to tracked changes, the application discovers **untracked files** (new files not yet added to git) via `git ls-files --others --exclude-standard`. For each untracked file, a synthetic unified diff is generated showing all lines as additions. These files are tagged with `isUntracked` internally and can be shown or hidden via a toolbar toggle (default: on) or the `show-untracked` configuration option. Untracked files respect `.gitignore` rules.
 
 ### 9.2 Diff Parsing
 

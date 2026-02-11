@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
 import type {
   DiffFile,
   DiffLoadPayload,
@@ -9,6 +9,7 @@ import type {
   Suggestion,
 } from '../../shared/types';
 import { useReviewState } from '../hooks/useReviewState';
+import { useConfig } from './ConfigContext';
 
 export interface ReviewContextValue {
   files: FileReviewState[];
@@ -43,11 +44,18 @@ interface ReviewProviderProps {
 }
 
 export function ReviewProvider({ children }: ReviewProviderProps) {
-  const [diffFiles, setDiffFiles] = useState<DiffFile[]>([]);
+  const [allDiffFiles, setAllDiffFiles] = useState<DiffFile[]>([]);
   const [gitDiffArgs, setGitDiffArgs] = useState<string>('');
   const [repository, setRepository] = useState<string>('');
+  const { config } = useConfig();
 
   const reviewState = useReviewState();
+
+  // Filter files based on showUntracked toggle
+  const diffFiles = useMemo(() => {
+    if (config.showUntracked) return allDiffFiles;
+    return allDiffFiles.filter((file) => !file.isUntracked);
+  }, [allDiffFiles, config.showUntracked]);
 
   // Create refs for IPC listener closure
   const gitDiffArgsRef = useRef(gitDiffArgs);
@@ -59,10 +67,10 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
   useEffect(() => { repositoryRef.current = repository; }, [repository]);
   useEffect(() => { filesRef.current = reviewState.files; }, [reviewState.files]);
 
-  // When diffFiles change, initialize FileReviewState
+  // When allDiffFiles change, initialize FileReviewState for all files
   useEffect(() => {
-    if (diffFiles.length > 0) {
-      const fileStates: FileReviewState[] = diffFiles.map((file) => ({
+    if (allDiffFiles.length > 0) {
+      const fileStates: FileReviewState[] = allDiffFiles.map((file) => ({
         path: file.newPath || file.oldPath,
         changeType: file.changeType,
         viewed: false,
@@ -70,7 +78,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
       }));
       reviewState.setFiles(fileStates);
     }
-  }, [diffFiles]);
+  }, [allDiffFiles]);
 
   // Register IPC listeners ONCE and request initial data
   useEffect(() => {
@@ -78,7 +86,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
 
     // Set up listeners first
     window.electronAPI.onDiffLoad((payload: DiffLoadPayload) => {
-      setDiffFiles(payload.files);
+      setAllDiffFiles(payload.files);
       setGitDiffArgs(payload.gitDiffArgs);
       setRepository(payload.repository);
 
@@ -131,7 +139,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
       value={{
         files: reviewState.files,
         diffFiles,
-        setDiffFiles,
+        setDiffFiles: setAllDiffFiles,
         addComment: reviewState.addComment,
         editComment: reviewState.updateComment,
         deleteComment: reviewState.deleteComment,

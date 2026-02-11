@@ -30,6 +30,7 @@ export interface DiffFile {
   changeType: ChangeType;
   isBinary: boolean;
   hunks: DiffHunk[];
+  isUntracked?: boolean;
 }
 
 // ===== Review State Types =====
@@ -80,12 +81,12 @@ export interface CategoryDef {
 export interface AppConfig {
   theme: 'light' | 'dark' | 'system';
   diffView: 'split' | 'unified';
-  prismTheme: string;
   fontSize: number;
   outputFormat: string;
   ignore: string[];
   categories: CategoryDef[];
   defaultDiffArgs: string;
+  showUntracked: boolean;
 }
 
 // ===== IPC Payload Types =====

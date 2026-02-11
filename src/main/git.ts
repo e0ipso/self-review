@@ -3,6 +3,7 @@
 
 import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
+import { readFileSync } from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -115,4 +116,84 @@ export async function runGitDiffAsync(args: string[]): Promise<string> {
     }
     throw error;
   }
+}
+
+/**
+ * Get list of untracked files (respects .gitignore).
+ */
+export async function getUntrackedFilesAsync(): Promise<string[]> {
+  try {
+    const { stdout } = await execAsync('git ls-files --others --exclude-standard', {
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 10000,
+    });
+    return stdout.trim().split('\n').filter((line) => line.length > 0);
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(`Warning: Failed to list untracked files: ${error.message}`);
+    } else {
+      console.error('Warning: Failed to list untracked files: unknown error');
+    }
+    return [];
+  }
+}
+
+/**
+ * Generate synthetic unified diffs for untracked files so they can be
+ * parsed by the existing diff parser.
+ */
+export function generateUntrackedDiffs(paths: string[], repoRoot: string): string {
+  const diffs: string[] = [];
+
+  for (const filePath of paths) {
+    const fullPath = `${repoRoot}/${filePath}`;
+    let content: Buffer;
+    try {
+      content = readFileSync(fullPath);
+    } catch {
+      // File may have been deleted between listing and reading
+      continue;
+    }
+
+    // Detect binary files by checking for null bytes in the first 8KB
+    const sample = content.subarray(0, 8192);
+    const isBinary = sample.includes(0);
+
+    if (isBinary) {
+      diffs.push(
+        `diff --git a/${filePath} b/${filePath}\n` +
+        `new file mode 100644\n` +
+        `Binary files /dev/null and b/${filePath} differ`
+      );
+      continue;
+    }
+
+    const text = content.toString('utf-8');
+    const lines = text.split('\n');
+
+    // Remove trailing empty string from split if file ends with newline
+    if (lines.length > 0 && lines[lines.length - 1] === '') {
+      lines.pop();
+    }
+
+    const lineCount = lines.length;
+    const addedLines = lines.map((line) => `+${line}`).join('\n');
+
+    let diff =
+      `diff --git a/${filePath} b/${filePath}\n` +
+      `new file mode 100644\n` +
+      `--- /dev/null\n` +
+      `+++ b/${filePath}\n` +
+      `@@ -0,0 +1,${lineCount} @@\n` +
+      addedLines;
+
+    // Indicate missing newline at end of file
+    if (text.length > 0 && !text.endsWith('\n')) {
+      diff += '\n\\ No newline at end of file';
+    }
+
+    diffs.push(diff);
+  }
+
+  return diffs.join('\n');
 }

@@ -10,7 +10,6 @@ import { AppConfig } from '../shared/types';
 const defaults: AppConfig = {
   theme: 'system',
   diffView: 'split',
-  prismTheme: 'one-dark',
   fontSize: 14,
   outputFormat: 'xml',
   ignore: [],
@@ -22,6 +21,7 @@ const defaults: AppConfig = {
     { name: 'nit', description: 'Minor nitpick, low priority', color: '#718096' },
   ],
   defaultDiffArgs: '',
+  showUntracked: true,
 };
 
 export function loadConfig(): AppConfig {
@@ -79,10 +79,6 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     }
   }
 
-  if ('prism-theme' in raw && typeof raw['prism-theme'] === 'string') {
-    config.prismTheme = raw['prism-theme'];
-  }
-
   if ('font-size' in raw && typeof raw['font-size'] === 'number') {
     config.fontSize = raw['font-size'];
   }
@@ -108,6 +104,10 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
 
   if ('default-diff-args' in raw && typeof raw['default-diff-args'] === 'string') {
     config.defaultDiffArgs = raw['default-diff-args'];
+  }
+
+  if ('show-untracked' in raw && typeof raw['show-untracked'] === 'boolean') {
+    config.showUntracked = raw['show-untracked'];
   }
 
   return config;

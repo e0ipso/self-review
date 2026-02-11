@@ -15,6 +15,8 @@ import {
   ChevronsUpDown,
   MessageSquare,
   MessageSquareOff,
+  FilePlus2,
+  FileX,
 } from 'lucide-react';
 
 export default function Toolbar() {
@@ -126,6 +128,28 @@ export default function Toolbar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent>{allCommentsCollapsed ? 'Expand all comments' : 'Collapse all comments'}</TooltipContent>
+        </Tooltip>
+
+        <Separator orientation="vertical" className="h-5" />
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid="toggle-untracked-btn"
+              onClick={() => updateConfig({ showUntracked: !config.showUntracked })}
+              className="gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground"
+            >
+              {config.showUntracked ? (
+                <FileX className="h-3.5 w-3.5" />
+              ) : (
+                <FilePlus2 className="h-3.5 w-3.5" />
+              )}
+              <span className="text-xs">{config.showUntracked ? 'Hide' : 'Show'} New Files</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{config.showUntracked ? 'Hide new files not yet in git' : 'Show new files not yet in git'}</TooltipContent>
         </Tooltip>
       </div>
 
