@@ -5,12 +5,6 @@ import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
-import {
   Columns2,
   AlignJustify,
   Sun,
@@ -89,34 +83,41 @@ export default function Toolbar() {
         </Button>
       </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" data-testid="theme-selector">
-            {config.theme === 'dark' ? (
-              <Moon className="h-4 w-4" />
-            ) : config.theme === 'light' ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Monitor className="h-4 w-4" />
-            )}
-            <span className="sr-only">Toggle theme</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="theme-option-light" onClick={() => handleThemeChange('light')}>
-            <Sun className="h-4 w-4 mr-2" />
-            Light
-          </DropdownMenuItem>
-          <DropdownMenuItem data-testid="theme-option-dark" onClick={() => handleThemeChange('dark')}>
-            <Moon className="h-4 w-4 mr-2" />
-            Dark
-          </DropdownMenuItem>
-          <DropdownMenuItem data-testid="theme-option-system" onClick={() => handleThemeChange('system')}>
-            <Monitor className="h-4 w-4 mr-2" />
-            System
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        value={config.theme}
+        onValueChange={(value) => value && handleThemeChange(value as 'light' | 'dark' | 'system')}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ToggleGroupItem value="light" data-testid="theme-option-light" className="h-8 w-8 p-0">
+              <Sun className="h-3.5 w-3.5" />
+              <span className="sr-only">Light theme</span>
+            </ToggleGroupItem>
+          </TooltipTrigger>
+          <TooltipContent>Light theme</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ToggleGroupItem value="dark" data-testid="theme-option-dark" className="h-8 w-8 p-0">
+              <Moon className="h-3.5 w-3.5" />
+              <span className="sr-only">Dark theme</span>
+            </ToggleGroupItem>
+          </TooltipTrigger>
+          <TooltipContent>Dark theme</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ToggleGroupItem value="system" data-testid="theme-option-system" className="h-8 w-8 p-0">
+              <Monitor className="h-3.5 w-3.5" />
+              <span className="sr-only">System theme</span>
+            </ToggleGroupItem>
+          </TooltipTrigger>
+          <TooltipContent>System theme</TooltipContent>
+        </Tooltip>
+      </ToggleGroup>
     </div>
   );
 }

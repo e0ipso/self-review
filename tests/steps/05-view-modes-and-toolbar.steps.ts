@@ -41,7 +41,6 @@ When(
 
 When('I switch the theme to {string} in the toolbar', async ({}, theme: string) => {
   const page = getPage();
-  await page.locator('[data-testid="theme-selector"]').click();
   await page.locator(`[data-testid="theme-option-${theme.toLowerCase()}"]`).click();
 });
 
