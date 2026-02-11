@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { DiffFile, LineRange } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
-import { ChevronDown, ChevronRight, MessageSquare, Plus } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { ChevronDown, ChevronRight, MessageSquare, Eye, EyeOff } from 'lucide-react';
 import SplitView from './SplitView';
 import UnifiedView from './UnifiedView';
 import CommentInput from '../Comments/CommentInput';
@@ -19,7 +20,7 @@ export interface FileSectionProps {
 }
 
 export default function FileSection({ file, viewMode, expanded: controlledExpanded, onToggleExpanded }: FileSectionProps) {
-  const { toggleViewed, getCommentsForFile } = useReview();
+  const { toggleViewed, getCommentsForFile, files } = useReview();
   const [internalExpanded, setInternalExpanded] = useState(true);
   const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
   const [commentingLine, setCommentingLine] = useState<{ lineNumber: number; side: 'old' | 'new' } | null>(null);
@@ -29,6 +30,27 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
   const filePath = file.newPath || file.oldPath;
   const comments = getCommentsForFile(filePath);
   const fileComments = comments.filter((c) => c.lineRange === null);
+  const fileState = files.find((f) => f.path === filePath);
+  const isViewed = fileState?.viewed || false;
+
+  // Sync viewed state with expansion: when viewed is checked, collapse the file
+  useEffect(() => {
+    if (isViewed && expanded && onToggleExpanded) {
+      onToggleExpanded(filePath);
+    }
+  }, [isViewed]);
+
+  const handleViewedToggle = () => {
+    toggleViewed(filePath);
+    // If checking as viewed, collapse the file
+    if (!isViewed && expanded && onToggleExpanded) {
+      onToggleExpanded(filePath);
+    }
+    // If unchecking viewed, expand the file
+    if (isViewed && !expanded && onToggleExpanded) {
+      onToggleExpanded(filePath);
+    }
+  };
 
   const handleLineClick = (lineNumber: number, side: 'old' | 'new') => {
     setCommentingLine({ lineNumber, side });
@@ -133,33 +155,49 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
 
         <Separator orientation="vertical" className="h-5" />
 
-        {/* Viewed checkbox */}
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            id={`viewed-${filePath}`}
-            data-testid={`viewed-${filePath}`}
-            onCheckedChange={() => toggleViewed(filePath)}
-            className="h-3.5 w-3.5"
-          />
-          <label htmlFor={`viewed-${filePath}`} className="text-xs text-muted-foreground cursor-pointer">
-            Viewed
-          </label>
-        </div>
+        {/* Viewed toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid={`viewed-${filePath}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleViewedToggle();
+              }}
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+            >
+              {isViewed ? (
+                <Eye className="h-3.5 w-3.5" />
+              ) : (
+                <EyeOff className="h-3.5 w-3.5" />
+              )}
+              <span className="sr-only">{isViewed ? 'Viewed' : 'Mark as viewed'}</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{isViewed ? 'Mark as unviewed' : 'Mark as viewed'}</TooltipContent>
+        </Tooltip>
 
         {/* Add file comment */}
-        <Button
-          variant="ghost"
-          size="sm"
-          data-testid={`add-file-comment-${filePath}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleAddFileComment();
-          }}
-          className="h-7 px-2 gap-1 text-muted-foreground hover:text-foreground"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          <span className="text-xs">Comment</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid={`add-file-comment-${filePath}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddFileComment();
+              }}
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span className="sr-only">Add comment</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add file comment</TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Body */}
@@ -189,6 +227,10 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
           {file.isBinary ? (
             <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
               Binary file — no diff available
+            </div>
+          ) : file.hunks.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              No changes to display
             </div>
           ) : viewMode === 'split' ? (
             <SplitView

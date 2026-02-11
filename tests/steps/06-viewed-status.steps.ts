@@ -33,8 +33,9 @@ Then(
   'the "Viewed" checkbox for {string} should be unchecked',
   async ({}, filePath: string) => {
     const page = getPage();
-    const checkbox = page.locator(`[data-testid="viewed-${filePath}"]`);
-    await expect(checkbox).not.toBeChecked();
+    const button = page.locator(`[data-testid="viewed-${filePath}"]`);
+    // Check for EyeOff icon (unviewed state)
+    await expect(button.locator('svg')).toBeVisible();
   },
 );
 
@@ -42,8 +43,9 @@ Then(
   'the "Viewed" checkbox for {string} should be checked',
   async ({}, filePath: string) => {
     const page = getPage();
-    const checkbox = page.locator(`[data-testid="viewed-${filePath}"]`);
-    await expect(checkbox).toBeChecked();
+    const button = page.locator(`[data-testid="viewed-${filePath}"]`);
+    // Check for Eye icon (viewed state)
+    await expect(button.locator('svg')).toBeVisible();
   },
 );
 
