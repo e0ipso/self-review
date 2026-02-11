@@ -6,6 +6,7 @@ import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import CommentInput from './CommentInput';
 import SuggestionBlock from './SuggestionBlock';
@@ -94,18 +95,35 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
             </span>
           )}
           {comment.category && (
-            <Badge
-              variant="secondary"
-              className="category-badge h-5 px-1.5 text-[10px] font-medium"
-              style={{
-                backgroundColor: categoryDef?.color ? `${categoryDef.color}20` : undefined,
-                color: categoryDef?.color || undefined,
-                borderColor: categoryDef?.color ? `${categoryDef.color}40` : undefined,
-                borderWidth: '1px',
-              }}
-            >
-              {comment.category}
-            </Badge>
+            categoryDef ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="secondary"
+                    className="category-badge h-5 px-1.5 text-[10px] font-medium"
+                    style={{
+                      backgroundColor: `${categoryDef.color}20`,
+                      color: categoryDef.color,
+                      borderColor: `${categoryDef.color}40`,
+                      borderWidth: '1px',
+                    }}
+                  >
+                    {comment.category}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {categoryDef.description}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Badge
+                variant="secondary"
+                className="category-badge h-5 px-1.5 text-[10px] font-medium"
+                style={{ borderWidth: '1px' }}
+              >
+                {comment.category}
+              </Badge>
+            )
           )}
           {comment.orphaned && (
             <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-orange-500/15 text-orange-600 dark:text-orange-400">

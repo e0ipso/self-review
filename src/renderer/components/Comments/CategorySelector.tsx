@@ -1,12 +1,7 @@
 import React from 'react';
 import { useConfig } from '../../context/ConfigContext';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
+import { Button } from '../ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 
 export interface CategorySelectorProps {
   value: string | null;
@@ -21,29 +16,39 @@ export default function CategorySelector({ value, onChange }: CategorySelectorPr
   }
 
   return (
-    <div data-testid="category-selector">
-      <Select
-        value={value || 'none'}
-        onValueChange={(val) => onChange(val === 'none' ? null : val)}
-      >
-        <SelectTrigger className="h-7 w-[160px] text-xs">
-          <SelectValue placeholder="Category" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none" className="text-xs">No category</SelectItem>
-          {config.categories.map((cat) => (
-            <SelectItem key={cat.name} value={cat.name} data-testid={`category-option-${cat.name}`} className="text-xs">
-              <div className="flex items-center gap-2">
-                <div
+    <div data-testid="category-selector" className="flex items-center gap-1">
+      {config.categories.map((cat) => {
+        const isActive = value === cat.name;
+        return (
+          <Tooltip key={cat.name}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                data-testid={`category-option-${cat.name}`}
+                onClick={() => onChange(isActive ? null : cat.name)}
+                className="h-7 px-2 text-xs gap-1.5"
+                style={isActive ? {
+                  backgroundColor: `${cat.color}20`,
+                  color: cat.color,
+                  borderColor: `${cat.color}40`,
+                  borderWidth: '1px',
+                } : undefined}
+              >
+                <span
                   className="h-2 w-2 rounded-full flex-shrink-0"
                   style={{ backgroundColor: cat.color }}
                 />
                 {cat.name}
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {cat.description}
+            </TooltipContent>
+          </Tooltip>
+        );
+      })}
     </div>
   );
 }
