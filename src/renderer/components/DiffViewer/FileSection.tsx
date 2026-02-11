@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { DiffFile } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
-import { Checkbox } from '../ui/checkbox';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
@@ -32,6 +31,34 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
   const fileComments = comments.filter((c) => c.lineRange === null);
   const fileState = files.find((f) => f.path === filePath);
   const isViewed = fileState?.viewed || false;
+
+  // Build lookup map for hunk boundaries (line number + side -> hunk bounds)
+  const hunkLineMap = useMemo(() => {
+    const map = new Map<string, { hunkIndex: number; minLine: number; maxLine: number }>();
+    file.hunks.forEach((hunk, hunkIndex) => {
+      let minOld = Infinity, maxOld = -Infinity;
+      let minNew = Infinity, maxNew = -Infinity;
+      for (const line of hunk.lines) {
+        if (line.oldLineNumber !== null) {
+          minOld = Math.min(minOld, line.oldLineNumber);
+          maxOld = Math.max(maxOld, line.oldLineNumber);
+        }
+        if (line.newLineNumber !== null) {
+          minNew = Math.min(minNew, line.newLineNumber);
+          maxNew = Math.max(maxNew, line.newLineNumber);
+        }
+      }
+      for (const line of hunk.lines) {
+        if (line.oldLineNumber !== null) {
+          map.set(`old-${line.oldLineNumber}`, { hunkIndex, minLine: minOld, maxLine: maxOld });
+        }
+        if (line.newLineNumber !== null) {
+          map.set(`new-${line.newLineNumber}`, { hunkIndex, minLine: minNew, maxLine: maxNew });
+        }
+      }
+    });
+    return map;
+  }, [file]);
 
   // Sync viewed state with expansion: when viewed is checked, collapse the file
   useEffect(() => {
@@ -70,18 +97,55 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
     setDragState({ startLine: lineNumber, currentLine: lineNumber, side });
   };
 
-  const handleDragMove = (lineNumber: number) => {
-    setDragState(prev => prev ? { ...prev, currentLine: lineNumber } : null);
-  };
+  const handleDragMove = useCallback((lineNumber: number, side: 'old' | 'new') => {
+    if (!dragState || dragState.side !== side) return;
 
-  const handleDragEnd = (lineNumber: number, side: 'old' | 'new') => {
-    if (dragState && dragState.side === side) {
-      const start = Math.min(dragState.startLine, lineNumber);
-      const end = Math.max(dragState.startLine, lineNumber);
-      handleCommentRange(start, end, side);
+    // Clamp to same hunk
+    const startKey = `${dragState.side}-${dragState.startLine}`;
+    const hunkInfo = hunkLineMap.get(startKey);
+    if (!hunkInfo) return;
+
+    const clampedLine = Math.max(hunkInfo.minLine, Math.min(hunkInfo.maxLine, lineNumber));
+    setDragState(prev => prev ? { ...prev, currentLine: clampedLine } : null);
+  }, [dragState, hunkLineMap]);
+
+  const handleDragEnd = useCallback(() => {
+    if (dragState) {
+      const start = Math.min(dragState.startLine, dragState.currentLine);
+      const end = Math.max(dragState.startLine, dragState.currentLine);
+      handleCommentRange(start, end, dragState.side);
     }
     setDragState(null);
-  };
+  }, [dragState]);
+
+  // Document-level listeners for drag
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      const lineEl = target?.closest('[data-line-number]') as HTMLElement | null;
+      if (lineEl) {
+        const lineNumber = parseInt(lineEl.getAttribute('data-line-number')!, 10);
+        const side = lineEl.getAttribute('data-line-side') as 'old' | 'new';
+        if (!isNaN(lineNumber) && side === dragState.side) {
+          handleDragMove(lineNumber, side);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      handleDragEnd();
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragState, hunkLineMap, handleDragMove, handleDragEnd]);
 
   const handleAddFileComment = () => {
     setShowingFileComment(true);
@@ -123,7 +187,7 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
   const changeLabel = file.changeType.charAt(0).toUpperCase() + file.changeType.slice(1);
 
   return (
-    <div className="border-b border-border" data-file-path={filePath} data-testid={`file-section-${filePath}`}>
+    <div className={`border-b border-border${dragState ? ' select-none' : ''}`} data-file-path={filePath} data-testid={`file-section-${filePath}`}>
       {/* Header */}
       <div
         className="sticky top-0 z-10 flex items-center gap-2 h-10 px-3 bg-muted/50 backdrop-blur-sm border-b border-border cursor-pointer select-none"
@@ -253,10 +317,7 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
               file={file}
               commentRange={commentRange}
               dragState={dragState}
-              onCommentRange={handleCommentRange}
               onDragStart={handleDragStart}
-              onDragMove={handleDragMove}
-              onDragEnd={handleDragEnd}
               onCancelComment={handleCancelComment}
               onCommentSaved={handleCommentSaved}
             />
@@ -265,10 +326,7 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
               file={file}
               commentRange={commentRange}
               dragState={dragState}
-              onCommentRange={handleCommentRange}
               onDragStart={handleDragStart}
-              onDragMove={handleDragMove}
-              onDragEnd={handleDragEnd}
               onCancelComment={handleCancelComment}
               onCommentSaved={handleCommentSaved}
             />

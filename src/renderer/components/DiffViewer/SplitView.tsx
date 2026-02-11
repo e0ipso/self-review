@@ -11,10 +11,7 @@ export interface SplitViewProps {
   file: DiffFile;
   commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
   dragState: { startLine: number; currentLine: number; side: 'old' | 'new' } | null;
-  onCommentRange: (start: number, end: number, side: 'old' | 'new') => void;
   onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
-  onDragMove: (lineNumber: number) => void;
-  onDragEnd: (lineNumber: number, side: 'old' | 'new') => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
 }
@@ -28,10 +25,7 @@ export default function SplitView({
   file,
   commentRange,
   dragState,
-  onCommentRange,
   onDragStart,
-  onDragMove,
-  onDragEnd,
   onCancelComment,
   onCommentSaved,
 }: SplitViewProps) {
@@ -111,9 +105,10 @@ export default function SplitView({
           {lineNumber && (
             <button
               className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover/gutter:opacity-100 transition-opacity text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
-              onClick={(e) => {
+              onMouseDown={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                onCommentRange(lineNumber, lineNumber, side);
+                onDragStart(lineNumber, side);
               }}
               data-testid={`comment-icon-${side}-${lineNumber}`}
             >

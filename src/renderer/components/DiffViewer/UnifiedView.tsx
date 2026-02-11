@@ -11,10 +11,7 @@ export interface UnifiedViewProps {
   file: DiffFile;
   commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
   dragState: { startLine: number; currentLine: number; side: 'old' | 'new' } | null;
-  onCommentRange: (start: number, end: number, side: 'old' | 'new') => void;
   onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
-  onDragMove: (lineNumber: number) => void;
-  onDragEnd: (lineNumber: number, side: 'old' | 'new') => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
 }
@@ -23,10 +20,7 @@ export default function UnifiedView({
   file,
   commentRange,
   dragState,
-  onCommentRange,
   onDragStart,
-  onDragMove,
-  onDragEnd,
   onCancelComment,
   onCommentSaved,
 }: UnifiedViewProps) {
@@ -100,9 +94,10 @@ export default function UnifiedView({
                     {line.oldLineNumber && (
                       <button
                         className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover/gutter-old:opacity-100 transition-opacity text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
-                        onClick={(e) => {
+                        onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
-                          onCommentRange(line.oldLineNumber!, line.oldLineNumber!, 'old');
+                          onDragStart(line.oldLineNumber!, 'old');
                         }}
                         data-testid={`comment-icon-old-${line.oldLineNumber}`}
                       >
@@ -121,9 +116,10 @@ export default function UnifiedView({
                     {line.newLineNumber && (
                       <button
                         className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover/gutter-new:opacity-100 transition-opacity text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
-                        onClick={(e) => {
+                        onMouseDown={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
-                          onCommentRange(line.newLineNumber!, line.newLineNumber!, 'new');
+                          onDragStart(line.newLineNumber!, 'new');
                         }}
                         data-testid={`comment-icon-new-${line.newLineNumber}`}
                       >
