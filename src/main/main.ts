@@ -2,8 +2,8 @@
 // Electron main process entry point
 
 import { app, BrowserWindow } from 'electron';
-import { parseCliArgs } from './cli';
-import { runGitDiff, getRepoRoot } from './git';
+import { parseCliArgs, checkEarlyExit } from './cli';
+import { runGitDiffAsync, getRepoRootAsync, validateGitAvailable } from './git';
 import { parseDiff } from './diff-parser';
 import { loadConfig } from './config';
 import { parseReviewXml } from './xml-parser';
@@ -20,9 +20,56 @@ import { DiffLoadPayload, ReviewState } from '../shared/types';
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
+// Install signal handlers FIRST, before any app initialization
+process.on('SIGTRAP', () => {
+  console.error('[main] SIGTRAP received (debugger signal) - exiting gracefully');
+  process.exit(0); // Exit 0 since SIGTRAP is from Playwright debugger, not an error
+});
+
+process.on('SIGILL', () => {
+  console.error('[main] SIGILL received (illegal instruction) - exiting');
+  process.exit(1);
+});
+
+process.on('SIGTERM', () => {
+  console.error('[main] SIGTERM received - shutting down');
+  if (app) app.quit();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.error('[main] SIGINT received - shutting down');
+  if (app) app.quit();
+  process.exit(0);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[main] Uncaught exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] Unhandled rejection:', reason);
+  process.exit(1);
+});
+
 // Handle Squirrel startup events on Windows
 if (require('electron-squirrel-startup')) {
   app.quit();
+}
+
+// Configure Electron for test/headless environments
+// This prevents initialization issues in containers with Xvfb
+if (process.env.NODE_ENV === 'test' || process.env.DISPLAY === ':99') {
+  // Disable hardware acceleration completely
+  app.disableHardwareAcceleration();
+  // Disable sandbox to work around AppArmor restrictions in containers
+  app.commandLine.appendSwitch('no-sandbox');
+  // Force X11 backend (not Wayland) for Xvfb compatibility
+  app.commandLine.appendSwitch('ozone-platform', 'x11');
+  // Disable GPU compositing
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -30,55 +77,102 @@ let diffData: DiffLoadPayload | null = null;
 let resumeComments: any[] = [];
 let appConfig: any = null;
 
-async function main() {
-  // Parse CLI arguments
-  const cliArgs = parseCliArgs();
+/**
+ * Initialize the application AFTER Electron is ready.
+ * This function is called from the app.whenReady() handler.
+ */
+async function initializeApp() {
+  // Add overall initialization timeout
+  const initTimeout = setTimeout(() => {
+    console.error('[main] Initialization timeout after 45 seconds');
+    process.exit(1);
+  }, 45000);
 
-  // Load configuration
-  appConfig = loadConfig();
+  try {
+    console.error('[main] Starting initialization');
 
-  // Determine git diff args (use config default if none provided)
-  let gitDiffArgs = cliArgs.gitDiffArgs;
-  if (gitDiffArgs.length === 0 && appConfig.defaultDiffArgs) {
-    gitDiffArgs = appConfig.defaultDiffArgs.split(' ').filter((arg: string) => arg.length > 0);
-  }
-  if (gitDiffArgs.length === 0) {
-    gitDiffArgs = ['--staged'];
-  }
+    // Phase 1: Parse CLI arguments
+    const cliArgs = parseCliArgs();
+    console.error('[main] CLI args parsed:', JSON.stringify(cliArgs));
 
-  // Get repository root
-  const repository = getRepoRoot();
+    // Phase 2: Load configuration
+    appConfig = loadConfig();
+    console.error('[main] Config loaded');
 
-  // Run git diff
-  const rawDiff = runGitDiff(gitDiffArgs);
-
-  // Parse diff into structured format
-  const files = parseDiff(rawDiff);
-
-  // Store diff data for sending to renderer
-  diffData = {
-    files,
-    gitDiffArgs: gitDiffArgs.join(' '),
-    repository,
-  };
-
-  // If --resume-from, parse the XML file
-  if (cliArgs.resumeFrom) {
-    try {
-      const parsed = parseReviewXml(cliArgs.resumeFrom);
-      resumeComments = parsed.comments;
-    } catch (error) {
-      // Error already logged by parseReviewXml
-      process.exit(1);
+    // Phase 3: Determine git diff args
+    let gitDiffArgs = cliArgs.gitDiffArgs;
+    if (gitDiffArgs.length === 0 && appConfig.defaultDiffArgs) {
+      gitDiffArgs = appConfig.defaultDiffArgs.split(' ').filter((arg: string) => arg.length > 0);
     }
+    if (gitDiffArgs.length === 0) {
+      gitDiffArgs = ['--staged'];
+    }
+    console.error('[main] Git diff args:', gitDiffArgs.join(' '));
+
+    // Phase 4: Get repository root (async with timeout)
+    console.error('[main] Getting repository root');
+    const repository = await getRepoRootAsync();
+    console.error('[main] Repository root:', repository);
+
+    // Phase 5: Run git diff (async with timeout)
+    console.error('[main] Running git diff');
+    const rawDiff = await runGitDiffAsync(gitDiffArgs);
+    console.error('[main] Git diff complete, size:', rawDiff.length, 'bytes');
+
+    // Phase 6: Parse diff into structured format
+    console.error('[main] Parsing diff');
+    const files = parseDiff(rawDiff);
+    console.error('[main] Diff parsed:', files.length, 'files');
+
+    // Store diff data for sending to renderer
+    diffData = {
+      files,
+      gitDiffArgs: gitDiffArgs.join(' '),
+      repository,
+    };
+
+    // Phase 7: Handle --resume-from if specified
+    if (cliArgs.resumeFrom) {
+      try {
+        console.error('[main] Loading resume file:', cliArgs.resumeFrom);
+        const parsed = parseReviewXml(cliArgs.resumeFrom);
+        resumeComments = parsed.comments;
+        console.error('[main] Loaded', resumeComments.length, 'comments from resume file');
+      } catch (error) {
+        console.error('[main] Error loading resume file');
+        clearTimeout(initTimeout);
+        process.exit(1);
+      }
+    }
+
+    // Phase 8: Register IPC handlers
+    console.error('[main] Registering IPC handlers');
+    registerIpcHandlers();
+
+    // Phase 9: Create window
+    console.error('[main] Creating window');
+    createWindow();
+    console.error('[main] Window created successfully');
+
+    clearTimeout(initTimeout);
+    console.error('[main] Initialization complete');
+
+  } catch (error) {
+    clearTimeout(initTimeout);
+    if (error instanceof Error) {
+      console.error(`[main] Initialization error: ${error.message}`);
+      console.error(`[main] Stack trace: ${error.stack}`);
+    } else {
+      console.error('[main] Initialization error: unknown error');
+    }
+    // Try to quit the app cleanly before exiting
+    try {
+      app.quit();
+    } catch {
+      // Ignore quit errors
+    }
+    process.exit(1);
   }
-
-  // Register IPC handlers
-  registerIpcHandlers();
-
-  // Create window when app is ready
-  await app.whenReady();
-  createWindow();
 }
 
 function createWindow(): void {
@@ -161,8 +255,33 @@ app.on('activate', () => {
   }
 });
 
-// Start the application
-main().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+// Check for --help/--version ONLY (these must exit before Electron initializes)
+const earlyExit = checkEarlyExit();
+if (earlyExit.shouldExit) {
+  process.exit(earlyExit.exitCode);
+}
+
+// Call app.whenReady() IMMEDIATELY - do NOT run any other code before this
+// This allows Electron to initialize its event loop without blockage
+console.error('[main] Calling app.whenReady()...');
+app.whenReady()
+  .then(() => {
+    console.error('[main] App is ready! Starting validation and initialization...');
+
+    // Now do git validation (after Electron is ready)
+    try {
+      console.error('[main] Validating git availability');
+      validateGitAvailable();
+      console.error('[main] Git validation passed');
+    } catch (error) {
+      // validateGitAvailable already logs errors
+      app.quit();
+      process.exit(1);
+    }
+
+    return initializeApp();
+  })
+  .catch((error) => {
+    console.error('[main] Fatal error during app initialization:', error);
+    process.exit(1);
+  });

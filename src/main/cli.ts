@@ -6,23 +6,30 @@ export interface CliArgs {
   gitDiffArgs: string[];
 }
 
+/**
+ * Extract application arguments from process.argv.
+ * In Electron dev mode (process.defaultApp = true), process.argv contains:
+ *   [electron, ...chromiumFlags, mainScript, ...appArgs]
+ * In packaged mode:
+ *   [appBinary, ...appArgs]
+ */
+function getAppArgs(): string[] {
+  if ((process as any).defaultApp) {
+    // Dev mode: skip past the main script (first non-flag argument)
+    const rawArgs = process.argv.slice(1);
+    const mainScriptIdx = rawArgs.findIndex(a => !a.startsWith('-'));
+    return mainScriptIdx >= 0 ? rawArgs.slice(mainScriptIdx + 1) : [];
+  }
+  return process.argv.slice(1);
+}
+
 export function parseCliArgs(): CliArgs {
-  const args = process.argv.slice(2);
+  const args = getAppArgs();
   let resumeFrom: string | null = null;
   const gitDiffArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-
-    if (arg === '--help' || arg === '-h') {
-      printHelp();
-      process.exit(0);
-    }
-
-    if (arg === '--version' || arg === '-v') {
-      printVersion();
-      process.exit(0);
-    }
 
     if (arg === '--resume-from') {
       if (i + 1 >= args.length) {
@@ -69,4 +76,31 @@ function printVersion(): void {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const packageJson = require('../../package.json');
   console.error(`self-review v${packageJson.version}`);
+}
+
+export interface EarlyExitInfo {
+  shouldExit: boolean;
+  exitCode: number;
+}
+
+/**
+ * Check if the app should exit early (--help, --version).
+ * This is called BEFORE Electron initialization to allow CLI-only operation.
+ */
+export function checkEarlyExit(): EarlyExitInfo {
+  const args = getAppArgs();
+
+  // Check for --help
+  if (args.includes('--help') || args.includes('-h')) {
+    printHelp();
+    return { shouldExit: true, exitCode: 0 };
+  }
+
+  // Check for --version
+  if (args.includes('--version') || args.includes('-v')) {
+    printVersion();
+    return { shouldExit: true, exitCode: 0 };
+  }
+
+  return { shouldExit: false, exitCode: 0 };
 }
