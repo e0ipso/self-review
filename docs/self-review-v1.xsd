@@ -134,13 +134,14 @@
           </xs:documentation>
         </xs:annotation>
       </xs:element>
-      <xs:element name="category" type="xs:string" minOccurs="0">
+      <xs:element name="category" type="xs:string">
         <xs:annotation>
           <xs:documentation>
-            Optional category tag for this comment (e.g., "bug", "style",
+            Required category tag for this comment (e.g., "bug", "style",
             "nit", "question", "security"). Categories are defined in the
-            project-level .self-review.yaml configuration. Useful for AI
-            agents to prioritize and triage feedback.
+            project-level .self-review.yaml configuration. Every comment
+            must have a category to help AI agents prioritize and triage
+            feedback.
           </xs:documentation>
         </xs:annotation>
       </xs:element>

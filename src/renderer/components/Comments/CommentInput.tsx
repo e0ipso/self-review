@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { LineRange, ReviewComment, Suggestion } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
+import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
@@ -25,8 +26,10 @@ export default function CommentInput({
   originalCode,
 }: CommentInputProps) {
   const { addComment, editComment } = useReview();
+  const { config } = useConfig();
+  const defaultCategory = config.categories?.[0]?.name ?? '';
   const [body, setBody] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
+  const [category, setCategory] = useState(defaultCategory);
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [proposedCode, setProposedCode] = useState('');
 
@@ -41,8 +44,10 @@ export default function CommentInput({
     }
   }, [existingComment]);
 
+  const isValid = body.trim().length > 0 && category.length > 0;
+
   const handleSubmit = () => {
-    if (!body.trim()) return;
+    if (!isValid) return;
 
     const suggestion: Suggestion | null =
       showSuggestion && originalCode
@@ -59,7 +64,7 @@ export default function CommentInput({
     }
 
     setBody('');
-    setCategory(null);
+    setCategory(defaultCategory);
     setShowSuggestion(false);
     setProposedCode('');
     onSubmit?.();
@@ -67,10 +72,17 @@ export default function CommentInput({
 
   const handleCancel = () => {
     setBody('');
-    setCategory(null);
+    setCategory(defaultCategory);
     setShowSuggestion(false);
     setProposedCode('');
     onCancel();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit();
+    }
   };
 
   return (
@@ -88,6 +100,7 @@ export default function CommentInput({
         <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Add your review comment..."
           className="min-h-[80px] resize-y text-sm border-0 shadow-none focus-visible:ring-0 p-0 placeholder:text-muted-foreground/60"
           autoFocus
@@ -116,6 +129,7 @@ export default function CommentInput({
               <Textarea
                 value={proposedCode}
                 onChange={(e) => setProposedCode(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="Enter your suggested code..."
                 className="font-mono text-xs resize-y"
                 rows={3}
@@ -160,10 +174,13 @@ export default function CommentInput({
             data-testid="add-comment-btn"
             size="sm"
             onClick={handleSubmit}
-            disabled={!body.trim()}
-            className="h-7 text-xs"
+            disabled={!isValid}
+            className="h-7 text-xs gap-1.5"
           >
             {existingComment ? 'Update' : 'Comment'}
+            <kbd className="pointer-events-none inline-flex items-center rounded border border-current/20 px-1 font-mono text-[10px] font-medium opacity-60">
+              {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl'}{'\u21B5'}
+            </kbd>
           </Button>
         </div>
       </div>

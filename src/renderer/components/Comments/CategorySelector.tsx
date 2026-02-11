@@ -4,8 +4,8 @@ import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 
 export interface CategorySelectorProps {
-  value: string | null;
-  onChange: (category: string | null) => void;
+  value: string;
+  onChange: (category: string) => void;
 }
 
 export default function CategorySelector({ value, onChange }: CategorySelectorProps) {
@@ -27,7 +27,7 @@ export default function CategorySelector({ value, onChange }: CategorySelectorPr
                 variant="ghost"
                 size="sm"
                 data-testid={`category-option-${cat.name}`}
-                onClick={() => onChange(isActive ? null : cat.name)}
+                onClick={() => { if (!isActive) onChange(cat.name); }}
                 className="h-7 px-2 text-xs gap-1.5"
                 style={isActive ? {
                   backgroundColor: `${cat.color}20`,

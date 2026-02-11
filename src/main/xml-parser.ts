@@ -62,7 +62,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
           filePath,
           lineRange: parseLineRange(comment),
           body: comment.body || '',
-          category: comment.category || null,
+          category: comment.category || '',
           suggestion: parseSuggestion(comment),
         };
 

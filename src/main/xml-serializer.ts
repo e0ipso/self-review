@@ -117,13 +117,14 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
           </xs:documentation>
         </xs:annotation>
       </xs:element>
-      <xs:element name="category" type="xs:string" minOccurs="0">
+      <xs:element name="category" type="xs:string">
         <xs:annotation>
           <xs:documentation>
-            Optional category tag for this comment (e.g., "bug", "style",
+            Required category tag for this comment (e.g., "bug", "style",
             "nit", "question", "security"). Categories are defined in the
-            project-level .self-review.yaml configuration. Useful for AI
-            agents to prioritize and triage feedback.
+            project-level .self-review.yaml configuration. Every comment
+            must have a category to help AI agents prioritize and triage
+            feedback.
           </xs:documentation>
         </xs:annotation>
       </xs:element>
@@ -332,10 +333,8 @@ function buildCommentXml(comment: ReviewComment): string[] {
   // Body (preserve whitespace and newlines)
   lines.push(`      <body>${escapeXml(comment.body)}</body>`);
 
-  // Category
-  if (comment.category) {
-    lines.push(`      <category>${escapeXml(comment.category)}</category>`);
-  }
+  // Category (required)
+  lines.push(`      <category>${escapeXml(comment.category)}</category>`);
 
   // Suggestion
   if (comment.suggestion) {

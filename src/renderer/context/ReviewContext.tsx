@@ -19,7 +19,7 @@ export interface ReviewContextValue {
     filePath: string,
     lineRange: LineRange | null,
     body: string,
-    category: string | null,
+    category: string,
     suggestion: Suggestion | null
   ) => void;
   editComment: (id: string, updates: Partial<ReviewComment>) => void;

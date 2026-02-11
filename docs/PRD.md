@@ -302,7 +302,7 @@ GitHub-style suggestions allow the reviewer to propose literal code replacements
 
 #### 5.4.5 Comment Categories / Tags
 
-If custom comment categories are defined in the project-level configuration (see Section 7), each comment can optionally be tagged with a category (e.g., `bug`, `style`, `question`, `nit`, `security`). This appears as a dropdown or chip selector in the comment input UI. Categories are included in the XML output to help AI agents prioritize and categorize feedback.
+Every comment must be assigned a category (e.g., `bug`, `style`, `question`, `nit`, `security`). Categories are defined in the project-level configuration (see Section 7) and the first category is selected by default when creating a new comment. The category selector uses radio-button semantics — exactly one category is always selected and cannot be deselected. Categories are included in the XML output to help AI agents prioritize and categorize feedback.
 
 #### 5.4.6 Editing and Deleting Comments
 
@@ -410,7 +410,7 @@ return user;</original-code>
 - **Comments are unified.** A `<comment>` with no line attributes is a file-level comment. A `<comment>` with line attributes is a line or multi-line comment. There is no separate element for file-level comments.
 - **Line comments reference either old or new line numbers.** Comments on added or context lines use `new-line-start` / `new-line-end` (line numbers from the post-change version). Comments on deleted lines use `old-line-start` / `old-line-end` (line numbers from the pre-change version). Exactly one pair should be present for line-level comments; this constraint is enforced by the application (not expressible in XSD 1.0). For single-line comments, start equals end.
 - **Suggestions** include both the original code (from the diff) and the proposed replacement, as literal text. The AI agent can apply the suggestion by performing a text replacement.
-- **Categories** are optional and only appear if the project configuration defines them and the reviewer assigns them.
+- **Categories** are required on every comment. The first configured category is selected by default.
 - **No wrapper elements.** `<file>` elements are direct children of `<review>`. No `<files>` or `<summary>` wrappers.
 
 ### 6.4 XSD Schema File
@@ -643,7 +643,7 @@ The following are explicitly not part of the v1 release:
 | **Multi-line comment** | A review comment attached to a range of lines in the diff |
 | **File-level comment** | A review comment attached to a file as a whole, not to specific lines |
 | **Suggestion** | A proposed code replacement within a comment, specifying both the original code and the replacement code |
-| **Category** | An optional tag on a comment (e.g., "bug", "nit") used to help AI agents prioritize feedback |
+| **Category** | A required tag on every comment (e.g., "bug", "nit") used to help AI agents prioritize feedback |
 | **Resume** | Loading a prior XML review output back into the UI to continue reviewing |
 | **XSD** | XML Schema Definition — a formal description of the structure of the XML output |
 

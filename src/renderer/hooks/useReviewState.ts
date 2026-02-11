@@ -8,7 +8,7 @@ export interface UseReviewStateReturn {
     filePath: string,
     lineRange: LineRange | null,
     body: string,
-    category: string | null,
+    category: string,
     suggestion: Suggestion | null
   ) => void;
   updateComment: (id: string, updates: Partial<ReviewComment>) => void;
@@ -25,7 +25,7 @@ export function useReviewState(): UseReviewStateReturn {
     filePath: string,
     lineRange: LineRange | null,
     body: string,
-    category: string | null,
+    category: string,
     suggestion: Suggestion | null
   ) => {
     const newComment: ReviewComment = {

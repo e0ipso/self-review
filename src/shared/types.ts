@@ -51,7 +51,7 @@ export interface ReviewComment {
   filePath: string;
   lineRange: LineRange | null;     // null = file-level comment
   body: string;
-  category: string | null;
+  category: string;
   suggestion: Suggestion | null;
   orphaned?: boolean;              // for --resume-from conflict handling
 }
