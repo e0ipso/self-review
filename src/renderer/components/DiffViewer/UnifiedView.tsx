@@ -39,20 +39,6 @@ export default function UnifiedView({
     return 'bg-muted/30';
   };
 
-  const getLinePrefix = (line: DiffLine) => {
-    switch (line.type) {
-      case 'addition': return '+';
-      case 'deletion': return '-';
-      default: return ' ';
-    }
-  };
-
-  const getPrefixColor = (line: DiffLine) => {
-    if (line.type === 'addition') return 'text-emerald-600 dark:text-emerald-400';
-    if (line.type === 'deletion') return 'text-red-600 dark:text-red-400';
-    return 'text-muted-foreground/50';
-  };
-
   // Pre-compute row offsets per hunk for sequential row indexing
   const hunkRowOffsets = useMemo(() => {
     const offsets: number[] = [];
@@ -132,10 +118,6 @@ export default function UnifiedView({
                       </button>
                     )}
                     <span className="pointer-events-none">{line.newLineNumber || ''}</span>
-                  </div>
-                  {/* Prefix */}
-                  <div className={`line-prefix w-5 flex-shrink-0 text-center text-[11px] leading-[22px] select-none font-bold ${getPrefixColor(line)}`}>
-                    {getLinePrefix(line)}
                   </div>
                   {/* Code content */}
                   <div className="flex-1 px-3 py-0.5 [overflow-x:overlay] leading-[22px]">
