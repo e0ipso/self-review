@@ -28,13 +28,34 @@ After(async () => {
 // ── Shared Background steps (used by many features) ──
 
 Given(
-  'a git repository with staged changes to the following files:',
+  'a git repository with changes to the following files:',
   async ({}, table: DataTable) => {
     // The test-repo fixture creates a deterministic repo matching the Background tables
     const repoDir = createTestRepo();
     setTestRepoDir(repoDir);
   },
 );
+
+/**
+ * Launch step with no args — uses bare `git diff` (unstaged changes).
+ */
+Given('I launch self-review', async () => {
+  let repoDir: string;
+  try {
+    repoDir = getTestRepoDir();
+  } catch {
+    repoDir = process.cwd();
+  }
+
+  try {
+    await launchApp([], repoDir);
+  } catch (error) {
+    console.error('[Given step] launchApp() failed, falling back to launchAppExpectExit():', error);
+    await launchAppExpectExit([], repoDir);
+    console.error('[Given step] After launchAppExpectExit - stderr:', getStderr().slice(0, 500));
+    console.error('[Given step] After launchAppExpectExit - exit code:', getExitCode());
+  }
+});
 
 /**
  * Unified launch step - handles both normal (window expected) and

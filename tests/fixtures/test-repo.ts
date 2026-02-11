@@ -4,12 +4,11 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 /**
- * Creates a temporary git repository with deterministic staged changes
+ * Creates a temporary git repository with deterministic unstaged changes
  * matching the Background sections in the Gherkin feature files.
  *
- * The repo has two commits:
- *   1. Initial commit with baseline files
- *   2. Staged (but uncommitted) changes that produce a known diff
+ * The repo has one commit with baseline files, then unstaged working tree
+ * changes that produce a known diff visible via bare `git diff`.
  *
  * Returns the path to the repo. Caller is responsible for cleanup.
  */
@@ -52,6 +51,9 @@ export function createTestRepo(): string {
     ].join('\n')
   );
 
+  // src/config.ts — empty file in initial commit, will be filled (25 additions)
+  writeFileSync(join(repoDir, 'src', 'config.ts'), '');
+
   // src/legacy.ts — will be "deleted"
   writeFileSync(
     join(repoDir, 'src', 'legacy.ts'),
@@ -67,7 +69,7 @@ export function createTestRepo(): string {
   run('git add -A');
   run('git commit -m "Initial commit"');
 
-  // ── Staged changes ──
+  // ── Unstaged working tree changes ──
 
   // Modify src/auth/login.ts: add try-catch, add session token, remove old error style
   writeFileSync(
@@ -104,7 +106,7 @@ export function createTestRepo(): string {
     ].join('\n')
   );
 
-  // Add src/config.ts (new file, 25 lines)
+  // Fill src/config.ts (was empty, now 25 lines)
   writeFileSync(
     join(repoDir, 'src', 'config.ts'),
     Array.from({ length: 25 }, (_, i) => {
@@ -123,8 +125,7 @@ export function createTestRepo(): string {
     ['# My App', '', 'A modern application with authentication.', '', 'See docs/ for more info.'].join('\n')
   );
 
-  // Stage everything
-  run('git add -A');
+  // Do NOT stage — changes are visible via bare `git diff`
 
   return repoDir;
 }
@@ -183,7 +184,7 @@ export function createPriorReviewXml(
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="urn:self-review:v1 self-review-v1.xsd"
   timestamp="2026-02-10T12:00:00Z"
-  git-diff-args="--staged"
+  git-diff-args=""
   repository="${repoDir}"
 >
 ${fileElements}

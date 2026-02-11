@@ -4,11 +4,11 @@ Feature: File Viewed Status
   So that my AI agent knows which files I actually reviewed
 
   Background:
-    Given a git repository with staged changes to the following files:
+    Given a git repository with changes to the following files:
       | file              | change_type | additions | deletions |
       | src/auth/login.ts | modified    | 10        | 3         |
-      | src/config.ts     | added       | 25        | 0         |
-    And I launch self-review with "--staged"
+      | src/config.ts     | modified    | 25        | 0         |
+    And I launch self-review
 
   Scenario: Files start as not viewed
     Then the "Viewed" checkbox for "src/auth/login.ts" should be unchecked

@@ -4,13 +4,13 @@ Feature: File Tree Navigation
   So that I can quickly jump to the files I care about
 
   Background:
-    Given a git repository with staged changes to the following files:
+    Given a git repository with changes to the following files:
       | file              | change_type | additions | deletions |
       | src/auth/login.ts | modified    | 10        | 3         |
-      | src/config.ts     | added       | 25        | 0         |
+      | src/config.ts     | modified    | 25        | 0         |
       | src/legacy.ts     | deleted     | 0         | 40        |
       | README.md         | modified    | 2         | 1         |
-    And I launch self-review with "--staged"
+    And I launch self-review
 
   Scenario: Clicking a file in the tree scrolls to that file's section
     When I click "src/config.ts" in the file tree

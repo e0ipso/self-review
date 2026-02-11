@@ -4,11 +4,11 @@ Feature: View Modes and Toolbar
   So that I can review code in the format I prefer
 
   Background:
-    Given a git repository with staged changes to the following files:
+    Given a git repository with changes to the following files:
       | file              | change_type | additions | deletions |
       | src/auth/login.ts | modified    | 10        | 3         |
-      | src/config.ts     | added       | 25        | 0         |
-    And I launch self-review with "--staged"
+      | src/config.ts     | modified    | 25        | 0         |
+    And I launch self-review
 
   Scenario: Default view mode is split
     Then the diff viewer should be in "split" view mode

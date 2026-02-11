@@ -8,7 +8,7 @@ import * as path from 'path';
 import { rmSync } from 'fs';
 
 const ELECTRON_BIN: string = require('electron') as unknown as string;
-const MAIN_BUNDLE = path.resolve(__dirname, '../../.webpack/x64/main/index.js');
+const MAIN_BUNDLE = path.resolve(__dirname, '../../.webpack/main/index.js');
 
 // Chromium sandbox requires SUID helper which isn't available in containers
 const CHROMIUM_FLAGS = [

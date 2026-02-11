@@ -104,9 +104,7 @@ async function initializeApp() {
     if (gitDiffArgs.length === 0 && appConfig.defaultDiffArgs) {
       gitDiffArgs = appConfig.defaultDiffArgs.split(' ').filter((arg: string) => arg.length > 0);
     }
-    if (gitDiffArgs.length === 0) {
-      gitDiffArgs = ['--staged'];
-    }
+    // No fallback — matches `git diff` default (unstaged working tree changes)
     console.error('[main] Git diff args:', gitDiffArgs.join(' '));
 
     // Phase 4: Get repository root (async with timeout)
@@ -205,25 +203,41 @@ function createWindow(): void {
     event.preventDefault();
 
     try {
+      console.error('[main] Window close handler triggered');
+
       // Request review state from renderer
+      console.error('[main] Requesting review state from renderer...');
       const reviewState = await requestReviewFromRenderer(mainWindow);
+      console.error('[main] Received review state:', JSON.stringify({
+        timestamp: reviewState.timestamp,
+        gitDiffArgs: reviewState.gitDiffArgs,
+        repository: reviewState.repository,
+        fileCount: reviewState.files.length,
+      }));
 
       // Serialize to XML
+      console.error('[main] Serializing to XML...');
       const xml = await serializeReview(reviewState);
+      console.error('[main] XML serialization complete, length:', xml.length);
 
       // Write to stdout
       process.stdout.write(xml);
       process.stdout.write('\n');
+      console.error('[main] XML written to stdout');
 
       // Now quit
       mainWindow.destroy();
       mainWindow = null;
-      app.quit();
+      console.error('[main] Window destroyed, exiting with code 0');
+
+      // Exit cleanly with code 0
+      process.exit(0);
     } catch (error) {
       if (error instanceof Error) {
-        console.error(`Error during window close: ${error.message}`);
+        console.error(`[main] Error during window close: ${error.message}`);
+        console.error(`[main] Stack: ${error.stack}`);
       } else {
-        console.error('Error during window close: unknown error');
+        console.error('[main] Error during window close: unknown error');
       }
       process.exit(1);
     }

@@ -4,10 +4,10 @@ Feature: Code Suggestions
   So that my AI agent can apply them directly
 
   Background:
-    Given a git repository with staged changes to the following files:
+    Given a git repository with changes to the following files:
       | file              | change_type | additions | deletions |
       | src/auth/login.ts | modified    | 10        | 3         |
-    And I launch self-review with "--staged"
+    And I launch self-review
 
   Scenario: Add a suggestion to a comment
     When I click the line number for new line 5 in "src/auth/login.ts"

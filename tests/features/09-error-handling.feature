@@ -5,7 +5,7 @@ Feature: Error Handling
 
   Scenario: Not a git repository
     Given I am in a directory that is not a git repository
-    When I launch self-review with "--staged"
+    When I launch self-review
     Then the process should exit with code 1
     And stderr should contain an error message about not being a git repository
 
@@ -16,8 +16,8 @@ Feature: Error Handling
     And stderr should contain an error message from git
 
   Scenario: Empty diff produces valid output
-    Given a git repository with no staged changes
-    When I launch self-review with "--staged"
+    Given a git repository with no changes
+    When I launch self-review
     And I close the Electron window
     Then stdout should contain valid XML
     And the XML should contain 0 file elements

@@ -4,16 +4,16 @@ Feature: Commenting System
   So that I can provide structured feedback to my AI agent
 
   Background:
-    Given a git repository with staged changes to the following files:
+    Given a git repository with changes to the following files:
       | file              | change_type | additions | deletions |
       | src/auth/login.ts | modified    | 10        | 3         |
-      | src/config.ts     | added       | 25        | 0         |
+      | src/config.ts     | modified    | 25        | 0         |
     And the project has these comment categories:
       | name     | color   |
       | bug      | #e53e3e |
       | nit      | #718096 |
       | question | #805ad5 |
-    And I launch self-review with "--staged"
+    And I launch self-review
 
   Scenario: Add a single-line comment on an added line
     When I click the line number for new line 5 in "src/auth/login.ts"

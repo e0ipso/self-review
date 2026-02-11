@@ -39,7 +39,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     }
 
     const review = result.review;
-    const gitDiffArgs = review['@_git-diff-args'] || '--staged';
+    const gitDiffArgs = review['@_git-diff-args'] || '';
     const comments: ReviewComment[] = [];
 
     // Handle files array

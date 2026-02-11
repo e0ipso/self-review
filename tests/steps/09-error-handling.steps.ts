@@ -31,12 +31,12 @@ Given('a git repository with no commits', async () => {
   setTestRepoDir(dir);
 });
 
-Given('a git repository with no staged changes', async () => {
+Given('a git repository with no changes', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'self-review-clean-'));
   execSync('git init', { cwd: dir, stdio: 'pipe' });
   execSync('git config user.email "test@test.com"', { cwd: dir, stdio: 'pipe' });
   execSync('git config user.name "Test"', { cwd: dir, stdio: 'pipe' });
-  // Create a file and commit it so HEAD exists, but nothing is staged
+  // Create a file and commit it so HEAD exists, no unstaged changes
   writeFileSync(join(dir, 'README.md'), '# Test');
   execSync('git add -A && git commit -m "init"', { cwd: dir, stdio: 'pipe' });
   setTestRepoDir(dir);

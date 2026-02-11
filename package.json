@@ -12,8 +12,8 @@
     "make": "npm run clean && electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
-    "test:e2e": "npx bddgen && npx playwright test",
-    "test:e2e:headed": "npx bddgen && npx playwright test --headed"
+    "test:e2e": "npx bddgen && xvfb-run --auto-servernum npx playwright test",
+    "test:e2e:headed": "npx bddgen && npx playwright test"
   },
   "keywords": [],
   "author": {

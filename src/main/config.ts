@@ -15,7 +15,7 @@ const defaults: AppConfig = {
   outputFormat: 'xml',
   ignore: [],
   categories: [],
-  defaultDiffArgs: '--staged',
+  defaultDiffArgs: '',
 };
 
 export function loadConfig(): AppConfig {
