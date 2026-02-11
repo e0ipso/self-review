@@ -7,8 +7,9 @@
   "private": true,
   "scripts": {
     "start": "electron-forge start",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
+    "clean": "rm -rf .webpack out",
+    "package": "npm run clean && electron-forge package",
+    "make": "npm run clean && electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
     "test:e2e": "npx bddgen && npx playwright test",
