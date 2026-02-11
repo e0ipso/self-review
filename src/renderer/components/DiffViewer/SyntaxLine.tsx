@@ -1,26 +1,20 @@
 import React from 'react';
+import type { DiffLineType } from '../../../shared/types';
+
+// Import Prism with components
 import Prism from 'prismjs';
-import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-markup';
+import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-clike';
 import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-jsx';
 import 'prismjs/components/prism-tsx';
-import 'prismjs/components/prism-css';
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-bash';
 import 'prismjs/components/prism-yaml';
 import 'prismjs/components/prism-markdown';
-import 'prismjs/components/prism-java';
-import 'prismjs/components/prism-go';
-import 'prismjs/components/prism-rust';
-import 'prismjs/components/prism-sql';
-import 'prismjs/components/prism-c';
-import 'prismjs/components/prism-cpp';
-import 'prismjs/components/prism-ruby';
-import 'prismjs/components/prism-php';
-import 'prismjs/components/prism-markup';
-
-import type { DiffLineType } from '../../../shared/types';
 
 export interface SyntaxLineProps {
   content: string;
@@ -68,18 +62,13 @@ const SyntaxLine = React.memo(function SyntaxLine({
     try {
       const prismLanguage = Prism.languages[language];
       if (!prismLanguage || language === 'plaintext') {
-        console.error(`[Prism] No language support for: ${language}`);
         return content
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
           .replace(/\t/g, '    ');
       }
-      const highlighted = Prism.highlight(content, prismLanguage, language);
-      if (content.length > 0 && content.length < 50) {
-        console.error(`[Prism] ${language}: "${content.substring(0, 30)}" → ${highlighted.includes('<span') ? 'HAS TOKENS' : 'NO TOKENS'}`);
-      }
-      return highlighted;
+      return Prism.highlight(content, prismLanguage, language);
     } catch (err) {
       console.error(`[Prism] Error for ${language}:`, err);
       return content

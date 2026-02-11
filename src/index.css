@@ -1,3 +1,4 @@
+@import "prismjs/themes/prism.css";
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
