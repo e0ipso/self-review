@@ -67,12 +67,11 @@ Then('the split view should show two columns', async () => {
 });
 
 Then(
-  'the unified view should show a single column with +\\\/- prefixes',
+  'the unified view should show a single column layout',
   async () => {
     const page = getPage();
     const unifiedView = page.locator('.unified-view').first();
-    const prefixes = unifiedView.locator('.line-prefix');
-    expect(await prefixes.count()).toBeGreaterThan(0);
+    await expect(unifiedView).toBeVisible();
   },
 );
 

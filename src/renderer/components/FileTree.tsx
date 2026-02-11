@@ -57,8 +57,14 @@ export default function FileTree() {
     }
   };
 
+  const splitPath = (fullPath: string) => {
+    const lastSlash = fullPath.lastIndexOf('/');
+    if (lastSlash === -1) return { dir: '', fileName: fullPath };
+    return { dir: fullPath.slice(0, lastSlash + 1), fileName: fullPath.slice(lastSlash + 1) };
+  };
+
   return (
-    <div className="flex flex-col h-full" data-testid="file-tree">
+    <div className="flex flex-col h-full overflow-hidden" data-testid="file-tree">
       {/* Header */}
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-center justify-between mb-2.5">
@@ -85,8 +91,8 @@ export default function FileTree() {
       <Separator />
 
       {/* File List */}
-      <ScrollArea className="flex-1">
-        <div className="p-1">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="p-1 overflow-hidden">
           {filteredFiles.map((file) => {
             const filePath = file.newPath || file.oldPath;
             const stats = getFileStats(file);
@@ -94,6 +100,7 @@ export default function FileTree() {
             const viewed = isViewed(filePath);
             const isActive = activeFilePath === filePath;
             const changeType = getChangeType(file.changeType);
+            const { dir, fileName } = splitPath(filePath);
 
             return (
               <Tooltip key={filePath}>
@@ -114,8 +121,15 @@ export default function FileTree() {
                       </span>
 
                       {/* File path */}
-                      <span className="flex-1 truncate font-mono text-xs leading-tight">
-                        {filePath}
+                      <span className="flex-1 min-w-0 flex font-mono text-xs leading-tight">
+                        {dir && (
+                          <span className="truncate text-muted-foreground/70">
+                            {dir}
+                          </span>
+                        )}
+                        <span className="flex-shrink-0 whitespace-nowrap">
+                          {fileName}
+                        </span>
                       </span>
 
                       {/* Indicators */}

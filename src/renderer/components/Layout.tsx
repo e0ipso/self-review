@@ -1,62 +1,37 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Group, Panel, Separator } from 'react-resizable-panels';
+import { GripVertical } from 'lucide-react';
 import FileTree from './FileTree';
 import DiffViewer from './DiffViewer/DiffViewer';
 
 export default function Layout() {
-  const [leftPanelWidth, setLeftPanelWidth] = useState(280);
-  const [isDragging, setIsDragging] = useState(false);
-
-  const handleMouseDown = () => {
-    setIsDragging(true);
-  };
-
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging) return;
-    const newWidth = e.clientX;
-    if (newWidth >= 200 && newWidth <= 600) {
-      setLeftPanelWidth(newWidth);
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  React.useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging]);
-
   return (
-    <div className="flex flex-1 overflow-hidden">
-      {/* Left Panel - File Tree */}
-      <div
-        style={{ width: `${leftPanelWidth}px` }}
-        className="flex-shrink-0 bg-muted/30"
+    <Group
+      orientation="horizontal"
+      style={{ flex: 1 }}
+    >
+      <Panel
+        id="fileTree"
+        defaultSize="25%"
+        minSize="10%"
+        maxSize="60%"
       >
-        <FileTree />
-      </div>
+        <div className="h-full overflow-hidden bg-muted/30">
+          <FileTree />
+        </div>
+      </Panel>
 
-      {/* Drag Handle */}
-      <div
-        onMouseDown={handleMouseDown}
-        className={`w-px flex-shrink-0 cursor-col-resize transition-colors duration-150 ${
-          isDragging
-            ? 'bg-primary w-0.5'
-            : 'bg-border hover:bg-muted-foreground/30'
-        }`}
-      />
+      <Separator className="relative flex w-px items-center justify-center bg-border">
+        <div className="z-10 flex h-4 w-3.5 items-center justify-center rounded-sm border bg-border">
+          <GripVertical className="h-2.5 w-2.5" />
+        </div>
+      </Separator>
 
-      {/* Right Panel - Diff Viewer */}
-      <div className="flex-1 overflow-y-auto bg-background">
-        <DiffViewer />
-      </div>
-    </div>
+      <Panel id="diffViewer" defaultSize="75%">
+        <div className="h-full overflow-y-auto bg-background">
+          <DiffViewer />
+        </div>
+      </Panel>
+    </Group>
   );
 }

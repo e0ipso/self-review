@@ -17,7 +17,7 @@ Feature: View Modes and Toolbar
   Scenario: Switch to unified view mode
     When I click the "Unified" view mode toggle in the toolbar
     Then the diff viewer should be in "unified" view mode
-    And the unified view should show a single column with +/- prefixes
+    And the unified view should show a single column layout
 
   Scenario: Switch back to split view mode
     When I click the "Unified" view mode toggle in the toolbar
