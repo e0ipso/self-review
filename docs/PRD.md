@@ -214,6 +214,28 @@ A vertical list of all files in the diff, displayed as a flat list with file pat
 
 The main content area displays diffs for all files in a single scrollable view (similar to GitHub's "Files changed" tab, not one file at a time).
 
+#### 5.3.0 Empty Diff Help Message
+
+When `git diff` returns no changes (zero files), the diff viewer area displays a help message instead of file sections. This message explains:
+
+1. **Why the diff is empty** — the arguments passed to `self-review` produced no changes.
+2. **How arguments work** — all arguments (except `--resume-from`, `--help`, `--version`) are passed directly to `git diff`.
+3. **Common examples** — a table of example commands with brief explanations to help the user select the right diff scope.
+
+The examples shown:
+
+| Command | Description |
+|---------|-------------|
+| `self-review` | Unstaged working tree changes (default) |
+| `self-review --staged` | Changes staged for commit |
+| `self-review HEAD~1` | Changes in the last commit |
+| `self-review main..HEAD` | All changes since branching from main |
+| `self-review -- src/` | Limit diff to a specific directory |
+
+If the user provided explicit arguments, the help message includes the actual arguments that were used, so the user can see what was passed to `git diff`.
+
+This empty state replaces the minimal "No files to review" placeholder and serves as inline documentation for first-time users or cases where the user forgot `--staged` or used the wrong ref.
+
 #### 5.3.1 File Sections
 
 Each file in the diff is rendered as a collapsible section:
