@@ -61,6 +61,28 @@ RUN ARCH=$(dpkg --print-architecture) && \
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/node && \
   chmod 0440 /etc/sudoers.d/node
 
+# Install Electron/Chromium dependencies for E2E testing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  xvfb \
+  xauth \
+  dbus-x11 \
+  libgtk-3-0 \
+  libgbm1 \
+  libnss3 \
+  libasound2 \
+  libxss1 \
+  libatk-bridge2.0-0 \
+  libdrm2 \
+  libxcomposite1 \
+  libxdamage1 \
+  libxrandr2 \
+  libcups2 \
+  libxkbcommon0 \
+  libpango-1.0-0 \
+  libcairo2 \
+  libegl1 \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Set up non-root user
 USER node
 

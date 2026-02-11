@@ -13,7 +13,11 @@
   },
   "runArgs": [
     "--cap-add=NET_ADMIN",
-    "--cap-add=NET_RAW"
+    "--cap-add=NET_RAW",
+    "--cap-add=SYS_ADMIN",
+    "--security-opt=seccomp=unconfined",
+    "--security-opt=apparmor=unconfined",
+    "--ipc=host"
   ],
   "customizations": {
     "vscode": {
@@ -67,10 +71,12 @@
     "NODE_OPTIONS": "--max-old-space-size=4096",
     "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
     "SSH_AUTH_SOCK": "/ssh-agent",
-    "LC_ALL": "C.UTF-8"
+    "LC_ALL": "C.UTF-8",
+    "DISPLAY": ":99"
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
-  "postCreateCommand": "sudo chown -R node:node /home/node/.claude || true",
+  "postCreateCommand": "sudo chown -R node:node /home/node/.claude || true && ([ -f node_modules/electron/dist/chrome-sandbox ] && sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox || true)",
+  "postStartCommand": "bash -c 'pkill Xvfb 2>/dev/null || true; Xvfb :99 -screen 0 1280x1024x24 -ac +extension GLX +render -noreset &>/dev/null & sleep 2; dbus-daemon --session --fork 2>/dev/null || true'",
   "waitFor": "postStartCommand"
 }
