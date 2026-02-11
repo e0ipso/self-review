@@ -76,6 +76,7 @@ export default function SplitView({
   const renderLineCell = (
     line: DiffLine | null,
     side: 'old' | 'new',
+    hasComment = false,
   ) => {
     if (!line) {
       return (
@@ -94,17 +95,15 @@ export default function SplitView({
       : undefined;
 
     return (
-      <div className={`split-half w-1/2 flex ${getLineBg(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
+      <div className={`split-half w-1/2 flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${hasComment ? 'border-l-2 border-l-amber-400' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`} data-line-number={lineNumber || undefined} data-line-side={side}>
         {/* Line number gutter */}
         <div
           className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter relative`}
           data-testid={lineTestId}
-          data-line-number={lineNumber || undefined}
-          data-line-side={side}
         >
-          {lineNumber && (
+          {lineNumber && line.type !== 'context' && (
             <button
-              className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover/gutter:opacity-100 transition-opacity text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
+              className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-7 opacity-0 group-hover/gutter:opacity-70 transition-opacity text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400"
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -112,13 +111,13 @@ export default function SplitView({
               }}
               data-testid={`comment-icon-${side}-${lineNumber}`}
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-4 w-4" />
             </button>
           )}
           <span className="pointer-events-none">{lineNumber || ''}</span>
         </div>
         {/* Code content */}
-        <div className="flex-1 px-3 py-0.5 overflow-x-auto leading-[22px]">
+        <div className="flex-1 px-3 py-0.5 [overflow-x:overlay] leading-[22px]">
           <SyntaxLine content={line.content} language={language} lineType={line.type} />
         </div>
       </div>
@@ -139,7 +138,9 @@ export default function SplitView({
             const newComments = newLineNumber
               ? getCommentsForLine(file.newPath || file.oldPath, newLineNumber, 'new')
               : [];
-            const hasComments = oldComments.length > 0 || newComments.length > 0;
+            const oldCommentsToRender = oldComments.filter(c => c.lineRange!.end === oldLineNumber);
+            const newCommentsToRender = newComments.filter(c => c.lineRange!.end === newLineNumber);
+            const hasCommentsToRender = oldCommentsToRender.length > 0 || newCommentsToRender.length > 0;
             const showCommentInputHere = commentRange && (
               (commentRange.side === 'old' && oldLineNumber === commentRange.end) ||
               (commentRange.side === 'new' && newLineNumber === commentRange.end)
@@ -150,7 +151,7 @@ export default function SplitView({
                 <div className="flex">
                   {/* Old side (left) */}
                   {row.oldLine ? (
-                    renderLineCell(row.oldLine, 'old')
+                    renderLineCell(row.oldLine, 'old', oldComments.length > 0)
                   ) : (
                     <div className="w-1/2 flex">
                       <div className="w-10 flex-shrink-0 bg-muted/20" />
@@ -159,7 +160,7 @@ export default function SplitView({
                   )}
                   {/* New side (right) */}
                   {row.newLine ? (
-                    renderLineCell(row.newLine, 'new')
+                    renderLineCell(row.newLine, 'new', newComments.length > 0)
                   ) : (
                     <div className="w-1/2 flex">
                       <div className="w-10 flex-shrink-0 bg-muted/20" />
@@ -168,13 +169,13 @@ export default function SplitView({
                   )}
                 </div>
 
-                {/* Comments spanning full width */}
-                {hasComments && (
+                {/* Comments spanning full width (rendered at last line of range) */}
+                {hasCommentsToRender && (
                   <div className="border-y border-border/50 bg-muted/20 px-4 py-3 space-y-2">
-                    {oldComments.map((comment) => (
+                    {oldCommentsToRender.map((comment) => (
                       <CommentDisplay key={comment.id} comment={comment} />
                     ))}
-                    {newComments.map((comment) => (
+                    {newCommentsToRender.map((comment) => (
                       <CommentDisplay key={comment.id} comment={comment} />
                     ))}
                   </div>

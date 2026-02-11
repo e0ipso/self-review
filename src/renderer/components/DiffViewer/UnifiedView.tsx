@@ -72,93 +72,97 @@ export default function UnifiedView({
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           <HunkHeader header={hunk.header} />
-          {hunk.lines.map((line, lineIndex) => {
-            const lineNumber = line.type === 'deletion' ? line.oldLineNumber : line.newLineNumber;
-            const side = line.type === 'deletion' ? 'old' : 'new';
-            const comments = lineNumber
-              ? getCommentsForLine(file.newPath || file.oldPath, lineNumber, side)
-              : [];
-            const showCommentInputHere = commentRange && lineNumber === commentRange.end && commentRange.side === side;
-            const isSelected = lineNumber ? isLineSelected(lineNumber, side) : false;
+          {(() => {
+            // Pre-compute effective new line numbers for cross-type drag support
+            const effectiveNewLines: number[] = [];
+            let lastNew = hunk.newStart;
+            for (const l of hunk.lines) {
+              if (l.newLineNumber !== null) lastNew = l.newLineNumber;
+              effectiveNewLines.push(lastNew);
+            }
+            return hunk.lines.map((line, lineIndex) => {
+              const effectiveLineNumber = effectiveNewLines[lineIndex];
+              const side = 'new' as const;
+              const comments = getCommentsForLine(filePath, effectiveLineNumber, side);
+              const commentsToRender = comments.filter(c => c.lineRange!.end === effectiveLineNumber);
+              const showCommentInputHere = commentRange && effectiveLineNumber === commentRange.end && commentRange.side === side;
+              const isSelected = isLineSelected(effectiveLineNumber, side);
 
-            return (
-              <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
-                <div className={`flex ${getLineBg(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
-                  {/* Old line number */}
-                  <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-old relative`}
-                    data-testid={line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined}
-                    data-line-number={line.oldLineNumber || undefined}
-                    data-line-side="old"
-                  >
-                    {line.oldLineNumber && (
-                      <button
-                        className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover/gutter-old:opacity-100 transition-opacity text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onDragStart(line.oldLineNumber!, 'old');
-                        }}
-                        data-testid={`comment-icon-old-${line.oldLineNumber}`}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    <span className="pointer-events-none">{line.oldLineNumber || ''}</span>
+              return (
+                <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
+                  <div className={`flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${comments.length > 0 ? 'border-l-2 border-l-amber-400' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`} data-line-number={effectiveLineNumber} data-line-side="new">
+                    {/* Old line number */}
+                    <div
+                      className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-old relative`}
+                      data-testid={line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined}
+                    >
+                      {line.oldLineNumber && line.type !== 'context' && (
+                        <button
+                          className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-7 opacity-0 group-hover/gutter-old:opacity-70 transition-opacity text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onDragStart(effectiveLineNumber, side);
+                          }}
+                          data-testid={`comment-icon-old-${line.oldLineNumber}`}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
+                      <span className="pointer-events-none">{line.oldLineNumber || ''}</span>
+                    </div>
+                    {/* New line number */}
+                    <div
+                      className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-new relative`}
+                      data-testid={line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined}
+                    >
+                      {line.newLineNumber && line.type !== 'context' && (
+                        <button
+                          className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-7 opacity-0 group-hover/gutter-new:opacity-70 transition-opacity text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onDragStart(effectiveLineNumber, side);
+                          }}
+                          data-testid={`comment-icon-new-${line.newLineNumber}`}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
+                      <span className="pointer-events-none">{line.newLineNumber || ''}</span>
+                    </div>
+                    {/* Prefix */}
+                    <div className={`line-prefix w-5 flex-shrink-0 text-center text-[11px] leading-[22px] select-none font-bold ${getPrefixColor(line)}`}>
+                      {getLinePrefix(line)}
+                    </div>
+                    {/* Code content */}
+                    <div className="flex-1 px-3 py-0.5 [overflow-x:overlay] leading-[22px]">
+                      <SyntaxLine content={line.content} language={language} lineType={line.type} />
+                    </div>
                   </div>
-                  {/* New line number */}
-                  <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-new relative`}
-                    data-testid={line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined}
-                    data-line-number={line.newLineNumber || undefined}
-                    data-line-side="new"
-                  >
-                    {line.newLineNumber && (
-                      <button
-                        className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover/gutter-new:opacity-100 transition-opacity text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onDragStart(line.newLineNumber!, 'new');
-                        }}
-                        data-testid={`comment-icon-new-${line.newLineNumber}`}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    <span className="pointer-events-none">{line.newLineNumber || ''}</span>
-                  </div>
-                  {/* Prefix */}
-                  <div className={`line-prefix w-5 flex-shrink-0 text-center text-[11px] leading-[22px] select-none font-bold ${getPrefixColor(line)}`}>
-                    {getLinePrefix(line)}
-                  </div>
-                  {/* Code content */}
-                  <div className="flex-1 px-3 py-0.5 overflow-x-auto leading-[22px]">
-                    <SyntaxLine content={line.content} language={language} lineType={line.type} />
-                  </div>
-                </div>
 
-                {/* Comments for this line */}
-                {comments.map((comment) => (
-                  <div key={comment.id} className="border-y border-border/50 bg-muted/20 px-4 py-3 ml-[100px]">
-                    <CommentDisplay comment={comment} />
-                  </div>
-                ))}
+                  {/* Comments for this line (rendered at last line of range) */}
+                  {commentsToRender.map((comment) => (
+                    <div key={comment.id} className="border-y border-border/50 bg-muted/20 px-4 py-3 ml-[100px]">
+                      <CommentDisplay comment={comment} />
+                    </div>
+                  ))}
 
-                {/* Comment input */}
-                {showCommentInputHere && (
-                  <div className="border-y border-border/50 bg-muted/20 px-4 py-3 ml-[100px]">
-                    <CommentInput
-                      filePath={file.newPath || file.oldPath}
-                      lineRange={{ side: commentRange.side, start: commentRange.start, end: commentRange.end }}
-                      onCancel={onCancelComment}
-                      onSubmit={onCommentSaved}
-                    />
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          })}
+                  {/* Comment input */}
+                  {showCommentInputHere && (
+                    <div className="border-y border-border/50 bg-muted/20 px-4 py-3 ml-[100px]">
+                      <CommentInput
+                        filePath={file.newPath || file.oldPath}
+                        lineRange={{ side: commentRange.side, start: commentRange.start, end: commentRange.end }}
+                        onCancel={onCancelComment}
+                        onSubmit={onCommentSaved}
+                      />
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            });
+          })()}
         </div>
       ))}
     </div>
