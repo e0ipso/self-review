@@ -272,15 +272,19 @@ The commenting system is the core interaction of the application. It closely mir
 
 #### 5.4.1 Line Comments
 
-- **Activation:** Clicking on a line number (or a "+" icon that appears on hover) opens a comment input box below that line.
-- **Input:** A text area with markdown support (plain text input; no rich text editor needed, but markdown will be preserved in the output).
-- **Actions:** "Add comment" button to submit. "Cancel" to discard.
-- **Display:** Submitted comments appear inline below the line they reference, with a distinct visual style (e.g., a colored left border, comment author label showing "You").
+- **Activation:** Hovering over a code line reveals a "+" icon in the line number gutter. Clicking the icon opens a comment input box below that line. The line number text itself is not interactive.
+- **Input:** A text area for writing comments in GitHub-flavored markdown (GFM). The input shows a header indicating the target line (e.g., "Comment on line 13").
+- **Actions:** "Comment" button to submit. "Cancel" to discard.
+- **Post-save behavior:** After saving, the comment input closes. To add another comment, click the "+" icon again. No automatic new input box appears.
+- **Display:** Submitted comments appear inline below the line they reference, with a colored left border, "You" author label, a line range indicator (e.g., "line 13"), optional category badge, and the comment body rendered as GitHub-flavored markdown (bold, italic, code blocks, tables, task lists, strikethrough).
 
 #### 5.4.2 Multi-Line Comments
 
-- **Activation:** Click and drag across multiple line numbers to select a range, then add a comment that references the entire range.
-- **Display:** The selected line range is visually highlighted, and the comment appears below the last line of the range.
+- **Activation:** Click and drag the "+" gutter icon across multiple lines to select a range. The drag interaction provides real-time visual feedback by highlighting the selected lines with a blue tint.
+- **Unified code path:** Single-line and multi-line comments share one interaction model and one state (`commentRange`). Clicking the icon is a degenerate case of dragging (start line equals end line).
+- **Hunk boundary constraint:** Drag selection cannot span across hunk boundaries (@@ separators). The selection is clamped to lines within the same hunk.
+- **Side constraint (split view):** In split view, drag is locked to the side (old/new) where it started. Cannot drag across sides.
+- **Display:** The selected line range is visually highlighted, and the comment appears below the last line of the range with a header indicating the range (e.g., "Comment on lines 6 to 10").
 
 #### 5.4.3 File-Level Comments
 
