@@ -198,26 +198,52 @@ graph TD
     005[Task 5: Markdown rendering] --> 006
 ```
 
-### Phase 1: Foundation & Independent UI
+### ✅ Phase 1: Foundation & Independent UI
 **Parallel Tasks:**
-- Task 1: Unify comment state in FileSection and refactor view props
-- Task 4: Add line range headers to CommentInput and CommentDisplay
-- Task 5: Add markdown rendering to CommentDisplay
+- ✔️ Task 1: Unify comment state in FileSection and refactor view props
+- ✔️ Task 4: Add line range headers to CommentInput and CommentDisplay
+- ✔️ Task 5: Add markdown rendering to CommentDisplay
 
-### Phase 2: Gutter Icon
+### ✅ Phase 2: Gutter Icon
 **Parallel Tasks:**
-- Task 2: Add hover "+" icon to gutter for comment activation (depends on: 1)
+- ✔️ Task 2: Add hover "+" icon to gutter for comment activation (depends on: 1)
 
-### Phase 3: Drag Interaction
+### ✅ Phase 3: Drag Interaction
 **Parallel Tasks:**
-- Task 3: Implement drag-to-select with hunk boundary constraints (depends on: 2)
+- ✔️ Task 3: Implement drag-to-select with hunk boundary constraints (depends on: 2)
 
-### Phase 4: Documentation
+### ✅ Phase 4: Documentation
 **Parallel Tasks:**
-- Task 6: Update PRD and create BDD feature files (depends on: 1, 2, 3, 4, 5)
+- ✔️ Task 6: Update PRD and create BDD feature files (depends on: 1, 2, 3, 4, 5)
 
 ### Execution Summary
 - Total Phases: 4
 - Total Tasks: 6
 - Maximum Parallelism: 3 tasks (in Phase 1)
 - Critical Path Length: 4 phases (1 → 2 → 3 → 6)
+
+## Execution Summary
+
+**Status**: ✅ Completed Successfully
+**Completed Date**: 2026-02-11
+
+### Results
+All 6 tasks across 4 phases were executed successfully on the `feature/1--commenting-revamp` branch:
+
+- **Phase 1** (3 tasks in parallel): Unified comment state in FileSection, added line range headers to CommentInput/CommentDisplay, added markdown rendering with react-markdown/remark-gfm
+- **Phase 2** (1 task): Added hover "+" icon to gutter in SplitView/UnifiedView, removed line number click handlers
+- **Phase 3** (1 task): Implemented drag-to-select with hunk boundary constraints via document-level event listeners and a memoized hunk-line lookup map
+- **Phase 4** (1 task): Updated PRD sections 5.4.1/5.4.2 and expanded BDD feature file from 8 to 22 scenarios
+
+Commits: 4 feature commits on `feature/1--commenting-revamp`
+
+### Noteworthy Events
+- Parallel Task 4 and Task 5 both modified `CommentDisplay.tsx` — changes merged cleanly without conflicts (Task 4 modified the header JSX, Task 5 modified the body JSX)
+- Removed unused `onCommentRange` prop from SplitView/UnifiedView during Phase 3 cleanup after the drag interaction replaced direct icon click handlers
+- Removed unused `Checkbox` import from FileSection.tsx during Phase 3 lint cleanup
+- Used Tailwind v4 arbitrary variant selectors (`[&_p]:my-1`, etc.) instead of `@tailwindcss/typography` plugin for markdown styling, since the project uses Tailwind v4 without a config file
+
+### Recommendations
+- Run manual visual QA to verify: hover icon appearance, drag highlight feedback, hunk boundary clamping, markdown rendering in comments
+- Consider adding E2E test step definitions for the new Gherkin scenarios in `tests/steps/`
+- The non-null assertions in UnifiedView.tsx (lines 100, 122) are safe (guarded by `line.oldLineNumber &&` / `line.newLineNumber &&`) but could be refactored to avoid the lint warnings
