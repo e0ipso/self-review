@@ -77,7 +77,7 @@ export default function UnifiedView({
   const filePath = file.newPath || file.oldPath;
 
   return (
-    <div className="font-mono text-[13px] leading-[20px] unified-view">
+    <div className="font-mono text-[13px] leading-[22px] unified-view">
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           <HunkHeader header={hunk.header} />
@@ -92,10 +92,10 @@ export default function UnifiedView({
 
             return (
               <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
-                <div className={`flex ${getLineBg(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''} border-b border-transparent hover:border-border/30`}>
+                <div className={`flex ${getLineBg(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
                   {/* Old line number */}
                   <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[20px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
+                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
                     data-testid={line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined}
                     onMouseDown={() => line.oldLineNumber && handleLineMouseDown(line.oldLineNumber, 'old')}
                     onMouseUp={() => line.oldLineNumber && handleLineMouseUp(line.oldLineNumber, 'old')}
@@ -105,7 +105,7 @@ export default function UnifiedView({
                   </div>
                   {/* New line number */}
                   <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[20px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
+                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
                     data-testid={line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined}
                     onMouseDown={() => line.newLineNumber && handleLineMouseDown(line.newLineNumber, 'new')}
                     onMouseUp={() => line.newLineNumber && handleLineMouseUp(line.newLineNumber, 'new')}
@@ -114,11 +114,11 @@ export default function UnifiedView({
                     {line.newLineNumber || ''}
                   </div>
                   {/* Prefix */}
-                  <div className={`line-prefix w-5 flex-shrink-0 text-center text-[11px] leading-[20px] select-none font-bold ${getPrefixColor(line)}`}>
+                  <div className={`line-prefix w-5 flex-shrink-0 text-center text-[11px] leading-[22px] select-none font-bold ${getPrefixColor(line)}`}>
                     {getLinePrefix(line)}
                   </div>
                   {/* Code content */}
-                  <div className="flex-1 px-2 overflow-x-auto leading-[20px]">
+                  <div className="flex-1 px-3 py-0.5 overflow-x-auto leading-[22px]">
                     <SyntaxLine content={line.content} language={language} lineType={line.type} />
                   </div>
                 </div>

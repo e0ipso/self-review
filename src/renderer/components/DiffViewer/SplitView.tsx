@@ -106,7 +106,7 @@ export default function SplitView({
       <div className={`split-half w-1/2 flex ${getLineBg(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
         {/* Line number gutter */}
         <div
-          className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[20px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
+          className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
           data-testid={lineTestId}
           onMouseDown={() => lineNumber && handleLineMouseDown(lineNumber, side)}
           onMouseUp={() => lineNumber && handleLineMouseUp(lineNumber, side)}
@@ -115,7 +115,7 @@ export default function SplitView({
           {lineNumber || ''}
         </div>
         {/* Code content */}
-        <div className="flex-1 px-2 overflow-x-auto leading-[20px]">
+        <div className="flex-1 px-3 py-0.5 overflow-x-auto leading-[22px]">
           <SyntaxLine content={line.content} language={language} lineType={line.type} />
         </div>
       </div>
@@ -123,7 +123,7 @@ export default function SplitView({
   };
 
   return (
-    <div className="font-mono text-[13px] leading-[20px] split-view">
+    <div className="font-mono text-[13px] leading-[22px] split-view">
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           <HunkHeader header={hunk.header} />
@@ -143,7 +143,7 @@ export default function SplitView({
 
             return (
               <React.Fragment key={`${hunkIndex}-${rowIndex}`}>
-                <div className="flex border-b border-transparent hover:border-border/30">
+                <div className="flex">
                   {/* Old side (left) */}
                   {row.oldLine ? (
                     renderLineCell(row.oldLine, 'old')

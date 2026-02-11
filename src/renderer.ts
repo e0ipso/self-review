@@ -1,4 +1,5 @@
 import './index.css';
+import 'prismjs/themes/prism.css';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './renderer/App';

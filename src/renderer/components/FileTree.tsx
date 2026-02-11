@@ -101,7 +101,7 @@ export default function FileTree() {
                   <button
                     data-testid={`file-entry-${filePath}`}
                     onClick={() => scrollToFile(filePath)}
-                    className={`w-full text-left px-2 py-1.5 rounded-md transition-colors ${
+                    className={`w-full text-left px-2 py-1.5 rounded-md transition-colors cursor-pointer ${
                       isActive
                         ? 'bg-accent text-accent-foreground'
                         : 'hover:bg-accent/50 text-foreground'

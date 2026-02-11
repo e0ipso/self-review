@@ -19,7 +19,6 @@ import 'prismjs/components/prism-cpp';
 import 'prismjs/components/prism-ruby';
 import 'prismjs/components/prism-php';
 import 'prismjs/components/prism-markup';
-import 'prism-themes/themes/prism-one-dark.css';
 
 import type { DiffLineType } from '../../../shared/types';
 
@@ -68,19 +67,32 @@ const SyntaxLine = React.memo(function SyntaxLine({
   const highlightedContent = React.useMemo(() => {
     try {
       const prismLanguage = Prism.languages[language];
-      if (!prismLanguage) {
-        // No syntax highlighting for unknown languages - return escaped content
-        return content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      if (!prismLanguage || language === 'plaintext') {
+        console.error(`[Prism] No language support for: ${language}`);
+        return content
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\t/g, '    ');
       }
-      return Prism.highlight(content, prismLanguage, language);
-    } catch {
-      return content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const highlighted = Prism.highlight(content, prismLanguage, language);
+      if (content.length > 0 && content.length < 50) {
+        console.error(`[Prism] ${language}: "${content.substring(0, 30)}" → ${highlighted.includes('<span') ? 'HAS TOKENS' : 'NO TOKENS'}`);
+      }
+      return highlighted;
+    } catch (err) {
+      console.error(`[Prism] Error for ${language}:`, err);
+      return content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\t/g, '    ');
     }
   }, [content, language]);
 
   return (
-    <span
-      className="font-mono text-[13px]"
+    <code
+      className="font-mono text-[13px] whitespace-pre block"
       dangerouslySetInnerHTML={{ __html: highlightedContent }}
     />
   );
