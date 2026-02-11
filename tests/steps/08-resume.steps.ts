@@ -5,6 +5,7 @@ import { expect } from '@playwright/test';
 import { createBdd, DataTable } from 'playwright-bdd';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
+import { XMLParser } from 'fast-xml-parser';
 import { createPriorReviewXml } from '../fixtures/test-repo';
 import {
   getPage,
@@ -87,7 +88,6 @@ Then(
   'the XML output should contain {int} comments for {string}',
   async ({}, count: number, filePath: string) => {
     const stdout = getStdout();
-    const { XMLParser } = await import('fast-xml-parser');
     const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
     const parsed = parser.parse(stdout);
     const files = Array.isArray(parsed.review.file)
