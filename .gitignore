@@ -115,3 +115,8 @@ dist/
 
 # Claude Code (user-specific)
 .claude/
+
+# Test artifacts
+test-results/
+.features-gen/
+core
