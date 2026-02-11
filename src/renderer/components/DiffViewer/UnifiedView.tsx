@@ -90,7 +90,7 @@ export default function UnifiedView({
 
               return (
                 <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
-                  <div className={`flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${comments.length > 0 ? 'border-l-2 border-l-amber-400' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`} data-line-number={effectiveLineNumber} data-line-side="new">
+                  <div className={`flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${comments.length > 0 ? 'border-l-4 !border-l-amber-500 dark:!border-l-amber-300' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`} data-line-number={effectiveLineNumber} data-line-side="new">
                     {/* Old line number */}
                     <div
                       className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-old relative`}

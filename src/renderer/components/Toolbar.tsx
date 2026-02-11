@@ -13,12 +13,15 @@ import {
   Monitor,
   ChevronsDownUp,
   ChevronsUpDown,
+  MessageSquare,
+  MessageSquareOff,
 } from 'lucide-react';
 
 export default function Toolbar() {
   const { config, updateConfig } = useConfig();
   const { diffFiles } = useReview();
   const [allExpanded, setAllExpanded] = useState(true);
+  const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
 
   const stats = useMemo(() => {
     let additions = 0;
@@ -38,6 +41,13 @@ export default function Toolbar() {
     const newExpanded = !allExpanded;
     setAllExpanded(newExpanded);
     const event = new CustomEvent('toggle-all-sections', { detail: { expanded: newExpanded } });
+    document.dispatchEvent(event);
+  };
+
+  const handleToggleAllComments = () => {
+    const newCollapsed = !allCommentsCollapsed;
+    setAllCommentsCollapsed(newCollapsed);
+    const event = new CustomEvent('toggle-all-comments', { detail: { collapsed: newCollapsed } });
     document.dispatchEvent(event);
   };
 
@@ -97,6 +107,26 @@ export default function Toolbar() {
           )}
           <span className="text-xs">{allExpanded ? 'Collapse' : 'Expand'}</span>
         </Button>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid={allCommentsCollapsed ? 'expand-all-comments-btn' : 'collapse-all-comments-btn'}
+              onClick={handleToggleAllComments}
+              className="gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground"
+            >
+              {allCommentsCollapsed ? (
+                <MessageSquare className="h-3.5 w-3.5" />
+              ) : (
+                <MessageSquareOff className="h-3.5 w-3.5" />
+              )}
+              <span className="text-xs">{allCommentsCollapsed ? 'Expand' : 'Collapse'} Comments</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{allCommentsCollapsed ? 'Expand all comments' : 'Collapse all comments'}</TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="diff-stats">

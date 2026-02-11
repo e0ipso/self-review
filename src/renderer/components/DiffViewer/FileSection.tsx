@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { DiffFile } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
@@ -60,6 +60,12 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
     return map;
   }, [file]);
 
+  // Refs for stable access in event handlers
+  const dragStateRef = useRef(dragState);
+  dragStateRef.current = dragState;
+  const hunkLineMapRef = useRef(hunkLineMap);
+  hunkLineMapRef.current = hunkLineMap;
+
   // Sync viewed state with expansion: when viewed is checked, collapse the file
   useEffect(() => {
     if (isViewed && expanded && onToggleExpanded) {
@@ -97,45 +103,40 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
     setDragState({ startLine: lineNumber, currentLine: lineNumber, side });
   };
 
-  const handleDragMove = useCallback((lineNumber: number, side: 'old' | 'new') => {
-    if (!dragState || dragState.side !== side) return;
-
-    // Clamp to same hunk
-    const startKey = `${dragState.side}-${dragState.startLine}`;
-    const hunkInfo = hunkLineMap.get(startKey);
-    if (!hunkInfo) return;
-
-    const clampedLine = Math.max(hunkInfo.minLine, Math.min(hunkInfo.maxLine, lineNumber));
-    setDragState(prev => prev ? { ...prev, currentLine: clampedLine } : null);
-  }, [dragState, hunkLineMap]);
-
-  const handleDragEnd = useCallback(() => {
-    if (dragState) {
-      const start = Math.min(dragState.startLine, dragState.currentLine);
-      const end = Math.max(dragState.startLine, dragState.currentLine);
-      handleCommentRange(start, end, dragState.side);
-    }
-    setDragState(null);
-  }, [dragState]);
-
   // Document-level listeners for drag
+  const isDragging = dragState !== null;
   useEffect(() => {
-    if (!dragState) return;
+    if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
+      const ds = dragStateRef.current;
+      if (!ds) return;
+
       const target = document.elementFromPoint(e.clientX, e.clientY);
       const lineEl = target?.closest('[data-line-number]') as HTMLElement | null;
       if (lineEl) {
         const lineNumber = parseInt(lineEl.getAttribute('data-line-number')!, 10);
         const side = lineEl.getAttribute('data-line-side') as 'old' | 'new';
-        if (!isNaN(lineNumber) && side === dragState.side) {
-          handleDragMove(lineNumber, side);
+        if (!isNaN(lineNumber) && side === ds.side) {
+          // Clamp to same hunk
+          const startKey = `${ds.side}-${ds.startLine}`;
+          const hunkInfo = hunkLineMapRef.current.get(startKey);
+          if (!hunkInfo) return;
+
+          const clampedLine = Math.max(hunkInfo.minLine, Math.min(hunkInfo.maxLine, lineNumber));
+          setDragState(prev => prev ? { ...prev, currentLine: clampedLine } : null);
         }
       }
     };
 
     const handleMouseUp = () => {
-      handleDragEnd();
+      const ds = dragStateRef.current;
+      if (ds) {
+        const start = Math.min(ds.startLine, ds.currentLine);
+        const end = Math.max(ds.startLine, ds.currentLine);
+        handleCommentRange(start, end, ds.side);
+      }
+      setDragState(null);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -145,7 +146,7 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragState, hunkLineMap, handleDragMove, handleDragEnd]);
+  }, [isDragging]);
 
   const handleAddFileComment = () => {
     setShowingFileComment(true);
