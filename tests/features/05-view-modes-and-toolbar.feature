@@ -39,6 +39,11 @@ Feature: View Modes and Toolbar
     Then the "src/auth/login.ts" file section should be collapsed
     And the "src/config.ts" file section should still be expanded
 
+  Scenario: Toolbar displays diff stats summary
+    Then the toolbar should show "4 files changed"
+    And the toolbar should show additions count "+37"
+    And the toolbar should show deletions count "-44"
+
   Scenario: Toggle theme to dark mode
     When I switch the theme to "Dark" in the toolbar
     Then the application should use dark theme colors

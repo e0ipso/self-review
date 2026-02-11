@@ -313,6 +313,7 @@ A top toolbar provides global controls:
 |---------|------|-------------|
 | View mode toggle | Segmented button | Switch between Split and Unified diff views |
 | Expand/Collapse all | Button | Expand or collapse all file sections at once |
+| Diff stats summary | Text | Shows total files changed, additions (+N in green), and deletions (-N in red). Computed from the parsed diff data. |
 | Theme toggle | Button or dropdown | Switch between Light, Dark, and System theme |
 
 ### 5.6 Theming

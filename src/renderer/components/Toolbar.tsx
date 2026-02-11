@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useConfig } from '../context/ConfigContext';
+import { useReview } from '../context/ReviewContext';
 import { Button } from './ui/button';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Separator } from './ui/separator';
@@ -16,7 +17,22 @@ import {
 
 export default function Toolbar() {
   const { config, updateConfig } = useConfig();
+  const { diffFiles } = useReview();
   const [allExpanded, setAllExpanded] = useState(true);
+
+  const stats = useMemo(() => {
+    let additions = 0;
+    let deletions = 0;
+    for (const file of diffFiles) {
+      for (const hunk of file.hunks) {
+        for (const line of hunk.lines) {
+          if (line.type === 'addition') additions++;
+          else if (line.type === 'deletion') deletions++;
+        }
+      }
+    }
+    return { files: diffFiles.length, additions, deletions };
+  }, [diffFiles]);
 
   const handleToggleAllSections = () => {
     const newExpanded = !allExpanded;
@@ -81,6 +97,16 @@ export default function Toolbar() {
           )}
           <span className="text-xs">{allExpanded ? 'Collapse' : 'Expand'}</span>
         </Button>
+      </div>
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="diff-stats">
+        <span>{stats.files} {stats.files === 1 ? 'file' : 'files'} changed</span>
+        {stats.additions > 0 && (
+          <span className="text-green-600 dark:text-green-400">+{stats.additions}</span>
+        )}
+        {stats.deletions > 0 && (
+          <span className="text-red-600 dark:text-red-400">-{stats.deletions}</span>
+        )}
       </div>
 
       <ToggleGroup

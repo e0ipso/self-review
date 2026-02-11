@@ -122,6 +122,26 @@ Then(
   },
 );
 
+// ── Then: diff stats assertions ──
+
+Then('the toolbar should show {string}', async ({}, text: string) => {
+  const page = getPage();
+  const stats = page.locator('[data-testid="diff-stats"]');
+  await expect(stats).toContainText(text);
+});
+
+Then('the toolbar should show additions count {string}', async ({}, text: string) => {
+  const page = getPage();
+  const stats = page.locator('[data-testid="diff-stats"]');
+  await expect(stats).toContainText(text);
+});
+
+Then('the toolbar should show deletions count {string}', async ({}, text: string) => {
+  const page = getPage();
+  const stats = page.locator('[data-testid="diff-stats"]');
+  await expect(stats).toContainText(text);
+});
+
 // ── Then: theme assertions ──
 
 Then('the application should use dark theme colors', async () => {
