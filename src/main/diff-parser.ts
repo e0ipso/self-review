@@ -28,10 +28,14 @@ export function parseDiff(rawDiff: string): DiffFile[] {
         }
       }
 
+      // Extract paths from "diff --git a/<old> b/<new>" as fallback
+      // for binary files that lack --- / +++ lines
+      const gitPaths = parseGitDiffHeader(line);
+
       // Initialize new file
       currentFile = {
-        oldPath: '',
-        newPath: '',
+        oldPath: gitPaths.oldPath,
+        newPath: gitPaths.newPath,
         changeType: 'modified' as ChangeType,
         isBinary: false,
         hunks: [],
@@ -179,4 +183,22 @@ function stripPrefix(path: string): string {
     return path.substring(2);
   }
   return path;
+}
+
+function parseGitDiffHeader(line: string): { oldPath: string; newPath: string } {
+  // Format: "diff --git a/<old> b/<new>"
+  // Paths may contain spaces, so we find the " b/" separator.
+  // Git guarantees the b/ prefix appears after a space.
+  const withoutPrefix = line.substring('diff --git '.length);
+
+  // Find " b/" — the boundary between old and new paths.
+  // Search from the midpoint-ish to handle paths that themselves contain " b/".
+  const bIdx = withoutPrefix.indexOf(' b/');
+  if (bIdx === -1) {
+    return { oldPath: '', newPath: '' };
+  }
+
+  const oldPath = stripPrefix(withoutPrefix.substring(0, bIdx));
+  const newPath = stripPrefix(withoutPrefix.substring(bIdx + 1));
+  return { oldPath, newPath };
 }
