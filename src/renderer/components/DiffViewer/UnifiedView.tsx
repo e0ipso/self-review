@@ -1,4 +1,5 @@
 import React from 'react';
+import { Plus } from 'lucide-react';
 import type { DiffFile, DiffLine } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import HunkHeader from './HunkHeader';
@@ -91,25 +92,45 @@ export default function UnifiedView({
                 <div className={`flex ${getLineBg(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
                   {/* Old line number */}
                   <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
+                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-old relative`}
                     data-testid={line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined}
-                    onMouseDown={() => line.oldLineNumber && onDragStart(line.oldLineNumber, 'old')}
-                    onMouseMove={() => line.oldLineNumber && onDragMove(line.oldLineNumber)}
-                    onMouseUp={() => line.oldLineNumber && onDragEnd(line.oldLineNumber, 'old')}
-                    onClick={() => line.oldLineNumber && onCommentRange(line.oldLineNumber, line.oldLineNumber, 'old')}
+                    data-line-number={line.oldLineNumber || undefined}
+                    data-line-side="old"
                   >
-                    {line.oldLineNumber || ''}
+                    {line.oldLineNumber && (
+                      <button
+                        className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover/gutter-old:opacity-100 transition-opacity text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onCommentRange(line.oldLineNumber!, line.oldLineNumber!, 'old');
+                        }}
+                        data-testid={`comment-icon-old-${line.oldLineNumber}`}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <span className="pointer-events-none">{line.oldLineNumber || ''}</span>
                   </div>
                   {/* New line number */}
                   <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
+                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-new relative`}
                     data-testid={line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined}
-                    onMouseDown={() => line.newLineNumber && onDragStart(line.newLineNumber, 'new')}
-                    onMouseMove={() => line.newLineNumber && onDragMove(line.newLineNumber)}
-                    onMouseUp={() => line.newLineNumber && onDragEnd(line.newLineNumber, 'new')}
-                    onClick={() => line.newLineNumber && onCommentRange(line.newLineNumber, line.newLineNumber, 'new')}
+                    data-line-number={line.newLineNumber || undefined}
+                    data-line-side="new"
                   >
-                    {line.newLineNumber || ''}
+                    {line.newLineNumber && (
+                      <button
+                        className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover/gutter-new:opacity-100 transition-opacity text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onCommentRange(line.newLineNumber!, line.newLineNumber!, 'new');
+                        }}
+                        data-testid={`comment-icon-new-${line.newLineNumber}`}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <span className="pointer-events-none">{line.newLineNumber || ''}</span>
                   </div>
                   {/* Prefix */}
                   <div className={`line-prefix w-5 flex-shrink-0 text-center text-[11px] leading-[22px] select-none font-bold ${getPrefixColor(line)}`}>

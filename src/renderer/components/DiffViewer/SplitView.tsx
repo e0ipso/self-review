@@ -1,4 +1,5 @@
 import React from 'react';
+import { Plus } from 'lucide-react';
 import type { DiffFile, DiffLine } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import HunkHeader from './HunkHeader';
@@ -102,14 +103,24 @@ export default function SplitView({
       <div className={`split-half w-1/2 flex ${getLineBg(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
         {/* Line number gutter */}
         <div
-          className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
+          className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter relative`}
           data-testid={lineTestId}
-          onMouseDown={() => lineNumber && onDragStart(lineNumber, side)}
-          onMouseMove={() => lineNumber && onDragMove(lineNumber)}
-          onMouseUp={() => lineNumber && onDragEnd(lineNumber, side)}
-          onClick={() => lineNumber && onCommentRange(lineNumber, lineNumber, side)}
+          data-line-number={lineNumber || undefined}
+          data-line-side={side}
         >
-          {lineNumber || ''}
+          {lineNumber && (
+            <button
+              className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover/gutter:opacity-100 transition-opacity text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCommentRange(lineNumber, lineNumber, side);
+              }}
+              data-testid={`comment-icon-${side}-${lineNumber}`}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <span className="pointer-events-none">{lineNumber || ''}</span>
         </div>
         {/* Code content */}
         <div className="flex-1 px-3 py-0.5 overflow-x-auto leading-[22px]">
