@@ -61,6 +61,13 @@ RUN ARCH=$(dpkg --print-architecture) && \
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/node && \
   chmod 0440 /etc/sudoers.d/node
 
+# Install Electron packaging tools (dpkg already present in base image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  fakeroot \
+  rpm \
+  zip \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Install Electron/Chromium dependencies for E2E testing
 RUN apt-get update && apt-get install -y --no-install-recommends \
   xvfb \

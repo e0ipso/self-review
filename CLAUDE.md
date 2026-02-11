@@ -2,6 +2,10 @@
 
 Local-only Electron desktop app that provides a GitHub-style PR review UI for local git diffs. Designed for solo developers reviewing AI-generated code. CLI-first, one-shot workflow: open → review → close → XML to stdout.
 
+## Dev Container
+
+Do NOT run e2e tests inside the container, they will not work. Check if you are inside of the dev container before running the e2e tests.
+
 ## Tech Stack
 
 - **Electron** (desktop shell, main + renderer process model)
