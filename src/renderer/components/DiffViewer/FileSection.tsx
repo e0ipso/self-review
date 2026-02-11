@@ -87,13 +87,14 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
   const displayPath = file.changeType === 'renamed' ? `${file.oldPath} → ${file.newPath}` : filePath;
 
   return (
-    <div className="border-b border-border" data-file-path={filePath}>
+    <div className="border-b border-border" data-file-path={filePath} data-testid={`file-section-${filePath}`}>
       {/* Header bar */}
-      <div className="bg-muted/30 px-4 py-3 flex items-center gap-3 border-t border-border">
+      <div className="bg-muted/30 px-4 py-3 flex items-center gap-3 border-t border-border" data-testid={`file-header-${filePath}`}>
         {/* Expand/collapse toggle */}
         <Button
           variant="ghost"
           size="sm"
+          data-testid="collapse-toggle"
           onClick={() => {
             if (onToggleExpanded) {
               onToggleExpanded(filePath);
@@ -131,6 +132,7 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
         <div className="flex items-center gap-2">
           <Checkbox
             id={`viewed-${filePath}`}
+            data-testid={`viewed-${filePath}`}
             onCheckedChange={() => toggleViewed(filePath)}
           />
           <label htmlFor={`viewed-${filePath}`} className="text-sm cursor-pointer">
@@ -142,6 +144,7 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
         <Button
           variant="outline"
           size="sm"
+          data-testid={`add-file-comment-${filePath}`}
           onClick={handleAddFileComment}
           className="flex items-center gap-1"
         >
@@ -152,7 +155,7 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
 
       {/* Body */}
       {expanded && (
-        <div className="bg-background">
+        <div className="bg-background file-diff-content">
           {/* File-level comments */}
           {fileComments.length > 0 && (
             <div className="border-b border-border">

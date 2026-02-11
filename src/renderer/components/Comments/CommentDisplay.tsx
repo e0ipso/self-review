@@ -46,6 +46,7 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
   return (
     <div
       className="rounded-lg bg-muted/30 p-4"
+      data-testid={`comment-${comment.id}`}
       style={{ borderLeft: `4px solid ${borderColor}` }}
     >
       <div className="mb-2 flex items-center justify-between">
@@ -54,6 +55,7 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
           {comment.category && (
             <Badge
               variant="secondary"
+              className="category-badge"
               style={{
                 backgroundColor: categoryDef?.color || undefined,
                 color: categoryDef ? 'white' : undefined,

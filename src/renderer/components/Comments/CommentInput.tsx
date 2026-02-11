@@ -72,7 +72,7 @@ export default function CommentInput({
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <div className="rounded-lg border border-border bg-card p-4 shadow-sm" data-testid="comment-input">
       <Textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -90,6 +90,7 @@ export default function CommentInput({
             type="button"
             variant="outline"
             size="sm"
+            data-testid="add-suggestion-btn"
             onClick={() => setShowSuggestion(!showSuggestion)}
           >
             {showSuggestion ? 'Remove suggestion' : 'Add suggestion'}
@@ -99,7 +100,7 @@ export default function CommentInput({
 
       {showSuggestion && originalCode && (
         <div className="mb-3 space-y-2">
-          <div>
+          <div data-testid="suggestion-original">
             <label className="mb-1 block text-sm font-medium text-foreground">
               Original code
             </label>
@@ -110,7 +111,7 @@ export default function CommentInput({
               rows={3}
             />
           </div>
-          <div>
+          <div data-testid="suggestion-proposed">
             <label className="mb-1 block text-sm font-medium text-foreground">
               Proposed code
             </label>
@@ -126,10 +127,10 @@ export default function CommentInput({
       )}
 
       <div className="flex gap-2">
-        <Button onClick={handleSubmit} disabled={!body.trim()}>
+        <Button data-testid="add-comment-btn" onClick={handleSubmit} disabled={!body.trim()}>
           {existingComment ? 'Update comment' : 'Add comment'}
         </Button>
-        <Button variant="ghost" onClick={handleCancel}>
+        <Button data-testid="cancel-comment-btn" variant="ghost" onClick={handleCancel}>
           Cancel
         </Button>
       </div>

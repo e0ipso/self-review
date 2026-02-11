@@ -31,7 +31,7 @@ export default function Toolbar() {
   };
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-background">
+    <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-background" data-testid="toolbar">
       <div className="flex items-center gap-4">
         {/* View Mode Toggle */}
         <div className="flex items-center gap-2">
@@ -42,18 +42,23 @@ export default function Toolbar() {
             onValueChange={handleViewModeChange}
             className="gap-0"
           >
-            <ToggleGroupItem value="split" className="px-3 py-1 text-sm">
+            <ToggleGroupItem value="split" className="px-3 py-1 text-sm" data-testid="view-mode-split">
               Split
             </ToggleGroupItem>
-            <ToggleGroupItem value="unified" className="px-3 py-1 text-sm">
+            <ToggleGroupItem value="unified" className="px-3 py-1 text-sm" data-testid="view-mode-unified">
               Unified
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
 
         {/* Expand/Collapse All Button */}
-        <Button variant="outline" size="sm" onClick={handleToggleAllSections}>
-          Expand/Collapse All
+        <Button
+          variant="outline"
+          size="sm"
+          data-testid={allExpanded ? 'collapse-all-btn' : 'expand-all-btn'}
+          onClick={handleToggleAllSections}
+        >
+          {allExpanded ? 'Collapse all' : 'Expand all'}
         </Button>
       </div>
 
@@ -61,18 +66,18 @@ export default function Toolbar() {
         {/* Theme Toggle */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" data-testid="theme-selector">
               Theme: {config.theme.charAt(0).toUpperCase() + config.theme.slice(1)}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleThemeChange('light')}>
+            <DropdownMenuItem data-testid="theme-option-light" onClick={() => handleThemeChange('light')}>
               Light
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleThemeChange('dark')}>
+            <DropdownMenuItem data-testid="theme-option-dark" onClick={() => handleThemeChange('dark')}>
               Dark
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleThemeChange('system')}>
+            <DropdownMenuItem data-testid="theme-option-system" onClick={() => handleThemeChange('system')}>
               System
             </DropdownMenuItem>
           </DropdownMenuContent>

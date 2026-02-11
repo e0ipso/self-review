@@ -21,27 +21,29 @@ export default function CategorySelector({ value, onChange }: CategorySelectorPr
   }
 
   return (
-    <Select
-      value={value || 'none'}
-      onValueChange={(val) => onChange(val === 'none' ? null : val)}
-    >
-      <SelectTrigger className="w-[200px]">
-        <SelectValue placeholder="No category" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="none">No category</SelectItem>
-        {config.categories.map((cat) => (
-          <SelectItem key={cat.name} value={cat.name}>
-            <div className="flex items-center gap-2">
-              <div
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: cat.color }}
-              />
-              {cat.name}
-            </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div data-testid="category-selector">
+      <Select
+        value={value || 'none'}
+        onValueChange={(val) => onChange(val === 'none' ? null : val)}
+      >
+        <SelectTrigger className="w-[200px]">
+          <SelectValue placeholder="No category" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">No category</SelectItem>
+          {config.categories.map((cat) => (
+            <SelectItem key={cat.name} value={cat.name} data-testid={`category-option-${cat.name}`}>
+              <div className="flex items-center gap-2">
+                <div
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: cat.color }}
+                />
+                {cat.name}
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

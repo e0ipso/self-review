@@ -66,7 +66,7 @@ export default function DiffViewer() {
   }
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto">
+    <div ref={containerRef} className="flex-1 overflow-y-auto" data-testid="diff-viewer" data-diff-viewer>
       {diffFiles.map((file) => {
         const filePath = file.newPath || file.oldPath;
         return (

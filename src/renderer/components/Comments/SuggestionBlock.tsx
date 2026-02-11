@@ -32,7 +32,7 @@ export default function SuggestionBlock({ suggestion, language = 'typescript' }:
   const proposedLines = suggestion.proposedCode.split('\n');
 
   return (
-    <div className="mt-2 rounded border border-border bg-muted/30 text-sm font-mono">
+    <div className="mt-2 rounded border border-border bg-muted/30 text-sm font-mono" data-testid="suggestion-block">
       <div className="border-b border-border bg-muted px-3 py-1 text-xs font-semibold text-foreground">
         Suggested change
       </div>
@@ -40,7 +40,7 @@ export default function SuggestionBlock({ suggestion, language = 'typescript' }:
         {originalLines.map((line, idx) => (
           <div
             key={`old-${idx}`}
-            className="flex bg-red-50 dark:bg-red-950/20"
+            className="suggestion-deletion flex bg-red-50 dark:bg-red-950/20"
           >
             <span className="inline-block w-8 flex-shrink-0 select-none px-2 text-red-600 dark:text-red-400">
               -
@@ -56,7 +56,7 @@ export default function SuggestionBlock({ suggestion, language = 'typescript' }:
         {proposedLines.map((line, idx) => (
           <div
             key={`new-${idx}`}
-            className="flex bg-green-50 dark:bg-green-950/20"
+            className="suggestion-addition flex bg-green-50 dark:bg-green-950/20"
           >
             <span className="inline-block w-8 flex-shrink-0 select-none px-2 text-green-600 dark:text-green-400">
               +

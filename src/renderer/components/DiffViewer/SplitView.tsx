@@ -96,11 +96,16 @@ export default function SplitView({
         ? 'bg-red-50 dark:bg-red-950/30'
         : '';
 
+    const lineTestId = lineNumber
+      ? `${side === 'old' ? 'old' : 'new'}-line-${filePath}-${lineNumber}`
+      : undefined;
+
     return (
-      <div className={`w-1/2 flex border-r border-border ${bgColor} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''}`}>
+      <div className={`split-half w-1/2 flex border-r border-border ${bgColor} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
         {/* Line number gutter */}
         <div
           className="w-12 text-right px-2 text-muted-foreground select-none cursor-pointer hover:bg-muted/50"
+          data-testid={lineTestId}
           onMouseDown={() => lineNumber && handleLineMouseDown(lineNumber, side)}
           onMouseUp={() => lineNumber && handleLineMouseUp(lineNumber, side)}
           onClick={() => lineNumber && onLineClick(lineNumber, side)}
@@ -115,8 +120,10 @@ export default function SplitView({
     );
   };
 
+  const filePath = file.newPath || file.oldPath;
+
   return (
-    <div className="font-mono text-sm">
+    <div className="font-mono text-sm split-view">
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           <HunkHeader header={hunk.header} />

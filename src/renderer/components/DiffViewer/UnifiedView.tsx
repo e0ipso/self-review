@@ -70,8 +70,10 @@ export default function UnifiedView({
     return lineNumber >= selectionRange.start && lineNumber <= selectionRange.end;
   };
 
+  const filePath = file.newPath || file.oldPath;
+
   return (
-    <div className="font-mono text-sm">
+    <div className="font-mono text-sm unified-view">
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           <HunkHeader header={hunk.header} />
@@ -86,10 +88,11 @@ export default function UnifiedView({
 
             return (
               <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
-                <div className={`flex ${getLineBackground(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''}`}>
+                <div className={`flex ${getLineBackground(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
                   {/* Old line number gutter */}
                   <div
                     className="w-12 text-right px-2 text-muted-foreground select-none cursor-pointer hover:bg-muted/50"
+                    data-testid={line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined}
                     onMouseDown={() => line.oldLineNumber && handleLineMouseDown(line.oldLineNumber, 'old')}
                     onMouseUp={() => line.oldLineNumber && handleLineMouseUp(line.oldLineNumber, 'old')}
                     onClick={() => line.oldLineNumber && onLineClick(line.oldLineNumber, 'old')}
@@ -99,6 +102,7 @@ export default function UnifiedView({
                   {/* New line number gutter */}
                   <div
                     className="w-12 text-right px-2 text-muted-foreground select-none cursor-pointer hover:bg-muted/50"
+                    data-testid={line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined}
                     onMouseDown={() => line.newLineNumber && handleLineMouseDown(line.newLineNumber, 'new')}
                     onMouseUp={() => line.newLineNumber && handleLineMouseUp(line.newLineNumber, 'new')}
                     onClick={() => line.newLineNumber && onLineClick(line.newLineNumber, 'new')}
@@ -106,7 +110,7 @@ export default function UnifiedView({
                     {line.newLineNumber || ''}
                   </div>
                   {/* Prefix */}
-                  <div className="w-6 text-center px-1 text-muted-foreground select-none">
+                  <div className="line-prefix w-6 text-center px-1 text-muted-foreground select-none">
                     {getLinePrefix(line)}
                   </div>
                   {/* Code content */}

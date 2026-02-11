@@ -63,7 +63,7 @@ export default function FileTree() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" data-testid="file-tree">
       {/* Search Input */}
       <div className="p-3 border-b border-border">
         <Input
@@ -72,6 +72,7 @@ export default function FileTree() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="h-8"
+          data-testid="file-search"
         />
       </div>
 
@@ -90,6 +91,7 @@ export default function FileTree() {
               <Tooltip key={filePath}>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid={`file-entry-${filePath}`}
                     onClick={() => scrollToFile(filePath)}
                     className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${
                       isActive
@@ -101,7 +103,7 @@ export default function FileTree() {
                       {/* Change Type Badge */}
                       <Badge
                         variant={changeTypeBadge.variant}
-                        className={`${changeTypeBadge.className} text-white w-5 h-5 p-0 flex items-center justify-center text-xs`}
+                        className={`change-type-badge ${changeTypeBadge.className} text-white w-5 h-5 p-0 flex items-center justify-center text-xs`}
                       >
                         {changeTypeBadge.label}
                       </Badge>
@@ -126,7 +128,7 @@ export default function FileTree() {
                         <span className="text-red-600">-{stats.deletions}</span>
                       )}
                       {commentCount > 0 && (
-                        <Badge variant="outline" className="h-4 px-1 text-xs">
+                        <Badge variant="outline" className="comment-count h-4 px-1 text-xs">
                           {commentCount} comment{commentCount !== 1 ? 's' : ''}
                         </Badge>
                       )}
