@@ -21,7 +21,7 @@ export function parseDiff(rawDiff: string): DiffFile[] {
     // Start of a new file
     if (line.startsWith('diff --git ')) {
       // Save previous file if exists
-      if (currentFile && currentFile.oldPath && currentFile.newPath) {
+      if (currentFile && currentFile.oldPath !== undefined && currentFile.newPath !== undefined) {
         files.push(currentFile as DiffFile);
       }
 
