@@ -22,7 +22,6 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const categoryDef = config.categories?.find((cat) => cat.name === comment.category);
-  const borderColor = categoryDef?.color || 'hsl(var(--border))';
 
   // Listen for global collapse/expand all events
   useEffect(() => {
@@ -68,7 +67,6 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
     <div
       className="rounded-lg border border-border bg-card text-sm group"
       data-testid={`comment-${comment.id}`}
-      style={{ borderLeftWidth: '3px', borderLeftColor: borderColor }}
     >
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2">
