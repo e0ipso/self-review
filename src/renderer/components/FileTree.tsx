@@ -3,7 +3,6 @@ import { useReview } from '../context/ReviewContext';
 import { useDiffNavigation } from '../hooks/useDiffNavigation';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
-import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { Search, CircleDashed, CircleCheck, MessageSquare } from 'lucide-react';
@@ -64,7 +63,7 @@ export default function FileTree() {
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" data-testid="file-tree">
+    <div className="flex flex-col h-full" data-testid="file-tree">
       {/* Header */}
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-center justify-between mb-2.5">
@@ -91,8 +90,7 @@ export default function FileTree() {
       <Separator />
 
       {/* File List */}
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="p-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-1">
           {filteredFiles.map((file) => {
             const filePath = file.newPath || file.oldPath;
             const stats = getFileStats(file);
@@ -171,8 +169,7 @@ export default function FileTree() {
               {searchQuery ? 'No files match your search' : 'No files in diff'}
             </div>
           )}
-        </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
