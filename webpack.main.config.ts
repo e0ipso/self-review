@@ -1,4 +1,5 @@
 import type { Configuration } from 'webpack';
+import CopyWebpackPlugin from 'copy-webpack-plugin';
 
 import { rules } from './webpack.rules';
 import { plugins } from './webpack.plugins';
@@ -13,7 +14,17 @@ export const mainConfig: Configuration = {
   module: {
     rules,
   },
-  plugins,
+  plugins: [
+    ...plugins,
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: 'node_modules/xmllint-wasm/xmllint.wasm',
+          to: 'native_modules/xmllint.wasm',
+        },
+      ],
+    }),
+  ],
   resolve: {
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.css', '.json'],
   },
