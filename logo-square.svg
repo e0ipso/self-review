@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Context line -->
+  <rect x="108" y="112" width="88" height="12" rx="4" fill="#94a3b8" opacity="0.4"/>
+  <rect x="212" y="112" width="64" height="12" rx="4" fill="#94a3b8" opacity="0.3"/>
+
+  <!-- Deleted line -->
+  <rect x="56" y="140" width="400" height="40" rx="8" fill="#dc2626" opacity="0.15"/>
+  <text x="76" y="168" font-family="monospace" font-size="28" font-weight="bold" fill="#ef4444">-</text>
+  <rect x="108" y="156" width="120" height="12" rx="4" fill="#ef4444" opacity="0.7"/>
+  <rect x="244" y="156" width="72" height="12" rx="4" fill="#ef4444" opacity="0.5"/>
+
+  <!-- Added line -->
+  <rect x="56" y="188" width="400" height="40" rx="8" fill="#16a34a" opacity="0.15"/>
+  <text x="76" y="216" font-family="monospace" font-size="28" font-weight="bold" fill="#22c55e">+</text>
+  <rect x="108" y="204" width="148" height="12" rx="4" fill="#22c55e" opacity="0.7"/>
+  <rect x="272" y="204" width="56" height="12" rx="4" fill="#22c55e" opacity="0.5"/>
+
+  <!-- Context line -->
+  <rect x="108" y="252" width="104" height="12" rx="4" fill="#94a3b8" opacity="0.4"/>
+  <rect x="228" y="252" width="48" height="12" rx="4" fill="#94a3b8" opacity="0.3"/>
+
+  <!-- Deleted line -->
+  <rect x="56" y="280" width="400" height="40" rx="8" fill="#dc2626" opacity="0.15"/>
+  <text x="76" y="308" font-family="monospace" font-size="28" font-weight="bold" fill="#ef4444">-</text>
+  <rect x="108" y="296" width="160" height="12" rx="4" fill="#ef4444" opacity="0.7"/>
+
+  <!-- Added line -->
+  <rect x="56" y="328" width="400" height="40" rx="8" fill="#16a34a" opacity="0.15"/>
+  <text x="76" y="356" font-family="monospace" font-size="28" font-weight="bold" fill="#22c55e">+</text>
+  <rect x="108" y="344" width="96" height="12" rx="4" fill="#22c55e" opacity="0.7"/>
+  <rect x="220" y="344" width="72" height="12" rx="4" fill="#22c55e" opacity="0.5"/>
+
+  <!-- Context line -->
+  <rect x="108" y="392" width="72" height="12" rx="4" fill="#94a3b8" opacity="0.4"/>
+
+  <!-- Checkmark badge -->
+  <circle cx="390" cy="390" r="52" fill="#22c55e" opacity="0.15"/>
+  <circle cx="390" cy="390" r="36" fill="#22c55e"/>
+  <polyline points="372,390 386,404 410,376" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Deleted line -->
+  <rect x="56" y="176" width="400" height="40" rx="8" fill="#dc2626" opacity="0.2"/>
+  <text x="76" y="204" font-family="monospace" font-size="28" font-weight="bold" fill="#f87171">-</text>
+  <rect x="108" y="192" width="120" height="12" rx="4" fill="#f87171" opacity="0.6"/>
+  <rect x="244" y="192" width="72" height="12" rx="4" fill="#f87171" opacity="0.4"/>
+
+  <!-- Context line -->
+  <rect x="108" y="240" width="88" height="12" rx="4" fill="#94a3b8" opacity="0.3"/>
+  <rect x="212" y="240" width="64" height="12" rx="4" fill="#94a3b8" opacity="0.2"/>
+
+  <!-- Added line -->
+  <rect x="56" y="268" width="400" height="40" rx="8" fill="#16a34a" opacity="0.2"/>
+  <text x="76" y="296" font-family="monospace" font-size="28" font-weight="bold" fill="#4ade80">+</text>
+  <rect x="108" y="284" width="148" height="12" rx="4" fill="#4ade80" opacity="0.6"/>
+  <rect x="272" y="284" width="56" height="12" rx="4" fill="#4ade80" opacity="0.4"/>
+
+  <!-- Checkmark badge -->
+  <circle cx="390" cy="340" r="52" fill="#16a34a" opacity="0.15"/>
+  <circle cx="390" cy="340" r="36" fill="#16a34a"/>
+  <polyline points="372,340 386,354 410,326" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
