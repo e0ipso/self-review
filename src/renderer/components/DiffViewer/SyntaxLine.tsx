@@ -3,18 +3,30 @@ import type { DiffLineType } from '../../../shared/types';
 
 // Import Prism with components
 import Prism from 'prismjs';
+// Base language components
 import 'prismjs/components/prism-markup';
+import 'prismjs/components/prism-markup-templating'; // Required for PHP and template languages
 import 'prismjs/components/prism-css';
 import 'prismjs/components/prism-clike';
+// JavaScript family
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-jsx';
 import 'prismjs/components/prism-tsx';
+// Other common languages
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-bash';
 import 'prismjs/components/prism-yaml';
 import 'prismjs/components/prism-markdown';
+import 'prismjs/components/prism-java';
+import 'prismjs/components/prism-go';
+import 'prismjs/components/prism-rust';
+import 'prismjs/components/prism-sql';
+import 'prismjs/components/prism-c';
+import 'prismjs/components/prism-cpp';
+import 'prismjs/components/prism-ruby';
+import 'prismjs/components/prism-php';
 
 export interface SyntaxLineProps {
   content: string;
