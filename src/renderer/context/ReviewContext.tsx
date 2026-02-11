@@ -72,18 +72,20 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
     }
   }, [diffFiles]);
 
-  // Register IPC listeners ONCE
+  // Register IPC listeners ONCE and request initial data
   useEffect(() => {
     if (!window.electronAPI) return;
 
-    // Load diff data from main process
+    // Set up listeners first
     window.electronAPI.onDiffLoad((payload: DiffLoadPayload) => {
       setDiffFiles(payload.files);
       setGitDiffArgs(payload.gitDiffArgs);
       setRepository(payload.repository);
+
+      // After diff is loaded, request resume data if available
+      window.electronAPI.requestResumeData();
     });
 
-    // Load prior comments for resume
     window.electronAPI.onResumeLoad((payload) => {
       // Merge prior comments into existing state
       const commentsByFile = new Map<string, ReviewComment[]>();
@@ -102,7 +104,6 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
       );
     });
 
-    // Handle review submission request
     window.electronAPI.onRequestReview(() => {
       const reviewData: ReviewState = {
         timestamp: new Date().toISOString(),
@@ -112,6 +113,9 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
       };
       window.electronAPI.submitReview(reviewData);
     });
+
+    // Now request the data from main process
+    window.electronAPI.requestDiffData();
   }, []); // Empty dependency array - register only once
 
   return (

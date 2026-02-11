@@ -69,6 +69,8 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
       window.electronAPI.onConfigLoad((payload) => {
         setConfig(payload);
       });
+      // Request config data
+      window.electronAPI.requestConfig();
     }
   }, []);
 

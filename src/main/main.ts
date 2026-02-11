@@ -10,9 +10,9 @@ import { parseReviewXml } from './xml-parser';
 import { serializeReview } from './xml-serializer';
 import {
   registerIpcHandlers,
-  sendDiffLoad,
-  sendConfigLoad,
-  sendResumeLoad,
+  setDiffData,
+  setConfigData,
+  setResumeComments,
   requestReviewFromRenderer,
 } from './ipc-handlers';
 import { DiffLoadPayload, ReviewState } from '../shared/types';
@@ -145,11 +145,18 @@ async function initializeApp() {
       }
     }
 
-    // Phase 8: Register IPC handlers
+    // Phase 8: Cache data for when renderer requests it
+    setDiffData(diffData);
+    setConfigData(appConfig);
+    if (resumeComments.length > 0) {
+      setResumeComments(resumeComments);
+    }
+
+    // Phase 9: Register IPC handlers
     console.error('[main] Registering IPC handlers');
     registerIpcHandlers();
 
-    // Phase 9: Create window
+    // Phase 10: Create window
     console.error('[main] Creating window');
     createWindow();
     console.error('[main] Window created successfully');
@@ -188,25 +195,7 @@ function createWindow(): void {
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  // Send data to renderer after window loads
-  mainWindow.webContents.on('did-finish-load', () => {
-    if (!mainWindow) return;
-
-    // Send diff data
-    if (diffData) {
-      sendDiffLoad(mainWindow, diffData);
-    }
-
-    // Send config
-    if (appConfig) {
-      sendConfigLoad(mainWindow, appConfig);
-    }
-
-    // Send resume comments if applicable
-    if (resumeComments.length > 0) {
-      sendResumeLoad(mainWindow, { comments: resumeComments });
-    }
-  });
+  // Data is sent when renderer requests it via IPC (see ipc-handlers.ts)
 
   // Handle window close - this is where we serialize to XML
   mainWindow.on('close', async (event) => {

@@ -6,11 +6,47 @@ import { IPC } from '../shared/ipc-channels';
 import { DiffLoadPayload, ResumeLoadPayload, AppConfig, ReviewState } from '../shared/types';
 
 let reviewStateCache: ReviewState | null = null;
+let diffDataCache: DiffLoadPayload | null = null;
+let configCache: AppConfig | null = null;
+let resumeCommentsCache: any[] = [];
+
+export function setDiffData(data: DiffLoadPayload): void {
+  diffDataCache = data;
+}
+
+export function setConfigData(data: AppConfig): void {
+  configCache = data;
+}
+
+export function setResumeComments(comments: any[]): void {
+  resumeCommentsCache = comments;
+}
 
 export function registerIpcHandlers(): void {
+  // Handle diff data request from renderer
+  ipcMain.on(IPC.DIFF_REQUEST, (event) => {
+    if (diffDataCache) {
+      event.sender.send(IPC.DIFF_LOAD, diffDataCache);
+    }
+  });
+
+  // Handle config request from renderer
+  ipcMain.on(IPC.CONFIG_REQUEST, (event) => {
+    if (configCache) {
+      event.sender.send(IPC.CONFIG_LOAD, configCache);
+    }
+  });
+
   // Handle review submission from renderer
   ipcMain.on(IPC.REVIEW_SUBMIT, (_event, state: ReviewState) => {
     reviewStateCache = state;
+  });
+
+  // Send resume comments when renderer is ready (after diff data is loaded)
+  ipcMain.on('resume:request', (event) => {
+    if (resumeCommentsCache.length > 0) {
+      event.sender.send(IPC.RESUME_LOAD, { comments: resumeCommentsCache });
+    }
   });
 }
 

@@ -103,9 +103,12 @@ export interface ResumeLoadPayload {
 // ===== Electron API (preload bridge) =====
 
 export interface ElectronAPI {
+  requestDiffData: () => void;
   onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => void;
-  onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
+  requestConfig: () => void;
   onConfigLoad: (callback: (payload: AppConfig) => void) => void;
+  requestResumeData: () => void;
+  onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
   submitReview: (state: ReviewState) => void;
   onRequestReview: (callback: () => void) => void;
 }
