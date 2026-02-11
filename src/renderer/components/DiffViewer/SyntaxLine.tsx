@@ -27,6 +27,7 @@ import 'prismjs/components/prism-c';
 import 'prismjs/components/prism-cpp';
 import 'prismjs/components/prism-ruby';
 import 'prismjs/components/prism-php';
+import 'prismjs/components/prism-twig';
 
 export interface SyntaxLineProps {
   content: string;
@@ -57,6 +58,7 @@ function getLanguageFromPath(filePath: string): string {
     xml: 'markup',
     rb: 'ruby',
     php: 'php',
+    twig: 'twig',
     c: 'c',
     cpp: 'cpp',
     h: 'c',
