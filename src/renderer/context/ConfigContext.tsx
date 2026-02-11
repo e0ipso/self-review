@@ -8,7 +8,13 @@ const defaultConfig: AppConfig = {
   fontSize: 14,
   outputFormat: 'xml',
   ignore: [],
-  categories: [],
+  categories: [
+    { name: 'bug', description: 'Likely defect or incorrect behavior', color: '#e53e3e' },
+    { name: 'security', description: 'Security vulnerability or concern', color: '#dd6b20' },
+    { name: 'style', description: 'Code style, naming, or formatting issue', color: '#3182ce' },
+    { name: 'question', description: 'Clarification needed — not necessarily a problem', color: '#805ad5' },
+    { name: 'nit', description: 'Minor nitpick, low priority', color: '#718096' },
+  ],
   defaultDiffArgs: '--staged',
 };
 
