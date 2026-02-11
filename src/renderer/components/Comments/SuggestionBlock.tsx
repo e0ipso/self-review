@@ -40,7 +40,7 @@ export default function SuggestionBlock({ suggestion, language = 'typescript' }:
         {originalLines.map((line, idx) => (
           <div
             key={`old-${idx}`}
-            className="suggestion-deletion flex bg-red-50/70 dark:bg-red-950/15 leading-[20px]"
+            className="suggestion-deletion flex bg-red-50/70 dark:bg-red-900/35 leading-[20px]"
           >
             <span className="inline-flex items-center justify-center w-7 flex-shrink-0 select-none text-red-500 dark:text-red-400 font-bold text-[11px]">
               -
@@ -56,7 +56,7 @@ export default function SuggestionBlock({ suggestion, language = 'typescript' }:
         {proposedLines.map((line, idx) => (
           <div
             key={`new-${idx}`}
-            className="suggestion-addition flex bg-emerald-50/70 dark:bg-emerald-950/15 leading-[20px]"
+            className="suggestion-addition flex bg-emerald-50/70 dark:bg-emerald-900/35 leading-[20px]"
           >
             <span className="inline-flex items-center justify-center w-7 flex-shrink-0 select-none text-emerald-500 dark:text-emerald-400 font-bold text-[11px]">
               +

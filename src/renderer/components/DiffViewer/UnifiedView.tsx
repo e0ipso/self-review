@@ -28,14 +28,14 @@ export default function UnifiedView({
   const language = getLanguageFromPath(file.newPath || file.oldPath);
 
   const getLineBg = (line: DiffLine) => {
-    if (line.type === 'addition') return 'bg-emerald-50/70 dark:bg-emerald-950/20';
-    if (line.type === 'deletion') return 'bg-red-50/70 dark:bg-red-950/20';
+    if (line.type === 'addition') return 'bg-emerald-50/70 dark:bg-emerald-900/40';
+    if (line.type === 'deletion') return 'bg-red-50/70 dark:bg-red-900/40';
     return '';
   };
 
   const getGutterBg = (line: DiffLine) => {
-    if (line.type === 'addition') return 'bg-emerald-100/80 dark:bg-emerald-900/20';
-    if (line.type === 'deletion') return 'bg-red-100/80 dark:bg-red-900/20';
+    if (line.type === 'addition') return 'bg-emerald-100/80 dark:bg-emerald-900/50';
+    if (line.type === 'deletion') return 'bg-red-100/80 dark:bg-red-900/50';
     return 'bg-muted/30';
   };
 
