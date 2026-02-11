@@ -67,16 +67,20 @@ const SyntaxLine = React.memo(function SyntaxLine({
 }: SyntaxLineProps) {
   const highlightedContent = React.useMemo(() => {
     try {
-      const prismLanguage = Prism.languages[language] || Prism.languages.plaintext;
+      const prismLanguage = Prism.languages[language];
+      if (!prismLanguage) {
+        // No syntax highlighting for unknown languages - return escaped content
+        return content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
       return Prism.highlight(content, prismLanguage, language);
     } catch {
-      return content;
+      return content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
   }, [content, language]);
 
   return (
     <span
-      className="font-mono text-sm"
+      className="font-mono text-[13px]"
       dangerouslySetInnerHTML={{ __html: highlightedContent }}
     />
   );

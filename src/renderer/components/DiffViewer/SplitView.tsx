@@ -29,7 +29,8 @@ export default function SplitView({
   onCancelComment,
 }: SplitViewProps) {
   const { getCommentsForLine } = useReview();
-  const language = getLanguageFromPath(file.newPath || file.oldPath);
+  const filePath = file.newPath || file.oldPath;
+  const language = getLanguageFromPath(filePath);
 
   const [rangeStart, setRangeStart] = React.useState<{ lineNumber: number; side: 'old' | 'new' } | null>(null);
 
@@ -53,10 +54,8 @@ export default function SplitView({
     return lineNumber >= selectionRange.start && lineNumber <= selectionRange.end;
   };
 
-  // Convert hunk lines into split view rows
   const buildSplitRows = (lines: DiffLine[]): SplitLineRow[] => {
     const rows: SplitLineRow[] = [];
-
     for (const line of lines) {
       if (line.type === 'context') {
         rows.push({ oldLine: line, newLine: line });
@@ -66,22 +65,32 @@ export default function SplitView({
         rows.push({ oldLine: line, newLine: null });
       }
     }
-
     return rows;
+  };
+
+  const getLineBg = (line: DiffLine | null) => {
+    if (!line) return '';
+    if (line.type === 'addition') return 'bg-emerald-50/70 dark:bg-emerald-950/20';
+    if (line.type === 'deletion') return 'bg-red-50/70 dark:bg-red-950/20';
+    return '';
+  };
+
+  const getGutterBg = (line: DiffLine | null) => {
+    if (!line) return 'bg-muted/30';
+    if (line.type === 'addition') return 'bg-emerald-100/80 dark:bg-emerald-900/20';
+    if (line.type === 'deletion') return 'bg-red-100/80 dark:bg-red-900/20';
+    return 'bg-muted/30';
   };
 
   const renderLineCell = (
     line: DiffLine | null,
     side: 'old' | 'new',
-    hunkIndex: number,
-    rowIndex: number
   ) => {
     if (!line) {
-      // Empty cell (spacer)
       return (
-        <div className="w-1/2 flex border-r border-border">
-          <div className="w-12 bg-muted/20"></div>
-          <div className="flex-1 bg-muted/10"></div>
+        <div className="w-1/2 flex">
+          <div className="w-10 flex-shrink-0 bg-muted/20" />
+          <div className="flex-1 bg-muted/10" />
         </div>
       );
     }
@@ -89,22 +98,15 @@ export default function SplitView({
     const lineNumber = side === 'old' ? line.oldLineNumber : line.newLineNumber;
     const isSelected = lineNumber ? isLineSelected(lineNumber, side) : false;
 
-    const bgColor =
-      line.type === 'addition'
-        ? 'bg-green-50 dark:bg-green-950/30'
-        : line.type === 'deletion'
-        ? 'bg-red-50 dark:bg-red-950/30'
-        : '';
-
     const lineTestId = lineNumber
       ? `${side === 'old' ? 'old' : 'new'}-line-${filePath}-${lineNumber}`
       : undefined;
 
     return (
-      <div className={`split-half w-1/2 flex border-r border-border ${bgColor} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
+      <div className={`split-half w-1/2 flex ${getLineBg(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
         {/* Line number gutter */}
         <div
-          className="w-12 text-right px-2 text-muted-foreground select-none cursor-pointer hover:bg-muted/50"
+          className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[20px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
           data-testid={lineTestId}
           onMouseDown={() => lineNumber && handleLineMouseDown(lineNumber, side)}
           onMouseUp={() => lineNumber && handleLineMouseUp(lineNumber, side)}
@@ -113,17 +115,15 @@ export default function SplitView({
           {lineNumber || ''}
         </div>
         {/* Code content */}
-        <div className="flex-1 px-2 overflow-x-auto">
+        <div className="flex-1 px-2 overflow-x-auto leading-[20px]">
           <SyntaxLine content={line.content} language={language} lineType={line.type} />
         </div>
       </div>
     );
   };
 
-  const filePath = file.newPath || file.oldPath;
-
   return (
-    <div className="font-mono text-sm split-view">
+    <div className="font-mono text-[13px] leading-[20px] split-view">
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           <HunkHeader header={hunk.header} />
@@ -143,30 +143,30 @@ export default function SplitView({
 
             return (
               <React.Fragment key={`${hunkIndex}-${rowIndex}`}>
-                <div className="flex">
+                <div className="flex border-b border-transparent hover:border-border/30">
                   {/* Old side (left) */}
                   {row.oldLine ? (
-                    renderLineCell(row.oldLine, 'old', hunkIndex, rowIndex)
+                    renderLineCell(row.oldLine, 'old')
                   ) : (
-                    <div className="w-1/2 flex border-r border-border">
-                      <div className="w-12 bg-muted/20"></div>
-                      <div className="flex-1 bg-muted/10"></div>
+                    <div className="w-1/2 flex">
+                      <div className="w-10 flex-shrink-0 bg-muted/20" />
+                      <div className="flex-1 bg-muted/10" />
                     </div>
                   )}
                   {/* New side (right) */}
                   {row.newLine ? (
-                    renderLineCell(row.newLine, 'new', hunkIndex, rowIndex)
+                    renderLineCell(row.newLine, 'new')
                   ) : (
                     <div className="w-1/2 flex">
-                      <div className="w-12 bg-muted/20"></div>
-                      <div className="flex-1 bg-muted/10"></div>
+                      <div className="w-10 flex-shrink-0 bg-muted/20" />
+                      <div className="flex-1 bg-muted/10" />
                     </div>
                   )}
                 </div>
 
                 {/* Comments spanning full width */}
                 {hasComments && (
-                  <div className="border-l-4 border-blue-500 bg-muted/30 p-4">
+                  <div className="border-y border-border/50 bg-muted/20 px-4 py-3 space-y-2">
                     {oldComments.map((comment) => (
                       <CommentDisplay key={comment.id} comment={comment} />
                     ))}
@@ -178,7 +178,7 @@ export default function SplitView({
 
                 {/* Comment input spanning full width */}
                 {hasCommentInput && (
-                  <div className="border-l-4 border-blue-500 bg-muted/30 p-4">
+                  <div className="border-y border-border/50 bg-muted/20 px-4 py-3">
                     <CommentInput
                       filePath={file.newPath || file.oldPath}
                       lineRange={

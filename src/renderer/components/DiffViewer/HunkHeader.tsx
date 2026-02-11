@@ -6,7 +6,7 @@ export interface HunkHeaderProps {
 
 export default function HunkHeader({ header }: HunkHeaderProps) {
   return (
-    <div className="hunk-header bg-muted/50 text-muted-foreground text-xs px-4 py-1 font-mono border-y border-border">
+    <div className="hunk-header flex items-center h-8 px-3 bg-accent/50 text-muted-foreground text-xs font-mono border-y border-border/50">
       {header}
     </div>
   );

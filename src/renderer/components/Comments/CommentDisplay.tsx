@@ -4,6 +4,7 @@ import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { Pencil, Trash2 } from 'lucide-react';
 import CommentInput from './CommentInput';
 import SuggestionBlock from './SuggestionBlock';
 
@@ -17,7 +18,7 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
   const [isEditing, setIsEditing] = useState(false);
 
   const categoryDef = config.categories?.find((cat) => cat.name === comment.category);
-  const borderColor = categoryDef?.color || 'hsl(var(--primary))';
+  const borderColor = categoryDef?.color || 'hsl(var(--border))';
 
   const handleDelete = () => {
     deleteComment(comment.id);
@@ -27,7 +28,6 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
     setIsEditing(false);
   };
 
-  // Extract original code if we have a suggestion
   const originalCode = comment.suggestion?.originalCode;
 
   if (isEditing) {
@@ -45,58 +45,66 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
 
   return (
     <div
-      className="rounded-lg bg-muted/30 p-4"
+      className="rounded-lg border border-border bg-card text-sm group"
       data-testid={`comment-${comment.id}`}
-      style={{ borderLeft: `4px solid ${borderColor}` }}
+      style={{ borderLeftWidth: '3px', borderLeftColor: borderColor }}
     >
-      <div className="mb-2 flex items-center justify-between">
+      <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-foreground">You</span>
+          <span className="text-xs font-semibold text-foreground">You</span>
           {comment.category && (
             <Badge
               variant="secondary"
-              className="category-badge"
+              className="category-badge h-5 px-1.5 text-[10px] font-medium"
               style={{
-                backgroundColor: categoryDef?.color || undefined,
-                color: categoryDef ? 'white' : undefined,
+                backgroundColor: categoryDef?.color ? `${categoryDef.color}20` : undefined,
+                color: categoryDef?.color || undefined,
+                borderColor: categoryDef?.color ? `${categoryDef.color}40` : undefined,
+                borderWidth: '1px',
               }}
             >
               {comment.category}
             </Badge>
           )}
           {comment.orphaned && (
-            <Badge variant="destructive" className="bg-orange-500">
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-orange-500/15 text-orange-600 dark:text-orange-400">
               Orphaned
             </Badge>
           )}
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsEditing(true)}
+            className="h-6 w-6 p-0"
           >
-            Edit
+            <Pencil className="h-3 w-3" />
+            <span className="sr-only">Edit</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={handleDelete}
+            className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
           >
-            Delete
+            <Trash2 className="h-3 w-3" />
+            <span className="sr-only">Delete</span>
           </Button>
         </div>
       </div>
 
-      <div className="whitespace-pre-wrap text-sm text-foreground">
+      <div className="px-3 pb-3 whitespace-pre-wrap text-sm text-foreground leading-relaxed">
         {comment.body}
       </div>
 
       {comment.suggestion && (
-        <SuggestionBlock
-          suggestion={comment.suggestion}
-          language="typescript"
-        />
+        <div className="px-3 pb-3">
+          <SuggestionBlock
+            suggestion={comment.suggestion}
+            language="typescript"
+          />
+        </div>
       )}
     </div>
   );

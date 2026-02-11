@@ -4,6 +4,7 @@ import { useReview } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Badge } from '../ui/badge';
+import { Separator } from '../ui/separator';
 import { ChevronDown, ChevronRight, MessageSquare, Plus } from 'lucide-react';
 import SplitView from './SplitView';
 import UnifiedView from './UnifiedView';
@@ -52,104 +53,112 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
     setShowingFileComment(false);
   };
 
-  const getChangeTypeBadge = () => {
+  const getChangeTypeStyle = () => {
     switch (file.changeType) {
       case 'added':
-        return <Badge className="bg-green-500 text-white">Added</Badge>;
+        return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400';
       case 'deleted':
-        return <Badge className="bg-red-500 text-white">Deleted</Badge>;
+        return 'bg-red-500/15 text-red-700 dark:text-red-400';
       case 'renamed':
-        return <Badge className="bg-blue-500 text-white">Renamed</Badge>;
+        return 'bg-blue-500/15 text-blue-700 dark:text-blue-400';
       case 'modified':
-        return <Badge className="bg-yellow-500 text-white">Modified</Badge>;
+        return 'bg-amber-500/15 text-amber-700 dark:text-amber-400';
       default:
-        return null;
+        return '';
     }
   };
 
   const getLineStats = () => {
     let additions = 0;
     let deletions = 0;
-
     for (const hunk of file.hunks) {
       for (const line of hunk.lines) {
         if (line.type === 'addition') additions++;
         if (line.type === 'deletion') deletions++;
       }
     }
-
     return { additions, deletions };
   };
 
   const { additions, deletions } = getLineStats();
-
-  // Display path for renamed files
   const displayPath = file.changeType === 'renamed' ? `${file.oldPath} → ${file.newPath}` : filePath;
+  const changeLabel = file.changeType.charAt(0).toUpperCase() + file.changeType.slice(1);
 
   return (
     <div className="border-b border-border" data-file-path={filePath} data-testid={`file-section-${filePath}`}>
-      {/* Header bar */}
-      <div className="bg-muted/30 px-4 py-3 flex items-center gap-3 border-t border-border" data-testid={`file-header-${filePath}`}>
-        {/* Expand/collapse toggle */}
-        <Button
-          variant="ghost"
-          size="sm"
-          data-testid="collapse-toggle"
-          onClick={() => {
-            if (onToggleExpanded) {
-              onToggleExpanded(filePath);
-            } else {
-              setInternalExpanded(!expanded);
-            }
-          }}
-          className="p-1 h-auto"
-        >
+      {/* Header */}
+      <div
+        className="sticky top-0 z-10 flex items-center gap-2 h-10 px-3 bg-muted/50 backdrop-blur-sm border-b border-border cursor-pointer select-none"
+        data-testid={`file-header-${filePath}`}
+        onClick={() => {
+          if (onToggleExpanded) {
+            onToggleExpanded(filePath);
+          } else {
+            setInternalExpanded(!expanded);
+          }
+        }}
+      >
+        {/* Expand/collapse indicator */}
+        <span className="text-muted-foreground" data-testid="collapse-toggle">
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </Button>
-
-        {/* File path */}
-        <span className="font-mono text-sm flex-1">{displayPath}</span>
-
-        {/* Change type badge */}
-        {getChangeTypeBadge()}
-
-        {/* Line stats */}
-        <span className="text-sm text-muted-foreground">
-          <span className="text-green-600 dark:text-green-400">+{additions}</span>
-          {' '}
-          <span className="text-red-600 dark:text-red-400">-{deletions}</span>
         </span>
 
-        {/* Comment count indicator */}
+        {/* File path */}
+        <span className="font-mono text-[13px] font-medium truncate flex-1 min-w-0">
+          {displayPath}
+        </span>
+
+        {/* Change type */}
+        <Badge variant="secondary" className={`text-[10px] font-semibold px-1.5 py-0 h-5 ${getChangeTypeStyle()}`}>
+          {changeLabel}
+        </Badge>
+
+        {/* Line stats */}
+        <span className="flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
+          {additions > 0 && (
+            <span className="text-emerald-600 dark:text-emerald-400">+{additions}</span>
+          )}
+          {deletions > 0 && (
+            <span className="text-red-600 dark:text-red-400">-{deletions}</span>
+          )}
+        </span>
+
+        {/* Comment count */}
         {comments.length > 0 && (
-          <span className="flex items-center gap-1 text-sm text-muted-foreground">
-            <MessageSquare className="h-4 w-4" />
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+            <MessageSquare className="h-3.5 w-3.5" />
             {comments.length}
           </span>
         )}
 
+        <Separator orientation="vertical" className="h-5" />
+
         {/* Viewed checkbox */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           <Checkbox
             id={`viewed-${filePath}`}
             data-testid={`viewed-${filePath}`}
             onCheckedChange={() => toggleViewed(filePath)}
+            className="h-3.5 w-3.5"
           />
-          <label htmlFor={`viewed-${filePath}`} className="text-sm cursor-pointer">
+          <label htmlFor={`viewed-${filePath}`} className="text-xs text-muted-foreground cursor-pointer">
             Viewed
           </label>
         </div>
 
-        {/* Add file comment button */}
+        {/* Add file comment */}
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           data-testid={`add-file-comment-${filePath}`}
-          onClick={handleAddFileComment}
-          className="flex items-center gap-1"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleAddFileComment();
+          }}
+          className="h-7 px-2 gap-1 text-muted-foreground hover:text-foreground"
         >
-          <Plus className="h-4 w-4" />
-          File comment
+          <Plus className="h-3.5 w-3.5" />
+          <span className="text-xs">Comment</span>
         </Button>
       </div>
 
@@ -158,18 +167,16 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
         <div className="bg-background file-diff-content">
           {/* File-level comments */}
           {fileComments.length > 0 && (
-            <div className="border-b border-border">
+            <div className="p-3 space-y-2 bg-muted/20 border-b border-border">
               {fileComments.map((comment) => (
-                <div key={comment.id} className="border-l-4 border-blue-500 bg-muted/30 p-4 m-4">
-                  <CommentDisplay comment={comment} />
-                </div>
+                <CommentDisplay key={comment.id} comment={comment} />
               ))}
             </div>
           )}
 
           {/* File comment input */}
           {showingFileComment && (
-            <div className="border-l-4 border-blue-500 bg-muted/30 p-4 m-4">
+            <div className="p-3 bg-muted/20 border-b border-border">
               <CommentInput
                 filePath={filePath}
                 lineRange={null}
@@ -180,8 +187,8 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
 
           {/* Diff content */}
           {file.isBinary ? (
-            <div className="p-8 text-center text-muted-foreground">
-              Binary file
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              Binary file — no diff available
             </div>
           ) : viewMode === 'split' ? (
             <SplitView

@@ -3,6 +3,8 @@ import type { LineRange, ReviewComment, Suggestion } from '../../../shared/types
 import { useReview } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
+import { Separator } from '../ui/separator';
+import { Code2 } from 'lucide-react';
 import CategorySelector from './CategorySelector';
 
 export interface CommentInputProps {
@@ -72,67 +74,89 @@ export default function CommentInput({
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 shadow-sm" data-testid="comment-input">
-      <Textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        placeholder="Add your review comment..."
-        className="mb-3 min-h-[100px] resize-y"
-      />
-
-      <div className="mb-3">
-        <CategorySelector value={category} onChange={setCategory} />
+    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden" data-testid="comment-input">
+      <div className="p-3">
+        <Textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Add your review comment..."
+          className="min-h-[80px] resize-y text-sm border-0 shadow-none focus-visible:ring-0 p-0 placeholder:text-muted-foreground/60"
+          autoFocus
+        />
       </div>
 
-      {originalCode && (
-        <div className="mb-3">
+      {showSuggestion && originalCode && (
+        <>
+          <Separator />
+          <div className="p-3 space-y-2 bg-muted/20">
+            <div data-testid="suggestion-original">
+              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1 block">
+                Original
+              </label>
+              <Textarea
+                value={originalCode}
+                disabled
+                className="font-mono text-xs bg-muted/30 resize-none"
+                rows={3}
+              />
+            </div>
+            <div data-testid="suggestion-proposed">
+              <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1 block">
+                Suggested
+              </label>
+              <Textarea
+                value={proposedCode}
+                onChange={(e) => setProposedCode(e.target.value)}
+                placeholder="Enter your suggested code..."
+                className="font-mono text-xs resize-y"
+                rows={3}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      <Separator />
+
+      {/* Actions bar */}
+      <div className="flex items-center justify-between px-3 py-2 bg-muted/10">
+        <div className="flex items-center gap-2">
+          <CategorySelector value={category} onChange={setCategory} />
+          {originalCode && (
+            <Button
+              type="button"
+              variant={showSuggestion ? 'secondary' : 'ghost'}
+              size="sm"
+              data-testid="add-suggestion-btn"
+              onClick={() => setShowSuggestion(!showSuggestion)}
+              className="h-7 gap-1.5 text-xs"
+            >
+              <Code2 className="h-3.5 w-3.5" />
+              {showSuggestion ? 'Remove suggestion' : 'Suggest'}
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5">
           <Button
-            type="button"
-            variant="outline"
+            data-testid="cancel-comment-btn"
+            variant="ghost"
             size="sm"
-            data-testid="add-suggestion-btn"
-            onClick={() => setShowSuggestion(!showSuggestion)}
+            onClick={handleCancel}
+            className="h-7 text-xs"
           >
-            {showSuggestion ? 'Remove suggestion' : 'Add suggestion'}
+            Cancel
+          </Button>
+          <Button
+            data-testid="add-comment-btn"
+            size="sm"
+            onClick={handleSubmit}
+            disabled={!body.trim()}
+            className="h-7 text-xs"
+          >
+            {existingComment ? 'Update' : 'Comment'}
           </Button>
         </div>
-      )}
-
-      {showSuggestion && originalCode && (
-        <div className="mb-3 space-y-2">
-          <div data-testid="suggestion-original">
-            <label className="mb-1 block text-sm font-medium text-foreground">
-              Original code
-            </label>
-            <Textarea
-              value={originalCode}
-              disabled
-              className="font-mono text-sm"
-              rows={3}
-            />
-          </div>
-          <div data-testid="suggestion-proposed">
-            <label className="mb-1 block text-sm font-medium text-foreground">
-              Proposed code
-            </label>
-            <Textarea
-              value={proposedCode}
-              onChange={(e) => setProposedCode(e.target.value)}
-              placeholder="Enter your suggested code..."
-              className="font-mono text-sm"
-              rows={3}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <Button data-testid="add-comment-btn" onClick={handleSubmit} disabled={!body.trim()}>
-          {existingComment ? 'Update comment' : 'Add comment'}
-        </Button>
-        <Button data-testid="cancel-comment-btn" variant="ghost" onClick={handleCancel}>
-          Cancel
-        </Button>
       </div>
     </div>
   );

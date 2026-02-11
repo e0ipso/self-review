@@ -4,7 +4,9 @@ import { useDiffNavigation } from '../hooks/useDiffNavigation';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
+import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { Search, Check, MessageSquare } from 'lucide-react';
 import type { DiffFile } from '../../shared/types';
 
 export default function FileTree() {
@@ -12,7 +14,6 @@ export default function FileTree() {
   const { activeFilePath, scrollToFile } = useDiffNavigation();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter files by search query
   const filteredFiles = useMemo(() => {
     if (!searchQuery.trim()) return diffFiles;
     const query = searchQuery.toLowerCase();
@@ -21,71 +22,78 @@ export default function FileTree() {
     );
   }, [diffFiles, searchQuery]);
 
-  // Calculate additions and deletions for each file
   const getFileStats = (file: DiffFile) => {
     let additions = 0;
     let deletions = 0;
-
     file.hunks.forEach((hunk) => {
       hunk.lines.forEach((line) => {
         if (line.type === 'addition') additions++;
         if (line.type === 'deletion') deletions++;
       });
     });
-
     return { additions, deletions };
   };
 
-  // Get comment count for a file
   const getCommentCount = (filePath: string) => {
     const fileState = files.find((f) => f.path === filePath);
     return fileState?.comments.length || 0;
   };
 
-  // Get viewed status for a file
   const isViewed = (filePath: string) => {
     const fileState = files.find((f) => f.path === filePath);
     return fileState?.viewed || false;
   };
 
-  // Get change type badge variant and label
-  const getChangeTypeBadge = (changeType: DiffFile['changeType']) => {
+  const getChangeType = (changeType: DiffFile['changeType']) => {
     switch (changeType) {
       case 'added':
-        return { variant: 'default' as const, label: 'A', className: 'bg-green-600 hover:bg-green-700' };
+        return { label: 'A', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' };
       case 'modified':
-        return { variant: 'default' as const, label: 'M', className: 'bg-yellow-600 hover:bg-yellow-700' };
+        return { label: 'M', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' };
       case 'deleted':
-        return { variant: 'destructive' as const, label: 'D', className: 'bg-red-600 hover:bg-red-700' };
+        return { label: 'D', className: 'bg-red-500/15 text-red-700 dark:text-red-400' };
       case 'renamed':
-        return { variant: 'default' as const, label: 'R', className: 'bg-blue-600 hover:bg-blue-700' };
+        return { label: 'R', className: 'bg-blue-500/15 text-blue-700 dark:text-blue-400' };
     }
   };
 
   return (
     <div className="flex flex-col h-full" data-testid="file-tree">
-      {/* Search Input */}
-      <div className="p-3 border-b border-border">
-        <Input
-          type="text"
-          placeholder="Search files..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-8"
-          data-testid="file-search"
-        />
+      {/* Header */}
+      <div className="px-3 pt-3 pb-2">
+        <div className="flex items-center justify-between mb-2.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Changed files
+          </span>
+          <Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-normal tabular-nums rounded">
+            {diffFiles.length}
+          </Badge>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Input
+            type="text"
+            placeholder="Filter files..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-7 pl-7 text-xs bg-background"
+            data-testid="file-search"
+          />
+        </div>
       </div>
+
+      <Separator />
 
       {/* File List */}
       <ScrollArea className="flex-1">
-        <div className="p-2 space-y-1">
+        <div className="p-1">
           {filteredFiles.map((file) => {
             const filePath = file.newPath || file.oldPath;
             const stats = getFileStats(file);
             const commentCount = getCommentCount(filePath);
             const viewed = isViewed(filePath);
             const isActive = activeFilePath === filePath;
-            const changeTypeBadge = getChangeTypeBadge(file.changeType);
+            const changeType = getChangeType(file.changeType);
 
             return (
               <Tooltip key={filePath}>
@@ -93,49 +101,49 @@ export default function FileTree() {
                   <button
                     data-testid={`file-entry-${filePath}`}
                     onClick={() => scrollToFile(filePath)}
-                    className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${
+                    className={`w-full text-left px-2 py-1.5 rounded-md transition-colors ${
                       isActive
                         ? 'bg-accent text-accent-foreground'
-                        : 'hover:bg-accent/50'
+                        : 'hover:bg-accent/50 text-foreground'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      {/* Change Type Badge */}
-                      <Badge
-                        variant={changeTypeBadge.variant}
-                        className={`change-type-badge ${changeTypeBadge.className} text-white w-5 h-5 p-0 flex items-center justify-center text-xs`}
-                      >
-                        {changeTypeBadge.label}
-                      </Badge>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {/* Change type indicator */}
+                      <span className={`flex-shrink-0 inline-flex items-center justify-center w-[18px] h-[18px] rounded-sm text-[10px] font-bold leading-none ${changeType.className}`}>
+                        {changeType.label}
+                      </span>
 
-                      {/* File Path */}
-                      <span className="flex-1 truncate font-mono text-xs">
+                      {/* File path */}
+                      <span className="flex-1 truncate font-mono text-xs leading-tight">
                         {filePath}
                       </span>
 
-                      {/* Viewed Indicator */}
-                      {viewed && (
-                        <span className="text-green-500 text-xs">✓</span>
-                      )}
-                    </div>
-
-                    {/* Stats and Comment Count */}
-                    <div className="flex items-center gap-2 mt-1 ml-7 text-xs">
-                      {stats.additions > 0 && (
-                        <span className="text-green-600">+{stats.additions}</span>
-                      )}
-                      {stats.deletions > 0 && (
-                        <span className="text-red-600">-{stats.deletions}</span>
-                      )}
-                      {commentCount > 0 && (
-                        <Badge variant="outline" className="comment-count h-4 px-1 text-xs">
-                          {commentCount} comment{commentCount !== 1 ? 's' : ''}
-                        </Badge>
-                      )}
+                      {/* Indicators */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {stats.additions > 0 && (
+                          <span className="text-[10px] tabular-nums font-medium text-emerald-600 dark:text-emerald-400">
+                            +{stats.additions}
+                          </span>
+                        )}
+                        {stats.deletions > 0 && (
+                          <span className="text-[10px] tabular-nums font-medium text-red-600 dark:text-red-400">
+                            -{stats.deletions}
+                          </span>
+                        )}
+                        {commentCount > 0 && (
+                          <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+                            <MessageSquare className="h-3 w-3" />
+                            <span className="text-[10px] tabular-nums">{commentCount}</span>
+                          </span>
+                        )}
+                        {viewed && (
+                          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        )}
+                      </div>
                     </div>
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-md">
+                <TooltipContent side="right" className="max-w-sm">
                   <p className="font-mono text-xs break-all">{filePath}</p>
                 </TooltipContent>
               </Tooltip>
@@ -143,7 +151,7 @@ export default function FileTree() {
           })}
 
           {filteredFiles.length === 0 && (
-            <div className="text-center text-muted-foreground text-sm py-4">
+            <div className="text-center text-muted-foreground text-xs py-8">
               {searchQuery ? 'No files match your search' : 'No files in diff'}
             </div>
           )}

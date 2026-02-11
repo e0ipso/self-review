@@ -26,16 +26,16 @@ export default function CategorySelector({ value, onChange }: CategorySelectorPr
         value={value || 'none'}
         onValueChange={(val) => onChange(val === 'none' ? null : val)}
       >
-        <SelectTrigger className="w-[200px]">
-          <SelectValue placeholder="No category" />
+        <SelectTrigger className="h-7 w-[160px] text-xs">
+          <SelectValue placeholder="Category" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">No category</SelectItem>
+          <SelectItem value="none" className="text-xs">No category</SelectItem>
           {config.categories.map((cat) => (
-            <SelectItem key={cat.name} value={cat.name} data-testid={`category-option-${cat.name}`}>
+            <SelectItem key={cat.name} value={cat.name} data-testid={`category-option-${cat.name}`} className="text-xs">
               <div className="flex items-center gap-2">
                 <div
-                  className="h-2 w-2 rounded-full"
+                  className="h-2 w-2 rounded-full flex-shrink-0"
                   style={{ backgroundColor: cat.color }}
                 />
                 {cat.name}

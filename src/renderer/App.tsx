@@ -10,7 +10,7 @@ export default function App() {
     <ConfigProvider>
       <ReviewProvider>
         <TooltipProvider>
-          <div className="flex flex-col h-screen">
+          <div className="flex flex-col h-screen bg-background text-foreground antialiased">
             <Toolbar />
             <Layout />
           </div>

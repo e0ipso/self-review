@@ -32,21 +32,21 @@ export default function SuggestionBlock({ suggestion, language = 'typescript' }:
   const proposedLines = suggestion.proposedCode.split('\n');
 
   return (
-    <div className="mt-2 rounded border border-border bg-muted/30 text-sm font-mono" data-testid="suggestion-block">
-      <div className="border-b border-border bg-muted px-3 py-1 text-xs font-semibold text-foreground">
+    <div className="rounded-md border border-border overflow-hidden text-xs font-mono" data-testid="suggestion-block">
+      <div className="flex items-center h-7 px-3 bg-muted text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
         Suggested change
       </div>
-      <div className="divide-y divide-border">
+      <div>
         {originalLines.map((line, idx) => (
           <div
             key={`old-${idx}`}
-            className="suggestion-deletion flex bg-red-50 dark:bg-red-950/20"
+            className="suggestion-deletion flex bg-red-50/70 dark:bg-red-950/15 leading-[20px]"
           >
-            <span className="inline-block w-8 flex-shrink-0 select-none px-2 text-red-600 dark:text-red-400">
+            <span className="inline-flex items-center justify-center w-7 flex-shrink-0 select-none text-red-500 dark:text-red-400 font-bold text-[11px]">
               -
             </span>
             <span
-              className="flex-1 text-red-800 dark:text-red-200"
+              className="flex-1 text-foreground/80"
               dangerouslySetInnerHTML={{
                 __html: highlightCode(line, language),
               }}
@@ -56,13 +56,13 @@ export default function SuggestionBlock({ suggestion, language = 'typescript' }:
         {proposedLines.map((line, idx) => (
           <div
             key={`new-${idx}`}
-            className="suggestion-addition flex bg-green-50 dark:bg-green-950/20"
+            className="suggestion-addition flex bg-emerald-50/70 dark:bg-emerald-950/15 leading-[20px]"
           >
-            <span className="inline-block w-8 flex-shrink-0 select-none px-2 text-green-600 dark:text-green-400">
+            <span className="inline-flex items-center justify-center w-7 flex-shrink-0 select-none text-emerald-500 dark:text-emerald-400 font-bold text-[11px]">
               +
             </span>
             <span
-              className="flex-1 text-green-800 dark:text-green-200"
+              className="flex-1 text-foreground/80"
               dangerouslySetInnerHTML={{
                 __html: highlightCode(line, language),
               }}

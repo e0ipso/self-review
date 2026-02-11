@@ -43,26 +43,30 @@ export default function UnifiedView({
     setRangeStart(null);
   };
 
-  const getLineBackground = (line: DiffLine) => {
-    switch (line.type) {
-      case 'addition':
-        return 'bg-green-50 dark:bg-green-950/30';
-      case 'deletion':
-        return 'bg-red-50 dark:bg-red-950/30';
-      default:
-        return '';
-    }
+  const getLineBg = (line: DiffLine) => {
+    if (line.type === 'addition') return 'bg-emerald-50/70 dark:bg-emerald-950/20';
+    if (line.type === 'deletion') return 'bg-red-50/70 dark:bg-red-950/20';
+    return '';
+  };
+
+  const getGutterBg = (line: DiffLine) => {
+    if (line.type === 'addition') return 'bg-emerald-100/80 dark:bg-emerald-900/20';
+    if (line.type === 'deletion') return 'bg-red-100/80 dark:bg-red-900/20';
+    return 'bg-muted/30';
   };
 
   const getLinePrefix = (line: DiffLine) => {
     switch (line.type) {
-      case 'addition':
-        return '+';
-      case 'deletion':
-        return '-';
-      default:
-        return ' ';
+      case 'addition': return '+';
+      case 'deletion': return '-';
+      default: return ' ';
     }
+  };
+
+  const getPrefixColor = (line: DiffLine) => {
+    if (line.type === 'addition') return 'text-emerald-600 dark:text-emerald-400';
+    if (line.type === 'deletion') return 'text-red-600 dark:text-red-400';
+    return 'text-muted-foreground/50';
   };
 
   const isLineSelected = (lineNumber: number, side: 'old' | 'new') => {
@@ -73,7 +77,7 @@ export default function UnifiedView({
   const filePath = file.newPath || file.oldPath;
 
   return (
-    <div className="font-mono text-sm unified-view">
+    <div className="font-mono text-[13px] leading-[20px] unified-view">
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           <HunkHeader header={hunk.header} />
@@ -88,10 +92,10 @@ export default function UnifiedView({
 
             return (
               <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
-                <div className={`flex ${getLineBackground(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}>
-                  {/* Old line number gutter */}
+                <div className={`flex ${getLineBg(line)} ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''} border-b border-transparent hover:border-border/30`}>
+                  {/* Old line number */}
                   <div
-                    className="w-12 text-right px-2 text-muted-foreground select-none cursor-pointer hover:bg-muted/50"
+                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[20px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
                     data-testid={line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined}
                     onMouseDown={() => line.oldLineNumber && handleLineMouseDown(line.oldLineNumber, 'old')}
                     onMouseUp={() => line.oldLineNumber && handleLineMouseUp(line.oldLineNumber, 'old')}
@@ -99,9 +103,9 @@ export default function UnifiedView({
                   >
                     {line.oldLineNumber || ''}
                   </div>
-                  {/* New line number gutter */}
+                  {/* New line number */}
                   <div
-                    className="w-12 text-right px-2 text-muted-foreground select-none cursor-pointer hover:bg-muted/50"
+                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[20px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
                     data-testid={line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined}
                     onMouseDown={() => line.newLineNumber && handleLineMouseDown(line.newLineNumber, 'new')}
                     onMouseUp={() => line.newLineNumber && handleLineMouseUp(line.newLineNumber, 'new')}
@@ -110,25 +114,25 @@ export default function UnifiedView({
                     {line.newLineNumber || ''}
                   </div>
                   {/* Prefix */}
-                  <div className="line-prefix w-6 text-center px-1 text-muted-foreground select-none">
+                  <div className={`line-prefix w-5 flex-shrink-0 text-center text-[11px] leading-[20px] select-none font-bold ${getPrefixColor(line)}`}>
                     {getLinePrefix(line)}
                   </div>
                   {/* Code content */}
-                  <div className="flex-1 px-2 overflow-x-auto">
+                  <div className="flex-1 px-2 overflow-x-auto leading-[20px]">
                     <SyntaxLine content={line.content} language={language} lineType={line.type} />
                   </div>
                 </div>
 
                 {/* Comments for this line */}
                 {comments.map((comment) => (
-                  <div key={comment.id} className="border-l-4 border-blue-500 bg-muted/30 p-4 ml-24">
+                  <div key={comment.id} className="border-y border-border/50 bg-muted/20 px-4 py-3 ml-[100px]">
                     <CommentDisplay comment={comment} />
                   </div>
                 ))}
 
-                {/* Comment input if user is commenting on this line */}
+                {/* Comment input */}
                 {isCommenting && lineNumber && (
-                  <div className="border-l-4 border-blue-500 bg-muted/30 p-4 ml-24">
+                  <div className="border-y border-border/50 bg-muted/20 px-4 py-3 ml-[100px]">
                     <CommentInput
                       filePath={file.newPath || file.oldPath}
                       lineRange={{ side, start: lineNumber, end: lineNumber }}
