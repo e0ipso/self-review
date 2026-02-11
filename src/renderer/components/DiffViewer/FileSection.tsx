@@ -60,11 +60,44 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
     return map;
   }, [file]);
 
+  // Build row-index mapping for unified view cross-type drag
+  const unifiedRowMap = useMemo(() => {
+    if (viewMode !== 'unified') return null;
+    const map = new Map<number, { lineNumber: number; side: 'old' | 'new'; hunkIndex: number }>();
+    let rowIndex = 0;
+    file.hunks.forEach((hunk, hunkIdx) => {
+      for (const line of hunk.lines) {
+        const ln = line.type === 'deletion' ? line.oldLineNumber! : line.newLineNumber!;
+        const s: 'old' | 'new' = line.type === 'deletion' ? 'old' : 'new';
+        map.set(rowIndex, { lineNumber: ln, side: s, hunkIndex: hunkIdx });
+        rowIndex++;
+      }
+    });
+    return map;
+  }, [file, viewMode]);
+
+  const hunkRowBounds = useMemo(() => {
+    if (viewMode !== 'unified') return null;
+    const bounds: { min: number; max: number }[] = [];
+    let rowIndex = 0;
+    for (const hunk of file.hunks) {
+      bounds.push({ min: rowIndex, max: rowIndex + hunk.lines.length - 1 });
+      rowIndex += hunk.lines.length;
+    }
+    return bounds;
+  }, [file, viewMode]);
+
   // Refs for stable access in event handlers
   const dragStateRef = useRef(dragState);
   dragStateRef.current = dragState;
   const hunkLineMapRef = useRef(hunkLineMap);
   hunkLineMapRef.current = hunkLineMap;
+  const unifiedRowMapRef = useRef(unifiedRowMap);
+  unifiedRowMapRef.current = unifiedRowMap;
+  const hunkRowBoundsRef = useRef(hunkRowBounds);
+  hunkRowBoundsRef.current = hunkRowBounds;
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
 
   // Sync viewed state with expansion: when viewed is checked, collapse the file
   useEffect(() => {
@@ -114,11 +147,29 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
 
       const target = document.elementFromPoint(e.clientX, e.clientY);
       const lineEl = target?.closest('[data-line-number]') as HTMLElement | null;
-      if (lineEl) {
+      if (!lineEl) return;
+
+      if (viewModeRef.current === 'unified') {
+        // Unified mode: use row indices for cross-type drag
+        const rowIndexAttr = lineEl.getAttribute('data-row-index');
+        if (!rowIndexAttr) return;
+        const rowIndex = parseInt(rowIndexAttr, 10);
+        if (isNaN(rowIndex)) return;
+
+        const rowMap = unifiedRowMapRef.current;
+        const bounds = hunkRowBoundsRef.current;
+        if (!rowMap || !bounds) return;
+
+        const startInfo = rowMap.get(ds.startLine);
+        if (!startInfo) return;
+        const hunkBounds = bounds[startInfo.hunkIndex];
+        const clamped = Math.max(hunkBounds.min, Math.min(hunkBounds.max, rowIndex));
+        setDragState(prev => prev ? { ...prev, currentLine: clamped } : null);
+      } else {
+        // Split mode: use line numbers with side matching
         const lineNumber = parseInt(lineEl.getAttribute('data-line-number')!, 10);
         const side = lineEl.getAttribute('data-line-side') as 'old' | 'new';
         if (!isNaN(lineNumber) && side === ds.side) {
-          // Clamp to same hunk
           const startKey = `${ds.side}-${ds.startLine}`;
           const hunkInfo = hunkLineMapRef.current.get(startKey);
           if (!hunkInfo) return;
@@ -132,9 +183,33 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
     const handleMouseUp = () => {
       const ds = dragStateRef.current;
       if (ds) {
-        const start = Math.min(ds.startLine, ds.currentLine);
-        const end = Math.max(ds.startLine, ds.currentLine);
-        handleCommentRange(start, end, ds.side);
+        if (viewModeRef.current === 'unified' && unifiedRowMapRef.current) {
+          // Convert row index range to real line range
+          const minRow = Math.min(ds.startLine, ds.currentLine);
+          const maxRow = Math.max(ds.startLine, ds.currentLine);
+          const rowMap = unifiedRowMapRef.current;
+
+          const newLines: number[] = [];
+          const oldLines: number[] = [];
+          for (let i = minRow; i <= maxRow; i++) {
+            const info = rowMap.get(i);
+            if (info) {
+              if (info.side === 'new') newLines.push(info.lineNumber);
+              else oldLines.push(info.lineNumber);
+            }
+          }
+
+          // Prefer new side; fall back to old for deletion-only selections
+          if (newLines.length > 0) {
+            handleCommentRange(Math.min(...newLines), Math.max(...newLines), 'new');
+          } else if (oldLines.length > 0) {
+            handleCommentRange(Math.min(...oldLines), Math.max(...oldLines), 'old');
+          }
+        } else {
+          const start = Math.min(ds.startLine, ds.currentLine);
+          const end = Math.max(ds.startLine, ds.currentLine);
+          handleCommentRange(start, end, ds.side);
+        }
       }
       setDragState(null);
     };
