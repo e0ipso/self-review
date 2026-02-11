@@ -32,6 +32,46 @@ self-review --staged --resume-from review.xml > review-updated.xml
 - **Structured XML output** — validated against an XSD schema, designed for machine consumption
 - **Resume support** — pick up where you left off with `--resume-from`
 
+## Configuration
+
+Customize **self-review** with YAML configuration files:
+
+- **User config:** `~/.config/self-review/config.yaml` — personal preferences for all projects
+- **Project config:** `.self-review.yaml` — per-project settings (committable)
+
+Project config overrides user config, which overrides built-in defaults.
+
+### Example: Custom comment categories
+
+```yaml
+# .self-review.yaml
+categories:
+  - name: bug
+    description: "Likely defect or incorrect behavior"
+    color: "#e53e3e"
+  - name: security
+    description: "Potential security vulnerability"
+    color: "#d69e2e"
+  - name: nit
+    description: "Minor style or formatting suggestion"
+    color: "#718096"
+  - name: question
+    description: "Clarification needed"
+    color: "#3182ce"
+```
+
+### Available options
+
+- `theme`: light, dark, or system (default: system)
+- `diff-view`: split or unified (default: split)
+- `prism-theme`: syntax highlighting theme name (default: one-dark)
+- `font-size`: editor font size in pixels (default: 14)
+- `ignore`: file patterns to exclude from diff (glob syntax)
+- `categories`: custom comment tags (see example above)
+- `default-diff-args`: default arguments passed to `git diff`
+
+See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
+
 ## Design principles
 
 - **CLI-first.** Launched from the terminal, outputs to stdout. Behaves like a Unix tool.
