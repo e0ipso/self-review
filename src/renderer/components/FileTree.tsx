@@ -6,7 +6,7 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, Check, MessageSquare } from 'lucide-react';
+import { Search, CircleDashed, CircleCheck, MessageSquare } from 'lucide-react';
 import type { DiffFile } from '../../shared/types';
 
 export default function FileTree() {
@@ -136,8 +136,10 @@ export default function FileTree() {
                             <span className="text-[10px] tabular-nums">{commentCount}</span>
                           </span>
                         )}
-                        {viewed && (
-                          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        {viewed ? (
+                          <CircleCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        ) : (
+                          <CircleDashed className="h-3.5 w-3.5 text-muted-foreground/60" />
                         )}
                       </div>
                     </div>

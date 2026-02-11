@@ -6,7 +6,7 @@ import { Checkbox } from '../ui/checkbox';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
-import { ChevronDown, ChevronRight, MessageSquare, Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, ChevronRight, MessageSquare, CircleDashed, CircleCheck } from 'lucide-react';
 import SplitView from './SplitView';
 import UnifiedView from './UnifiedView';
 import CommentInput from '../Comments/CommentInput';
@@ -169,14 +169,14 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
               className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
             >
               {isViewed ? (
-                <Eye className="h-3.5 w-3.5" />
+                <CircleCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <EyeOff className="h-3.5 w-3.5" />
+                <CircleDashed className="h-3.5 w-3.5" />
               )}
-              <span className="sr-only">{isViewed ? 'Viewed' : 'Mark as viewed'}</span>
+              <span className="sr-only">{isViewed ? 'Done reviewing' : 'To review'}</span>
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{isViewed ? 'Mark as unviewed' : 'Mark as viewed'}</TooltipContent>
+          <TooltipContent>{isViewed ? 'Mark as needs review' : 'Mark as done reviewing'}</TooltipContent>
         </Tooltip>
 
         {/* Add file comment */}
