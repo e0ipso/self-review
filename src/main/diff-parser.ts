@@ -20,9 +20,12 @@ export function parseDiff(rawDiff: string): DiffFile[] {
 
     // Start of a new file
     if (line.startsWith('diff --git ')) {
-      // Save previous file if exists
+      // Save previous file if exists and has actual changes
       if (currentFile && currentFile.oldPath !== undefined && currentFile.newPath !== undefined) {
-        files.push(currentFile as DiffFile);
+        // Only include files that have actual changes (hunks) or are binary
+        if (currentFile.isBinary || (currentFile.hunks && currentFile.hunks.length > 0)) {
+          files.push(currentFile as DiffFile);
+        }
       }
 
       // Initialize new file
@@ -160,7 +163,10 @@ export function parseDiff(rawDiff: string): DiffFile[] {
     currentFile.hunks!.push(currentHunk as DiffHunk);
   }
   if (currentFile && currentFile.oldPath !== undefined && currentFile.newPath !== undefined) {
-    files.push(currentFile as DiffFile);
+    // Only include files that have actual changes (hunks) or are binary
+    if (currentFile.isBinary || (currentFile.hunks && currentFile.hunks.length > 0)) {
+      files.push(currentFile as DiffFile);
+    }
   }
 
   return files;
