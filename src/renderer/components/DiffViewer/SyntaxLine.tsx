@@ -28,6 +28,23 @@ import 'prismjs/components/prism-cpp';
 import 'prismjs/components/prism-ruby';
 import 'prismjs/components/prism-php';
 import 'prismjs/components/prism-twig';
+// Config and data formats
+import 'prismjs/components/prism-ini';
+import 'prismjs/components/prism-toml';
+import 'prismjs/components/prism-csv';
+import 'prismjs/components/prism-diff';
+// Web and infrastructure
+import 'prismjs/components/prism-scss';
+import 'prismjs/components/prism-sass';
+import 'prismjs/components/prism-graphql';
+import 'prismjs/components/prism-nginx';
+import 'prismjs/components/prism-docker';
+// Database and tooling
+import 'prismjs/components/prism-mongodb';
+import 'prismjs/components/prism-makefile';
+import 'prismjs/components/prism-git';
+import 'prismjs/components/prism-vim';
+import 'prismjs/components/prism-xml-doc';
 
 export interface SyntaxLineProps {
   content: string;
@@ -63,7 +80,43 @@ function getLanguageFromPath(filePath: string): string {
     cpp: 'cpp',
     h: 'c',
     hpp: 'cpp',
+    // Config and data formats
+    ini: 'ini',
+    toml: 'toml',
+    csv: 'csv',
+    diff: 'diff',
+    patch: 'diff',
+    // Web and infrastructure
+    scss: 'scss',
+    sass: 'sass',
+    graphql: 'graphql',
+    gql: 'graphql',
+    conf: 'nginx',
+    // Database
+    mongodb: 'mongodb',
+    // Tooling
+    makefile: 'makefile',
+    mk: 'makefile',
+    mak: 'makefile',
+    vim: 'vim',
+    vimrc: 'vim',
   };
+
+  // Check for special filenames without extensions
+  const filename = filePath.split('/').pop()?.toLowerCase() || '';
+  if (filename === 'dockerfile' || filename.startsWith('dockerfile.')) {
+    return 'docker';
+  }
+  if (filename === 'makefile' || filename.startsWith('makefile.')) {
+    return 'makefile';
+  }
+  if (filename.startsWith('.git')) {
+    return 'git';
+  }
+  if (filename === '.vimrc' || filename.startsWith('.vim')) {
+    return 'vim';
+  }
+
   return langMap[ext] || 'plaintext';
 }
 
