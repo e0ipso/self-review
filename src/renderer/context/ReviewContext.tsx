@@ -105,13 +105,21 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
     });
 
     window.electronAPI.onRequestReview(() => {
+      console.error('[renderer] Received review:request from main');
       const reviewData: ReviewState = {
         timestamp: new Date().toISOString(),
         gitDiffArgs: gitDiffArgsRef.current,
         repository: repositoryRef.current,
         files: filesRef.current,
       };
+      console.error('[renderer] Submitting review data:', JSON.stringify({
+        timestamp: reviewData.timestamp,
+        gitDiffArgs: reviewData.gitDiffArgs,
+        repository: reviewData.repository,
+        fileCount: reviewData.files.length,
+      }));
       window.electronAPI.submitReview(reviewData);
+      console.error('[renderer] Review data submitted');
     });
 
     // Now request the data from main process

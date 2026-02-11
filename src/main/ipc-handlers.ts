@@ -39,6 +39,12 @@ export function registerIpcHandlers(): void {
 
   // Handle review submission from renderer
   ipcMain.on(IPC.REVIEW_SUBMIT, (_event, state: ReviewState) => {
+    console.error('[ipc] Received REVIEW_SUBMIT from renderer:', JSON.stringify({
+      timestamp: state.timestamp,
+      gitDiffArgs: state.gitDiffArgs,
+      repository: state.repository,
+      fileCount: state.files.length,
+    }));
     reviewStateCache = state;
   });
 
@@ -68,11 +74,13 @@ export function requestReviewFromRenderer(window: BrowserWindow): Promise<Review
     reviewStateCache = null;
 
     // Send request to renderer
+    console.error('[ipc] Sending review:request to renderer');
     window.webContents.send('review:request');
 
     // Wait for response with timeout
     const timeout = setTimeout(() => {
-      console.error('Warning: Timeout waiting for review state from renderer');
+      console.error('[ipc] WARNING: Timeout waiting for review state from renderer (5s)');
+      console.error('[ipc] Resolving with empty review state');
       resolve({
         timestamp: new Date().toISOString(),
         gitDiffArgs: '',
@@ -84,6 +92,7 @@ export function requestReviewFromRenderer(window: BrowserWindow): Promise<Review
     // Poll for the cached state
     const interval = setInterval(() => {
       if (reviewStateCache) {
+        console.error('[ipc] Review state received from renderer');
         clearTimeout(timeout);
         clearInterval(interval);
         resolve(reviewStateCache);
