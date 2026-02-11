@@ -8,40 +8,29 @@ import CommentDisplay from '../Comments/CommentDisplay';
 
 export interface UnifiedViewProps {
   file: DiffFile;
-  commentingLine: { lineNumber: number; side: 'old' | 'new' } | null;
-  selectionRange: { start: number; end: number; side: 'old' | 'new' } | null;
-  onLineClick: (lineNumber: number, side: 'old' | 'new') => void;
-  onLineRangeSelect: (start: number, end: number, side: 'old' | 'new') => void;
+  commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
+  dragState: { startLine: number; currentLine: number; side: 'old' | 'new' } | null;
+  onCommentRange: (start: number, end: number, side: 'old' | 'new') => void;
+  onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
+  onDragMove: (lineNumber: number) => void;
+  onDragEnd: (lineNumber: number, side: 'old' | 'new') => void;
   onCancelComment: () => void;
+  onCommentSaved: () => void;
 }
 
 export default function UnifiedView({
   file,
-  commentingLine,
-  selectionRange,
-  onLineClick,
-  onLineRangeSelect,
+  commentRange,
+  dragState,
+  onCommentRange,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
   onCancelComment,
+  onCommentSaved,
 }: UnifiedViewProps) {
   const { getCommentsForLine } = useReview();
   const language = getLanguageFromPath(file.newPath || file.oldPath);
-
-  const [rangeStart, setRangeStart] = React.useState<{ lineNumber: number; side: 'old' | 'new' } | null>(null);
-
-  const handleLineMouseDown = (lineNumber: number, side: 'old' | 'new') => {
-    setRangeStart({ lineNumber, side });
-  };
-
-  const handleLineMouseUp = (lineNumber: number, side: 'old' | 'new') => {
-    if (rangeStart && rangeStart.side === side) {
-      const start = Math.min(rangeStart.lineNumber, lineNumber);
-      const end = Math.max(rangeStart.lineNumber, lineNumber);
-      if (start !== end) {
-        onLineRangeSelect(start, end, side);
-      }
-    }
-    setRangeStart(null);
-  };
 
   const getLineBg = (line: DiffLine) => {
     if (line.type === 'addition') return 'bg-emerald-50/70 dark:bg-emerald-950/20';
@@ -70,8 +59,15 @@ export default function UnifiedView({
   };
 
   const isLineSelected = (lineNumber: number, side: 'old' | 'new') => {
-    if (!selectionRange || selectionRange.side !== side) return false;
-    return lineNumber >= selectionRange.start && lineNumber <= selectionRange.end;
+    if (commentRange && commentRange.side === side) {
+      if (lineNumber >= commentRange.start && lineNumber <= commentRange.end) return true;
+    }
+    if (dragState && dragState.side === side) {
+      const min = Math.min(dragState.startLine, dragState.currentLine);
+      const max = Math.max(dragState.startLine, dragState.currentLine);
+      if (lineNumber >= min && lineNumber <= max) return true;
+    }
+    return false;
   };
 
   const filePath = file.newPath || file.oldPath;
@@ -87,7 +83,7 @@ export default function UnifiedView({
             const comments = lineNumber
               ? getCommentsForLine(file.newPath || file.oldPath, lineNumber, side)
               : [];
-            const isCommenting = commentingLine?.lineNumber === lineNumber && commentingLine?.side === side;
+            const showCommentInputHere = commentRange && lineNumber === commentRange.end && commentRange.side === side;
             const isSelected = lineNumber ? isLineSelected(lineNumber, side) : false;
 
             return (
@@ -97,9 +93,10 @@ export default function UnifiedView({
                   <div
                     className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
                     data-testid={line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined}
-                    onMouseDown={() => line.oldLineNumber && handleLineMouseDown(line.oldLineNumber, 'old')}
-                    onMouseUp={() => line.oldLineNumber && handleLineMouseUp(line.oldLineNumber, 'old')}
-                    onClick={() => line.oldLineNumber && onLineClick(line.oldLineNumber, 'old')}
+                    onMouseDown={() => line.oldLineNumber && onDragStart(line.oldLineNumber, 'old')}
+                    onMouseMove={() => line.oldLineNumber && onDragMove(line.oldLineNumber)}
+                    onMouseUp={() => line.oldLineNumber && onDragEnd(line.oldLineNumber, 'old')}
+                    onClick={() => line.oldLineNumber && onCommentRange(line.oldLineNumber, line.oldLineNumber, 'old')}
                   >
                     {line.oldLineNumber || ''}
                   </div>
@@ -107,9 +104,10 @@ export default function UnifiedView({
                   <div
                     className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
                     data-testid={line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined}
-                    onMouseDown={() => line.newLineNumber && handleLineMouseDown(line.newLineNumber, 'new')}
-                    onMouseUp={() => line.newLineNumber && handleLineMouseUp(line.newLineNumber, 'new')}
-                    onClick={() => line.newLineNumber && onLineClick(line.newLineNumber, 'new')}
+                    onMouseDown={() => line.newLineNumber && onDragStart(line.newLineNumber, 'new')}
+                    onMouseMove={() => line.newLineNumber && onDragMove(line.newLineNumber)}
+                    onMouseUp={() => line.newLineNumber && onDragEnd(line.newLineNumber, 'new')}
+                    onClick={() => line.newLineNumber && onCommentRange(line.newLineNumber, line.newLineNumber, 'new')}
                   >
                     {line.newLineNumber || ''}
                   </div>
@@ -131,12 +129,13 @@ export default function UnifiedView({
                 ))}
 
                 {/* Comment input */}
-                {isCommenting && lineNumber && (
+                {showCommentInputHere && (
                   <div className="border-y border-border/50 bg-muted/20 px-4 py-3 ml-[100px]">
                     <CommentInput
                       filePath={file.newPath || file.oldPath}
-                      lineRange={{ side, start: lineNumber, end: lineNumber }}
+                      lineRange={{ side: commentRange.side, start: commentRange.start, end: commentRange.end }}
                       onCancel={onCancelComment}
+                      onSubmit={onCommentSaved}
                     />
                   </div>
                 )}

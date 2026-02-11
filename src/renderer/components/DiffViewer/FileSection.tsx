@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { DiffFile, LineRange } from '../../../shared/types';
+import type { DiffFile } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
@@ -23,8 +23,8 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
   const { toggleViewed, getCommentsForFile, files } = useReview();
   const [internalExpanded, setInternalExpanded] = useState(true);
   const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
-  const [commentingLine, setCommentingLine] = useState<{ lineNumber: number; side: 'old' | 'new' } | null>(null);
-  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number; side: 'old' | 'new' } | null>(null);
+  const [commentRange, setCommentRange] = useState<{ start: number; end: number; side: 'old' | 'new' } | null>(null);
+  const [dragState, setDragState] = useState<{ startLine: number; currentLine: number; side: 'old' | 'new' } | null>(null);
   const [showingFileComment, setShowingFileComment] = useState(false);
 
   const filePath = file.newPath || file.oldPath;
@@ -52,19 +52,35 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
     }
   };
 
-  const handleLineClick = (lineNumber: number, side: 'old' | 'new') => {
-    setCommentingLine({ lineNumber, side });
-    setSelectionRange(null);
-  };
-
-  const handleLineRangeSelect = (start: number, end: number, side: 'old' | 'new') => {
-    setSelectionRange({ start, end, side });
-    setCommentingLine(null);
+  const handleCommentRange = (start: number, end: number, side: 'old' | 'new') => {
+    setCommentRange({ start: Math.min(start, end), end: Math.max(start, end), side });
+    setDragState(null);
   };
 
   const handleCancelComment = () => {
-    setCommentingLine(null);
-    setSelectionRange(null);
+    setCommentRange(null);
+    setDragState(null);
+  };
+
+  const handleCommentSaved = () => {
+    setCommentRange(null);
+  };
+
+  const handleDragStart = (lineNumber: number, side: 'old' | 'new') => {
+    setDragState({ startLine: lineNumber, currentLine: lineNumber, side });
+  };
+
+  const handleDragMove = (lineNumber: number) => {
+    setDragState(prev => prev ? { ...prev, currentLine: lineNumber } : null);
+  };
+
+  const handleDragEnd = (lineNumber: number, side: 'old' | 'new') => {
+    if (dragState && dragState.side === side) {
+      const start = Math.min(dragState.startLine, lineNumber);
+      const end = Math.max(dragState.startLine, lineNumber);
+      handleCommentRange(start, end, side);
+    }
+    setDragState(null);
   };
 
   const handleAddFileComment = () => {
@@ -235,20 +251,26 @@ export default function FileSection({ file, viewMode, expanded: controlledExpand
           ) : viewMode === 'split' ? (
             <SplitView
               file={file}
-              commentingLine={commentingLine}
-              selectionRange={selectionRange}
-              onLineClick={handleLineClick}
-              onLineRangeSelect={handleLineRangeSelect}
+              commentRange={commentRange}
+              dragState={dragState}
+              onCommentRange={handleCommentRange}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
+              onDragEnd={handleDragEnd}
               onCancelComment={handleCancelComment}
+              onCommentSaved={handleCommentSaved}
             />
           ) : (
             <UnifiedView
               file={file}
-              commentingLine={commentingLine}
-              selectionRange={selectionRange}
-              onLineClick={handleLineClick}
-              onLineRangeSelect={handleLineRangeSelect}
+              commentRange={commentRange}
+              dragState={dragState}
+              onCommentRange={handleCommentRange}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
+              onDragEnd={handleDragEnd}
               onCancelComment={handleCancelComment}
+              onCommentSaved={handleCommentSaved}
             />
           )}
         </div>

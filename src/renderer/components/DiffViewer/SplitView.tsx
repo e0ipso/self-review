@@ -8,11 +8,14 @@ import CommentDisplay from '../Comments/CommentDisplay';
 
 export interface SplitViewProps {
   file: DiffFile;
-  commentingLine: { lineNumber: number; side: 'old' | 'new' } | null;
-  selectionRange: { start: number; end: number; side: 'old' | 'new' } | null;
-  onLineClick: (lineNumber: number, side: 'old' | 'new') => void;
-  onLineRangeSelect: (start: number, end: number, side: 'old' | 'new') => void;
+  commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
+  dragState: { startLine: number; currentLine: number; side: 'old' | 'new' } | null;
+  onCommentRange: (start: number, end: number, side: 'old' | 'new') => void;
+  onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
+  onDragMove: (lineNumber: number) => void;
+  onDragEnd: (lineNumber: number, side: 'old' | 'new') => void;
   onCancelComment: () => void;
+  onCommentSaved: () => void;
 }
 
 interface SplitLineRow {
@@ -22,36 +25,29 @@ interface SplitLineRow {
 
 export default function SplitView({
   file,
-  commentingLine,
-  selectionRange,
-  onLineClick,
-  onLineRangeSelect,
+  commentRange,
+  dragState,
+  onCommentRange,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
   onCancelComment,
+  onCommentSaved,
 }: SplitViewProps) {
   const { getCommentsForLine } = useReview();
   const filePath = file.newPath || file.oldPath;
   const language = getLanguageFromPath(filePath);
 
-  const [rangeStart, setRangeStart] = React.useState<{ lineNumber: number; side: 'old' | 'new' } | null>(null);
-
-  const handleLineMouseDown = (lineNumber: number, side: 'old' | 'new') => {
-    setRangeStart({ lineNumber, side });
-  };
-
-  const handleLineMouseUp = (lineNumber: number, side: 'old' | 'new') => {
-    if (rangeStart && rangeStart.side === side) {
-      const start = Math.min(rangeStart.lineNumber, lineNumber);
-      const end = Math.max(rangeStart.lineNumber, lineNumber);
-      if (start !== end) {
-        onLineRangeSelect(start, end, side);
-      }
-    }
-    setRangeStart(null);
-  };
-
   const isLineSelected = (lineNumber: number, side: 'old' | 'new') => {
-    if (!selectionRange || selectionRange.side !== side) return false;
-    return lineNumber >= selectionRange.start && lineNumber <= selectionRange.end;
+    if (commentRange && commentRange.side === side) {
+      if (lineNumber >= commentRange.start && lineNumber <= commentRange.end) return true;
+    }
+    if (dragState && dragState.side === side) {
+      const min = Math.min(dragState.startLine, dragState.currentLine);
+      const max = Math.max(dragState.startLine, dragState.currentLine);
+      if (lineNumber >= min && lineNumber <= max) return true;
+    }
+    return false;
   };
 
   const buildSplitRows = (lines: DiffLine[]): SplitLineRow[] => {
@@ -108,9 +104,10 @@ export default function SplitView({
         <div
           className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none cursor-pointer hover:text-foreground transition-colors ${getGutterBg(line)}`}
           data-testid={lineTestId}
-          onMouseDown={() => lineNumber && handleLineMouseDown(lineNumber, side)}
-          onMouseUp={() => lineNumber && handleLineMouseUp(lineNumber, side)}
-          onClick={() => lineNumber && onLineClick(lineNumber, side)}
+          onMouseDown={() => lineNumber && onDragStart(lineNumber, side)}
+          onMouseMove={() => lineNumber && onDragMove(lineNumber)}
+          onMouseUp={() => lineNumber && onDragEnd(lineNumber, side)}
+          onClick={() => lineNumber && onCommentRange(lineNumber, lineNumber, side)}
         >
           {lineNumber || ''}
         </div>
@@ -137,9 +134,10 @@ export default function SplitView({
               ? getCommentsForLine(file.newPath || file.oldPath, newLineNumber, 'new')
               : [];
             const hasComments = oldComments.length > 0 || newComments.length > 0;
-            const isOldCommenting = commentingLine?.lineNumber === oldLineNumber && commentingLine?.side === 'old';
-            const isNewCommenting = commentingLine?.lineNumber === newLineNumber && commentingLine?.side === 'new';
-            const hasCommentInput = isOldCommenting || isNewCommenting;
+            const showCommentInputHere = commentRange && (
+              (commentRange.side === 'old' && oldLineNumber === commentRange.end) ||
+              (commentRange.side === 'new' && newLineNumber === commentRange.end)
+            );
 
             return (
               <React.Fragment key={`${hunkIndex}-${rowIndex}`}>
@@ -177,18 +175,13 @@ export default function SplitView({
                 )}
 
                 {/* Comment input spanning full width */}
-                {hasCommentInput && (
+                {showCommentInputHere && (
                   <div className="border-y border-border/50 bg-muted/20 px-4 py-3">
                     <CommentInput
                       filePath={file.newPath || file.oldPath}
-                      lineRange={
-                        isOldCommenting && oldLineNumber
-                          ? { side: 'old', start: oldLineNumber, end: oldLineNumber }
-                          : isNewCommenting && newLineNumber
-                          ? { side: 'new', start: newLineNumber, end: newLineNumber }
-                          : null
-                      }
+                      lineRange={{ side: commentRange.side, start: commentRange.start, end: commentRange.end }}
                       onCancel={onCancelComment}
+                      onSubmit={onCommentSaved}
                     />
                   </div>
                 )}

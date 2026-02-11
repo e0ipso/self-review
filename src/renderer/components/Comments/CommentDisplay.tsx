@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ReviewComment } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
@@ -52,6 +54,13 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-foreground">You</span>
+          {comment.lineRange && (
+            <span className="text-[11px] text-muted-foreground">
+              {comment.lineRange.start === comment.lineRange.end
+                ? `line ${comment.lineRange.start}`
+                : `lines ${comment.lineRange.start}\u2013${comment.lineRange.end}`}
+            </span>
+          )}
           {comment.category && (
             <Badge
               variant="secondary"
@@ -94,8 +103,10 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
         </div>
       </div>
 
-      <div className="px-3 pb-3 whitespace-pre-wrap text-sm text-foreground leading-relaxed">
-        {comment.body}
+      <div className="px-3 pb-3 text-sm text-foreground leading-relaxed [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_pre]:my-2 [&_pre]:p-3 [&_pre]:bg-muted [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_code]:text-[0.85em] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-muted [&_h1]:text-base [&_h1]:font-bold [&_h1]:my-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:my-2 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:my-2 [&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400 [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_hr]:my-2 [&_hr]:border-border [&_pre_code]:bg-transparent [&_pre_code]:p-0">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {comment.body}
+        </ReactMarkdown>
       </div>
 
       {comment.suggestion && (

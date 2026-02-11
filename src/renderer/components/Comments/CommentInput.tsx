@@ -75,6 +75,15 @@ export default function CommentInput({
 
   return (
     <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden" data-testid="comment-input">
+      {lineRange && (
+        <div className="px-3 pt-2 pb-0">
+          <span className="text-xs font-medium text-muted-foreground">
+            {lineRange.start === lineRange.end
+              ? `Comment on line ${lineRange.start}`
+              : `Comment on lines ${lineRange.start} to ${lineRange.end}`}
+          </span>
+        </div>
+      )}
       <div className="p-3">
         <Textarea
           value={body}
