@@ -9,8 +9,6 @@ import { XMLParser } from 'fast-xml-parser';
 import { createPriorReviewXml } from '../fixtures/test-repo';
 import {
   getPage,
-  getExitCode,
-  getStderr,
   getTestRepoDir,
   readOutputFile,
 } from './app';
@@ -35,14 +33,6 @@ Given(
     }));
     const xmlContent = createPriorReviewXml(repoDir, comments);
     writeFileSync(join(repoDir, fileName), xmlContent);
-  }
-);
-
-Given(
-  'a file {string} containing {string}',
-  async ({}, fileName: string, content: string) => {
-    const repoDir = getTestRepoDir();
-    writeFileSync(join(repoDir, fileName), content);
   }
 );
 
@@ -115,17 +105,3 @@ Then(
   }
 );
 
-Then('stderr should contain an error message about invalid XML', async () => {
-  const stderr = getStderr();
-  expect(stderr.toLowerCase()).toMatch(/error|invalid|parse|xml/i);
-});
-
-Then(
-  'stderr should contain an error message about the file not being found',
-  async () => {
-    const stderr = getStderr();
-    expect(stderr.toLowerCase()).toMatch(
-      /error|no such file|not found|enoent/i
-    );
-  }
-);

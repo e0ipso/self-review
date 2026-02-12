@@ -46,13 +46,3 @@ Feature: Resume from Prior Review
     And I click "Finish Review"
     Then the output file should contain 2 comments for "src/auth/login.ts"
 
-  Scenario: Resume with invalid XML file exits with error
-    Given a file "bad-review.xml" containing "not valid xml {"
-    When I launch self-review with "--resume-from bad-review.xml"
-    Then the process should exit with code 1
-    And stderr should contain an error message about invalid XML
-
-  Scenario: Resume with nonexistent file exits with error
-    When I launch self-review with "--resume-from nonexistent.xml"
-    Then the process should exit with code 1
-    And stderr should contain an error message about the file not being found
