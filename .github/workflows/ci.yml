@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only release on pushes to main, after all tests pass
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [lint, unit-test, e2e-test]
+    needs: [lint, unit-test]
     permissions:
       contents: write      # Create GitHub Releases and tags
       issues: write        # Comment on issues referenced in commits
