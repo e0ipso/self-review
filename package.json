@@ -32,7 +32,8 @@
     "url": "git+https://github.com/e0ipso/self-review.git"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^12.6.0",

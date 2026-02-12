@@ -115,39 +115,7 @@ jobs:
 
       - run: npm ci
 
-      # Diagnostic: test the OIDC → npm token exchange directly,
-      # bypassing @semantic-release/npm to isolate the failure.
-      - name: Test OIDC token exchange with npm
-        run: |
-          node --input-type=module -e "
-            import { getIDToken } from '@actions/core';
-            try {
-              console.log('Step 1: Requesting OIDC token from GitHub...');
-              const idToken = await getIDToken('npm:registry.npmjs.org');
-              console.log('Step 2: Got OIDC token (length: ' + idToken.length + ')');
-
-              console.log('Step 3: Exchanging with npm registry...');
-              const resp = await fetch(
-                'https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/%40e0ipso%2Fself-review',
-                { method: 'POST', headers: { Authorization: 'Bearer ' + idToken } }
-              );
-              const body = await resp.json();
-              console.log('Step 4: npm response status:', resp.status);
-              if (resp.ok) {
-                console.log('SUCCESS: npm OIDC token exchange worked');
-              } else {
-                console.log('FAILED:', body.message || JSON.stringify(body));
-              }
-            } catch (e) {
-              console.error('ERROR:', e.message);
-            }
-          "
-
-      # npm Trusted Publishing (OIDC) — one-time manual steps on npmjs.com:
-      # 1. Go to https://www.npmjs.com/package/@e0ipso/self-review/access
-      # 2. Under Trusted Publishers, click GitHub Actions
-      # 3. Configure: owner=e0ipso, repo=self-review, workflow=ci.yml
       - name: Run semantic-release
-        run: npx semantic-release --debug
+        run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
