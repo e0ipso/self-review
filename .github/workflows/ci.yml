@@ -115,13 +115,33 @@ jobs:
 
       - run: npm ci
 
-      # Diagnostic: confirm the OIDC runtime variables are available.
-      # If either is NOT SET, the id-token permission is not being granted.
-      - name: Verify OIDC environment
+      # Diagnostic: test the OIDC → npm token exchange directly,
+      # bypassing @semantic-release/npm to isolate the failure.
+      - name: Test OIDC token exchange with npm
         run: |
-          echo "ACTIONS_ID_TOKEN_REQUEST_URL is $([ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && echo 'SET' || echo 'NOT SET')"
-          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN is $([ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ] && echo 'SET' || echo 'NOT SET')"
-          echo "Node $(node -v) / npm $(npm -v)"
+          node --input-type=module -e "
+            import { getIDToken } from '@actions/core';
+            try {
+              console.log('Step 1: Requesting OIDC token from GitHub...');
+              const idToken = await getIDToken('npm:registry.npmjs.org');
+              console.log('Step 2: Got OIDC token (length: ' + idToken.length + ')');
+
+              console.log('Step 3: Exchanging with npm registry...');
+              const resp = await fetch(
+                'https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/%40e0ipso%2Fself-review',
+                { method: 'POST', headers: { Authorization: 'Bearer ' + idToken } }
+              );
+              const body = await resp.json();
+              console.log('Step 4: npm response status:', resp.status);
+              if (resp.ok) {
+                console.log('SUCCESS: npm OIDC token exchange worked');
+              } else {
+                console.log('FAILED:', body.message || JSON.stringify(body));
+              }
+            } catch (e) {
+              console.error('ERROR:', e.message);
+            }
+          "
 
       # npm Trusted Publishing (OIDC) — one-time manual steps on npmjs.com:
       # 1. Go to https://www.npmjs.com/package/@e0ipso/self-review/access
