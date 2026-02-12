@@ -5,9 +5,38 @@ import { expect } from '@playwright/test';
 import { createBdd, DataTable } from 'playwright-bdd';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
+import { Page } from '@playwright/test';
 import { getPage, getTestRepoDir, triggerCommentIcon } from './app';
 
 const { Given, When, Then } = createBdd();
+
+// Track the file path of the current drag operation
+let activeDragFile: string | null = null;
+
+/**
+ * Perform a drag move to the given line within the active drag file section.
+ * Dispatches a mousemove event from within the browser context using
+ * getBoundingClientRect() to avoid CDP-to-browser coordinate translation issues.
+ */
+async function dragMoveToLine(page: Page, line: number, side: 'new' | 'old'): Promise<void> {
+  const sectionSel = activeDragFile
+    ? `[data-testid="file-section-${activeDragFile}"]`
+    : null;
+  await page.evaluate(({ ln, s, secSel }) => {
+    const container = secSel ? document.querySelector(secSel) : document;
+    if (!container) return;
+    const el = container.querySelector(`[data-line-number="${ln}"][data-line-side="${s}"]`);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      document.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: rect.x + 20,
+        clientY: rect.y + rect.height / 2,
+        bubbles: true,
+      }));
+    }
+  }, { ln: line, s: side, secSel: sectionSel });
+  await page.waitForTimeout(100);
+}
 
 // ── Background: project categories ──
 
@@ -56,6 +85,7 @@ Given(
 Given(
   'I have added a comment on new lines {int} to {int} of {string}',
   async ({}, startLine: number, endLine: number, filePath: string) => {
+    activeDragFile = filePath;
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     const gutter = section.locator(
@@ -69,17 +99,8 @@ Given(
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(100);
-      const target = section
-        .locator(`[data-line-number="${endLine}"][data-line-side="new"]`)
-        .first();
-      const targetBox = await target.boundingBox();
-      if (targetBox) {
-        await page.mouse.move(
-          targetBox.x + targetBox.width / 2,
-          targetBox.y + targetBox.height / 2
-        );
-      }
+      await page.waitForTimeout(200);
+      await dragMoveToLine(page, endLine, 'new');
       await page.mouse.up();
       await page.waitForTimeout(100);
     }
@@ -180,6 +201,7 @@ When(
 When(
   'I select line numbers from new line {int} to new line {int} in {string}',
   async ({}, startLine: number, endLine: number, filePath: string) => {
+    activeDragFile = filePath;
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     const gutter = section.locator(
@@ -193,17 +215,8 @@ When(
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(100);
-      const target = section
-        .locator(`[data-line-number="${endLine}"][data-line-side="new"]`)
-        .first();
-      const targetBox = await target.boundingBox();
-      if (targetBox) {
-        await page.mouse.move(
-          targetBox.x + targetBox.width / 2,
-          targetBox.y + targetBox.height / 2
-        );
-      }
+      await page.waitForTimeout(200);
+      await dragMoveToLine(page, endLine, 'new');
       await page.mouse.up();
       await page.waitForTimeout(100);
     }
@@ -215,6 +228,7 @@ When(
 When(
   'I mousedown on the {string} icon at new line {int} in {string}',
   async ({}, _icon: string, line: number, filePath: string) => {
+    activeDragFile = filePath;
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     const gutter = section.locator(
@@ -226,7 +240,7 @@ When(
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(200);
     }
   }
 );
@@ -234,6 +248,7 @@ When(
 When(
   'I mousedown on the {string} icon at new line {int}',
   async ({}, _icon: string, line: number) => {
+    // No file path provided — activeDragFile stays from previous step or null
     const page = getPage();
     const icon = page
       .locator(`[data-testid="comment-icon-new-${line}"]`)
@@ -244,46 +259,40 @@ When(
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(200);
     }
   }
 );
 
 When('I drag to new line {int}', async ({}, line: number) => {
   const page = getPage();
-  const target = page
-    .locator(`[data-line-number="${line}"][data-line-side="new"]`)
-    .first();
-  const box = await target.boundingBox();
-  if (box) {
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.waitForTimeout(50);
-  }
+  await dragMoveToLine(page, line, 'new');
 });
 
 When('I drag upward to new line {int}', async ({}, line: number) => {
   const page = getPage();
-  const target = page
-    .locator(`[data-line-number="${line}"][data-line-side="new"]`)
-    .first();
-  const box = await target.boundingBox();
-  if (box) {
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.waitForTimeout(50);
-  }
+  await dragMoveToLine(page, line, 'new');
 });
 
 When('I drag past new line {int} toward hunk B', async ({}, line: number) => {
   const page = getPage();
-  const target = page
-    .locator(`[data-line-number="${line}"][data-line-side="new"]`)
-    .last();
-  const box = await target.boundingBox();
-  if (box) {
-    // Move past the target line toward the next hunk
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height + 100);
-    await page.waitForTimeout(50);
-  }
+  const sectionSel = activeDragFile
+    ? `[data-testid="file-section-${activeDragFile}"]`
+    : null;
+  await page.evaluate(({ ln, secSel }) => {
+    const container = secSel ? document.querySelector(secSel) : document;
+    if (!container) return;
+    const el = container.querySelector(`[data-line-number="${ln}"][data-line-side="new"]`);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      document.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: rect.x + 20,
+        clientY: rect.y + rect.height + 100,
+        bubbles: true,
+      }));
+    }
+  }, { ln: line, secSel: sectionSel });
+  await page.waitForTimeout(100);
 });
 
 When('I release the mouse', async () => {
@@ -544,8 +553,10 @@ Then(
       const commentIndicator = entry.locator('.lucide-message-square');
       await expect(commentIndicator).toHaveCount(0);
     } else {
-      const commentText = entry.locator('text=' + count);
-      await expect(commentText).toBeVisible();
+      // Target the comment count span next to the MessageSquare icon
+      const commentBadge = entry.locator('.lucide-message-square + span');
+      await expect(commentBadge).toBeVisible();
+      await expect(commentBadge).toHaveText(String(count));
     }
   }
 );

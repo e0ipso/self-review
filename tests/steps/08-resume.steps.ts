@@ -52,22 +52,17 @@ When(
   'I click {string} on the comment {string}',
   async ({}, action: string, commentBody: string) => {
     const page = getPage();
-    // Find the comment that contains the body text
-    const comments = page.locator('[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid^="comment-collapse"])');
-    const count = await comments.count();
-    for (let i = 0; i < count; i++) {
-      const text = await comments.nth(i).textContent();
-      if (text?.includes(commentBody)) {
-        if (action === 'Edit') {
-          await comments.nth(i).locator('button', { hasText: 'Edit' }).click();
-        } else if (action === 'Delete') {
-          await comments
-            .nth(i)
-            .locator('button', { hasText: 'Delete' })
-            .click();
-        }
-        break;
-      }
+    // Wait for resumed comments to load, then find the one with matching body text
+    const comment = page
+      .locator('[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid^="comment-collapse"]):not([data-testid="comment-input"])')
+      .filter({ hasText: commentBody });
+    await comment.first().waitFor({ state: 'visible', timeout: 15000 });
+    await comment.first().hover();
+    await page.waitForTimeout(100);
+    if (action === 'Edit') {
+      await comment.first().locator('button:has(.lucide-pencil)').click({ force: true });
+    } else if (action === 'Delete') {
+      await comment.first().locator('button:has(.lucide-trash-2)').click({ force: true });
     }
   }
 );

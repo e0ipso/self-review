@@ -82,6 +82,22 @@ export default function SplitView({
     return 'bg-muted/30';
   };
 
+  // Extract original code for the selected line range (for suggestions)
+  const getOriginalCode = (): string | undefined => {
+    if (!commentRange) return undefined;
+    const { start, end, side } = commentRange;
+    const lines: string[] = [];
+    for (const hunk of file.hunks) {
+      for (const line of hunk.lines) {
+        const lineNum = side === 'old' ? line.oldLineNumber : line.newLineNumber;
+        if (lineNum !== null && lineNum >= start && lineNum <= end) {
+          lines.push(line.content);
+        }
+      }
+    }
+    return lines.length > 0 ? lines.join('\n') : undefined;
+  };
+
   const renderLineCell = (
     line: DiffLine | null,
     side: 'old' | 'new',
@@ -226,6 +242,7 @@ export default function SplitView({
                       }}
                       onCancel={onCancelComment}
                       onSubmit={onCommentSaved}
+                      originalCode={getOriginalCode()}
                     />
                   </div>
                 )}

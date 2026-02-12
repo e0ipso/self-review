@@ -106,19 +106,19 @@ jobs:
         with:
           fetch-depth: 0   # Full history needed for semantic-release commit analysis
 
-      # Do NOT set registry-url here — it creates an .npmrc that conflicts
-      # with semantic-release's OIDC authentication mechanism.
+      # npm Trusted Publishing (OIDC) requires Node 22.14.0+ and npm 11.5.1+.
+      # registry-url is safe with OIDC — don't set NODE_AUTH_TOKEN; npm uses OIDC for publish.
       - uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
       - run: npm ci
 
-      # npm Trusted Publishing (OIDC) — one-time manual steps on npmjs.com:
-      # 1. Go to https://www.npmjs.com/package/@e0ipso/self-review/access
-      # 2. Under Trusted Publishers, click GitHub Actions
-      # 3. Configure: owner=e0ipso, repo=self-review, workflow=ci.yml
+      # npm Trusted Publishing (OIDC) — configure on npmjs.com:
+      # Package → Settings → Trusted Publishers → GitHub Actions
+      # owner=e0ipso, repo=self-review, workflow=ci.yml (exact filename, case-sensitive)
       - name: Run semantic-release
         run: npx semantic-release
         env:

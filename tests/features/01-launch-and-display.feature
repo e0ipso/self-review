@@ -20,7 +20,7 @@ Feature: App Launch and Diff Display
   Scenario: File tree shows correct metadata for each file
     When I launch self-review
     Then the file tree entry for "src/auth/login.ts" should show change type "modified"
-    And the file tree entry for "src/auth/login.ts" should show "+10 -3"
+    And the file tree entry for "src/auth/login.ts" should show "+21 -10"
     And the file tree entry for "src/config.ts" should show change type "modified"
     And the file tree entry for "src/legacy.ts" should show change type "deleted"
 

@@ -30,17 +30,23 @@ async function selectLineRange(
   if (box) {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
+    await page.waitForTimeout(200);
+    // Dispatch mousemove from browser context, scoped to the file section
+    const secSel = `[data-testid="file-section-${filePath}"]`;
+    await page.evaluate(({ ln, s, secSelector }) => {
+      const container = document.querySelector(secSelector);
+      if (!container) return;
+      const el = container.querySelector(`[data-line-number="${ln}"][data-line-side="${s}"]`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        document.dispatchEvent(new MouseEvent('mousemove', {
+          clientX: rect.x + 20,
+          clientY: rect.y + rect.height / 2,
+          bubbles: true,
+        }));
+      }
+    }, { ln: end, s: side, secSelector: secSel });
     await page.waitForTimeout(100);
-    const target = section
-      .locator(`[data-line-number="${end}"][data-line-side="${side}"]`)
-      .first();
-    const targetBox = await target.boundingBox();
-    if (targetBox) {
-      await page.mouse.move(
-        targetBox.x + targetBox.width / 2,
-        targetBox.y + targetBox.height / 2
-      );
-    }
     await page.mouse.up();
     await page.waitForTimeout(100);
   }
