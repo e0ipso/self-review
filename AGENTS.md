@@ -24,8 +24,7 @@ container before running the e2e tests.
 self-review/
 ├── CLAUDE.md
 ├── docs/
-│   ├── PRD.md                    # Product requirements (source of truth)
-│   └── self-review-v1.xsd       # XML schema (source of truth for output format)
+│   └── PRD.md                    # Product requirements (source of truth)
 ├── src/
 │   ├── shared/                   # Shared between main and renderer
 │   │   ├── types.ts              # All TypeScript interfaces — THE CONTRACT
@@ -178,11 +177,10 @@ E2E tests use Playwright with Cucumber BDD:
 - **Prism.js for syntax highlighting.** Language detection by file extension. Theme must match the
   app's light/dark theme.
 
-## XSD Schema Sync
+## XSD Schema Location
 
-The XSD schema `docs/self-review-v1.xsd` is the source of truth. A copy exists at
-`.claude/skills/self-review/apply-review/assets/self-review-v1.xsd` for the Claude Code skill. **When
-updating the XSD, both copies must be kept in sync.**
+The XSD schema lives at `.claude/skills/self-review/apply-review/assets/self-review-v1.xsd`. This is
+the single source of truth for the XML output format.
 
 ## What NOT To Do
 

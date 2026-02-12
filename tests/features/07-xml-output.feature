@@ -77,7 +77,7 @@ Feature: XML Output
     When I launch self-review
     And I add a comment "Test" on new line 5 of "src/auth/login.ts"
     And I click "Finish Review"
-    Then the output file should validate against "docs/self-review-v1.xsd"
+    Then the output file should validate against ".claude/skills/self-review/apply-review/assets/self-review-v1.xsd"
 
   Scenario: Nothing is written to stdout
     When I launch self-review
