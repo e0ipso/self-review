@@ -6,17 +6,39 @@ import { createBdd } from 'playwright-bdd';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { XMLParser } from 'fast-xml-parser';
-import { getPage, getStdout, closeAppWindow } from './app';
+import { getPage, getStdout, closeAppWindow, triggerCommentIcon } from './app';
 
 const { When, Then } = createBdd();
+
+// Helper to perform a drag selection across a line range
+async function selectLineRange(filePath: string, start: number, end: number, side: 'old' | 'new' = 'new') {
+  const page = getPage();
+  const section = page.locator(`[data-testid="file-section-${filePath}"]`);
+  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${start}"]`);
+  await gutter.hover();
+  const startIcon = section.locator(`[data-testid="comment-icon-${side}-${start}"]`);
+  const box = await startIcon.boundingBox();
+  if (box) {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(100);
+    const target = section.locator(`[data-line-number="${end}"][data-line-side="${side}"]`).first();
+    const targetBox = await target.boundingBox();
+    if (targetBox) {
+      await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+  }
+}
 
 // ── When: composite actions for XML scenarios ──
 
 When(
   'I add a comment {string} on new line {int} of {string}',
   async ({}, body: string, line: number, filePath: string) => {
+    await triggerCommentIcon(filePath, line, 'new');
     const page = getPage();
-    await page.locator(`[data-testid="new-line-${filePath}-${line}"]`).click();
     await page.locator('[data-testid="comment-input"] textarea').fill(body);
     await page.locator('[data-testid="add-comment-btn"]').click();
   },
@@ -35,8 +57,8 @@ When(
 When(
   'I add a comment {string} with category {string} on new line {int} of {string}',
   async ({}, body: string, category: string, line: number, filePath: string) => {
+    await triggerCommentIcon(filePath, line, 'new');
     const page = getPage();
-    await page.locator(`[data-testid="new-line-${filePath}-${line}"]`).click();
     await page.locator('[data-testid="category-selector"]').click();
     await page.locator(`[data-testid="category-option-${category}"]`).click();
     await page.locator('[data-testid="comment-input"] textarea').fill(body);
@@ -47,13 +69,8 @@ When(
 When(
   'I add a comment with a suggestion on new lines {int}-{int} of {string}',
   async ({}, start: number, end: number, filePath: string) => {
+    await selectLineRange(filePath, start, end);
     const page = getPage();
-    // Select line range
-    const startEl = page.locator(`[data-testid="new-line-${filePath}-${start}"]`);
-    const endEl = page.locator(`[data-testid="new-line-${filePath}-${end}"]`);
-    await startEl.dispatchEvent('mousedown');
-    await endEl.dispatchEvent('mouseup');
-    // Fill comment
     await page.locator('[data-testid="comment-input"] textarea').fill('Suggestion comment');
     await page.locator('[data-testid="add-suggestion-btn"]').click();
     await page.locator('[data-testid="suggestion-proposed"] textarea').fill('replacement code');
@@ -64,11 +81,8 @@ When(
 When(
   'I add a comment {string} on new lines {int}-{int} of {string}',
   async ({}, body: string, start: number, end: number, filePath: string) => {
+    await selectLineRange(filePath, start, end);
     const page = getPage();
-    const startEl = page.locator(`[data-testid="new-line-${filePath}-${start}"]`);
-    const endEl = page.locator(`[data-testid="new-line-${filePath}-${end}"]`);
-    await startEl.dispatchEvent('mousedown');
-    await endEl.dispatchEvent('mouseup');
     await page.locator('[data-testid="comment-input"] textarea').fill(body);
     await page.locator('[data-testid="add-comment-btn"]').click();
   },
@@ -77,8 +91,8 @@ When(
 When(
   'I add a comment {string} on old line {int} of {string}',
   async ({}, body: string, line: number, filePath: string) => {
+    await triggerCommentIcon(filePath, line, 'old');
     const page = getPage();
-    await page.locator(`[data-testid="old-line-${filePath}-${line}"]`).click();
     await page.locator('[data-testid="comment-input"] textarea').fill(body);
     await page.locator('[data-testid="add-comment-btn"]').click();
   },

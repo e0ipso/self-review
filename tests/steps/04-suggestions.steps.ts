@@ -3,7 +3,7 @@
  */
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { getPage } from './app';
+import { getPage, triggerCommentIcon } from './app';
 
 const { Given, When, Then } = createBdd();
 
@@ -12,8 +12,8 @@ const { Given, When, Then } = createBdd();
 Given(
   'I have added a comment with a suggestion on new line {int} of {string}',
   async ({}, line: number, filePath: string) => {
+    await triggerCommentIcon(filePath, line, 'new');
     const page = getPage();
-    await page.locator(`[data-testid="new-line-${filePath}-${line}"]`).click();
     await page.locator('[data-testid="comment-input"] textarea').fill('Suggestion comment');
     await page.locator('[data-testid="add-suggestion-btn"]').click();
     await page.locator('[data-testid="suggestion-proposed"] textarea').fill('const fixed = true;');

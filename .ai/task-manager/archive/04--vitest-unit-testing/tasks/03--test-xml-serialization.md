@@ -2,8 +2,9 @@
 id: 3
 group: "priority-tests"
 dependencies: [1]
-status: "pending"
+status: "completed"
 created: "2026-02-12"
+completed: "2026-02-12"
 skills:
   - vitest
   - typescript
