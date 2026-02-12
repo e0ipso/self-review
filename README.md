@@ -135,19 +135,6 @@ See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 - **AI-native output.** The XML format is designed to be parsed by LLMs, with an XSD schema they can
   reference for structure.
 
-## CI/CD
-
-This project uses GitHub Actions for continuous integration and delivery.
-
-**Test gating**: Every push to `main` and every PR runs three parallel jobs — **Lint**, **Unit Tests**, and **E2E Tests**. All three must pass before a PR can be merged (enforced via branch protection required status checks).
-
-**Automated releases**: When conventional commits are merged to `main`, [semantic-release](https://semantic-release.gitbook.io/) automatically determines the next version, creates a GitHub Release, and publishes to npm as [`@e0ipso/self-review`](https://www.npmjs.com/package/@e0ipso/self-review).
-
-### One-time setup (maintainers)
-
-1. **Branch protection**: After the first workflow run, go to Settings > Branches > Add rule for `main` > Enable "Require status checks to pass" > Select `Lint`, `Unit Tests`, `E2E Tests`.
-2. **npm Trusted Publishing**: In the npm package settings for `@e0ipso/self-review`, configure Trusted Publishers > GitHub Actions with this repository and the `ci.yml` workflow.
-
 ## Requirements
 
 - macOS or Linux
