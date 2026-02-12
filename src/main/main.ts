@@ -21,7 +21,7 @@ import {
   setResumeComments,
   requestReviewFromRenderer,
 } from './ipc-handlers';
-import { DiffLoadPayload, ReviewState } from '../shared/types';
+import { DiffLoadPayload } from '../shared/types';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -62,6 +62,7 @@ process.on('unhandledRejection', reason => {
 });
 
 // Handle Squirrel startup events on Windows
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
@@ -175,7 +176,7 @@ async function initializeApp() {
           resumeComments.length,
           'comments from resume file'
         );
-      } catch (error) {
+      } catch (_error) {
         console.error('[main] Error loading resume file');
         clearTimeout(initTimeout);
         process.exit(1);
@@ -320,7 +321,7 @@ app
       console.error('[main] Validating git availability');
       validateGitAvailable();
       console.error('[main] Git validation passed');
-    } catch (error) {
+    } catch (_error) {
       // validateGitAvailable already logs errors
       app.quit();
       process.exit(1);

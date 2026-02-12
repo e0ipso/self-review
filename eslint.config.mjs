@@ -12,6 +12,7 @@ export default defineConfig([
       '**/coverage/**',
       '**/.ai/**',
       '**/build/**',
+      '**/.webpack/**',
       'eslint.config.*',
     ],
   },
@@ -51,12 +52,14 @@ export default defineConfig([
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/no-namespace': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+      'no-empty-pattern': 'off',
     },
   },
 
   // Config files
   {
-    files: ['**/*.config.{js,ts}', '**/jest.config.js'],
+    files: ['**/*.config.{js,ts}', '**/jest.config.js', 'webpack.*.ts'],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -64,6 +67,7 @@ export default defineConfig([
     },
     rules: {
       '@typescript-eslint/no-var-requires': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
 ]);

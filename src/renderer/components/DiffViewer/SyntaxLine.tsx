@@ -123,7 +123,7 @@ function getLanguageFromPath(filePath: string): string {
 const SyntaxLine = React.memo(function SyntaxLine({
   content,
   language,
-  lineType,
+  lineType: _lineType,
 }: SyntaxLineProps) {
   const highlightedContent = React.useMemo(() => {
     try {

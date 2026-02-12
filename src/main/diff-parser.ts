@@ -1,7 +1,7 @@
 // src/main/diff-parser.ts
 // Parse unified diff output into DiffFile[]
 
-import { DiffFile, DiffHunk, DiffLine, ChangeType } from '../shared/types';
+import { DiffFile, DiffHunk, ChangeType } from '../shared/types';
 
 export function parseDiff(rawDiff: string): DiffFile[] {
   if (!rawDiff.trim()) {
@@ -106,7 +106,7 @@ export function parseDiff(rawDiff: string): DiffFile[] {
         const oldLines = match[2] ? parseInt(match[2], 10) : 1;
         const newStart = parseInt(match[3], 10);
         const newLines = match[4] ? parseInt(match[4], 10) : 1;
-        const context = match[5];
+        const _context = match[5];
 
         currentHunk = {
           header: line,
