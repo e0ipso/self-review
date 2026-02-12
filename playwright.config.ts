@@ -1,17 +1,27 @@
 import { defineConfig } from '@playwright/test';
 import { defineBddConfig } from 'playwright-bdd';
 
-const testDir = defineBddConfig({
+const bddTestDir = defineBddConfig({
   features: 'tests/features/**/*.feature',
   steps: 'tests/steps/**/*.ts',
 });
 
 export default defineConfig({
-  testDir,
-  timeout: process.env.CI ? 60_000 : 30_000,
   retries: 0,
   workers: 1,
-  use: {
-    trace: 'on-first-retry',
-  },
+  projects: [
+    {
+      name: 'e2e',
+      testDir: bddTestDir,
+      timeout: process.env.CI ? 60_000 : 30_000,
+      use: {
+        trace: 'on-first-retry',
+      },
+    },
+    {
+      name: 'recording',
+      testDir: 'tests/recording',
+      timeout: 120_000,
+    },
+  ],
 });
