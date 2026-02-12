@@ -42,6 +42,47 @@ self-review --staged --resume-from review.xml
 - **Structured XML output** — validated against an XSD schema, designed for machine consumption
 - **Resume support** — pick up where you left off with `--resume-from`
 
+## Claude Code Skill
+
+self-review ships with a Claude Code skill that closes the feedback loop: it reads your review XML,
+prioritizes the feedback, and executes the changes.
+
+### Install
+
+Copy the skill directory into your project:
+
+```bash
+# From the self-review repo (or download the folder from GitHub)
+cp -r .claude/skills/self-review /path/to/your/project/.claude/skills/
+```
+
+Your project should end up with:
+
+```
+your-project/
+└── .claude/
+    └── skills/
+        └── self-review/
+            └── apply-review/
+                ├── SKILL.md
+                └── self-review-v1.xsd
+```
+
+### Usage
+
+After running self-review and producing a `review.xml`, invoke the skill in Claude Code:
+
+```
+/self-review:apply-review review.xml
+```
+
+The skill will:
+1. Read the XSD schema to understand the review format
+2. Parse your review XML
+3. Categorize and prioritize comments (security > bug > style > nit)
+4. Output a task plan showing parallel and sequential work groups
+5. Execute the changes — applying suggestions first, then addressing open-ended feedback
+
 ## Configuration
 
 Customize **self-review** with YAML configuration files:

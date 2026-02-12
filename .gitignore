@@ -114,7 +114,8 @@ dist/
 .settings/
 
 # Claude Code (user-specific)
-.claude/
+.claude/*
+!.claude/skills/
 
 # AI task manager (plans and archive)
 .ai/task-manager/plans/

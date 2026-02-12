@@ -178,6 +178,12 @@ E2E tests use Playwright with Cucumber BDD:
 - **Prism.js for syntax highlighting.** Language detection by file extension. Theme must match the
   app's light/dark theme.
 
+## XSD Schema Sync
+
+The XSD schema `docs/self-review-v1.xsd` is the source of truth. A copy exists at
+`.claude/skills/self-review/apply-review/self-review-v1.xsd` for the Claude Code skill. **When
+updating the XSD, both copies must be kept in sync.**
+
 ## What NOT To Do
 
 - Do not install or use `webpack` — Electron Forge handles bundling.
