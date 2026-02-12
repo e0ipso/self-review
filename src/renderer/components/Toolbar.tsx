@@ -18,6 +18,7 @@ import {
   FilePlus2,
   FileX,
   Terminal,
+  CheckCircle2,
 } from 'lucide-react';
 
 export default function Toolbar() {
@@ -211,15 +212,16 @@ export default function Toolbar() {
         )}
       </div>
 
-      <ToggleGroup
-        type='single'
-        variant='outline'
-        size='sm'
-        value={config.theme}
-        onValueChange={value =>
-          value && handleThemeChange(value as 'light' | 'dark' | 'system')
-        }
-      >
+      <div className='flex items-center gap-2'>
+        <ToggleGroup
+          type='single'
+          variant='outline'
+          size='sm'
+          value={config.theme}
+          onValueChange={value =>
+            value && handleThemeChange(value as 'light' | 'dark' | 'system')
+          }
+        >
         <Tooltip>
           <TooltipTrigger asChild>
             <ToggleGroupItem
@@ -259,7 +261,21 @@ export default function Toolbar() {
           </TooltipTrigger>
           <TooltipContent>System theme</TooltipContent>
         </Tooltip>
-      </ToggleGroup>
+        </ToggleGroup>
+
+        <Separator orientation='vertical' className='h-5' />
+
+        <Button
+          variant='default'
+          size='sm'
+          data-testid='finish-review-btn'
+          onClick={() => window.close()}
+          className='gap-1.5 h-8 px-3'
+        >
+          <CheckCircle2 className='h-3.5 w-3.5' />
+          <span className='text-xs font-medium'>Finish Review</span>
+        </Button>
+      </div>
     </div>
   );
 }
