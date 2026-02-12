@@ -178,6 +178,22 @@ export function getTestRepoDir(): string {
   return testRepoDir;
 }
 
+/**
+ * Trigger the icon-based comment on a specific line.
+ * Simulates mousedown on the + icon → wait for React → mouseup.
+ */
+export async function triggerCommentIcon(filePath: string, line: number, side: 'old' | 'new'): Promise<void> {
+  const page = getPage();
+  const section = page.locator(`[data-testid="file-section-${filePath}"]`);
+  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${line}"]`);
+  await gutter.hover();
+  const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
+  await icon.dispatchEvent('mousedown');
+  await page.waitForTimeout(100);
+  await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
+  await page.locator('[data-testid="comment-input"]').waitFor({ state: 'visible', timeout: 5000 });
+}
+
 function resetState(): void {
   electronApp = null;
   appPage = null;

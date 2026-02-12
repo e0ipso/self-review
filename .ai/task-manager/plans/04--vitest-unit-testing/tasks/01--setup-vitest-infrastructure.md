@@ -2,7 +2,7 @@
 id: 1
 group: "infrastructure"
 dependencies: []
-status: "pending"
+status: "completed"
 created: "2026-02-12"
 skills:
   - vitest

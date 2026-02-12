@@ -17,11 +17,12 @@ import {
   MessageSquareOff,
   FilePlus2,
   FileX,
+  Terminal,
 } from 'lucide-react';
 
 export default function Toolbar() {
   const { config, updateConfig } = useConfig();
-  const { diffFiles } = useReview();
+  const { diffFiles, gitDiffArgs } = useReview();
   const [allExpanded, setAllExpanded] = useState(true);
   const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
 
@@ -154,6 +155,11 @@ export default function Toolbar() {
       </div>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="diff-stats">
+        <span className="inline-flex items-center gap-1 font-mono">
+          <Terminal className="h-3 w-3" />
+          git diff{gitDiffArgs ? ` ${gitDiffArgs}` : ''}
+        </span>
+        <Separator orientation="vertical" className="h-3.5" />
         <span>{stats.files} {stats.files === 1 ? 'file' : 'files'} changed</span>
         {stats.additions > 0 && (
           <span className="text-green-600 dark:text-green-400">+{stats.additions}</span>

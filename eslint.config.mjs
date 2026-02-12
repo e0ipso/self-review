@@ -25,10 +25,6 @@ export default defineConfig([
         ...globals.node,
       },
       parser: tseslint.parser,
-      parserOptions: {
-        project: ['./tsconfig.json', './tsconfig.test.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',

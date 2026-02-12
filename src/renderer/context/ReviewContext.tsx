@@ -14,6 +14,7 @@ import { useConfig } from './ConfigContext';
 export interface ReviewContextValue {
   files: FileReviewState[];
   diffFiles: DiffFile[];
+  gitDiffArgs: string;
   setDiffFiles: (files: DiffFile[]) => void;
   addComment: (
     filePath: string,
@@ -139,6 +140,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
       value={{
         files: reviewState.files,
         diffFiles,
+        gitDiffArgs,
         setDiffFiles: setAllDiffFiles,
         addComment: reviewState.addComment,
         editComment: reviewState.updateComment,
