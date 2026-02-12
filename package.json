@@ -1,10 +1,10 @@
 {
-  "name": "workspace",
-  "productName": "workspace",
+  "name": "@e0ipso/self-review",
+  "productName": "self-review",
   "version": "1.0.0",
   "description": "My Electron application description",
   "main": ".webpack/main",
-  "private": true,
+
   "scripts": {
     "start": "electron-forge start",
     "clean": "rm -rf .webpack out",
