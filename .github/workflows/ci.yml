@@ -116,14 +116,10 @@ jobs:
 
       - run: npm ci
 
-      # npm Trusted Publishing (OIDC) setup — one-time manual steps on npmjs.com:
-      # 1. Create/claim the @e0ipso/self-review package on npm
-      # 2. Go to package Settings > Trusted Publishers > GitHub Actions
-      # 3. Configure: repository owner, repository name, workflow filename (ci.yml)
-      # 4. The id-token: write permission above enables OIDC token generation
-      #
-      # Fallback: If OIDC is incompatible with @semantic-release/npm, add an
-      # NPM_TOKEN repository secret and set env: NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # npm Trusted Publishing (OIDC) — one-time manual steps on npmjs.com:
+      # 1. Go to https://www.npmjs.com/package/@e0ipso/self-review/access
+      # 2. Under Trusted Publishers, click GitHub Actions
+      # 3. Configure: owner=e0ipso, repo=self-review, workflow=ci.yml
       - name: Run semantic-release
         run: npx semantic-release
         env:
