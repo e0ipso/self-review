@@ -32,7 +32,7 @@ function parseArguments() {
   const args = process.argv.slice(2);
   const result = {
     template: null,
-    variables: {}
+    variables: {},
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -48,7 +48,9 @@ function parseArguments() {
       const varArg = args[++i];
       const eqIndex = varArg.indexOf('=');
       if (eqIndex === -1) {
-        throw new Error(`Invalid variable format: ${varArg}. Expected format: key=value`);
+        throw new Error(
+          `Invalid variable format: ${varArg}. Expected format: key=value`
+        );
       }
       const key = varArg.substring(0, eqIndex);
       const value = varArg.substring(eqIndex + 1);
@@ -79,7 +81,14 @@ function findTemplateFile(templateName) {
   // Define search paths in priority order
   const searchPaths = [
     path.join(rootDir, '.claude', 'commands', 'tasks', templateName),
-    path.join(rootDir, 'templates', 'assistant', 'commands', 'tasks', templateName)
+    path.join(
+      rootDir,
+      'templates',
+      'assistant',
+      'commands',
+      'tasks',
+      templateName
+    ),
   ];
 
   for (const searchPath of searchPaths) {
@@ -104,7 +113,7 @@ function parseFrontmatter(content) {
   if (!match) {
     return {
       frontmatter: {},
-      body: content
+      body: content,
     };
   }
 
@@ -131,7 +140,7 @@ function parseFrontmatter(content) {
 
   return {
     frontmatter,
-    body: bodyContent
+    body: bodyContent,
   };
 }
 
@@ -149,7 +158,10 @@ function substituteVariables(body, variables) {
   // Replace $ARGUMENTS if provided
   if (variables.ARGUMENTS !== undefined) {
     // Use regex with negative lookahead to avoid replacing $ARGUMENTS that are part of longer identifiers
-    result = result.replace(/\$ARGUMENTS(?![0-9A-Za-z_])/g, variables.ARGUMENTS);
+    result = result.replace(
+      /\$ARGUMENTS(?![0-9A-Za-z_])/g,
+      variables.ARGUMENTS
+    );
   }
 
   // Replace positional arguments ($1, $2, $3, etc.)
@@ -178,7 +190,10 @@ function reconstructMarkdown(frontmatter, body) {
   let result = '---\n';
   for (const [key, value] of Object.entries(frontmatter)) {
     // Preserve original formatting - add quotes if value contains special characters
-    if (typeof value === 'string' && (value.includes(':') || value.includes('[') || value.includes(']'))) {
+    if (
+      typeof value === 'string' &&
+      (value.includes(':') || value.includes('[') || value.includes(']'))
+    ) {
       result += `${key}: "${value}"\n`;
     } else {
       result += `${key}: ${value}\n`;

@@ -3,7 +3,13 @@
 
 import { app, BrowserWindow } from 'electron';
 import { parseCliArgs, checkEarlyExit } from './cli';
-import { runGitDiffAsync, getRepoRootAsync, validateGitAvailable, getUntrackedFilesAsync, generateUntrackedDiffs } from './git';
+import {
+  runGitDiffAsync,
+  getRepoRootAsync,
+  validateGitAvailable,
+  getUntrackedFilesAsync,
+  generateUntrackedDiffs,
+} from './git';
 import { parseDiff } from './diff-parser';
 import { loadConfig } from './config';
 import { parseReviewXml } from './xml-parser';
@@ -22,7 +28,9 @@ declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 // Install signal handlers FIRST, before any app initialization
 process.on('SIGTRAP', () => {
-  console.error('[main] SIGTRAP received (debugger signal) - exiting gracefully');
+  console.error(
+    '[main] SIGTRAP received (debugger signal) - exiting gracefully'
+  );
   process.exit(0); // Exit 0 since SIGTRAP is from Playwright debugger, not an error
 });
 
@@ -43,12 +51,12 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   console.error('[main] Uncaught exception:', error);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', reason => {
   console.error('[main] Unhandled rejection:', reason);
   process.exit(1);
 });
@@ -102,7 +110,9 @@ async function initializeApp() {
     // Phase 3: Determine git diff args
     let gitDiffArgs = cliArgs.gitDiffArgs;
     if (gitDiffArgs.length === 0 && appConfig.defaultDiffArgs) {
-      gitDiffArgs = appConfig.defaultDiffArgs.split(' ').filter((arg: string) => arg.length > 0);
+      gitDiffArgs = appConfig.defaultDiffArgs
+        .split(' ')
+        .filter((arg: string) => arg.length > 0);
     }
     // No fallback — matches `git diff` default (unstaged working tree changes)
     console.error('[main] Git diff args:', gitDiffArgs.join(' '));
@@ -129,14 +139,21 @@ async function initializeApp() {
 
     let allFiles = files;
     if (untrackedPaths.length > 0) {
-      const untrackedDiffStr = generateUntrackedDiffs(untrackedPaths, repository);
+      const untrackedDiffStr = generateUntrackedDiffs(
+        untrackedPaths,
+        repository
+      );
       if (untrackedDiffStr.length > 0) {
         const untrackedFiles = parseDiff(untrackedDiffStr);
         for (const file of untrackedFiles) {
           file.isUntracked = true;
         }
         allFiles = [...files, ...untrackedFiles];
-        console.error('[main] Added', untrackedFiles.length, 'untracked file diffs');
+        console.error(
+          '[main] Added',
+          untrackedFiles.length,
+          'untracked file diffs'
+        );
       }
     }
 
@@ -153,7 +170,11 @@ async function initializeApp() {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
         const parsed = parseReviewXml(cliArgs.resumeFrom);
         resumeComments = parsed.comments;
-        console.error('[main] Loaded', resumeComments.length, 'comments from resume file');
+        console.error(
+          '[main] Loaded',
+          resumeComments.length,
+          'comments from resume file'
+        );
       } catch (error) {
         console.error('[main] Error loading resume file');
         clearTimeout(initTimeout);
@@ -179,7 +200,6 @@ async function initializeApp() {
 
     clearTimeout(initTimeout);
     console.error('[main] Initialization complete');
-
   } catch (error) {
     clearTimeout(initTimeout);
     if (error instanceof Error) {
@@ -214,7 +234,7 @@ function createWindow(): void {
   // Data is sent when renderer requests it via IPC (see ipc-handlers.ts)
 
   // Handle window close - this is where we serialize to XML
-  mainWindow.on('close', async (event) => {
+  mainWindow.on('close', async event => {
     if (!mainWindow) return;
 
     // Prevent default close
@@ -226,12 +246,15 @@ function createWindow(): void {
       // Request review state from renderer
       console.error('[main] Requesting review state from renderer...');
       const reviewState = await requestReviewFromRenderer(mainWindow);
-      console.error('[main] Received review state:', JSON.stringify({
-        timestamp: reviewState.timestamp,
-        gitDiffArgs: reviewState.gitDiffArgs,
-        repository: reviewState.repository,
-        fileCount: reviewState.files.length,
-      }));
+      console.error(
+        '[main] Received review state:',
+        JSON.stringify({
+          timestamp: reviewState.timestamp,
+          gitDiffArgs: reviewState.gitDiffArgs,
+          repository: reviewState.repository,
+          fileCount: reviewState.files.length,
+        })
+      );
 
       // Serialize to XML
       console.error('[main] Serializing to XML...');
@@ -285,9 +308,12 @@ if (earlyExit.shouldExit) {
 // Call app.whenReady() IMMEDIATELY - do NOT run any other code before this
 // This allows Electron to initialize its event loop without blockage
 console.error('[main] Calling app.whenReady()...');
-app.whenReady()
+app
+  .whenReady()
   .then(() => {
-    console.error('[main] App is ready! Starting validation and initialization...');
+    console.error(
+      '[main] App is ready! Starting validation and initialization...'
+    );
 
     // Now do git validation (after Electron is ready)
     try {
@@ -302,7 +328,7 @@ app.whenReady()
 
     return initializeApp();
   })
-  .catch((error) => {
+  .catch(error => {
     console.error('[main] Fatal error during app initialization:', error);
     process.exit(1);
   });

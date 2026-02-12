@@ -238,7 +238,10 @@ describe('git', () => {
         .mockReturnValueOnce(Buffer.from('content1\n'))
         .mockReturnValueOnce(Buffer.from('content2\n'));
 
-      const result = generateUntrackedDiffs(['file1.txt', 'file2.txt'], '/repo');
+      const result = generateUntrackedDiffs(
+        ['file1.txt', 'file2.txt'],
+        '/repo'
+      );
 
       expect(result).toContain('diff --git a/file1.txt b/file1.txt');
       expect(result).toContain('diff --git a/file2.txt b/file2.txt');

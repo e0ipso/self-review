@@ -14,11 +14,15 @@ Given(
   async ({}, line: number, filePath: string) => {
     await triggerCommentIcon(filePath, line, 'new');
     const page = getPage();
-    await page.locator('[data-testid="comment-input"] textarea').fill('Suggestion comment');
+    await page
+      .locator('[data-testid="comment-input"] textarea')
+      .fill('Suggestion comment');
     await page.locator('[data-testid="add-suggestion-btn"]').click();
-    await page.locator('[data-testid="suggestion-proposed"] textarea').fill('const fixed = true;');
+    await page
+      .locator('[data-testid="suggestion-proposed"] textarea')
+      .fill('const fixed = true;');
     await page.locator('[data-testid="add-comment-btn"]').click();
-  },
+  }
 );
 
 // ── When: suggestion interactions ──
@@ -27,13 +31,17 @@ When(
   'I type {string} in the proposed code editor',
   async ({}, code: string) => {
     const page = getPage();
-    await page.locator('[data-testid="suggestion-proposed"] textarea').fill(code);
-  },
+    await page
+      .locator('[data-testid="suggestion-proposed"] textarea')
+      .fill(code);
+  }
 );
 
 When('I enter proposed code in the suggestion editor', async () => {
   const page = getPage();
-  await page.locator('[data-testid="suggestion-proposed"] textarea').fill('try {\n  // wrapped\n} catch (e) {\n  throw e;\n}');
+  await page
+    .locator('[data-testid="suggestion-proposed"] textarea')
+    .fill('try {\n  // wrapped\n} catch (e) {\n  throw e;\n}');
 });
 
 // ── Then: suggestion assertions ──
@@ -42,40 +50,56 @@ Then(
   'a suggestion editor should appear with original code pre-filled from new line {int}',
   async ({}, _line: number) => {
     const page = getPage();
-    await expect(page.locator('[data-testid="suggestion-original"]')).toBeVisible();
-    const value = await page.locator('[data-testid="suggestion-original"] textarea').inputValue();
+    await expect(
+      page.locator('[data-testid="suggestion-original"]')
+    ).toBeVisible();
+    const value = await page
+      .locator('[data-testid="suggestion-original"] textarea')
+      .inputValue();
     expect(value.length).toBeGreaterThan(0);
-  },
+  }
 );
 
 Then(
   'a suggestion editor should appear with original code pre-filled from new lines {int}-{int}',
   async ({}, _start: number, _end: number) => {
     const page = getPage();
-    await expect(page.locator('[data-testid="suggestion-original"]')).toBeVisible();
-    const value = await page.locator('[data-testid="suggestion-original"] textarea').inputValue();
+    await expect(
+      page.locator('[data-testid="suggestion-original"]')
+    ).toBeVisible();
+    const value = await page
+      .locator('[data-testid="suggestion-original"] textarea')
+      .inputValue();
     expect(value.length).toBeGreaterThan(0);
-  },
+  }
 );
 
 Then('the displayed comment should show a suggestion block', async () => {
   const page = getPage();
-  await expect(page.locator('[data-testid="suggestion-block"]').first()).toBeVisible();
+  await expect(
+    page.locator('[data-testid="suggestion-block"]').first()
+  ).toBeVisible();
 });
 
-Then('the suggestion block should show original code as deleted lines', async () => {
-  const page = getPage();
-  const block = page.locator('[data-testid="suggestion-block"]').first();
-  const deletionLines = block.locator('.suggestion-deletion');
-  expect(await deletionLines.count()).toBeGreaterThan(0);
-});
+Then(
+  'the suggestion block should show original code as deleted lines',
+  async () => {
+    const page = getPage();
+    const block = page.locator('[data-testid="suggestion-block"]').first();
+    const deletionLines = block.locator('.suggestion-deletion');
+    expect(await deletionLines.count()).toBeGreaterThan(0);
+  }
+);
 
-Then('the suggestion block should show proposed code as added lines', async () => {
-  const page = getPage();
-  const block = page.locator('[data-testid="suggestion-block"]').first();
-  const additionLines = block.locator('.suggestion-addition');
-  expect(await additionLines.count()).toBeGreaterThan(0);
-});
+Then(
+  'the suggestion block should show proposed code as added lines',
+  async () => {
+    const page = getPage();
+    const block = page.locator('[data-testid="suggestion-block"]').first();
+    const additionLines = block.locator('.suggestion-addition');
+    expect(await additionLines.count()).toBeGreaterThan(0);
+  }
+);
 
 Then('the suggestion block should have syntax-highlighted code', async () => {
   const page = getPage();

@@ -21,9 +21,17 @@ export function parseDiff(rawDiff: string): DiffFile[] {
     // Start of a new file
     if (line.startsWith('diff --git ')) {
       // Save previous file if exists and has actual changes
-      if (currentFile && currentFile.oldPath !== undefined && currentFile.newPath !== undefined) {
+      if (
+        currentFile &&
+        currentFile.oldPath !== undefined &&
+        currentFile.newPath !== undefined
+      ) {
         // Include files that have hunks, are binary, or are new (empty new files)
-        if (currentFile.isBinary || (currentFile.hunks && currentFile.hunks.length > 0) || currentFile.changeType === 'added') {
+        if (
+          currentFile.isBinary ||
+          (currentFile.hunks && currentFile.hunks.length > 0) ||
+          currentFile.changeType === 'added'
+        ) {
           files.push(currentFile as DiffFile);
         }
       }
@@ -90,7 +98,9 @@ export function parseDiff(rawDiff: string): DiffFile[] {
       }
 
       // Parse hunk header: @@ -oldStart,oldLines +newStart,newLines @@ context
-      const match = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
+      const match = line.match(
+        /@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/
+      );
       if (match) {
         const oldStart = parseInt(match[1], 10);
         const oldLines = match[2] ? parseInt(match[2], 10) : 1;
@@ -166,9 +176,17 @@ export function parseDiff(rawDiff: string): DiffFile[] {
   if (currentHunk && currentHunk.header && currentFile) {
     currentFile.hunks!.push(currentHunk as DiffHunk);
   }
-  if (currentFile && currentFile.oldPath !== undefined && currentFile.newPath !== undefined) {
+  if (
+    currentFile &&
+    currentFile.oldPath !== undefined &&
+    currentFile.newPath !== undefined
+  ) {
     // Include files that have hunks, are binary, or are new (empty new files)
-    if (currentFile.isBinary || (currentFile.hunks && currentFile.hunks.length > 0) || currentFile.changeType === 'added') {
+    if (
+      currentFile.isBinary ||
+      (currentFile.hunks && currentFile.hunks.length > 0) ||
+      currentFile.changeType === 'added'
+    ) {
       files.push(currentFile as DiffFile);
     }
   }
@@ -185,7 +203,10 @@ function stripPrefix(path: string): string {
   return path;
 }
 
-function parseGitDiffHeader(line: string): { oldPath: string; newPath: string } {
+function parseGitDiffHeader(line: string): {
+  oldPath: string;
+  newPath: string;
+} {
   // Format: "diff --git a/<old> b/<new>"
   // Paths may contain spaces, so we find the " b/" separator.
   // Git guarantees the b/ prefix appears after a space.

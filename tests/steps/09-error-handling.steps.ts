@@ -7,12 +7,7 @@ import { mkdtempSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import {
-  getStdout,
-  getStderr,
-  getExitCode,
-  setTestRepoDir,
-} from './app';
+import { getStdout, getStderr, getExitCode, setTestRepoDir } from './app';
 
 const { Given, Then } = createBdd();
 
@@ -26,7 +21,10 @@ Given('I am in a directory that is not a git repository', async () => {
 Given('a git repository with no commits', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'self-review-empty-'));
   execSync('git init', { cwd: dir, stdio: 'pipe' });
-  execSync('git config user.email "test@test.com"', { cwd: dir, stdio: 'pipe' });
+  execSync('git config user.email "test@test.com"', {
+    cwd: dir,
+    stdio: 'pipe',
+  });
   execSync('git config user.name "Test"', { cwd: dir, stdio: 'pipe' });
   setTestRepoDir(dir);
 });
@@ -34,7 +32,10 @@ Given('a git repository with no commits', async () => {
 Given('a git repository with no changes', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'self-review-clean-'));
   execSync('git init', { cwd: dir, stdio: 'pipe' });
-  execSync('git config user.email "test@test.com"', { cwd: dir, stdio: 'pipe' });
+  execSync('git config user.email "test@test.com"', {
+    cwd: dir,
+    stdio: 'pipe',
+  });
   execSync('git config user.name "Test"', { cwd: dir, stdio: 'pipe' });
   // Create a file and commit it so HEAD exists, no unstaged changes
   writeFileSync(join(dir, 'README.md'), '# Test');
@@ -49,7 +50,7 @@ Then(
   async () => {
     const stderr = getStderr();
     expect(stderr.toLowerCase()).toMatch(/not a git repository|not.*git/i);
-  },
+  }
 );
 
 Then('stderr should contain an error message from git', async () => {

@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 import type { AppConfig } from '../../shared/types';
 import lightThemeCss from 'prismjs/themes/prism.css?raw';
 import darkThemeCss from 'prism-themes/themes/prism-one-dark.css?raw';
@@ -10,11 +16,31 @@ const defaultConfig: AppConfig = {
   outputFormat: 'xml',
   ignore: [],
   categories: [
-    { name: 'bug', description: 'Likely defect or incorrect behavior', color: '#e53e3e' },
-    { name: 'security', description: 'Security vulnerability or concern', color: '#dd6b20' },
-    { name: 'style', description: 'Code style, naming, or formatting issue', color: '#3182ce' },
-    { name: 'question', description: 'Clarification needed — not necessarily a problem', color: '#805ad5' },
-    { name: 'nit', description: 'Minor nitpick, low priority', color: '#718096' },
+    {
+      name: 'bug',
+      description: 'Likely defect or incorrect behavior',
+      color: '#e53e3e',
+    },
+    {
+      name: 'security',
+      description: 'Security vulnerability or concern',
+      color: '#dd6b20',
+    },
+    {
+      name: 'style',
+      description: 'Code style, naming, or formatting issue',
+      color: '#3182ce',
+    },
+    {
+      name: 'question',
+      description: 'Clarification needed — not necessarily a problem',
+      color: '#805ad5',
+    },
+    {
+      name: 'nit',
+      description: 'Minor nitpick, low priority',
+      color: '#718096',
+    },
   ],
   defaultDiffArgs: '--staged',
   showUntracked: true,
@@ -44,7 +70,7 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
 
   const updateConfig = (updates: Partial<AppConfig>) => {
-    setConfig((prev) => ({ ...prev, ...updates }));
+    setConfig(prev => ({ ...prev, ...updates }));
   };
 
   // Apply theme to document element and swap Prism syntax theme
@@ -52,7 +78,9 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
     const applyTheme = (isDark: boolean) => {
       document.documentElement.classList.toggle('dark', isDark);
 
-      let styleEl = document.getElementById('prism-theme') as HTMLStyleElement | null;
+      let styleEl = document.getElementById(
+        'prism-theme'
+      ) as HTMLStyleElement | null;
       if (!styleEl) {
         styleEl = document.createElement('style');
         styleEl.id = 'prism-theme';
@@ -84,7 +112,7 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
   // Register IPC listener for config from main process
   useEffect(() => {
     if (window.electronAPI) {
-      window.electronAPI.onConfigLoad((payload) => {
+      window.electronAPI.onConfigLoad(payload => {
         setConfig(payload);
       });
       // Request config data

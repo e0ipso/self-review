@@ -148,7 +148,7 @@ const SyntaxLine = React.memo(function SyntaxLine({
 
   return (
     <code
-      className="font-mono text-[13px] whitespace-pre block"
+      className='font-mono text-[13px] whitespace-pre block'
       dangerouslySetInnerHTML={{ __html: highlightedContent }}
     />
   );

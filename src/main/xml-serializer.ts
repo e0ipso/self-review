@@ -339,8 +339,12 @@ function buildCommentXml(comment: ReviewComment): string[] {
   // Suggestion
   if (comment.suggestion) {
     lines.push('      <suggestion>');
-    lines.push(`        <original-code>${escapeXml(comment.suggestion.originalCode)}</original-code>`);
-    lines.push(`        <proposed-code>${escapeXml(comment.suggestion.proposedCode)}</proposed-code>`);
+    lines.push(
+      `        <original-code>${escapeXml(comment.suggestion.originalCode)}</original-code>`
+    );
+    lines.push(
+      `        <proposed-code>${escapeXml(comment.suggestion.proposedCode)}</proposed-code>`
+    );
     lines.push('      </suggestion>');
   }
 

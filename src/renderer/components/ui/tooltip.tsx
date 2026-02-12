@@ -7,7 +7,9 @@ const Tooltip = TooltipPrimitive.Root;
 
 const TooltipTrigger = React.forwardRef<
   HTMLButtonElement,
-  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger> & { asChild?: boolean }
+  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger> & {
+    asChild?: boolean;
+  }
 >(({ asChild, children, ...props }, ref) => {
   if (asChild && React.isValidElement(children)) {
     return <TooltipPrimitive.Trigger ref={ref} {...props} render={children} />;
@@ -30,7 +32,12 @@ interface TooltipContentProps extends React.HTMLAttributes<HTMLDivElement> {
 const TooltipContent = React.forwardRef<HTMLDivElement, TooltipContentProps>(
   ({ className, side, align, sideOffset = 4, alignOffset, ...props }, ref) => (
     <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Positioner side={side} align={align} sideOffset={sideOffset} alignOffset={alignOffset}>
+      <TooltipPrimitive.Positioner
+        side={side}
+        align={align}
+        sideOffset={sideOffset}
+        alignOffset={alignOffset}
+      >
         <TooltipPrimitive.Popup
           ref={ref}
           className={cn(

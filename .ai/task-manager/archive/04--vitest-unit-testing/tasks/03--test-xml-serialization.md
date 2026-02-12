@@ -1,19 +1,22 @@
 ---
 id: 3
-group: "priority-tests"
+group: 'priority-tests'
 dependencies: [1]
-status: "completed"
-created: "2026-02-12"
-completed: "2026-02-12"
+status: 'completed'
+created: '2026-02-12'
+completed: '2026-02-12'
 skills:
   - vitest
   - typescript
 ---
+
 # Test XML Serializer and Parser Modules
 
 ## Objective
 
-Write comprehensive unit tests for the XML serialization and parsing modules (`xml-serializer.ts` and `xml-parser.ts`), which convert review state to/from XML format. These are priority modules critical for the application's output format and resume functionality.
+Write comprehensive unit tests for the XML serialization and parsing modules (`xml-serializer.ts`
+and `xml-parser.ts`), which convert review state to/from XML format. These are priority modules
+critical for the application's output format and resume functionality.
 
 ## Skills Required
 
@@ -24,7 +27,8 @@ Write comprehensive unit tests for the XML serialization and parsing modules (`x
 
 - [ ] Test file created at `src/main/xml-serializer.test.ts`
 - [ ] Test file created at `src/main/xml-parser.test.ts`
-- [ ] Tests cover serialization: empty reviews, reviews with comments, file/line-level comments, suggestions
+- [ ] Tests cover serialization: empty reviews, reviews with comments, file/line-level comments,
+      suggestions
 - [ ] Tests cover parsing: valid XML, malformed XML, missing fields, line ranges
 - [ ] Tests verify XSD schema validation (or mock if WASM loading is problematic)
 - [ ] Tests include round-trip validation: serialize → parse → should match original
@@ -39,6 +43,7 @@ Use your internal Todo tool to track these and keep on track.
 ### Modules to Test
 
 **Files**:
+
 - `src/main/xml-serializer.ts`: `serializeReviewToXML(reviewState: ReviewState): string`
 - `src/main/xml-parser.ts`: `parseReviewXML(xml: string): ReviewComment[]`
 
@@ -103,6 +108,7 @@ describe('parseReviewXML', () => {
 ### XML Fixture Examples
 
 **Empty Review**:
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <review xmlns="urn:self-review:v1"
@@ -113,6 +119,7 @@ describe('parseReviewXML', () => {
 ```
 
 **Review with File-Level Comment**:
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <review xmlns="urn:self-review:v1"
@@ -128,6 +135,7 @@ describe('parseReviewXML', () => {
 ```
 
 **Review with Line-Level Comment and Suggestion**:
+
 ```xml
 <file path="src/utils.ts" viewed="false">
   <comment category="issue" newLineStart="42" newLineEnd="45">
@@ -159,14 +167,17 @@ describe('parseReviewXML', () => {
 <details>
 <summary>Testing Approach and XML Validation</summary>
 
-**IMPORTANT**: Write a few tests, mostly integration. Focus on testing the core serialization/parsing logic and critical edge cases like character escaping and round-trip fidelity.
+**IMPORTANT**: Write a few tests, mostly integration. Focus on testing the core
+serialization/parsing logic and critical edge cases like character escaping and round-trip fidelity.
 
 ### Meaningful Test Strategy Guidelines
 
-**Definition of "Meaningful Tests":**
-Tests that verify custom business logic, critical paths, and edge cases specific to the application. Focus on testing YOUR code, not the framework or library functionality.
+**Definition of "Meaningful Tests":** Tests that verify custom business logic, critical paths, and
+edge cases specific to the application. Focus on testing YOUR code, not the framework or library
+functionality.
 
 **When TO Write Tests:**
+
 - Custom business logic and algorithms (✅ XML serialization/parsing is core logic)
 - Critical user workflows and data transformations (✅ XML output is the primary deliverable)
 - Edge cases and error conditions for core functionality (✅ malformed XML, character escaping)
@@ -174,6 +185,7 @@ Tests that verify custom business logic, critical paths, and edge cases specific
 - Complex validation logic or calculations (✅ XSD validation)
 
 **When NOT to Write Tests:**
+
 - Third-party library functionality (xmllint-wasm is already tested)
 - Framework features
 - Simple CRUD operations without custom logic
@@ -455,6 +467,7 @@ describe('parseReviewXML', () => {
 The `xmllint-wasm` dependency might have issues loading WASM files in the test environment. Options:
 
 1. **Mock the validation**: If XSD validation is problematic, mock it:
+
 ```typescript
 vi.mock('xmllint-wasm', () => ({
   validateXML: vi.fn(() => ({ valid: true })),

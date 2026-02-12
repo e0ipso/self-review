@@ -9,25 +9,22 @@
 
 const fs = require('fs');
 const path = require('path');
-const {
-  resolvePlan,
-  parseFrontmatter
-} = require('./shared-utils.cjs');
+const { resolvePlan, parseFrontmatter } = require('./shared-utils.cjs');
 
 // Color functions for output
-const _printError = (message) => {
+const _printError = message => {
   console.error(`ERROR: ${message}`);
 };
 
-const _printSuccess = (message) => {
+const _printSuccess = message => {
   console.log(`✓ ${message}`);
 };
 
-const _printWarning = (message) => {
+const _printWarning = message => {
   console.log(`⚠ ${message}`);
 };
 
-const _printInfo = (message) => {
+const _printInfo = message => {
   console.log(message);
 };
 
@@ -42,7 +39,7 @@ const _findTaskFile = (planDir, taskId) => {
   const variations = [
     taskId,
     taskId.padStart(2, '0'),
-    taskId.replace(/^0+/, '') || '0'
+    taskId.replace(/^0+/, '') || '0',
   ];
 
   const uniqueVariations = [...new Set(variations)];
@@ -51,7 +48,9 @@ const _findTaskFile = (planDir, taskId) => {
     const files = fs.readdirSync(taskDir);
     const found = uniqueVariations.reduce((acc, v) => {
       if (acc) return acc;
-      const match = files.find(f => f.startsWith(`${v}--`) && f.endsWith('.md'));
+      const match = files.find(
+        f => f.startsWith(`${v}--`) && f.endsWith('.md')
+      );
       return match ? path.join(taskDir, match) : null;
     }, null);
     return found;
@@ -60,9 +59,8 @@ const _findTaskFile = (planDir, taskId) => {
   }
 };
 
-
 // Function to extract dependencies from frontmatter
-const _extractDependencies = (frontmatter) => {
+const _extractDependencies = frontmatter => {
   const lines = frontmatter.split('\n');
   const dependencies = [];
   let inDependenciesSection = false;
@@ -88,13 +86,20 @@ const _extractDependencies = (frontmatter) => {
     }
 
     // If we're in dependencies section and hit a non-indented line that's not a list item, exit
-    if (inDependenciesSection && line.match(/^[^ ]/) && !line.match(/^[ \t]*-/)) {
+    if (
+      inDependenciesSection &&
+      line.match(/^[^ ]/) &&
+      !line.match(/^[ \t]*-/)
+    ) {
       inDependenciesSection = false;
     }
 
     // Parse list format dependencies
     if (inDependenciesSection && line.match(/^[ \t]*-/)) {
-      const dep = line.replace(/^[ \t]*-[ \t]*/, '').replace(/[ \t]*$/, '').replace(/['"]/g, '');
+      const dep = line
+        .replace(/^[ \t]*-[ \t]*/, '')
+        .replace(/[ \t]*$/, '')
+        .replace(/['"]/g, '');
       if (dep.length > 0) {
         dependencies.push(dep);
       }
@@ -105,12 +110,16 @@ const _extractDependencies = (frontmatter) => {
 };
 
 // Function to extract status from frontmatter
-const _extractStatus = (frontmatter) => {
+const _extractStatus = frontmatter => {
   const lines = frontmatter.split('\n');
 
   for (const line of lines) {
     if (line.match(/^status:/)) {
-      return line.replace(/^status:[ \t]*/, '').replace(/^["']/, '').replace(/["']$/, '').trim();
+      return line
+        .replace(/^status:[ \t]*/, '')
+        .replace(/^["']/, '')
+        .replace(/["']$/, '')
+        .trim();
     }
   }
 
@@ -122,7 +131,9 @@ const _main = (startPath = process.cwd()) => {
   // Check arguments
   if (process.argv.length !== 4) {
     _printError('Invalid number of arguments');
-    console.log('Usage: node check-task-dependencies.cjs <plan-id-or-path> <task-id>');
+    console.log(
+      'Usage: node check-task-dependencies.cjs <plan-id-or-path> <task-id>'
+    );
     console.log('Example: node check-task-dependencies.cjs 16 03');
     process.exit(1);
   }
@@ -137,10 +148,7 @@ const _main = (startPath = process.cwd()) => {
     process.exit(1);
   }
 
-  const {
-    planDir,
-    planId
-  } = resolved;
+  const { planDir, planId } = resolved;
   _printInfo(`Found plan directory: ${planDir}`);
 
   // Find task file
@@ -218,7 +226,9 @@ const _main = (startPath = process.cwd()) => {
   console.log('');
 
   if (allResolved) {
-    _printSuccess(`All dependencies are resolved! Task ${taskId} is ready to execute.`);
+    _printSuccess(
+      `All dependencies are resolved! Task ${taskId} is ready to execute.`
+    );
     process.exit(0);
   } else {
     _printError(`Task ${taskId} has unresolved dependencies:`);
@@ -236,5 +246,5 @@ if (require.main === module) {
 }
 
 module.exports = {
-  _main
+  _main,
 };

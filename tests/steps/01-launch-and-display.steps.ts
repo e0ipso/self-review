@@ -33,7 +33,7 @@ Given(
     // The test-repo fixture creates a deterministic repo matching the Background tables
     const repoDir = createTestRepo();
     setTestRepoDir(repoDir);
-  },
+  }
 );
 
 /**
@@ -50,10 +50,19 @@ Given('I launch self-review', async () => {
   try {
     await launchApp([], repoDir);
   } catch (error) {
-    console.error('[Given step] launchApp() failed, falling back to launchAppExpectExit():', error);
+    console.error(
+      '[Given step] launchApp() failed, falling back to launchAppExpectExit():',
+      error
+    );
     await launchAppExpectExit([], repoDir);
-    console.error('[Given step] After launchAppExpectExit - stderr:', getStderr().slice(0, 500));
-    console.error('[Given step] After launchAppExpectExit - exit code:', getExitCode());
+    console.error(
+      '[Given step] After launchAppExpectExit - stderr:',
+      getStderr().slice(0, 500)
+    );
+    console.error(
+      '[Given step] After launchAppExpectExit - exit code:',
+      getExitCode()
+    );
   }
 });
 
@@ -73,8 +82,10 @@ Given('I launch self-review with {string}', async ({}, args: string) => {
   }
 
   const expectsImmediateExit =
-    cliArgs.includes('--help') || cliArgs.includes('-h') ||
-    cliArgs.includes('--version') || cliArgs.includes('-v');
+    cliArgs.includes('--help') ||
+    cliArgs.includes('-h') ||
+    cliArgs.includes('--version') ||
+    cliArgs.includes('-v');
 
   if (expectsImmediateExit) {
     await launchAppExpectExit(cliArgs, repoDir);
@@ -84,10 +95,19 @@ Given('I launch self-review with {string}', async ({}, args: string) => {
     } catch (error) {
       // If Electron GUI can't start (error scenario or container env),
       // fall back to spawn to capture stdout/stderr/exitCode.
-      console.error('[Given step] launchApp() failed, falling back to launchAppExpectExit():', error);
+      console.error(
+        '[Given step] launchApp() failed, falling back to launchAppExpectExit():',
+        error
+      );
       await launchAppExpectExit(cliArgs, repoDir);
-      console.error('[Given step] After launchAppExpectExit - stderr:', getStderr().slice(0, 500));
-      console.error('[Given step] After launchAppExpectExit - exit code:', getExitCode());
+      console.error(
+        '[Given step] After launchAppExpectExit - stderr:',
+        getStderr().slice(0, 500)
+      );
+      console.error(
+        '[Given step] After launchAppExpectExit - exit code:',
+        getExitCode()
+      );
     }
   }
 });
@@ -96,7 +116,9 @@ Given('I launch self-review with {string}', async ({}, args: string) => {
 
 Then('the Electron window should be visible', async () => {
   const page = getPage();
-  const visible = await page.evaluate(() => document.visibilityState === 'visible');
+  const visible = await page.evaluate(
+    () => document.visibilityState === 'visible'
+  );
   expect(visible).toBe(true);
 });
 
@@ -106,11 +128,14 @@ Then('the file tree should list {int} file(s)', async ({}, count: number) => {
   await expect(entries).toHaveCount(count);
 });
 
-Then('the diff viewer should show {int} file sections', async ({}, count: number) => {
-  const page = getPage();
-  const sections = page.locator('[data-testid^="file-section-"]');
-  await expect(sections).toHaveCount(count);
-});
+Then(
+  'the diff viewer should show {int} file sections',
+  async ({}, count: number) => {
+    const page = getPage();
+    const sections = page.locator('[data-testid^="file-section-"]');
+    await expect(sections).toHaveCount(count);
+  }
+);
 
 Then(
   'the file tree entry for {string} should show change type {string}',
@@ -125,7 +150,7 @@ Then(
     };
     const label = badgeMap[changeType];
     await expect(entry.locator('.change-type-badge')).toHaveText(label);
-  },
+  }
 );
 
 Then(
@@ -138,14 +163,14 @@ Then(
     const normalized = text?.replace(/\s+/g, '') || '';
     const expected = statsText.replace(/\s+/g, '');
     expect(normalized).toContain(expected);
-  },
+  }
 );
 
 Then(
   'the diff viewer should show file sections in this order:',
   async ({}, table: DataTable) => {
     const page = getPage();
-    const expectedOrder = table.hashes().map((row) => row.file);
+    const expectedOrder = table.hashes().map(row => row.file);
     const sections = page.locator('[data-testid^="file-section-"]');
     const count = await sections.count();
     const actualOrder: string[] = [];
@@ -154,7 +179,7 @@ Then(
       actualOrder.push(testid!.replace('file-section-', ''));
     }
     expect(actualOrder).toEqual(expectedOrder);
-  },
+  }
 );
 
 Then(
@@ -165,7 +190,7 @@ Then(
     // Prism.js adds token spans for highlighting
     const tokens = section.locator('.token');
     expect(await tokens.count()).toBeGreaterThan(0);
-  },
+  }
 );
 
 Then('addition lines should have a green background', async () => {
@@ -192,9 +217,11 @@ Then(
     expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {
       const text = await hunkHeaders.nth(i).textContent();
-      expect(text?.trim()).toMatch(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+      expect(text?.trim()).toMatch(
+        new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
+      );
     }
-  },
+  }
 );
 
 When('I close the Electron window', async () => {

@@ -10,7 +10,11 @@ import CommentDisplay from '../Comments/CommentDisplay';
 export interface SplitViewProps {
   file: DiffFile;
   commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
-  dragState: { startLine: number; currentLine: number; side: 'old' | 'new' } | null;
+  dragState: {
+    startLine: number;
+    currentLine: number;
+    side: 'old' | 'new';
+  } | null;
   onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
@@ -35,7 +39,8 @@ export default function SplitView({
 
   const isLineSelected = (lineNumber: number, side: 'old' | 'new') => {
     if (commentRange && commentRange.side === side) {
-      if (lineNumber >= commentRange.start && lineNumber <= commentRange.end) return true;
+      if (lineNumber >= commentRange.start && lineNumber <= commentRange.end)
+        return true;
     }
     if (dragState && dragState.side === side) {
       const min = Math.min(dragState.startLine, dragState.currentLine);
@@ -61,14 +66,16 @@ export default function SplitView({
 
   const getLineBg = (line: DiffLine | null) => {
     if (!line) return '';
-    if (line.type === 'addition') return 'bg-emerald-50/70 dark:bg-emerald-900/40';
+    if (line.type === 'addition')
+      return 'bg-emerald-50/70 dark:bg-emerald-900/40';
     if (line.type === 'deletion') return 'bg-red-50/70 dark:bg-red-900/40';
     return '';
   };
 
   const getGutterBg = (line: DiffLine | null) => {
     if (!line) return 'bg-muted/30';
-    if (line.type === 'addition') return 'bg-emerald-100/80 dark:bg-emerald-900/50';
+    if (line.type === 'addition')
+      return 'bg-emerald-100/80 dark:bg-emerald-900/50';
     if (line.type === 'deletion') return 'bg-red-100/80 dark:bg-red-900/50';
     return 'bg-muted/30';
   };
@@ -76,13 +83,13 @@ export default function SplitView({
   const renderLineCell = (
     line: DiffLine | null,
     side: 'old' | 'new',
-    hasComment = false,
+    hasComment = false
   ) => {
     if (!line) {
       return (
-        <div className="w-1/2 flex">
-          <div className="w-10 flex-shrink-0 bg-muted/20" />
-          <div className="flex-1 bg-muted/10" />
+        <div className='w-1/2 flex'>
+          <div className='w-10 flex-shrink-0 bg-muted/20' />
+          <div className='flex-1 bg-muted/10' />
         </div>
       );
     }
@@ -95,7 +102,11 @@ export default function SplitView({
       : undefined;
 
     return (
-      <div className={`split-half w-1/2 flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${hasComment ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`} data-line-number={lineNumber || undefined} data-line-side={side}>
+      <div
+        className={`split-half w-1/2 flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${hasComment ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}
+        data-line-number={lineNumber || undefined}
+        data-line-side={side}
+      >
         {/* Line number gutter */}
         <div
           className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter relative`}
@@ -103,29 +114,33 @@ export default function SplitView({
         >
           {lineNumber && line.type !== 'context' && (
             <button
-              className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-7 opacity-0 group-hover/gutter:opacity-70 transition-opacity text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400"
-              onMouseDown={(e) => {
+              className='absolute left-0 top-0 bottom-0 flex items-center justify-center w-7 opacity-0 group-hover/gutter:opacity-70 transition-opacity text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400'
+              onMouseDown={e => {
                 e.preventDefault();
                 e.stopPropagation();
                 onDragStart(lineNumber, side);
               }}
               data-testid={`comment-icon-${side}-${lineNumber}`}
             >
-              <Plus className="h-4 w-4" />
+              <Plus className='h-4 w-4' />
             </button>
           )}
-          <span className="pointer-events-none">{lineNumber || ''}</span>
+          <span className='pointer-events-none'>{lineNumber || ''}</span>
         </div>
         {/* Code content */}
-        <div className="flex-1 px-3 py-0.5 [overflow-x:overlay] leading-[22px]">
-          <SyntaxLine content={line.content} language={language} lineType={line.type} />
+        <div className='flex-1 px-3 py-0.5 [overflow-x:overlay] leading-[22px]'>
+          <SyntaxLine
+            content={line.content}
+            language={language}
+            lineType={line.type}
+          />
         </div>
       </div>
     );
   };
 
   return (
-    <div className="font-mono text-[13px] leading-[22px] split-view">
+    <div className='font-mono text-[13px] leading-[22px] split-view'>
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           <HunkHeader header={hunk.header} />
@@ -133,49 +148,64 @@ export default function SplitView({
             const oldLineNumber = row.oldLine?.oldLineNumber;
             const newLineNumber = row.newLine?.newLineNumber;
             const oldComments = oldLineNumber
-              ? getCommentsForLine(file.newPath || file.oldPath, oldLineNumber, 'old')
+              ? getCommentsForLine(
+                  file.newPath || file.oldPath,
+                  oldLineNumber,
+                  'old'
+                )
               : [];
             const newComments = newLineNumber
-              ? getCommentsForLine(file.newPath || file.oldPath, newLineNumber, 'new')
+              ? getCommentsForLine(
+                  file.newPath || file.oldPath,
+                  newLineNumber,
+                  'new'
+                )
               : [];
-            const oldCommentsToRender = oldComments.filter(c => c.lineRange!.end === oldLineNumber);
-            const newCommentsToRender = newComments.filter(c => c.lineRange!.end === newLineNumber);
-            const hasCommentsToRender = oldCommentsToRender.length > 0 || newCommentsToRender.length > 0;
-            const showCommentInputHere = commentRange && (
-              (commentRange.side === 'old' && oldLineNumber === commentRange.end) ||
-              (commentRange.side === 'new' && newLineNumber === commentRange.end)
+            const oldCommentsToRender = oldComments.filter(
+              c => c.lineRange!.end === oldLineNumber
             );
+            const newCommentsToRender = newComments.filter(
+              c => c.lineRange!.end === newLineNumber
+            );
+            const hasCommentsToRender =
+              oldCommentsToRender.length > 0 || newCommentsToRender.length > 0;
+            const showCommentInputHere =
+              commentRange &&
+              ((commentRange.side === 'old' &&
+                oldLineNumber === commentRange.end) ||
+                (commentRange.side === 'new' &&
+                  newLineNumber === commentRange.end));
 
             return (
               <React.Fragment key={`${hunkIndex}-${rowIndex}`}>
-                <div className="flex">
+                <div className='flex'>
                   {/* Old side (left) */}
                   {row.oldLine ? (
                     renderLineCell(row.oldLine, 'old', oldComments.length > 0)
                   ) : (
-                    <div className="w-1/2 flex">
-                      <div className="w-10 flex-shrink-0 bg-muted/20" />
-                      <div className="flex-1 bg-muted/10" />
+                    <div className='w-1/2 flex'>
+                      <div className='w-10 flex-shrink-0 bg-muted/20' />
+                      <div className='flex-1 bg-muted/10' />
                     </div>
                   )}
                   {/* New side (right) */}
                   {row.newLine ? (
                     renderLineCell(row.newLine, 'new', newComments.length > 0)
                   ) : (
-                    <div className="w-1/2 flex">
-                      <div className="w-10 flex-shrink-0 bg-muted/20" />
-                      <div className="flex-1 bg-muted/10" />
+                    <div className='w-1/2 flex'>
+                      <div className='w-10 flex-shrink-0 bg-muted/20' />
+                      <div className='flex-1 bg-muted/10' />
                     </div>
                   )}
                 </div>
 
                 {/* Comments spanning full width (rendered at last line of range) */}
                 {hasCommentsToRender && (
-                  <div className="border-y border-border/50 bg-muted/20 px-4 py-3 space-y-2">
-                    {oldCommentsToRender.map((comment) => (
+                  <div className='border-y border-border/50 bg-muted/20 px-4 py-3 space-y-2'>
+                    {oldCommentsToRender.map(comment => (
                       <CommentDisplay key={comment.id} comment={comment} />
                     ))}
-                    {newCommentsToRender.map((comment) => (
+                    {newCommentsToRender.map(comment => (
                       <CommentDisplay key={comment.id} comment={comment} />
                     ))}
                   </div>
@@ -183,10 +213,14 @@ export default function SplitView({
 
                 {/* Comment input spanning full width */}
                 {showCommentInputHere && (
-                  <div className="border-y border-border/50 bg-muted/20 px-4 py-3">
+                  <div className='border-y border-border/50 bg-muted/20 px-4 py-3'>
                     <CommentInput
                       filePath={file.newPath || file.oldPath}
-                      lineRange={{ side: commentRange.side, start: commentRange.start, end: commentRange.end }}
+                      lineRange={{
+                        side: commentRange.side,
+                        start: commentRange.start,
+                        end: commentRange.end,
+                      }}
                       onCancel={onCancelComment}
                       onSubmit={onCommentSaved}
                     />

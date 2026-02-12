@@ -2,7 +2,11 @@
  * Shared Electron app management for E2E tests.
  * Provides helpers to launch/close the app and capture stdout/stderr.
  */
-import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
+import {
+  _electron as electron,
+  ElectronApplication,
+  Page,
+} from '@playwright/test';
 import { ChildProcess, spawn, execSync } from 'child_process';
 import * as path from 'path';
 import { rmSync } from 'fs';
@@ -13,10 +17,10 @@ const MAIN_BUNDLE = path.resolve(__dirname, '../../.webpack/main/index.js');
 // Chromium sandbox requires SUID helper which isn't available in containers
 const CHROMIUM_FLAGS = [
   '--no-sandbox',
-  '--disable-dev-shm-usage',  // Don't use /dev/shm for shared memory
+  '--disable-dev-shm-usage', // Don't use /dev/shm for shared memory
   '--disable-setuid-sandbox',
   '--disable-gpu',
-  '--disable-namespace-sandbox',  // Bypass namespace restrictions in containers
+  '--disable-namespace-sandbox', // Bypass namespace restrictions in containers
 ];
 
 // Ensure a display server is available for Electron (headless CI)
@@ -54,11 +58,15 @@ export async function launchApp(cliArgs: string[], cwd: string): Promise<Page> {
   });
 
   const proc = electronApp.process();
-  proc.stdout?.on('data', (data: Buffer) => { stdoutData += data.toString(); });
-  proc.stderr?.on('data', (data: Buffer) => { stderrData += data.toString(); });
+  proc.stdout?.on('data', (data: Buffer) => {
+    stdoutData += data.toString();
+  });
+  proc.stderr?.on('data', (data: Buffer) => {
+    stderrData += data.toString();
+  });
 
-  processExitPromise = new Promise<number>((resolve) => {
-    proc.on('close', (code) => {
+  processExitPromise = new Promise<number>(resolve => {
+    proc.on('close', code => {
       processExitCode = code ?? -1;
       resolve(processExitCode);
     });
@@ -70,7 +78,9 @@ export async function launchApp(cliArgs: string[], cwd: string): Promise<Page> {
     return appPage;
   } catch (error) {
     process.stderr.write(`\n[launchApp failed] ${error}\n`);
-    process.stderr.write(`[stderr from Electron] ${stderrData.slice(0, 1000)}\n`);
+    process.stderr.write(
+      `[stderr from Electron] ${stderrData.slice(0, 1000)}\n`
+    );
     throw error;
   }
 }
@@ -83,30 +93,38 @@ export async function launchApp(cliArgs: string[], cwd: string): Promise<Page> {
 export async function launchAppExpectExit(
   cliArgs: string[],
   cwd: string,
-  timeoutMs = 15000,
+  timeoutMs = 15000
 ): Promise<void> {
   resetState();
 
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn(ELECTRON_BIN, [...CHROMIUM_FLAGS, MAIN_BUNDLE, ...cliArgs], {
-      cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, NODE_ENV: 'test' },
-    });
+    const proc = spawn(
+      ELECTRON_BIN,
+      [...CHROMIUM_FLAGS, MAIN_BUNDLE, ...cliArgs],
+      {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, NODE_ENV: 'test' },
+      }
+    );
 
     const timer = setTimeout(() => {
       proc.kill();
       resolve(); // Resolve even on timeout — tests can check exitCode
     }, timeoutMs);
 
-    proc.stdout.on('data', (d: Buffer) => { stdoutData += d.toString(); });
-    proc.stderr.on('data', (d: Buffer) => { stderrData += d.toString(); });
-    proc.on('close', (code) => {
+    proc.stdout.on('data', (d: Buffer) => {
+      stdoutData += d.toString();
+    });
+    proc.stderr.on('data', (d: Buffer) => {
+      stderrData += d.toString();
+    });
+    proc.on('close', code => {
       clearTimeout(timer);
       processExitCode = code ?? -1;
       resolve();
     });
-    proc.on('error', (err) => {
+    proc.on('error', err => {
       clearTimeout(timer);
       reject(err);
     });
@@ -129,7 +147,7 @@ export async function closeAppWindow(): Promise<void> {
   if (processExitPromise) {
     await Promise.race([
       processExitPromise,
-      new Promise<number>((resolve) => setTimeout(() => resolve(-1), 15000)),
+      new Promise<number>(resolve => setTimeout(() => resolve(-1), 15000)),
     ]);
   }
 }
@@ -168,11 +186,19 @@ export function getElectronApp(): ElectronApplication {
   return electronApp;
 }
 
-export function getStdout(): string { return stdoutData; }
-export function getStderr(): string { return stderrData; }
-export function getExitCode(): number | null { return processExitCode; }
+export function getStdout(): string {
+  return stdoutData;
+}
+export function getStderr(): string {
+  return stderrData;
+}
+export function getExitCode(): number | null {
+  return processExitCode;
+}
 
-export function setTestRepoDir(dir: string): void { testRepoDir = dir; }
+export function setTestRepoDir(dir: string): void {
+  testRepoDir = dir;
+}
 export function getTestRepoDir(): string {
   if (!testRepoDir) throw new Error('Test repo not created');
   return testRepoDir;
@@ -182,16 +208,26 @@ export function getTestRepoDir(): string {
  * Trigger the icon-based comment on a specific line.
  * Simulates mousedown on the + icon → wait for React → mouseup.
  */
-export async function triggerCommentIcon(filePath: string, line: number, side: 'old' | 'new'): Promise<void> {
+export async function triggerCommentIcon(
+  filePath: string,
+  line: number,
+  side: 'old' | 'new'
+): Promise<void> {
   const page = getPage();
   const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${line}"]`);
+  const gutter = section.locator(
+    `[data-testid="${side}-line-${filePath}-${line}"]`
+  );
   await gutter.hover();
   const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
   await icon.dispatchEvent('mousedown');
   await page.waitForTimeout(100);
-  await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
-  await page.locator('[data-testid="comment-input"]').waitFor({ state: 'visible', timeout: 5000 });
+  await page.evaluate(() =>
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+  );
+  await page
+    .locator('[data-testid="comment-input"]')
+    .waitFor({ state: 'visible', timeout: 5000 });
 }
 
 function resetState(): void {

@@ -21,7 +21,7 @@ const SelectTrigger = React.forwardRef<
   >
     {children}
     <SelectPrimitive.Icon>
-      <ChevronDown className="h-4 w-4 opacity-50" />
+      <ChevronDown className='h-4 w-4 opacity-50' />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -45,12 +45,12 @@ const SelectContent = React.forwardRef<
         )}
         {...props}
       >
-        <SelectPrimitive.ScrollUpArrow className="flex cursor-default items-center justify-center py-1">
-          <ChevronUp className="h-4 w-4" />
+        <SelectPrimitive.ScrollUpArrow className='flex cursor-default items-center justify-center py-1'>
+          <ChevronUp className='h-4 w-4' />
         </SelectPrimitive.ScrollUpArrow>
         {children}
-        <SelectPrimitive.ScrollDownArrow className="flex cursor-default items-center justify-center py-1">
-          <ChevronDown className="h-4 w-4" />
+        <SelectPrimitive.ScrollDownArrow className='flex cursor-default items-center justify-center py-1'>
+          <ChevronDown className='h-4 w-4' />
         </SelectPrimitive.ScrollDownArrow>
       </SelectPrimitive.Popup>
     </SelectPrimitive.Positioner>
@@ -70,9 +70,9 @@ const SelectItem = React.forwardRef<
     )}
     {...props}
   >
-    <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
+    <span className='absolute right-2 flex h-3.5 w-3.5 items-center justify-center'>
       <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
+        <Check className='h-4 w-4' />
       </SelectPrimitive.ItemIndicator>
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
@@ -84,7 +84,11 @@ const SelectLabel = React.forwardRef<
   HTMLDivElement,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.GroupLabel>
 >(({ className, ...props }, ref) => (
-  <SelectPrimitive.GroupLabel ref={ref} className={cn('px-2 py-1.5 text-sm font-semibold', className)} {...props} />
+  <SelectPrimitive.GroupLabel
+    ref={ref}
+    className={cn('px-2 py-1.5 text-sm font-semibold', className)}
+    {...props}
+  />
 ));
 SelectLabel.displayName = 'SelectLabel';
 
@@ -92,7 +96,11 @@ const SelectSeparator = React.forwardRef<
   HTMLDivElement,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <SelectPrimitive.Separator ref={ref} className={cn('-mx-1 my-1 h-px bg-muted', className)} {...props} />
+  <SelectPrimitive.Separator
+    ref={ref}
+    className={cn('-mx-1 my-1 h-px bg-muted', className)}
+    {...props}
+  />
 ));
 SelectSeparator.displayName = 'SelectSeparator';
 

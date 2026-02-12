@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { serializeReview } from './xml-serializer';
-import type { ReviewState, FileReviewState, ReviewComment } from '../shared/types';
+import type {
+  ReviewState,
+  FileReviewState,
+  ReviewComment,
+} from '../shared/types';
 
 // Mock xmllint-wasm to avoid WASM loading issues in tests
 vi.mock('xmllint-wasm', () => ({
@@ -48,7 +52,9 @@ describe('serializeReview', () => {
 
       const xml = await serializeReview(reviewState);
 
-      expect(xml).toContain('<file path="src/main.ts" change-type="modified" viewed="true" />');
+      expect(xml).toContain(
+        '<file path="src/main.ts" change-type="modified" viewed="true" />'
+      );
       expect(xml).not.toContain('<comment');
     });
 
@@ -70,8 +76,18 @@ describe('serializeReview', () => {
     it('handles multiple files with different change types', async () => {
       const files: FileReviewState[] = [
         { path: 'src/new.ts', changeType: 'added', viewed: true, comments: [] },
-        { path: 'src/old.ts', changeType: 'deleted', viewed: false, comments: [] },
-        { path: 'src/moved.ts', changeType: 'renamed', viewed: true, comments: [] },
+        {
+          path: 'src/old.ts',
+          changeType: 'deleted',
+          viewed: false,
+          comments: [],
+        },
+        {
+          path: 'src/moved.ts',
+          changeType: 'renamed',
+          viewed: true,
+          comments: [],
+        },
       ];
 
       const reviewState: ReviewState = {
@@ -116,7 +132,9 @@ describe('serializeReview', () => {
 
       const xml = await serializeReview(reviewState);
 
-      expect(xml).toContain('<file path="src/main.ts" change-type="modified" viewed="true">');
+      expect(xml).toContain(
+        '<file path="src/main.ts" change-type="modified" viewed="true">'
+      );
       expect(xml).toContain('<comment>');
       expect(xml).toContain('<body>Overall looks good</body>');
       expect(xml).toContain('<category>praise</category>');
@@ -294,7 +312,7 @@ describe('serializeReview', () => {
         category: 'suggestion',
         suggestion: {
           originalCode: 'if (x < 5 && y > 10) { return "test"; }',
-          proposedCode: 'if (x >= 5 || y <= 10) { return \'test\'; }',
+          proposedCode: "if (x >= 5 || y <= 10) { return 'test'; }",
         },
       };
 
@@ -404,7 +422,9 @@ describe('serializeReview', () => {
       const xml = await serializeReview(reviewState);
 
       // Check basic XML structure
-      expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+      expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(
+        true
+      );
       expect(xml).toContain('<review');
       expect(xml).toContain('</review>');
       expect(xml.indexOf('<review')).toBeLessThan(xml.indexOf('</review>'));

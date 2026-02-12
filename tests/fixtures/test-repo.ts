@@ -122,7 +122,13 @@ export function createTestRepo(): string {
   // Modify README.md
   writeFileSync(
     join(repoDir, 'README.md'),
-    ['# My App', '', 'A modern application with authentication.', '', 'See docs/ for more info.'].join('\n')
+    [
+      '# My App',
+      '',
+      'A modern application with authentication.',
+      '',
+      'See docs/ for more info.',
+    ].join('\n')
   );
 
   // Do NOT stage — changes are visible via bare `git diff`
@@ -145,7 +151,7 @@ export function createPriorReviewXml(
     category?: string;
   }>
 ): string {
-  const commentXml = (c: typeof comments[0]) => {
+  const commentXml = (c: (typeof comments)[0]) => {
     const lineAttrs = [
       c.oldLineStart != null ? `old-line-start="${c.oldLineStart}"` : '',
       c.oldLineEnd != null ? `old-line-end="${c.oldLineEnd}"` : '',

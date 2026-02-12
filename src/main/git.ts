@@ -21,7 +21,9 @@ export function runGitDiff(args: string[]): string {
     try {
       execSync('git rev-parse --git-dir', { stdio: 'ignore' });
     } catch {
-      console.error('Error: not a git repository (or any parent up to mount point)');
+      console.error(
+        'Error: not a git repository (or any parent up to mount point)'
+      );
       process.exit(1);
     }
 
@@ -73,7 +75,9 @@ export function validateGitAvailable(): void {
   try {
     execSync('git rev-parse --git-dir', { stdio: 'ignore' });
   } catch {
-    console.error('Error: not a git repository (or any parent up to mount point)');
+    console.error(
+      'Error: not a git repository (or any parent up to mount point)'
+    );
     process.exit(1);
   }
 }
@@ -123,14 +127,22 @@ export async function runGitDiffAsync(args: string[]): Promise<string> {
  */
 export async function getUntrackedFilesAsync(): Promise<string[]> {
   try {
-    const { stdout } = await execAsync('git ls-files --others --exclude-standard', {
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 10000,
-    });
-    return stdout.trim().split('\n').filter((line) => line.length > 0);
+    const { stdout } = await execAsync(
+      'git ls-files --others --exclude-standard',
+      {
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 10000,
+      }
+    );
+    return stdout
+      .trim()
+      .split('\n')
+      .filter(line => line.length > 0);
   } catch (error) {
     if (error instanceof Error) {
-      console.error(`Warning: Failed to list untracked files: ${error.message}`);
+      console.error(
+        `Warning: Failed to list untracked files: ${error.message}`
+      );
     } else {
       console.error('Warning: Failed to list untracked files: unknown error');
     }
@@ -142,7 +154,10 @@ export async function getUntrackedFilesAsync(): Promise<string[]> {
  * Generate synthetic unified diffs for untracked files so they can be
  * parsed by the existing diff parser.
  */
-export function generateUntrackedDiffs(paths: string[], repoRoot: string): string {
+export function generateUntrackedDiffs(
+  paths: string[],
+  repoRoot: string
+): string {
   const diffs: string[] = [];
 
   for (const filePath of paths) {
@@ -162,8 +177,8 @@ export function generateUntrackedDiffs(paths: string[], repoRoot: string): strin
     if (isBinary) {
       diffs.push(
         `diff --git a/${filePath} b/${filePath}\n` +
-        `new file mode 100644\n` +
-        `Binary files /dev/null and b/${filePath} differ`
+          `new file mode 100644\n` +
+          `Binary files /dev/null and b/${filePath} differ`
       );
       continue;
     }
@@ -177,7 +192,7 @@ export function generateUntrackedDiffs(paths: string[], repoRoot: string): strin
     }
 
     const lineCount = lines.length;
-    const addedLines = lines.map((line) => `+${line}`).join('\n');
+    const addedLines = lines.map(line => `+${line}`).join('\n');
 
     let diff =
       `diff --git a/${filePath} b/${filePath}\n` +

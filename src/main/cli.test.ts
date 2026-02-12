@@ -39,7 +39,12 @@ describe('cli', () => {
 
     it('parses --resume-from with additional git args', () => {
       (process as any).defaultApp = false;
-      process.argv = ['/path/to/app', '--resume-from', 'review.xml', '--staged'];
+      process.argv = [
+        '/path/to/app',
+        '--resume-from',
+        'review.xml',
+        '--staged',
+      ];
 
       const args = parseCliArgs();
 
@@ -59,11 +64,22 @@ describe('cli', () => {
 
     it('passes through multiple git diff arguments', () => {
       (process as any).defaultApp = false;
-      process.argv = ['/path/to/app', '--staged', '--ignore-space-change', '--', 'src/'];
+      process.argv = [
+        '/path/to/app',
+        '--staged',
+        '--ignore-space-change',
+        '--',
+        'src/',
+      ];
 
       const args = parseCliArgs();
 
-      expect(args.gitDiffArgs).toEqual(['--staged', '--ignore-space-change', '--', 'src/']);
+      expect(args.gitDiffArgs).toEqual([
+        '--staged',
+        '--ignore-space-change',
+        '--',
+        'src/',
+      ]);
       expect(args.resumeFrom).toBeNull();
     });
 
@@ -121,7 +137,12 @@ describe('cli', () => {
 
     it('handles git args before --resume-from', () => {
       (process as any).defaultApp = false;
-      process.argv = ['/path/to/app', '--staged', '--resume-from', 'review.xml'];
+      process.argv = [
+        '/path/to/app',
+        '--staged',
+        '--resume-from',
+        'review.xml',
+      ];
 
       const args = parseCliArgs();
 

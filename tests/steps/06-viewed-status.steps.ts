@@ -15,7 +15,7 @@ When(
     const page = getPage();
     const checkbox = page.locator(`[data-testid="viewed-${filePath}"]`);
     await checkbox.click();
-  },
+  }
 );
 
 When(
@@ -24,7 +24,7 @@ When(
     const page = getPage();
     const checkbox = page.locator(`[data-testid="viewed-${filePath}"]`);
     await checkbox.click();
-  },
+  }
 );
 
 // ── Then: viewed status assertions ──
@@ -36,7 +36,7 @@ Then(
     const button = page.locator(`[data-testid="viewed-${filePath}"]`);
     // Check for EyeOff icon (unviewed state)
     await expect(button.locator('svg')).toBeVisible();
-  },
+  }
 );
 
 Then(
@@ -46,7 +46,7 @@ Then(
     const button = page.locator(`[data-testid="viewed-${filePath}"]`);
     // Check for Eye icon (viewed state)
     await expect(button.locator('svg')).toBeVisible();
-  },
+  }
 );
 
 Then(
@@ -54,8 +54,8 @@ Then(
   async ({}, filePath: string, viewedValue: string) => {
     const stdout = getStdout();
     const regex = new RegExp(
-      `<file[^>]*path="${filePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*viewed="${viewedValue}"`,
+      `<file[^>]*path="${filePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*viewed="${viewedValue}"`
     );
     expect(stdout).toMatch(regex);
-  },
+  }
 );

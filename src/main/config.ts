@@ -14,11 +14,31 @@ const defaults: AppConfig = {
   outputFormat: 'xml',
   ignore: [],
   categories: [
-    { name: 'bug', description: 'Likely defect or incorrect behavior', color: '#e53e3e' },
-    { name: 'security', description: 'Security vulnerability or concern', color: '#dd6b20' },
-    { name: 'style', description: 'Code style, naming, or formatting issue', color: '#3182ce' },
-    { name: 'question', description: 'Clarification needed — not necessarily a problem', color: '#805ad5' },
-    { name: 'nit', description: 'Minor nitpick, low priority', color: '#718096' },
+    {
+      name: 'bug',
+      description: 'Likely defect or incorrect behavior',
+      color: '#e53e3e',
+    },
+    {
+      name: 'security',
+      description: 'Security vulnerability or concern',
+      color: '#dd6b20',
+    },
+    {
+      name: 'style',
+      description: 'Code style, naming, or formatting issue',
+      color: '#3182ce',
+    },
+    {
+      name: 'question',
+      description: 'Clarification needed — not necessarily a problem',
+      color: '#805ad5',
+    },
+    {
+      name: 'nit',
+      description: 'Minor nitpick, low priority',
+      color: '#718096',
+    },
   ],
   defaultDiffArgs: '',
   showUntracked: true,
@@ -28,13 +48,20 @@ export function loadConfig(): AppConfig {
   let config = { ...defaults };
 
   // Load user-level config
-  const userConfigPath = join(homedir(), '.config', 'self-review', 'config.yaml');
+  const userConfigPath = join(
+    homedir(),
+    '.config',
+    'self-review',
+    'config.yaml'
+  );
   if (existsSync(userConfigPath)) {
     try {
       const userConfig = loadYamlConfig(userConfigPath);
       config = mergeConfig(config, userConfig);
     } catch (error) {
-      console.error(`Warning: Failed to load user config from ${userConfigPath}: ${error}`);
+      console.error(
+        `Warning: Failed to load user config from ${userConfigPath}: ${error}`
+      );
     }
   }
 
@@ -45,7 +72,9 @@ export function loadConfig(): AppConfig {
       const projectConfig = loadYamlConfig(projectConfigPath);
       config = mergeConfig(config, projectConfig);
     } catch (error) {
-      console.error(`Warning: Failed to load project config from ${projectConfigPath}: ${error}`);
+      console.error(
+        `Warning: Failed to load project config from ${projectConfigPath}: ${error}`
+      );
     }
   }
 
@@ -67,7 +96,9 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     if (['light', 'dark', 'system'].includes(raw.theme)) {
       config.theme = raw.theme;
     } else {
-      console.error(`Warning: Invalid theme value "${raw.theme}", using default`);
+      console.error(
+        `Warning: Invalid theme value "${raw.theme}", using default`
+      );
     }
   }
 
@@ -75,7 +106,9 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     if (['split', 'unified'].includes(raw['diff-view'])) {
       config.diffView = raw['diff-view'];
     } else {
-      console.error(`Warning: Invalid diff-view value "${raw['diff-view']}", using default`);
+      console.error(
+        `Warning: Invalid diff-view value "${raw['diff-view']}", using default`
+      );
     }
   }
 
@@ -102,7 +135,10 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     );
   }
 
-  if ('default-diff-args' in raw && typeof raw['default-diff-args'] === 'string') {
+  if (
+    'default-diff-args' in raw &&
+    typeof raw['default-diff-args'] === 'string'
+  ) {
     config.defaultDiffArgs = raw['default-diff-args'];
   }
 
@@ -119,6 +155,7 @@ function mergeConfig(base: AppConfig, override: Partial<AppConfig>): AppConfig {
     ...override,
     // Arrays are replaced, not merged
     ignore: override.ignore !== undefined ? override.ignore : base.ignore,
-    categories: override.categories !== undefined ? override.categories : base.categories,
+    categories:
+      override.categories !== undefined ? override.categories : base.categories,
   };
 }

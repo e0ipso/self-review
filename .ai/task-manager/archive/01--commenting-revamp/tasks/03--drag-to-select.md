@@ -1,25 +1,34 @@
 ---
 id: 3
-group: "interaction-model"
+group: 'interaction-model'
 dependencies: [2]
-status: "completed"
-created: "2026-02-11"
+status: 'completed'
+created: '2026-02-11'
 skills:
   - react-components
   - css
 complexity_score: 5
-complexity_notes: "Most complex task: document-level event listeners, hunk boundary lookup map, drag state machine, visual feedback. Well-scoped to interaction layer only."
+complexity_notes:
+  'Most complex task: document-level event listeners, hunk boundary lookup map, drag state machine,
+  visual feedback. Well-scoped to interaction layer only.'
 ---
+
 # Implement Drag-to-Select Multi-Line Comments with Hunk Boundary Constraints
 
 ## Objective
-Implement a drag interaction starting from the "+" icon that allows selecting a range of lines for multi-line comments. The drag is constrained to lines within a single hunk and the same side (old/new). Visual feedback highlights lines during the drag. A single click (mousedown + mouseup on same line) is the degenerate case producing a single-line comment.
+
+Implement a drag interaction starting from the "+" icon that allows selecting a range of lines for
+multi-line comments. The drag is constrained to lines within a single hunk and the same side
+(old/new). Visual feedback highlights lines during the drag. A single click (mousedown + mouseup on
+same line) is the degenerate case producing a single-line comment.
 
 ## Skills Required
+
 - `react-components`: Document-level event listeners, state-driven UI, hunk-to-line mapping
 - `css`: Dynamic highlight classes during drag (Tailwind)
 
 ## Acceptance Criteria
+
 - [ ] `mousedown` on the "+" icon initiates a drag (sets drag start line)
 - [ ] `mousemove` on the document tracks the current hovered line and updates visual feedback
 - [ ] `mouseup` on the document commits the range and opens CommentInput
@@ -32,15 +41,20 @@ Implement a drag interaction starting from the "+" icon that allows selecting a 
 - [ ] Text selection is prevented during drag (`user-select: none` or `e.preventDefault()`)
 
 ## Technical Requirements
-- Modify `src/renderer/components/DiffViewer/FileSection.tsx` (drag state management, hunk boundary logic)
-- Modify `src/renderer/components/DiffViewer/SplitView.tsx` (icon mousedown handler, line data attributes, visual feedback)
+
+- Modify `src/renderer/components/DiffViewer/FileSection.tsx` (drag state management, hunk boundary
+  logic)
+- Modify `src/renderer/components/DiffViewer/SplitView.tsx` (icon mousedown handler, line data
+  attributes, visual feedback)
 - Modify `src/renderer/components/DiffViewer/UnifiedView.tsx` (same as SplitView)
 
 ## Input Dependencies
+
 - Task 1: Unified state model with `dragState` in FileSection
 - Task 2: "+" icon in gutter as the drag start element
 
 ## Output Artifacts
+
 - Functional drag-to-select interaction in both SplitView and UnifiedView
 - Hunk boundary constraint logic in FileSection
 - Visual feedback during drag
@@ -52,14 +66,19 @@ Implement a drag interaction starting from the "+" icon that allows selecting a 
 
 ### Hunk boundary lookup map
 
-In `FileSection`, build a lookup map that maps `(lineNumber, side)` to a hunk index. This allows clamping the drag end line to the same hunk as the start line.
+In `FileSection`, build a lookup map that maps `(lineNumber, side)` to a hunk index. This allows
+clamping the drag end line to the same hunk as the start line.
 
 ```tsx
-const buildHunkLineMap = (file: DiffFile): Map<string, { hunkIndex: number; minLine: number; maxLine: number }> => {
+const buildHunkLineMap = (
+  file: DiffFile
+): Map<string, { hunkIndex: number; minLine: number; maxLine: number }> => {
   const map = new Map<string, { hunkIndex: number; minLine: number; maxLine: number }>();
   file.hunks.forEach((hunk, hunkIndex) => {
-    let minOld = Infinity, maxOld = -Infinity;
-    let minNew = Infinity, maxNew = -Infinity;
+    let minOld = Infinity,
+      maxOld = -Infinity;
+    let minNew = Infinity,
+      maxNew = -Infinity;
     for (const line of hunk.lines) {
       if (line.oldLineNumber !== null) {
         minOld = Math.min(minOld, line.oldLineNumber);
@@ -85,6 +104,7 @@ const buildHunkLineMap = (file: DiffFile): Map<string, { hunkIndex: number; minL
 ```
 
 Use `useMemo` to compute this once per file render:
+
 ```tsx
 const hunkLineMap = useMemo(() => buildHunkLineMap(file), [file]);
 ```
@@ -107,7 +127,7 @@ const handleDragMove = (lineNumber: number, side: 'old' | 'new') => {
   if (!hunkInfo) return;
 
   const clampedLine = Math.max(hunkInfo.minLine, Math.min(hunkInfo.maxLine, lineNumber));
-  setDragState(prev => prev ? { ...prev, currentLine: clampedLine } : null);
+  setDragState(prev => (prev ? { ...prev, currentLine: clampedLine } : null));
 };
 
 // End drag
@@ -123,7 +143,8 @@ const handleDragEnd = () => {
 
 ### Document-level event listeners
 
-When drag starts, attach `mousemove` and `mouseup` listeners to `document`. Use `useEffect` with cleanup:
+When drag starts, attach `mousemove` and `mouseup` listeners to `document`. Use `useEffect` with
+cleanup:
 
 ```tsx
 useEffect(() => {
@@ -158,7 +179,8 @@ useEffect(() => {
 
 ### Data attributes on line rows
 
-In both SplitView and UnifiedView, add `data-line-number` and `data-line-side` attributes to the line row divs or gutter cells so that `elementFromPoint` can identify lines during drag:
+In both SplitView and UnifiedView, add `data-line-number` and `data-line-side` attributes to the
+line row divs or gutter cells so that `elementFromPoint` can identify lines during drag:
 
 ```tsx
 <div
@@ -192,7 +214,8 @@ Apply the highlight class: `bg-blue-100 dark:bg-blue-900/30`
 
 ### Icon mousedown handler
 
-In SplitView/UnifiedView, the "+" icon gets a `mousedown` handler instead of (or in addition to) `click`:
+In SplitView/UnifiedView, the "+" icon gets a `mousedown` handler instead of (or in addition to)
+`click`:
 
 ```tsx
 <button
@@ -204,11 +227,13 @@ In SplitView/UnifiedView, the "+" icon gets a `mousedown` handler instead of (or
 >
 ```
 
-The `click` event is no longer needed separately — the mouseup handler in FileSection will detect if it's a single click (start === current) and treat it as a single-line range.
+The `click` event is no longer needed separately — the mouseup handler in FileSection will detect if
+it's a single click (start === current) and treat it as a single-line range.
 
 ### Prevent text selection during drag
 
 Add to the root div of FileSection during drag:
+
 ```tsx
 <div className={`... ${dragState ? 'select-none' : ''}`}>
 ```

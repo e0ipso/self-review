@@ -1,39 +1,52 @@
 ---
 id: 6
-group: "documentation"
+group: 'documentation'
 dependencies: [1, 2, 3, 4, 5]
-status: "completed"
-created: "2026-02-11"
+status: 'completed'
+created: '2026-02-11'
 skills:
   - technical-writing
 ---
+
 # Update PRD and Create BDD Feature Files
 
 ## Objective
-Update PRD.md sections 5.4.1 (Line Comments) and 5.4.2 (Multi-Line Comments) to reflect the new commenting behavior. Create BDD feature files in `test/features/` describing the new commenting UX.
+
+Update PRD.md sections 5.4.1 (Line Comments) and 5.4.2 (Multi-Line Comments) to reflect the new
+commenting behavior. Create BDD feature files in `test/features/` describing the new commenting UX.
 
 ## Skills Required
+
 - `technical-writing`: PRD updates, BDD/Gherkin feature file creation
 
 ## Acceptance Criteria
-- [ ] PRD section 5.4.1 describes the new icon-based activation (hover "+" icon in gutter, replaces line-number click)
-- [ ] PRD section 5.4.2 describes the unified drag-based interaction model (click = single-line, drag = multi-line), hunk boundary constraints, and visual feedback
+
+- [ ] PRD section 5.4.1 describes the new icon-based activation (hover "+" icon in gutter, replaces
+      line-number click)
+- [ ] PRD section 5.4.2 describes the unified drag-based interaction model (click = single-line,
+      drag = multi-line), hunk boundary constraints, and visual feedback
 - [ ] PRD sections mention line range headers in both comment input and rendered comments
 - [ ] PRD sections mention GFM markdown rendering for comment bodies
 - [ ] PRD sections mention post-save behavior (input closes after saving)
 - [ ] References to "clicking on a line number" are removed from the PRD
-- [ ] BDD feature files are created in `test/features/` covering: icon visibility on hover, single-line comment via click, multi-line comment via drag, hunk boundary constraints, line range headers, markdown rendering, comment input closing after save
+- [ ] BDD feature files are created in `test/features/` covering: icon visibility on hover,
+      single-line comment via click, multi-line comment via drag, hunk boundary constraints, line
+      range headers, markdown rendering, comment input closing after save
 - [ ] Feature files use Gherkin syntax (Given/When/Then)
 
 ## Technical Requirements
+
 - Modify `docs/PRD.md` (sections 5.4.1 and 5.4.2)
 - Create `test/features/commenting.feature` (or split into multiple feature files)
 - The `test/features/` directory may need to be created
 
 ## Input Dependencies
-- Tasks 1-5: All implementation tasks should be complete so documentation accurately reflects the final behavior
+
+- Tasks 1-5: All implementation tasks should be complete so documentation accurately reflects the
+  final behavior
 
 ## Output Artifacts
+
 - Updated `docs/PRD.md`
 - New `test/features/commenting.feature` (or equivalent)
 
@@ -49,11 +62,17 @@ Replace the current content with something like:
 ```markdown
 #### 5.4.1 Line Comments
 
-- **Activation:** Hovering over a code line reveals a "+" icon in the line number gutter. Clicking the icon opens a comment input box below that line. The line number text itself is not interactive.
-- **Input:** A text area for writing comments in GitHub-flavored markdown (GFM). The input shows a header indicating the target line (e.g., "Comment on line 13").
+- **Activation:** Hovering over a code line reveals a "+" icon in the line number gutter. Clicking
+  the icon opens a comment input box below that line. The line number text itself is not
+  interactive.
+- **Input:** A text area for writing comments in GitHub-flavored markdown (GFM). The input shows a
+  header indicating the target line (e.g., "Comment on line 13").
 - **Actions:** "Comment" button to submit. "Cancel" to discard.
-- **Post-save behavior:** After saving, the comment input closes. To add another comment, click the "+" icon again.
-- **Display:** Submitted comments appear inline below the line they reference, with a line range header, category badge, and the comment body rendered as GitHub-flavored markdown (bold, italic, code blocks, tables, task lists, strikethrough).
+- **Post-save behavior:** After saving, the comment input closes. To add another comment, click the
+  "+" icon again.
+- **Display:** Submitted comments appear inline below the line they reference, with a line range
+  header, category badge, and the comment body rendered as GitHub-flavored markdown (bold, italic,
+  code blocks, tables, task lists, strikethrough).
 ```
 
 ### PRD Section 5.4.2 — Multi-Line Comments (replace content at lines 280-283)
@@ -61,11 +80,16 @@ Replace the current content with something like:
 ```markdown
 #### 5.4.2 Multi-Line Comments
 
-- **Activation:** Click and drag the "+" gutter icon across multiple lines to select a range. The drag interaction provides real-time visual feedback by highlighting the selected lines.
-- **Unified code path:** Single-line and multi-line comments share one interaction model. Clicking the icon is a degenerate case of dragging (start line equals end line).
-- **Hunk boundary constraint:** Drag selection cannot span across hunk boundaries (@@ separators). The selection is clamped to lines within the same hunk.
-- **Side constraint (split view):** In split view, drag is locked to the side (old/new) where it started.
-- **Display:** The selected line range is visually highlighted, and the comment appears below the last line of the range with a header indicating the range (e.g., "Comment on lines 6 to 10").
+- **Activation:** Click and drag the "+" gutter icon across multiple lines to select a range. The
+  drag interaction provides real-time visual feedback by highlighting the selected lines.
+- **Unified code path:** Single-line and multi-line comments share one interaction model. Clicking
+  the icon is a degenerate case of dragging (start line equals end line).
+- **Hunk boundary constraint:** Drag selection cannot span across hunk boundaries (@@ separators).
+  The selection is clamped to lines within the same hunk.
+- **Side constraint (split view):** In split view, drag is locked to the side (old/new) where it
+  started.
+- **Display:** The selected line range is visually highlighted, and the comment appears below the
+  last line of the range with a header indicating the range (e.g., "Comment on lines 6 to 10").
 ```
 
 ### BDD Feature File — `test/features/commenting.feature`
@@ -149,6 +173,7 @@ Feature: Markdown Rendering in Comments
     Then the table renders with borders and alignment
 ```
 
-Adapt the scenarios to match the exact final behavior. The feature file serves as a specification, not an automated test suite (unless E2E testing is set up).
+Adapt the scenarios to match the exact final behavior. The feature file serves as a specification,
+not an automated test suite (unless E2E testing is set up).
 
 </details>

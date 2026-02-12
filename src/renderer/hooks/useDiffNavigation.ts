@@ -18,12 +18,12 @@ export function useDiffNavigation(): DiffNavigationState {
   useEffect(() => {
     // Set up IntersectionObserver to track which file section is visible
     const observer = new IntersectionObserver(
-      (entries) => {
+      entries => {
         // Find the most visible entry
         let maxRatio = 0;
         let mostVisible: IntersectionObserverEntry | null = null;
 
-        entries.forEach((entry) => {
+        entries.forEach(entry => {
           if (entry.intersectionRatio > maxRatio) {
             maxRatio = entry.intersectionRatio;
             mostVisible = entry;
@@ -46,7 +46,7 @@ export function useDiffNavigation(): DiffNavigationState {
     // Observe all file sections
     const observeElements = () => {
       const elements = document.querySelectorAll('[data-file-path]');
-      elements.forEach((el) => observer.observe(el));
+      elements.forEach(el => observer.observe(el));
     };
 
     // Initial observation

@@ -1,30 +1,35 @@
 ---
 id: 1
-group: "infrastructure"
+group: 'infrastructure'
 dependencies: []
-status: "completed"
-created: "2026-02-12"
+status: 'completed'
+created: '2026-02-12'
 skills:
   - vitest
   - typescript
 ---
+
 # Setup Vitest Infrastructure and Configuration
 
 ## Objective
 
-Install Vitest dependencies and create separate configuration files for main and renderer processes, along with npm scripts for running tests and collecting coverage.
+Install Vitest dependencies and create separate configuration files for main and renderer processes,
+along with npm scripts for running tests and collecting coverage.
 
 ## Skills Required
 
-- **vitest**: Configure Vitest with separate environments for Electron's main (Node.js) and renderer (jsdom) processes
+- **vitest**: Configure Vitest with separate environments for Electron's main (Node.js) and renderer
+  (jsdom) processes
 - **typescript**: Set up TypeScript path aliases and module resolution for test files
 
 ## Acceptance Criteria
 
-- [ ] Vitest dependencies installed (`vitest`, `@vitest/ui`, `@vitest/coverage-v8`, `jsdom` or `happy-dom`)
+- [ ] Vitest dependencies installed (`vitest`, `@vitest/ui`, `@vitest/coverage-v8`, `jsdom` or
+      `happy-dom`)
 - [ ] `vitest.config.main.ts` created for main process tests (Node.js environment)
 - [ ] `vitest.config.renderer.ts` created for renderer process tests (jsdom environment)
-- [ ] npm scripts added to package.json: `test:unit`, `test:unit:main`, `test:unit:renderer`, `test:unit:run`, `test:coverage`
+- [ ] npm scripts added to package.json: `test:unit`, `test:unit:main`, `test:unit:renderer`,
+      `test:unit:run`, `test:coverage`
 - [ ] Both configs have proper TypeScript path alias resolution
 - [ ] Coverage is configured to exclude node_modules, .webpack, out, .features-gen, tests (e2e)
 - [ ] Coverage reporters set to: text, html, json-summary
@@ -74,6 +79,7 @@ npm install -D vitest @vitest/ui @vitest/coverage-v8 jsdom
 ### Package Scripts
 
 Add to `package.json`:
+
 ```json
 {
   "test:unit": "vitest",
@@ -179,6 +185,7 @@ export default defineConfig({
 ### Verification
 
 After setup, verify:
+
 1. Run `npm run test:unit:run` - should exit with "no tests found" (success)
 2. Run `npm run test:coverage` - should generate coverage report (empty)
 3. Check that configs don't conflict with webpack or e2e test configs

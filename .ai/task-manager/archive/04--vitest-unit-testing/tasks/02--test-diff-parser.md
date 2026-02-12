@@ -1,18 +1,21 @@
 ---
 id: 2
-group: "priority-tests"
+group: 'priority-tests'
 dependencies: [1]
-status: "completed"
-created: "2026-02-12"
+status: 'completed'
+created: '2026-02-12'
 skills:
   - vitest
   - typescript
 ---
+
 # Test diff-parser Module
 
 ## Objective
 
-Write comprehensive unit tests for the `src/main/diff-parser.ts` module, which parses unified git diff output into structured `DiffFile[]` objects. This is a priority module with critical business logic for the application.
+Write comprehensive unit tests for the `src/main/diff-parser.ts` module, which parses unified git
+diff output into structured `DiffFile[]` objects. This is a priority module with critical business
+logic for the application.
 
 ## Skills Required
 
@@ -35,8 +38,7 @@ Use your internal Todo tool to track these and keep on track.
 
 ### Module to Test
 
-**File**: `src/main/diff-parser.ts`
-**Main function**: `parseDiff(rawDiff: string): DiffFile[]`
+**File**: `src/main/diff-parser.ts` **Main function**: `parseDiff(rawDiff: string): DiffFile[]`
 
 ### Test Structure
 
@@ -69,6 +71,7 @@ describe('parseDiff', () => {
 Use **real git diff output** as test fixtures. Examples:
 
 **File Addition**:
+
 ```
 diff --git a/new-file.ts b/new-file.ts
 new file mode 100644
@@ -82,6 +85,7 @@ index 0000000..abcd123
 ```
 
 **File Modification**:
+
 ```
 diff --git a/existing.ts b/existing.ts
 index abc123..def456 100644
@@ -100,6 +104,7 @@ Store fixtures as template strings in the test file.
 ### Validation
 
 Each test should verify:
+
 1. **Correct parsing**: Output structure matches expected `DiffFile` shape
 2. **Line numbers**: `oldLineNumber` and `newLineNumber` tracked correctly
 3. **Change types**: File `changeType` is accurate (added, deleted, modified)
@@ -122,14 +127,17 @@ Each test should verify:
 <details>
 <summary>Testing Approach and Examples</summary>
 
-**IMPORTANT**: Write a few tests, mostly integration. Focus on testing the actual business logic of parsing diffs, not every single line or edge case exhaustively.
+**IMPORTANT**: Write a few tests, mostly integration. Focus on testing the actual business logic of
+parsing diffs, not every single line or edge case exhaustively.
 
 ### Meaningful Test Strategy Guidelines
 
-**Definition of "Meaningful Tests":**
-Tests that verify custom business logic, critical paths, and edge cases specific to the application. Focus on testing YOUR code, not the framework or library functionality.
+**Definition of "Meaningful Tests":** Tests that verify custom business logic, critical paths, and
+edge cases specific to the application. Focus on testing YOUR code, not the framework or library
+functionality.
 
 **When TO Write Tests:**
+
 - Custom business logic and algorithms (✅ diff parsing is core logic)
 - Critical user workflows and data transformations (✅ diff parsing is critical)
 - Edge cases and error conditions for core functionality (✅ binary files, empty diffs)
@@ -137,6 +145,7 @@ Tests that verify custom business logic, critical paths, and edge cases specific
 - Complex validation logic or calculations
 
 **When NOT to Write Tests:**
+
 - Third-party library functionality (already tested upstream)
 - Framework features (React hooks, Express middleware, etc.)
 - Simple CRUD operations without custom logic

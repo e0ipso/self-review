@@ -19,12 +19,15 @@ Given(
     // Create a clean repo with no staged/unstaged changes
     const dir = mkdtempSync(join(tmpdir(), 'self-review-clean-'));
     execSync('git init', { cwd: dir, stdio: 'pipe' });
-    execSync('git config user.email "test@test.com"', { cwd: dir, stdio: 'pipe' });
+    execSync('git config user.email "test@test.com"', {
+      cwd: dir,
+      stdio: 'pipe',
+    });
     execSync('git config user.name "Test"', { cwd: dir, stdio: 'pipe' });
     writeFileSync(join(dir, 'README.md'), '# Test');
     execSync('git add -A && git commit -m "init"', { cwd: dir, stdio: 'pipe' });
     setTestRepoDir(dir);
-  },
+  }
 );
 
 // ── Then: empty diff help assertions ──
@@ -35,11 +38,14 @@ Then('the diff viewer should display an empty diff help message', async () => {
   await expect(helpMessage).toBeVisible();
 });
 
-Then('the help message should explain that arguments are passed to git diff', async () => {
-  const page = getPage();
-  const helpMessage = page.locator('[data-testid="empty-diff-help"]');
-  await expect(helpMessage).toContainText('git diff');
-});
+Then(
+  'the help message should explain that arguments are passed to git diff',
+  async () => {
+    const page = getPage();
+    const helpMessage = page.locator('[data-testid="empty-diff-help"]');
+    await expect(helpMessage).toContainText('git diff');
+  }
+);
 
 Then(
   'the help message should include the following examples:',
@@ -50,7 +56,7 @@ Then(
     for (const row of rows) {
       await expect(helpMessage).toContainText(row.command);
     }
-  },
+  }
 );
 
 Then(
@@ -59,7 +65,7 @@ Then(
     const page = getPage();
     const helpMessage = page.locator('[data-testid="empty-diff-help"]');
     await expect(helpMessage).toContainText(args);
-  },
+  }
 );
 
 Then('the help message should suggest trying different arguments', async () => {
@@ -68,20 +74,29 @@ Then('the help message should suggest trying different arguments', async () => {
   await expect(helpMessage).toContainText('different');
 });
 
-Then('the diff viewer should not display an empty diff help message', async () => {
-  const page = getPage();
-  const helpMessage = page.locator('[data-testid="empty-diff-help"]');
-  await expect(helpMessage).toHaveCount(0);
-});
+Then(
+  'the diff viewer should not display an empty diff help message',
+  async () => {
+    const page = getPage();
+    const helpMessage = page.locator('[data-testid="empty-diff-help"]');
+    await expect(helpMessage).toHaveCount(0);
+  }
+);
 
-Then('the diff viewer should show {int} file section', async ({}, count: number) => {
-  const page = getPage();
-  const sections = page.locator('[data-testid^="file-section-"]');
-  await expect(sections).toHaveCount(count);
-});
+Then(
+  'the diff viewer should show {int} file section',
+  async ({}, count: number) => {
+    const page = getPage();
+    const sections = page.locator('[data-testid^="file-section-"]');
+    await expect(sections).toHaveCount(count);
+  }
+);
 
-Then('the file tree file count badge should show {int}', async ({}, count: number) => {
-  const page = getPage();
-  const badge = page.locator('[data-testid="file-tree"] .h-5.px-1\\.5');
-  await expect(badge).toContainText(`${count}`);
-});
+Then(
+  'the file tree file count badge should show {int}',
+  async ({}, count: number) => {
+    const page = getPage();
+    const badge = page.locator('[data-testid="file-tree"] .h-5.px-1\\.5');
+    await expect(badge).toContainText(`${count}`);
+  }
+);

@@ -2,10 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const {
-  resolvePlan,
-  extractIdFromFrontmatter
-} = require('./shared-utils.cjs');
+const { resolvePlan, extractIdFromFrontmatter } = require('./shared-utils.cjs');
 
 /**
  * Get the next available task ID for a specific plan
@@ -26,9 +23,7 @@ function _getNextTaskId(inputId) {
     process.exit(1);
   }
 
-  const {
-    planDir
-  } = resolved;
+  const { planDir } = resolved;
   const tasksPath = path.join(planDir, 'tasks');
 
   // Optimization: If no tasks directory exists, return 1 immediately (90% case)
@@ -40,7 +35,7 @@ function _getNextTaskId(inputId) {
 
   try {
     const entries = fs.readdirSync(tasksPath, {
-      withFileTypes: true
+      withFileTypes: true,
     });
 
     // Another optimization: If directory is empty, return 1 immediately
@@ -77,5 +72,5 @@ if (require.main === module) {
 }
 
 module.exports = {
-  _getNextTaskId
+  _getNextTaskId,
 };

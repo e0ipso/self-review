@@ -117,17 +117,17 @@ function extractIdFromFrontmatter(content, filePath = 'unknown') {
   // - Mixed quotes: 'id': "5"  (different quote types)
   const patterns = [
     // Most flexible pattern - handles quoted/unquoted keys and values with optional spaces
-    /^\s*["']?id["']?\s*:\s*["']?([+-]?\d+)["']?\s*(?:#.*)?$/mi,
+    /^\s*["']?id["']?\s*:\s*["']?([+-]?\d+)["']?\s*(?:#.*)?$/im,
     // Simple numeric with optional whitespace and comments
-    /^\s*id\s*:\s*([+-]?\d+)\s*(?:#.*)?$/mi,
+    /^\s*id\s*:\s*([+-]?\d+)\s*(?:#.*)?$/im,
     // Double quoted values
-    /^\s*["']?id["']?\s*:\s*"([+-]?\d+)"\s*(?:#.*)?$/mi,
+    /^\s*["']?id["']?\s*:\s*"([+-]?\d+)"\s*(?:#.*)?$/im,
     // Single quoted values
-    /^\s*["']?id["']?\s*:\s*'([+-]?\d+)'\s*(?:#.*)?$/mi,
+    /^\s*["']?id["']?\s*:\s*'([+-]?\d+)'\s*(?:#.*)?$/im,
     // Mixed quotes - quoted key, unquoted value
-    /^\s*["']id["']\s*:\s*([+-]?\d+)\s*(?:#.*)?$/mi,
+    /^\s*["']id["']\s*:\s*([+-]?\d+)\s*(?:#.*)?$/im,
     // YAML-style with pipe or greater-than indicators (edge case)
-    /^\s*id\s*:\s*[|>]\s*([+-]?\d+)\s*$/mi
+    /^\s*id\s*:\s*[|>]\s*([+-]?\d+)\s*$/im,
   ];
 
   // Try each pattern in order using functional find
@@ -143,17 +143,23 @@ function extractIdFromFrontmatter(content, filePath = 'unknown') {
 
   // Validate the parsed ID
   if (isNaN(id)) {
-    console.error(`[ERROR] Invalid ID value "${rawId}" in ${filePath} - not a valid number`);
+    console.error(
+      `[ERROR] Invalid ID value "${rawId}" in ${filePath} - not a valid number`
+    );
     return null;
   }
 
   if (id < 0) {
-    console.error(`[ERROR] Invalid ID value ${id} in ${filePath} - ID must be non-negative`);
+    console.error(
+      `[ERROR] Invalid ID value ${id} in ${filePath} - ID must be non-negative`
+    );
     return null;
   }
 
   if (id > Number.MAX_SAFE_INTEGER) {
-    console.error(`[ERROR] Invalid ID value ${id} in ${filePath} - ID exceeds maximum safe integer`);
+    console.error(
+      `[ERROR] Invalid ID value ${id} in ${filePath} - ID exceeds maximum safe integer`
+    );
     return null;
   }
 
@@ -169,23 +175,26 @@ function extractIdFromFrontmatter(content, filePath = 'unknown') {
 function parseFrontmatter(content) {
   const lines = content.split('\n');
 
-  const result = lines.reduce((acc, line) => {
-    if (acc.done) return acc;
+  const result = lines.reduce(
+    (acc, line) => {
+      if (acc.done) return acc;
 
-    if (line.trim() === '---') {
-      const nextDelimiterCount = acc.delimiterCount + 1;
-      if (nextDelimiterCount === 2) {
-        return { ...acc, delimiterCount: nextDelimiterCount, done: true };
+      if (line.trim() === '---') {
+        const nextDelimiterCount = acc.delimiterCount + 1;
+        if (nextDelimiterCount === 2) {
+          return { ...acc, delimiterCount: nextDelimiterCount, done: true };
+        }
+        return { ...acc, delimiterCount: nextDelimiterCount };
       }
-      return { ...acc, delimiterCount: nextDelimiterCount };
-    }
 
-    if (acc.delimiterCount === 1) {
-      return { ...acc, frontmatterLines: [...acc.frontmatterLines, line] };
-    }
+      if (acc.delimiterCount === 1) {
+        return { ...acc, frontmatterLines: [...acc.frontmatterLines, line] };
+      }
 
-    return acc;
-  }, { delimiterCount: 0, frontmatterLines: [], done: false });
+      return acc;
+    },
+    { delimiterCount: 0, frontmatterLines: [], done: false }
+  );
 
   return result.frontmatterLines.join('\n');
 }
@@ -208,7 +217,7 @@ function findPlanById(planId, taskManagerRoot) {
   return {
     planFile: plan.file,
     planDir: plan.dir,
-    isArchive: plan.isArchive
+    isArchive: plan.isArchive,
   };
 }
 
@@ -295,7 +304,7 @@ function getAllPlans(taskManagerRoot) {
 
   const types = [
     { dir: path.join(root, 'plans'), isArchive: false },
-    { dir: path.join(root, 'archive'), isArchive: true }
+    { dir: path.join(root, 'archive'), isArchive: true },
   ];
 
   return types.flatMap(({ dir, isArchive }) => {
@@ -309,9 +318,13 @@ function getAllPlans(taskManagerRoot) {
         const planDirPath = path.join(dir, entry.name);
 
         try {
-          const planDirEntries = fs.readdirSync(planDirPath, { withFileTypes: true });
+          const planDirEntries = fs.readdirSync(planDirPath, {
+            withFileTypes: true,
+          });
           return planDirEntries
-            .filter(planEntry => planEntry.isFile() && planEntry.name.endsWith('.md'))
+            .filter(
+              planEntry => planEntry.isFile() && planEntry.name.endsWith('.md')
+            )
             .flatMap(planEntry => {
               const filePath = path.join(planDirPath, planEntry.name);
               try {
@@ -324,7 +337,7 @@ function getAllPlans(taskManagerRoot) {
                     file: filePath,
                     dir: planDirPath,
                     isArchive,
-                    name: entry.name
+                    name: entry.name,
                   };
                 }
               } catch (err) {
@@ -357,14 +370,16 @@ function resolvePlan(input, startPath = process.cwd()) {
     const planId = validatePlanFile(inputStr);
     if (planId === null) return null;
 
-    const tmRoot = checkStandardRootShortcut(inputStr) || findTaskManagerRoot(path.dirname(inputStr));
+    const tmRoot =
+      checkStandardRootShortcut(inputStr) ||
+      findTaskManagerRoot(path.dirname(inputStr));
     if (!tmRoot) return null;
 
     return {
       planFile: inputStr,
       planDir: path.dirname(inputStr),
       taskManagerRoot: tmRoot,
-      planId
+      planId,
     };
   }
 
@@ -388,7 +403,7 @@ function resolvePlan(input, startPath = process.cwd()) {
         planFile: plan.planFile,
         planDir: plan.planDir,
         taskManagerRoot: tmRoot,
-        planId
+        planId,
       };
     }
 
@@ -414,5 +429,5 @@ module.exports = {
   checkBlueprintExists,
   getAllPlans,
   _getParentPaths,
-  resolvePlan
+  resolvePlan,
 };

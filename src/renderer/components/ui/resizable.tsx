@@ -7,10 +7,7 @@ const ResizablePanelGroup = ({
   className,
   ...props
 }: React.ComponentProps<typeof Group>) => (
-  <Group
-    className={cn('flex h-full w-full', className)}
-    {...props}
-  />
+  <Group className={cn('flex h-full w-full', className)} {...props} />
 );
 
 const ResizablePanel = Panel;
@@ -30,8 +27,8 @@ const ResizableHandle = ({
     {...props}
   >
     {withHandle && (
-      <div className="z-10 flex h-4 w-3.5 items-center justify-center rounded-sm border bg-border">
-        <GripVertical className="h-2.5 w-2.5" />
+      <div className='z-10 flex h-4 w-3.5 items-center justify-center rounded-sm border bg-border'>
+        <GripVertical className='h-2.5 w-2.5' />
       </div>
     )}
   </Separator>

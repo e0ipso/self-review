@@ -74,7 +74,6 @@ If no arguments are provided, shows unstaged working tree changes.
 }
 
 function printVersion(): void {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const packageJson = require('../../package.json');
   console.error(`self-review v${packageJson.version}`);
 }

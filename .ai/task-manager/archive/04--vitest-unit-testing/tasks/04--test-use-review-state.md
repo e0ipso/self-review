@@ -1,18 +1,21 @@
 ---
 id: 4
-group: "priority-tests"
+group: 'priority-tests'
 dependencies: [1]
-status: "completed"
-created: "2026-02-12"
+status: 'completed'
+created: '2026-02-12'
 skills:
   - vitest
   - react
 ---
+
 # Test useReviewState Hook
 
 ## Objective
 
-Write comprehensive unit tests for the `useReviewState` React hook, which manages all review state including comments, suggestions, and viewed status. This is a priority module with complex state management logic.
+Write comprehensive unit tests for the `useReviewState` React hook, which manages all review state
+including comments, suggestions, and viewed status. This is a priority module with complex state
+management logic.
 
 ## Skills Required
 
@@ -38,8 +41,7 @@ Use your internal Todo tool to track these and keep on track.
 
 ### Module to Test
 
-**File**: `src/renderer/hooks/useReviewState.ts`
-**Hook**: `useReviewState(): UseReviewStateReturn`
+**File**: `src/renderer/hooks/useReviewState.ts` **Hook**: `useReviewState(): UseReviewStateReturn`
 
 ### Hook Interface
 
@@ -58,7 +60,11 @@ interface UseReviewStateReturn {
   deleteComment: (id: string) => void;
   toggleViewed: (filePath: string) => void;
   getCommentsForFile: (filePath: string) => ReviewComment[];
-  getCommentsForLine: (filePath: string, lineNumber: number, side: 'old' | 'new') => ReviewComment[];
+  getCommentsForLine: (
+    filePath: string,
+    lineNumber: number,
+    side: 'old' | 'new'
+  ) => ReviewComment[];
 }
 ```
 
@@ -126,20 +132,24 @@ Or use Vitest's built-in approach if available.
 <details>
 <summary>Testing Approach for React Hooks</summary>
 
-**IMPORTANT**: Write a few tests, mostly integration. Focus on testing the state management logic and data integrity, not every edge case exhaustively.
+**IMPORTANT**: Write a few tests, mostly integration. Focus on testing the state management logic
+and data integrity, not every edge case exhaustively.
 
 ### Meaningful Test Strategy Guidelines
 
-**Definition of "Meaningful Tests":**
-Tests that verify custom business logic, critical paths, and edge cases specific to the application. Focus on testing YOUR code, not the framework or library functionality.
+**Definition of "Meaningful Tests":** Tests that verify custom business logic, critical paths, and
+edge cases specific to the application. Focus on testing YOUR code, not the framework or library
+functionality.
 
 **When TO Write Tests:**
+
 - Custom business logic and algorithms (✅ comment CRUD operations)
 - Critical user workflows and data transformations (✅ review state management)
 - Edge cases and error conditions for core functionality (✅ updating non-existent comments)
 - Complex state management logic (✅ this hook manages all review state)
 
 **When NOT to Write Tests:**
+
 - React's built-in hook functionality (useState, useEffect already tested by React)
 - Simple getter/setter operations without custom logic
 - Framework features
@@ -159,9 +169,7 @@ describe('useReviewState', () => {
 
       // Initialize with a file
       act(() => {
-        result.current.setFiles([
-          { path: 'src/test.ts', viewed: false, comments: [] },
-        ]);
+        result.current.setFiles([{ path: 'src/test.ts', viewed: false, comments: [] }]);
       });
 
       // Add file-level comment
@@ -187,9 +195,7 @@ describe('useReviewState', () => {
       const { result } = renderHook(() => useReviewState());
 
       act(() => {
-        result.current.setFiles([
-          { path: 'src/utils.ts', viewed: false, comments: [] },
-        ]);
+        result.current.setFiles([{ path: 'src/utils.ts', viewed: false, comments: [] }]);
       });
 
       act(() => {
@@ -213,9 +219,7 @@ describe('useReviewState', () => {
       const { result } = renderHook(() => useReviewState());
 
       act(() => {
-        result.current.setFiles([
-          { path: 'src/test.ts', viewed: false, comments: [] },
-        ]);
+        result.current.setFiles([{ path: 'src/test.ts', viewed: false, comments: [] }]);
       });
 
       act(() => {
@@ -234,9 +238,7 @@ describe('useReviewState', () => {
       const { result } = renderHook(() => useReviewState());
 
       act(() => {
-        result.current.setFiles([
-          { path: 'src/bug.ts', viewed: false, comments: [] },
-        ]);
+        result.current.setFiles([{ path: 'src/bug.ts', viewed: false, comments: [] }]);
       });
 
       const suggestion = {
@@ -330,9 +332,7 @@ describe('useReviewState', () => {
       const { result } = renderHook(() => useReviewState());
 
       act(() => {
-        result.current.setFiles([
-          { path: 'src/test.ts', viewed: false, comments: [] },
-        ]);
+        result.current.setFiles([{ path: 'src/test.ts', viewed: false, comments: [] }]);
       });
 
       act(() => {
@@ -411,9 +411,7 @@ describe('useReviewState', () => {
       const { result } = renderHook(() => useReviewState());
 
       act(() => {
-        result.current.setFiles([
-          { path: 'src/test.ts', viewed: false, comments: [] },
-        ]);
+        result.current.setFiles([{ path: 'src/test.ts', viewed: false, comments: [] }]);
       });
 
       act(() => {
@@ -427,9 +425,7 @@ describe('useReviewState', () => {
       const { result } = renderHook(() => useReviewState());
 
       act(() => {
-        result.current.setFiles([
-          { path: 'src/test.ts', viewed: true, comments: [] },
-        ]);
+        result.current.setFiles([{ path: 'src/test.ts', viewed: true, comments: [] }]);
       });
 
       act(() => {
@@ -450,8 +446,22 @@ describe('useReviewState', () => {
             path: 'src/test.ts',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: null, body: 'Comment 1', category: 'note', suggestion: null },
-              { id: '2', filePath: 'src/test.ts', lineRange: null, body: 'Comment 2', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'Comment 1',
+                category: 'note',
+                suggestion: null,
+              },
+              {
+                id: '2',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'Comment 2',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);
@@ -470,8 +480,22 @@ describe('useReviewState', () => {
             path: 'src/test.ts',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: { newLineStart: 10, newLineEnd: 10 }, body: 'Line 10', category: 'note', suggestion: null },
-              { id: '2', filePath: 'src/test.ts', lineRange: { newLineStart: 20, newLineEnd: 20 }, body: 'Line 20', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: { newLineStart: 10, newLineEnd: 10 },
+                body: 'Line 10',
+                category: 'note',
+                suggestion: null,
+              },
+              {
+                id: '2',
+                filePath: 'src/test.ts',
+                lineRange: { newLineStart: 20, newLineEnd: 20 },
+                body: 'Line 20',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);
@@ -491,8 +515,22 @@ describe('useReviewState', () => {
             path: 'src/test.ts',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: { newLineStart: 10, newLineEnd: 10 }, body: 'New line', category: 'note', suggestion: null },
-              { id: '2', filePath: 'src/test.ts', lineRange: { oldLineStart: 10, oldLineEnd: 10 }, body: 'Old line', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: { newLineStart: 10, newLineEnd: 10 },
+                body: 'New line',
+                category: 'note',
+                suggestion: null,
+              },
+              {
+                id: '2',
+                filePath: 'src/test.ts',
+                lineRange: { oldLineStart: 10, oldLineEnd: 10 },
+                body: 'Old line',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);

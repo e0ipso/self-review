@@ -16,19 +16,19 @@ const path = require('path');
 const { resolvePlan } = require('./shared-utils.cjs');
 
 // Color functions for output
-const _printError = (message) => {
+const _printError = message => {
   console.error(`ERROR: ${message}`);
 };
 
-const _printSuccess = (message) => {
+const _printSuccess = message => {
   console.log(`✓ ${message}`);
 };
 
-const _printWarning = (message) => {
+const _printWarning = message => {
   console.log(`⚠ ${message}`);
 };
 
-const _printInfo = (message) => {
+const _printInfo = message => {
   console.log(message);
 };
 
@@ -37,9 +37,12 @@ const _printInfo = (message) => {
  * @param {string} command - Git command to execute
  * @returns {string|null} Command output or null on error
  */
-const _execGit = (command) => {
+const _execGit = command => {
   try {
-    return execSync(command, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    return execSync(command, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
   } catch (_error) {
     return null;
   }
@@ -76,16 +79,24 @@ const _hasUncommittedChanges = () => {
  * @param {string} branchName - Branch name to check
  * @returns {boolean}
  */
-const _branchExists = (branchName) => {
+const _branchExists = branchName => {
   // Check local branches
   const localBranches = _execGit('git branch --list');
-  if (localBranches && localBranches.split('\n').some(b => b.trim().replace('* ', '') === branchName)) {
+  if (
+    localBranches &&
+    localBranches
+      .split('\n')
+      .some(b => b.trim().replace('* ', '') === branchName)
+  ) {
     return true;
   }
 
   // Check remote branches
   const remoteBranches = _execGit('git branch -r --list');
-  if (remoteBranches && remoteBranches.split('\n').some(b => b.trim().includes(branchName))) {
+  if (
+    remoteBranches &&
+    remoteBranches.split('\n').some(b => b.trim().includes(branchName))
+  ) {
     return true;
   }
 
@@ -97,13 +108,13 @@ const _branchExists = (branchName) => {
  * @param {string} planName - Original plan name from directory
  * @returns {string} Sanitized branch name segment
  */
-const _sanitizeBranchName = (planName) => {
+const _sanitizeBranchName = planName => {
   return planName
     .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')  // Replace non-alphanumeric chars with hyphens
-    .replace(/-+/g, '-')          // Collapse multiple hyphens
-    .replace(/^-|-$/g, '')        // Remove leading/trailing hyphens
-    .substring(0, 60);            // Max 60 chars
+    .replace(/[^a-z0-9-]/g, '-') // Replace non-alphanumeric chars with hyphens
+    .replace(/-+/g, '-') // Collapse multiple hyphens
+    .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
+    .substring(0, 60); // Max 60 chars
 };
 
 /**
@@ -111,7 +122,7 @@ const _sanitizeBranchName = (planName) => {
  * @param {string} planDir - Full path to plan directory
  * @returns {string} Plan name portion (e.g., "update-docs" from "58--update-docs")
  */
-const _extractPlanName = (planDir) => {
+const _extractPlanName = planDir => {
   const dirName = path.basename(planDir);
   // Match pattern: {id}--{name}
   const match = dirName.match(/^\d+--(.+)$/);
@@ -164,7 +175,9 @@ const _main = (startPath = process.cwd()) => {
   // Step 4: Check for uncommitted changes
   if (_hasUncommittedChanges()) {
     _printError('Uncommitted changes detected in working tree');
-    _printInfo('Please commit or stash your changes before creating a feature branch');
+    _printInfo(
+      'Please commit or stash your changes before creating a feature branch'
+    );
     process.exit(1);
   }
 
@@ -200,5 +213,5 @@ if (require.main === module) {
 module.exports = {
   _main,
   _sanitizeBranchName,
-  _extractPlanName
+  _extractPlanName,
 };

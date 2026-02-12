@@ -5,7 +5,13 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/renderer/**/*.test.{ts,tsx}'],
-    exclude: ['node_modules/**', '.webpack/**', 'out/**', '.features-gen/**', 'tests/**'],
+    exclude: [
+      'node_modules/**',
+      '.webpack/**',
+      'out/**',
+      '.features-gen/**',
+      'tests/**',
+    ],
     globals: true, // Enable browser globals
     mockReset: true,
     restoreMocks: true,

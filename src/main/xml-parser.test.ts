@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { parseReviewXmlString, parseReviewXml } from './xml-parser';
 import { serializeReview } from './xml-serializer';
-import type { ReviewState, FileReviewState, ReviewComment } from '../shared/types';
+import type {
+  ReviewState,
+  FileReviewState,
+  ReviewComment,
+} from '../shared/types';
 import { readFileSync } from 'fs';
 
 // Mock xmllint-wasm for serializer tests
@@ -286,7 +290,9 @@ describe('parseReviewXmlString', () => {
       expect(result.comments[0].suggestion?.originalCode).toBe(
         'function foo() {\n  return bar();\n}'
       );
-      expect(result.comments[0].suggestion?.proposedCode).toBe('const foo = () => bar();');
+      expect(result.comments[0].suggestion?.proposedCode).toBe(
+        'const foo = () => bar();'
+      );
     });
   });
 
@@ -296,7 +302,9 @@ describe('parseReviewXmlString', () => {
 <root>
   <file path="test.ts" />
 </root>`;
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      const mockExit = vi
+        .spyOn(process, 'exit')
+        .mockImplementation(() => undefined as never);
 
       parseReviewXmlString(xml);
 
@@ -380,7 +388,9 @@ describe('parseReviewXmlString', () => {
 
       const result = parseReviewXmlString(xml);
 
-      expect(result.comments[0].body).toBe('Use <Component> with & symbol and "quotes"');
+      expect(result.comments[0].body).toBe(
+        'Use <Component> with & symbol and "quotes"'
+      );
     });
 
     it('handles escaped entities in suggestion code', () => {
@@ -403,8 +413,12 @@ describe('parseReviewXmlString', () => {
 
       const result = parseReviewXmlString(xml);
 
-      expect(result.comments[0].suggestion?.originalCode).toBe('if (x < 5 && y > 10) { }');
-      expect(result.comments[0].suggestion?.proposedCode).toBe('if (x <= 5 || y >= 10) { }');
+      expect(result.comments[0].suggestion?.originalCode).toBe(
+        'if (x < 5 && y > 10) { }'
+      );
+      expect(result.comments[0].suggestion?.proposedCode).toBe(
+        'if (x <= 5 || y >= 10) { }'
+      );
     });
   });
 
@@ -426,7 +440,9 @@ describe('parseReviewXmlString', () => {
     });
 
     it('exits with error code on file read failure', () => {
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      const mockExit = vi
+        .spyOn(process, 'exit')
+        .mockImplementation(() => undefined as never);
       vi.mocked(readFileSync).mockImplementationOnce(() => {
         throw new Error('File not found');
       });
@@ -470,11 +486,19 @@ describe('parseReviewXmlString', () => {
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(1);
-      expect(parsed.comments[0].filePath).toBe(original.files[0].comments[0].filePath);
+      expect(parsed.comments[0].filePath).toBe(
+        original.files[0].comments[0].filePath
+      );
       expect(parsed.comments[0].body).toBe(original.files[0].comments[0].body);
-      expect(parsed.comments[0].category).toBe(original.files[0].comments[0].category);
-      expect(parsed.comments[0].lineRange).toEqual(original.files[0].comments[0].lineRange);
-      expect(parsed.comments[0].suggestion).toEqual(original.files[0].comments[0].suggestion);
+      expect(parsed.comments[0].category).toBe(
+        original.files[0].comments[0].category
+      );
+      expect(parsed.comments[0].lineRange).toEqual(
+        original.files[0].comments[0].lineRange
+      );
+      expect(parsed.comments[0].suggestion).toEqual(
+        original.files[0].comments[0].suggestion
+      );
       expect(parsed.gitDiffArgs).toBe(original.gitDiffArgs);
     });
 
@@ -574,9 +598,15 @@ describe('parseReviewXmlString', () => {
       const xml = await serializeReview(original);
       const parsed = parseReviewXmlString(xml);
 
-      expect(parsed.comments[0].body).toBe('Use <Component> with & "quotes" and \'apostrophes\'');
-      expect(parsed.comments[0].suggestion?.originalCode).toBe('if (x < 5 && y > 10)');
-      expect(parsed.comments[0].suggestion?.proposedCode).toBe('if (x >= 5 || y <= 10)');
+      expect(parsed.comments[0].body).toBe(
+        'Use <Component> with & "quotes" and \'apostrophes\''
+      );
+      expect(parsed.comments[0].suggestion?.originalCode).toBe(
+        'if (x < 5 && y > 10)'
+      );
+      expect(parsed.comments[0].suggestion?.proposedCode).toBe(
+        'if (x >= 5 || y <= 10)'
+      );
     });
 
     it('round-trip with multiple files and comments', async () => {
@@ -708,7 +738,9 @@ describe('parseReviewXmlString', () => {
       expect(result.comments).toHaveLength(2);
       expect(result.comments[0].suggestion).toBeTruthy();
       expect(result.comments[1].suggestion).toBeTruthy();
-      expect(result.comments[1].suggestion?.proposedCode).toBe('const foo = () => {}');
+      expect(result.comments[1].suggestion?.proposedCode).toBe(
+        'const foo = () => {}'
+      );
     });
   });
 
@@ -738,10 +770,10 @@ describe('parseReviewXmlString', () => {
       const result = parseReviewXmlString(xml);
 
       expect(result.comments).toHaveLength(3);
-      const ids = result.comments.map((c) => c.id);
+      const ids = result.comments.map(c => c.id);
       const uniqueIds = new Set(ids);
       expect(uniqueIds.size).toBe(3); // All IDs should be unique
-      ids.forEach((id) => {
+      ids.forEach(id => {
         expect(id).toBeTruthy();
         expect(typeof id).toBe('string');
       });

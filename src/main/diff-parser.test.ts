@@ -28,7 +28,9 @@ index 0000000..abcd123
       expect(result[0].hunks).toHaveLength(1);
       expect(result[0].hunks[0].lines).toHaveLength(3);
       expect(result[0].hunks[0].lines[0].type).toBe('addition');
-      expect(result[0].hunks[0].lines[0].content).toBe('export function hello() {');
+      expect(result[0].hunks[0].lines[0].content).toBe(
+        'export function hello() {'
+      );
     });
 
     it('parses file deletion with hunks showing deleted content', () => {
@@ -50,7 +52,9 @@ index abc123..0000000
       expect(result[0].oldPath).toBe('deleted.ts');
       expect(result[0].hunks).toHaveLength(1);
       expect(result[0].hunks[0].lines).toHaveLength(3);
-      expect(result[0].hunks[0].lines.every(line => line.type === 'deletion')).toBe(true);
+      expect(
+        result[0].hunks[0].lines.every(line => line.type === 'deletion')
+      ).toBe(true);
     });
 
     it('parses file modification with mixed changes', () => {
@@ -475,7 +479,9 @@ index abc123..def456 100644
 
       const result = parseDiff(diff);
 
-      expect(result[0].hunks[0].header).toContain('export function myFunction()');
+      expect(result[0].hunks[0].header).toContain(
+        'export function myFunction()'
+      );
     });
   });
 
@@ -560,8 +566,17 @@ index abc123..def456 100644
 
       // Bug fix - added trim()
       const lines = result[0].hunks[0].lines;
-      expect(lines.some(l => l.type === 'deletion' && l.content.includes('return input.length'))).toBe(true);
-      expect(lines.some(l => l.type === 'addition' && l.content.includes('input.trim()'))).toBe(true);
+      expect(
+        lines.some(
+          l =>
+            l.type === 'deletion' && l.content.includes('return input.length')
+        )
+      ).toBe(true);
+      expect(
+        lines.some(
+          l => l.type === 'addition' && l.content.includes('input.trim()')
+        )
+      ).toBe(true);
     });
   });
 });

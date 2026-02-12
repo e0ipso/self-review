@@ -43,7 +43,11 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     const comments: ReviewComment[] = [];
 
     // Handle files array
-    const files = Array.isArray(review.file) ? review.file : review.file ? [review.file] : [];
+    const files = Array.isArray(review.file)
+      ? review.file
+      : review.file
+        ? [review.file]
+        : [];
 
     for (const file of files) {
       const filePath = file['@_path'];
@@ -83,9 +87,11 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
 
 function parseLineRange(comment: any): LineRange | null {
   const hasOld =
-    comment['@_old-line-start'] !== undefined && comment['@_old-line-end'] !== undefined;
+    comment['@_old-line-start'] !== undefined &&
+    comment['@_old-line-end'] !== undefined;
   const hasNew =
-    comment['@_new-line-start'] !== undefined && comment['@_new-line-end'] !== undefined;
+    comment['@_new-line-start'] !== undefined &&
+    comment['@_new-line-end'] !== undefined;
 
   if (hasOld) {
     return {

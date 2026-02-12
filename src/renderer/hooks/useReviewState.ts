@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import type { FileReviewState, ReviewComment, LineRange, Suggestion } from '../../shared/types';
+import type {
+  FileReviewState,
+  ReviewComment,
+  LineRange,
+  Suggestion,
+} from '../../shared/types';
 
 export interface UseReviewStateReturn {
   files: FileReviewState[];
@@ -15,7 +20,11 @@ export interface UseReviewStateReturn {
   deleteComment: (id: string) => void;
   toggleViewed: (filePath: string) => void;
   getCommentsForFile: (filePath: string) => ReviewComment[];
-  getCommentsForLine: (filePath: string, lineNumber: number, side: 'old' | 'new') => ReviewComment[];
+  getCommentsForLine: (
+    filePath: string,
+    lineNumber: number,
+    side: 'old' | 'new'
+  ) => ReviewComment[];
 }
 
 export function useReviewState(): UseReviewStateReturn {
@@ -37,8 +46,8 @@ export function useReviewState(): UseReviewStateReturn {
       suggestion,
     };
 
-    setFiles((prevFiles) =>
-      prevFiles.map((file) =>
+    setFiles(prevFiles =>
+      prevFiles.map(file =>
         file.path === filePath
           ? { ...file, comments: [...file.comments, newComment] }
           : file
@@ -47,10 +56,10 @@ export function useReviewState(): UseReviewStateReturn {
   };
 
   const updateComment = (id: string, updates: Partial<ReviewComment>) => {
-    setFiles((prevFiles) =>
-      prevFiles.map((file) => ({
+    setFiles(prevFiles =>
+      prevFiles.map(file => ({
         ...file,
-        comments: file.comments.map((comment) =>
+        comments: file.comments.map(comment =>
           comment.id === id ? { ...comment, ...updates } : comment
         ),
       }))
@@ -58,24 +67,24 @@ export function useReviewState(): UseReviewStateReturn {
   };
 
   const deleteComment = (id: string) => {
-    setFiles((prevFiles) =>
-      prevFiles.map((file) => ({
+    setFiles(prevFiles =>
+      prevFiles.map(file => ({
         ...file,
-        comments: file.comments.filter((comment) => comment.id !== id),
+        comments: file.comments.filter(comment => comment.id !== id),
       }))
     );
   };
 
   const toggleViewed = (filePath: string) => {
-    setFiles((prevFiles) =>
-      prevFiles.map((file) =>
+    setFiles(prevFiles =>
+      prevFiles.map(file =>
         file.path === filePath ? { ...file, viewed: !file.viewed } : file
       )
     );
   };
 
   const getCommentsForFile = (filePath: string): ReviewComment[] => {
-    const file = files.find((f) => f.path === filePath);
+    const file = files.find(f => f.path === filePath);
     return file ? file.comments : [];
   };
 
@@ -84,10 +93,10 @@ export function useReviewState(): UseReviewStateReturn {
     lineNumber: number,
     side: 'old' | 'new'
   ): ReviewComment[] => {
-    const file = files.find((f) => f.path === filePath);
+    const file = files.find(f => f.path === filePath);
     if (!file) return [];
 
-    return file.comments.filter((comment) => {
+    return file.comments.filter(comment => {
       if (!comment.lineRange) return false;
       if (comment.lineRange.side !== side) return false;
       return (

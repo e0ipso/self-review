@@ -5,7 +5,13 @@ export default defineConfig({
   test: {
     // By default, exclude e2e tests and generated files
     include: ['src/**/*.test.{ts,tsx}'],
-    exclude: ['node_modules/**', '.webpack/**', 'out/**', '.features-gen/**', 'tests/**'],
+    exclude: [
+      'node_modules/**',
+      '.webpack/**',
+      'out/**',
+      '.features-gen/**',
+      'tests/**',
+    ],
     globals: false,
     mockReset: true,
     restoreMocks: true,

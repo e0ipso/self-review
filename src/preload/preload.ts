@@ -3,7 +3,12 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from '../shared/ipc-channels';
-import { DiffLoadPayload, ResumeLoadPayload, AppConfig, ReviewState } from '../shared/types';
+import {
+  DiffLoadPayload,
+  ResumeLoadPayload,
+  AppConfig,
+  ReviewState,
+} from '../shared/types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   requestDiffData: () => {
@@ -11,7 +16,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => {
-    ipcRenderer.on(IPC.DIFF_LOAD, (_event, payload: DiffLoadPayload) => callback(payload));
+    ipcRenderer.on(IPC.DIFF_LOAD, (_event, payload: DiffLoadPayload) =>
+      callback(payload)
+    );
   },
 
   requestConfig: () => {
@@ -19,7 +26,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   onConfigLoad: (callback: (payload: AppConfig) => void) => {
-    ipcRenderer.on(IPC.CONFIG_LOAD, (_event, payload: AppConfig) => callback(payload));
+    ipcRenderer.on(IPC.CONFIG_LOAD, (_event, payload: AppConfig) =>
+      callback(payload)
+    );
   },
 
   requestResumeData: () => {
@@ -27,7 +36,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => {
-    ipcRenderer.on(IPC.RESUME_LOAD, (_event, payload: ResumeLoadPayload) => callback(payload));
+    ipcRenderer.on(IPC.RESUME_LOAD, (_event, payload: ResumeLoadPayload) =>
+      callback(payload)
+    );
   },
 
   submitReview: (state: ReviewState) => {

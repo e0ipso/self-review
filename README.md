@@ -2,9 +2,14 @@
 
 A local code review tool for developers working with AI coding agents.
 
-When you use tools like Claude Code to generate code changes, you need to review those changes before accepting them. Today your options are: push to GitHub (exposing unfinished work to a remote server) or squint at diffs in the terminal.
+When you use tools like Claude Code to generate code changes, you need to review those changes
+before accepting them. Today your options are: push to GitHub (exposing unfinished work to a remote
+server) or squint at diffs in the terminal.
 
-**self-review** gives you GitHub's pull request review UI on your local machine — no remote, no account, no setup. Launch it from the terminal, review the diff, leave comments and suggestions, close the window. Your feedback is written to stdout as structured XML that you pipe directly back to your AI agent.
+**self-review** gives you GitHub's pull request review UI on your local machine — no remote, no
+account, no setup. Launch it from the terminal, review the diff, leave comments and suggestions,
+close the window. Your feedback is written to stdout as structured XML that you pipe directly back
+to your AI agent.
 
 ## How it works
 
@@ -24,7 +29,8 @@ self-review --staged --resume-from review.xml > review-updated.xml
 
 ## What you get
 
-- **GitHub-style diff viewer** — split or unified view, syntax highlighting, collapsible file sections
+- **GitHub-style diff viewer** — split or unified view, syntax highlighting, collapsible file
+  sections
 - **Line comments** — click a line number, type your feedback
 - **Multi-line comments** — drag across line numbers to comment on a range
 - **Code suggestions** — propose exact replacements, rendered as a diff-within-a-diff
@@ -47,17 +53,17 @@ Project config overrides user config, which overrides built-in defaults.
 # .self-review.yaml
 categories:
   - name: bug
-    description: "Likely defect or incorrect behavior"
-    color: "#e53e3e"
+    description: 'Likely defect or incorrect behavior'
+    color: '#e53e3e'
   - name: security
-    description: "Potential security vulnerability"
-    color: "#d69e2e"
+    description: 'Potential security vulnerability'
+    color: '#d69e2e'
   - name: nit
-    description: "Minor style or formatting suggestion"
-    color: "#718096"
+    description: 'Minor style or formatting suggestion'
+    color: '#718096'
   - name: question
-    description: "Clarification needed"
-    color: "#3182ce"
+    description: 'Clarification needed'
+    color: '#3182ce'
 ```
 
 ### Available options
@@ -77,7 +83,8 @@ See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 - **CLI-first.** Launched from the terminal, outputs to stdout. Behaves like a Unix tool.
 - **One-shot.** Open → review → close → done. No servers, no persistent state.
 - **Local-only.** No network access, no accounts, no telemetry. Your code stays on your machine.
-- **AI-native output.** The XML format is designed to be parsed by LLMs, with an XSD schema they can reference for structure.
+- **AI-native output.** The XML format is designed to be parsed by LLMs, with an XSD schema they can
+  reference for structure.
 
 ## Requirements
 

@@ -11,7 +11,7 @@ const {
   getAllPlans,
   validatePlanFile,
   checkStandardRootShortcut,
-  resolvePlan
+  resolvePlan,
 } = sharedUtils;
 
 /**
@@ -53,13 +53,23 @@ function _validatePlanBlueprint(inputId, fieldName, startPath = process.cwd()) {
   if (!inputId) {
     _errorLog('Plan ID or absolute path is required');
     _errorLog('');
-    _errorLog('Usage: node validate-plan-blueprint.cjs <plan-id-or-path> [field-name]');
+    _errorLog(
+      'Usage: node validate-plan-blueprint.cjs <plan-id-or-path> [field-name]'
+    );
     _errorLog('');
     _errorLog('Examples:');
-    _errorLog('  node validate-plan-blueprint.cjs 47                  # Output full JSON');
-    _errorLog('  node validate-plan-blueprint.cjs /path/to/plan.md    # Output full JSON for specific file');
-    _errorLog('  node validate-plan-blueprint.cjs 47 planFile         # Output just the plan file path');
-    _errorLog('  node validate-plan-blueprint.cjs 47 blueprintExists  # Output yes/no');
+    _errorLog(
+      '  node validate-plan-blueprint.cjs 47                  # Output full JSON'
+    );
+    _errorLog(
+      '  node validate-plan-blueprint.cjs /path/to/plan.md    # Output full JSON for specific file'
+    );
+    _errorLog(
+      '  node validate-plan-blueprint.cjs 47 planFile         # Output just the plan file path'
+    );
+    _errorLog(
+      '  node validate-plan-blueprint.cjs 47 blueprintExists  # Output yes/no'
+    );
     process.exit(1);
   }
 
@@ -91,12 +101,7 @@ function _validatePlanBlueprint(inputId, fieldName, startPath = process.cwd()) {
     process.exit(1);
   }
 
-  const {
-    planFile,
-    planDir,
-    taskManagerRoot,
-    planId
-  } = resolved;
+  const { planFile, planDir, taskManagerRoot, planId } = resolved;
 
   const taskCount = countTasks(planDir);
   const blueprintExists = checkBlueprintExists(planFile);
@@ -107,12 +112,19 @@ function _validatePlanBlueprint(inputId, fieldName, startPath = process.cwd()) {
     taskManagerRoot,
     planId,
     taskCount,
-    blueprintExists: blueprintExists ? 'yes' : 'no'
+    blueprintExists: blueprintExists ? 'yes' : 'no',
   };
 
   // If field name is provided, output just that field
   if (fieldName) {
-    const validFields = ['planFile', 'planDir', 'taskCount', 'blueprintExists', 'taskManagerRoot', 'planId'];
+    const validFields = [
+      'planFile',
+      'planDir',
+      'taskCount',
+      'blueprintExists',
+      'taskManagerRoot',
+      'planId',
+    ];
     if (!validFields.includes(fieldName)) {
       _errorLog(`Invalid field name: ${fieldName}`);
       _errorLog(`Valid fields: ${validFields.join(', ')}`);
@@ -134,5 +146,5 @@ if (require.main === module) {
 }
 
 module.exports = {
-  _validatePlanBlueprint
+  _validatePlanBlueprint,
 };

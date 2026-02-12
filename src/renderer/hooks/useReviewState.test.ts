@@ -10,7 +10,12 @@ describe('useReviewState', () => {
       // Initialize with a file
       act(() => {
         result.current.setFiles([
-          { path: 'src/test.ts', changeType: 'modified', viewed: false, comments: [] },
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
         ]);
       });
 
@@ -38,7 +43,12 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/utils.ts', changeType: 'modified', viewed: false, comments: [] },
+          {
+            path: 'src/utils.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
         ]);
       });
 
@@ -65,13 +75,30 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/test.ts', changeType: 'modified', viewed: false, comments: [] },
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
         ]);
       });
 
       act(() => {
-        result.current.addComment('src/test.ts', null, 'Comment 1', 'note', null);
-        result.current.addComment('src/test.ts', null, 'Comment 2', 'note', null);
+        result.current.addComment(
+          'src/test.ts',
+          null,
+          'Comment 1',
+          'note',
+          null
+        );
+        result.current.addComment(
+          'src/test.ts',
+          null,
+          'Comment 2',
+          'note',
+          null
+        );
       });
 
       const comments = result.current.getCommentsForFile('src/test.ts');
@@ -86,7 +113,12 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/bug.ts', changeType: 'modified', viewed: false, comments: [] },
+          {
+            path: 'src/bug.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
         ]);
       });
 
@@ -114,7 +146,12 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/feature.ts', changeType: 'added', viewed: false, comments: [] },
+          {
+            path: 'src/feature.ts',
+            changeType: 'added',
+            viewed: false,
+            comments: [],
+          },
         ]);
       });
 
@@ -219,7 +256,12 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/test.ts', changeType: 'modified', viewed: false, comments: [] },
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
         ]);
       });
 
@@ -351,7 +393,12 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/test.ts', changeType: 'modified', viewed: false, comments: [] },
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
         ]);
       });
 
@@ -367,7 +414,12 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/test.ts', changeType: 'modified', viewed: true, comments: [] },
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: true,
+            comments: [],
+          },
         ]);
       });
 
@@ -383,9 +435,24 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/file1.ts', changeType: 'modified', viewed: false, comments: [] },
-          { path: 'src/file2.ts', changeType: 'modified', viewed: false, comments: [] },
-          { path: 'src/file3.ts', changeType: 'modified', viewed: true, comments: [] },
+          {
+            path: 'src/file1.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
+          {
+            path: 'src/file2.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
+          {
+            path: 'src/file3.ts',
+            changeType: 'modified',
+            viewed: true,
+            comments: [],
+          },
         ]);
       });
 
@@ -394,8 +461,8 @@ describe('useReviewState', () => {
       });
 
       expect(result.current.files[0].viewed).toBe(false); // Unchanged
-      expect(result.current.files[1].viewed).toBe(true);  // Toggled
-      expect(result.current.files[2].viewed).toBe(true);  // Unchanged
+      expect(result.current.files[1].viewed).toBe(true); // Toggled
+      expect(result.current.files[2].viewed).toBe(true); // Unchanged
     });
   });
 
@@ -410,8 +477,22 @@ describe('useReviewState', () => {
             changeType: 'modified',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: null, body: 'Comment 1', category: 'note', suggestion: null },
-              { id: '2', filePath: 'src/test.ts', lineRange: null, body: 'Comment 2', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'Comment 1',
+                category: 'note',
+                suggestion: null,
+              },
+              {
+                id: '2',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'Comment 2',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);
@@ -431,7 +512,14 @@ describe('useReviewState', () => {
             changeType: 'modified',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: null, body: 'Comment 1', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'Comment 1',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);
@@ -451,14 +539,32 @@ describe('useReviewState', () => {
             changeType: 'modified',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: { side: 'new', start: 10, end: 10 }, body: 'Line 10', category: 'note', suggestion: null },
-              { id: '2', filePath: 'src/test.ts', lineRange: { side: 'new', start: 20, end: 20 }, body: 'Line 20', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: { side: 'new', start: 10, end: 10 },
+                body: 'Line 10',
+                category: 'note',
+                suggestion: null,
+              },
+              {
+                id: '2',
+                filePath: 'src/test.ts',
+                lineRange: { side: 'new', start: 20, end: 20 },
+                body: 'Line 20',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);
       });
 
-      const comments = result.current.getCommentsForLine('src/test.ts', 10, 'new');
+      const comments = result.current.getCommentsForLine(
+        'src/test.ts',
+        10,
+        'new'
+      );
       expect(comments).toHaveLength(1);
       expect(comments[0].body).toBe('Line 10');
     });
@@ -473,15 +579,37 @@ describe('useReviewState', () => {
             changeType: 'modified',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: { side: 'new', start: 10, end: 10 }, body: 'New line', category: 'note', suggestion: null },
-              { id: '2', filePath: 'src/test.ts', lineRange: { side: 'old', start: 10, end: 10 }, body: 'Old line', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: { side: 'new', start: 10, end: 10 },
+                body: 'New line',
+                category: 'note',
+                suggestion: null,
+              },
+              {
+                id: '2',
+                filePath: 'src/test.ts',
+                lineRange: { side: 'old', start: 10, end: 10 },
+                body: 'Old line',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);
       });
 
-      const newComments = result.current.getCommentsForLine('src/test.ts', 10, 'new');
-      const oldComments = result.current.getCommentsForLine('src/test.ts', 10, 'old');
+      const newComments = result.current.getCommentsForLine(
+        'src/test.ts',
+        10,
+        'new'
+      );
+      const oldComments = result.current.getCommentsForLine(
+        'src/test.ts',
+        10,
+        'old'
+      );
 
       expect(newComments).toHaveLength(1);
       expect(newComments[0].body).toBe('New line');
@@ -499,22 +627,39 @@ describe('useReviewState', () => {
             changeType: 'modified',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: { side: 'new', start: 10, end: 15 }, body: 'Range comment', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: { side: 'new', start: 10, end: 15 },
+                body: 'Range comment',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);
       });
 
       // Line 10 is within range
-      expect(result.current.getCommentsForLine('src/test.ts', 10, 'new')).toHaveLength(1);
+      expect(
+        result.current.getCommentsForLine('src/test.ts', 10, 'new')
+      ).toHaveLength(1);
       // Line 12 is within range
-      expect(result.current.getCommentsForLine('src/test.ts', 12, 'new')).toHaveLength(1);
+      expect(
+        result.current.getCommentsForLine('src/test.ts', 12, 'new')
+      ).toHaveLength(1);
       // Line 15 is within range
-      expect(result.current.getCommentsForLine('src/test.ts', 15, 'new')).toHaveLength(1);
+      expect(
+        result.current.getCommentsForLine('src/test.ts', 15, 'new')
+      ).toHaveLength(1);
       // Line 9 is outside range
-      expect(result.current.getCommentsForLine('src/test.ts', 9, 'new')).toHaveLength(0);
+      expect(
+        result.current.getCommentsForLine('src/test.ts', 9, 'new')
+      ).toHaveLength(0);
       // Line 16 is outside range
-      expect(result.current.getCommentsForLine('src/test.ts', 16, 'new')).toHaveLength(0);
+      expect(
+        result.current.getCommentsForLine('src/test.ts', 16, 'new')
+      ).toHaveLength(0);
     });
 
     it('getCommentsForLine returns empty array for non-existent file', () => {
@@ -527,13 +672,24 @@ describe('useReviewState', () => {
             changeType: 'modified',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: { side: 'new', start: 10, end: 10 }, body: 'Line 10', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: { side: 'new', start: 10, end: 10 },
+                body: 'Line 10',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);
       });
 
-      const comments = result.current.getCommentsForLine('src/nonexistent.ts', 10, 'new');
+      const comments = result.current.getCommentsForLine(
+        'src/nonexistent.ts',
+        10,
+        'new'
+      );
       expect(comments).toEqual([]);
     });
 
@@ -547,14 +703,32 @@ describe('useReviewState', () => {
             changeType: 'modified',
             viewed: false,
             comments: [
-              { id: '1', filePath: 'src/test.ts', lineRange: null, body: 'File comment', category: 'note', suggestion: null },
-              { id: '2', filePath: 'src/test.ts', lineRange: { side: 'new', start: 10, end: 10 }, body: 'Line comment', category: 'note', suggestion: null },
+              {
+                id: '1',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'File comment',
+                category: 'note',
+                suggestion: null,
+              },
+              {
+                id: '2',
+                filePath: 'src/test.ts',
+                lineRange: { side: 'new', start: 10, end: 10 },
+                body: 'Line comment',
+                category: 'note',
+                suggestion: null,
+              },
             ],
           },
         ]);
       });
 
-      const comments = result.current.getCommentsForLine('src/test.ts', 10, 'new');
+      const comments = result.current.getCommentsForLine(
+        'src/test.ts',
+        10,
+        'new'
+      );
       expect(comments).toHaveLength(1);
       expect(comments[0].body).toBe('Line comment');
     });
@@ -566,14 +740,25 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/test.ts', changeType: 'modified', viewed: false, comments: [] },
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
         ]);
       });
 
       const filesBefore = result.current.files;
 
       act(() => {
-        result.current.addComment('src/test.ts', null, 'New comment', 'note', null);
+        result.current.addComment(
+          'src/test.ts',
+          null,
+          'New comment',
+          'note',
+          null
+        );
       });
 
       expect(result.current.files).not.toBe(filesBefore);
@@ -653,7 +838,12 @@ describe('useReviewState', () => {
 
       act(() => {
         result.current.setFiles([
-          { path: 'src/test.ts', changeType: 'modified', viewed: false, comments: [] },
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
         ]);
       });
 

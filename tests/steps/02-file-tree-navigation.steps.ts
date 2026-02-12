@@ -25,7 +25,7 @@ Then(
     if (viewport && box) {
       expect(box.y).toBeLessThan(viewport.height);
     }
-  },
+  }
 );
 
 Then(
@@ -34,7 +34,7 @@ Then(
     const page = getPage();
     const entry = page.locator(`[data-testid="file-entry-${filePath}"]`);
     await expect(entry).toHaveClass(/bg-accent/);
-  },
+  }
 );
 
 When(
@@ -45,13 +45,16 @@ When(
     await section.scrollIntoViewIfNeeded();
     // Wait for IntersectionObserver to fire
     await page.waitForTimeout(500);
-  },
+  }
 );
 
-When('I type {string} in the file tree search input', async ({}, query: string) => {
-  const page = getPage();
-  await page.locator('[data-testid="file-search"]').fill(query);
-});
+When(
+  'I type {string} in the file tree search input',
+  async ({}, query: string) => {
+    const page = getPage();
+    await page.locator('[data-testid="file-search"]').fill(query);
+  }
+);
 
 When('I clear the file tree search input', async () => {
   const page = getPage();

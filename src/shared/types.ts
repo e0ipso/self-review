@@ -49,11 +49,11 @@ export interface LineRange {
 export interface ReviewComment {
   id: string;
   filePath: string;
-  lineRange: LineRange | null;     // null = file-level comment
+  lineRange: LineRange | null; // null = file-level comment
   body: string;
   category: string;
   suggestion: Suggestion | null;
-  orphaned?: boolean;              // for --resume-from conflict handling
+  orphaned?: boolean; // for --resume-from conflict handling
 }
 
 export interface FileReviewState {

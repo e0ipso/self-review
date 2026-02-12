@@ -1,6 +1,7 @@
 # PRE_PLAN Hook
 
-This hook provides pre-planning guidance to ensure scope control, simplicity principles, and proper validation requirements are established before comprehensive plan creation.
+This hook provides pre-planning guidance to ensure scope control, simplicity principles, and proper
+validation requirements are established before comprehensive plan creation.
 
 ## Scope Control Guidelines
 
@@ -10,9 +11,11 @@ This hook provides pre-planning guidance to ensure scope control, simplicity pri
 - **Question Everything Extra**: If not directly mentioned by the user, don't add it
 - **Avoid Feature Creep**: Resist the urge to add "helpful" features or "nice-to-have" additions
 - **YAGNI Principle**: _You Aren't Gonna Need It_ - don't build for hypothetical future needs
-- **Do NOT add backwards compatibility, unless requested**: If there is a potential BC break, ask the user if they want to BC support. Do not assume the want it.
+- **Do NOT add backwards compatibility, unless requested**: If there is a potential BC break, ask
+  the user if they want to BC support. Do not assume the want it.
 
 **Common Scope Creep Anti-Patterns to Avoid:**
+
 1. Adding extra commands or features "for completeness"
 2. Creating infrastructure for future features that weren't requested
 3. Building abstractions or frameworks when simple solutions suffice
@@ -30,7 +33,8 @@ This hook provides pre-planning guidance to ensure scope control, simplicity pri
 - **Avoid Over-Engineering**: Don't create complex systems when simple ones work
 - **Readable Code**: Write code that others can easily understand and modify
 - **Standard Patterns**: Use established patterns rather than inventing new ones
-- **Minimal Dependencies**: Add external dependencies only when essential, but do not re-invent the wheel
+- **Minimal Dependencies**: Add external dependencies only when essential, but do not re-invent the
+  wheel
 - **Clear Structure**: Organize code in obvious, predictable ways
 
 **Remember**: A working simple solution is better than a complex "perfect" one.
@@ -41,4 +45,5 @@ This hook provides pre-planning guidance to ensure scope control, simplicity pri
 - Prioritize accuracy over speed
 - Consider both technical and non-technical aspects
 - Use the plan template in .ai/task-manager/config/templates/PLAN_TEMPLATE.md
-- DO NOT create or list any tasks or phases during the plan creation. This will be done in a later step. Stick to writing the PRD (Project Requirements Document).
+- DO NOT create or list any tasks or phases during the plan creation. This will be done in a later
+  step. Stick to writing the PRD (Project Requirements Document).

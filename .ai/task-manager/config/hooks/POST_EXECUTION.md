@@ -7,7 +7,8 @@ Before marking the blueprint as complete, verify:
 - [ ] All linting rules must pass without errors. If no linter is configured, skip this step
 - [ ] All tests must pass successfully. If no test suite is configured, skip this step
 - [ ] Verify all tasks in the plan have `status: "completed"` in their frontmatter
-- [ ] Verify that the AGENTS.md documentation or related documentes are still correct after this plan execution
+- [ ] Verify that the AGENTS.md documentation or related documentes are still correct after this
+      plan execution
 
 ## Failure Behavior
 

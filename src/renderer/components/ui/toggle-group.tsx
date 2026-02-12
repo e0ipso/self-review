@@ -10,7 +10,8 @@ const toggleGroupItemVariants = cva(
     variants: {
       variant: {
         default: 'bg-transparent',
-        outline: 'border border-input bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground',
+        outline:
+          'border border-input bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground',
       },
       size: {
         default: 'h-9 px-3 min-w-9',
@@ -25,12 +26,17 @@ const toggleGroupItemVariants = cva(
   }
 );
 
-const ToggleGroupContext = React.createContext<VariantProps<typeof toggleGroupItemVariants>>({
+const ToggleGroupContext = React.createContext<
+  VariantProps<typeof toggleGroupItemVariants>
+>({
   size: 'default',
   variant: 'default',
 });
 
-interface ToggleGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'defaultValue'> {
+interface ToggleGroupProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'defaultValue'
+> {
   type?: 'single' | 'multiple';
   variant?: VariantProps<typeof toggleGroupItemVariants>['variant'];
   size?: VariantProps<typeof toggleGroupItemVariants>['size'];
@@ -41,7 +47,20 @@ interface ToggleGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'd
 }
 
 const ToggleGroup = React.forwardRef<HTMLDivElement, ToggleGroupProps>(
-  ({ className, type = 'single', variant, size, value, defaultValue, onValueChange, children, ...props }, ref) => {
+  (
+    {
+      className,
+      type = 'single',
+      variant,
+      size,
+      value,
+      defaultValue,
+      onValueChange,
+      children,
+      ...props
+    },
+    ref
+  ) => {
     const baseValue = value != null ? (value ? [value] : []) : undefined;
     const baseDefaultValue = defaultValue ? [defaultValue] : undefined;
 
@@ -61,7 +80,10 @@ const ToggleGroup = React.forwardRef<HTMLDivElement, ToggleGroupProps>(
         value={baseValue}
         defaultValue={baseDefaultValue}
         onValueChange={handleValueChange}
-        className={cn('inline-flex -space-x-px rounded-md shadow-sm', className)}
+        className={cn(
+          'inline-flex -space-x-px rounded-md shadow-sm',
+          className
+        )}
         {...props}
       >
         <ToggleGroupContext.Provider value={{ variant, size }}>
@@ -74,31 +96,33 @@ const ToggleGroup = React.forwardRef<HTMLDivElement, ToggleGroupProps>(
 ToggleGroup.displayName = 'ToggleGroup';
 
 interface ToggleGroupItemProps
-  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'value'>,
+  extends
+    Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'value'>,
     VariantProps<typeof toggleGroupItemVariants> {
   value: string;
 }
 
-const ToggleGroupItem = React.forwardRef<HTMLButtonElement, ToggleGroupItemProps>(
-  ({ className, children, variant, size, ...props }, ref) => {
-    const context = React.useContext(ToggleGroupContext);
-    return (
-      <Toggle
-        ref={ref}
-        className={cn(
-          toggleGroupItemVariants({
-            variant: variant || context.variant,
-            size: size || context.size,
-          }),
-          className
-        )}
-        {...props}
-      >
-        {children}
-      </Toggle>
-    );
-  }
-);
+const ToggleGroupItem = React.forwardRef<
+  HTMLButtonElement,
+  ToggleGroupItemProps
+>(({ className, children, variant, size, ...props }, ref) => {
+  const context = React.useContext(ToggleGroupContext);
+  return (
+    <Toggle
+      ref={ref}
+      className={cn(
+        toggleGroupItemVariants({
+          variant: variant || context.variant,
+          size: size || context.size,
+        }),
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </Toggle>
+  );
+});
 ToggleGroupItem.displayName = 'ToggleGroupItem';
 
 export { ToggleGroup, ToggleGroupItem };

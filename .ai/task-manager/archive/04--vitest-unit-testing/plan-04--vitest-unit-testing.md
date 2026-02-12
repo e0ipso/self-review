@@ -1,6 +1,8 @@
 ---
 id: 4
-summary: "Add comprehensive unit test coverage using Vitest for main process modules and renderer hooks with 50-60% coverage target"
+summary:
+  'Add comprehensive unit test coverage using Vitest for main process modules and renderer hooks
+  with 50-60% coverage target'
 created: 2026-02-12
 ---
 
@@ -8,60 +10,74 @@ created: 2026-02-12
 
 ## Original Work Order
 
-> I need you to add test coverage using vitest. This is an architecture decision so it should be documented in @CLAUDE.md
+> I need you to add test coverage using vitest. This is an architecture decision so it should be
+> documented in @CLAUDE.md
 
 ## Plan Clarifications
 
-| Question | Answer |
-|----------|--------|
-| Which parts of the codebase should have unit test coverage? | Main process modules (diff-parser, xml-serializer, etc.) + Renderer hooks and utilities |
-| Should I write initial tests for existing code, or just set up the testing infrastructure? | Set up + write comprehensive tests |
-| What should happen to the existing Playwright e2e tests? | Keep them (they serve different purposes from unit tests) |
-| What level of test coverage are you targeting? | ~50-60% coverage |
-| How should Vitest be configured for the Electron two-process architecture? | Separate configs for main/renderer (vitest.config.main.ts and vitest.config.renderer.ts) |
-| Should test files be colocated with source files or in a separate directory? | Colocated (place test files next to source files) |
-| Should I set up coverage reporting and add it to CI/package scripts? | Yes, but minimal setup (enable coverage but don't enforce thresholds initially) |
-| Are there specific modules you're most concerned about testing? | diff-parser, xml-serializer, xml-parser, useReviewState hook |
-| Should vitest be configured to work within the Dev Container environment? | Yes, ensure tests work in both dev container and host machine |
+| Question                                                                                   | Answer                                                                                   |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Which parts of the codebase should have unit test coverage?                                | Main process modules (diff-parser, xml-serializer, etc.) + Renderer hooks and utilities  |
+| Should I write initial tests for existing code, or just set up the testing infrastructure? | Set up + write comprehensive tests                                                       |
+| What should happen to the existing Playwright e2e tests?                                   | Keep them (they serve different purposes from unit tests)                                |
+| What level of test coverage are you targeting?                                             | ~50-60% coverage                                                                         |
+| How should Vitest be configured for the Electron two-process architecture?                 | Separate configs for main/renderer (vitest.config.main.ts and vitest.config.renderer.ts) |
+| Should test files be colocated with source files or in a separate directory?               | Colocated (place test files next to source files)                                        |
+| Should I set up coverage reporting and add it to CI/package scripts?                       | Yes, but minimal setup (enable coverage but don't enforce thresholds initially)          |
+| Are there specific modules you're most concerned about testing?                            | diff-parser, xml-serializer, xml-parser, useReviewState hook                             |
+| Should vitest be configured to work within the Dev Container environment?                  | Yes, ensure tests work in both dev container and host machine                            |
 
 ## Executive Summary
 
-This plan establishes a comprehensive unit testing infrastructure for the self-review Electron application using Vitest. Currently, the project has only end-to-end tests using Playwright + Cucumber. Adding unit tests will provide faster feedback cycles, enable test-driven development, and improve code confidence without replacing the existing e2e test suite.
+This plan establishes a comprehensive unit testing infrastructure for the self-review Electron
+application using Vitest. Currently, the project has only end-to-end tests using Playwright +
+Cucumber. Adding unit tests will provide faster feedback cycles, enable test-driven development, and
+improve code confidence without replacing the existing e2e test suite.
 
-The implementation focuses on testing business logic in the main process (diff parsing, XML serialization, git operations) and state management in the renderer (React hooks). We'll configure Vitest to handle the unique challenges of Electron's two-process architecture and ensure compatibility with both the dev container and host environments.
+The implementation focuses on testing business logic in the main process (diff parsing, XML
+serialization, git operations) and state management in the renderer (React hooks). We'll configure
+Vitest to handle the unique challenges of Electron's two-process architecture and ensure
+compatibility with both the dev container and host environments.
 
-This architectural decision will be documented in CLAUDE.md to guide future development and maintain consistent testing practices across the codebase.
+This architectural decision will be documented in CLAUDE.md to guide future development and maintain
+consistent testing practices across the codebase.
 
 ## Context
 
 ### Current State vs Target State
 
-| Current State | Target State | Why? |
-|--------------|--------------|------|
-| Only e2e tests with Playwright + Cucumber | e2e tests + unit tests with Vitest | Enable faster test feedback and test individual modules in isolation |
-| No unit test infrastructure | Vitest configured with separate main/renderer configs | Support testing both Node.js (main) and React (renderer) code appropriately |
-| ~0% unit test coverage | ~50-60% unit test coverage on critical modules | Improve code confidence and catch regressions early |
-| No testing for diff-parser, xml-serializer, hooks | Comprehensive tests for priority modules | Protect critical business logic from bugs |
-| Testing architecture not documented | Testing approach documented in CLAUDE.md | Establish clear patterns for future development |
-| Long test feedback loop (e2e only) | Fast unit tests + slower e2e tests | Enable TDD workflow and rapid iteration |
-| No coverage reporting | Coverage collection enabled with npm scripts | Visibility into what code is tested without enforcement |
+| Current State                                     | Target State                                          | Why?                                                                        |
+| ------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
+| Only e2e tests with Playwright + Cucumber         | e2e tests + unit tests with Vitest                    | Enable faster test feedback and test individual modules in isolation        |
+| No unit test infrastructure                       | Vitest configured with separate main/renderer configs | Support testing both Node.js (main) and React (renderer) code appropriately |
+| ~0% unit test coverage                            | ~50-60% unit test coverage on critical modules        | Improve code confidence and catch regressions early                         |
+| No testing for diff-parser, xml-serializer, hooks | Comprehensive tests for priority modules              | Protect critical business logic from bugs                                   |
+| Testing architecture not documented               | Testing approach documented in CLAUDE.md              | Establish clear patterns for future development                             |
+| Long test feedback loop (e2e only)                | Fast unit tests + slower e2e tests                    | Enable TDD workflow and rapid iteration                                     |
+| No coverage reporting                             | Coverage collection enabled with npm scripts          | Visibility into what code is tested without enforcement                     |
 
 ### Background
 
-The self-review application has a solid e2e test suite that validates the complete user workflow. However, e2e tests are slow, harder to debug, and don't provide granular feedback about individual module behavior. As the codebase grows, the lack of unit tests creates challenges:
+The self-review application has a solid e2e test suite that validates the complete user workflow.
+However, e2e tests are slow, harder to debug, and don't provide granular feedback about individual
+module behavior. As the codebase grows, the lack of unit tests creates challenges:
 
 1. **Slow feedback**: E2e tests take 30+ seconds to run
-2. **Debugging difficulty**: When e2e tests fail, it's hard to pinpoint the exact module causing issues
-3. **Untested edge cases**: E2e tests cover happy paths but miss edge cases in parsing, XML validation, etc.
+2. **Debugging difficulty**: When e2e tests fail, it's hard to pinpoint the exact module causing
+   issues
+3. **Untested edge cases**: E2e tests cover happy paths but miss edge cases in parsing, XML
+   validation, etc.
 4. **Refactoring risk**: No safety net when refactoring internal modules
 
 Adding Vitest provides:
+
 - Sub-second test execution for unit tests
 - Isolated testing of business logic
 - Better developer experience with watch mode
 - Foundation for test-driven development
 
-The Electron architecture requires careful setup: main process tests run in Node.js while renderer tests need DOM mocking and React support.
+The Electron architecture requires careful setup: main process tests run in Node.js while renderer
+tests need DOM mocking and React support.
 
 ## Architectural Approach
 
@@ -89,11 +105,13 @@ graph TD
 
 ### Component 1: Vitest Infrastructure Setup
 
-**Objective**: Install and configure Vitest with separate environments for main and renderer processes, ensuring compatibility with Electron's architecture and the dev container.
+**Objective**: Install and configure Vitest with separate environments for main and renderer
+processes, ensuring compatibility with Electron's architecture and the dev container.
 
 **Implementation Details**:
 
-1. **Dependencies**: Install `vitest`, `@vitest/ui` (for test UI), and `@vitest/coverage-v8` (for coverage reporting)
+1. **Dependencies**: Install `vitest`, `@vitest/ui` (for test UI), and `@vitest/coverage-v8` (for
+   coverage reporting)
 
 2. **Main Process Configuration** (`vitest.config.main.ts`):
    - Target: Node.js environment
@@ -123,9 +141,11 @@ graph TD
 
 ### Component 2: Package Scripts and Coverage
 
-**Objective**: Add convenient npm scripts for running tests and collecting coverage with minimal enforcement.
+**Objective**: Add convenient npm scripts for running tests and collecting coverage with minimal
+enforcement.
 
 **Scripts to Add**:
+
 ```json
 {
   "test:unit": "vitest",
@@ -137,6 +157,7 @@ graph TD
 ```
 
 **Coverage Configuration**:
+
 - Enable coverage collection with v8 provider
 - Generate HTML reports for local viewing
 - JSON summary for potential CI integration
@@ -146,11 +167,13 @@ graph TD
 
 ### Component 3: Priority Module Tests
 
-**Objective**: Write comprehensive tests for the four priority modules identified: diff-parser, xml-serializer, xml-parser, and useReviewState.
+**Objective**: Write comprehensive tests for the four priority modules identified: diff-parser,
+xml-serializer, xml-parser, and useReviewState.
 
 #### 3.1 diff-parser Tests (`src/main/diff-parser.test.ts`)
 
 **Coverage Goals**:
+
 - Parse basic file additions, deletions, modifications
 - Handle binary files correctly
 - Parse multiple hunks per file
@@ -160,6 +183,7 @@ graph TD
 - Validate output structure matches TypeScript types
 
 **Test Structure**:
+
 ```
 describe('parseDiff', () => {
   describe('basic operations', () => {
@@ -183,11 +207,13 @@ describe('parseDiff', () => {
 });
 ```
 
-**Approach**: Use real git diff output samples stored as fixture strings. Test both parsing correctness and edge cases.
+**Approach**: Use real git diff output samples stored as fixture strings. Test both parsing
+correctness and edge cases.
 
 #### 3.2 xml-serializer Tests (`src/main/xml-serializer.test.ts`)
 
 **Coverage Goals**:
+
 - Serialize ReviewState to valid XML
 - Include all required attributes (timestamp, git-diff-args, repository)
 - Serialize files with/without comments
@@ -198,6 +224,7 @@ describe('parseDiff', () => {
 - Reject invalid ReviewState
 
 **Test Structure**:
+
 ```
 describe('serializeReviewToXML', () => {
   describe('basic serialization', () => {
@@ -220,11 +247,13 @@ describe('serializeReviewToXML', () => {
 });
 ```
 
-**Approach**: Create test ReviewState objects, serialize them, and validate both structure and XSD compliance using xmllint-wasm.
+**Approach**: Create test ReviewState objects, serialize them, and validate both structure and XSD
+compliance using xmllint-wasm.
 
 #### 3.3 xml-parser Tests (`src/main/xml-parser.test.ts`)
 
 **Coverage Goals**:
+
 - Parse valid XML into ReviewComment[]
 - Extract file path, line ranges, body, category correctly
 - Handle file-level vs line-level comments
@@ -234,6 +263,7 @@ describe('serializeReviewToXML', () => {
 - Round-trip: serialize then parse should yield equivalent data
 
 **Test Structure**:
+
 ```
 describe('parseReviewXML', () => {
   describe('basic parsing', () => {
@@ -263,11 +293,13 @@ describe('parseReviewXML', () => {
 });
 ```
 
-**Approach**: Use fixture XML strings (valid and invalid), parse them, and validate the resulting TypeScript objects.
+**Approach**: Use fixture XML strings (valid and invalid), parse them, and validate the resulting
+TypeScript objects.
 
 #### 3.4 useReviewState Tests (`src/renderer/hooks/useReviewState.test.ts`)
 
 **Coverage Goals**:
+
 - Add comments to files
 - Update existing comments
 - Delete comments
@@ -278,6 +310,7 @@ describe('parseReviewXML', () => {
 - Generate unique IDs for comments
 
 **Test Structure**:
+
 ```
 describe('useReviewState', () => {
   describe('addComment', () => {
@@ -311,7 +344,8 @@ describe('useReviewState', () => {
 });
 ```
 
-**Approach**: Use `@testing-library/react-hooks` or Vitest's built-in hook testing. Test state transitions and data integrity.
+**Approach**: Use `@testing-library/react-hooks` or Vitest's built-in hook testing. Test state
+transitions and data integrity.
 
 ### Component 4: Additional Module Tests
 
@@ -324,7 +358,8 @@ describe('useReviewState', () => {
 3. **git.ts**: Test git command construction (mock child_process)
 4. **useDiffNavigation.ts**: Test scroll sync logic, file navigation
 
-**Approach**: Focus on pure functions and testable logic. Mock external dependencies (filesystem, child processes, DOM) as needed.
+**Approach**: Focus on pure functions and testable logic. Mock external dependencies (filesystem,
+child processes, DOM) as needed.
 
 ### Component 5: Documentation Updates
 
@@ -334,7 +369,7 @@ describe('useReviewState', () => {
 
 Add a new "## Testing" section after "## Shared Types":
 
-```markdown
+````markdown
 ## Testing
 
 The app has two testing layers:
@@ -346,12 +381,16 @@ The app has two testing layers:
 
 Unit tests use Vitest with separate configurations for main and renderer processes:
 
-- **Main process tests** (`src/main/**/*.test.ts`): Test Node.js modules (diff parsing, XML serialization, git operations). Run in Node.js environment.
-- **Renderer tests** (`src/renderer/**/*.test.{ts,tsx}`): Test React hooks and utilities. Run in jsdom environment.
+- **Main process tests** (`src/main/**/*.test.ts`): Test Node.js modules (diff parsing, XML
+  serialization, git operations). Run in Node.js environment.
+- **Renderer tests** (`src/renderer/**/*.test.{ts,tsx}`): Test React hooks and utilities. Run in
+  jsdom environment.
 
-**Test file location**: Colocate test files with source files (e.g., `diff-parser.test.ts` next to `diff-parser.ts`).
+**Test file location**: Colocate test files with source files (e.g., `diff-parser.test.ts` next to
+`diff-parser.ts`).
 
 **Running tests**:
+
 ```bash
 npm run test:unit              # Run all unit tests in watch mode
 npm run test:unit:run          # Run all unit tests once
@@ -359,14 +398,17 @@ npm run test:unit:main         # Run only main process tests
 npm run test:unit:renderer     # Run only renderer tests
 npm run test:coverage          # Run tests with coverage report
 ```
+````
 
 **Dev Container**: Unit tests work in both the dev container and host machine (unlike e2e tests).
 
-**Coverage target**: ~50-60% coverage on business logic. Coverage is collected but thresholds are not enforced.
+**Coverage target**: ~50-60% coverage on business logic. Coverage is collected but thresholds are
+not enforced.
 
 ### E2E Tests
 
 E2E tests use Playwright with Cucumber BDD:
+
 - **Cannot run in dev container** — requires host machine with display
 - Test complete user workflows from CLI invocation to XML output
 - Run with `npm run test:e2e` (headless) or `npm run test:e2e:headed`
@@ -379,7 +421,8 @@ E2E tests use Playwright with Cucumber BDD:
 - Mock external dependencies (filesystem, child processes, network)
 - For hooks: test state transitions and data integrity
 - For parsers: use fixture strings of real input samples
-```
+
+````
 
 ## Risk Considerations and Mitigation Strategies
 
@@ -553,40 +596,52 @@ graph TD
 
     style T1 fill:#e1f5ff
     style T6 fill:#ffe1f5
-```
+````
 
 **Validation Gates:**
+
 - Reference: `.ai/task-manager/config/hooks/POST_PHASE.md`
 
 ### ✅ Phase 1: Infrastructure Setup
+
 **Parallel Tasks:**
+
 - ✔️ Task 1: Setup Vitest Infrastructure and Configuration (status: completed)
 
-**Description**: Install dependencies and create separate Vitest configurations for main and renderer processes. This must complete before any tests can be written.
+**Description**: Install dependencies and create separate Vitest configurations for main and
+renderer processes. This must complete before any tests can be written.
 
 ### ✅ Phase 2: Write Comprehensive Tests
+
 **Parallel Tasks:**
+
 - ✔️ Task 2: Test diff-parser Module (status: completed)
 - ✔️ Task 3: Test XML Serializer and Parser Modules (status: completed)
 - ✔️ Task 4: Test useReviewState Hook (status: completed)
 - ✔️ Task 5: Test Supporting Modules (status: completed)
 
-**Description**: Write comprehensive unit tests for all priority and supporting modules. These tasks can run in parallel since they test independent modules.
+**Description**: Write comprehensive unit tests for all priority and supporting modules. These tasks
+can run in parallel since they test independent modules.
 
 ### Phase 3: Documentation
+
 **Parallel Tasks:**
+
 - Task 6: Update CLAUDE.md Documentation (depends on: 1, 2, 3, 4, 5)
 
-**Description**: Document the testing architecture, conventions, and commands in CLAUDE.md after all tests are complete.
+**Description**: Document the testing architecture, conventions, and commands in CLAUDE.md after all
+tests are complete.
 
 ### Post-phase Actions
 
 After each phase, verify:
+
 - **Phase 1**: `npm run test:unit:run` executes without errors (may show "no tests found")
 - **Phase 2**: All tests pass with `npm run test:unit` and coverage reaches ~50-60%
 - **Phase 3**: CLAUDE.md accurately reflects the implemented testing infrastructure
 
 ### Execution Summary
+
 - **Total Phases**: 3
 - **Total Tasks**: 6
 - **Maximum Parallelism**: 4 tasks (in Phase 2)
@@ -602,15 +657,19 @@ After each phase, verify:
 
 ### Results
 
-Successfully implemented comprehensive unit testing infrastructure for the self-review Electron application using Vitest. All objectives achieved:
+Successfully implemented comprehensive unit testing infrastructure for the self-review Electron
+application using Vitest. All objectives achieved:
 
 **Infrastructure (Phase 1)**:
+
 - Installed Vitest, @vitest/ui, @vitest/coverage-v8, and jsdom dependencies
 - Created separate Vitest configurations for main (Node.js) and renderer (jsdom) processes
-- Added npm scripts: test, test:unit, test:unit:main, test:unit:renderer, test:unit:run, test:coverage
+- Added npm scripts: test, test:unit, test:unit:main, test:unit:renderer, test:unit:run,
+  test:coverage
 - Configured v8 coverage provider with text, html, and json-summary reporters
 
 **Test Coverage (Phase 2)**:
+
 - **158 total unit tests** written and passing
   - diff-parser: 28 tests (93.18% coverage)
   - XML serializer/parser: 48 tests (~96% coverage)
@@ -621,6 +680,7 @@ Successfully implemented comprehensive unit testing infrastructure for the self-
 - Tests focus on meaningful business logic, not framework functionality
 
 **Documentation (Phase 3)**:
+
 - Added comprehensive Testing section to CLAUDE.md
 - Documented two-layer testing strategy (unit + e2e)
 - Included all test commands with examples
@@ -629,22 +689,33 @@ Successfully implemented comprehensive unit testing infrastructure for the self-
 
 ### Noteworthy Events
 
-1. **Test Script Configuration Challenge**: Initially encountered "document is not defined" errors when running all tests together. The default `vitest` command didn't properly handle different environments. Resolved by updating the `test` and `test:unit:run` scripts to explicitly run both main and renderer configs sequentially.
+1. **Test Script Configuration Challenge**: Initially encountered "document is not defined" errors
+   when running all tests together. The default `vitest` command didn't properly handle different
+   environments. Resolved by updating the `test` and `test:unit:run` scripts to explicitly run both
+   main and renderer configs sequentially.
 
-2. **Pre-commit Hook Integration**: Added `test` script to package.json to satisfy husky pre-commit hook requirements, ensuring all tests pass before each commit.
+2. **Pre-commit Hook Integration**: Added `test` script to package.json to satisfy husky pre-commit
+   hook requirements, ensuring all tests pass before each commit.
 
-3. **Test Environment Separation**: Successfully configured separate environments (Node.js for main, jsdom for renderer) to properly test Electron's two-process architecture.
+3. **Test Environment Separation**: Successfully configured separate environments (Node.js for main,
+   jsdom for renderer) to properly test Electron's two-process architecture.
 
-4. **Coverage Excellence**: Achieved ~90% coverage, significantly exceeding the 50-60% target, while maintaining focus on meaningful business logic testing.
+4. **Coverage Excellence**: Achieved ~90% coverage, significantly exceeding the 50-60% target, while
+   maintaining focus on meaningful business logic testing.
 
 ### Recommendations
 
-1. **Future Component Testing**: The infrastructure now supports adding React component tests with @testing-library/react when needed. Currently excluded per YAGNI principles.
+1. **Future Component Testing**: The infrastructure now supports adding React component tests with
+   @testing-library/react when needed. Currently excluded per YAGNI principles.
 
-2. **Coverage Thresholds**: Consider adding coverage thresholds to vitest configs once the team establishes baseline expectations (currently collecting but not enforcing).
+2. **Coverage Thresholds**: Consider adding coverage thresholds to vitest configs once the team
+   establishes baseline expectations (currently collecting but not enforcing).
 
-3. **CI Integration**: The test infrastructure is ready for CI/CD integration - tests run quickly (<2s), don't require display, and work in both dev container and host environments.
+3. **CI Integration**: The test infrastructure is ready for CI/CD integration - tests run quickly
+   (<2s), don't require display, and work in both dev container and host environments.
 
-4. **Test Fixtures**: Maintain real git diff and XML fixtures in test files to ensure tests validate against actual data formats as git/XML standards evolve.
+4. **Test Fixtures**: Maintain real git diff and XML fixtures in test files to ensure tests validate
+   against actual data formats as git/XML standards evolve.
 
-5. **Mocking Strategy**: Continue using vitest mocking for external dependencies (fs, child_process, WASM) to keep tests fast and reliable.
+5. **Mocking Strategy**: Continue using vitest mocking for external dependencies (fs, child_process,
+   WASM) to keep tests fast and reliable.

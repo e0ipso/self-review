@@ -23,11 +23,19 @@ function _getNextPlanId() {
   const taskManagerRoot = findTaskManagerRoot();
 
   if (!taskManagerRoot) {
-    _errorLog('No .ai/task-manager/plans directory found in current directory or any parent directory.');
+    _errorLog(
+      'No .ai/task-manager/plans directory found in current directory or any parent directory.'
+    );
     _errorLog('');
-    _errorLog('Please ensure you are in a project with task manager initialized, or navigate to the correct');
-    _errorLog('project directory. The task manager looks for the .ai/task-manager/plans structure starting');
-    _errorLog('from the current working directory and traversing upward through parent directories.');
+    _errorLog(
+      'Please ensure you are in a project with task manager initialized, or navigate to the correct'
+    );
+    _errorLog(
+      'project directory. The task manager looks for the .ai/task-manager/plans structure starting'
+    );
+    _errorLog(
+      'from the current working directory and traversing upward through parent directories.'
+    );
     _errorLog('');
     _errorLog(`Current working directory: ${process.cwd()}`);
     process.exit(1);
@@ -45,5 +53,5 @@ if (require.main === module) {
 }
 
 module.exports = {
-  _getNextPlanId
+  _getNextPlanId,
 };

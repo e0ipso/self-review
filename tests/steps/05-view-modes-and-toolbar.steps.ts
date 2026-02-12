@@ -18,7 +18,7 @@ When(
     } else if (mode === 'Split') {
       await page.locator('[data-testid="view-mode-split"]').click();
     }
-  },
+  }
 );
 
 When('I click {string} in the toolbar', async ({}, buttonText: string) => {
@@ -36,13 +36,18 @@ When(
     const page = getPage();
     const header = page.locator(`[data-testid="file-header-${filePath}"]`);
     await header.locator('[data-testid="collapse-toggle"]').click();
-  },
+  }
 );
 
-When('I switch the theme to {string} in the toolbar', async ({}, theme: string) => {
-  const page = getPage();
-  await page.locator(`[data-testid="theme-option-${theme.toLowerCase()}"]`).click();
-});
+When(
+  'I switch the theme to {string} in the toolbar',
+  async ({}, theme: string) => {
+    const page = getPage();
+    await page
+      .locator(`[data-testid="theme-option-${theme.toLowerCase()}"]`)
+      .click();
+  }
+);
 
 // ── Then: view mode assertions ──
 
@@ -51,11 +56,15 @@ Then(
   async ({}, mode: string) => {
     const page = getPage();
     if (mode === 'split') {
-      await expect(page.locator('[data-testid="diff-viewer"] .split-view').first()).toBeVisible();
+      await expect(
+        page.locator('[data-testid="diff-viewer"] .split-view').first()
+      ).toBeVisible();
     } else if (mode === 'unified') {
-      await expect(page.locator('[data-testid="diff-viewer"] .unified-view').first()).toBeVisible();
+      await expect(
+        page.locator('[data-testid="diff-viewer"] .unified-view').first()
+      ).toBeVisible();
     }
-  },
+  }
 );
 
 Then('the split view should show two columns', async () => {
@@ -66,14 +75,11 @@ Then('the split view should show two columns', async () => {
   expect(await halves.count()).toBeGreaterThanOrEqual(2);
 });
 
-Then(
-  'the unified view should show a single column layout',
-  async () => {
-    const page = getPage();
-    const unifiedView = page.locator('.unified-view').first();
-    await expect(unifiedView).toBeVisible();
-  },
-);
+Then('the unified view should show a single column layout', async () => {
+  const page = getPage();
+  const unifiedView = page.locator('.unified-view').first();
+  await expect(unifiedView).toBeVisible();
+});
 
 // ── Then: collapse/expand assertions ──
 
@@ -104,12 +110,15 @@ Then('all file sections should be expanded', async () => {
   }
 });
 
-Then('the {string} file section should be collapsed', async ({}, filePath: string) => {
-  const page = getPage();
-  const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-  const content = section.locator('.file-diff-content');
-  await expect(content).toHaveCount(0);
-});
+Then(
+  'the {string} file section should be collapsed',
+  async ({}, filePath: string) => {
+    const page = getPage();
+    const section = page.locator(`[data-testid="file-section-${filePath}"]`);
+    const content = section.locator('.file-diff-content');
+    await expect(content).toHaveCount(0);
+  }
+);
 
 Then(
   'the {string} file section should still be expanded',
@@ -118,7 +127,7 @@ Then(
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     const content = section.locator('.file-diff-content');
     await expect(content).toHaveCount(1);
-  },
+  }
 );
 
 // ── Then: diff stats assertions ──
@@ -129,24 +138,30 @@ Then('the toolbar should show {string}', async ({}, text: string) => {
   await expect(stats).toContainText(text);
 });
 
-Then('the toolbar should show additions count {string}', async ({}, text: string) => {
-  const page = getPage();
-  const stats = page.locator('[data-testid="diff-stats"]');
-  await expect(stats).toContainText(text);
-});
+Then(
+  'the toolbar should show additions count {string}',
+  async ({}, text: string) => {
+    const page = getPage();
+    const stats = page.locator('[data-testid="diff-stats"]');
+    await expect(stats).toContainText(text);
+  }
+);
 
-Then('the toolbar should show deletions count {string}', async ({}, text: string) => {
-  const page = getPage();
-  const stats = page.locator('[data-testid="diff-stats"]');
-  await expect(stats).toContainText(text);
-});
+Then(
+  'the toolbar should show deletions count {string}',
+  async ({}, text: string) => {
+    const page = getPage();
+    const stats = page.locator('[data-testid="diff-stats"]');
+    await expect(stats).toContainText(text);
+  }
+);
 
 // ── Then: theme assertions ──
 
 Then('the application should use dark theme colors', async () => {
   const page = getPage();
   const hasDarkClass = await page.evaluate(() =>
-    document.documentElement.classList.contains('dark'),
+    document.documentElement.classList.contains('dark')
   );
   expect(hasDarkClass).toBe(true);
 });
@@ -154,7 +169,7 @@ Then('the application should use dark theme colors', async () => {
 Then('the application should use light theme colors', async () => {
   const page = getPage();
   const hasDarkClass = await page.evaluate(() =>
-    document.documentElement.classList.contains('dark'),
+    document.documentElement.classList.contains('dark')
   );
   expect(hasDarkClass).toBe(false);
 });

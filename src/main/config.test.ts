@@ -43,7 +43,7 @@ describe('config', () => {
 theme: dark
 font-size: 16
 `;
-      vi.mocked(fs.existsSync).mockImplementation((filepath) => {
+      vi.mocked(fs.existsSync).mockImplementation(filepath => {
         return filepath === `${mockHomedir}/.config/self-review/config.yaml`;
       });
       vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
@@ -60,7 +60,7 @@ font-size: 16
 diff-view: unified
 show-untracked: false
 `;
-      vi.mocked(fs.existsSync).mockImplementation((filepath) => {
+      vi.mocked(fs.existsSync).mockImplementation(filepath => {
         return filepath === `${mockCwd}/.self-review.yaml`;
       });
       vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
@@ -83,7 +83,7 @@ theme: light
 font-size: 18
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockImplementation((filepath) => {
+      vi.mocked(fs.readFileSync).mockImplementation(filepath => {
         if (filepath.includes('.config/self-review')) {
           return userYaml;
         }

@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  ReactNode,
+} from 'react';
 import type {
   DiffFile,
   DiffLoadPayload,
@@ -27,7 +35,11 @@ export interface ReviewContextValue {
   deleteComment: (id: string) => void;
   toggleViewed: (filePath: string) => void;
   getCommentsForFile: (filePath: string) => ReviewComment[];
-  getCommentsForLine: (filePath: string, lineNumber: number, side: 'old' | 'new') => ReviewComment[];
+  getCommentsForLine: (
+    filePath: string,
+    lineNumber: number,
+    side: 'old' | 'new'
+  ) => ReviewComment[];
 }
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
@@ -55,7 +67,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
   // Filter files based on showUntracked toggle
   const diffFiles = useMemo(() => {
     if (config.showUntracked) return allDiffFiles;
-    return allDiffFiles.filter((file) => !file.isUntracked);
+    return allDiffFiles.filter(file => !file.isUntracked);
   }, [allDiffFiles, config.showUntracked]);
 
   // Create refs for IPC listener closure
@@ -64,14 +76,20 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
   const filesRef = useRef(reviewState.files);
 
   // Update refs when values change
-  useEffect(() => { gitDiffArgsRef.current = gitDiffArgs; }, [gitDiffArgs]);
-  useEffect(() => { repositoryRef.current = repository; }, [repository]);
-  useEffect(() => { filesRef.current = reviewState.files; }, [reviewState.files]);
+  useEffect(() => {
+    gitDiffArgsRef.current = gitDiffArgs;
+  }, [gitDiffArgs]);
+  useEffect(() => {
+    repositoryRef.current = repository;
+  }, [repository]);
+  useEffect(() => {
+    filesRef.current = reviewState.files;
+  }, [reviewState.files]);
 
   // When allDiffFiles change, initialize FileReviewState for all files
   useEffect(() => {
     if (allDiffFiles.length > 0) {
-      const fileStates: FileReviewState[] = allDiffFiles.map((file) => ({
+      const fileStates: FileReviewState[] = allDiffFiles.map(file => ({
         path: file.newPath || file.oldPath,
         changeType: file.changeType,
         viewed: false,
@@ -95,18 +113,18 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
       window.electronAPI.requestResumeData();
     });
 
-    window.electronAPI.onResumeLoad((payload) => {
+    window.electronAPI.onResumeLoad(payload => {
       // Merge prior comments into existing state
       const commentsByFile = new Map<string, ReviewComment[]>();
-      payload.comments.forEach((comment) => {
+      payload.comments.forEach(comment => {
         if (!commentsByFile.has(comment.filePath)) {
           commentsByFile.set(comment.filePath, []);
         }
         commentsByFile.get(comment.filePath)!.push(comment);
       });
 
-      reviewState.setFiles((prev) =>
-        prev.map((file) => ({
+      reviewState.setFiles(prev =>
+        prev.map(file => ({
           ...file,
           comments: commentsByFile.get(file.path) || [],
         }))
@@ -121,12 +139,15 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
         repository: repositoryRef.current,
         files: filesRef.current,
       };
-      console.error('[renderer] Submitting review data:', JSON.stringify({
-        timestamp: reviewData.timestamp,
-        gitDiffArgs: reviewData.gitDiffArgs,
-        repository: reviewData.repository,
-        fileCount: reviewData.files.length,
-      }));
+      console.error(
+        '[renderer] Submitting review data:',
+        JSON.stringify({
+          timestamp: reviewData.timestamp,
+          gitDiffArgs: reviewData.gitDiffArgs,
+          repository: reviewData.repository,
+          fileCount: reviewData.files.length,
+        })
+      );
       window.electronAPI.submitReview(reviewData);
       console.error('[renderer] Review data submitted');
     });

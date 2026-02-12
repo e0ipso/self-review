@@ -1,19 +1,22 @@
 ---
 id: 5
-group: "supporting-tests"
+group: 'supporting-tests'
 dependencies: [1]
-status: "completed"
-created: "2026-02-12"
-completed: "2026-02-12"
+status: 'completed'
+created: '2026-02-12'
+completed: '2026-02-12'
 skills:
   - vitest
   - typescript
 ---
+
 # Test Supporting Modules
 
 ## Objective
 
-Write unit tests for supporting modules (config, CLI, git, useDiffNavigation) to reach the 50-60% coverage target. These modules support the core functionality but are not as critical as the priority modules.
+Write unit tests for supporting modules (config, CLI, git, useDiffNavigation) to reach the 50-60%
+coverage target. These modules support the core functionality but are not as critical as the
+priority modules.
 
 ## Skills Required
 
@@ -40,11 +43,13 @@ Use your internal Todo tool to track these and keep on track.
 1. **config.ts** (`src/main/config.ts`): YAML config loading, merging user config with defaults
 2. **cli.ts** (`src/main/cli.ts`): CLI argument parsing, pass-through to git diff
 3. **git.ts** (`src/main/git.ts`): Git command construction and execution
-4. **useDiffNavigation.ts** (`src/renderer/hooks/useDiffNavigation.ts`): Scroll sync and file navigation
+4. **useDiffNavigation.ts** (`src/renderer/hooks/useDiffNavigation.ts`): Scroll sync and file
+   navigation
 
 ### Test Focus
 
 **IMPORTANT**: Write a few tests, mostly integration. Focus on meaningful business logic:
+
 - **config.ts**: Test config merging logic, default values, YAML parsing
 - **cli.ts**: Test argument parsing and validation (if any)
 - **git.ts**: Test command construction (mock child_process)
@@ -60,7 +65,8 @@ Use your internal Todo tool to track these and keep on track.
 ## Input Dependencies
 
 - Task 1: Vitest infrastructure must be set up
-- Source modules: `src/main/config.ts`, `src/main/cli.ts`, `src/main/git.ts`, `src/renderer/hooks/useDiffNavigation.ts`
+- Source modules: `src/main/config.ts`, `src/main/cli.ts`, `src/main/git.ts`,
+  `src/renderer/hooks/useDiffNavigation.ts`
 - Mock libraries: Vitest's built-in mocking (`vi.mock()`)
 
 ## Output Artifacts
@@ -76,20 +82,24 @@ Use your internal Todo tool to track these and keep on track.
 <details>
 <summary>Testing Approach and Examples</summary>
 
-**IMPORTANT**: Write a few tests, mostly integration. Don't over-test simple operations. Focus on the custom business logic in these modules.
+**IMPORTANT**: Write a few tests, mostly integration. Don't over-test simple operations. Focus on
+the custom business logic in these modules.
 
 ### Meaningful Test Strategy Guidelines
 
-**Definition of "Meaningful Tests":**
-Tests that verify custom business logic, critical paths, and edge cases specific to the application. Focus on testing YOUR code, not the framework or library functionality.
+**Definition of "Meaningful Tests":** Tests that verify custom business logic, critical paths, and
+edge cases specific to the application. Focus on testing YOUR code, not the framework or library
+functionality.
 
 **When TO Write Tests:**
+
 - Custom business logic and algorithms (✅ config merging, git command construction)
 - Critical user workflows and data transformations
 - Edge cases and error conditions for core functionality
 - Integration points between different system components
 
 **When NOT to Write Tests:**
+
 - Third-party library functionality (YAML parsing library, child_process)
 - Framework features
 - Simple CRUD operations without custom logic
@@ -357,7 +367,8 @@ describe('useDiffNavigation', () => {
 
 1. **Mock External Dependencies**: Use `vi.mock()` for fs, child_process, etc.
 2. **Focus on Logic**: Test your custom logic, not library functionality
-3. **Don't Over-Test**: These are supporting modules—write enough tests to be confident, not exhaustive
+3. **Don't Over-Test**: These are supporting modules—write enough tests to be confident, not
+   exhaustive
 4. **Integration Over Unit**: Test how modules work together rather than isolated functions
 5. **Skip Trivial Code**: Don't test simple getters, setters, or pass-through functions
 
