@@ -1,4 +1,5 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
+import { spawnSync } from 'child_process';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
@@ -10,6 +11,33 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
 import { mainConfig } from './webpack.main.config';
 import { rendererConfig } from './webpack.renderer.config';
+
+/**
+ * Find an available TCP port. Tries the preferred port first, falls back to an OS-assigned port.
+ */
+function getAvailablePort(preferred = 3000): number {
+  const script = `
+    const s = require('net').createServer();
+    s.listen(${preferred}, () => {
+      process.stdout.write(String(s.address().port));
+      s.close();
+    });
+    s.on('error', () => {
+      s.listen(0, () => {
+        process.stdout.write(String(s.address().port));
+        s.close();
+      });
+    });
+  `;
+  const result = spawnSync('node', ['-e', script], {
+    encoding: 'utf-8',
+    timeout: 5000,
+  });
+  const port = parseInt(result.stdout.trim(), 10);
+  return isNaN(port) || port < 1024 ? preferred : port;
+}
+
+const devPort = getAvailablePort(3000);
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -26,6 +54,7 @@ const config: ForgeConfig = {
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
+      port: devPort,
       mainConfig,
       renderer: {
         config: rendererConfig,
