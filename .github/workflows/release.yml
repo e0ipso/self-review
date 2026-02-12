@@ -30,6 +30,11 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
+      # workflow_run checkout by SHA creates detached HEAD.
+      # semantic-release requires a named branch to match its config.
+      - name: Restore branch ref for semantic-release
+        run: git checkout -B ${{ github.event.workflow_run.head_branch }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
