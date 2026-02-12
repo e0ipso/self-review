@@ -93,6 +93,51 @@ Key types: `DiffFile`, `DiffHunk`, `DiffLine`, `ReviewComment`, `Suggestion`, `R
 
 See the file itself for full definitions.
 
+## Testing
+
+The app has two testing layers:
+
+1. **Unit tests** (Vitest) — Fast, isolated tests for business logic and state management
+2. **E2E tests** (Playwright + Cucumber) — Slow, comprehensive tests for user workflows
+
+### Unit Tests
+
+Unit tests use Vitest with separate configurations for main and renderer processes:
+
+- **Main process tests** (`src/main/**/*.test.ts`): Test Node.js modules (diff parsing, XML serialization, git operations). Run in Node.js environment.
+- **Renderer tests** (`src/renderer/**/*.test.{ts,tsx}`): Test React hooks and utilities. Run in jsdom environment.
+
+**Test file location**: Colocate test files with source files (e.g., `diff-parser.test.ts` next to `diff-parser.ts`).
+
+**Running tests**:
+```bash
+npm run test:unit              # Run all unit tests in watch mode
+npm run test:unit:run          # Run all unit tests once
+npm run test:unit:main         # Run only main process tests
+npm run test:unit:renderer     # Run only renderer tests
+npm run test:coverage          # Run tests with coverage report
+```
+
+**Dev Container**: Unit tests work in both the dev container and host machine (unlike e2e tests).
+
+**Coverage target**: ~50-60% coverage on business logic. Coverage is collected but thresholds are not enforced.
+
+### E2E Tests
+
+E2E tests use Playwright with Cucumber BDD:
+- **Cannot run in dev container** — requires host machine with display
+- Test complete user workflows from CLI invocation to XML output
+- Run with `npm run test:e2e` (headless) or `npm run test:e2e:headed`
+
+### Testing Conventions
+
+- Test pure functions and business logic, not implementation details
+- Use descriptive test names: `it('parses file addition with single hunk', ...)`
+- Group related tests with `describe` blocks
+- Mock external dependencies (filesystem, child processes, network)
+- For hooks: test state transitions and data integrity
+- For parsers: use fixture strings of real input samples
+
 ## Critical Conventions
 
 - **stdout is sacred.** Only XML output goes to stdout. All logging, warnings, and errors go to stderr. Use `console.error()` for logging in the main process, never `console.log()`.
