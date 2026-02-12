@@ -44,6 +44,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     asarUnpack: ['**/xmllint.wasm'],
+    executableName: 'self-review',
   },
   rebuildConfig: {},
   makers: [
