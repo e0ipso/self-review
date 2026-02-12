@@ -181,7 +181,7 @@ E2E tests use Playwright with Cucumber BDD:
 ## XSD Schema Sync
 
 The XSD schema `docs/self-review-v1.xsd` is the source of truth. A copy exists at
-`.claude/skills/self-review/apply-review/self-review-v1.xsd` for the Claude Code skill. **When
+`.claude/skills/self-review/apply-review/assets/self-review-v1.xsd` for the Claude Code skill. **When
 updating the XSD, both copies must be kept in sync.**
 
 ## What NOT To Do

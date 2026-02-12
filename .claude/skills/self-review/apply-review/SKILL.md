@@ -1,8 +1,9 @@
 ---
 name: apply-review
 description: Parse self-review XML feedback and execute the review comments as organized tasks
-disable-model-invocation: true
-argument-hint: "[review.xml path]"
+metadata:
+  disable-model-invocation: "true"
+  argument-hint: "[review.xml path]"
 ---
 
 # Apply Self-Review Feedback
@@ -16,7 +17,7 @@ execute the changes.
 Read the XSD schema bundled with this skill to understand the structure of the review XML:
 
 ```
-.claude/skills/self-review/apply-review/self-review-v1.xsd
+assets/self-review-v1.xsd
 ```
 
 Use the XSD annotations and documentation elements to understand:
@@ -29,13 +30,8 @@ Use the XSD annotations and documentation elements to understand:
 
 ## Step 2: Read the Review XML
 
-Read the review XML file provided by the user:
-
-```
-$ARGUMENTS
-```
-
-If no argument is provided, default to `./review.xml`.
+Read the review XML file. The path may be provided as an argument (`$ARGUMENTS`) or by the user
+directly. If no path is available, default to `./review.xml`.
 
 If the file does not exist, inform the user and stop.
 
