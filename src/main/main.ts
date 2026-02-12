@@ -176,7 +176,7 @@ async function initializeApp() {
           resumeComments.length,
           'comments from resume file'
         );
-      } catch (_error) {
+      } catch {
         console.error('[main] Error loading resume file');
         clearTimeout(initTimeout);
         process.exit(1);
@@ -321,7 +321,7 @@ app
       console.error('[main] Validating git availability');
       validateGitAvailable();
       console.error('[main] Git validation passed');
-    } catch (_error) {
+    } catch {
       // validateGitAvailable already logs errors
       app.quit();
       process.exit(1);
