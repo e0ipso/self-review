@@ -1,0 +1,5 @@
+{
+  "*.{ts,tsx}": ["node scripts/lint-staged-eslint.js", "prettier --write"],
+  "*.{js,jsx}": ["node scripts/lint-staged-eslint.js", "prettier --write"],
+  "*.{json,md,yml,yaml}": ["prettier --write"]
+}

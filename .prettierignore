@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+build/
+
+# Coverage reports
+coverage/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Compiled binary addons
+*.o
+*.so
+*.dylib
+
+# package-lock and yarn.lock (formatted differently)
+package-lock.json
+yarn.lock
+
+# Environment files (might contain sensitive data)
+.env*
+
+# Generated documentation
+docs/
+
+# Git files
+.git/
+
+# Temporary files
+tmp/
+temp/
+
+.claude/
