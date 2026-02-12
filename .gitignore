@@ -116,6 +116,10 @@ dist/
 # Claude Code (user-specific)
 .claude/
 
+# AI task manager (plans and archive)
+.ai/task-manager/plans/
+.ai/task-manager/archive/
+
 # Test artifacts
 test-results/
 .features-gen/
