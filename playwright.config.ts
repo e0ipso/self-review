@@ -8,7 +8,7 @@ const testDir = defineBddConfig({
 
 export default defineConfig({
   testDir,
-  timeout: 30_000,
+  timeout: process.env.CI ? 60_000 : 30_000,
   retries: 0,
   use: {
     trace: 'on-first-retry',
