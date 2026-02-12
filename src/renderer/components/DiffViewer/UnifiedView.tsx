@@ -7,6 +7,7 @@ import HunkHeader from './HunkHeader';
 import SyntaxLine, { getLanguageFromPath } from './SyntaxLine';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
+import { extractOriginalCode } from './diff-utils';
 
 export interface UnifiedViewProps {
   file: DiffFile;
@@ -63,17 +64,7 @@ export default function UnifiedView({
   // Extract original code for the selected line range (for suggestions)
   const getOriginalCode = (): string | undefined => {
     if (!commentRange) return undefined;
-    const { start, end, side } = commentRange;
-    const lines: string[] = [];
-    for (const hunk of file.hunks) {
-      for (const line of hunk.lines) {
-        const lineNum = side === 'old' ? line.oldLineNumber : line.newLineNumber;
-        if (lineNum !== null && lineNum >= start && lineNum <= end) {
-          lines.push(line.content);
-        }
-      }
-    }
-    return lines.length > 0 ? lines.join('\n') : undefined;
+    return extractOriginalCode(file, commentRange);
   };
 
   return (
@@ -192,7 +183,10 @@ export default function UnifiedView({
                     key={comment.id}
                     className='border-y border-border/50 bg-muted/20 px-4 py-3 ml-[100px]'
                   >
-                    <CommentDisplay comment={comment} />
+                    <CommentDisplay
+                      comment={comment}
+                      originalCode={comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined}
+                    />
                   </div>
                 ))}
 

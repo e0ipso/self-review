@@ -13,9 +13,10 @@ import SuggestionBlock from './SuggestionBlock';
 
 export interface CommentDisplayProps {
   comment: ReviewComment;
+  originalCode?: string;
 }
 
-export default function CommentDisplay({ comment }: CommentDisplayProps) {
+export default function CommentDisplay({ comment, originalCode: originalCodeProp }: CommentDisplayProps) {
   const { deleteComment } = useReview();
   const { config } = useConfig();
   const [isEditing, setIsEditing] = useState(false);
@@ -53,7 +54,7 @@ export default function CommentDisplay({ comment }: CommentDisplayProps) {
     setIsCollapsed(!isCollapsed);
   };
 
-  const originalCode = comment.suggestion?.originalCode;
+  const originalCode = originalCodeProp ?? comment.suggestion?.originalCode;
 
   if (isEditing) {
     return (
