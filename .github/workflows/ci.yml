@@ -115,11 +115,19 @@ jobs:
 
       - run: npm ci
 
+      # Diagnostic: confirm the OIDC runtime variables are available.
+      # If either is NOT SET, the id-token permission is not being granted.
+      - name: Verify OIDC environment
+        run: |
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL is $([ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && echo 'SET' || echo 'NOT SET')"
+          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN is $([ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ] && echo 'SET' || echo 'NOT SET')"
+          echo "Node $(node -v) / npm $(npm -v)"
+
       # npm Trusted Publishing (OIDC) — one-time manual steps on npmjs.com:
       # 1. Go to https://www.npmjs.com/package/@e0ipso/self-review/access
       # 2. Under Trusted Publishers, click GitHub Actions
       # 3. Configure: owner=e0ipso, repo=self-review, workflow=ci.yml
       - name: Run semantic-release
-        run: npx semantic-release
+        run: npx semantic-release --debug
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

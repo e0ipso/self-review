@@ -31,6 +31,9 @@
     "type": "git",
     "url": "git+https://github.com/e0ipso/self-review.git"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@cucumber/cucumber": "^12.6.0",
     "@electron-forge/cli": "^7.11.1",
