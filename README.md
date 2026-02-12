@@ -13,6 +13,8 @@ account, no setup. Launch it from the terminal, review the diff, leave comments 
 close the window. Your feedback is written to stdout as structured XML that you pipe directly back
 to your AI agent.
 
+![Screenshot](./docs/screenshot.png)
+
 ## How it works
 
 ```bash
