@@ -45,13 +45,31 @@ const config: ForgeConfig = {
     asar: true,
     asarUnpack: ['**/xmllint.wasm'],
     executableName: 'self-review',
+    icon: './assets/icon',
   },
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ['darwin']),
-    new MakerRpm({}),
-    new MakerDeb({}),
+    new MakerRpm({
+      options: {
+        icon: './assets/icon.png',
+        homepage: 'https://github.com/e0ipso/self-review',
+        description: 'GitHub-style PR review UI for local git diffs',
+        categories: ['Development'],
+        genericName: 'Code Review Tool',
+      },
+    }),
+    new MakerDeb({
+      options: {
+        icon: './assets/icon.png',
+        homepage: 'https://github.com/e0ipso/self-review',
+        description: 'GitHub-style PR review UI for local git diffs',
+        categories: ['Development'],
+        genericName: 'Code Review Tool',
+        section: 'devel',
+      },
+    }),
   ],
   plugins: [
     new AutoUnpackNativesPlugin({}),

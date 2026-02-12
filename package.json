@@ -1,8 +1,8 @@
 {
   "name": "@e0ipso/self-review",
-  "productName": "self-review",
+  "productName": "Self Review",
   "version": "1.0.0",
-  "description": "Review your changes locally",
+  "description": "GitHub-style PR review UI for local git diffs",
   "main": ".webpack/main",
   "scripts": {
     "start": "electron-forge start",
@@ -21,7 +21,14 @@
     "test:coverage": "vitest run --config vitest.config.main.ts --coverage && vitest run --config vitest.config.renderer.ts --coverage",
     "prepare": "husky"
   },
-  "keywords": [],
+  "keywords": [
+    "code-review",
+    "git",
+    "diff",
+    "electron",
+    "ai",
+    "developer-tools"
+  ],
   "author": {
     "name": "Mateu Aguiló Bosch",
     "email": "mateu@mateuaguilo.com"
@@ -30,6 +37,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/e0ipso/self-review.git"
+  },
+  "homepage": "https://github.com/e0ipso/self-review",
+  "bugs": {
+    "url": "https://github.com/e0ipso/self-review/issues"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^12.6.0",
