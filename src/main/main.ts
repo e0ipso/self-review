@@ -1,7 +1,9 @@
 // src/main/main.ts
 // Electron main process entry point
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
+import { writeFileSync } from 'fs';
+import { resolve } from 'path';
 import { parseCliArgs, checkEarlyExit } from './cli';
 import {
   runGitDiffAsync,
@@ -21,6 +23,7 @@ import {
   setResumeComments,
   requestReviewFromRenderer,
 } from './ipc-handlers';
+import { IPC } from '../shared/ipc-channels';
 import { AppConfig, DiffLoadPayload, ReviewComment } from '../shared/types';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
@@ -234,48 +237,45 @@ function createWindow(): void {
 
   // Data is sent when renderer requests it via IPC (see ipc-handlers.ts)
 
-  // Handle window close - this is where we serialize to XML
-  mainWindow.on('close', async event => {
+  // Handle window close - intercept and ask renderer to show confirmation dialog
+  mainWindow.on('close', event => {
+    if (!mainWindow) return;
+    event.preventDefault();
+    mainWindow.webContents.send(IPC.APP_CLOSE_REQUESTED);
+  });
+
+  // Handle save-and-quit from renderer (Finish Review button or dialog Save & Quit)
+  ipcMain.on(IPC.APP_SAVE_AND_QUIT, async () => {
     if (!mainWindow) return;
 
-    // Prevent default close
-    event.preventDefault();
-
     try {
-      console.error('[main] Window close handler triggered');
-
-      // Request review state from renderer
-      console.error('[main] Requesting review state from renderer...');
+      console.error('[main] Save and quit requested');
       const reviewState = await requestReviewFromRenderer(mainWindow);
-      console.error(
-        '[main] Received review state:',
-        JSON.stringify({
-          timestamp: reviewState.timestamp,
-          gitDiffArgs: reviewState.gitDiffArgs,
-          repository: reviewState.repository,
-          fileCount: reviewState.files.length,
-        })
-      );
-
-      // Serialize to XML
-      console.error('[main] Serializing to XML...');
       const xml = await serializeReview(reviewState);
-      console.error('[main] XML serialization complete, length:', xml.length);
 
-      // Write to stdout and exit only after flush (callback guarantees data reaches pipe)
-      process.stdout.write(xml + '\n', () => {
-        mainWindow?.destroy();
-        process.exit(0);
-      });
+      const outputPath = resolve(process.cwd(), appConfig!.outputFile);
+      writeFileSync(outputPath, xml + '\n', 'utf-8');
+      console.error(`[main] Review written to ${outputPath}`);
+
+      mainWindow.destroy();
+      process.exit(0);
     } catch (error) {
       if (error instanceof Error) {
-        console.error(`[main] Error during window close: ${error.message}`);
-        console.error(`[main] Stack: ${error.stack}`);
+        console.error(`[main] Error saving review: ${error.message}`);
       } else {
-        console.error('[main] Error during window close: unknown error');
+        console.error('[main] Error saving review: unknown error');
       }
       process.exit(1);
     }
+  });
+
+  // Handle discard-and-quit from renderer (dialog Discard button)
+  ipcMain.on(IPC.APP_DISCARD_AND_QUIT, () => {
+    console.error('[main] Discard and quit requested');
+    if (mainWindow) {
+      mainWindow.destroy();
+    }
+    process.exit(0);
   });
 }
 

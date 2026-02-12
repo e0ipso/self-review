@@ -4,6 +4,7 @@ import { ReviewProvider } from './context/ReviewContext';
 import { TooltipProvider } from './components/ui/tooltip';
 import Toolbar from './components/Toolbar';
 import Layout from './components/Layout';
+import CloseConfirmDialog from './components/CloseConfirmDialog';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
             <Toolbar />
             <Layout />
           </div>
+          <CloseConfirmDialog />
         </TooltipProvider>
       </ReviewProvider>
     </ConfigProvider>

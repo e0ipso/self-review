@@ -273,7 +273,7 @@ export default function Toolbar() {
           variant='default'
           size='sm'
           data-testid='finish-review-btn'
-          onClick={() => window.close()}
+          onClick={() => window.electronAPI.saveAndQuit()}
           className='gap-1.5 h-8 px-3'
         >
           <CheckCircle2 className='h-3.5 w-3.5' />

@@ -4,7 +4,6 @@
   "version": "1.0.0",
   "description": "Review your changes locally",
   "main": ".webpack/main",
-
   "scripts": {
     "start": "electron-forge start",
     "clean": "rm -rf .webpack out",
@@ -76,6 +75,7 @@
     "@base-ui/react": "^1.1.0",
     "@commitlint/cli": "^20.4.1",
     "@commitlint/config-conventional": "^20.4.1",
+    "@radix-ui/react-alert-dialog": "^1.1.15",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^11.0.6",
