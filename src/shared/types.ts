@@ -87,6 +87,7 @@ export interface AppConfig {
   categories: CategoryDef[];
   defaultDiffArgs: string;
   showUntracked: boolean;
+  wordWrap: boolean;
 }
 
 // ===== IPC Payload Types =====

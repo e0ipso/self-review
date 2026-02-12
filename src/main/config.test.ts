@@ -36,6 +36,7 @@ describe('config', () => {
       expect(config.fontSize).toBe(14);
       expect(config.categories).toHaveLength(5);
       expect(config.categories[0].name).toBe('bug');
+      expect(config.wordWrap).toBe(true);
     });
 
     it('loads user-level config from ~/.config/self-review/config.yaml', () => {
@@ -243,6 +244,26 @@ categories:
       // Should have only 1 category, not 6 (1 custom + 5 defaults)
       expect(config.categories).toHaveLength(1);
       expect(config.categories[0].name).toBe('only-this');
+    });
+
+    it('loads word-wrap from config', () => {
+      const mockYaml = `word-wrap: false`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.wordWrap).toBe(false);
+    });
+
+    it('ignores non-boolean word-wrap values', () => {
+      const mockYaml = `word-wrap: "yes"`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.wordWrap).toBe(true);
     });
   });
 });

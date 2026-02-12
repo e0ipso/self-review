@@ -51,3 +51,15 @@ Feature: View Modes and Toolbar
   Scenario: Toggle theme to light mode
     When I switch the theme to "Light" in the toolbar
     Then the application should use light theme colors
+
+  Scenario: Toggle line wrapping off
+    Then long lines should be wrapped by default
+    When I click the "No Wrap" toggle in the toolbar
+    Then long lines should scroll horizontally
+    And a horizontal scrollbar should be visible on overflowing lines
+
+  Scenario: Toggle line wrapping back on
+    When I click the "No Wrap" toggle in the toolbar
+    And I click the "Wrap Lines" toggle in the toolbar
+    Then long lines should be wrapped
+    And no horizontal scrollbar should be visible

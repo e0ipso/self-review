@@ -42,6 +42,7 @@ const defaults: AppConfig = {
   ],
   defaultDiffArgs: '',
   showUntracked: true,
+  wordWrap: true,
 };
 
 export function loadConfig(): AppConfig {
@@ -146,6 +147,10 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
 
   if ('show-untracked' in raw && typeof raw['show-untracked'] === 'boolean') {
     config.showUntracked = raw['show-untracked'];
+  }
+
+  if ('word-wrap' in raw && typeof raw['word-wrap'] === 'boolean') {
+    config.wordWrap = raw['word-wrap'];
   }
 
   return config;

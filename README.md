@@ -75,6 +75,7 @@ categories:
 - `categories`: custom comment tags (see example above)
 - `default-diff-args`: default arguments passed to `git diff`
 - `show-untracked`: show new files not yet added to git (default: true)
+- `word-wrap`: wrap long lines in the diff viewer (default: true)
 
 See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 

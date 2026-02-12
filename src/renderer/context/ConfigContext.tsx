@@ -44,6 +44,7 @@ const defaultConfig: AppConfig = {
   ],
   defaultDiffArgs: '--staged',
   showUntracked: true,
+  wordWrap: true,
 };
 
 interface ConfigContextValue {
