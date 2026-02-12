@@ -9,10 +9,22 @@ import {
 } from '@playwright/test';
 import { ChildProcess, spawn, execSync } from 'child_process';
 import * as path from 'path';
-import { rmSync } from 'fs';
+import { rmSync, existsSync } from 'fs';
 
 const ELECTRON_BIN: string = require('electron') as unknown as string;
-const MAIN_BUNDLE = path.resolve(__dirname, '../../.webpack/main/index.js');
+
+// Production build (electron-forge package) puts output in .webpack/{arch}/main/
+// Dev build (electron-forge start) puts output in .webpack/main/
+function findMainBundle(): string {
+  const root = path.resolve(__dirname, '../../.webpack');
+  const archPath = path.join(root, process.arch, 'main', 'index.js');
+  if (existsSync(archPath)) return archPath;
+  const devPath = path.join(root, 'main', 'index.js');
+  if (existsSync(devPath)) return devPath;
+  throw new Error(`Cannot find webpack main bundle in ${root}`);
+}
+
+const MAIN_BUNDLE = findMainBundle();
 
 // Chromium sandbox requires SUID helper which isn't available in containers
 const CHROMIUM_FLAGS = [
