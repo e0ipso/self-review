@@ -11,8 +11,6 @@ import {
   Sun,
   Moon,
   Monitor,
-  ChevronsDownUp,
-  ChevronsUpDown,
   MessageSquare,
   MessageSquareOff,
   FilePlus2,
@@ -26,7 +24,6 @@ import {
 export default function Toolbar() {
   const { config, updateConfig } = useConfig();
   const { diffFiles, gitDiffArgs } = useReview();
-  const [allExpanded, setAllExpanded] = useState(true);
   const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
 
   const stats = useMemo(() => {
@@ -42,15 +39,6 @@ export default function Toolbar() {
     }
     return { files: diffFiles.length, additions, deletions };
   }, [diffFiles]);
-
-  const handleToggleAllSections = () => {
-    const newExpanded = !allExpanded;
-    setAllExpanded(newExpanded);
-    const event = new CustomEvent('toggle-all-sections', {
-      detail: { expanded: newExpanded },
-    });
-    document.dispatchEvent(event);
-  };
 
   const handleToggleAllComments = () => {
     const newCollapsed = !allCommentsCollapsed;
@@ -77,6 +65,36 @@ export default function Toolbar() {
       data-testid='toolbar'
     >
       <div className='flex items-center gap-2'>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant='ghost'
+              size='sm'
+              data-testid='toggle-untracked-btn'
+              onClick={() =>
+                updateConfig({ showUntracked: !config.showUntracked })
+              }
+              className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
+            >
+              {config.showUntracked ? (
+                <FileX className='h-3.5 w-3.5' />
+              ) : (
+                <FilePlus2 className='h-3.5 w-3.5' />
+              )}
+              <span className='text-xs'>
+                {config.showUntracked ? 'Hide' : 'Show'} New Files
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {config.showUntracked
+              ? 'Hide new files not yet in git'
+              : 'Show new files not yet in git'}
+          </TooltipContent>
+        </Tooltip>
+
+        <Separator orientation='vertical' className='h-5' />
+
         <ToggleGroup
           type='single'
           variant='outline'
@@ -114,21 +132,6 @@ export default function Toolbar() {
 
         <Separator orientation='vertical' className='h-5' />
 
-        <Button
-          variant='ghost'
-          size='sm'
-          data-testid={allExpanded ? 'collapse-all-btn' : 'expand-all-btn'}
-          onClick={handleToggleAllSections}
-          className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
-        >
-          {allExpanded ? (
-            <ChevronsDownUp className='h-3.5 w-3.5' />
-          ) : (
-            <ChevronsUpDown className='h-3.5 w-3.5' />
-          )}
-          <span className='text-xs'>{allExpanded ? 'Collapse' : 'Expand'}</span>
-        </Button>
-
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -159,61 +162,6 @@ export default function Toolbar() {
           </TooltipContent>
         </Tooltip>
 
-        <Separator orientation='vertical' className='h-5' />
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant='ghost'
-              size='sm'
-              data-testid='toggle-untracked-btn'
-              onClick={() =>
-                updateConfig({ showUntracked: !config.showUntracked })
-              }
-              className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
-            >
-              {config.showUntracked ? (
-                <FileX className='h-3.5 w-3.5' />
-              ) : (
-                <FilePlus2 className='h-3.5 w-3.5' />
-              )}
-              <span className='text-xs'>
-                {config.showUntracked ? 'Hide' : 'Show'} New Files
-              </span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {config.showUntracked
-              ? 'Hide new files not yet in git'
-              : 'Show new files not yet in git'}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant='ghost'
-              size='sm'
-              data-testid='toggle-word-wrap-btn'
-              onClick={() => updateConfig({ wordWrap: !config.wordWrap })}
-              className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
-            >
-              {config.wordWrap ? (
-                <WrapText className='h-3.5 w-3.5' />
-              ) : (
-                <MoveHorizontal className='h-3.5 w-3.5' />
-              )}
-              <span className='text-xs'>
-                {config.wordWrap ? 'Wrap Lines' : 'No Wrap'}
-              </span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {config.wordWrap
-              ? 'Wrap long lines'
-              : 'Scroll long lines horizontally'}
-          </TooltipContent>
-        </Tooltip>
       </div>
 
       <div
@@ -241,6 +189,34 @@ export default function Toolbar() {
       </div>
 
       <div className='flex items-center gap-2'>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant='ghost'
+              size='sm'
+              data-testid='toggle-word-wrap-btn'
+              onClick={() => updateConfig({ wordWrap: !config.wordWrap })}
+              className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
+            >
+              {config.wordWrap ? (
+                <WrapText className='h-3.5 w-3.5' />
+              ) : (
+                <MoveHorizontal className='h-3.5 w-3.5' />
+              )}
+              <span className='text-xs'>
+                {config.wordWrap ? 'Wrap Lines' : 'No Wrap'}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {config.wordWrap
+              ? 'Wrap long lines'
+              : 'Scroll long lines horizontally'}
+          </TooltipContent>
+        </Tooltip>
+
+        <Separator orientation='vertical' className='h-5' />
+
         <ToggleGroup
           type='single'
           variant='outline'

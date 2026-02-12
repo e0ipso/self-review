@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Plus } from 'lucide-react';
+import { MessageSquarePlus } from 'lucide-react';
 import type { DiffFile, DiffLine } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
@@ -118,7 +118,7 @@ export default function UnifiedView({
                   >
                     {line.oldLineNumber && line.type !== 'context' && (
                       <button
-                        className='absolute left-0 top-0 bottom-0 flex items-center justify-center w-7 opacity-0 group-hover/gutter-old:opacity-70 transition-opacity text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400'
+                        className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter-old:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
                         onMouseDown={e => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -126,7 +126,7 @@ export default function UnifiedView({
                         }}
                         data-testid={`comment-icon-old-${line.oldLineNumber}`}
                       >
-                        <Plus className='h-4 w-4' />
+                        <MessageSquarePlus className='h-4 w-4' />
                       </button>
                     )}
                     <span className='pointer-events-none'>
@@ -144,7 +144,7 @@ export default function UnifiedView({
                   >
                     {line.newLineNumber && line.type !== 'context' && (
                       <button
-                        className='absolute left-0 top-0 bottom-0 flex items-center justify-center w-7 opacity-0 group-hover/gutter-new:opacity-70 transition-opacity text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400'
+                        className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter-new:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
                         onMouseDown={e => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -152,7 +152,7 @@ export default function UnifiedView({
                         }}
                         data-testid={`comment-icon-new-${line.newLineNumber}`}
                       >
-                        <Plus className='h-4 w-4' />
+                        <MessageSquarePlus className='h-4 w-4' />
                       </button>
                     )}
                     <span className='pointer-events-none'>

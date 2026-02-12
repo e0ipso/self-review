@@ -125,7 +125,7 @@ Unit tests use Vitest with separate configurations for main and renderer process
 
 ```bash
 npm run test:unit              # Run all unit tests in watch mode
-npm run test:unit:run          # Run all unit tests once
+npm run test:unit          # Run all unit tests once
 npm run test:unit:main         # Run only main process tests
 npm run test:unit:renderer     # Run only renderer tests
 npm run test:coverage          # Run tests with coverage report

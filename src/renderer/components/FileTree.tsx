@@ -1,17 +1,28 @@
 import React, { useState, useMemo } from 'react';
 import { useReview } from '../context/ReviewContext';
 import { useDiffNavigation } from '../hooks/useDiffNavigation';
+import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, CircleDashed, CircleCheck, MessageSquare } from 'lucide-react';
+import { Search, CircleDashed, CircleCheck, MessageSquare, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import type { DiffFile } from '../../shared/types';
 
 export default function FileTree() {
   const { diffFiles, files } = useReview();
   const { activeFilePath, scrollToFile } = useDiffNavigation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [allExpanded, setAllExpanded] = useState(true);
+
+  const handleToggleAllSections = () => {
+    const newExpanded = !allExpanded;
+    setAllExpanded(newExpanded);
+    const event = new CustomEvent('toggle-all-sections', {
+      detail: { expanded: newExpanded },
+    });
+    document.dispatchEvent(event);
+  };
 
   const filteredFiles = useMemo(() => {
     if (!searchQuery.trim()) return diffFiles;
@@ -83,12 +94,34 @@ export default function FileTree() {
           <span className='text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'>
             Changed files
           </span>
-          <Badge
-            variant='secondary'
-            className='h-5 px-1.5 text-[11px] font-normal tabular-nums rounded'
-          >
-            {diffFiles.length}
-          </Badge>
+          <div className='flex items-center gap-1'>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  data-testid={allExpanded ? 'collapse-all-btn' : 'expand-all-btn'}
+                  onClick={handleToggleAllSections}
+                  className='h-5 w-5 text-muted-foreground hover:text-foreground'
+                >
+                  {allExpanded ? (
+                    <ChevronsDownUp className='h-3.5 w-3.5' />
+                  ) : (
+                    <ChevronsUpDown className='h-3.5 w-3.5' />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {allExpanded ? 'Collapse all files' : 'Expand all files'}
+              </TooltipContent>
+            </Tooltip>
+            <Badge
+              variant='secondary'
+              className='h-5 px-1.5 text-[11px] font-normal tabular-nums rounded'
+            >
+              {diffFiles.length}
+            </Badge>
+          </div>
         </div>
         <div className='relative'>
           <Search className='absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none' />
