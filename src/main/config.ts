@@ -121,17 +121,19 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
   }
 
   if ('ignore' in raw && Array.isArray(raw.ignore)) {
-    config.ignore = raw.ignore.filter((item: any) => typeof item === 'string');
+    config.ignore = raw.ignore.filter(
+      (item: unknown) => typeof item === 'string'
+    );
   }
 
   if ('categories' in raw && Array.isArray(raw.categories)) {
     config.categories = raw.categories.filter(
-      (cat: any) =>
-        cat &&
+      (cat: unknown): cat is { name: string; description: string; color: string } =>
+        cat !== null &&
         typeof cat === 'object' &&
-        typeof cat.name === 'string' &&
-        typeof cat.description === 'string' &&
-        typeof cat.color === 'string'
+        typeof (cat as Record<string, unknown>).name === 'string' &&
+        typeof (cat as Record<string, unknown>).description === 'string' &&
+        typeof (cat as Record<string, unknown>).color === 'string'
     );
   }
 

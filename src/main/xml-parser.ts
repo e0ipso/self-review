@@ -85,7 +85,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
   }
 }
 
-function parseLineRange(comment: any): LineRange | null {
+function parseLineRange(comment: Record<string, unknown>): LineRange | null {
   const hasOld =
     comment['@_old-line-start'] !== undefined &&
     comment['@_old-line-end'] !== undefined;
@@ -96,31 +96,31 @@ function parseLineRange(comment: any): LineRange | null {
   if (hasOld) {
     return {
       side: 'old',
-      start: parseInt(comment['@_old-line-start'], 10),
-      end: parseInt(comment['@_old-line-end'], 10),
+      start: parseInt(String(comment['@_old-line-start']), 10),
+      end: parseInt(String(comment['@_old-line-end']), 10),
     };
   }
 
   if (hasNew) {
     return {
       side: 'new',
-      start: parseInt(comment['@_new-line-start'], 10),
-      end: parseInt(comment['@_new-line-end'], 10),
+      start: parseInt(String(comment['@_new-line-start']), 10),
+      end: parseInt(String(comment['@_new-line-end']), 10),
     };
   }
 
   return null; // File-level comment
 }
 
-function parseSuggestion(comment: any): Suggestion | null {
+function parseSuggestion(comment: Record<string, unknown>): Suggestion | null {
   if (!comment.suggestion) {
     return null;
   }
 
-  const suggestion = comment.suggestion;
+  const suggestion = comment.suggestion as Record<string, unknown>;
   return {
-    originalCode: suggestion['original-code'] || '',
-    proposedCode: suggestion['proposed-code'] || '',
+    originalCode: String(suggestion['original-code'] || ''),
+    proposedCode: String(suggestion['proposed-code'] || ''),
   };
 }
 

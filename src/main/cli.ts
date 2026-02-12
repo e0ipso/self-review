@@ -14,7 +14,7 @@ export interface CliArgs {
  *   [appBinary, ...appArgs]
  */
 function getAppArgs(): string[] {
-  if ((process as any).defaultApp) {
+  if ((process as NodeJS.Process & { defaultApp?: boolean }).defaultApp) {
     // Dev mode: skip past the main script (first non-flag argument)
     const rawArgs = process.argv.slice(1);
     const mainScriptIdx = rawArgs.findIndex(a => !a.startsWith('-'));

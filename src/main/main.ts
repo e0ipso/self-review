@@ -21,7 +21,7 @@ import {
   setResumeComments,
   requestReviewFromRenderer,
 } from './ipc-handlers';
-import { DiffLoadPayload } from '../shared/types';
+import { AppConfig, DiffLoadPayload, ReviewComment } from '../shared/types';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -83,8 +83,8 @@ if (process.env.NODE_ENV === 'test' || process.env.DISPLAY === ':99') {
 
 let mainWindow: BrowserWindow | null = null;
 let diffData: DiffLoadPayload | null = null;
-let resumeComments: any[] = [];
-let appConfig: any = null;
+let resumeComments: ReviewComment[] = [];
+let appConfig: AppConfig | null = null;
 
 /**
  * Initialize the application AFTER Electron is ready.

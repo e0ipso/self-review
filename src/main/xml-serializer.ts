@@ -247,7 +247,7 @@ export async function serializeReview(state: ReviewState): Promise<string> {
     if (!validationResult.valid) {
       const errors = validationResult.errors || [];
       console.error('XML validation failed:');
-      errors.forEach((err: any) => console.error(`  ${err}`));
+      errors.forEach((err: unknown) => console.error(`  ${err}`));
       throw new Error('Generated XML does not conform to schema');
     }
   } catch (error) {

@@ -8,12 +8,13 @@ import {
   ResumeLoadPayload,
   AppConfig,
   ReviewState,
+  ReviewComment,
 } from '../shared/types';
 
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
 let configCache: AppConfig | null = null;
-let resumeCommentsCache: any[] = [];
+let resumeCommentsCache: ReviewComment[] = [];
 
 export function setDiffData(data: DiffLoadPayload): void {
   diffDataCache = data;
@@ -23,7 +24,7 @@ export function setConfigData(data: AppConfig): void {
   configCache = data;
 }
 
-export function setResumeComments(comments: any[]): void {
+export function setResumeComments(comments: ReviewComment[]): void {
   resumeCommentsCache = comments;
 }
 
