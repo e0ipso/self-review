@@ -106,13 +106,12 @@ jobs:
         with:
           fetch-depth: 0   # Full history needed for semantic-release commit analysis
 
-      # Node 24 ships npm >=11.5.1 which supports OIDC Trusted Publishing.
-      # All other jobs use Node 22 (LTS).
+      # Do NOT set registry-url here — it creates an .npmrc that conflicts
+      # with semantic-release's OIDC authentication mechanism.
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 'lts/*'
           cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci
 
