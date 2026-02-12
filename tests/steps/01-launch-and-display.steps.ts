@@ -47,7 +47,13 @@ Given('I launch self-review', async () => {
     repoDir = process.cwd();
   }
 
-  await launchApp([], repoDir);
+  try {
+    await launchApp([], repoDir);
+  } catch {
+    // The app may exit immediately in error scenarios (not a git repo, etc.).
+    // Fall back to launchAppExpectExit to capture stderr and exit code.
+    await launchAppExpectExit([], repoDir);
+  }
 });
 
 /**

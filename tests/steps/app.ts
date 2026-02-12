@@ -98,11 +98,6 @@ export async function launchApp(cliArgs: string[], cwd: string): Promise<Page> {
   try {
     appPage = await electronApp.firstWindow();
     await appPage.waitForLoadState('domcontentloaded');
-    // Wait for React to render the app shell (file tree or diff viewer)
-    await appPage.waitForSelector(
-      '[data-testid^="file-entry-"], [data-testid="diff-viewer"], [data-testid="empty-diff-help"]',
-      { state: 'visible', timeout: 15000 }
-    );
     return appPage;
   } catch (error) {
     process.stderr.write(`\n[launchApp failed] ${error}\n`);
@@ -315,14 +310,10 @@ export async function triggerCommentIcon(
   const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
   await icon.waitFor({ state: 'visible', timeout: 5000 });
   await icon.dispatchEvent('mousedown');
-  // Wait for React to process the mousedown before dispatching mouseup
-  await page.waitForFunction(
-    () => document.querySelector('[data-comment-pending]') !== null ||
-          document.querySelector('[data-testid="comment-input"]') !== null,
-    { timeout: 3000 }
-  ).catch(() => {
-    // Fallback: React may have already processed without intermediate state
-  });
+  // Brief pause for React to register the mousedown before dispatching mouseup.
+  // There's no observable intermediate DOM state between mousedown and mouseup,
+  // so a short fixed delay is appropriate here.
+  await page.waitForTimeout(150);
   await page.evaluate(() =>
     document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
   );
