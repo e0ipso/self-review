@@ -1,5 +1,17 @@
 import type { ModuleOptions } from 'webpack';
 
+const tsRule = {
+  test: /\.tsx?$/,
+  exclude: /(node_modules|\.webpack)/,
+  use: {
+    loader: 'ts-loader',
+    options: {
+      transpileOnly: true,
+    },
+  },
+};
+
+// Full rules for main process (includes native module loaders that require __dirname)
 export const rules: Required<ModuleOptions>['rules'] = [
   // Add support for native node modules
   {
@@ -18,14 +30,9 @@ export const rules: Required<ModuleOptions>['rules'] = [
       },
     },
   },
-  {
-    test: /\.tsx?$/,
-    exclude: /(node_modules|\.webpack)/,
-    use: {
-      loader: 'ts-loader',
-      options: {
-        transpileOnly: true,
-      },
-    },
-  },
+  tsRule,
 ];
+
+// Base rules for renderer and preload (no native module loaders —
+// the asset relocator injects __dirname refs that break in sandboxed contexts)
+export const baseRules: Required<ModuleOptions>['rules'] = [tsRule];
