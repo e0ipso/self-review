@@ -47,23 +47,7 @@ Given('I launch self-review', async () => {
     repoDir = process.cwd();
   }
 
-  try {
-    await launchApp([], repoDir);
-  } catch (error) {
-    console.error(
-      '[Given step] launchApp() failed, falling back to launchAppExpectExit():',
-      error
-    );
-    await launchAppExpectExit([], repoDir);
-    console.error(
-      '[Given step] After launchAppExpectExit - stderr:',
-      getStderr().slice(0, 500)
-    );
-    console.error(
-      '[Given step] After launchAppExpectExit - exit code:',
-      getExitCode()
-    );
-  }
+  await launchApp([], repoDir);
 });
 
 /**

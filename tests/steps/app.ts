@@ -35,11 +35,22 @@ const CHROMIUM_FLAGS = [
   '--disable-namespace-sandbox', // Bypass namespace restrictions in containers
 ];
 
-// Ensure a display server is available for Electron (headless CI)
+// Ensure a display server is available for Electron (headless CI).
+// In CI, xvfb-run provides the display; only start Xvfb locally if no DISPLAY is set.
 function ensureDisplay(): void {
   if (process.env.DISPLAY) return;
   try {
+    // Check if Xvfb is already running on :99
+    try {
+      execSync('xdpyinfo -display :99 2>/dev/null', { stdio: 'ignore' });
+      process.env.DISPLAY = ':99';
+      return;
+    } catch {
+      // Not running, start it
+    }
     execSync('Xvfb :99 -screen 0 1024x768x24 &', { stdio: 'ignore' });
+    // Wait briefly for Xvfb to become ready
+    execSync('sleep 0.5', { stdio: 'ignore' });
     process.env.DISPLAY = ':99';
   } catch {
     // If Xvfb isn't available, tests will fail with a clear error
@@ -87,6 +98,11 @@ export async function launchApp(cliArgs: string[], cwd: string): Promise<Page> {
   try {
     appPage = await electronApp.firstWindow();
     await appPage.waitForLoadState('domcontentloaded');
+    // Wait for React to render the app shell (file tree or diff viewer)
+    await appPage.waitForSelector(
+      '[data-testid^="file-entry-"], [data-testid="diff-viewer"], [data-testid="empty-diff-help"]',
+      { state: 'visible', timeout: 15000 }
+    );
     return appPage;
   } catch (error) {
     process.stderr.write(`\n[launchApp failed] ${error}\n`);
@@ -297,8 +313,16 @@ export async function triggerCommentIcon(
   );
   await gutter.hover();
   const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
+  await icon.waitFor({ state: 'visible', timeout: 5000 });
   await icon.dispatchEvent('mousedown');
-  await page.waitForTimeout(100);
+  // Wait for React to process the mousedown before dispatching mouseup
+  await page.waitForFunction(
+    () => document.querySelector('[data-comment-pending]') !== null ||
+          document.querySelector('[data-testid="comment-input"]') !== null,
+    { timeout: 3000 }
+  ).catch(() => {
+    // Fallback: React may have already processed without intermediate state
+  });
   await page.evaluate(() =>
     document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
   );

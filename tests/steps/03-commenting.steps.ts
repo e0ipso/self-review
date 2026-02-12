@@ -35,7 +35,13 @@ async function dragMoveToLine(page: Page, line: number, side: 'new' | 'old'): Pr
       }));
     }
   }, { ln: line, s: side, secSel: sectionSel });
-  await page.waitForTimeout(100);
+  // Wait for React to process the selection state update
+  await page.waitForFunction(
+    () => document.querySelector('[class*="bg-blue"]') !== null,
+    { timeout: 3000 }
+  ).catch(() => {
+    // Selection highlight may not appear for single-line drags
+  });
 }
 
 // ── Background: project categories ──
@@ -99,11 +105,12 @@ Given(
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(200);
       await dragMoveToLine(page, endLine, 'new');
       await page.mouse.up();
-      await page.waitForTimeout(100);
     }
+    await page
+      .locator('[data-testid="comment-input"]')
+      .waitFor({ state: 'visible', timeout: 5000 });
     await page
       .locator('[data-testid="comment-input"] textarea')
       .fill('Test comment');
@@ -215,11 +222,13 @@ When(
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(200);
       await dragMoveToLine(page, endLine, 'new');
       await page.mouse.up();
-      await page.waitForTimeout(100);
     }
+    // Wait for comment input to appear after drag selection
+    await page
+      .locator('[data-testid="comment-input"]')
+      .waitFor({ state: 'visible', timeout: 5000 });
   }
 );
 
@@ -236,11 +245,11 @@ When(
     );
     await gutter.hover();
     const icon = section.locator(`[data-testid="comment-icon-new-${line}"]`);
+    await icon.waitFor({ state: 'visible', timeout: 5000 });
     const box = await icon.boundingBox();
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(200);
     }
   }
 );
@@ -255,11 +264,11 @@ When(
       .first();
     const gutter = icon.locator('..');
     await gutter.hover();
+    await icon.waitFor({ state: 'visible', timeout: 5000 });
     const box = await icon.boundingBox();
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(200);
     }
   }
 );
@@ -292,13 +301,18 @@ When('I drag past new line {int} toward hunk B', async ({}, line: number) => {
       }));
     }
   }, { ln: line, secSel: sectionSel });
-  await page.waitForTimeout(100);
 });
 
 When('I release the mouse', async () => {
   const page = getPage();
   await page.mouse.up();
-  await page.waitForTimeout(100);
+  // Wait for comment input to appear after completing the drag selection
+  await page
+    .locator('[data-testid="comment-input"]')
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .catch(() => {
+      // Comment input may not appear in all drag scenarios (e.g. clamped)
+    });
 });
 
 // ── When: comment input interactions ──
@@ -622,8 +636,8 @@ Then(
     // Release the mouse and verify the comment input appears
     const page = getPage();
     await page.mouse.up();
-    await page.waitForTimeout(100);
     const commentInput = page.locator('[data-testid="comment-input"]');
+    await commentInput.waitFor({ state: 'visible', timeout: 5000 });
     await expect(commentInput).toBeVisible();
   }
 );

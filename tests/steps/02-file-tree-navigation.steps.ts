@@ -43,8 +43,19 @@ When(
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     await section.scrollIntoViewIfNeeded();
-    // Wait for IntersectionObserver to fire
-    await page.waitForTimeout(500);
+    // Wait for IntersectionObserver to update the active file in the tree
+    await page.locator(`[data-testid="file-entry-${filePath}"]`).waitFor({ state: 'visible' });
+    // Give the observer callback time to propagate through React state
+    await page.waitForFunction(
+      (fp) => {
+        const entry = document.querySelector(`[data-testid="file-entry-${fp}"]`);
+        return entry?.className.includes('bg-accent') ?? false;
+      },
+      filePath,
+      { timeout: 5000 }
+    ).catch(() => {
+      // If the entry doesn't get bg-accent (e.g. already active), proceed
+    });
   }
 );
 

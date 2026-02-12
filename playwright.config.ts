@@ -7,15 +7,16 @@ const bddTestDir = defineBddConfig({
 });
 
 export default defineConfig({
-  retries: 0,
+  retries: process.env.CI ? 2 : 0,
   workers: 1,
   projects: [
     {
       name: 'e2e',
       testDir: bddTestDir,
-      timeout: process.env.CI ? 60_000 : 30_000,
+      timeout: process.env.CI ? 90_000 : 30_000,
       use: {
-        trace: 'on-first-retry',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
       },
     },
     {

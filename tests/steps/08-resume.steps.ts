@@ -48,7 +48,9 @@ When(
       .filter({ hasText: commentBody });
     await comment.first().waitFor({ state: 'visible', timeout: 15000 });
     await comment.first().hover();
-    await page.waitForTimeout(100);
+    // Wait for hover action buttons to become visible
+    await comment.first().locator('button:has(.lucide-pencil), button:has(.lucide-trash-2)').first()
+      .waitFor({ state: 'visible', timeout: 3000 });
     if (action === 'Edit') {
       await comment.first().locator('button:has(.lucide-pencil)').click({ force: true });
     } else if (action === 'Delete') {

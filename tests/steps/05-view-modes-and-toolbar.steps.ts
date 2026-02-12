@@ -85,12 +85,8 @@ Then('the unified view should show a single column layout', async () => {
 
 Then('all file sections should be collapsed', async () => {
   const page = getPage();
-  const sections = page.locator('[data-testid^="file-section-"]');
-  const count = await sections.count();
-  for (let i = 0; i < count; i++) {
-    const content = sections.nth(i).locator('.file-diff-content');
-    await expect(content).toHaveCount(0);
-  }
+  // Wait for the collapse animation to complete — no diff content should remain
+  await expect(page.locator('.file-diff-content')).toHaveCount(0);
 });
 
 Then('the diff content should not be visible for any file', async () => {

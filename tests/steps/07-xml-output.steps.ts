@@ -37,7 +37,6 @@ async function selectLineRange(
   if (box) {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
-    await page.waitForTimeout(200);
     // Dispatch mousemove from browser context, scoped to the file section
     const secSel = `[data-testid="file-section-${filePath}"]`;
     await page.evaluate(({ ln, s, secSelector }) => {
@@ -53,9 +52,16 @@ async function selectLineRange(
         }));
       }
     }, { ln: end, s: side, secSelector: secSel });
-    await page.waitForTimeout(100);
+    // Wait for React to process the selection
+    await page.waitForFunction(
+      () => document.querySelector('[class*="bg-blue"]') !== null,
+      { timeout: 3000 }
+    ).catch(() => {});
     await page.mouse.up();
-    await page.waitForTimeout(100);
+    // Wait for comment input to appear after drag
+    await page
+      .locator('[data-testid="comment-input"]')
+      .waitFor({ state: 'visible', timeout: 5000 });
   }
 }
 
