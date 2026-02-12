@@ -9,7 +9,7 @@ import {
 } from '@playwright/test';
 import { ChildProcess, spawn, execSync } from 'child_process';
 import * as path from 'path';
-import { rmSync, existsSync } from 'fs';
+import { rmSync, existsSync, readFileSync } from 'fs';
 
 const ELECTRON_BIN: string = require('electron') as unknown as string;
 
@@ -144,18 +144,19 @@ export async function launchAppExpectExit(
 }
 
 /**
- * Close the Electron window, triggering XML serialization → stdout → exit.
+ * Close the Electron window by triggering saveAndQuit, which writes XML to file and exits.
+ * This simulates clicking the "Finish Review" button.
  */
 export async function closeAppWindow(): Promise<void> {
   if (!electronApp) return;
 
-  // Trigger window close via Electron API (fires the 'close' event handler in main.ts)
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (win) win.close();
+  // Trigger saveAndQuit via the renderer's electronAPI (same as clicking Finish Review)
+  const page = await electronApp.firstWindow();
+  await page.evaluate(() => {
+    (window as any).electronAPI.saveAndQuit();
   });
 
-  // Wait for the process to finish (XML serialization + exit)
+  // Wait for the process to finish (XML serialization to file + exit)
   if (processExitPromise) {
     await Promise.race([
       processExitPromise,
@@ -240,6 +241,41 @@ export async function triggerCommentIcon(
   await page
     .locator('[data-testid="comment-input"]')
     .waitFor({ state: 'visible', timeout: 5000 });
+}
+
+/**
+ * Get the path to the output XML file for the current test.
+ * The app writes to `./review.xml` relative to its working directory (the test repo).
+ */
+export function getOutputFilePath(): string {
+  const repoDir = getTestRepoDir();
+  return path.join(repoDir, 'review.xml');
+}
+
+/**
+ * Read the output XML file content.
+ * Returns the file contents as a string, or throws if the file does not exist.
+ */
+export function readOutputFile(): string {
+  const filePath = getOutputFilePath();
+  return readFileSync(filePath, 'utf-8');
+}
+
+/**
+ * Check whether the output XML file exists.
+ */
+export function outputFileExists(): boolean {
+  return existsSync(getOutputFilePath());
+}
+
+/**
+ * Remove the output XML file if it exists (for cleanup).
+ */
+export function removeOutputFile(): void {
+  const filePath = getOutputFilePath();
+  if (existsSync(filePath)) {
+    rmSync(filePath, { force: true });
+  }
 }
 
 function resetState(): void {

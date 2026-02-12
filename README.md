@@ -10,7 +10,7 @@ server) or squint at diffs in the terminal.
 
 **self-review** gives you GitHub's pull request review UI on your local machine — no remote, no
 account, no setup. Launch it from the terminal, review the diff, leave comments and suggestions,
-close the window. Your feedback is written to stdout as structured XML that you pipe directly back
+close the window. Your feedback is written to a file as structured XML that you feed directly back
 to your AI agent.
 
 ![Screenshot](./docs/screenshot.png)
@@ -18,17 +18,17 @@ to your AI agent.
 ## How it works
 
 ```bash
-# Review staged changes, save feedback as XML
-self-review --staged > review.xml
+# Review staged changes — produces ./review.xml by default
+self-review --staged
 
 # Feed the feedback back to your AI agent
 cat review.xml | claude-code "Apply this review feedback"
 
 # Review changes between branches
-self-review main..feature-branch > review.xml
+self-review main..feature-branch
 
 # Resume a previous review
-self-review --staged --resume-from review.xml > review-updated.xml
+self-review --staged --resume-from review.xml
 ```
 
 ## What you get
@@ -75,6 +75,7 @@ categories:
 - `theme`: light, dark, or system (default: system)
 - `diff-view`: split or unified (default: split)
 - `font-size`: editor font size in pixels (default: 14)
+- `output-file`: path for the review XML output (default: `./review.xml`)
 - `ignore`: file patterns to exclude from diff (glob syntax)
 - `categories`: custom comment tags (see example above)
 - `default-diff-args`: default arguments passed to `git diff`
@@ -85,7 +86,7 @@ See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 
 ## Design principles
 
-- **CLI-first.** Launched from the terminal, outputs to stdout. Behaves like a Unix tool.
+- **CLI-first.** Launched from the terminal, writes review output to a file. Behaves like a Unix tool.
 - **One-shot.** Open → review → close → done. No servers, no persistent state.
 - **Local-only.** No network access, no accounts, no telemetry. Your code stays on your machine.
 - **AI-native output.** The XML format is designed to be parsed by LLMs, with an XSD schema they can

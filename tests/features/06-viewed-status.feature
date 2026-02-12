@@ -25,6 +25,6 @@ Feature: File Viewed Status
 
   Scenario: Viewed status is reflected in XML output
     When I check the "Viewed" checkbox on the "src/auth/login.ts" file section header
-    And I close the Electron window
-    Then the XML output should contain a file element for "src/auth/login.ts" with viewed="true"
-    And the XML output should contain a file element for "src/config.ts" with viewed="false"
+    And I click "Finish Review"
+    Then the output file should contain a file element for "src/auth/login.ts" with viewed="true"
+    And the output file should contain a file element for "src/config.ts" with viewed="false"

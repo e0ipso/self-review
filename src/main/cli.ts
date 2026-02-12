@@ -60,15 +60,18 @@ Options:
   --version, -v           Show version number
 
 Examples:
-  self-review > review.xml                      # unstaged changes (git diff default)
-  self-review --staged > review.xml             # staged changes
-  self-review main..feature-branch > review.xml
-  self-review HEAD~3 > review.xml
-  self-review -- src/auth.ts > review.xml
-  self-review --resume-from review.xml > review-updated.xml
+  self-review                                   # unstaged changes (git diff default)
+  self-review --staged                          # staged changes
+  self-review main..feature-branch
+  self-review HEAD~3
+  self-review -- src/auth.ts
+  self-review --resume-from review.xml          # resume a previous review
 
 All arguments except --resume-from and --help are passed to git diff.
 If no arguments are provided, shows unstaged working tree changes.
+
+Output is written to ./review.xml by default (configurable via
+output-file in .self-review.yaml or ~/.config/self-review/config.yaml).
 `;
   console.error(help.trim());
 }

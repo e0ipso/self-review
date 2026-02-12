@@ -18,8 +18,8 @@ Feature: Error Handling
   Scenario: Empty diff produces valid output
     Given a git repository with no changes
     When I launch self-review
-    And I close the Electron window
-    Then stdout should contain valid XML
+    And I click "Finish Review"
+    Then the output file should contain valid XML
     And the XML should contain 0 file elements
     And the process should exit with code 0
 

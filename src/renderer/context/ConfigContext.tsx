@@ -14,6 +14,7 @@ const defaultConfig: AppConfig = {
   diffView: 'split',
   fontSize: 14,
   outputFormat: 'xml',
+  outputFile: './review.xml',
   ignore: [],
   categories: [
     {

@@ -9,10 +9,10 @@ import { XMLParser } from 'fast-xml-parser';
 import { createPriorReviewXml } from '../fixtures/test-repo';
 import {
   getPage,
-  getStdout,
   getExitCode,
   getStderr,
   getTestRepoDir,
+  readOutputFile,
 } from './app';
 
 const { Given, When, Then } = createBdd();
@@ -88,14 +88,14 @@ Then(
 );
 
 Then(
-  'the XML output should contain {int} comments for {string}',
+  'the output file should contain {int} comments for {string}',
   async ({}, count: number, filePath: string) => {
-    const stdout = getStdout();
+    const xmlContent = readOutputFile();
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
     });
-    const parsed = parser.parse(stdout);
+    const parsed = parser.parse(xmlContent);
     const files = Array.isArray(parsed.review.file)
       ? parsed.review.file
       : parsed.review.file

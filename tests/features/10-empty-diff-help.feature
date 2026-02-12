@@ -43,7 +43,7 @@ Feature: Empty Diff Help Message
   Scenario: Empty diff with arguments still produces valid XML on close
     Given a git repository with no changes matching "--staged"
     When I launch self-review with "--staged"
-    And I close the Electron window
-    Then stdout should contain valid XML
+    And I click "Finish Review"
+    Then the output file should contain valid XML
     And the XML should contain 0 file elements
     And the process should exit with code 0

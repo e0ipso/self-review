@@ -6,7 +6,14 @@ import { createBdd } from 'playwright-bdd';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { XMLParser } from 'fast-xml-parser';
-import { getPage, getStdout, getStderr, closeAppWindow, triggerCommentIcon } from './app';
+import {
+  getPage,
+  getStdout,
+  getStderr,
+  triggerCommentIcon,
+  readOutputFile,
+  outputFileExists,
+} from './app';
 
 const { When, Then } = createBdd();
 
@@ -131,12 +138,12 @@ When(
 // ── XML parsing helper ──
 
 function parseXmlOutput(): any {
-  const stdout = getStdout();
+  const xmlContent = readOutputFile();
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
   });
-  return parser.parse(stdout);
+  return parser.parse(xmlContent);
 }
 
 function getFileElement(filePath: string): any {
@@ -156,27 +163,39 @@ function getLastComment(filePath: string): any {
   return comments[comments.length - 1];
 }
 
-// ── Then: XML assertions ──
+// ── Then: output file assertions ──
 
-Then('stdout should contain valid XML', async () => {
-  const stdout = getStdout();
-  expect(stdout).toContain('<?xml');
+Then('the output file should exist', async () => {
+  expect(outputFileExists()).toBe(true);
+});
+
+Then('the output file should contain valid XML', async () => {
+  expect(outputFileExists()).toBe(true);
+  const xmlContent = readOutputFile();
+  expect(xmlContent).toContain('<?xml');
   // Should parse without errors
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
   });
-  const result = parser.parse(stdout);
+  const result = parser.parse(xmlContent);
   expect(result).toBeTruthy();
   expect(result.review).toBeTruthy();
 });
 
+Then('stdout should be empty', async () => {
+  const stdout = getStdout();
+  expect(stdout.trim()).toBe('');
+});
+
+// ── Then: XML assertions (reading from output file) ──
+
 Then(
   'the XML should have a root element {string} with namespace {string}',
   async ({}, element: string, namespace: string) => {
-    const stdout = getStdout();
-    expect(stdout).toContain(`<${element}`);
-    expect(stdout).toContain(`xmlns="${namespace}"`);
+    const xmlContent = readOutputFile();
+    expect(xmlContent).toContain(`<${element}`);
+    expect(xmlContent).toContain(`xmlns="${namespace}"`);
   }
 );
 
@@ -232,28 +251,28 @@ Then(
 Then(
   'that comment should have new-line-start={string} and new-line-end={string}',
   async ({}, start: string, end: string) => {
-    const stdout = getStdout();
-    expect(stdout).toContain(`new-line-start="${start}"`);
-    expect(stdout).toContain(`new-line-end="${end}"`);
+    const xmlContent = readOutputFile();
+    expect(xmlContent).toContain(`new-line-start="${start}"`);
+    expect(xmlContent).toContain(`new-line-end="${end}"`);
   }
 );
 
 Then(
   'that comment should have old-line-start={string} and old-line-end={string}',
   async ({}, start: string, end: string) => {
-    const stdout = getStdout();
-    expect(stdout).toContain(`old-line-start="${start}"`);
-    expect(stdout).toContain(`old-line-end="${end}"`);
+    const xmlContent = readOutputFile();
+    expect(xmlContent).toContain(`old-line-start="${start}"`);
+    expect(xmlContent).toContain(`old-line-end="${end}"`);
   }
 );
 
 Then('that comment should have body {string}', async ({}, body: string) => {
-  const stdout = getStdout();
-  expect(stdout).toContain(`<body>${body}</body>`);
+  const xmlContent = readOutputFile();
+  expect(xmlContent).toContain(`<body>${body}</body>`);
 });
 
 Then('that comment should not have line attributes', async () => {
-  // The last comment in stdout should not have line attributes
+  // The last comment in the output file should not have line attributes
   const parsed = parseXmlOutput();
   const files = Array.isArray(parsed.review.file)
     ? parsed.review.file
@@ -277,23 +296,23 @@ Then('that comment should not have line attributes', async () => {
 Then(
   'that comment should have a category element with text {string}',
   async ({}, category: string) => {
-    const stdout = getStdout();
-    expect(stdout).toContain(`<category>${category}</category>`);
+    const xmlContent = readOutputFile();
+    expect(xmlContent).toContain(`<category>${category}</category>`);
   }
 );
 
 Then('that comment should have a suggestion element', async () => {
-  const stdout = getStdout();
-  expect(stdout).toContain('<suggestion>');
-  expect(stdout).toContain('</suggestion>');
+  const xmlContent = readOutputFile();
+  expect(xmlContent).toContain('<suggestion>');
+  expect(xmlContent).toContain('</suggestion>');
 });
 
 Then(
   'the suggestion should have a/an {string} element',
   async ({}, element: string) => {
-    const stdout = getStdout();
-    expect(stdout).toContain(`<${element}>`);
-    expect(stdout).toContain(`</${element}>`);
+    const xmlContent = readOutputFile();
+    expect(xmlContent).toContain(`<${element}>`);
+    expect(xmlContent).toContain(`</${element}>`);
   }
 );
 
@@ -320,24 +339,19 @@ Then(
 );
 
 Then(
-  'the XML output should validate against {string}',
+  'the output file should validate against {string}',
   async ({}, xsdPath: string) => {
     // Use xmllint-wasm for validation
     const { validateXML } = await import('xmllint-wasm');
-    const stdout = getStdout();
+    const xmlContent = readOutputFile();
     const xsdContent = readFileSync(resolve(process.cwd(), xsdPath), 'utf-8');
     const result = await validateXML({
-      xml: [{ fileName: 'review.xml', contents: stdout }],
+      xml: [{ fileName: 'review.xml', contents: xmlContent }],
       schema: [{ fileName: 'schema.xsd', contents: xsdContent }],
     });
     expect(result.valid).toBe(true);
   }
 );
-
-Then('stdout should start with {string}', async ({}, prefix: string) => {
-  const stdout = getStdout();
-  expect(stdout.trimStart().startsWith(prefix)).toBe(true);
-});
 
 Then('stderr should not be empty', async () => {
   const stderr = getStderr();

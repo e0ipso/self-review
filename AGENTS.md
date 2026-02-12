@@ -2,7 +2,7 @@
 
 Local-only Electron desktop app that provides a GitHub-style PR review UI for local git diffs.
 Designed for solo developers reviewing AI-generated code. CLI-first, one-shot workflow: open →
-review → close → XML to stdout.
+review → close → XML to file.
 
 ## Dev Container
 
@@ -73,8 +73,8 @@ self-review/
 Two-process model:
 
 1. **Main process** — parses CLI args, runs `git diff`, parses the unified diff into a structured
-   AST (`DiffFile[]`), sends it to the renderer via IPC. On window close, collects review state from
-   renderer via IPC, serializes to XML, writes to stdout, exits.
+   AST (`DiffFile[]`), sends it to the renderer via IPC. On "Finish Review" or "Save & Quit",
+   collects review state from renderer via IPC, serializes to XML, writes to the output file, exits.
 2. **Renderer process** — React app that renders the review UI. Manages all review state (comments,
    suggestions, viewed flags) in React context. Communicates with main via the preload bridge.
 
@@ -91,6 +91,9 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | `review:submit` | Renderer → Main | `ReviewState`     | Collect review on window close        |
 | `resume:load`   | Main → Renderer | `ReviewComment[]` | Load prior comments for --resume-from |
 | `config:load`   | Main → Renderer | `AppConfig`       | Send merged configuration             |
+| `app:close-requested` | Main → Renderer | (none)      | Notify renderer that user tried to close the window |
+| `app:save-and-quit`   | Renderer → Main | (none)      | Save review to file and exit          |
+| `app:discard-and-quit` | Renderer → Main | (none)     | Exit without saving                   |
 
 ## Shared Types
 
@@ -155,13 +158,16 @@ E2E tests use Playwright with Cucumber BDD:
 
 ## Critical Conventions
 
-- **stdout is sacred.** Only XML output goes to stdout. All logging, warnings, and errors go to
-  stderr. Use `console.error()` for logging in the main process, never `console.log()`.
+- **stdout is unused.** Nothing is written to stdout. XML output is written to a file (default
+  `./review.xml`, configurable via `output-file` in YAML config). All logging goes to stderr. Use
+  `console.error()` for logging in the main process, never `console.log()`.
 - **No network access.** The app makes zero network requests. No telemetry, no analytics, no CDN
   fetches. All assets are bundled.
-- **No file writes.** The app writes nothing to disk. Output goes to stdout only.
-- **Close = done.** Closing the window by any method triggers review:submit → XML serialization →
-  stdout → exit(0). No confirmation dialogs, no save prompts.
+- **One file write.** The app writes exactly one file: the review XML output, at the configured
+  `output-file` path (default `./review.xml`). No other files are written.
+- **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
+  Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit /
+  Discard / Cancel.
 - **XML must validate.** The serializer validates output against the XSD before writing. If
   validation fails, write error to stderr and exit(1).
 - **Line numbers: old vs new.** Comments on added/context lines use `newLineStart`/`newLineEnd`.
@@ -178,7 +184,6 @@ E2E tests use Playwright with Cucumber BDD:
 - Do not use `localStorage` or any browser storage APIs.
 - Do not use `require()` in the renderer — use ES module imports.
 - Do not use `nodeIntegration: true` — use the preload script.
-- Do not add confirmation dialogs on window close.
 - Do not create wrapper elements in the XML output (no `<files>`, no `<comments>` wrapper).
 - Do not store any state outside of React context in the renderer.
-- Do not use `console.log()` in the main process (it writes to stdout).
+- Do not use `console.log()` in the main process (use `console.error()` for stderr logging).

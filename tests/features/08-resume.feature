@@ -34,8 +34,8 @@ Feature: Resume from Prior Review
       | src/auth/login.ts | 5              | 5            | Delete me  |
     When I launch self-review with "--resume-from review.xml"
     And I click "Delete" on the comment "Delete me"
-    And I close the Electron window
-    Then the XML output should contain 0 comments for "src/auth/login.ts"
+    And I click "Finish Review"
+    Then the output file should contain 0 comments for "src/auth/login.ts"
 
   Scenario: New comments can be added alongside resumed comments
     Given a prior review XML file "review.xml" with these comments:
@@ -43,8 +43,8 @@ Feature: Resume from Prior Review
       | src/auth/login.ts | 5              | 5            | Prior comment |
     When I launch self-review with "--resume-from review.xml"
     And I add a comment "New comment" on new line 10 of "src/auth/login.ts"
-    And I close the Electron window
-    Then the XML output should contain 2 comments for "src/auth/login.ts"
+    And I click "Finish Review"
+    Then the output file should contain 2 comments for "src/auth/login.ts"
 
   Scenario: Resume with invalid XML file exits with error
     Given a file "bad-review.xml" containing "not valid xml {"

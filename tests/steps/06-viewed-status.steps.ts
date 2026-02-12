@@ -3,7 +3,7 @@
  */
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { getPage, getStdout } from './app';
+import { getPage, readOutputFile } from './app';
 
 const { When, Then } = createBdd();
 
@@ -50,12 +50,12 @@ Then(
 );
 
 Then(
-  'the XML output should contain a file element for {string} with viewed={string}',
+  'the output file should contain a file element for {string} with viewed={string}',
   async ({}, filePath: string, viewedValue: string) => {
-    const stdout = getStdout();
+    const xmlContent = readOutputFile();
     const regex = new RegExp(
       `<file[^>]*path="${filePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*viewed="${viewedValue}"`
     );
-    expect(stdout).toMatch(regex);
+    expect(xmlContent).toMatch(regex);
   }
 );

@@ -43,7 +43,7 @@ Feature: App Launch and Diff Display
     When I launch self-review
     Then the file section for "src/auth/login.ts" should display hunk headers starting with "@@"
 
-  Scenario: App exits with code 0 on window close
+  Scenario: App exits with code 0 on finish review
     When I launch self-review
-    And I close the Electron window
+    And I click "Finish Review"
     Then the process should exit with code 0

@@ -26,7 +26,7 @@ A single developer working locally with AI coding agents. They are comfortable w
 
 ### 1.3 Design Philosophy
 
-- **CLI-first.** The app is launched from the terminal, receives input via CLI arguments, and writes output to stdout. It behaves like a Unix tool.
+- **CLI-first.** The app is launched from the terminal, receives input via CLI arguments, and writes output to a file (default `./review.xml`, configurable via `output-file` in YAML config). It behaves like a Unix tool.
 - **One-shot workflow.** Open → review → close → done. No persistent state, no servers running in the background.
 - **Machine-readable output.** The primary consumer of the review output is an AI agent, not a human. The format must be structured, validated, and self-documenting.
 - **Minimal footprint.** No accounts, no cloud, no telemetry, no auto-updates. A local tool that does one thing well.
@@ -59,7 +59,7 @@ A single developer working locally with AI coding agents. They are comfortable w
 
 The application follows Electron's standard two-process model:
 
-- **Main process (Node.js):** Handles CLI argument parsing, runs `git diff`, launches the renderer, manages IPC communication, and writes XML output to stdout on exit.
+- **Main process (Node.js):** Handles CLI argument parsing, runs `git diff`, launches the renderer, manages IPC communication, and writes XML output to the configured output file on exit.
 - **Renderer process (React):** Renders the review UI, manages review state (comments, suggestions), and communicates with the main process via IPC.
 
 ### 3.2 Data Flow
@@ -68,7 +68,7 @@ The application follows Electron's standard two-process model:
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Terminal                                                            │
 │                                                                     │
-│  $ self-review --staged > review.xml                                │
+│  $ self-review --staged                                             │
 │         │                                                           │
 │         ▼                                                           │
 │  ┌─────────────┐     ┌──────────────┐     ┌───────────────────┐    │
@@ -97,10 +97,10 @@ The application follows Electron's standard two-process model:
 │                                          │ (main process)   │       │
 │                                          └────────┬────────┘       │
 │                                                   │                 │
-│                                              stdout (XML)           │
+│                                          write to output file        │
 │                                                   │                 │
 │                                                   ▼                 │
-│                                             review.xml              │
+│                                      ./review.xml (default)         │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -114,6 +114,9 @@ The main process and renderer process communicate via Electron's `ipcMain` / `ip
 | `review:submit` | Renderer → Main | Complete review state (all comments, suggestions) | Triggered on window close |
 | `resume:load` | Main → Renderer | Previously exported XML parsed back into review state | Resume from prior review |
 | `config:load` | Main → Renderer | Merged configuration (user + project) | Theme, view mode, categories |
+| `app:close-requested` | Main → Renderer | (none) | Notify renderer that user tried to close the window |
+| `app:save-and-quit` | Renderer → Main | (none) | Save review to file and exit |
+| `app:discard-and-quit` | Renderer → Main | (none) | Exit without saving |
 
 ---
 
@@ -138,41 +141,49 @@ The CLI accepts any arguments that `git diff` accepts. These are passed through 
 ### 4.3 Usage Examples
 
 ```bash
-# Review staged changes
-self-review --staged > review.xml
+# Review staged changes (writes ./review.xml by default)
+self-review --staged
 
 # Review changes between branches
-self-review main..feature-branch > review.xml
+self-review main..feature-branch
 
 # Review last 3 commits
-self-review HEAD~3 > review.xml
+self-review HEAD~3
 
 # Review specific files
-self-review --staged -- src/auth.ts src/db.ts > review.xml
+self-review --staged -- src/auth.ts src/db.ts
 
 # Resume a previous review
-self-review --staged --resume-from review.xml > review-updated.xml
+self-review --staged --resume-from review.xml
 ```
 
-### 4.4 stdout / stderr Separation
+### 4.4 Output and Logging
 
-- **stdout** is reserved exclusively for XML output. Nothing else may be written to stdout.
+- **XML output** is written to a file (default `./review.xml`, configurable via `output-file` in YAML config). The output file path is logged to stderr on successful write.
+- **stdout** is unused. Nothing is written to stdout.
 - **stderr** is used for all logging, progress messages, warnings, and errors.
-
-This follows standard Unix conventions and enables clean piping with the `>` operator.
 
 ### 4.5 Exit Behavior
 
-When the Electron window is closed — by any method (clicking the window close button, pressing Cmd+Q / Ctrl+Q, or any other OS-level close action) — the application:
+There are two exit paths:
+
+**Finish Review button:** Clicking "Finish Review" in the toolbar saves the review to the configured output file and exits immediately with code 0. This is the primary exit path.
+
+**Window close (X / Cmd+Q / Alt+F4):** Closing the window by any OS-level method shows a three-way confirmation dialog:
+
+1. **Save & Quit** — collects the review state, serializes to XML, writes to the output file, exits with code 0.
+2. **Discard** — exits immediately with code 0, without writing any output.
+3. **Cancel** — dismisses the dialog and returns to the review.
+
+In both save paths, the application:
 
 1. Collects the current review state from the renderer process via IPC.
 2. Serializes it to XML.
-3. Writes the XML to stdout.
-4. Exits with code 0.
+3. Writes the XML to the configured output file (default `./review.xml`).
+4. Logs the output file path to stderr.
+5. Exits with code 0.
 
-There is no distinction between "Done" and "close." Closing the window is "done." There is no confirmation dialog, no summary screen, no separate "submit" action.
-
-If the user closes the window before adding any comments, an empty review XML (valid against the schema, with zero comments) is written to stdout.
+If the user saves before adding any comments, an empty review XML (valid against the schema, with zero comments) is written to the output file.
 
 ---
 
@@ -342,7 +353,7 @@ The default is **System**.
 
 The review output is an XML document conforming to a published XSD schema. The schema serves two purposes:
 
-1. **Validation:** The application validates its own output against the schema before writing to stdout. If validation fails, the application writes an error to stderr and exits with code 1.
+1. **Validation:** The application validates its own output against the schema before writing to the output file. If validation fails, the application writes an error to stderr and exits with code 1.
 2. **LLM grounding:** The XSD is designed to be fed to an AI agent alongside the review XML, so the agent can understand the structure, semantics, and constraints of the feedback it receives.
 
 ### 6.2 XML Structure
@@ -457,6 +468,9 @@ prism-theme: one-dark
 # Editor font size in pixels
 font-size: 14
 
+# Output file path for the review XML
+output-file: ./review.xml
+
 # Default output format (reserved for future multi-format support)
 output-format: xml
 
@@ -527,7 +541,7 @@ The `--resume-from` flag accepts a path to a previously exported XML file. The a
 2. Runs `git diff` with the provided arguments to generate the current diff.
 3. Launches the Electron window with the diff data and the prior review state overlaid.
 4. The user can edit, delete, or add new comments.
-5. On close, the updated review state is written to stdout as a new XML file.
+5. On save (via "Finish Review" or "Save & Quit"), the updated review state is written to the output file.
 
 ### 8.2 Conflict Handling
 
@@ -618,7 +632,7 @@ No artificial limit is imposed on diff size. Performance for very large diffs (t
 
 - The application does not open any network connections. All operations are local.
 - The application does not execute arbitrary code from the diff content. Syntax highlighting is purely visual.
-- The application does not write any files except to stdout. No hidden files, no temp files, no analytics.
+- The application writes exactly one file: the review XML output at the configured `output-file` path (default `./review.xml`). No hidden files, no temp files, no analytics.
 
 ---
 
