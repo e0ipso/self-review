@@ -17,6 +17,55 @@ to your AI agent.
 
 ![Screenshot](./docs/screenshot.png)
 
+## Installation
+
+Download the latest release from [GitHub Releases](https://github.com/e0ipso/self-review/releases).
+
+<details>
+<summary>Linux (Debian/Ubuntu)</summary>
+
+Download the `.deb` package and install it:
+
+```bash
+# Replace X.Y.Z with the version you downloaded
+sudo dpkg -i self-review_X.Y.Z_amd64.deb
+```
+
+The `self-review` command will be available system-wide.
+
+</details>
+
+<details>
+<summary>Linux (Fedora/RHEL)</summary>
+
+Download the `.rpm` package and install it:
+
+```bash
+# Replace X.Y.Z with the version you downloaded
+sudo rpm -i self-review-X.Y.Z-1.x86_64.rpm
+```
+
+The `self-review` command will be available system-wide.
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+Download the `.zip` archive, extract it, and move the app to your Applications folder:
+
+```bash
+unzip self-review-darwin-*.zip -d /Applications
+```
+
+To use the `self-review` command from the terminal, create a symlink:
+
+```bash
+sudo ln -s /Applications/self-review.app/Contents/MacOS/self-review /usr/local/bin/self-review
+```
+
+</details>
+
 ## How it works
 
 ```bash

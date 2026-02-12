@@ -79,7 +79,7 @@ jobs:
         run: npx bddgen
 
       - name: Run E2E tests
-        run: xvfb-run --auto-servernum npx playwright test
+        run: xvfb-run --auto-servernum npx playwright test --project=e2e
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
