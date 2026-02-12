@@ -34,6 +34,7 @@ describe('config', () => {
       expect(config.theme).toBe('system');
       expect(config.diffView).toBe('split');
       expect(config.fontSize).toBe(14);
+      expect(config.outputFile).toBe('./review.xml');
       expect(config.categories).toHaveLength(5);
       expect(config.categories[0].name).toBe('bug');
       expect(config.wordWrap).toBe(true);
@@ -264,6 +265,42 @@ categories:
       const config = loadConfig();
 
       expect(config.wordWrap).toBe(true);
+    });
+
+    it('loads output-file from config', () => {
+      const mockYaml = `output-file: './custom-output.xml'`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.outputFile).toBe('./custom-output.xml');
+    });
+
+    it('project config output-file takes precedence over user config', () => {
+      const userYaml = `output-file: './user.xml'`;
+      const projectYaml = `output-file: './project.xml'`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockImplementation(filepath => {
+        if (filepath.includes('.config/self-review')) {
+          return userYaml;
+        }
+        return projectYaml;
+      });
+
+      const config = loadConfig();
+
+      expect(config.outputFile).toBe('./project.xml');
+    });
+
+    it('ignores empty output-file and uses default', () => {
+      const mockYaml = `output-file: ''`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.outputFile).toBe('./review.xml');
     });
   });
 });

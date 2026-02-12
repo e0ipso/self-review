@@ -8,4 +8,7 @@ export const IPC = {
   RESUME_LOAD: 'resume:load',
   CONFIG_LOAD: 'config:load',
   CONFIG_REQUEST: 'config:request',
+  APP_CLOSE_REQUESTED: 'app:close-requested',
+  APP_SAVE_AND_QUIT: 'app:save-and-quit',
+  APP_DISCARD_AND_QUIT: 'app:discard-and-quit',
 } as const;

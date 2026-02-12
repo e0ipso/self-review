@@ -83,6 +83,7 @@ export interface AppConfig {
   diffView: 'split' | 'unified';
   fontSize: number;
   outputFormat: string;
+  outputFile: string;
   ignore: string[];
   categories: CategoryDef[];
   defaultDiffArgs: string;
@@ -113,6 +114,9 @@ export interface ElectronAPI {
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
   submitReview: (state: ReviewState) => void;
   onRequestReview: (callback: () => void) => void;
+  onCloseRequested: (callback: () => void) => void;
+  saveAndQuit: () => void;
+  discardAndQuit: () => void;
 }
 
 declare global {

@@ -48,4 +48,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRequestReview: (callback: () => void) => {
     ipcRenderer.on('review:request', () => callback());
   },
+
+  onCloseRequested: (callback: () => void) => {
+    ipcRenderer.on(IPC.APP_CLOSE_REQUESTED, () => callback());
+  },
+
+  saveAndQuit: () => {
+    ipcRenderer.send(IPC.APP_SAVE_AND_QUIT);
+  },
+
+  discardAndQuit: () => {
+    ipcRenderer.send(IPC.APP_DISCARD_AND_QUIT);
+  },
 });

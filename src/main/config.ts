@@ -12,6 +12,7 @@ const defaults: AppConfig = {
   diffView: 'split',
   fontSize: 14,
   outputFormat: 'xml',
+  outputFile: './review.xml',
   ignore: [],
   categories: [
     {
@@ -151,6 +152,14 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
 
   if ('word-wrap' in raw && typeof raw['word-wrap'] === 'boolean') {
     config.wordWrap = raw['word-wrap'];
+  }
+
+  if (
+    'output-file' in raw &&
+    typeof raw['output-file'] === 'string' &&
+    raw['output-file'].length > 0
+  ) {
+    config.outputFile = raw['output-file'];
   }
 
   return config;
