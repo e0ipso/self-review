@@ -116,9 +116,20 @@ jobs:
 
       - run: npm ci
 
-      # npm Trusted Publishing (OIDC) — configure on npmjs.com:
-      # Package → Settings → Trusted Publishers → GitHub Actions
-      # owner=e0ipso, repo=self-review, workflow=ci.yml (exact filename, case-sensitive)
+      - name: Get OIDC token and set as NPM_TOKEN
+        run: |
+          # Manually perform the OIDC exchange to bypass plugin detection issues
+          ID_TOKEN=$(node --input-type=module -e "import { getIDToken } from '@actions/core'; console.log(await getIDToken('npm:registry.npmjs.org'))")
+          NPM_TOKEN=$(curl -s -X POST \
+            https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/%40e0ipso%2Fself-review \
+            -H "Authorization: Bearer $ID_TOKEN" | node -e "const fs = require('fs'); const body = JSON.parse(fs.readFileSync(0)); console.log(body.token)")
+          if [ -z "$NPM_TOKEN" ] || [ "$NPM_TOKEN" = "undefined" ]; then
+            echo "Failed to get npm token via OIDC"
+            exit 1
+          fi
+          echo "NPM_TOKEN=$NPM_TOKEN" >> $GITHUB_ENV
+          echo "::add-mask::$NPM_TOKEN"
+
       - name: Run semantic-release
         run: npx semantic-release
         env:
