@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success'
     permissions:
+      actions: write
       contents: write
       issues: write
       pull-requests: write
@@ -74,5 +75,11 @@ jobs:
       - name: Upload release assets
         if: steps.tag.outputs.tag != ''
         run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger macOS build
+        if: steps.tag.outputs.tag != ''
+        run: gh workflow run release-darwin.yml -f tag="${{ steps.tag.outputs.tag }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

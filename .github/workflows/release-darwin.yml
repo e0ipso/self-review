@@ -1,16 +1,20 @@
 # GitHub Actions Release Pipeline for self-review (macOS)
 #
-# Triggered when the Linux release workflow pushes a version tag. Builds a macOS
-# .zip archive and uploads it to the existing GitHub Release.
+# Triggered by the Linux release workflow after semantic-release creates a new
+# tag. Builds a macOS .zip archive and uploads it to the existing GitHub Release.
 
 name: Release (macOS)
 
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.2.3)'
+        required: true
+        type: string
 
 concurrency:
-  group: release-darwin-${{ github.ref }}
+  group: release-darwin-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -21,6 +25,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
 
       - uses: actions/setup-node@v4
         with:
@@ -31,7 +37,7 @@ jobs:
 
       - name: Wait for GitHub Release to exist
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${{ inputs.tag }}"
           for i in $(seq 1 30); do
             if gh release view "$TAG" > /dev/null 2>&1; then
               echo "Release $TAG found"
@@ -50,7 +56,7 @@ jobs:
 
       - name: Upload release assets
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${{ inputs.tag }}"
           shopt -s globstar
           gh release upload "$TAG" out/make/zip/darwin/**/*.zip --clobber
         env:
