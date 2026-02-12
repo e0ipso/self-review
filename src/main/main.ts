@@ -262,18 +262,11 @@ function createWindow(): void {
       const xml = await serializeReview(reviewState);
       console.error('[main] XML serialization complete, length:', xml.length);
 
-      // Write to stdout
-      process.stdout.write(xml);
-      process.stdout.write('\n');
-      console.error('[main] XML written to stdout');
-
-      // Now quit
-      mainWindow.destroy();
-      mainWindow = null;
-      console.error('[main] Window destroyed, exiting with code 0');
-
-      // Exit cleanly with code 0
-      process.exit(0);
+      // Write to stdout and exit only after flush (callback guarantees data reaches pipe)
+      process.stdout.write(xml + '\n', () => {
+        mainWindow?.destroy();
+        process.exit(0);
+      });
     } catch (error) {
       if (error instanceof Error) {
         console.error(`[main] Error during window close: ${error.message}`);
