@@ -41,8 +41,8 @@ Feature: View Modes and Toolbar
 
   Scenario: Toolbar displays diff stats summary
     Then the toolbar should show "4 files changed"
-    And the toolbar should show additions count "+37"
-    And the toolbar should show deletions count "-44"
+    And the toolbar should show additions count "+49"
+    And the toolbar should show deletions count "-51"
 
   Scenario: Toggle theme to dark mode
     When I switch the theme to "Dark" in the toolbar

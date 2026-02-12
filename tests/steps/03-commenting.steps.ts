@@ -335,7 +335,7 @@ When('I click {string} on that comment', async ({}, action: string) => {
   const page = getPage();
   // Find the most recently added comment and click its action button
   const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
   );
   const lastComment = comments.last();
   if (action === 'Edit') {
@@ -466,7 +466,7 @@ Then(
   async ({}, _line: number, _filePath: string) => {
     const page = getPage();
     const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
     );
     expect(await comments.count()).toBeGreaterThan(0);
   }
@@ -477,7 +477,7 @@ Then(
   async ({}, _line: number, _filePath: string) => {
     const page = getPage();
     const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
     );
     expect(await comments.count()).toBeGreaterThan(0);
   }
@@ -488,7 +488,7 @@ Then(
   async ({}, filePath: string) => {
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-    const comments = section.locator('[data-testid^="comment-"]');
+    const comments = section.locator('[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid^="comment-collapse"])');
     expect(await comments.count()).toBeGreaterThan(0);
   }
 );
@@ -496,7 +496,7 @@ Then(
 Then('the comment should show {string}', async ({}, expectedText: string) => {
   const page = getPage();
   const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
   );
   const lastComment = comments.last();
   await expect(lastComment).toContainText(expectedText);
@@ -505,7 +505,7 @@ Then('the comment should show {string}', async ({}, expectedText: string) => {
 Then('the comment header should show {string}', async ({}, text: string) => {
   const page = getPage();
   const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
   );
   const lastComment = comments.last();
   await expect(lastComment).toContainText(text);
@@ -516,7 +516,7 @@ Then(
   async ({}, text: string) => {
     const page = getPage();
     const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
     );
     const lastComment = comments.last();
     await expect(lastComment).toContainText(text);
@@ -526,7 +526,7 @@ Then(
 Then('the comment display should show no line range indicator', async () => {
   const page = getPage();
   const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
   );
   const lastComment = comments.last();
   // File-level comments have no lineRange so no "line X" or "lines X–Y" text
@@ -555,7 +555,7 @@ Then(
   async ({}, category: string) => {
     const page = getPage();
     const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
     );
     const lastComment = comments.last();
     await expect(lastComment.locator('.category-badge')).toContainText(
@@ -577,7 +577,7 @@ Then(
 Then('the comment should be removed', async () => {
   const page = getPage();
   const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
   );
   await expect(comments).toHaveCount(0);
 });
@@ -587,7 +587,7 @@ Then(
   async ({}, _line: number) => {
     const page = getPage();
     const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
     );
     await expect(comments).toHaveCount(0);
   }
@@ -620,7 +620,7 @@ Then(
   async ({}, _line: number) => {
     const page = getPage();
     const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
     );
     expect(await comments.count()).toBeGreaterThan(0);
   }
@@ -633,7 +633,7 @@ Then(
   async ({}, text: string) => {
     const page = getPage();
     const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
     );
     const lastComment = comments.last();
     const bold = lastComment.locator('strong');
@@ -644,7 +644,7 @@ Then(
 Then('{string} as italic text', async ({}, text: string) => {
   const page = getPage();
   const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
   );
   const lastComment = comments.last();
   const italic = lastComment.locator('em');
@@ -656,7 +656,7 @@ Then(
   async () => {
     const page = getPage();
     const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
     );
     const lastComment = comments.last();
     const codeBlock = lastComment.locator('pre');
@@ -667,7 +667,7 @@ Then(
 Then('the table should render with borders', async () => {
   const page = getPage();
   const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid="comment-input"])'
+    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
   );
   const lastComment = comments.last();
   const table = lastComment.locator('table');

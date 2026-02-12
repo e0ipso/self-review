@@ -114,7 +114,7 @@ export default function SplitView({
           className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter relative`}
           data-testid={lineTestId}
         >
-          {lineNumber && line.type !== 'context' && (
+          {lineNumber && (
             <button
               className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
               onMouseDown={e => {

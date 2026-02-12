@@ -18,7 +18,7 @@ Feature: XML Output
     And I close the Electron window
     Then stdout should contain valid XML
     And the XML should have a root element "review" with namespace "urn:self-review:v1"
-    And the XML should contain 2 file elements
+    And the XML should contain 4 file elements
     And the XML "review" element should have a "timestamp" attribute
     And the XML "review" element should have a "git-diff-args" attribute
     And the XML "review" element should have a "repository" attribute

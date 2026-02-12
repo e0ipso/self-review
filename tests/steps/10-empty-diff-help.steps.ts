@@ -84,11 +84,20 @@ Then(
 );
 
 Then(
-  'the diff viewer should show {int} file section',
+  'the diff viewer should show {int} file section(s)',
   async ({}, count: number) => {
     const page = getPage();
     const sections = page.locator('[data-testid^="file-section-"]');
     await expect(sections).toHaveCount(count);
+  }
+);
+
+Then(
+  'the file tree should display the message {string}',
+  async ({}, text: string) => {
+    const page = getPage();
+    const fileTree = page.locator('[data-testid="file-tree"]');
+    await expect(fileTree).toContainText(text);
   }
 );
 

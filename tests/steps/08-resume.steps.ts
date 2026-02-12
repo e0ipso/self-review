@@ -53,7 +53,7 @@ When(
   async ({}, action: string, commentBody: string) => {
     const page = getPage();
     // Find the comment that contains the body text
-    const comments = page.locator('[data-testid^="comment-"]');
+    const comments = page.locator('[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid^="comment-collapse"])');
     const count = await comments.count();
     for (let i = 0; i < count; i++) {
       const text = await comments.nth(i).textContent();

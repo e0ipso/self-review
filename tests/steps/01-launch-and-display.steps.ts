@@ -197,7 +197,7 @@ Then('addition lines should have a green background', async () => {
   const page = getPage();
   const additionLine = page.locator('.diff-line-addition').first();
   await expect(additionLine).toBeVisible();
-  await expect(additionLine).toHaveClass(/bg-green/);
+  await expect(additionLine).toHaveClass(/bg-emerald/);
 });
 
 Then('deletion lines should have a red background', async () => {

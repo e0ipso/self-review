@@ -116,7 +116,7 @@ export default function UnifiedView({
                         : undefined
                     }
                   >
-                    {line.oldLineNumber && line.type !== 'context' && (
+                    {line.oldLineNumber && (
                       <button
                         className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter-old:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
                         onMouseDown={e => {
@@ -142,7 +142,7 @@ export default function UnifiedView({
                         : undefined
                     }
                   >
-                    {line.newLineNumber && line.type !== 'context' && (
+                    {line.newLineNumber && (
                       <button
                         className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter-new:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
                         onMouseDown={e => {

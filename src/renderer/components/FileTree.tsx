@@ -164,7 +164,7 @@ export default function FileTree() {
                   <div className='flex items-center gap-1.5 min-w-0'>
                     {/* Change type indicator */}
                     <span
-                      className={`flex-shrink-0 inline-flex items-center justify-center w-[18px] h-[18px] rounded-sm text-[10px] font-bold leading-none ${changeType.className}`}
+                      className={`change-type-badge flex-shrink-0 inline-flex items-center justify-center w-[18px] h-[18px] rounded-sm text-[10px] font-bold leading-none ${changeType.className}`}
                     >
                       {changeType.label}
                     </span>
