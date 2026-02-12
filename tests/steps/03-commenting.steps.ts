@@ -6,7 +6,7 @@ import { createBdd, DataTable } from 'playwright-bdd';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { Page } from '@playwright/test';
-import { getPage, getTestRepoDir, triggerCommentIcon, closeAppWindow } from './app';
+import { getPage, getTestRepoDir, triggerCommentIcon, saveAndCloseApp } from './app';
 
 const { Given, When, Then } = createBdd();
 
@@ -317,7 +317,7 @@ When('I click {string}', async ({}, buttonText: string) => {
   } else if (buttonText === 'Add suggestion') {
     await page.locator('[data-testid="add-suggestion-btn"]').click();
   } else if (buttonText === 'Finish Review') {
-    await closeAppWindow();
+    await saveAndCloseApp();
   }
 });
 

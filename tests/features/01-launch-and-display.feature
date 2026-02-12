@@ -43,7 +43,7 @@ Feature: App Launch and Diff Display
     When I launch self-review
     Then the file section for "src/auth/login.ts" should display hunk headers starting with "@@"
 
-  Scenario: App exits with code 0 on finish review
+  Scenario: App exits with code 0 on close
     When I launch self-review
-    And I click "Finish Review"
+    And I close the app
     Then the process should exit with code 0

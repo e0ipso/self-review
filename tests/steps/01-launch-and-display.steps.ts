@@ -215,7 +215,7 @@ Then(
   }
 );
 
-When('I close the Electron window', async () => {
+When('I close the app', async () => {
   await closeAppWindow();
 });
 

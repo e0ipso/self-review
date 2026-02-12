@@ -145,18 +145,36 @@ export async function launchAppExpectExit(
 
 /**
  * Close the Electron window by triggering saveAndQuit, which writes XML to file and exits.
- * This simulates clicking the "Finish Review" button.
+ * Use this only when the test needs to assert on the output file.
  */
-export async function closeAppWindow(): Promise<void> {
+export async function saveAndCloseApp(): Promise<void> {
   if (!electronApp) return;
 
-  // Trigger saveAndQuit via the renderer's electronAPI (same as clicking Finish Review)
   const page = await electronApp.firstWindow();
   await page.evaluate(() => {
     (window as any).electronAPI.saveAndQuit();
   });
 
-  // Wait for the process to finish (XML serialization to file + exit)
+  if (processExitPromise) {
+    await Promise.race([
+      processExitPromise,
+      new Promise<number>(resolve => setTimeout(() => resolve(-1), 15000)),
+    ]);
+  }
+}
+
+/**
+ * Close the Electron window by triggering discardAndQuit (no file write).
+ * Use this when the test does NOT need the output file.
+ */
+export async function closeAppWindow(): Promise<void> {
+  if (!electronApp) return;
+
+  const page = await electronApp.firstWindow();
+  await page.evaluate(() => {
+    (window as any).electronAPI.discardAndQuit();
+  });
+
   if (processExitPromise) {
     await Promise.race([
       processExitPromise,
