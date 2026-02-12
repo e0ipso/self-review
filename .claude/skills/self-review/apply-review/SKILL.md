@@ -99,9 +99,19 @@ Before making any changes, output a markdown summary of the planned work:
 
 Omit any priority section that has no comments. Omit the questions section if there are none.
 
-## Step 5: Execute the Tasks
+## Step 5: Create Tasks and Execute in Parallel
 
-After outputting the plan, proceed to execute the changes:
+Use the built-in **TaskCreate** tool to create one task per file that has actionable comments. Each
+task should include the file path, the list of comments (with line numbers, categories, and
+suggestion bodies), and clear instructions for what to change. Then use **TaskUpdate** to set up
+dependencies between tasks that correspond to the parallel execution groups from Step 4.
+
+After creating all tasks, use the **Task** tool to spawn subagents that work on independent files
+concurrently. Launch one subagent per parallel execution group — files in the same group can share a
+single subagent since they are independent. Files in later groups (that depend on earlier groups)
+must wait until those groups complete.
+
+Each subagent (or your own direct execution for small reviews) should follow these rules:
 
 1. **Apply suggestions first.** For each `<suggestion>`, find the `original-code` text in the file
    and replace it with `proposed-code`. Use the line number attributes as hints to locate the code,
@@ -118,6 +128,10 @@ After outputting the plan, proceed to execute the changes:
 
 5. **Skip questions.** Do not make changes for `question` category comments unless the answer is
    obvious and the implied change is clear.
+
+For small reviews (3 or fewer files, all independent), you may skip subagent spawning and apply the
+changes directly. For larger reviews, parallelization via the Task tool significantly reduces
+execution time.
 
 ## Important Notes
 
