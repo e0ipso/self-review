@@ -180,6 +180,7 @@ Then(
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     // Prism.js adds token spans for highlighting
     const tokens = section.locator('.token');
+    await tokens.first().waitFor({ state: 'visible', timeout: 10000 });
     expect(await tokens.count()).toBeGreaterThan(0);
   }
 );
@@ -204,6 +205,7 @@ Then(
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     const hunkHeaders = section.locator('.hunk-header');
+    await hunkHeaders.first().waitFor({ state: 'visible', timeout: 10000 });
     const count = await hunkHeaders.count();
     expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {

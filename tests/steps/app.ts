@@ -161,22 +161,30 @@ export async function saveAndCloseApp(): Promise<void> {
 
   try {
     const page = await electronApp.firstWindow();
+    // saveAndQuit triggers process.exit(0) in main after writing the XML.
+    // The page connection may close before evaluate returns.
     await page.evaluate(() => {
       (window as any).electronAPI.saveAndQuit();
     });
   } catch {
-    // Page/browser already closed — force-kill the process instead.
-    try {
-      electronApp.process().kill();
-    } catch {
-      // Already dead
-    }
+    // evaluate likely threw because the process exited (closing the
+    // connection).  Do NOT kill here — the process may be exiting cleanly.
   }
 
   if (processExitPromise) {
     await Promise.race([
       processExitPromise,
-      new Promise<number>(resolve => setTimeout(() => resolve(-1), 15000)),
+      new Promise<number>(resolve =>
+        setTimeout(() => {
+          // Process didn't exit after IPC — force kill as last resort.
+          try {
+            electronApp?.process().kill();
+          } catch {
+            // Already dead
+          }
+          resolve(-1);
+        }, 15000)
+      ),
     ]);
   }
 }
@@ -190,22 +198,33 @@ export async function closeAppWindow(): Promise<void> {
 
   try {
     const page = await electronApp.firstWindow();
+    // discardAndQuit triggers process.exit(0) in main, which destroys the
+    // page connection.  evaluate() may throw because the connection closes
+    // before the result is returned — this is expected, not an error.
     await page.evaluate(() => {
       (window as any).electronAPI.discardAndQuit();
     });
   } catch {
-    // Page/browser already closed — force-kill the process instead.
-    try {
-      electronApp.process().kill();
-    } catch {
-      // Already dead
-    }
+    // evaluate likely threw because the process exited (closing the
+    // connection).  Do NOT kill here — the process may already be exiting
+    // cleanly with code 0.  The timeout below handles the case where it
+    // truly didn't exit.
   }
 
   if (processExitPromise) {
     await Promise.race([
       processExitPromise,
-      new Promise<number>(resolve => setTimeout(() => resolve(-1), 15000)),
+      new Promise<number>(resolve =>
+        setTimeout(() => {
+          // Process didn't exit after IPC — force kill as last resort.
+          try {
+            electronApp?.process().kill();
+          } catch {
+            // Already dead
+          }
+          resolve(-1);
+        }, 15000)
+      ),
     ]);
   }
 }
