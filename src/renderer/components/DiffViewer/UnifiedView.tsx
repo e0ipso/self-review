@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import type { DiffFile, DiffLine } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
+import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
 import SyntaxLine, { getLanguageFromPath } from './SyntaxLine';
 import CommentInput from '../Comments/CommentInput';
@@ -29,6 +30,7 @@ export default function UnifiedView({
   onCommentSaved,
 }: UnifiedViewProps) {
   const { getCommentsForLine } = useReview();
+  const { config } = useConfig();
   const language = getLanguageFromPath(file.newPath || file.oldPath);
 
   const getLineBg = (line: DiffLine) => {
@@ -158,11 +160,12 @@ export default function UnifiedView({
                     </span>
                   </div>
                   {/* Code content */}
-                  <div className='flex-1 px-3 py-0.5 [overflow-x:overlay] leading-[22px]'>
+                  <div className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}>
                     <SyntaxLine
                       content={line.content}
                       language={language}
                       lineType={line.type}
+                      wordWrap={config.wordWrap}
                     />
                   </div>
                 </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Plus } from 'lucide-react';
 import type { DiffFile, DiffLine } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
+import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
 import SyntaxLine, { getLanguageFromPath } from './SyntaxLine';
 import CommentInput from '../Comments/CommentInput';
@@ -34,6 +35,7 @@ export default function SplitView({
   onCommentSaved,
 }: SplitViewProps) {
   const { getCommentsForLine } = useReview();
+  const { config } = useConfig();
   const filePath = file.newPath || file.oldPath;
   const language = getLanguageFromPath(filePath);
 
@@ -128,11 +130,12 @@ export default function SplitView({
           <span className='pointer-events-none'>{lineNumber || ''}</span>
         </div>
         {/* Code content */}
-        <div className='flex-1 px-3 py-0.5 [overflow-x:overlay] leading-[22px]'>
+        <div className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}>
           <SyntaxLine
             content={line.content}
             language={language}
             lineType={line.type}
+            wordWrap={config.wordWrap}
           />
         </div>
       </div>

@@ -50,6 +50,7 @@ export interface SyntaxLineProps {
   content: string;
   language: string;
   lineType: DiffLineType;
+  wordWrap?: boolean;
 }
 
 function getLanguageFromPath(filePath: string): string {
@@ -124,6 +125,7 @@ const SyntaxLine = React.memo(function SyntaxLine({
   content,
   language,
   lineType: _lineType,
+  wordWrap,
 }: SyntaxLineProps) {
   const highlightedContent = React.useMemo(() => {
     try {
@@ -148,7 +150,7 @@ const SyntaxLine = React.memo(function SyntaxLine({
 
   return (
     <code
-      className='font-mono text-[13px] whitespace-pre block'
+      className={`font-mono text-[13px] ${wordWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'} block`}
       dangerouslySetInnerHTML={{ __html: highlightedContent }}
     />
   );

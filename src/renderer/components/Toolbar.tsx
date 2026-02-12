@@ -17,6 +17,8 @@ import {
   MessageSquareOff,
   FilePlus2,
   FileX,
+  WrapText,
+  MoveHorizontal,
   Terminal,
   CheckCircle2,
 } from 'lucide-react';
@@ -184,6 +186,32 @@ export default function Toolbar() {
             {config.showUntracked
               ? 'Hide new files not yet in git'
               : 'Show new files not yet in git'}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant='ghost'
+              size='sm'
+              data-testid='toggle-word-wrap-btn'
+              onClick={() => updateConfig({ wordWrap: !config.wordWrap })}
+              className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
+            >
+              {config.wordWrap ? (
+                <WrapText className='h-3.5 w-3.5' />
+              ) : (
+                <MoveHorizontal className='h-3.5 w-3.5' />
+              )}
+              <span className='text-xs'>
+                {config.wordWrap ? 'Wrap Lines' : 'No Wrap'}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {config.wordWrap
+              ? 'Wrap long lines'
+              : 'Scroll long lines horizontally'}
           </TooltipContent>
         </Tooltip>
       </div>
