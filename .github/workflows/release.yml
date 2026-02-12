@@ -1,95 +1,25 @@
 # GitHub Actions Release Pipeline for self-review (Linux)
 #
-# Runs the full CI suite (lint, unit tests, E2E tests) then creates a GitHub Release
+# Triggered when the CI workflow completes on main. Creates a GitHub Release
 # with semantic-release and uploads .deb and .rpm packages as release assets.
-#
-# IMPORTANT: The E2E job disables AppArmor's unprivileged user namespace restriction
-# (kernel.apparmor_restrict_unprivileged_userns) because Ubuntu 24.04 enables it by
-# default, which prevents Electron/Chromium from launching. This is a known issue:
-# https://github.com/electron/electron/issues/41066
 
 name: Release (Linux)
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
     branches: [main]
+    types: [completed]
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run lint
-
-  unit-test:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run test:unit
-
-  e2e-test:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      # Ubuntu 24.04 restricts unprivileged user namespaces via AppArmor,
-      # which breaks Electron/Chromium. Disable it for the test run.
-      - name: Disable AppArmor unprivileged userns restriction
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
-      # Cache the Electron binary (~180MB) to speed up subsequent runs
-      - name: Cache Electron binary
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/electron
-          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            electron-${{ runner.os }}-
-
-      - run: npm ci
-
-      - name: Package Electron app
-        run: npm run package
-
-      - name: Generate BDD test files
-        run: npx bddgen
-
-      - name: Run E2E tests
-        run: xvfb-run --auto-servernum npx playwright test
-
-      - name: Upload Playwright report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 14
-
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [lint, unit-test, e2e-test]
+    if: github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: write
       issues: write
@@ -97,6 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -106,17 +37,26 @@ jobs:
 
       - run: npm ci
 
+      - name: Get tag before release
+        id: before
+        run: echo "tag=$(git describe --tags --abbrev=0 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+
       - name: Run semantic-release
-        id: semantic
         run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get latest tag
+      - name: Detect new tag
         id: tag
         run: |
+          git fetch --tags
           TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ "$TAG" != "${{ steps.before.outputs.tag }}" ] && [ -n "$TAG" ]; then
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "No new release tag created"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install Linux maker dependencies
         if: steps.tag.outputs.tag != ''
