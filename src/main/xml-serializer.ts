@@ -251,12 +251,17 @@ export async function serializeReview(state: ReviewState): Promise<string> {
       throw new Error('Generated XML does not conform to schema');
     }
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(`XML validation error: ${error.message}`);
-    } else {
-      console.error('XML validation error: unknown error');
+    // Re-throw if it's a schema validation failure (our own throw above)
+    if (error instanceof Error && error.message === 'Generated XML does not conform to schema') {
+      throw error;
     }
-    throw error;
+    // Infrastructure failure (e.g. WASM load): log warning and return XML anyway
+    if (error instanceof Error) {
+      console.error(`[main] XML validation infrastructure failed: ${error.message} - emitting XML without validation`);
+    } else {
+      console.error('[main] XML validation infrastructure failed - emitting XML without validation');
+    }
+    return xml;
   }
 
   return xml;

@@ -60,6 +60,22 @@ export default function UnifiedView({
 
   const filePath = file.newPath || file.oldPath;
 
+  // Extract original code for the selected line range (for suggestions)
+  const getOriginalCode = (): string | undefined => {
+    if (!commentRange) return undefined;
+    const { start, end, side } = commentRange;
+    const lines: string[] = [];
+    for (const hunk of file.hunks) {
+      for (const line of hunk.lines) {
+        const lineNum = side === 'old' ? line.oldLineNumber : line.newLineNumber;
+        if (lineNum !== null && lineNum >= start && lineNum <= end) {
+          lines.push(line.content);
+        }
+      }
+    }
+    return lines.length > 0 ? lines.join('\n') : undefined;
+  };
+
   return (
     <div className='font-mono text-[13px] leading-[22px] unified-view'>
       {file.hunks.map((hunk, hunkIndex) => (
@@ -192,6 +208,7 @@ export default function UnifiedView({
                       }}
                       onCancel={onCancelComment}
                       onSubmit={onCommentSaved}
+                      originalCode={getOriginalCode()}
                     />
                   </div>
                 )}

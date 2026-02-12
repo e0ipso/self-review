@@ -77,7 +77,7 @@ Feature: Commenting System
     And I type "This whole block needs error handling" in the comment input
     And I click "Comment"
     Then a comment should be displayed below new line 15
-    And the comment header should show "lines 10\u201315"
+    And the comment header should show "lines 10–15"
 
   # --- Line Range Headers ---
 
@@ -87,7 +87,7 @@ Feature: Commenting System
 
   Scenario: Multi-line comment shows range header in display
     Given I have added a comment on new lines 6 to 10 of "src/auth/login.ts"
-    Then the comment display header should show "lines 6\u201310"
+    Then the comment display header should show "lines 6–10"
 
   Scenario: File-level comment shows no line header
     Given I have added a file-level comment on "src/auth/login.ts"

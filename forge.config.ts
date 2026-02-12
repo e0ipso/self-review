@@ -43,7 +43,7 @@ const devPort = getAvailablePort(3000);
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    asarUnpack: ['**/native_modules/**'],
+    asarUnpack: ['**/xmllint.wasm'],
   },
   rebuildConfig: {},
   makers: [

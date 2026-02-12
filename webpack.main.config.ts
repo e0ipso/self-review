@@ -20,7 +20,7 @@ export const mainConfig: Configuration = {
       patterns: [
         {
           from: 'node_modules/xmllint-wasm/xmllint.wasm',
-          to: 'native_modules/xmllint.wasm',
+          to: 'xmllint.wasm',
         },
       ],
     }),

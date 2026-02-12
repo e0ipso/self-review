@@ -129,15 +129,6 @@ Then('the file tree should list {int} file(s)', async ({}, count: number) => {
 });
 
 Then(
-  'the diff viewer should show {int} file sections',
-  async ({}, count: number) => {
-    const page = getPage();
-    const sections = page.locator('[data-testid^="file-section-"]');
-    await expect(sections).toHaveCount(count);
-  }
-);
-
-Then(
   'the file tree entry for {string} should show change type {string}',
   async ({}, filePath: string, changeType: string) => {
     const page = getPage();

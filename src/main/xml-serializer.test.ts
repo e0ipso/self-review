@@ -469,9 +469,9 @@ describe('serializeReview', () => {
       );
     });
 
-    it('handles validation exception', async () => {
+    it('gracefully falls back when validation infrastructure fails (e.g. WASM load)', async () => {
       const { validateXML } = await import('xmllint-wasm');
-      vi.mocked(validateXML).mockRejectedValueOnce(new Error('WASM error'));
+      vi.mocked(validateXML).mockRejectedValueOnce(new Error('WASM load failed'));
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
@@ -480,7 +480,13 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      await expect(serializeReview(reviewState)).rejects.toThrow('WASM error');
+      const xml = await serializeReview(reviewState);
+
+      // Should return XML without throwing (graceful fallback)
+      expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+      expect(xml).toContain('xmlns="urn:self-review:v1"');
+      expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
+      expect(xml).toContain('</review>');
     });
   });
 
