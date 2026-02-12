@@ -1,0 +1,56 @@
+# GitHub Actions Release Pipeline for self-review (macOS)
+#
+# Triggered when the Linux release workflow pushes a version tag. Builds a macOS
+# .zip archive and uploads it to the existing GitHub Release.
+
+name: Release (macOS)
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-darwin-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: macOS Release
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Wait for GitHub Release to exist
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          for i in $(seq 1 30); do
+            if gh release view "$TAG" > /dev/null 2>&1; then
+              echo "Release $TAG found"
+              exit 0
+            fi
+            echo "Waiting for release $TAG... (attempt $i/30)"
+            sleep 10
+          done
+          echo "Timed out waiting for release $TAG"
+          exit 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build macOS package
+        run: npm run make
+
+      - name: Upload release assets
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release upload "$TAG" out/make/zip/darwin/**/*.zip --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

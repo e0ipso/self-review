@@ -1,25 +1,22 @@
-# GitHub Actions CI Pipeline for self-review
+# GitHub Actions Release Pipeline for self-review (Linux)
 #
-# This workflow runs three parallel test jobs (Lint, Unit Tests, E2E Tests) on every
-# push to main and every PR targeting main.
+# Runs the full CI suite (lint, unit tests, E2E tests) then creates a GitHub Release
+# with semantic-release and uploads .deb and .rpm packages as release assets.
 #
 # IMPORTANT: The E2E job disables AppArmor's unprivileged user namespace restriction
 # (kernel.apparmor_restrict_unprivileged_userns) because Ubuntu 24.04 enables it by
 # default, which prevents Electron/Chromium from launching. This is a known issue:
 # https://github.com/electron/electron/issues/41066
 
-name: CI
+name: Release (Linux)
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
-# Cancel in-progress runs for the same branch/PR
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   lint:
@@ -88,3 +85,49 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [lint, unit-test, e2e-test]
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run semantic-release
+        id: semantic
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get latest tag
+        id: tag
+        run: |
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Install Linux maker dependencies
+        if: steps.tag.outputs.tag != ''
+        run: sudo apt-get install -y dpkg-dev fakeroot rpm
+
+      - name: Build Linux packages
+        if: steps.tag.outputs.tag != ''
+        run: npm run make
+
+      - name: Upload release assets
+        if: steps.tag.outputs.tag != ''
+        run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
