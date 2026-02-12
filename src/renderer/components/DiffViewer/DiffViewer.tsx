@@ -138,7 +138,7 @@ export default function DiffViewer() {
   return (
     <div
       ref={containerRef}
-      className='flex-1 overflow-y-auto'
+      className='flex-1'
       data-testid='diff-viewer'
       data-diff-viewer
     >

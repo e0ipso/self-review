@@ -20,6 +20,12 @@ export function parseDiff(rawDiff: string): DiffFile[] {
 
     // Start of a new file
     if (line.startsWith('diff --git ')) {
+      // Flush the pending hunk into the current file before saving
+      if (currentHunk && currentHunk.header && currentFile) {
+        currentFile.hunks!.push(currentHunk as DiffHunk);
+        currentHunk = null;
+      }
+
       // Save previous file if exists and has actual changes
       if (
         currentFile &&
@@ -208,13 +214,19 @@ function parseGitDiffHeader(line: string): {
   newPath: string;
 } {
   // Format: "diff --git a/<old> b/<new>"
-  // Paths may contain spaces, so we find the " b/" separator.
-  // Git guarantees the b/ prefix appears after a space.
+  // With diff.mnemonicPrefix, git uses i/ w/ c/ o/ instead of a/ b/.
+  // Paths may contain spaces, so we find the " X/" separator where X is a
+  // single-letter prefix.
   const withoutPrefix = line.substring('diff --git '.length);
 
-  // Find " b/" — the boundary between old and new paths.
-  // Search from the midpoint-ish to handle paths that themselves contain " b/".
-  const bIdx = withoutPrefix.indexOf(' b/');
+  // Find " X/" — the boundary between old and new paths.
+  // Try common prefixes: b/ (default), w/ i/ c/ o/ (mnemonic)
+  let bIdx = -1;
+  for (const prefix of [' b/', ' w/', ' i/', ' c/', ' o/']) {
+    bIdx = withoutPrefix.indexOf(prefix);
+    if (bIdx !== -1) break;
+  }
+
   if (bIdx === -1) {
     return { oldPath: '', newPath: '' };
   }

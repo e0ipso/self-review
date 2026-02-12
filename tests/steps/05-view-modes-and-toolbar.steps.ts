@@ -173,3 +173,43 @@ Then('the application should use light theme colors', async () => {
   );
   expect(hasDarkClass).toBe(false);
 });
+
+// ── When/Then: line wrapping assertions ──
+
+When(
+  'I click the {string} toggle in the toolbar',
+  async ({}, _label: string) => {
+    const page = getPage();
+    await page.locator('[data-testid="toggle-word-wrap-btn"]').click();
+  }
+);
+
+Then('long lines should be wrapped by default', async () => {
+  const page = getPage();
+  const codeLine = page.locator('[data-testid="diff-viewer"] code').first();
+  await expect(codeLine).toHaveCSS('white-space', 'pre-wrap');
+});
+
+Then('long lines should scroll horizontally', async () => {
+  const page = getPage();
+  const codeLine = page.locator('[data-testid="diff-viewer"] code').first();
+  await expect(codeLine).toHaveCSS('white-space', 'pre');
+});
+
+Then('a horizontal scrollbar should be visible on overflowing lines', async () => {
+  const page = getPage();
+  const btn = page.locator('[data-testid="toggle-word-wrap-btn"]');
+  await expect(btn).toContainText('No Wrap');
+});
+
+Then('long lines should be wrapped', async () => {
+  const page = getPage();
+  const codeLine = page.locator('[data-testid="diff-viewer"] code').first();
+  await expect(codeLine).toHaveCSS('white-space', 'pre-wrap');
+});
+
+Then('no horizontal scrollbar should be visible', async () => {
+  const page = getPage();
+  const btn = page.locator('[data-testid="toggle-word-wrap-btn"]');
+  await expect(btn).toContainText('Wrap Lines');
+});

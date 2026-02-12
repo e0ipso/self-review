@@ -6,7 +6,7 @@ import { createBdd } from 'playwright-bdd';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { XMLParser } from 'fast-xml-parser';
-import { getPage, getStdout, closeAppWindow, triggerCommentIcon } from './app';
+import { getPage, getStdout, getStderr, closeAppWindow, triggerCommentIcon } from './app';
 
 const { When, Then } = createBdd();
 
@@ -334,7 +334,6 @@ Then('stdout should start with {string}', async ({}, prefix: string) => {
 });
 
 Then('stderr should not be empty', async () => {
-  const { getStderr } = await import('./app');
   const stderr = getStderr();
   expect(stderr.length).toBeGreaterThan(0);
 });
