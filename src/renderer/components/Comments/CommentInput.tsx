@@ -40,7 +40,7 @@ export default function CommentInput({
   useEffect(() => {
     if (existingComment) {
       setBody(existingComment.body);
-      setCategory(existingComment.category);
+      setCategory(existingComment.category || defaultCategory);
       if (existingComment.suggestion) {
         setShowSuggestion(true);
         setProposedCode(existingComment.suggestion.proposedCode);

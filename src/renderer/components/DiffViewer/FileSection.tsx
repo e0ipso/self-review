@@ -45,6 +45,7 @@ export default function FileSection({
     side: 'old' | 'new';
   } | null>(null);
   const [showingFileComment, setShowingFileComment] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
 
   const filePath = file.newPath || file.oldPath;
   const comments = getCommentsForFile(filePath);
@@ -178,22 +179,46 @@ export default function FileSection({
   };
 
   const handleDragStart = (lineNumber: number, side: 'old' | 'new') => {
-    setDragState({ startLine: lineNumber, currentLine: lineNumber, side });
+    const state = { startLine: lineNumber, currentLine: lineNumber, side };
+    dragStateRef.current = state;
+    setDragState(state);
   };
 
-  // Document-level listeners for drag
-  const isDragging = dragState !== null;
+  // Document-level listeners for drag — registered on mount, check ref inside.
+  // This avoids timing issues between React state updates and listener registration.
   useEffect(() => {
-    if (!isDragging) return;
-
     const handleMouseMove = (e: MouseEvent) => {
       const ds = dragStateRef.current;
       if (!ds) return;
 
+      // Find line element under cursor
+      let lineEl: HTMLElement | null = null;
+
+      // Fast path: elementFromPoint
       const target = document.elementFromPoint(e.clientX, e.clientY);
-      const lineEl = target?.closest(
+      lineEl = target?.closest(
         '[data-line-number]'
       ) as HTMLElement | null;
+
+      // Fallback: search within the file section for element at coordinates
+      if (!lineEl && sectionRef.current) {
+        const candidates = sectionRef.current.querySelectorAll<HTMLElement>(
+          '[data-line-number]'
+        );
+        for (const el of candidates) {
+          const rect = el.getBoundingClientRect();
+          if (
+            e.clientY >= rect.top &&
+            e.clientY <= rect.bottom &&
+            e.clientX >= rect.left &&
+            e.clientX <= rect.right
+          ) {
+            lineEl = el;
+            break;
+          }
+        }
+      }
+
       if (!lineEl) return;
 
       if (viewModeRef.current === 'unified') {
@@ -214,7 +239,11 @@ export default function FileSection({
           hunkBounds.min,
           Math.min(hunkBounds.max, rowIndex)
         );
-        setDragState(prev => (prev ? { ...prev, currentLine: clamped } : null));
+        setDragState(prev => {
+          const next = prev ? { ...prev, currentLine: clamped } : null;
+          dragStateRef.current = next;
+          return next;
+        });
       } else {
         // Split mode: use line numbers with side matching
         const lineNumber = parseInt(
@@ -231,52 +260,55 @@ export default function FileSection({
             hunkInfo.minLine,
             Math.min(hunkInfo.maxLine, lineNumber)
           );
-          setDragState(prev =>
-            prev ? { ...prev, currentLine: clampedLine } : null
-          );
+          setDragState(prev => {
+            const next = prev ? { ...prev, currentLine: clampedLine } : null;
+            dragStateRef.current = next;
+            return next;
+          });
         }
       }
     };
 
     const handleMouseUp = () => {
       const ds = dragStateRef.current;
-      if (ds) {
-        if (viewModeRef.current === 'unified' && unifiedRowMapRef.current) {
-          // Convert row index range to real line range
-          const minRow = Math.min(ds.startLine, ds.currentLine);
-          const maxRow = Math.max(ds.startLine, ds.currentLine);
-          const rowMap = unifiedRowMapRef.current;
+      if (!ds) return;
 
-          const newLines: number[] = [];
-          const oldLines: number[] = [];
-          for (let i = minRow; i <= maxRow; i++) {
-            const info = rowMap.get(i);
-            if (info) {
-              if (info.side === 'new') newLines.push(info.lineNumber);
-              else oldLines.push(info.lineNumber);
-            }
-          }
+      if (viewModeRef.current === 'unified' && unifiedRowMapRef.current) {
+        // Convert row index range to real line range
+        const minRow = Math.min(ds.startLine, ds.currentLine);
+        const maxRow = Math.max(ds.startLine, ds.currentLine);
+        const rowMap = unifiedRowMapRef.current;
 
-          // Prefer new side; fall back to old for deletion-only selections
-          if (newLines.length > 0) {
-            handleCommentRange(
-              Math.min(...newLines),
-              Math.max(...newLines),
-              'new'
-            );
-          } else if (oldLines.length > 0) {
-            handleCommentRange(
-              Math.min(...oldLines),
-              Math.max(...oldLines),
-              'old'
-            );
+        const newLines: number[] = [];
+        const oldLines: number[] = [];
+        for (let i = minRow; i <= maxRow; i++) {
+          const info = rowMap.get(i);
+          if (info) {
+            if (info.side === 'new') newLines.push(info.lineNumber);
+            else oldLines.push(info.lineNumber);
           }
-        } else {
-          const start = Math.min(ds.startLine, ds.currentLine);
-          const end = Math.max(ds.startLine, ds.currentLine);
-          handleCommentRange(start, end, ds.side);
         }
+
+        // Prefer new side; fall back to old for deletion-only selections
+        if (newLines.length > 0) {
+          handleCommentRange(
+            Math.min(...newLines),
+            Math.max(...newLines),
+            'new'
+          );
+        } else if (oldLines.length > 0) {
+          handleCommentRange(
+            Math.min(...oldLines),
+            Math.max(...oldLines),
+            'old'
+          );
+        }
+      } else {
+        const start = Math.min(ds.startLine, ds.currentLine);
+        const end = Math.max(ds.startLine, ds.currentLine);
+        handleCommentRange(start, end, ds.side);
       }
+      dragStateRef.current = null;
       setDragState(null);
     };
 
@@ -287,7 +319,7 @@ export default function FileSection({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging]);
+  }, []);
 
   const handleAddFileComment = () => {
     setShowingFileComment(true);
@@ -334,6 +366,7 @@ export default function FileSection({
 
   return (
     <div
+      ref={sectionRef}
       className={`border-b border-border${dragState ? ' select-none' : ''}`}
       data-file-path={filePath}
       data-testid={`file-section-${filePath}`}

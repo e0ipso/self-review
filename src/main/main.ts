@@ -88,6 +88,13 @@ let mainWindow: BrowserWindow | null = null;
 let diffData: DiffLoadPayload | null = null;
 let resumeComments: ReviewComment[] = [];
 let appConfig: AppConfig | null = null;
+let isQuitting = false;
+
+// When the app is quitting (SIGTERM, app.quit(), etc.), allow windows to close
+// without showing the confirmation dialog.
+app.on('before-quit', () => {
+  isQuitting = true;
+});
 
 /**
  * Initialize the application AFTER Electron is ready.
@@ -238,8 +245,9 @@ function createWindow(): void {
   // Data is sent when renderer requests it via IPC (see ipc-handlers.ts)
 
   // Handle window close - intercept and ask renderer to show confirmation dialog
+  // Skip the dialog when the app is quitting (SIGTERM, process.kill, etc.)
   mainWindow.on('close', event => {
-    if (!mainWindow) return;
+    if (!mainWindow || isQuitting) return;
     event.preventDefault();
     mainWindow.webContents.send(IPC.APP_CLOSE_REQUESTED);
   });
