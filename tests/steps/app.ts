@@ -93,6 +93,15 @@ export async function launchApp(cliArgs: string[], cwd: string): Promise<Page> {
     process.stderr.write(
       `[stderr from Electron] ${stderrData.slice(0, 1000)}\n`
     );
+    // Kill the orphaned Electron process so the fallback to
+    // launchAppExpectExit() doesn't compete with a zombie.
+    try {
+      electronApp.process().kill();
+    } catch {
+      // Process may already be dead
+    }
+    electronApp = null;
+    appPage = null;
     throw error;
   }
 }
@@ -150,10 +159,19 @@ export async function launchAppExpectExit(
 export async function saveAndCloseApp(): Promise<void> {
   if (!electronApp) return;
 
-  const page = await electronApp.firstWindow();
-  await page.evaluate(() => {
-    (window as any).electronAPI.saveAndQuit();
-  });
+  try {
+    const page = await electronApp.firstWindow();
+    await page.evaluate(() => {
+      (window as any).electronAPI.saveAndQuit();
+    });
+  } catch {
+    // Page/browser already closed — force-kill the process instead.
+    try {
+      electronApp.process().kill();
+    } catch {
+      // Already dead
+    }
+  }
 
   if (processExitPromise) {
     await Promise.race([
@@ -170,10 +188,19 @@ export async function saveAndCloseApp(): Promise<void> {
 export async function closeAppWindow(): Promise<void> {
   if (!electronApp) return;
 
-  const page = await electronApp.firstWindow();
-  await page.evaluate(() => {
-    (window as any).electronAPI.discardAndQuit();
-  });
+  try {
+    const page = await electronApp.firstWindow();
+    await page.evaluate(() => {
+      (window as any).electronAPI.discardAndQuit();
+    });
+  } catch {
+    // Page/browser already closed — force-kill the process instead.
+    try {
+      electronApp.process().kill();
+    } catch {
+      // Already dead
+    }
+  }
 
   if (processExitPromise) {
     await Promise.race([
