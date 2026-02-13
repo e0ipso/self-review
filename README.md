@@ -68,30 +68,31 @@ sudo ln -s /Applications/self-review.app/Contents/MacOS/self-review /usr/local/b
 
 ## How it works
 
+Instead of seeing your changes with `git diff <arguments>` execute `self-review <arguments>`. This will open the app
+and will record all the feedback in an XML file (`review.xml` by default).
+
+You can continue your saved review if you didn't finish it:
+
 ```bash
-# Review staged changes — produces ./review.xml by default
-self-review --staged
-
-# Feed the feedback back to your AI agent
-cat review.xml | claude-code "Apply this review feedback"
-
-# Review changes between branches
-self-review main..feature-branch
-
 # Resume a previous review
 self-review --staged --resume-from review.xml
 ```
 
-## What you get
+### Examples
 
-- **GitHub-style diff viewer** — split or unified view, syntax highlighting, collapsible file
-  sections
-- **Line comments** — click a line number, type your feedback
-- **Multi-line comments** — drag across line numbers to comment on a range
-- **Code suggestions** — propose exact replacements, rendered as a diff-within-a-diff
-- **Categories** — tag comments as `bug`, `nit`, `security`, `question`, etc.
-- **Structured XML output** — validated against an XSD schema, designed for machine consumption
-- **Resume support** — pick up where you left off with `--resume-from`
+```bash
+# Review staged changes — produces ./review.xml by default
+self-review --staged
+
+# Review changes between branches
+self-review main
+
+# Review the last commit
+self-review HEAD^
+
+# Review the current changes
+self-review
+```
 
 ## Claude Code Skill
 
@@ -104,19 +105,7 @@ Copy the skill directory into your project:
 
 ```bash
 # From the self-review repo (or download the folder from GitHub)
-cp -r .claude/skills/self-review /path/to/your/project/.claude/skills/
-```
-
-Your project should end up with:
-
-```
-your-project/
-└── .claude/
-    └── skills/
-        └── self-review/
-            └── apply-review/
-                ├── SKILL.md
-                └── self-review-v1.xsd
+cp -r .claude/skills/self-review-apply /path/to/your/project/.claude/skills/
 ```
 
 ### Usage
@@ -124,15 +113,32 @@ your-project/
 After running self-review and producing a `review.xml`, invoke the skill in Claude Code:
 
 ```
-/self-review:apply-review review.xml
+/self-review-apply review.xml
 ```
 
+<details>
+<summary>Details</summary>
+Your project should end up with:
+
+<code>
+your-project/
+└── .claude/
+    └── skills/
+        └──self-review-apply/
+            ├── SKILL.md
+            └── self-review-v1.xsd
+</code>
+
 The skill will:
+
 1. Read the XSD schema to understand the review format
 2. Parse your review XML
 3. Categorize and prioritize comments (security > bug > style > nit)
 4. Output a task plan showing parallel and sequential work groups
-5. Execute the changes — applying suggestions first, then addressing open-ended feedback
+5. Execute the changes — applying suggestions first, then addressing open-ended
+   feedback
+
+</details>
 
 ## Configuration
 
@@ -143,7 +149,20 @@ Customize **self-review** with YAML configuration files:
 
 Project config overrides user config, which overrides built-in defaults.
 
-### Example: Custom comment categories
+### Available options
+
+- `theme`: light, dark, or system (default: system)
+- `diff-view`: split or unified (default: split)
+- `font-size`: editor font size in pixels (default: 14)
+- `output-file`: path for the review XML output (default: `./review.xml`)
+- `ignore`: file patterns to exclude from diff (glob syntax)
+- `categories`: custom comment tags (see example above)
+- `default-diff-args`: default arguments passed to `git diff`
+- `show-untracked`: show new files not yet added to git (default: true)
+- `word-wrap`: wrap long lines in the diff viewer (default: true)
+
+<details>
+<summary>Example: Custom comment categories</summary>
 
 ```yaml
 # .self-review.yaml
@@ -162,17 +181,7 @@ categories:
     color: '#3182ce'
 ```
 
-### Available options
-
-- `theme`: light, dark, or system (default: system)
-- `diff-view`: split or unified (default: split)
-- `font-size`: editor font size in pixels (default: 14)
-- `output-file`: path for the review XML output (default: `./review.xml`)
-- `ignore`: file patterns to exclude from diff (glob syntax)
-- `categories`: custom comment tags (see example above)
-- `default-diff-args`: default arguments passed to `git diff`
-- `show-untracked`: show new files not yet added to git (default: true)
-- `word-wrap`: wrap long lines in the diff viewer (default: true)
+</details>
 
 See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 
@@ -183,9 +192,3 @@ See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 - **Local-only.** No network access, no accounts, no telemetry. Your code stays on your machine.
 - **AI-native output.** The XML format is designed to be parsed by LLMs, with an XSD schema they can
   reference for structure.
-
-## Requirements
-
-- macOS or Linux
-- git
-- Node.js 20+

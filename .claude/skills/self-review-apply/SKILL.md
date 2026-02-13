@@ -1,5 +1,5 @@
 ---
-name: apply-review
+name: self-review-apply
 description: Parse self-review XML feedback and execute the review comments as organized tasks
 metadata:
   disable-model-invocation: "true"
