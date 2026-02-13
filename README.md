@@ -55,13 +55,13 @@ The `self-review` command will be available system-wide.
 Download the `.zip` archive, extract it, and move the app to your Applications folder:
 
 ```bash
-unzip self-review-darwin-*.zip -d /Applications
+unzip Self.Review-darwin-*.zip -d /Applications
 ```
 
 To use the `self-review` command from the terminal, create a symlink:
 
 ```bash
-sudo ln -s /Applications/self-review.app/Contents/MacOS/self-review /usr/local/bin/self-review
+sudo ln -s /Applications/Self\ Review.app/Contents/MacOS/self-review /usr/local/bin/self-review
 ```
 
 </details>
