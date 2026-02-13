@@ -53,6 +53,7 @@ const config: ForgeConfig = {
     new MakerZIP({}, ['darwin']),
     new MakerRpm({
       options: {
+        bin: 'self-review',
         icon: './assets/icon.png',
         homepage: 'https://github.com/e0ipso/self-review',
         description: 'GitHub-style PR review UI for local git diffs',
@@ -62,6 +63,7 @@ const config: ForgeConfig = {
     }),
     new MakerDeb({
       options: {
+        bin: 'self-review',
         icon: './assets/icon.png',
         homepage: 'https://github.com/e0ipso/self-review',
         description: 'GitHub-style PR review UI for local git diffs',
