@@ -68,7 +68,7 @@ xattr -cr /Applications/Self\ Review.app
 To use the `self-review` command from the terminal, create a symlink:
 
 ```bash
-sudo ln -s /Applications/Self\ Review.app/Contents/MacOS/self-review /usr/local/bin/self-review
+sudo ln -s "/Applications/Self Review.app/Contents/MacOS/Self Review" /usr/local/bin/self-review
 ```
 
 </details>
