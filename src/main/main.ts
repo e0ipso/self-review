@@ -1,9 +1,9 @@
 // src/main/main.ts
 // Electron main process entry point
 
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import { writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { resolve, join } from 'path';
 import { parseCliArgs, checkEarlyExit } from './cli';
 import {
   runGitDiffAsync,
@@ -230,9 +230,17 @@ async function initializeApp() {
 }
 
 function createWindow(): void {
+  // On Linux, set the window icon explicitly so alt+tab and taskbar show
+  // the correct icon. macOS uses the .icns from the app bundle automatically.
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, 'icon.png')
+    : join(__dirname, '..', '..', 'assets', 'icon.png');
+  const iconImage = nativeImage.createFromPath(iconPath);
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    ...(process.platform === 'linux' && !iconImage.isEmpty() && { icon: iconImage }),
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       nodeIntegration: false,

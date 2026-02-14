@@ -49,6 +49,7 @@ const config: ForgeConfig = {
     // Linux where it controls the CLI command name.
     ...(process.platform !== 'darwin' && { executableName: 'self-review' }),
     icon: './assets/icon',
+    extraResource: ['./assets/icon.png'],
   },
   rebuildConfig: {},
   makers: [
