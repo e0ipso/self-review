@@ -44,9 +44,9 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     asarUnpack: ['**/xmllint.wasm'],
-    // Only override on Linux — on macOS this breaks helper app discovery
-    // because helpers are named after productName ("Self Review") while
-    // the renamed executable looks for "self-review" helpers.
+    // On macOS the binary name inside the .app bundle is derived from
+    // productName and doesn't need overriding.  Only set executableName on
+    // Linux where it controls the CLI command name.
     ...(process.platform !== 'darwin' && { executableName: 'self-review' }),
     icon: './assets/icon',
   },

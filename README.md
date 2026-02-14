@@ -65,10 +65,14 @@ quarantine attribute before opening:
 xattr -cr /Applications/Self\ Review.app
 ```
 
-To use the `self-review` command from the terminal, create a symlink:
+To use the `self-review` command from the terminal, create a wrapper script:
 
 ```bash
-sudo ln -s "/Applications/Self Review.app/Contents/MacOS/Self Review" /usr/local/bin/self-review
+sudo tee /usr/local/bin/self-review > /dev/null << 'SCRIPT'
+#!/bin/bash
+exec "/Applications/Self Review.app/Contents/MacOS/Self Review" "$@"
+SCRIPT
+sudo chmod +x /usr/local/bin/self-review
 ```
 
 </details>
