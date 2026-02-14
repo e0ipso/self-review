@@ -1,4 +1,4 @@
-# self-review
+# self-review <img align="right" src="./assets/icon.png" alt="self-review logo" title="self-review" width="100">
 
 [![CI](https://github.com/e0ipso/self-review/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/e0ipso/self-review/actions/workflows/ci.yml)
  
