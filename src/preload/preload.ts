@@ -63,4 +63,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   discardAndQuit: () => {
     ipcRenderer.send(IPC.APP_DISCARD_AND_QUIT);
   },
+
+  pickDirectory: () => ipcRenderer.invoke(IPC.DIALOG_PICK_DIRECTORY),
+
+  startDirectoryReview: (path: string) =>
+    ipcRenderer.invoke(IPC.REVIEW_START_DIRECTORY, path),
 });

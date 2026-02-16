@@ -3,7 +3,7 @@
 Local-only Electron desktop app that provides a GitHub-style PR review UI for local git diffs and
 directory-based reviews (all files treated as new when no repo context is available).
 Designed for solo developers reviewing AI-generated code. CLI-first, one-shot workflow: open →
-review → close → XML to file.
+review → close → XML to file. When launched outside a git repo without a directory argument (e.g., from an app launcher), the app shows a welcome screen with a directory picker instead of exiting.
 
 ## Dev Container
 
@@ -67,6 +67,17 @@ self-review/
 │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
 │               └── CategorySelector.tsx # Dropdown/chip selector for categories
 ```
+
+## Keyboard Shortcuts
+
+The app supports Vimium-style keyboard navigation:
+
+- `f` — Activate hint labels on changed diff lines to open a comment input
+- `g` — Activate hint labels on file tree entries to jump to a file
+- `j` / `k` — Smooth scroll the diff pane down/up
+- `Escape` — Dismiss active hint overlay
+
+All shortcuts are suppressed when a text input has focus. The implementation lives in `useKeyboardNavigation` hook with `HintOverlay` for rendering hint badges.
 
 ## Architecture
 

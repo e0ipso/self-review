@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useReview } from '../context/ReviewContext';
-import { useDiffNavigation } from '../hooks/useDiffNavigation';
+import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
@@ -11,7 +11,7 @@ import type { DiffFile } from '../../shared/types';
 
 export default function FileTree() {
   const { diffFiles, files } = useReview();
-  const { activeFilePath, scrollToFile } = useDiffNavigation();
+  const { activeFilePath, scrollToFile } = useDiffNavigationContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [allExpanded, setAllExpanded] = useState(true);
 
@@ -154,6 +154,7 @@ export default function FileTree() {
               <TooltipTrigger asChild>
                 <button
                   data-testid={`file-entry-${filePath}`}
+                  data-file-path={filePath}
                   onClick={() => scrollToFile(filePath)}
                   className={`w-full text-left px-2 py-1.5 rounded-md transition-colors cursor-pointer ${
                     isActive
@@ -222,6 +223,17 @@ export default function FileTree() {
             {searchQuery ? 'No files match your search' : 'No files in diff'}
           </div>
         )}
+      </div>
+
+      <Separator />
+
+      {/* Keyboard Shortcuts */}
+      <div className='px-3 py-2 text-xs text-muted-foreground space-y-1'>
+        <div className='font-medium text-foreground/70 mb-1'>Keyboard Shortcuts</div>
+        <div className='flex justify-between'><span>Comment on line</span><kbd className='font-mono'>f</kbd></div>
+        <div className='flex justify-between'><span>Jump to file</span><kbd className='font-mono'>g</kbd></div>
+        <div className='flex justify-between'><span>Scroll diffs</span><kbd className='font-mono'>j/k</kbd></div>
+        <div className='flex justify-between'><span>Cancel</span><kbd className='font-mono'>Esc</kbd></div>
       </div>
     </div>
   );

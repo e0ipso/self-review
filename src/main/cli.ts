@@ -12,15 +12,24 @@ export interface CliArgs {
  *   [electron, ...chromiumFlags, mainScript, ...appArgs]
  * In packaged mode:
  *   [appBinary, ...appArgs]
+ *
+ * macOS Finder passes `-psn_XXXX` process serial number arguments when
+ * launching an app by double-clicking. These are filtered out so they
+ * don't interfere with CLI parsing.
  */
 function getAppArgs(): string[] {
+  let args: string[];
   if ((process as NodeJS.Process & { defaultApp?: boolean }).defaultApp) {
     // Dev mode: skip past the main script (first non-flag argument)
     const rawArgs = process.argv.slice(1);
     const mainScriptIdx = rawArgs.findIndex(a => !a.startsWith('-'));
-    return mainScriptIdx >= 0 ? rawArgs.slice(mainScriptIdx + 1) : [];
+    args = mainScriptIdx >= 0 ? rawArgs.slice(mainScriptIdx + 1) : [];
+  } else {
+    args = process.argv.slice(1);
   }
-  return process.argv.slice(1);
+
+  // Filter out macOS Finder process serial number arguments (-psn_XXXX)
+  return args.filter(arg => !arg.startsWith('-psn_'));
 }
 
 export function parseCliArgs(): CliArgs {

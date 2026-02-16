@@ -266,6 +266,15 @@ export default function CommentInput({
                 e.preventDefault();
                 handleSubmit();
               }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                const actions = (e.target as HTMLElement).closest('[data-testid="comment-input"]')?.querySelector('[data-testid="comment-actions"]') as HTMLElement | null;
+                if (actions) {
+                  actions.focus();
+                } else {
+                  (e.target as HTMLElement).blur();
+                }
+              }
             },
             onPaste: handlePasteImages as unknown as React.ClipboardEventHandler<HTMLTextAreaElement>,
           }}
@@ -329,7 +338,7 @@ export default function CommentInput({
       <Separator />
 
       {/* Actions bar */}
-      <div className='flex items-center justify-between px-3 py-2 bg-muted/10'>
+      <div className='flex items-center justify-between px-3 py-2 bg-muted/10 outline-none' data-testid='comment-actions' tabIndex={-1}>
         <div className='flex items-center gap-2'>
           <CategorySelector value={category} onChange={setCategory} />
           {originalCode && (
@@ -372,6 +381,9 @@ export default function CommentInput({
         </div>
 
         <div className='flex items-center gap-1.5'>
+          <span className='text-[10px] text-muted-foreground/50 mr-0.5'>
+            <kbd className='font-mono'>Esc</kbd> to unfocus
+          </span>
           <Button
             data-testid='cancel-comment-btn'
             variant='ghost'

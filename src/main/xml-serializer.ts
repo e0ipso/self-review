@@ -35,18 +35,28 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="git-diff-args" type="xs:string" use="required">
+    <xs:attribute name="git-diff-args" type="xs:string" use="optional">
       <xs:annotation>
         <xs:documentation>
           The git diff arguments that were passed to self-review on the CLI.
           Example: "--staged", "main..feature-branch", "HEAD~3".
+          Present only when reviewing a git diff.
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="repository" type="xs:string" use="required">
+    <xs:attribute name="repository" type="xs:string" use="optional">
       <xs:annotation>
         <xs:documentation>
           Absolute path to the repository root where self-review was invoked.
+          Present only when reviewing a git diff.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="source-path" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          Absolute path to the directory being reviewed.
+          Present only when reviewing a directory (non-git mode).
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
@@ -343,6 +353,18 @@ export async function serializeReview(state: ReviewState, outputFilePath: string
   return xml;
 }
 
+function buildSourceAttributes(state: ReviewState): string {
+  const source = state.source;
+  if (source.type === 'git') {
+    return ` git-diff-args="${escapeXml(source.gitDiffArgs)}" repository="${escapeXml(source.repository)}"`;
+  }
+  if (source.type === 'directory') {
+    return ` source-path="${escapeXml(source.sourcePath)}"`;
+  }
+  // welcome mode: no source attributes
+  return '';
+}
+
 function buildXml(state: ReviewState): string {
   const lines: string[] = [];
 
@@ -350,8 +372,9 @@ function buildXml(state: ReviewState): string {
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
 
   // Root element with namespace
+  const sourceAttrs = buildSourceAttributes(state);
   lines.push(
-    `<review xmlns="urn:self-review:v1" timestamp="${escapeXml(state.timestamp)}" git-diff-args="${escapeXml(state.gitDiffArgs)}" repository="${escapeXml(state.repository)}">`
+    `<review xmlns="urn:self-review:v1" timestamp="${escapeXml(state.timestamp)}"${sourceAttrs}>`
   );
 
   // Files

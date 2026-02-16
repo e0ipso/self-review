@@ -18,12 +18,13 @@ import {
   WrapText,
   MoveHorizontal,
   Terminal,
+  FolderOpen,
   CheckCircle2,
 } from 'lucide-react';
 
 export default function Toolbar() {
   const { config, updateConfig } = useConfig();
-  const { diffFiles, gitDiffArgs } = useReview();
+  const { diffFiles, diffSource } = useReview();
   const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
 
   const stats = useMemo(() => {
@@ -65,35 +66,39 @@ export default function Toolbar() {
       data-testid='toolbar'
     >
       <div className='flex items-center gap-2'>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant='ghost'
-              size='sm'
-              data-testid='toggle-untracked-btn'
-              onClick={() =>
-                updateConfig({ showUntracked: !config.showUntracked })
-              }
-              className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
-            >
-              {config.showUntracked ? (
-                <FileX className='h-3.5 w-3.5' />
-              ) : (
-                <FilePlus2 className='h-3.5 w-3.5' />
-              )}
-              <span className='text-xs'>
-                {config.showUntracked ? 'Hide' : 'Show'} New Files
-              </span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {config.showUntracked
-              ? 'Hide new files not yet in git'
-              : 'Show new files not yet in git'}
-          </TooltipContent>
-        </Tooltip>
+        {diffSource.type === 'git' && (
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  data-testid='toggle-untracked-btn'
+                  onClick={() =>
+                    updateConfig({ showUntracked: !config.showUntracked })
+                  }
+                  className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
+                >
+                  {config.showUntracked ? (
+                    <FileX className='h-3.5 w-3.5' />
+                  ) : (
+                    <FilePlus2 className='h-3.5 w-3.5' />
+                  )}
+                  <span className='text-xs'>
+                    {config.showUntracked ? 'Hide' : 'Show'} New Files
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {config.showUntracked
+                  ? 'Hide new files not yet in git'
+                  : 'Show new files not yet in git'}
+              </TooltipContent>
+            </Tooltip>
 
-        <Separator orientation='vertical' className='h-5' />
+            <Separator orientation='vertical' className='h-5' />
+          </>
+        )}
 
         <ToggleGroup
           type='single'
@@ -169,8 +174,16 @@ export default function Toolbar() {
         data-testid='diff-stats'
       >
         <span className='inline-flex items-center gap-1 font-mono'>
-          <Terminal className='h-3 w-3' />
-          git diff{gitDiffArgs ? ` ${gitDiffArgs}` : ''}
+          {diffSource.type === 'directory' ? (
+            <FolderOpen className='h-3 w-3' />
+          ) : (
+            <Terminal className='h-3 w-3' />
+          )}
+          {diffSource.type === 'git'
+            ? `git diff${diffSource.gitDiffArgs ? ` ${diffSource.gitDiffArgs}` : ''}`
+            : diffSource.type === 'directory'
+              ? `Directory: ${diffSource.sourcePath}`
+              : ''}
         </span>
         <Separator orientation='vertical' className='h-3.5' />
         <span>

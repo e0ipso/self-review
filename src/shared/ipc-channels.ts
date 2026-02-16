@@ -12,4 +12,6 @@ export const IPC = {
   APP_SAVE_AND_QUIT: 'app:save-and-quit',
   APP_DISCARD_AND_QUIT: 'app:discard-and-quit',
   ATTACHMENT_READ: 'attachment:read',
+  DIALOG_PICK_DIRECTORY: 'dialog:pick-directory',
+  REVIEW_START_DIRECTORY: 'review:start-directory',
 } as const;

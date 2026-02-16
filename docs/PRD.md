@@ -128,7 +128,7 @@ The main process and renderer process communicate via Electron's `ipcMain` / `ip
 self-review [options] [<git-diff-args>...]
 ```
 
-The CLI accepts any arguments that `git diff` accepts. These are passed through directly to `git diff` as a child process.
+The CLI accepts any arguments that `git diff` accepts. These are passed through directly to `git diff` as a child process. Alternatively, a positional argument can be a path to a non-git directory, in which case the app enters **directory mode** (see Section 4.6).
 
 ### 4.2 Options
 
@@ -155,6 +155,9 @@ self-review --staged -- src/auth.ts src/db.ts
 
 # Resume a previous review
 self-review --staged --resume-from review.xml
+
+# Review a non-git directory (all files shown as new additions)
+self-review /path/to/generated-code
 ```
 
 ### 4.4 Output and Logging
@@ -184,6 +187,18 @@ In both save paths, the application:
 5. Exits with code 0.
 
 If the user saves before adding any comments, an empty review XML (valid against the schema, with zero comments) is written to the output file.
+
+### 4.6 App Launcher Behavior
+
+When launched from macOS Finder, a Linux desktop app launcher, or any other method that does not provide CLI arguments, the application cannot run `git diff` (the working directory is typically the user's home directory, not a git repository). Instead of printing an error and exiting, the app opens a **welcome screen** (see Section 5.7).
+
+**macOS `-psn_XXXX` filtering:** macOS Finder passes a process serial number argument (`-psn_XXXX`) when launching apps by double-clicking. The CLI parser filters these arguments out before processing so they do not interfere with argument parsing or get passed to `git diff`.
+
+**Mode determination logic:** On startup, the app determines which mode to use:
+
+1. If the current working directory is inside a git repository, the app enters **git mode** (normal diff review).
+2. If not in a git repo but the first positional argument is an existing directory path, the app enters **directory mode** (all files treated as new additions).
+3. Otherwise, the app enters **welcome mode** and displays the welcome screen.
 
 ---
 
@@ -246,6 +261,8 @@ The examples shown:
 If the user provided explicit arguments, the help message includes the actual arguments that were used, so the user can see what was passed to `git diff`.
 
 This empty state replaces the minimal "No files to review" placeholder and serves as inline documentation for first-time users or cases where the user forgot `--staged` or used the wrong ref.
+
+**Directory mode variant:** In directory mode, the empty diff help message does not appear because the directory scanner always produces at least a listing of the scanned directory. All files are shown as additions with change type "added."
 
 #### 5.3.1 File Sections
 
@@ -345,6 +362,19 @@ The theme affects all UI elements including the Prism syntax highlighting theme.
 
 The default is **System**.
 
+### 5.7 Welcome Screen
+
+The welcome screen is displayed when the app is launched outside a git repository with no directory argument (e.g., from macOS Finder or a Linux app launcher). It provides a centered, single-column layout with:
+
+- **App title and tagline** — "self-review" heading with a short description.
+- **Git Mode card** — an informational card explaining that git mode requires launching from the CLI with diff arguments. This card is not interactive; it serves as a hint to use the CLI.
+- **Directory Mode card** — an interactive card with:
+  - A **Browse...** button that opens a native directory picker dialog.
+  - The selected directory path displayed next to the button.
+  - A **Start Review** button (appears after selecting a directory) that initiates a directory review, scanning all files recursively and treating them as new additions.
+
+Selecting a directory and clicking "Start Review" transitions the app from the welcome screen to the standard review UI with all files shown as additions.
+
 ---
 
 ## 6. Output Format
@@ -370,6 +400,9 @@ The following is the target structure. The exact XSD will be generated as part o
   git-diff-args="--staged"
   repository="/path/to/repo"
 >
+  <!-- In directory mode, git-diff-args and repository are absent; source-path is used instead:
+       <review ... source-path="/path/to/directory"> -->
+
   <file path="src/auth/login.ts" change-type="modified" viewed="true">
     <!-- File-level comment: no line attributes -->
     <comment>
@@ -424,6 +457,7 @@ return user;</original-code>
 - **Suggestions** include both the original code (from the diff) and the proposed replacement, as literal text. The AI agent can apply the suggestion by performing a text replacement.
 - **Categories** are required on every comment. The first configured category is selected by default.
 - **No wrapper elements.** `<file>` elements are direct children of `<review>`. No `<files>` or `<summary>` wrappers.
+- **Source attributes are mode-dependent.** In git mode, the `<review>` element carries `git-diff-args` and `repository` attributes. In directory mode, it carries a `source-path` attribute (the absolute path to the scanned directory) and omits `git-diff-args` and `repository`. All three attributes are optional in the XSD.
 
 ### 6.4 XSD Schema File
 
@@ -599,7 +633,17 @@ interface DiffLine {
 
 Binary files in the diff (e.g., images) are listed in the file tree with a "Binary file" indicator. No diff content is displayed. File-level comments can still be added.
 
-### 9.4 Large Diffs
+### 9.4 Directory Mode (Non-Git Alternative)
+
+When the app is invoked with a path to a non-git directory (either via the CLI or via the welcome screen's Browse button), it bypasses git entirely and uses a recursive directory scanner. The scanner:
+
+- Reads every file in the directory tree recursively.
+- Treats each file as a new addition (`changeType: 'added'`), with all lines shown as additions.
+- Generates synthetic `DiffFile[]` entries identical in structure to parsed git diffs, so the renderer handles them uniformly.
+
+This mode is useful for reviewing AI-generated code that exists as standalone files outside a git repository. The XML output uses `source-path` instead of `git-diff-args` and `repository` to identify the reviewed directory.
+
+### 9.5 Large Diffs
 
 No artificial limit is imposed on diff size. Performance for very large diffs (thousands of files, hundreds of thousands of lines) is a concern but not a v1 blocker. The UI should remain responsive through virtualized rendering of the file list and diff content if performance issues arise.
 
@@ -620,10 +664,14 @@ No artificial limit is imposed on diff size. Performance for very large diffs (t
 - Sufficient color contrast in both light and dark themes.
 - Screen reader compatibility is a nice-to-have for v1 but not required.
 
+### Keyboard Navigation
+
+The app supports keyboard-driven code review via Vimium-style hint labels (`f` for line comments, `g` for file jumps) and smooth scrolling (`j`/`k`). All shortcuts are suppressed when text inputs have focus.
+
 ### 10.3 Error Handling
 
 - If `git` is not installed or not in PATH, the CLI prints a clear error to stderr and exits with code 1.
-- If the current directory is not a git repository, same behavior.
+- If the current directory is not a git repository and no directory path argument is provided, the app displays the welcome screen instead of exiting with an error. This allows the user to browse for a directory to review or to see instructions for CLI usage.
 - If the `git diff` command fails (e.g., invalid ref), the error message from git is printed to stderr and the app exits with code 1.
 - If the `--resume-from` file does not exist or is not valid XML, the app prints an error to stderr and exits with code 1.
 - The Electron window must never show a blank white screen due to an uncaught exception. Errors should be caught and displayed inline.

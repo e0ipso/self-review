@@ -20,7 +20,7 @@ export default function Layout() {
       </Separator>
 
       <Panel id='diffViewer' defaultSize='75%'>
-        <div className='h-full overflow-y-auto bg-background'>
+        <div className='h-full overflow-y-auto bg-background' data-scroll-container="diff">
           <DiffViewer />
         </div>
       </Panel>
