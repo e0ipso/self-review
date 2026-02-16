@@ -176,11 +176,25 @@ E2E tests use Playwright with Cucumber BDD:
   dialogs, etc. Use shadcn/ui components.
 - **Prism.js for syntax highlighting.** Language detection by file extension. Theme must match the
   app's light/dark theme.
+- **MDEditor for comments.** `CommentInput` uses `@uiw/react-md-editor` (write-only mode, no
+  preview) for the comment body textarea. Suggestion code textareas remain as plain shadcn
+  `<Textarea>` components.
 
 ## XSD Schema Location
 
-The XSD schema lives at `.claude/skills/self-review/apply-review/assets/self-review-v1.xsd`. This is
+The XSD schema lives at `.claude/skills/self-review-apply/assets/self-review-v1.xsd`. This is
 the single source of truth for the XML output format.
+
+## Code Reuse
+
+- **No duplication.** Strongly favor extracting small, reusable functions and modules over writing
+  code that does very similar things in multiple places. If two pieces of code perform nearly the
+  same operation, abstract the shared logic into a single utility and call it from both sites.
+- **Extract before extending.** When adding a new feature that overlaps with existing functionality,
+  refactor the existing code into a reusable abstraction first, then build the new feature on top of
+  it. Do not copy-paste and modify.
+- **Small, focused utilities.** Prefer many small single-purpose functions over large monolithic
+  ones. Each utility should do one thing and be independently testable.
 
 ## What NOT To Do
 

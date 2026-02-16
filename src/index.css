@@ -125,3 +125,32 @@ body {
 *::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--border) / 0.5);
 }
+
+/* MDEditor overrides for CommentInput */
+.md-editor-comment.w-md-editor {
+  border: none !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+  --color-border-default: hsl(var(--border)) !important;
+}
+
+.md-editor-comment .w-md-editor-toolbar {
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  background-color: transparent !important;
+  padding: 4px !important;
+  min-height: auto !important;
+}
+
+.md-editor-comment .w-md-editor-toolbar li > button {
+  height: 24px !important;
+}
+
+.md-editor-comment .w-md-editor-text {
+  min-height: 80px;
+}
+
+.md-editor-comment .w-md-editor-text-input,
+.md-editor-comment .w-md-editor-text-pre {
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+}
