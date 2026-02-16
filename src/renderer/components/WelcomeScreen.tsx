@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import {
   Card,
@@ -11,6 +11,13 @@ import {
 export default function WelcomeScreen() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return window.electronAPI.onCloseRequested(() => {
+      window.electronAPI.discardAndQuit();
+    });
+  }, []);
 
   const handleBrowse = async () => {
     const path = await window.electronAPI.pickDirectory();
@@ -26,6 +33,7 @@ export default function WelcomeScreen() {
       await window.electronAPI.startDirectoryReview(selectedPath);
     } catch (err) {
       console.error('[WelcomeScreen] Failed to start directory review:', err);
+      setError(err instanceof Error ? err.message : 'Failed to start review');
       setLoading(false);
     }
   };
@@ -94,6 +102,18 @@ export default function WelcomeScreen() {
                 {loading ? 'Loading...' : 'Start Review'}
               </Button>
             )}
+            {error && (
+              <p
+                data-testid="welcome-error"
+                className="text-sm text-destructive"
+              >
+                {error}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              If the selected directory is a git repository, git mode will be
+              used automatically.
+            </p>
           </CardContent>
         </Card>
       </div>
