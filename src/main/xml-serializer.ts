@@ -1,6 +1,8 @@
 // src/main/xml-serializer.ts
 // Serialize ReviewState to XML and validate against XSD
 
+import * as path from 'path';
+import * as fs from 'fs';
 import { ReviewState, FileReviewState, ReviewComment } from '../shared/types';
 import { validateXML } from 'xmllint-wasm';
 
@@ -261,8 +263,55 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
 
 </xs:schema>`;
 
-export async function serializeReview(state: ReviewState): Promise<string> {
-  const xml = buildXml(state);
+function extFromMediaType(mediaType: string): string {
+  const map: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+  };
+  return map[mediaType] || 'png';
+}
+
+function writeAttachments(state: ReviewState, outputFilePath: string): ReviewState {
+  const assetDir = path.join(path.dirname(outputFilePath), '.self-review-assets');
+  let hasAttachments = false;
+
+  const updatedFiles = state.files.map(file => ({
+    ...file,
+    comments: file.comments.map(comment => {
+      if (!comment.attachments?.length) return comment;
+
+      const updatedAttachments = comment.attachments.map((att, index) => {
+        if (!att.data) return att;
+        hasAttachments = true;
+
+        const ext = extFromMediaType(att.mediaType);
+        const fileName = `${comment.id}-${index}.${ext}`;
+        const relativePath = `.self-review-assets/${fileName}`;
+
+        if (!fs.existsSync(assetDir)) {
+          fs.mkdirSync(assetDir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(assetDir, fileName), Buffer.from(att.data));
+
+        return { ...att, fileName: relativePath, data: undefined };
+      });
+
+      return { ...comment, attachments: updatedAttachments };
+    }),
+  }));
+
+  if (hasAttachments) {
+    console.error(`[main] Wrote attachment files to ${assetDir}`);
+  }
+
+  return { ...state, files: updatedFiles };
+}
+
+export async function serializeReview(state: ReviewState, outputFilePath: string): Promise<string> {
+  const processedState = writeAttachments(state, outputFilePath);
+  const xml = buildXml(processedState);
 
   // Validate the XML against the XSD
   try {
@@ -378,6 +427,13 @@ function buildCommentXml(comment: ReviewComment): string[] {
       `        <proposed-code>${escapeXml(comment.suggestion.proposedCode)}</proposed-code>`
     );
     lines.push('      </suggestion>');
+  }
+
+  // Attachments
+  if (comment.attachments?.length) {
+    for (const att of comment.attachments) {
+      lines.push(`      <attachment path="${escapeXml(att.fileName)}" media-type="${escapeXml(att.mediaType)}" />`);
+    }
   }
 
   // Closing tag

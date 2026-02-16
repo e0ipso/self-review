@@ -11,6 +11,8 @@ vi.mock('xmllint-wasm', () => ({
   validateXML: vi.fn(() => Promise.resolve({ valid: true, errors: [] })),
 }));
 
+const TEST_OUTPUT_PATH = '/tmp/test-review.xml';
+
 describe('serializeReview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -25,7 +27,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
       expect(xml).toContain('xmlns="urn:self-review:v1"');
@@ -50,7 +52,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain(
         '<file path="src/main.ts" change-type="modified" viewed="true" />'
@@ -66,7 +68,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('timestamp="2024-02-20T15:45:30Z"');
       expect(xml).toContain('git-diff-args="HEAD~3"');
@@ -97,7 +99,7 @@ describe('serializeReview', () => {
         files,
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('change-type="added"');
       expect(xml).toContain('change-type="deleted"');
@@ -130,7 +132,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain(
         '<file path="src/main.ts" change-type="modified" viewed="true">'
@@ -166,7 +168,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<comment new-line-start="10" new-line-end="12">');
       expect(xml).toContain('<body>Consider refactoring</body>');
@@ -198,7 +200,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<comment old-line-start="5" old-line-end="8">');
       expect(xml).toContain('<body>Why was this removed?</body>');
@@ -229,7 +231,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<comment new-line-start="42" new-line-end="42">');
     });
@@ -261,7 +263,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<suggestion>');
       expect(xml).toContain('<original-code>const x = foo();</original-code>');
@@ -293,7 +295,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('&lt;Component&gt;');
       expect(xml).toContain('&amp;');
@@ -330,7 +332,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('&lt;');
       expect(xml).toContain('&gt;');
@@ -354,7 +356,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('src/test&amp;file&lt;name&gt;.ts');
     });
@@ -401,7 +403,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<body>File-level comment</body>');
       expect(xml).toContain('<body>Line comment</body>');
@@ -419,7 +421,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       // Check basic XML structure
       expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(
@@ -440,7 +442,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      await serializeReview(reviewState);
+      await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(validateXML).toHaveBeenCalledTimes(1);
       const callArgs = vi.mocked(validateXML).mock.calls[0][0];
@@ -464,7 +466,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      await expect(serializeReview(reviewState)).rejects.toThrow(
+      await expect(serializeReview(reviewState, TEST_OUTPUT_PATH)).rejects.toThrow(
         'Generated XML does not conform to schema'
       );
     });
@@ -480,7 +482,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       // Should return XML without throwing (graceful fallback)
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
@@ -536,7 +538,7 @@ describe('serializeReview', () => {
         ],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('src/components/Button.tsx');
       expect(xml).toContain('src/utils/helpers.ts');
@@ -570,7 +572,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<body></body>');
       expect(xml).toContain('<category></category>');
@@ -600,7 +602,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<body>First line\nSecond line\nThird line</body>');
     });

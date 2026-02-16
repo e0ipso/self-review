@@ -482,7 +482,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(1);
@@ -526,7 +526,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(1);
@@ -558,7 +558,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments[0].lineRange).toEqual({
@@ -595,7 +595,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments[0].body).toBe(
@@ -662,7 +662,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(3);

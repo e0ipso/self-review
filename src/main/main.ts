@@ -267,9 +267,9 @@ function createWindow(): void {
     try {
       console.error('[main] Save and quit requested');
       const reviewState = await requestReviewFromRenderer(mainWindow);
-      const xml = await serializeReview(reviewState);
-
       const outputPath = resolve(process.cwd(), appConfig!.outputFile);
+      const xml = await serializeReview(reviewState, outputPath);
+
       writeFileSync(outputPath, xml + '\n', 'utf-8');
       console.error(`[main] Review written to ${outputPath}`);
 

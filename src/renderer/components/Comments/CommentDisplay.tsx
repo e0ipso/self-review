@@ -1,15 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { ReviewComment } from '../../../shared/types';
+import type { ReviewComment, Attachment } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, ChevronUp, ImageOff } from 'lucide-react';
 import CommentInput from './CommentInput';
 import SuggestionBlock from './SuggestionBlock';
+
+function AttachmentImage({ attachment }: { attachment: Attachment }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let revoke: (() => void) | undefined;
+
+    if (attachment.data) {
+      const url = URL.createObjectURL(new Blob([attachment.data]));
+      setImageUrl(url);
+      revoke = () => URL.revokeObjectURL(url);
+    } else if (attachment.fileName) {
+      window.electronAPI
+        .readAttachment(attachment.fileName)
+        .then((buffer) => {
+          if (buffer) {
+            const url = URL.createObjectURL(new Blob([buffer]));
+            setImageUrl(url);
+            revoke = () => URL.revokeObjectURL(url);
+          } else {
+            setError(true);
+          }
+        })
+        .catch(() => setError(true));
+    }
+
+    return () => revoke?.();
+  }, [attachment.data, attachment.fileName]);
+
+  if (error) {
+    return (
+      <div className='flex items-center gap-1 text-muted-foreground text-sm p-2 border rounded bg-muted'>
+        <ImageOff className='h-4 w-4' />
+        <span>Image not found</span>
+      </div>
+    );
+  }
+
+  if (!imageUrl) return null;
+
+  return (
+    <img
+      src={imageUrl}
+      alt='Attachment'
+      className='max-h-48 rounded border cursor-pointer hover:opacity-80'
+      onClick={() => window.open(imageUrl, '_blank')}
+    />
+  );
+}
 
 export interface CommentDisplayProps {
   comment: ReviewComment;
@@ -177,6 +227,14 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
                 suggestion={comment.suggestion}
                 language='typescript'
               />
+            </div>
+          )}
+
+          {comment.attachments && comment.attachments.length > 0 && (
+            <div className='flex gap-2 flex-wrap px-3 pb-3'>
+              {comment.attachments.map((att) => (
+                <AttachmentImage key={att.id} attachment={att} />
+              ))}
             </div>
           )}
         </>

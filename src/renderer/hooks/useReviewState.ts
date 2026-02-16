@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type {
+  Attachment,
   FileReviewState,
   ReviewComment,
   LineRange,
@@ -14,7 +15,8 @@ export interface UseReviewStateReturn {
     lineRange: LineRange | null,
     body: string,
     category: string,
-    suggestion: Suggestion | null
+    suggestion: Suggestion | null,
+    attachments?: Attachment[]
   ) => void;
   updateComment: (id: string, updates: Partial<ReviewComment>) => void;
   deleteComment: (id: string) => void;
@@ -35,7 +37,8 @@ export function useReviewState(): UseReviewStateReturn {
     lineRange: LineRange | null,
     body: string,
     category: string,
-    suggestion: Suggestion | null
+    suggestion: Suggestion | null,
+    attachments?: Attachment[]
   ) => {
     const newComment: ReviewComment = {
       id: crypto.randomUUID(),
@@ -44,6 +47,7 @@ export function useReviewState(): UseReviewStateReturn {
       body,
       category,
       suggestion,
+      ...(attachments?.length ? { attachments } : {}),
     };
 
     setFiles(prevFiles =>
