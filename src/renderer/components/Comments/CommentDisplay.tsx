@@ -51,12 +51,22 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
 
   if (!imageUrl) return null;
 
+  const openImageWindow = () => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html>
+<html><head><title>Attachment</title>
+<style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1a1a1a;}</style>
+</head><body><img src="${imageUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;"/></body></html>`);
+    win.document.close();
+  };
+
   return (
     <img
       src={imageUrl}
       alt='Attachment'
       className='max-h-48 rounded border cursor-pointer hover:opacity-80'
-      onClick={() => window.open(imageUrl, '_blank')}
+      onClick={openImageWindow}
     />
   );
 }
