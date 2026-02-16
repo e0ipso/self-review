@@ -115,6 +115,7 @@ export default function SplitView({
         className={`split-half w-1/2 flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${hasComment ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}
         data-line-number={lineNumber || undefined}
         data-line-side={side}
+        data-line-type={line.type}
       >
         {/* Line number gutter */}
         <div

@@ -1,6 +1,8 @@
+import React from 'react';
 import { describe, it, expect, beforeEach, vi, beforeAll } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useDiffNavigation } from './useDiffNavigation';
+import { DiffNavigationProvider } from '../context/DiffNavigationContext';
 
 // Mock IntersectionObserver and MutationObserver before all tests
 let intersectionCallback: IntersectionObserverCallback | null = null;
@@ -40,6 +42,9 @@ class MockMutationObserver implements MutationObserver {
   takeRecords = vi.fn(() => []);
 }
 
+const wrapper = ({ children }: { children: React.ReactNode }) =>
+  React.createElement(DiffNavigationProvider, null, children);
+
 describe('useDiffNavigation', () => {
   beforeAll(() => {
     global.IntersectionObserver = MockIntersectionObserver as any;
@@ -62,7 +67,7 @@ describe('useDiffNavigation', () => {
       mockElement.scrollIntoView = scrollIntoViewMock;
       document.body.appendChild(mockElement);
 
-      const { result } = renderHook(() => useDiffNavigation());
+      const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
       act(() => {
         result.current.scrollToFile('test.ts');
@@ -75,7 +80,7 @@ describe('useDiffNavigation', () => {
     });
 
     it('does nothing when element is not found', () => {
-      const { result } = renderHook(() => useDiffNavigation());
+      const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
       // Should not throw
       act(() => {
@@ -99,7 +104,7 @@ describe('useDiffNavigation', () => {
       document.body.appendChild(element1);
       document.body.appendChild(element2);
 
-      const { result } = renderHook(() => useDiffNavigation());
+      const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
       act(() => {
         result.current.scrollToFile('file2.ts');
@@ -115,7 +120,7 @@ describe('useDiffNavigation', () => {
 
   describe('IntersectionObserver setup', () => {
     it('initializes with null activeFilePath', () => {
-      const { result } = renderHook(() => useDiffNavigation());
+      const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
       expect(result.current.activeFilePath).toBeNull();
     });
@@ -125,7 +130,7 @@ describe('useDiffNavigation', () => {
       element.setAttribute('data-file-path', 'file1.ts');
       document.body.appendChild(element);
 
-      const { result } = renderHook(() => useDiffNavigation());
+      const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
       // Simulate intersection
       if (intersectionCallback) {
@@ -157,7 +162,7 @@ describe('useDiffNavigation', () => {
       document.body.appendChild(element1);
       document.body.appendChild(element2);
 
-      const { result } = renderHook(() => useDiffNavigation());
+      const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
       if (intersectionCallback) {
         const entries: IntersectionObserverEntry[] = [
@@ -194,7 +199,7 @@ describe('useDiffNavigation', () => {
       // No data-file-path attribute
       document.body.appendChild(element);
 
-      const { result } = renderHook(() => useDiffNavigation());
+      const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
       if (intersectionCallback) {
         const entries: IntersectionObserverEntry[] = [
@@ -223,7 +228,7 @@ describe('useDiffNavigation', () => {
       element.setAttribute('data-file-path', 'file1.ts');
       document.body.appendChild(element);
 
-      const { result } = renderHook(() => useDiffNavigation());
+      const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
       if (intersectionCallback) {
         const entries: IntersectionObserverEntry[] = [

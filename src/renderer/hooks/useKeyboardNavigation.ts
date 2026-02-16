@@ -69,6 +69,16 @@ export function useKeyboardNavigation() {
   const activateHint = useCallback(
     (hint: HintItem) => {
       if (modeRef.current === 'hint-diff') {
+        const testId = hint.element.getAttribute('data-testid');
+
+        // Comment form buttons: just click them
+        if (testId === 'cancel-comment-btn' || testId === 'add-comment-btn' || testId?.startsWith('category-option-')) {
+          hint.element.click();
+          clearHintsRef.current();
+          return;
+        }
+
+        // Diff line: trigger comment and focus textarea
         const lineNumber = hint.element.getAttribute('data-line-number');
         const side = hint.element.getAttribute('data-line-side');
         let filePath: string | null = null;
@@ -94,6 +104,14 @@ export function useKeyboardNavigation() {
               },
             })
           );
+
+          // Focus the comment textarea after React renders
+          requestAnimationFrame(() => {
+            const textarea = document.querySelector(
+              '[data-testid="comment-input"] textarea'
+            ) as HTMLElement | null;
+            textarea?.focus();
+          });
         }
       } else if (modeRef.current === 'hint-file') {
         const filePath = hint.element.getAttribute('data-file-path');
@@ -111,7 +129,7 @@ export function useKeyboardNavigation() {
     let selector: string;
     if (newMode === 'hint-diff') {
       selector =
-        '[data-line-type="addition"][data-line-number][data-line-side], [data-line-type="deletion"][data-line-number][data-line-side]';
+        '[data-line-type="addition"][data-line-number][data-line-side], [data-line-type="deletion"][data-line-number][data-line-side], [data-testid="cancel-comment-btn"], [data-testid="add-comment-btn"], [data-testid^="category-option-"]';
     } else {
       selector =
         '.file-tree [data-file-path], [data-testid="file-tree"] [data-file-path], button[data-file-path]';

@@ -321,6 +321,18 @@ export default function FileSection({
     };
   }, []);
 
+  // Listen for programmatic comment triggering from keyboard hint system
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { filePath: targetFile, lineNumber, side } = (e as CustomEvent).detail;
+      if (targetFile !== filePath) return;
+      if (dragStateRef.current) return;
+      handleCommentRange(lineNumber, lineNumber, side);
+    };
+    document.addEventListener('trigger-line-comment', handler);
+    return () => document.removeEventListener('trigger-line-comment', handler);
+  }, [filePath]);
+
   const handleAddFileComment = () => {
     setShowingFileComment(true);
   };
