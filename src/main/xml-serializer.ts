@@ -137,6 +137,14 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
           </xs:documentation>
         </xs:annotation>
       </xs:element>
+      <xs:element name="attachment" type="sr:AttachmentType" minOccurs="0" maxOccurs="unbounded">
+        <xs:annotation>
+          <xs:documentation>
+            Optional image attachment. The path attribute references an image file
+            stored in the .self-review-assets/ directory alongside the XML output.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:element>
     </xs:sequence>
     <xs:attribute name="old-line-start" type="xs:positiveInteger" use="optional">
       <xs:annotation>
@@ -200,6 +208,25 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
         </xs:annotation>
       </xs:element>
     </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="AttachmentType">
+    <xs:annotation>
+      <xs:documentation>
+        Reference to an image file attached to a review comment. The file is stored
+        alongside the XML output in the .self-review-assets/ directory.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="path" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>Relative path from the XML file to the image file.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="media-type" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>MIME type of the image (e.g., image/png, image/jpeg).</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
   </xs:complexType>
 
   <xs:simpleType name="ChangeTypeEnum">
