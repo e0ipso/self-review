@@ -11,4 +11,5 @@ export const IPC = {
   APP_CLOSE_REQUESTED: 'app:close-requested',
   APP_SAVE_AND_QUIT: 'app:save-and-quit',
   APP_DISCARD_AND_QUIT: 'app:discard-and-quit',
+  ATTACHMENT_READ: 'attachment:read',
 } as const;

@@ -1,6 +1,7 @@
 // src/main/ipc-handlers.ts
 // IPC handler registration
 
+import * as fs from 'fs';
 import { ipcMain, BrowserWindow } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import {
@@ -55,6 +56,17 @@ export function registerIpcHandlers(): void {
       })
     );
     reviewStateCache = state;
+  });
+
+  // Handle attachment file read from renderer
+  ipcMain.handle(IPC.ATTACHMENT_READ, async (_event, filePath: string) => {
+    try {
+      const buffer = await fs.promises.readFile(filePath);
+      return buffer.buffer; // Convert Node.js Buffer to ArrayBuffer
+    } catch {
+      console.error(`[attachment:read] Failed to read file: ${filePath}`);
+      return null;
+    }
   });
 
   // Send resume comments when renderer is ready (after diff data is loaded)

@@ -734,6 +734,104 @@ describe('useReviewState', () => {
     });
   });
 
+  describe('attachment state management', () => {
+    it('adds comment with attachments', () => {
+      const { result } = renderHook(() => useReviewState());
+
+      act(() => {
+        result.current.setFiles([
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
+        ]);
+      });
+
+      const attachments = [
+        {
+          id: 'att-1',
+          fileName: 'screenshot.png',
+          mediaType: 'image/png',
+          data: new ArrayBuffer(8),
+        },
+      ];
+
+      act(() => {
+        result.current.addComment(
+          'src/test.ts',
+          { side: 'new', start: 5, end: 5 },
+          'See attached screenshot',
+          'bug',
+          null,
+          attachments
+        );
+      });
+
+      const comments = result.current.getCommentsForFile('src/test.ts');
+      expect(comments).toHaveLength(1);
+      expect(comments[0].attachments).toHaveLength(1);
+      expect(comments[0].attachments![0].fileName).toBe('screenshot.png');
+      expect(comments[0].attachments![0].mediaType).toBe('image/png');
+    });
+
+    it('updates comment attachments via updateComment', () => {
+      const { result } = renderHook(() => useReviewState());
+
+      act(() => {
+        result.current.setFiles([
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [
+              {
+                id: 'comment-att-1',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'Original',
+                category: 'note',
+                suggestion: null,
+                attachments: [
+                  {
+                    id: 'att-old',
+                    fileName: 'old.png',
+                    mediaType: 'image/png',
+                  },
+                ],
+              },
+            ],
+          },
+        ]);
+      });
+
+      const newAttachments = [
+        {
+          id: 'att-new-1',
+          fileName: 'new-screenshot.png',
+          mediaType: 'image/png',
+        },
+        {
+          id: 'att-new-2',
+          fileName: 'diagram.jpg',
+          mediaType: 'image/jpeg',
+        },
+      ];
+
+      act(() => {
+        result.current.updateComment('comment-att-1', {
+          attachments: newAttachments,
+        });
+      });
+
+      const comments = result.current.getCommentsForFile('src/test.ts');
+      expect(comments[0].attachments).toHaveLength(2);
+      expect(comments[0].attachments![0].fileName).toBe('new-screenshot.png');
+      expect(comments[0].attachments![1].fileName).toBe('diagram.jpg');
+    });
+  });
+
   describe('state immutability', () => {
     it('addComment does not mutate files array', () => {
       const { result } = renderHook(() => useReviewState());

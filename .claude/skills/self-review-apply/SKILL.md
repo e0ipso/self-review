@@ -19,7 +19,14 @@ everything: elements, attributes, line number semantics, and suggestion format.
 
 Read the XML file from `$ARGUMENTS` or default to `./review.xml`. Stop if the file does not exist.
 
-## 3. Execute the Feedback
+## 3. Load Image Attachments
+
+For each comment with `<attachment>` elements, read the referenced image file using the Read tool to
+include it as visual context before processing the comment. The `path` attribute contains a relative
+path from the XML file to the image. If the image file does not exist, note this in your output and
+proceed with the text-based feedback only.
+
+## 4. Execute the Feedback
 
 Skip files with zero comments. For files with comments, create one **TaskCreate** task per file,
 then spawn subagents to work on independent files concurrently. For small reviews (3 or fewer

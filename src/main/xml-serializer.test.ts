@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs';
 import { serializeReview } from './xml-serializer';
 import type {
   ReviewState,
@@ -10,6 +11,20 @@ import type {
 vi.mock('xmllint-wasm', () => ({
   validateXML: vi.fn(() => Promise.resolve({ valid: true, errors: [] })),
 }));
+
+// Mock fs for attachment file writing tests
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    existsSync: vi.fn(actual.existsSync),
+    mkdirSync: vi.fn(actual.mkdirSync),
+    writeFileSync: vi.fn(actual.writeFileSync),
+    readFileSync: actual.readFileSync,
+  };
+});
+
+const TEST_OUTPUT_PATH = '/tmp/test-review.xml';
 
 describe('serializeReview', () => {
   beforeEach(() => {
@@ -25,7 +40,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
       expect(xml).toContain('xmlns="urn:self-review:v1"');
@@ -50,7 +65,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain(
         '<file path="src/main.ts" change-type="modified" viewed="true" />'
@@ -66,7 +81,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('timestamp="2024-02-20T15:45:30Z"');
       expect(xml).toContain('git-diff-args="HEAD~3"');
@@ -97,7 +112,7 @@ describe('serializeReview', () => {
         files,
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('change-type="added"');
       expect(xml).toContain('change-type="deleted"');
@@ -130,7 +145,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain(
         '<file path="src/main.ts" change-type="modified" viewed="true">'
@@ -166,7 +181,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<comment new-line-start="10" new-line-end="12">');
       expect(xml).toContain('<body>Consider refactoring</body>');
@@ -198,7 +213,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<comment old-line-start="5" old-line-end="8">');
       expect(xml).toContain('<body>Why was this removed?</body>');
@@ -229,7 +244,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<comment new-line-start="42" new-line-end="42">');
     });
@@ -261,7 +276,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<suggestion>');
       expect(xml).toContain('<original-code>const x = foo();</original-code>');
@@ -293,7 +308,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('&lt;Component&gt;');
       expect(xml).toContain('&amp;');
@@ -330,7 +345,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('&lt;');
       expect(xml).toContain('&gt;');
@@ -354,7 +369,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('src/test&amp;file&lt;name&gt;.ts');
     });
@@ -401,7 +416,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<body>File-level comment</body>');
       expect(xml).toContain('<body>Line comment</body>');
@@ -419,7 +434,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       // Check basic XML structure
       expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(
@@ -440,7 +455,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      await serializeReview(reviewState);
+      await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(validateXML).toHaveBeenCalledTimes(1);
       const callArgs = vi.mocked(validateXML).mock.calls[0][0];
@@ -464,7 +479,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      await expect(serializeReview(reviewState)).rejects.toThrow(
+      await expect(serializeReview(reviewState, TEST_OUTPUT_PATH)).rejects.toThrow(
         'Generated XML does not conform to schema'
       );
     });
@@ -480,13 +495,132 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       // Should return XML without throwing (graceful fallback)
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
       expect(xml).toContain('xmlns="urn:self-review:v1"');
       expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
       expect(xml).toContain('</review>');
+    });
+  });
+
+  describe('attachment serialization', () => {
+    it('emits attachment elements with path and media-type', async () => {
+      const comment: ReviewComment = {
+        id: 'att-comment-1',
+        filePath: 'src/main.ts',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        body: 'See screenshot',
+        category: 'bug',
+        suggestion: null,
+        attachments: [
+          {
+            id: 'att-1',
+            fileName: 'screenshot.png',
+            mediaType: 'image/png',
+            data: new ArrayBuffer(8),
+          },
+        ],
+      };
+
+      const file: FileReviewState = {
+        path: 'src/main.ts',
+        changeType: 'modified',
+        viewed: true,
+        comments: [comment],
+      };
+
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        gitDiffArgs: '--staged',
+        repository: '/repo',
+        files: [file],
+      };
+
+      const xml = await serializeReview(reviewState, '/tmp/test-output/review.xml');
+
+      expect(xml).toContain('<attachment path=".self-review-assets/');
+      expect(xml).toContain('media-type="image/png"');
+      expect(xml).toContain('/>');
+    });
+
+    it('writes image files to .self-review-assets directory', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+      vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
+
+      const imageData = new ArrayBuffer(16);
+      const comment: ReviewComment = {
+        id: 'att-write-1',
+        filePath: 'src/main.ts',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        body: 'Image attached',
+        category: 'note',
+        suggestion: null,
+        attachments: [
+          {
+            id: 'img-1',
+            fileName: 'capture.png',
+            mediaType: 'image/png',
+            data: imageData,
+          },
+        ],
+      };
+
+      const file: FileReviewState = {
+        path: 'src/main.ts',
+        changeType: 'modified',
+        viewed: true,
+        comments: [comment],
+      };
+
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        gitDiffArgs: '--staged',
+        repository: '/repo',
+        files: [file],
+      };
+
+      await serializeReview(reviewState, '/tmp/test-output/review.xml');
+
+      expect(fs.mkdirSync).toHaveBeenCalledWith(
+        '/tmp/test-output/.self-review-assets',
+        { recursive: true }
+      );
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('.self-review-assets/att-write-1-0.png'),
+        expect.any(Buffer)
+      );
+    });
+
+    it('skips asset directory when no attachments exist', async () => {
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        gitDiffArgs: '--staged',
+        repository: '/repo',
+        files: [
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: true,
+            comments: [
+              {
+                id: 'no-att',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'No attachments here',
+                category: 'note',
+                suggestion: null,
+              },
+            ],
+          },
+        ],
+      };
+
+      await serializeReview(reviewState, '/tmp/test-output/review.xml');
+
+      expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
   });
 
@@ -536,7 +670,7 @@ describe('serializeReview', () => {
         ],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('src/components/Button.tsx');
       expect(xml).toContain('src/utils/helpers.ts');
@@ -570,7 +704,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<body></body>');
       expect(xml).toContain('<category></category>');
@@ -600,7 +734,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState);
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<body>First line\nSecond line\nThird line</body>');
     });

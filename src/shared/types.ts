@@ -40,6 +40,13 @@ export interface Suggestion {
   proposedCode: string;
 }
 
+export interface Attachment {
+  id: string;
+  fileName: string;
+  mediaType: string;
+  data?: ArrayBuffer; // Present in-memory during session, stripped before XML serialization
+}
+
 export interface LineRange {
   side: 'old' | 'new';
   start: number;
@@ -54,6 +61,7 @@ export interface ReviewComment {
   category: string;
   suggestion: Suggestion | null;
   orphaned?: boolean; // for --resume-from conflict handling
+  attachments?: Attachment[];
 }
 
 export interface FileReviewState {
@@ -116,6 +124,7 @@ export interface ElectronAPI {
   onRequestReview: (callback: () => void) => void;
   onCloseRequested: (callback: () => void) => void;
   saveAndQuit: () => void;
+  readAttachment: (filePath: string) => Promise<ArrayBuffer | null>;
   discardAndQuit: () => void;
 }
 

@@ -482,7 +482,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(1);
@@ -526,7 +526,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(1);
@@ -558,7 +558,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments[0].lineRange).toEqual({
@@ -595,7 +595,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments[0].body).toBe(
@@ -662,7 +662,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original);
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(3);
@@ -741,6 +741,60 @@ describe('parseReviewXmlString', () => {
       expect(result.comments[1].suggestion?.proposedCode).toBe(
         'const foo = () => {}'
       );
+    });
+  });
+
+  describe('attachment parsing', () => {
+    it('parses attachment elements into Attachment objects', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1" timestamp="2026-01-01T00:00:00Z" git-diff-args="--staged" repository="/repo">
+  <file path="test.ts" change-type="modified" viewed="true">
+    <comment new-line-start="1" new-line-end="1">
+      <body>test comment</body>
+      <category>bug</category>
+      <attachment path=".self-review-assets/img-001.png" media-type="image/png" />
+    </comment>
+  </file>
+</review>`;
+      const result = parseReviewXmlString(xml);
+      expect(result.comments).toHaveLength(1);
+      expect(result.comments[0].attachments).toHaveLength(1);
+      expect(result.comments[0].attachments![0].fileName).toBe('.self-review-assets/img-001.png');
+      expect(result.comments[0].attachments![0].mediaType).toBe('image/png');
+      expect(result.comments[0].attachments![0].data).toBeUndefined();
+    });
+
+    it('parses multiple attachments on a single comment', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1" timestamp="2026-01-01T00:00:00Z" git-diff-args="--staged" repository="/repo">
+  <file path="test.ts" change-type="modified" viewed="true">
+    <comment new-line-start="1" new-line-end="1">
+      <body>test</body>
+      <category>bug</category>
+      <attachment path=".self-review-assets/img-001.png" media-type="image/png" />
+      <attachment path=".self-review-assets/img-002.jpg" media-type="image/jpeg" />
+    </comment>
+  </file>
+</review>`;
+      const result = parseReviewXmlString(xml);
+      expect(result.comments[0].attachments).toHaveLength(2);
+      expect(result.comments[0].attachments![0].mediaType).toBe('image/png');
+      expect(result.comments[0].attachments![1].mediaType).toBe('image/jpeg');
+    });
+
+    it('handles XML without attachments (backward compatibility)', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1" timestamp="2026-01-01T00:00:00Z" git-diff-args="--staged" repository="/repo">
+  <file path="test.ts" change-type="modified" viewed="true">
+    <comment new-line-start="1" new-line-end="1">
+      <body>test</body>
+      <category>bug</category>
+    </comment>
+  </file>
+</review>`;
+      const result = parseReviewXmlString(xml);
+      expect(result.comments).toHaveLength(1);
+      expect(result.comments[0].attachments).toBeUndefined();
     });
   });
 

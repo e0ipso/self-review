@@ -70,6 +70,23 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
           suggestion: parseSuggestion(comment),
         };
 
+        // Parse attachments
+        const commentAttachments = Array.isArray(comment.attachment)
+          ? comment.attachment
+          : comment.attachment
+            ? [comment.attachment]
+            : [];
+
+        if (commentAttachments.length > 0) {
+          reviewComment.attachments = commentAttachments.map(
+            (att: Record<string, unknown>, i: number) => ({
+              id: `${reviewComment.id}-att-${i}`,
+              fileName: String(att['@_path'] || ''),
+              mediaType: String(att['@_media-type'] || 'image/png'),
+            })
+          );
+        }
+
         comments.push(reviewComment);
       }
     }

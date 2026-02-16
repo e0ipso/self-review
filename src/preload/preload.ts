@@ -57,6 +57,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send(IPC.APP_SAVE_AND_QUIT);
   },
 
+  readAttachment: (filePath: string) =>
+    ipcRenderer.invoke(IPC.ATTACHMENT_READ, filePath),
+
   discardAndQuit: () => {
     ipcRenderer.send(IPC.APP_DISCARD_AND_QUIT);
   },

@@ -8,6 +8,7 @@ import React, {
   ReactNode,
 } from 'react';
 import type {
+  Attachment,
   DiffFile,
   DiffLoadPayload,
   FileReviewState,
@@ -29,7 +30,8 @@ export interface ReviewContextValue {
     lineRange: LineRange | null,
     body: string,
     category: string,
-    suggestion: Suggestion | null
+    suggestion: Suggestion | null,
+    attachments?: Attachment[]
   ) => void;
   editComment: (id: string, updates: Partial<ReviewComment>) => void;
   deleteComment: (id: string) => void;

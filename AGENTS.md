@@ -1,6 +1,7 @@
 # self-review
 
-Local-only Electron desktop app that provides a GitHub-style PR review UI for local git diffs.
+Local-only Electron desktop app that provides a GitHub-style PR review UI for local git diffs and
+directory-based reviews (all files treated as new when no repo context is available).
 Designed for solo developers reviewing AI-generated code. CLI-first, one-shot workflow: open →
 review → close → XML to file.
 
@@ -162,8 +163,8 @@ E2E tests use Playwright with Cucumber BDD:
   `console.error()` for logging in the main process, never `console.log()`.
 - **No network access.** The app makes zero network requests. No telemetry, no analytics, no CDN
   fetches. All assets are bundled.
-- **One file write.** The app writes exactly one file: the review XML output, at the configured
-  `output-file` path (default `./review.xml`). No other files are written.
+- **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
+- **XSD sync.** The XSD schema exists in two locations: `.claude/skills/self-review-apply/assets/self-review-v1.xsd` (standalone) and embedded as a string in `src/main/xml-serializer.ts`. Both copies must be kept in sync when the schema changes.
 - **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
   Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit /
   Discard / Cancel.
