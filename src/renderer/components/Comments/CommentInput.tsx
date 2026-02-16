@@ -108,6 +108,8 @@ export default function CommentInput({
   const [proposedCode, setProposedCode] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
 
   const handleImageAttach = useCallback(async (files: (File | Blob)[]) => {
     try {
@@ -134,11 +136,29 @@ export default function CommentInput({
   }, [handleImageAttach]);
 
   const handleDropImages = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setIsDragging(false);
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
     if (files.length === 0) return;
-    e.preventDefault();
     handleImageAttach(files);
   }, [handleImageAttach]);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (existingComment) {
@@ -199,12 +219,22 @@ export default function CommentInput({
 
   return (
     <div
-      className='rounded-lg border border-border bg-card shadow-sm overflow-hidden'
+      className={`rounded-lg border bg-card shadow-sm overflow-hidden relative ${isDragging ? 'border-primary border-2' : 'border-border'}`}
       data-testid='comment-input'
       onPaste={handlePasteImages}
       onDrop={handleDropImages}
       onDragOver={(e) => e.preventDefault()}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
     >
+      {isDragging && (
+        <div className='absolute inset-0 z-50 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] rounded-lg pointer-events-none'>
+          <div className='flex items-center gap-2 text-sm font-medium text-primary'>
+            <ImageIcon className='h-5 w-5' />
+            Drop image to attach
+          </div>
+        </div>
+      )}
       <div className='p-1' data-color-mode={isDark ? 'dark' : 'light'}>
         <MDEditor
           value={body}
