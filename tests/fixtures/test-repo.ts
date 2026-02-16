@@ -131,6 +131,12 @@ export function createTestRepo(): string {
     ].join('\n')
   );
 
+  // Add a new untracked file (will appear as "added" via untracked file detection)
+  writeFileSync(
+    join(repoDir, 'src', 'new-feature.ts'),
+    Array.from({ length: 20 }, (_, i) => `export const feature${i + 1} = true;`).join('\n')
+  );
+
   // Do NOT stage — changes are visible via bare `git diff`
 
   return repoDir;

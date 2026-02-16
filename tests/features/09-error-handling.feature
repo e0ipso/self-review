@@ -6,8 +6,7 @@ Feature: Error Handling
   Scenario: Not a git repository
     Given I am in a directory that is not a git repository
     When I launch self-review
-    Then the process should exit with code 1
-    And stderr should contain an error message about not being a git repository
+    Then the welcome screen should be visible
 
   Scenario: Invalid git ref
     Given a git repository with no commits

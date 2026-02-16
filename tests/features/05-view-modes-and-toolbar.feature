@@ -66,20 +66,20 @@ Feature: View Modes and Toolbar
 
   Scenario: Added files render in unified view when split mode is active
     Given a git repository with changes to the following files:
-      | file            | change_type | additions | deletions |
-      | src/new-file.ts | added       | 20        | 0         |
-      | src/existing.ts | modified    | 5         | 2         |
+      | file                | change_type | additions | deletions |
+      | src/new-feature.ts  | added       | 20        | 0         |
+      | src/auth/login.ts   | modified    | 10        | 3         |
     And I launch self-review
     Then the diff viewer should be in "split" view mode
-    And the "src/existing.ts" file section should use "split" view
-    And the "src/new-file.ts" file section should use "unified" view
+    And the "src/auth/login.ts" file section should use "split" view
+    And the "src/new-feature.ts" file section should use "unified" view
 
   Scenario: Deleted files render in unified view when split mode is active
     Given a git repository with changes to the following files:
-      | file            | change_type | additions | deletions |
-      | src/removed.ts  | deleted     | 0         | 15        |
-      | src/existing.ts | modified    | 5         | 2         |
+      | file              | change_type | additions | deletions |
+      | src/legacy.ts     | deleted     | 0         | 40        |
+      | src/auth/login.ts | modified    | 10        | 3         |
     And I launch self-review
     Then the diff viewer should be in "split" view mode
-    And the "src/existing.ts" file section should use "split" view
-    And the "src/removed.ts" file section should use "unified" view
+    And the "src/auth/login.ts" file section should use "split" view
+    And the "src/legacy.ts" file section should use "unified" view
