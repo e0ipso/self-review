@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import MDEditor, { commands } from '@uiw/react-md-editor';
 import type {
   LineRange,
   ReviewComment,
@@ -82,35 +83,48 @@ export default function CommentInput({
     onCancel();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
+  const isDark = document.documentElement.classList.contains('dark');
 
   return (
     <div
       className='rounded-lg border border-border bg-card shadow-sm overflow-hidden'
       data-testid='comment-input'
     >
-      {lineRange && (
-        <div className='px-3 pt-2 pb-0'>
-          <span className='text-xs font-medium text-muted-foreground'>
-            {lineRange.start === lineRange.end
-              ? `Comment on line ${lineRange.start}`
-              : `Comment on lines ${lineRange.start} to ${lineRange.end}`}
-          </span>
-        </div>
-      )}
-      <div className='p-3'>
-        <Textarea
+      <div className='p-1' data-color-mode={isDark ? 'dark' : 'light'}>
+        <MDEditor
           value={body}
-          onChange={e => setBody(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder='Add your review comment...'
-          className='min-h-[80px] resize-y text-sm border-0 shadow-none focus-visible:ring-0 p-0 placeholder:text-muted-foreground/60'
-          autoFocus
+          onChange={(val) => setBody(val || '')}
+          preview='edit'
+          highlightEnable={false}
+          commands={[
+            commands.bold, commands.italic,
+            commands.divider,
+            commands.quote, commands.code, commands.link,
+            commands.divider,
+            commands.unorderedListCommand, commands.orderedListCommand, commands.checkedListCommand,
+          ]}
+          extraCommands={lineRange ? [{
+            name: 'line-range',
+            keyCommand: 'line-range',
+            render: () => (
+              <span className='text-xs font-medium text-muted-foreground whitespace-nowrap'>
+                {lineRange.start === lineRange.end
+                  ? `Comment on line ${lineRange.start}`
+                  : `Comment on lines ${lineRange.start} to ${lineRange.end}`}
+              </span>
+            ),
+          }] : []}
+          textareaProps={{
+            placeholder: 'Add your review comment...',
+            onKeyDown: (e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleSubmit();
+              }
+            },
+          }}
+          height={240}
+          className='md-editor-comment'
         />
       </div>
 
@@ -136,7 +150,12 @@ export default function CommentInput({
               <Textarea
                 value={proposedCode}
                 onChange={e => setProposedCode(e.target.value)}
-                onKeyDown={handleKeyDown}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
                 placeholder='Enter your suggested code...'
                 className='font-mono text-xs resize-y'
                 rows={3}
