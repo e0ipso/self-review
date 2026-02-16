@@ -13,7 +13,7 @@ import {
   generateUntrackedDiffs,
 } from './git';
 import { parseDiff } from './diff-parser';
-import { scanDirectory } from './directory-scanner';
+import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
 import { parseReviewXml } from './xml-parser';
 import { serializeReview } from './xml-serializer';
@@ -110,10 +110,40 @@ function isInGitRepo(): boolean {
 }
 
 /**
+ * Check if a file is tracked by git (known to the index).
+ */
+function isGitTracked(filePath: string): boolean {
+  try {
+    execSync(`git ls-files --error-unmatch ${JSON.stringify(filePath)}`, {
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Determine the startup mode based on git availability and CLI arguments.
  * Returns the DiffSource type to use.
  */
-function determineMode(gitDiffArgs: string[]): 'git' | 'directory' | 'welcome' {
+function determineMode(gitDiffArgs: string[]): 'git' | 'directory' | 'file' | 'welcome' {
+  // Check if first arg is an existing file
+  if (gitDiffArgs.length > 0) {
+    const candidate = resolve(process.cwd(), gitDiffArgs[0]);
+    try {
+      if (existsSync(candidate) && statSync(candidate).isFile()) {
+        if (isInGitRepo()) {
+          // In git repo: tracked files go through git diff, untracked use file mode
+          return isGitTracked(gitDiffArgs[0]) ? 'git' : 'file';
+        }
+        return 'file';
+      }
+    } catch {
+      // Failed to stat — fall through
+    }
+  }
+
   if (isInGitRepo()) {
     return 'git';
   }
@@ -210,6 +240,18 @@ async function initializeApp() {
       diffData = {
         files: allFiles,
         source: { type: 'git', gitDiffArgs: gitDiffArgs.join(' '), repository },
+      };
+    } else if (mode === 'file') {
+      // File mode: scan a single file as new addition
+      const filePath = resolve(process.cwd(), gitDiffArgs[0]);
+      console.error('[main] Scanning file:', filePath);
+
+      const files = await scanFile(filePath);
+      console.error('[main] File scan complete:', files.length, 'files');
+
+      diffData = {
+        files,
+        source: { type: 'file', sourcePath: filePath },
       };
     } else if (mode === 'directory') {
       // Directory mode: scan the specified directory

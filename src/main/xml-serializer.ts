@@ -358,7 +358,7 @@ function buildSourceAttributes(state: ReviewState): string {
   if (source.type === 'git') {
     return ` git-diff-args="${escapeXml(source.gitDiffArgs)}" repository="${escapeXml(source.repository)}"`;
   }
-  if (source.type === 'directory') {
+  if (source.type === 'directory' || source.type === 'file') {
     return ` source-path="${escapeXml(source.sourcePath)}"`;
   }
   // welcome mode: no source attributes

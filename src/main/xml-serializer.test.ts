@@ -85,6 +85,20 @@ describe('serializeReview', () => {
       expect(xml).not.toContain('repository');
     });
 
+    it('serializes file mode review with source-path attribute', async () => {
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'file', sourcePath: '/home/user/document.md' },
+        files: [],
+      };
+
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+
+      expect(xml).toContain('source-path="/home/user/document.md"');
+      expect(xml).not.toContain('git-diff-args');
+      expect(xml).not.toContain('repository');
+    });
+
     it('serializes welcome mode review with no source attributes', async () => {
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
