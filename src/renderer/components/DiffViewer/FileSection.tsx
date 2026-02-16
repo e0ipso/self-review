@@ -512,6 +512,7 @@ export default function FileSection({
           )}
 
           {/* Diff content */}
+          {/* Force unified view for pure additions/deletions to avoid wasted empty pane in split view */}
           {file.isBinary ? (
             <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
               Binary file — no diff available
@@ -520,7 +521,7 @@ export default function FileSection({
             <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
               No changes to display
             </div>
-          ) : viewMode === 'split' ? (
+          ) : viewMode === 'split' && file.changeType !== 'added' && file.changeType !== 'deleted' ? (
             <SplitView
               file={file}
               commentRange={commentRange}

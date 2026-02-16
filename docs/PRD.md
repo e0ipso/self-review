@@ -282,6 +282,8 @@ Two view modes, togglable via a control in the toolbar:
 
 The selected view mode persists for the session and can be set as a default in configuration.
 
+**Added/deleted file override:** Files with change type `added` or `deleted` always render in unified view, regardless of the selected view mode. In split view, these files would waste half the screen — an added file shows content only on the right pane with the left pane empty, and a deleted file shows content only on the left pane with the right pane empty. Forcing unified view for these files uses the full width for the content that matters.
+
 #### 5.3.3 Syntax Highlighting
 
 All code in the diff viewer is syntax-highlighted using Prism.js. Language detection is based on the file extension. Prism supports a broad set of languages out of the box; no restriction on which languages are supported. The Prism theme follows the application's light/dark theme.
