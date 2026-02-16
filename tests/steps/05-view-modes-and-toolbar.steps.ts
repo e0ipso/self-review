@@ -81,6 +81,15 @@ Then('the unified view should show a single column layout', async () => {
   await expect(unifiedView).toBeVisible();
 });
 
+Then(
+  'the {string} file section should use {string} view',
+  async ({}, filePath: string, mode: string) => {
+    const page = getPage();
+    const section = page.locator(`[data-testid="file-section-${filePath}"]`);
+    await expect(section.locator(`.${mode}-view`).first()).toBeVisible();
+  }
+);
+
 // ── Then: collapse/expand assertions ──
 
 Then('all file sections should be collapsed', async () => {

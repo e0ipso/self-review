@@ -71,8 +71,8 @@ Feature: View Modes and Toolbar
       | src/existing.ts | modified    | 5         | 2         |
     And I launch self-review
     Then the diff viewer should be in "split" view mode
-    And the "src/existing.ts" file section should use split view
-    And the "src/new-file.ts" file section should use unified view
+    And the "src/existing.ts" file section should use "split" view
+    And the "src/new-file.ts" file section should use "unified" view
 
   Scenario: Deleted files render in unified view when split mode is active
     Given a git repository with changes to the following files:
@@ -81,5 +81,5 @@ Feature: View Modes and Toolbar
       | src/existing.ts | modified    | 5         | 2         |
     And I launch self-review
     Then the diff viewer should be in "split" view mode
-    And the "src/existing.ts" file section should use split view
-    And the "src/removed.ts" file section should use unified view
+    And the "src/existing.ts" file section should use "split" view
+    And the "src/removed.ts" file section should use "unified" view
