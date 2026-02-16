@@ -15,25 +15,23 @@ import { Code2, Paperclip, X, ImageIcon } from 'lucide-react';
 import CategorySelector from './CategorySelector';
 
 async function resizeImageIfNeeded(blob: Blob, maxDimension = 1920): Promise<Blob> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(blob);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      if (img.width <= maxDimension && img.height <= maxDimension) {
-        resolve(blob);
-        return;
-      }
-      const scale = Math.min(maxDimension / img.width, maxDimension / img.height);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const bitmap = await createImageBitmap(blob);
+  try {
+    if (bitmap.width <= maxDimension && bitmap.height <= maxDimension) {
+      return blob;
+    }
+    const scale = Math.min(maxDimension / bitmap.width, maxDimension / bitmap.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return await new Promise<Blob>((resolve) => {
       canvas.toBlob((resized) => resolve(resized || blob), blob.type);
-    };
-    img.src = url;
-  });
+    });
+  } finally {
+    bitmap.close();
+  }
 }
 
 async function processImageFile(file: File | Blob): Promise<Attachment> {
@@ -112,8 +110,12 @@ export default function CommentInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageAttach = useCallback(async (files: (File | Blob)[]) => {
-    const newAttachments = await Promise.all(files.map(processImageFile));
-    setAttachments(prev => [...prev, ...newAttachments]);
+    try {
+      const newAttachments = await Promise.all(files.map(processImageFile));
+      setAttachments(prev => [...prev, ...newAttachments]);
+    } catch (err) {
+      console.error('Failed to attach image:', err);
+    }
   }, []);
 
   const handlePasteImages = useCallback((e: React.ClipboardEvent | ClipboardEvent) => {
