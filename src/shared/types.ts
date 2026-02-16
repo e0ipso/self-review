@@ -131,6 +131,8 @@ export interface ElectronAPI {
   saveAndQuit: () => void;
   readAttachment: (filePath: string) => Promise<ArrayBuffer | null>;
   discardAndQuit: () => void;
+  pickDirectory: () => Promise<string | null>;
+  startDirectoryReview: (path: string) => Promise<void>;
 }
 
 declare global {

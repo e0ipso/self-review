@@ -2,7 +2,8 @@
 // IPC handler registration
 
 import * as fs from 'fs';
-import { ipcMain, BrowserWindow } from 'electron';
+import { execSync } from 'child_process';
+import { ipcMain, BrowserWindow, dialog, app } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import {
   DiffLoadPayload,
@@ -11,6 +12,7 @@ import {
   ReviewState,
   ReviewComment,
 } from '../shared/types';
+import { scanDirectory } from './directory-scanner';
 
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
@@ -74,6 +76,97 @@ export function registerIpcHandlers(): void {
       event.sender.send(IPC.RESUME_LOAD, { comments: resumeCommentsCache });
     }
   });
+
+  // Open native directory picker dialog
+  ipcMain.handle(IPC.DIALOG_PICK_DIRECTORY, async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      defaultPath: app.getPath('home'),
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
+  // Start a directory review from a picked path
+  ipcMain.handle(
+    IPC.REVIEW_START_DIRECTORY,
+    async (event, directoryPath: string) => {
+      console.error(
+        '[ipc] Starting directory review for:',
+        directoryPath
+      );
+
+      // Check if the selected directory is a git repo
+      let isGitRepo = false;
+      try {
+        execSync('git rev-parse --git-dir', {
+          cwd: directoryPath,
+          stdio: 'ignore',
+        });
+        isGitRepo = true;
+      } catch {
+        // Not a git repo — use directory mode
+      }
+
+      let payload: DiffLoadPayload;
+
+      if (isGitRepo) {
+        // Git mode: import and use git functions
+        const { runGitDiffAsync, getRepoRootAsync, getUntrackedFilesAsync, generateUntrackedDiffs } = await import('./git');
+        const { parseDiff } = await import('./diff-parser');
+
+        const repository = await getRepoRootAsync();
+        const rawDiff = await runGitDiffAsync([]);
+        const files = parseDiff(rawDiff);
+
+        const untrackedPaths = await getUntrackedFilesAsync();
+        let allFiles = files;
+        if (untrackedPaths.length > 0) {
+          const untrackedDiffStr = generateUntrackedDiffs(
+            untrackedPaths,
+            repository
+          );
+          if (untrackedDiffStr.length > 0) {
+            const untrackedFiles = parseDiff(untrackedDiffStr);
+            for (const file of untrackedFiles) {
+              file.isUntracked = true;
+            }
+            allFiles = [...files, ...untrackedFiles];
+          }
+        }
+
+        payload = {
+          files: allFiles,
+          source: { type: 'git', gitDiffArgs: '', repository },
+        };
+      } else {
+        // Directory mode: scan all files as new additions
+        const files = await scanDirectory(directoryPath);
+        payload = {
+          files,
+          source: { type: 'directory', sourcePath: directoryPath },
+        };
+      }
+
+      // Update the cache and send to renderer
+      diffDataCache = payload;
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (window) {
+        window.webContents.send(IPC.DIFF_LOAD, payload);
+      }
+
+      console.error(
+        '[ipc] Directory review started:',
+        payload.source.type,
+        'mode with',
+        payload.files.length,
+        'files'
+      );
+    }
+  );
 }
 
 export function sendDiffLoad(

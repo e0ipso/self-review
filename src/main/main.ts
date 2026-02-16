@@ -2,17 +2,18 @@
 // Electron main process entry point
 
 import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
-import { writeFileSync } from 'fs';
+import { writeFileSync, existsSync, statSync } from 'fs';
+import { execSync } from 'child_process';
 import { resolve, join } from 'path';
 import { parseCliArgs, checkEarlyExit } from './cli';
 import {
   runGitDiffAsync,
   getRepoRootAsync,
-  validateGitAvailable,
   getUntrackedFilesAsync,
   generateUntrackedDiffs,
 } from './git';
 import { parseDiff } from './diff-parser';
+import { scanDirectory } from './directory-scanner';
 import { loadConfig } from './config';
 import { parseReviewXml } from './xml-parser';
 import { serializeReview } from './xml-serializer';
@@ -97,6 +98,42 @@ app.on('before-quit', () => {
 });
 
 /**
+ * Check if the current working directory is inside a git repository.
+ */
+function isInGitRepo(): boolean {
+  try {
+    execSync('git rev-parse --git-dir', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Determine the startup mode based on git availability and CLI arguments.
+ * Returns the DiffSource type to use.
+ */
+function determineMode(gitDiffArgs: string[]): 'git' | 'directory' | 'welcome' {
+  if (isInGitRepo()) {
+    return 'git';
+  }
+
+  // Not in a git repo — check if first positional arg is an existing directory
+  if (gitDiffArgs.length > 0) {
+    const candidate = resolve(process.cwd(), gitDiffArgs[0]);
+    try {
+      if (existsSync(candidate) && statSync(candidate).isDirectory()) {
+        return 'directory';
+      }
+    } catch {
+      // Failed to stat — fall through to welcome
+    }
+  }
+
+  return 'welcome';
+}
+
+/**
  * Initialize the application AFTER Electron is ready.
  * This function is called from the app.whenReady() handler.
  */
@@ -125,57 +162,79 @@ async function initializeApp() {
         .split(' ')
         .filter((arg: string) => arg.length > 0);
     }
-    // No fallback — matches `git diff` default (unstaged working tree changes)
-    console.error('[main] Git diff args:', gitDiffArgs.join(' '));
 
-    // Phase 4: Get repository root (async with timeout)
-    console.error('[main] Getting repository root');
-    const repository = await getRepoRootAsync();
-    console.error('[main] Repository root:', repository);
+    // Phase 4: Determine startup mode
+    const mode = determineMode(gitDiffArgs);
+    console.error('[main] Startup mode:', mode);
 
-    // Phase 5: Run git diff (async with timeout)
-    console.error('[main] Running git diff');
-    const rawDiff = await runGitDiffAsync(gitDiffArgs);
-    console.error('[main] Git diff complete, size:', rawDiff.length, 'bytes');
+    if (mode === 'git') {
+      // Git mode: existing flow
+      console.error('[main] Git diff args:', gitDiffArgs.join(' '));
 
-    // Phase 6: Parse diff into structured format
-    console.error('[main] Parsing diff');
-    const files = parseDiff(rawDiff);
-    console.error('[main] Diff parsed:', files.length, 'files');
+      console.error('[main] Getting repository root');
+      const repository = await getRepoRootAsync();
+      console.error('[main] Repository root:', repository);
 
-    // Phase 6b: Fetch and parse untracked files
-    console.error('[main] Fetching untracked files');
-    const untrackedPaths = await getUntrackedFilesAsync();
-    console.error('[main] Found', untrackedPaths.length, 'untracked files');
+      console.error('[main] Running git diff');
+      const rawDiff = await runGitDiffAsync(gitDiffArgs);
+      console.error('[main] Git diff complete, size:', rawDiff.length, 'bytes');
 
-    let allFiles = files;
-    if (untrackedPaths.length > 0) {
-      const untrackedDiffStr = generateUntrackedDiffs(
-        untrackedPaths,
-        repository
-      );
-      if (untrackedDiffStr.length > 0) {
-        const untrackedFiles = parseDiff(untrackedDiffStr);
-        for (const file of untrackedFiles) {
-          file.isUntracked = true;
-        }
-        allFiles = [...files, ...untrackedFiles];
-        console.error(
-          '[main] Added',
-          untrackedFiles.length,
-          'untracked file diffs'
+      console.error('[main] Parsing diff');
+      const files = parseDiff(rawDiff);
+      console.error('[main] Diff parsed:', files.length, 'files');
+
+      console.error('[main] Fetching untracked files');
+      const untrackedPaths = await getUntrackedFilesAsync();
+      console.error('[main] Found', untrackedPaths.length, 'untracked files');
+
+      let allFiles = files;
+      if (untrackedPaths.length > 0) {
+        const untrackedDiffStr = generateUntrackedDiffs(
+          untrackedPaths,
+          repository
         );
+        if (untrackedDiffStr.length > 0) {
+          const untrackedFiles = parseDiff(untrackedDiffStr);
+          for (const file of untrackedFiles) {
+            file.isUntracked = true;
+          }
+          allFiles = [...files, ...untrackedFiles];
+          console.error(
+            '[main] Added',
+            untrackedFiles.length,
+            'untracked file diffs'
+          );
+        }
       }
+
+      diffData = {
+        files: allFiles,
+        source: { type: 'git', gitDiffArgs: gitDiffArgs.join(' '), repository },
+      };
+    } else if (mode === 'directory') {
+      // Directory mode: scan the specified directory
+      const directoryPath = resolve(process.cwd(), gitDiffArgs[0]);
+      console.error('[main] Scanning directory:', directoryPath);
+
+      const files = await scanDirectory(directoryPath);
+      console.error('[main] Directory scan complete:', files.length, 'files');
+
+      diffData = {
+        files,
+        source: { type: 'directory', sourcePath: directoryPath },
+      };
+    } else {
+      // Welcome mode: open window with no diff data
+      console.error('[main] Welcome mode — no git repo or directory arg');
+
+      diffData = {
+        files: [],
+        source: { type: 'welcome' },
+      };
     }
 
-    // Store diff data for sending to renderer
-    diffData = {
-      files: allFiles,
-      source: { type: 'git', gitDiffArgs: gitDiffArgs.join(' '), repository },
-    };
-
-    // Phase 7: Handle --resume-from if specified
-    if (cliArgs.resumeFrom) {
+    // Phase 5: Handle --resume-from if specified (git mode only)
+    if (cliArgs.resumeFrom && mode === 'git') {
       try {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
         const parsed = parseReviewXml(cliArgs.resumeFrom);
@@ -192,18 +251,18 @@ async function initializeApp() {
       }
     }
 
-    // Phase 8: Cache data for when renderer requests it
+    // Phase 6: Cache data for when renderer requests it
     setDiffData(diffData);
     setConfigData(appConfig);
     if (resumeComments.length > 0) {
       setResumeComments(resumeComments);
     }
 
-    // Phase 9: Register IPC handlers
+    // Phase 7: Register IPC handlers
     console.error('[main] Registering IPC handlers');
     registerIpcHandlers();
 
-    // Phase 10: Create window
+    // Phase 8: Create window
     console.error('[main] Creating window');
     createWindow();
     console.error('[main] Window created successfully');
@@ -321,19 +380,8 @@ app
   .whenReady()
   .then(() => {
     console.error(
-      '[main] App is ready! Starting validation and initialization...'
+      '[main] App is ready! Starting initialization...'
     );
-
-    // Now do git validation (after Electron is ready)
-    try {
-      console.error('[main] Validating git availability');
-      validateGitAvailable();
-      console.error('[main] Git validation passed');
-    } catch {
-      // validateGitAvailable already logs errors
-      app.quit();
-      process.exit(1);
-    }
 
     return initializeApp();
   })
