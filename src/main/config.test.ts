@@ -36,7 +36,7 @@ describe('config', () => {
       expect(config.fontSize).toBe(14);
       expect(config.outputFile).toBe('./review.xml');
       expect(config.categories).toHaveLength(5);
-      expect(config.categories[0].name).toBe('bug');
+      expect(config.categories[0].name).toBe('question');
       expect(config.wordWrap).toBe(true);
     });
 
