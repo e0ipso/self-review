@@ -3,7 +3,7 @@
 Local-only Electron desktop app that provides a GitHub-style PR review UI for local git diffs and
 directory-based reviews (all files treated as new when no repo context is available).
 Designed for solo developers reviewing AI-generated code. CLI-first, one-shot workflow: open →
-review → close → XML to file.
+review → close → XML to file. When launched outside a git repo without a directory argument (e.g., from an app launcher), the app shows a welcome screen with a directory picker instead of exiting.
 
 ## Dev Container
 
