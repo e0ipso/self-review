@@ -507,6 +507,7 @@ export default function FileSection({
                 filePath={filePath}
                 lineRange={null}
                 onCancel={handleCancelFileComment}
+                onSubmit={() => setShowingFileComment(false)}
               />
             </div>
           )}
