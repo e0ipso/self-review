@@ -4,7 +4,7 @@ import { useConfig } from '../../context/ConfigContext';
 import FileSection from './FileSection';
 
 export default function DiffViewer() {
-  const { diffFiles, gitDiffArgs } = useReview();
+  const { diffFiles, diffSource } = useReview();
   const { config } = useConfig();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -75,12 +75,12 @@ export default function DiffViewer() {
               git diff
             </code>
             .
-            {gitDiffArgs && (
+            {diffSource.type === 'git' && diffSource.gitDiffArgs && (
               <span>
                 {' '}
                 The arguments{' '}
                 <code className='px-1 py-0.5 rounded bg-muted text-xs font-mono'>
-                  {gitDiffArgs}
+                  {diffSource.gitDiffArgs}
                 </code>{' '}
                 were passed to git diff. Try different arguments to see your
                 changes.

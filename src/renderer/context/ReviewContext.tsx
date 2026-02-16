@@ -11,6 +11,7 @@ import type {
   Attachment,
   DiffFile,
   DiffLoadPayload,
+  DiffSource,
   FileReviewState,
   ReviewComment,
   ReviewState,
@@ -23,7 +24,7 @@ import { useConfig } from './ConfigContext';
 export interface ReviewContextValue {
   files: FileReviewState[];
   diffFiles: DiffFile[];
-  gitDiffArgs: string;
+  diffSource: DiffSource;
   setDiffFiles: (files: DiffFile[]) => void;
   addComment: (
     filePath: string,
@@ -60,8 +61,7 @@ interface ReviewProviderProps {
 
 export function ReviewProvider({ children }: ReviewProviderProps) {
   const [allDiffFiles, setAllDiffFiles] = useState<DiffFile[]>([]);
-  const [gitDiffArgs, setGitDiffArgs] = useState<string>('');
-  const [repository, setRepository] = useState<string>('');
+  const [diffSource, setDiffSource] = useState<DiffSource>({ type: 'welcome' });
   const { config } = useConfig();
 
   const reviewState = useReviewState();
@@ -73,17 +73,13 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
   }, [allDiffFiles, config.showUntracked]);
 
   // Create refs for IPC listener closure
-  const gitDiffArgsRef = useRef(gitDiffArgs);
-  const repositoryRef = useRef(repository);
+  const diffSourceRef = useRef(diffSource);
   const filesRef = useRef(reviewState.files);
 
   // Update refs when values change
   useEffect(() => {
-    gitDiffArgsRef.current = gitDiffArgs;
-  }, [gitDiffArgs]);
-  useEffect(() => {
-    repositoryRef.current = repository;
-  }, [repository]);
+    diffSourceRef.current = diffSource;
+  }, [diffSource]);
   useEffect(() => {
     filesRef.current = reviewState.files;
   }, [reviewState.files]);
@@ -108,8 +104,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
     // Set up listeners first
     window.electronAPI.onDiffLoad((payload: DiffLoadPayload) => {
       setAllDiffFiles(payload.files);
-      setGitDiffArgs(payload.gitDiffArgs);
-      setRepository(payload.repository);
+      setDiffSource(payload.source);
 
       // After diff is loaded, request resume data if available
       window.electronAPI.requestResumeData();
@@ -137,16 +132,14 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
       console.error('[renderer] Received review:request from main');
       const reviewData: ReviewState = {
         timestamp: new Date().toISOString(),
-        gitDiffArgs: gitDiffArgsRef.current,
-        repository: repositoryRef.current,
+        source: diffSourceRef.current,
         files: filesRef.current,
       };
       console.error(
         '[renderer] Submitting review data:',
         JSON.stringify({
           timestamp: reviewData.timestamp,
-          gitDiffArgs: reviewData.gitDiffArgs,
-          repository: reviewData.repository,
+          source: reviewData.source,
           fileCount: reviewData.files.length,
         })
       );
@@ -163,7 +156,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
       value={{
         files: reviewState.files,
         diffFiles,
-        gitDiffArgs,
+        diffSource,
         setDiffFiles: setAllDiffFiles,
         addComment: reviewState.addComment,
         editComment: reviewState.updateComment,

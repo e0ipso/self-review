@@ -171,8 +171,7 @@ async function initializeApp() {
     // Store diff data for sending to renderer
     diffData = {
       files: allFiles,
-      gitDiffArgs: gitDiffArgs.join(' '),
-      repository,
+      source: { type: 'git', gitDiffArgs: gitDiffArgs.join(' '), repository },
     };
 
     // Phase 7: Handle --resume-from if specified

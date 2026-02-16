@@ -50,8 +50,7 @@ export function registerIpcHandlers(): void {
       '[ipc] Received REVIEW_SUBMIT from renderer:',
       JSON.stringify({
         timestamp: state.timestamp,
-        gitDiffArgs: state.gitDiffArgs,
-        repository: state.repository,
+        source: state.source,
         fileCount: state.files.length,
       })
     );
@@ -114,8 +113,7 @@ export function requestReviewFromRenderer(
       console.error('[ipc] Resolving with empty review state');
       resolve({
         timestamp: new Date().toISOString(),
-        gitDiffArgs: '',
-        repository: '',
+        source: { type: 'git', gitDiffArgs: '', repository: '' },
         files: [],
       });
     }, 5000);

@@ -33,6 +33,13 @@ export interface DiffFile {
   isUntracked?: boolean;
 }
 
+// ===== Diff Source Types =====
+
+export type DiffSource =
+  | { type: 'git'; gitDiffArgs: string; repository: string }
+  | { type: 'directory'; sourcePath: string }
+  | { type: 'welcome' };
+
 // ===== Review State Types =====
 
 export interface Suggestion {
@@ -73,8 +80,7 @@ export interface FileReviewState {
 
 export interface ReviewState {
   timestamp: string;
-  gitDiffArgs: string;
-  repository: string;
+  source: DiffSource;
   files: FileReviewState[];
 }
 
@@ -103,8 +109,7 @@ export interface AppConfig {
 
 export interface DiffLoadPayload {
   files: DiffFile[];
-  gitDiffArgs: string;
-  repository: string;
+  source: DiffSource;
 }
 
 export interface ResumeLoadPayload {

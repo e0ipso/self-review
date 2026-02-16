@@ -23,7 +23,7 @@ import {
 
 export default function Toolbar() {
   const { config, updateConfig } = useConfig();
-  const { diffFiles, gitDiffArgs } = useReview();
+  const { diffFiles, diffSource } = useReview();
   const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
 
   const stats = useMemo(() => {
@@ -170,7 +170,11 @@ export default function Toolbar() {
       >
         <span className='inline-flex items-center gap-1 font-mono'>
           <Terminal className='h-3 w-3' />
-          git diff{gitDiffArgs ? ` ${gitDiffArgs}` : ''}
+          {diffSource.type === 'git'
+            ? `git diff${diffSource.gitDiffArgs ? ` ${diffSource.gitDiffArgs}` : ''}`
+            : diffSource.type === 'directory'
+              ? diffSource.sourcePath
+              : ''}
         </span>
         <Separator orientation='vertical' className='h-3.5' />
         <span>

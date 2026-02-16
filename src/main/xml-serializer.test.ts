@@ -35,8 +35,7 @@ describe('serializeReview', () => {
     it('serializes empty review with required attributes', async () => {
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/path/to/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/path/to/repo' },
         files: [],
       };
 
@@ -60,8 +59,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 
@@ -76,8 +74,7 @@ describe('serializeReview', () => {
     it('includes timestamp, git-diff-args, and repository attributes', async () => {
       const reviewState: ReviewState = {
         timestamp: '2024-02-20T15:45:30Z',
-        gitDiffArgs: 'HEAD~3',
-        repository: '/home/user/projects/myapp',
+        source: { type: 'git', gitDiffArgs: 'HEAD~3', repository: '/home/user/projects/myapp' },
         files: [],
       };
 
@@ -107,8 +104,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: 'main',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: 'main', repository: '/repo' },
         files,
       };
 
@@ -140,8 +136,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 
@@ -176,8 +171,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: 'HEAD~1',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: 'HEAD~1', repository: '/repo' },
         files: [file],
       };
 
@@ -208,8 +202,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: 'main',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: 'main', repository: '/repo' },
         files: [file],
       };
 
@@ -239,8 +232,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 
@@ -271,8 +263,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: 'main',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: 'main', repository: '/repo' },
         files: [file],
       };
 
@@ -303,8 +294,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 
@@ -340,8 +330,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 
@@ -364,8 +353,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 
@@ -411,8 +399,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 
@@ -429,8 +416,7 @@ describe('serializeReview', () => {
     it('produces valid XML structure', async () => {
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [],
       };
 
@@ -450,8 +436,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [],
       };
 
@@ -474,8 +459,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [],
       };
 
@@ -490,8 +474,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [],
       };
 
@@ -533,8 +516,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 
@@ -577,8 +559,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 
@@ -597,8 +578,7 @@ describe('serializeReview', () => {
     it('skips asset directory when no attachments exist', async () => {
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [
           {
             path: 'src/test.ts',
@@ -628,8 +608,7 @@ describe('serializeReview', () => {
     it('serializes complex multi-file review', async () => {
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: 'main..feature',
-        repository: '/home/user/project',
+        source: { type: 'git', gitDiffArgs: 'main..feature', repository: '/home/user/project' },
         files: [
           {
             path: 'src/components/Button.tsx',
@@ -699,8 +678,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '',
-        repository: '',
+        source: { type: 'git', gitDiffArgs: '', repository: '' },
         files: [file],
       };
 
@@ -729,8 +707,7 @@ describe('serializeReview', () => {
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
-        gitDiffArgs: '--staged',
-        repository: '/repo',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
         files: [file],
       };
 

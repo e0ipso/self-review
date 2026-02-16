@@ -350,8 +350,10 @@ function buildXml(state: ReviewState): string {
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
 
   // Root element with namespace
+  const gitDiffArgs = state.source.type === 'git' ? state.source.gitDiffArgs : '';
+  const repository = state.source.type === 'git' ? state.source.repository : '';
   lines.push(
-    `<review xmlns="urn:self-review:v1" timestamp="${escapeXml(state.timestamp)}" git-diff-args="${escapeXml(state.gitDiffArgs)}" repository="${escapeXml(state.repository)}">`
+    `<review xmlns="urn:self-review:v1" timestamp="${escapeXml(state.timestamp)}" git-diff-args="${escapeXml(gitDiffArgs)}" repository="${escapeXml(repository)}">`
   );
 
   // Files
