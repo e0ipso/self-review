@@ -2,7 +2,7 @@
 // Recursively scans a directory and produces DiffFile[] treating all files as new additions.
 
 import { readdir, stat } from 'fs/promises';
-import { join, relative } from 'path';
+import { join, relative, basename, dirname } from 'path';
 import { DiffFile } from '../shared/types';
 import { generateSyntheticDiffs } from './synthetic-diff';
 import { parseDiff } from './diff-parser';
@@ -79,5 +79,33 @@ export async function scanDirectory(
   }
 
   const diffText = generateSyntheticDiffs(filePaths, directoryPath);
+  return parseDiff(diffText);
+}
+
+/**
+ * Scan a single file and return DiffFile[] with the file treated as a new addition.
+ *
+ * @param filePath - Absolute path to the file to scan
+ * @returns Parsed DiffFile array (single element)
+ */
+export async function scanFile(filePath: string): Promise<DiffFile[]> {
+  try {
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile()) {
+      console.error(`Error: "${filePath}" is not a file`);
+      return [];
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(`Error accessing file "${filePath}": ${error.message}`);
+    } else {
+      console.error(`Error accessing file "${filePath}": unknown error`);
+    }
+    return [];
+  }
+
+  const fileName = basename(filePath);
+  const rootDir = dirname(filePath);
+  const diffText = generateSyntheticDiffs([fileName], rootDir);
   return parseDiff(diffText);
 }

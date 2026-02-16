@@ -5,7 +5,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtemp, writeFile, mkdir, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { scanDirectory } from './directory-scanner';
+import { scanDirectory, scanFile } from './directory-scanner';
 
 describe('scanDirectory', () => {
   const tempDirs: string[] = [];
@@ -137,5 +137,76 @@ describe('scanDirectory', () => {
     expect(file.hunks[0].lines[0].content).toBe('line1');
     expect(file.hunks[0].lines[1].content).toBe('line2');
     expect(file.hunks[0].lines[2].content).toBe('line3');
+  });
+});
+
+describe('scanFile', () => {
+  const tempDirs: string[] = [];
+
+  async function createTempDir(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'file-scanner-test-'));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  afterEach(async () => {
+    for (const dir of tempDirs) {
+      await rm(dir, { recursive: true, force: true });
+    }
+    tempDirs.length = 0;
+  });
+
+  it('scans a single text file', async () => {
+    const dir = await createTempDir();
+    const filePath = join(dir, 'hello.ts');
+    await writeFile(filePath, 'export const x = 1;\n');
+
+    const result = await scanFile(filePath);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].newPath).toBe('hello.ts');
+    expect(result[0].changeType).toBe('added');
+  });
+
+  it('produces correct hunk content', async () => {
+    const dir = await createTempDir();
+    const filePath = join(dir, 'sample.ts');
+    await writeFile(filePath, 'line1\nline2\nline3\n');
+
+    const result = await scanFile(filePath);
+
+    expect(result).toHaveLength(1);
+    const file = result[0];
+    expect(file.hunks).toHaveLength(1);
+    expect(file.hunks[0].lines).toHaveLength(3);
+    expect(file.hunks[0].lines[0].type).toBe('addition');
+    expect(file.hunks[0].lines[0].content).toBe('line1');
+  });
+
+  it('returns empty array for non-existent path', async () => {
+    const result = await scanFile('/tmp/non-existent-file-xyz-12345.ts');
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for a directory path', async () => {
+    const dir = await createTempDir();
+
+    const result = await scanFile(dir);
+
+    expect(result).toEqual([]);
+  });
+
+  it('handles binary files', async () => {
+    const dir = await createTempDir();
+    const filePath = join(dir, 'image.png');
+    const binaryContent = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d, 0x0a]);
+    await writeFile(filePath, binaryContent);
+
+    const result = await scanFile(filePath);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].isBinary).toBe(true);
+    expect(result[0].changeType).toBe('added');
   });
 });

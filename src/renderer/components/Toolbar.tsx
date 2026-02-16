@@ -19,6 +19,7 @@ import {
   MoveHorizontal,
   Terminal,
   FolderOpen,
+  FileText,
   CheckCircle2,
 } from 'lucide-react';
 
@@ -174,7 +175,9 @@ export default function Toolbar() {
         data-testid='diff-stats'
       >
         <span className='inline-flex items-center gap-1 font-mono'>
-          {diffSource.type === 'directory' ? (
+          {diffSource.type === 'file' ? (
+            <FileText className='h-3 w-3' />
+          ) : diffSource.type === 'directory' ? (
             <FolderOpen className='h-3 w-3' />
           ) : (
             <Terminal className='h-3 w-3' />
@@ -183,7 +186,9 @@ export default function Toolbar() {
             ? `git diff${diffSource.gitDiffArgs ? ` ${diffSource.gitDiffArgs}` : ''}`
             : diffSource.type === 'directory'
               ? `Directory: ${diffSource.sourcePath}`
-              : ''}
+              : diffSource.type === 'file'
+                ? `File: ${diffSource.sourcePath.split('/').pop()}`
+                : ''}
         </span>
         <Separator orientation='vertical' className='h-3.5' />
         <span>

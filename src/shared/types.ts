@@ -38,6 +38,7 @@ export interface DiffFile {
 export type DiffSource =
   | { type: 'git'; gitDiffArgs: string; repository: string }
   | { type: 'directory'; sourcePath: string }
+  | { type: 'file'; sourcePath: string }
   | { type: 'welcome' };
 
 // ===== Review State Types =====

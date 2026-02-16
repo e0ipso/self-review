@@ -12,7 +12,7 @@ import {
   ReviewState,
   ReviewComment,
 } from '../shared/types';
-import { scanDirectory } from './directory-scanner';
+import { scanDirectory, scanFile } from './directory-scanner';
 
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
@@ -98,6 +98,35 @@ export function registerIpcHandlers(): void {
         '[ipc] Starting directory review for:',
         directoryPath
       );
+
+      // Check if the path is a file (not a directory)
+      let isFile = false;
+      try {
+        isFile = fs.statSync(directoryPath).isFile();
+      } catch {
+        // Failed to stat — proceed as directory
+      }
+
+      if (isFile) {
+        const files = await scanFile(directoryPath);
+        const payload: DiffLoadPayload = {
+          files,
+          source: { type: 'file', sourcePath: directoryPath },
+        };
+
+        diffDataCache = payload;
+        const window = BrowserWindow.fromWebContents(event.sender);
+        if (window) {
+          window.webContents.send(IPC.DIFF_LOAD, payload);
+        }
+
+        console.error(
+          '[ipc] File review started:',
+          payload.files.length,
+          'files'
+        );
+        return;
+      }
 
       // Check if the selected directory is a git repo
       let isGitRepo = false;
