@@ -88,7 +88,7 @@ export default function WelcomeScreen() {
         <div className="text-center space-y-4">
           <Logo className="w-20 h-20 mx-auto" />
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight">Self Review</h1>
+            <h1 className="text-2xl font-bold tracking-tight">self-review</h1>
             <p className="text-muted-foreground">
               GitHub-style PR review UI for local git diffs. Designed for solo
               developers reviewing AI-generated code.
