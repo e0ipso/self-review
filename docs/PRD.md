@@ -632,7 +632,7 @@ No artificial limit is imposed on diff size. Performance for very large diffs (t
 
 - The application does not open any network connections. All operations are local.
 - The application does not execute arbitrary code from the diff content. Syntax highlighting is purely visual.
-- The application writes exactly one file: the review XML output at the configured `output-file` path (default `./review.xml`). No hidden files, no temp files, no analytics.
+- The application writes the review XML output at the configured `output-file` path (default `./review.xml`). When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced image files. No hidden files, no temp files, no analytics.
 
 ---
 

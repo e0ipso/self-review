@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs';
 import { serializeReview } from './xml-serializer';
 import type {
   ReviewState,
@@ -10,6 +11,18 @@ import type {
 vi.mock('xmllint-wasm', () => ({
   validateXML: vi.fn(() => Promise.resolve({ valid: true, errors: [] })),
 }));
+
+// Mock fs for attachment file writing tests
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    existsSync: vi.fn(actual.existsSync),
+    mkdirSync: vi.fn(actual.mkdirSync),
+    writeFileSync: vi.fn(actual.writeFileSync),
+    readFileSync: actual.readFileSync,
+  };
+});
 
 const TEST_OUTPUT_PATH = '/tmp/test-review.xml';
 
@@ -489,6 +502,125 @@ describe('serializeReview', () => {
       expect(xml).toContain('xmlns="urn:self-review:v1"');
       expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
       expect(xml).toContain('</review>');
+    });
+  });
+
+  describe('attachment serialization', () => {
+    it('emits attachment elements with path and media-type', async () => {
+      const comment: ReviewComment = {
+        id: 'att-comment-1',
+        filePath: 'src/main.ts',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        body: 'See screenshot',
+        category: 'bug',
+        suggestion: null,
+        attachments: [
+          {
+            id: 'att-1',
+            fileName: 'screenshot.png',
+            mediaType: 'image/png',
+            data: new ArrayBuffer(8),
+          },
+        ],
+      };
+
+      const file: FileReviewState = {
+        path: 'src/main.ts',
+        changeType: 'modified',
+        viewed: true,
+        comments: [comment],
+      };
+
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        gitDiffArgs: '--staged',
+        repository: '/repo',
+        files: [file],
+      };
+
+      const xml = await serializeReview(reviewState, '/tmp/test-output/review.xml');
+
+      expect(xml).toContain('<attachment path=".self-review-assets/');
+      expect(xml).toContain('media-type="image/png"');
+      expect(xml).toContain('/>');
+    });
+
+    it('writes image files to .self-review-assets directory', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+      vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
+
+      const imageData = new ArrayBuffer(16);
+      const comment: ReviewComment = {
+        id: 'att-write-1',
+        filePath: 'src/main.ts',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        body: 'Image attached',
+        category: 'note',
+        suggestion: null,
+        attachments: [
+          {
+            id: 'img-1',
+            fileName: 'capture.png',
+            mediaType: 'image/png',
+            data: imageData,
+          },
+        ],
+      };
+
+      const file: FileReviewState = {
+        path: 'src/main.ts',
+        changeType: 'modified',
+        viewed: true,
+        comments: [comment],
+      };
+
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        gitDiffArgs: '--staged',
+        repository: '/repo',
+        files: [file],
+      };
+
+      await serializeReview(reviewState, '/tmp/test-output/review.xml');
+
+      expect(fs.mkdirSync).toHaveBeenCalledWith(
+        '/tmp/test-output/.self-review-assets',
+        { recursive: true }
+      );
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('.self-review-assets/att-write-1-0.png'),
+        expect.any(Buffer)
+      );
+    });
+
+    it('skips asset directory when no attachments exist', async () => {
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        gitDiffArgs: '--staged',
+        repository: '/repo',
+        files: [
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: true,
+            comments: [
+              {
+                id: 'no-att',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'No attachments here',
+                category: 'note',
+                suggestion: null,
+              },
+            ],
+          },
+        ],
+      };
+
+      await serializeReview(reviewState, '/tmp/test-output/review.xml');
+
+      expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
   });
 
