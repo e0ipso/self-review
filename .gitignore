@@ -126,3 +126,4 @@ test-results/
 .features-gen/
 core
 review.xml
+/.self-review-assets
