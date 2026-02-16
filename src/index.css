@@ -145,8 +145,17 @@ body {
   height: 24px !important;
 }
 
+.md-editor-comment .w-md-editor-content {
+  flex: 1 !important;
+}
+
 .md-editor-comment .w-md-editor-text {
   min-height: 80px;
+  height: 100% !important;
+}
+
+.md-editor-comment .w-md-editor-preview {
+  display: none !important;
 }
 
 .md-editor-comment .w-md-editor-text-input,
