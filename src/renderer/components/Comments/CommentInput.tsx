@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MDEditor, { commands } from '@uiw/react-md-editor';
 import type {
   Attachment,
@@ -11,7 +11,7 @@ import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
-import { Code2, Paperclip, X } from 'lucide-react';
+import { Code2, Paperclip, X, ImageIcon } from 'lucide-react';
 import CategorySelector from './CategorySelector';
 
 async function resizeImageIfNeeded(blob: Blob, maxDimension = 1920): Promise<Blob> {
@@ -49,6 +49,41 @@ async function processImageFile(file: File | Blob): Promise<Attachment> {
   };
 }
 
+function AttachmentThumbnail({ attachment, onRemove }: { attachment: Attachment; onRemove: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!attachment.data) return;
+    const objectUrl = URL.createObjectURL(new Blob([attachment.data]));
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [attachment.id, attachment.data]);
+
+  return (
+    <div className='relative group'>
+      {url ? (
+        <img
+          src={url}
+          alt='Attachment preview'
+          className='h-16 w-16 object-cover rounded border'
+        />
+      ) : (
+        <div className='h-16 w-16 flex items-center justify-center rounded border bg-muted'>
+          <ImageIcon className='h-4 w-4 text-muted-foreground' />
+        </div>
+      )}
+      <Button
+        variant='ghost'
+        size='icon'
+        className='absolute -top-2 -right-2 h-5 w-5 rounded-full bg-background border shadow-sm opacity-0 group-hover:opacity-100'
+        onClick={onRemove}
+      >
+        <X className='h-3 w-3' />
+      </Button>
+    </div>
+  );
+}
+
 export interface CommentInputProps {
   filePath: string;
   lineRange: LineRange | null;
@@ -75,6 +110,33 @@ export default function CommentInput({
   const [proposedCode, setProposedCode] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageAttach = useCallback(async (files: (File | Blob)[]) => {
+    const newAttachments = await Promise.all(files.map(processImageFile));
+    setAttachments(prev => [...prev, ...newAttachments]);
+  }, []);
+
+  const handlePasteImages = useCallback((e: React.ClipboardEvent | ClipboardEvent) => {
+    const clipboardData = 'clipboardData' in e ? e.clipboardData : null;
+    if (!clipboardData) return;
+    const items = Array.from(clipboardData.items);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+    if (imageItems.length === 0) return;
+    e.preventDefault();
+    const files = imageItems
+      .map(item => item.getAsFile())
+      .filter((f): f is File => f !== null);
+    if (files.length > 0) {
+      handleImageAttach(files);
+    }
+  }, [handleImageAttach]);
+
+  const handleDropImages = useCallback((e: React.DragEvent) => {
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+    e.preventDefault();
+    handleImageAttach(files);
+  }, [handleImageAttach]);
 
   useEffect(() => {
     if (existingComment) {
@@ -137,6 +199,9 @@ export default function CommentInput({
     <div
       className='rounded-lg border border-border bg-card shadow-sm overflow-hidden'
       data-testid='comment-input'
+      onPaste={handlePasteImages}
+      onDrop={handleDropImages}
+      onDragOver={(e) => e.preventDefault()}
     >
       <div className='p-1' data-color-mode={isDark ? 'dark' : 'light'}>
         <MDEditor
@@ -163,26 +228,14 @@ export default function CommentInput({
             ),
           }] : []}
           textareaProps={{
-            placeholder: 'Add your review comment...',
+            placeholder: 'Add your review comment... (paste or drop images here)',
             onKeyDown: (e) => {
               if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault();
                 handleSubmit();
               }
             },
-            onPaste: (e: React.ClipboardEvent) => {
-              const items = Array.from(e.clipboardData.items);
-              const imageItem = items.find(item => item.type.startsWith('image/'));
-              if (imageItem) {
-                e.preventDefault();
-                const file = imageItem.getAsFile();
-                if (file) {
-                  processImageFile(file).then(attachment => {
-                    setAttachments(prev => [...prev, attachment]);
-                  });
-                }
-              }
-            },
+            onPaste: handlePasteImages as unknown as React.ClipboardEventHandler<HTMLTextAreaElement>,
           }}
           height={240}
           className='md-editor-comment'
@@ -190,24 +243,17 @@ export default function CommentInput({
       </div>
 
       {attachments.length > 0 && (
-        <div className='flex gap-2 flex-wrap px-3 py-2'>
+        <div className='flex gap-2 flex-wrap px-3 py-2 border-t border-border/50'>
           {attachments.map((att) => (
-            <div key={att.id} className='relative group'>
-              <img
-                src={att.data ? URL.createObjectURL(new Blob([att.data])) : ''}
-                alt='Attachment preview'
-                className='h-16 w-16 object-cover rounded border'
-              />
-              <Button
-                variant='ghost'
-                size='icon'
-                className='absolute -top-2 -right-2 h-5 w-5 rounded-full bg-background border shadow-sm opacity-0 group-hover:opacity-100'
-                onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
-              >
-                <X className='h-3 w-3' />
-              </Button>
-            </div>
+            <AttachmentThumbnail
+              key={att.id}
+              attachment={att}
+              onRemove={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
+            />
           ))}
+          <span className='self-center text-[11px] text-muted-foreground'>
+            {attachments.length} {attachments.length === 1 ? 'image' : 'images'}
+          </span>
         </div>
       )}
 
@@ -283,10 +329,11 @@ export default function CommentInput({
             accept='image/*'
             multiple
             className='hidden'
-            onChange={async (e) => {
+            onChange={(e) => {
               const files = Array.from(e.target.files || []);
-              const newAttachments = await Promise.all(files.map(processImageFile));
-              setAttachments(prev => [...prev, ...newAttachments]);
+              if (files.length > 0) {
+                handleImageAttach(files);
+              }
               e.target.value = '';
             }}
           />
