@@ -123,6 +123,50 @@ describe('parseReviewXmlString', () => {
 
       expect(result.gitDiffArgs).toBe('main..feature');
     });
+
+    it('parses git source from review attributes', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1"
+        timestamp="2024-01-15T10:30:00Z"
+        git-diff-args="--staged"
+        repository="/home/user/repo">
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.source).toEqual({
+        type: 'git',
+        gitDiffArgs: '--staged',
+        repository: '/home/user/repo',
+      });
+    });
+
+    it('parses directory source from source-path attribute', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1"
+        timestamp="2024-01-15T10:30:00Z"
+        source-path="/home/user/my-project">
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.source).toEqual({
+        type: 'directory',
+        sourcePath: '/home/user/my-project',
+      });
+      expect(result.gitDiffArgs).toBe('');
+    });
+
+    it('parses welcome source when no source attributes present', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1"
+        timestamp="2024-01-15T10:30:00Z">
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.source).toEqual({ type: 'welcome' });
+    });
   });
 
   describe('line ranges', () => {
@@ -499,6 +543,54 @@ describe('parseReviewXmlString', () => {
         original.files[0].comments[0].suggestion
       );
       expect(parsed.gitDiffArgs).toBe((original.source as { type: 'git'; gitDiffArgs: string }).gitDiffArgs);
+    });
+
+    it('round-trip with directory source', async () => {
+      const original: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'directory', sourcePath: '/home/user/my-project' },
+        files: [
+          {
+            path: 'src/app.ts',
+            changeType: 'added',
+            viewed: true,
+            comments: [
+              {
+                id: 'dir-1',
+                filePath: 'src/app.ts',
+                lineRange: { side: 'new', start: 1, end: 5 },
+                body: 'Directory review comment',
+                category: 'note',
+                suggestion: null,
+              },
+            ],
+          },
+        ],
+      };
+
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const parsed = parseReviewXmlString(xml);
+
+      expect(parsed.source).toEqual({
+        type: 'directory',
+        sourcePath: '/home/user/my-project',
+      });
+      expect(parsed.comments).toHaveLength(1);
+      expect(parsed.comments[0].body).toBe('Directory review comment');
+      expect(parsed.gitDiffArgs).toBe('');
+    });
+
+    it('round-trip with welcome source', async () => {
+      const original: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'welcome' },
+        files: [],
+      };
+
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const parsed = parseReviewXmlString(xml);
+
+      expect(parsed.source).toEqual({ type: 'welcome' });
     });
 
     it('round-trip with file-level comment', async () => {

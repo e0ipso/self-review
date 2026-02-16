@@ -68,6 +68,17 @@ self-review/
 │               └── CategorySelector.tsx # Dropdown/chip selector for categories
 ```
 
+## Keyboard Shortcuts
+
+The app supports Vimium-style keyboard navigation:
+
+- `f` — Activate hint labels on changed diff lines to open a comment input
+- `g` — Activate hint labels on file tree entries to jump to a file
+- `j` / `k` — Smooth scroll the diff pane down/up
+- `Escape` — Dismiss active hint overlay
+
+All shortcuts are suppressed when a text input has focus. The implementation lives in `useKeyboardNavigation` hook with `HintOverlay` for rendering hint badges.
+
 ## Architecture
 
 Two-process model:

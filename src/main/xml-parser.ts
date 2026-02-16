@@ -3,11 +3,12 @@
 
 import { readFileSync } from 'fs';
 import { XMLParser } from 'fast-xml-parser';
-import { ReviewComment, Suggestion, LineRange } from '../shared/types';
+import { ReviewComment, Suggestion, LineRange, DiffSource } from '../shared/types';
 
 export interface ParsedReview {
   comments: ReviewComment[];
   gitDiffArgs: string;
+  source: DiffSource;
 }
 
 export function parseReviewXml(xmlPath: string): ParsedReview {
@@ -40,6 +41,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
 
     const review = result.review;
     const gitDiffArgs = review['@_git-diff-args'] || '';
+    const source = parseSource(review);
     const comments: ReviewComment[] = [];
 
     // Handle files array
@@ -91,7 +93,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
       }
     }
 
-    return { comments, gitDiffArgs };
+    return { comments, gitDiffArgs, source };
   } catch (error) {
     if (error instanceof Error) {
       console.error(`Error parsing XML: ${error.message}`);
@@ -100,6 +102,25 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     }
     process.exit(1);
   }
+}
+
+function parseSource(review: Record<string, unknown>): DiffSource {
+  const sourcePath = review['@_source-path'];
+  if (sourcePath) {
+    return { type: 'directory', sourcePath: String(sourcePath) };
+  }
+
+  const gitDiffArgs = review['@_git-diff-args'];
+  const repository = review['@_repository'];
+  if (gitDiffArgs !== undefined || repository !== undefined) {
+    return {
+      type: 'git',
+      gitDiffArgs: String(gitDiffArgs || ''),
+      repository: String(repository || ''),
+    };
+  }
+
+  return { type: 'welcome' };
 }
 
 function parseLineRange(comment: Record<string, unknown>): LineRange | null {

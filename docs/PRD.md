@@ -620,6 +620,10 @@ No artificial limit is imposed on diff size. Performance for very large diffs (t
 - Sufficient color contrast in both light and dark themes.
 - Screen reader compatibility is a nice-to-have for v1 but not required.
 
+### Keyboard Navigation
+
+The app supports keyboard-driven code review via Vimium-style hint labels (`f` for line comments, `g` for file jumps) and smooth scrolling (`j`/`k`). All shortcuts are suppressed when text inputs have focus.
+
 ### 10.3 Error Handling
 
 - If `git` is not installed or not in PATH, the CLI prints a clear error to stderr and exits with code 1.

@@ -50,18 +50,28 @@
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="git-diff-args" type="xs:string" use="required">
+    <xs:attribute name="git-diff-args" type="xs:string" use="optional">
       <xs:annotation>
         <xs:documentation>
           The git diff arguments that were passed to self-review on the CLI.
           Example: "--staged", "main..feature-branch", "HEAD~3".
+          Present only when reviewing a git diff.
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="repository" type="xs:string" use="required">
+    <xs:attribute name="repository" type="xs:string" use="optional">
       <xs:annotation>
         <xs:documentation>
           Absolute path to the repository root where self-review was invoked.
+          Present only when reviewing a git diff.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="source-path" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          Absolute path to the directory being reviewed.
+          Present only when reviewing a directory (non-git mode).
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
