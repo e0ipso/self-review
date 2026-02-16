@@ -173,7 +173,7 @@ export default function Toolbar() {
           {diffSource.type === 'git'
             ? `git diff${diffSource.gitDiffArgs ? ` ${diffSource.gitDiffArgs}` : ''}`
             : diffSource.type === 'directory'
-              ? diffSource.sourcePath
+              ? `Directory: ${diffSource.sourcePath}`
               : ''}
         </span>
         <Separator orientation='vertical' className='h-3.5' />
