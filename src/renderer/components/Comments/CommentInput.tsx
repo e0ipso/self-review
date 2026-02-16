@@ -108,6 +108,7 @@ export default function CommentInput({
   const [proposedCode, setProposedCode] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragCounter = useRef(0);
 
@@ -158,6 +159,12 @@ export default function CommentInput({
     if (dragCounter.current === 0) {
       setIsDragging(false);
     }
+  }, []);
+
+  useEffect(() => {
+    // Auto-focus the editor textarea when the comment input mounts
+    const textarea = editorContainerRef.current?.querySelector<HTMLTextAreaElement>('.w-md-editor-text-input');
+    textarea?.focus();
   }, []);
 
   useEffect(() => {
@@ -235,7 +242,7 @@ export default function CommentInput({
           </div>
         </div>
       )}
-      <div className='p-1' data-color-mode={isDark ? 'dark' : 'light'}>
+      <div className='p-1' data-color-mode={isDark ? 'dark' : 'light'} ref={editorContainerRef}>
         <MDEditor
           value={body}
           onChange={(val) => setBody(val || '')}

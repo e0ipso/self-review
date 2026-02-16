@@ -16,6 +16,11 @@ const defaults: AppConfig = {
   ignore: [],
   categories: [
     {
+      name: 'question',
+      description: 'Clarification needed — not necessarily a problem',
+      color: '#805ad5',
+    },
+    {
       name: 'bug',
       description: 'Likely defect or incorrect behavior',
       color: '#e53e3e',
@@ -29,11 +34,6 @@ const defaults: AppConfig = {
       name: 'style',
       description: 'Code style, naming, or formatting issue',
       color: '#3182ce',
-    },
-    {
-      name: 'question',
-      description: 'Clarification needed — not necessarily a problem',
-      color: '#805ad5',
     },
     {
       name: 'nit',
