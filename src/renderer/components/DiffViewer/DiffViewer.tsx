@@ -53,6 +53,35 @@ export default function DiffViewer() {
   }, [diffFiles]);
 
   const handleToggleExpanded = (filePath: string) => {
+    const isCurrentlyExpanded = expandedState[filePath];
+
+    // Compensate scroll position when collapsing a file above the viewport
+    if (isCurrentlyExpanded) {
+      const scrollContainer = document.querySelector<HTMLElement>(
+        '[data-scroll-container="diff"]'
+      );
+      const sectionEl = document.querySelector<HTMLElement>(
+        `[data-file-path="${CSS.escape(filePath)}"]`
+      );
+
+      if (scrollContainer && sectionEl) {
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const sectionRect = sectionEl.getBoundingClientRect();
+
+        // Only compensate if the section top is above the viewport top
+        if (sectionRect.top < containerRect.top) {
+          const HEADER_HEIGHT = 40; // h-10 = 2.5rem = 40px
+          const delta = sectionEl.scrollHeight - HEADER_HEIGHT;
+
+          if (delta > 0) {
+            requestAnimationFrame(() => {
+              scrollContainer.scrollTop -= delta;
+            });
+          }
+        }
+      }
+    }
+
     setExpandedState(prev => ({
       ...prev,
       [filePath]: !prev[filePath],
