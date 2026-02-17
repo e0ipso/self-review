@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Self Review
+GenericName=Code Review Tool
+Comment=A local-only PR review UI for git diffs
+Exec=zypak-wrapper.sh self-review %U
+Icon=com.mateuaguilo.SelfReview
+Type=Application
+Categories=Development;
+Terminal=false
+StartupWMClass=self-review
+StartupNotify=true

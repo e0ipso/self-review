@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.mateuaguilo.SelfReview</id>
+  <name>Self Review</name>
+  <summary>Local-only PR review UI for git diffs</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="com.mateuaguilo">
+    <name>Mateu Aguiló Bosch</name>
+  </developer>
+  <description>
+    <p>A desktop app that provides a GitHub-style pull request review interface for local git diffs and directory-based reviews. Designed for solo developers reviewing AI-generated code. Features include split and unified diff views, inline comments with markdown support, code suggestions, syntax highlighting, and XML export of review feedback.</p>
+  </description>
+  <launchable type="desktop-id">com.mateuaguilo.SelfReview.desktop</launchable>
+  <url type="homepage">https://github.com/e0ipso/self-review</url>
+  <url type="bugtracker">https://github.com/e0ipso/self-review/issues</url>
+  <url type="vcs-browser">https://github.com/e0ipso/self-review</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.8.0" date="2026-02-12">
+      <description>
+        <p>Latest release</p>
+      </description>
+    </release>
+  </releases>
+</component>
