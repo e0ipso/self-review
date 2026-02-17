@@ -51,9 +51,14 @@ describe('useDiffNavigation', () => {
     global.MutationObserver = MockMutationObserver as any;
   });
 
+  let scrollContainer: HTMLDivElement;
+
   beforeEach(() => {
-    // Clear the DOM
+    // Clear the DOM and set up scroll container matching Layout.tsx
     document.body.innerHTML = '';
+    scrollContainer = document.createElement('div');
+    scrollContainer.setAttribute('data-scroll-container', 'diff');
+    document.body.appendChild(scrollContainer);
     intersectionCallback = null;
     mutationCallback = null;
     vi.clearAllMocks();
@@ -65,7 +70,7 @@ describe('useDiffNavigation', () => {
       mockElement.setAttribute('data-file-path', 'test.ts');
       const scrollIntoViewMock = vi.fn();
       mockElement.scrollIntoView = scrollIntoViewMock;
-      document.body.appendChild(mockElement);
+      scrollContainer.appendChild(mockElement);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
@@ -101,8 +106,8 @@ describe('useDiffNavigation', () => {
       const scroll2 = vi.fn();
       element2.scrollIntoView = scroll2;
 
-      document.body.appendChild(element1);
-      document.body.appendChild(element2);
+      scrollContainer.appendChild(element1);
+      scrollContainer.appendChild(element2);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
@@ -128,7 +133,7 @@ describe('useDiffNavigation', () => {
     it('updates activeFilePath when element becomes visible', () => {
       const element = document.createElement('div');
       element.setAttribute('data-file-path', 'file1.ts');
-      document.body.appendChild(element);
+      scrollContainer.appendChild(element);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
@@ -159,8 +164,8 @@ describe('useDiffNavigation', () => {
       element1.setAttribute('data-file-path', 'file1.ts');
       const element2 = document.createElement('div');
       element2.setAttribute('data-file-path', 'file2.ts');
-      document.body.appendChild(element1);
-      document.body.appendChild(element2);
+      scrollContainer.appendChild(element1);
+      scrollContainer.appendChild(element2);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
@@ -197,7 +202,7 @@ describe('useDiffNavigation', () => {
     it('ignores elements without data-file-path attribute', () => {
       const element = document.createElement('div');
       // No data-file-path attribute
-      document.body.appendChild(element);
+      scrollContainer.appendChild(element);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
@@ -226,7 +231,7 @@ describe('useDiffNavigation', () => {
     it('ignores non-intersecting elements', () => {
       const element = document.createElement('div');
       element.setAttribute('data-file-path', 'file1.ts');
-      document.body.appendChild(element);
+      scrollContainer.appendChild(element);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 

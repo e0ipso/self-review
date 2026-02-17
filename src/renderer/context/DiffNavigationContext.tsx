@@ -30,7 +30,12 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
   const scrollToFile = useCallback((filePath: string) => {
-    const element = document.querySelector(`[data-file-path="${filePath}"]`);
+    const scrollContainer = document.querySelector(
+      '[data-scroll-container="diff"]'
+    );
+    const element = scrollContainer?.querySelector(
+      `[data-file-path="${filePath}"]`
+    );
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -64,9 +69,13 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Observe all file sections
+    // Observe file sections within the diff viewer only
     const observeElements = () => {
-      const elements = document.querySelectorAll('[data-file-path]');
+      const scrollContainer = document.querySelector(
+        '[data-scroll-container="diff"]'
+      );
+      if (!scrollContainer) return;
+      const elements = scrollContainer.querySelectorAll('[data-file-path]');
       elements.forEach(el => observer.observe(el));
     };
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import FileSection from './FileSection';
@@ -52,6 +52,22 @@ export default function DiffViewer() {
     };
   }, [diffFiles]);
 
+  // Pending scroll adjustment to apply after React commits the DOM change
+  const scrollAdjustRef = useRef<number>(0);
+
+  // Apply scroll compensation synchronously after DOM update, before paint
+  useLayoutEffect(() => {
+    if (scrollAdjustRef.current > 0) {
+      const scrollContainer = document.querySelector<HTMLElement>(
+        '[data-scroll-container="diff"]'
+      );
+      if (scrollContainer) {
+        scrollContainer.scrollTop -= scrollAdjustRef.current;
+      }
+      scrollAdjustRef.current = 0;
+    }
+  }, [expandedState]);
+
   const handleToggleExpanded = (filePath: string) => {
     const isCurrentlyExpanded = expandedState[filePath];
 
@@ -60,23 +76,22 @@ export default function DiffViewer() {
       const scrollContainer = document.querySelector<HTMLElement>(
         '[data-scroll-container="diff"]'
       );
-      const sectionEl = document.querySelector<HTMLElement>(
-        `[data-file-path="${CSS.escape(filePath)}"]`
+      // Scope query to scroll container to avoid matching FileTree elements
+      const sectionEl = scrollContainer?.querySelector<HTMLElement>(
+        `[data-file-path="${filePath}"]`
       );
 
       if (scrollContainer && sectionEl) {
         const containerRect = scrollContainer.getBoundingClientRect();
         const sectionRect = sectionEl.getBoundingClientRect();
 
-        // Only compensate if the section top is above the viewport top
+        // Compensate if the section top is above the viewport top
         if (sectionRect.top < containerRect.top) {
           const HEADER_HEIGHT = 40; // h-10 = 2.5rem = 40px
           const delta = sectionEl.scrollHeight - HEADER_HEIGHT;
 
           if (delta > 0) {
-            requestAnimationFrame(() => {
-              scrollContainer.scrollTop -= delta;
-            });
+            scrollAdjustRef.current = delta;
           }
         }
       }
