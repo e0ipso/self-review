@@ -55,7 +55,6 @@
     "@electron/fuses": "^1.8.0",
     "@eslint/js": "^9.39.2",
     "@playwright/test": "^1.58.2",
-    "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/prismjs": "^1.26.6",
