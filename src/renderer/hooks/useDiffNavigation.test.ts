@@ -60,12 +60,20 @@ describe('useDiffNavigation', () => {
   });
 
   describe('scrollToFile', () => {
-    it('scrolls to element with matching data-file-path', () => {
+    let diffViewer: HTMLDivElement;
+
+    beforeEach(() => {
+      diffViewer = document.createElement('div');
+      diffViewer.setAttribute('data-diff-viewer', '');
+      document.body.appendChild(diffViewer);
+    });
+
+    it('scrolls to element with matching data-file-path inside diff viewer', () => {
       const mockElement = document.createElement('div');
       mockElement.setAttribute('data-file-path', 'test.ts');
       const scrollIntoViewMock = vi.fn();
       mockElement.scrollIntoView = scrollIntoViewMock;
-      document.body.appendChild(mockElement);
+      diffViewer.appendChild(mockElement);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
@@ -90,6 +98,22 @@ describe('useDiffNavigation', () => {
       expect(result.current.activeFilePath).toBeNull();
     });
 
+    it('ignores elements outside diff viewer', () => {
+      const outsideElement = document.createElement('div');
+      outsideElement.setAttribute('data-file-path', 'test.ts');
+      const scrollMock = vi.fn();
+      outsideElement.scrollIntoView = scrollMock;
+      document.body.appendChild(outsideElement);
+
+      const { result } = renderHook(() => useDiffNavigation(), { wrapper });
+
+      act(() => {
+        result.current.scrollToFile('test.ts');
+      });
+
+      expect(scrollMock).not.toHaveBeenCalled();
+    });
+
     it('handles multiple files and scrolls to correct one', () => {
       const element1 = document.createElement('div');
       element1.setAttribute('data-file-path', 'file1.ts');
@@ -101,8 +125,8 @@ describe('useDiffNavigation', () => {
       const scroll2 = vi.fn();
       element2.scrollIntoView = scroll2;
 
-      document.body.appendChild(element1);
-      document.body.appendChild(element2);
+      diffViewer.appendChild(element1);
+      diffViewer.appendChild(element2);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
