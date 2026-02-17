@@ -17,6 +17,9 @@
   <url type="vcs-browser">https://github.com/e0ipso/self-review</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.9.0" date="2026-02-17">
+      <url type="details">https://github.com/e0ipso/self-review/releases/tag/v1.9.0</url>
+    </release>
     <release version="1.8.0" date="2026-02-12">
       <description>
         <p>Added Flatpak packaging and desktop integration files.</p>
