@@ -4,7 +4,7 @@
   <name>Self Review</name>
   <summary>Local-only PR review UI for git diffs</summary>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>MIT</project_license>
+  <project_license>LicenseRef-proprietary</project_license>
   <developer id="com.mateuaguilo">
     <name>Mateu Aguiló Bosch</name>
   </developer>
@@ -19,7 +19,7 @@
   <releases>
     <release version="1.8.0" date="2026-02-12">
       <description>
-        <p>Latest release</p>
+        <p>Added Flatpak packaging and desktop integration files.</p>
       </description>
     </release>
   </releases>

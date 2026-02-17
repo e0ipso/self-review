@@ -1,5 +1,8 @@
 # Flatpak manifest for Self Review
-# See https://docs.flathub.org/docs/for-app-authors/requirements
+# Based on the Electron BaseApp template for Flathub:
+#   https://github.com/nickvdp/chromium-flatpak-base-app (Electron2.BaseApp)
+#   https://docs.flathub.org/docs/for-app-authors/requirements
+#   https://docs.flathub.org/docs/for-app-authors/electron
 app-id: com.mateuaguilo.SelfReview
 runtime: org.freedesktop.Platform
 runtime-version: '24.08'
