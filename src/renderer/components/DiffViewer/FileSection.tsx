@@ -53,6 +53,11 @@ export default function FileSection({
   const fileState = files.find(f => f.path === filePath);
   const isViewed = fileState?.viewed || false;
 
+  // Effective view mode: added/deleted files are forced to unified view even when viewMode is 'split'
+  const effectiveViewMode = viewMode === 'split' && (file.changeType === 'added' || file.changeType === 'deleted')
+    ? 'unified'
+    : viewMode;
+
   // Build lookup map for hunk boundaries (line number + side -> hunk bounds)
   const hunkLineMap = useMemo(() => {
     const map = new Map<
@@ -96,7 +101,7 @@ export default function FileSection({
 
   // Build row-index mapping for unified view cross-type drag
   const unifiedRowMap = useMemo(() => {
-    if (viewMode !== 'unified') return null;
+    if (effectiveViewMode !== 'unified') return null;
     const map = new Map<
       number,
       { lineNumber: number; side: 'old' | 'new'; hunkIndex: number }
@@ -112,10 +117,10 @@ export default function FileSection({
       }
     });
     return map;
-  }, [file, viewMode]);
+  }, [file, effectiveViewMode]);
 
   const hunkRowBounds = useMemo(() => {
-    if (viewMode !== 'unified') return null;
+    if (effectiveViewMode !== 'unified') return null;
     const bounds: { min: number; max: number }[] = [];
     let rowIndex = 0;
     for (const hunk of file.hunks) {
@@ -123,7 +128,7 @@ export default function FileSection({
       rowIndex += hunk.lines.length;
     }
     return bounds;
-  }, [file, viewMode]);
+  }, [file, effectiveViewMode]);
 
   // Refs for stable access in event handlers
   const dragStateRef = useRef(dragState);
@@ -134,8 +139,8 @@ export default function FileSection({
   unifiedRowMapRef.current = unifiedRowMap;
   const hunkRowBoundsRef = useRef(hunkRowBounds);
   hunkRowBoundsRef.current = hunkRowBounds;
-  const viewModeRef = useRef(viewMode);
-  viewModeRef.current = viewMode;
+  const viewModeRef = useRef(effectiveViewMode);
+  viewModeRef.current = effectiveViewMode;
 
   // Sync viewed state with expansion: when viewed is checked, collapse the file
   useEffect(() => {
@@ -446,6 +451,8 @@ export default function FileSection({
               variant='ghost'
               size='sm'
               data-testid={`viewed-${filePath}`}
+              data-hint-action='toggle-viewed'
+              data-hint-file-path={filePath}
               onClick={e => {
                 e.stopPropagation();
                 handleViewedToggle();
@@ -474,6 +481,8 @@ export default function FileSection({
               variant='ghost'
               size='sm'
               data-testid={`add-file-comment-${filePath}`}
+              data-hint-action='add-file-comment'
+              data-hint-file-path={filePath}
               onClick={e => {
                 e.stopPropagation();
                 handleAddFileComment();
