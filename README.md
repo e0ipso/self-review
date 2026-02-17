@@ -77,6 +77,23 @@ sudo chmod +x /usr/local/bin/self-review
 
 </details>
 
+<details>
+<summary>Linux (Flatpak)</summary>
+
+Install from [Flathub](https://flathub.org/apps/com.mateuaguilo.SelfReview):
+
+```bash
+flatpak install flathub com.mateuaguilo.SelfReview
+```
+
+To use the `self-review` command from the terminal, create an alias:
+
+```bash
+alias self-review='flatpak run com.mateuaguilo.SelfReview'
+```
+
+</details>
+
 ## How it works
 
 Instead of seeing your changes with `git diff <arguments>` execute `self-review <arguments>`. This will open the app

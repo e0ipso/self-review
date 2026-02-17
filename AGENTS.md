@@ -24,6 +24,11 @@ container before running the e2e tests.
 ```
 self-review/
 ├── CLAUDE.md
+├── flatpak/                         # Flathub packaging files
+│   ├── com.mateuaguilo.SelfReview.desktop      # FreeDesktop .desktop entry
+│   ├── com.mateuaguilo.SelfReview.metainfo.xml # AppStream metainfo for Flathub listing
+│   ├── com.mateuaguilo.SelfReview.yml          # Flatpak build manifest
+│   └── flathub.json                            # Flathub auto-merge config
 ├── docs/
 │   └── PRD.md                    # Product requirements (source of truth)
 ├── src/
