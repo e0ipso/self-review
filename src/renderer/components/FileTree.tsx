@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, CircleDashed, CircleCheck, MessageSquare, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { Search, CircleDashed, CircleCheck, MessageSquare, ChevronsDownUp, ChevronsUpDown, Keyboard } from 'lucide-react';
 import type { DiffFile } from '../../shared/types';
 
 export default function FileTree() {
@@ -95,6 +95,25 @@ export default function FileTree() {
             Changed files
           </span>
           <div className='flex items-center gap-1'>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  data-testid='keyboard-shortcuts-btn'
+                  className='h-5 w-5 text-muted-foreground hover:text-foreground'
+                >
+                  <Keyboard className='h-3.5 w-3.5' />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side='right' className='text-xs space-y-1 p-2'>
+                <div className='font-medium mb-1'>Keyboard Shortcuts</div>
+                <div className='flex justify-between gap-4'><span>Comment on line</span><kbd className='font-mono'>f</kbd></div>
+                <div className='flex justify-between gap-4'><span>Jump to file</span><kbd className='font-mono'>g</kbd></div>
+                <div className='flex justify-between gap-4'><span>Scroll diffs</span><kbd className='font-mono'>j/k</kbd></div>
+                <div className='flex justify-between gap-4'><span>Cancel</span><kbd className='font-mono'>Esc</kbd></div>
+              </TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -225,16 +244,6 @@ export default function FileTree() {
         )}
       </div>
 
-      <Separator />
-
-      {/* Keyboard Shortcuts */}
-      <div className='px-3 py-2 text-xs text-muted-foreground space-y-1'>
-        <div className='font-medium text-foreground/70 mb-1'>Keyboard Shortcuts</div>
-        <div className='flex justify-between'><span>Comment on line</span><kbd className='font-mono'>f</kbd></div>
-        <div className='flex justify-between'><span>Jump to file</span><kbd className='font-mono'>g</kbd></div>
-        <div className='flex justify-between'><span>Scroll diffs</span><kbd className='font-mono'>j/k</kbd></div>
-        <div className='flex justify-between'><span>Cancel</span><kbd className='font-mono'>Esc</kbd></div>
-      </div>
     </div>
   );
 }
