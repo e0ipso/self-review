@@ -26,6 +26,7 @@ import {
   type HunkChangeRange,
   type HunkContextBudget,
 } from './diff-utils';
+import { getFileStats, getChangeTypeInfo } from '../../utils/diff-styles';
 
 export interface FileSectionProps {
   file: DiffFile;
@@ -565,34 +566,7 @@ export default function FileSection({
     setShowingFileComment(false);
   };
 
-  const getChangeTypeStyle = () => {
-    switch (file.changeType) {
-      case 'added':
-        return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400';
-      case 'deleted':
-        return 'bg-red-500/15 text-red-700 dark:text-red-400';
-      case 'renamed':
-        return 'bg-blue-500/15 text-blue-700 dark:text-blue-400';
-      case 'modified':
-        return 'bg-amber-500/15 text-amber-700 dark:text-amber-400';
-      default:
-        return '';
-    }
-  };
-
-  const getLineStats = () => {
-    let additions = 0;
-    let deletions = 0;
-    for (const hunk of file.hunks) {
-      for (const line of hunk.lines) {
-        if (line.type === 'addition') additions++;
-        if (line.type === 'deletion') deletions++;
-      }
-    }
-    return { additions, deletions };
-  };
-
-  const { additions, deletions } = getLineStats();
+  const { additions, deletions } = getFileStats(file);
   const displayPath =
     file.changeType === 'renamed'
       ? `${file.oldPath} → ${file.newPath}`
@@ -636,7 +610,7 @@ export default function FileSection({
         {/* Change type */}
         <Badge
           variant='secondary'
-          className={`text-[10px] font-semibold px-1.5 py-0 h-5 ${getChangeTypeStyle()}`}
+          className={`text-[10px] font-semibold px-1.5 py-0 h-5 ${getChangeTypeInfo(file.changeType).className}`}
         >
           {changeLabel}
         </Badge>

@@ -7,7 +7,7 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { Search, CircleDashed, CircleCheck, MessageSquare, ChevronsDownUp, ChevronsUpDown, Keyboard } from 'lucide-react';
-import type { DiffFile } from '../../shared/types';
+import { getFileStats, getChangeTypeInfo } from '../utils/diff-styles';
 
 export default function FileTree() {
   const { diffFiles, files } = useReview();
@@ -30,18 +30,6 @@ export default function FileTree() {
     return diffFiles.filter(file => file.newPath.toLowerCase().includes(query));
   }, [diffFiles, searchQuery]);
 
-  const getFileStats = (file: DiffFile) => {
-    let additions = 0;
-    let deletions = 0;
-    file.hunks.forEach(hunk => {
-      hunk.lines.forEach(line => {
-        if (line.type === 'addition') additions++;
-        if (line.type === 'deletion') deletions++;
-      });
-    });
-    return { additions, deletions };
-  };
-
   const getCommentCount = (filePath: string) => {
     const fileState = files.find(f => f.path === filePath);
     return fileState?.comments.length || 0;
@@ -50,31 +38,6 @@ export default function FileTree() {
   const isViewed = (filePath: string) => {
     const fileState = files.find(f => f.path === filePath);
     return fileState?.viewed || false;
-  };
-
-  const getChangeType = (changeType: DiffFile['changeType']) => {
-    switch (changeType) {
-      case 'added':
-        return {
-          label: 'A',
-          className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-        };
-      case 'modified':
-        return {
-          label: 'M',
-          className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-        };
-      case 'deleted':
-        return {
-          label: 'D',
-          className: 'bg-red-500/15 text-red-700 dark:text-red-400',
-        };
-      case 'renamed':
-        return {
-          label: 'R',
-          className: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-        };
-    }
   };
 
   const splitPath = (fullPath: string) => {
@@ -165,7 +128,7 @@ export default function FileTree() {
           const commentCount = getCommentCount(filePath);
           const viewed = isViewed(filePath);
           const isActive = activeFilePath === filePath;
-          const changeType = getChangeType(file.changeType);
+          const changeType = getChangeTypeInfo(file.changeType);
           const { dir, fileName } = splitPath(filePath);
 
           return (

@@ -9,6 +9,8 @@ import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
 import ExpandContextBar from './ExpandContextBar';
+import { getLineBg, getGutterBg } from '../../utils/diff-styles';
+import EmptyLinePane from './EmptyLinePane';
 
 export interface SplitViewProps {
   file: DiffFile;
@@ -104,22 +106,6 @@ export default function SplitView({
     return rows;
   };
 
-  const getLineBg = (line: DiffLine | null) => {
-    if (!line) return '';
-    if (line.type === 'addition')
-      return 'bg-emerald-50/70 dark:bg-emerald-900/40';
-    if (line.type === 'deletion') return 'bg-red-50/70 dark:bg-red-900/40';
-    return '';
-  };
-
-  const getGutterBg = (line: DiffLine | null) => {
-    if (!line) return 'bg-muted/30';
-    if (line.type === 'addition')
-      return 'bg-emerald-100/80 dark:bg-emerald-900/50';
-    if (line.type === 'deletion') return 'bg-red-100/80 dark:bg-red-900/50';
-    return 'bg-muted/30';
-  };
-
   // Extract original code for the selected line range (for suggestions)
   const getOriginalCode = (): string | undefined => {
     if (!commentRange) return undefined;
@@ -132,12 +118,7 @@ export default function SplitView({
     hasComment = false
   ) => {
     if (!line) {
-      return (
-        <div className='w-1/2 flex'>
-          <div className='w-10 flex-shrink-0 bg-muted/20' />
-          <div className='flex-1 bg-muted/10' />
-        </div>
-      );
+      return <EmptyLinePane />;
     }
 
     const lineNumber = side === 'old' ? line.oldLineNumber : line.newLineNumber;
@@ -260,19 +241,13 @@ export default function SplitView({
                   {row.oldLine ? (
                     renderLineCell(row.oldLine, 'old', oldComments.length > 0)
                   ) : (
-                    <div className='w-1/2 flex'>
-                      <div className='w-10 flex-shrink-0 bg-muted/20' />
-                      <div className='flex-1 bg-muted/10' />
-                    </div>
+                    <EmptyLinePane />
                   )}
                   {/* New side (right) */}
                   {row.newLine ? (
                     renderLineCell(row.newLine, 'new', newComments.length > 0)
                   ) : (
-                    <div className='w-1/2 flex'>
-                      <div className='w-10 flex-shrink-0 bg-muted/20' />
-                      <div className='flex-1 bg-muted/10' />
-                    </div>
+                    <EmptyLinePane />
                   )}
                 </div>
 

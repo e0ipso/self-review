@@ -1,8 +1,8 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useMemo, useCallback, createContext, useContext } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import type { Components } from 'react-markdown';
+import type { Components, ExtraProps } from 'react-markdown';
 import { MessageSquarePlus } from 'lucide-react';
 import Prism from 'prismjs';
 import type { DiffFile, LineRange } from '../../../shared/types';
@@ -10,61 +10,13 @@ import { useReview } from '../../context/ReviewContext';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
+import MermaidBlock from './MermaidBlock';
 
 // ===== Nesting Context =====
 // Tracks whether we're inside a block that already has a gutter wrapper,
 // so nested elements (li inside ul, p inside blockquote) don't duplicate it.
 
 const GutterNestingContext = createContext(false);
-
-// ===== Mermaid Block =====
-
-let mermaidInitialized = false;
-let mermaidIdCounter = 0;
-
-function MermaidBlock({ code }: { code: string }) {
-  const [svg, setSvg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const idRef = useRef(`mermaid-${mermaidIdCounter++}`);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const mermaid = (await import('mermaid')).default;
-        const isDark = document.documentElement.classList.contains('dark');
-
-        if (!mermaidInitialized) {
-          mermaid.initialize({
-            startOnLoad: false,
-            theme: isDark ? 'dark' : 'default',
-          });
-          mermaidInitialized = true;
-        }
-
-        const { svg: rendered } = await mermaid.render(idRef.current, code);
-        if (!cancelled) setSvg(rendered);
-      } catch (err: unknown) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to render diagram');
-        }
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [code]);
-
-  if (error) {
-    return (
-      <div className='text-destructive text-sm p-2 border border-destructive/20 rounded'>
-        Mermaid error: {error}
-      </div>
-    );
-  }
-  if (!svg) return <div className='animate-pulse bg-muted h-32 rounded' />;
-  return <div dangerouslySetInnerHTML={{ __html: svg }} />;
-}
 
 // ===== Content Extraction =====
 
@@ -234,7 +186,7 @@ export default function RenderedMarkdownView({
   // Factory for block-level renderers
   const createBlockRenderer = useCallback(
     (tag: keyof React.JSX.IntrinsicElements) => {
-      return function BlockRenderer({ node, children, ...props }: any) {
+      return function BlockRenderer({ node, children, ...props }: React.HTMLAttributes<HTMLElement> & ExtraProps) {
         const startLine = node?.position?.start?.line;
         const endLine = node?.position?.end?.line;
         return (
@@ -260,7 +212,7 @@ export default function RenderedMarkdownView({
 
   // Code renderer with Prism highlighting + Mermaid support
   const CodeRenderer = useCallback(
-    ({ className, children, node, ...props }: any) => {
+    ({ className, children, node, ...props }: React.HTMLAttributes<HTMLElement> & ExtraProps) => {
       const match = /language-(\w+)/.exec(className || '');
       const lang = match ? match[1] : '';
       const code = String(children).replace(/\n$/, '');
