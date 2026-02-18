@@ -1,7 +1,7 @@
 {
   "name": "@e0ipso/self-review",
   "productName": "Self Review",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "description": "GitHub-style PR review UI for local git diffs",
   "main": ".webpack/main",
   "scripts": {
