@@ -10,6 +10,7 @@ import React, {
 import type {
   Attachment,
   DiffFile,
+  DiffHunk,
   DiffLoadPayload,
   DiffSource,
   FileReviewState,
@@ -43,7 +44,8 @@ export interface ReviewContextValue {
     lineNumber: number,
     side: 'old' | 'new'
   ) => ReviewComment[];
-  expandFileContext: (filePath: string, contextLines: number) => Promise<{ totalLines: number } | null>;
+  expandFileContext: (filePath: string, contextLines: number) => Promise<{ hunks: DiffHunk[]; totalLines: number } | null>;
+  updateFileHunks: (filePath: string, hunks: DiffHunk[]) => void;
 }
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
@@ -152,25 +154,28 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
     window.electronAPI.requestDiffData();
   }, []); // Empty dependency array - register only once
 
-  const expandFileContext = async (filePath: string, contextLines: number): Promise<{ totalLines: number } | null> => {
+  const expandFileContext = async (filePath: string, contextLines: number): Promise<{ hunks: DiffHunk[]; totalLines: number } | null> => {
     if (!window.electronAPI) return null;
     try {
       const response = await window.electronAPI.expandContext({ filePath, contextLines });
       if (!response) return null;
-      setAllDiffFiles(prev =>
-        prev.map(f => {
-          const fPath = f.newPath || f.oldPath;
-          if (fPath === filePath) {
-            return { ...f, hunks: response.hunks };
-          }
-          return f;
-        })
-      );
-      return { totalLines: response.totalLines };
+      return { hunks: response.hunks, totalLines: response.totalLines };
     } catch (error) {
       console.error('[ReviewContext] Failed to expand context:', error);
       return null;
     }
+  };
+
+  const updateFileHunks = (filePath: string, hunks: DiffHunk[]) => {
+    setAllDiffFiles(prev =>
+      prev.map(f => {
+        const fPath = f.newPath || f.oldPath;
+        if (fPath === filePath) {
+          return { ...f, hunks };
+        }
+        return f;
+      })
+    );
   };
 
   return (
@@ -187,6 +192,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
         getCommentsForFile: reviewState.getCommentsForFile,
         getCommentsForLine: reviewState.getCommentsForLine,
         expandFileContext,
+        updateFileHunks,
       }}
     >
       {children}

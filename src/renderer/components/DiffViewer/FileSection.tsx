@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
-import type { DiffFile } from '../../../shared/types';
+import type { DiffFile, DiffHunk } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -16,6 +16,14 @@ import SplitView from './SplitView';
 import UnifiedView from './UnifiedView';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
+import {
+  trimHunkContext,
+  getHunkChangeRange,
+  countLeadingContext,
+  countTrailingContext,
+  type HunkChangeRange,
+  type HunkContextBudget,
+} from './diff-utils';
 
 export interface FileSectionProps {
   file: DiffFile;
@@ -30,7 +38,7 @@ export default function FileSection({
   expanded: controlledExpanded,
   onToggleExpanded,
 }: FileSectionProps) {
-  const { toggleViewed, getCommentsForFile, files, diffSource, expandFileContext } = useReview();
+  const { toggleViewed, getCommentsForFile, files, diffSource, expandFileContext, updateFileHunks } = useReview();
   const [internalExpanded, setInternalExpanded] = useState(true);
   const expanded =
     controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
@@ -57,13 +65,26 @@ export default function FileSection({
   const isExpandable = diffSource.type === 'git' && !file.isUntracked && !file.isBinary;
   const [expandLoading, setExpandLoading] = useState(false);
   const [totalLines, setTotalLines] = useState<number | null>(null);
-  const [contextLevel, setContextLevel] = useState(() => {
-    if (diffSource.type === 'git') {
-      const match = diffSource.gitDiffArgs.match(/-U(\d+)|--unified=(\d+)/);
-      if (match) return parseInt(match[1] || match[2], 10);
-    }
-    return 3;
-  });
+
+  // Per-hunk directional context budgets, raw hunk cache, and original change ranges.
+  // Keyed by original hunk positions so they survive hunk merging from expansion.
+  const originalRangesRef = useRef<HunkChangeRange[] | null>(null);
+  const hunkBudgetsRef = useRef<HunkContextBudget[] | null>(null);
+  const rawHunksRef = useRef<DiffHunk[] | null>(null);
+  const lastRequestedContextRef = useRef<number>(0);
+
+  // Initialize per-hunk tracking from the initial hunks (run once)
+  if (originalRangesRef.current === null && file.hunks.length > 0) {
+    originalRangesRef.current = file.hunks.map(h => getHunkChangeRange(h));
+    hunkBudgetsRef.current = file.hunks.map(h => ({
+      above: countLeadingContext(h),
+      below: countTrailingContext(h),
+    }));
+    lastRequestedContextRef.current = Math.max(
+      ...file.hunks.flatMap(h => [countLeadingContext(h), countTrailingContext(h)]),
+      0,
+    );
+  }
 
   // Scroll compensation: keep the user looking at the same code after expansion.
   // We anchor on a specific diff line that existed before expansion:
@@ -104,21 +125,72 @@ export default function FileSection({
 
   const handleExpandContext = useCallback(async (direction: 'up' | 'down' | 'all', hunkIndex: number, position: 'top' | 'between' | 'bottom') => {
     if (!isExpandable || expandLoading) return;
-    const newLevel = direction === 'all' ? 99999 : contextLevel + 5;
+    const budgets = hunkBudgetsRef.current;
+    const originalRanges = originalRangesRef.current;
+    if (!budgets || !originalRanges) return;
 
-    // Pick the anchor line — the existing context line the user is "looking at".
-    //
-    // Bar positions and their hunkIndex semantics:
-    //   top bar:     hunkIndex = 0 (the hunk below the bar)
-    //   between bar: hunkIndex = N (the hunk below the bar; hunk above is N-1)
-    //   bottom bar:  hunkIndex = lastIdx (the hunk above the bar)
-    //
-    // Anchor rules:
-    //   up:   first line of hunkIndex (the hunk below the bar)
-    //   down: last line of the hunk ABOVE the bar
-    //         - between bar: last line of hunkIndex - 1
-    //         - bottom bar:  last line of hunkIndex (it IS the hunk above)
-    //   all:  same as up
+    // --- Update per-hunk budgets for the clicked direction ---
+    // Map current hunkIndex back to original hunk indices via change ranges.
+    const currentHunk = file.hunks[hunkIndex];
+    const findOriginalIndices = (h: DiffHunk): number[] => {
+      const indices: number[] = [];
+      for (let i = 0; i < originalRanges.length; i++) {
+        const range = originalRanges[i];
+        for (const line of h.lines) {
+          if (line.type === 'context') continue;
+          if (range.oldRange && line.oldLineNumber !== null &&
+              line.oldLineNumber >= range.oldRange[0] && line.oldLineNumber <= range.oldRange[1]) {
+            indices.push(i);
+            break;
+          }
+          if (range.newRange && line.newLineNumber !== null &&
+              line.newLineNumber >= range.newRange[0] && line.newLineNumber <= range.newRange[1]) {
+            indices.push(i);
+            break;
+          }
+        }
+      }
+      return indices;
+    };
+
+    const STEP = 5;
+    const MAX_CONTEXT = 99999;
+
+    if (direction === 'up') {
+      // Increase `above` for the first original hunk in currentHunk
+      const indices = findOriginalIndices(currentHunk);
+      if (indices.length > 0) {
+        budgets[indices[0]].above += STEP;
+      }
+    } else if (direction === 'down') {
+      // The hunk ABOVE the bar:
+      //   bottom bar: hunkIndex IS the hunk above
+      //   between bar: hunkIndex is the hunk below, so above = hunkIndex - 1
+      const aboveIdx = position === 'bottom' ? hunkIndex : hunkIndex - 1;
+      const aboveHunk = file.hunks[Math.max(0, aboveIdx)];
+      const indices = findOriginalIndices(aboveHunk);
+      if (indices.length > 0) {
+        budgets[indices[indices.length - 1]].below += STEP;
+      }
+    } else {
+      // 'all' — expand both sides fully
+      if (position === 'top') {
+        const indices = findOriginalIndices(currentHunk);
+        if (indices.length > 0) budgets[indices[0]].above = MAX_CONTEXT;
+      } else if (position === 'bottom') {
+        const indices = findOriginalIndices(currentHunk);
+        if (indices.length > 0) budgets[indices[indices.length - 1]].below = MAX_CONTEXT;
+      } else {
+        // between: expand below of hunk above AND above of hunk below
+        const aboveHunk = file.hunks[hunkIndex - 1];
+        const aboveIndices = findOriginalIndices(aboveHunk);
+        if (aboveIndices.length > 0) budgets[aboveIndices[aboveIndices.length - 1]].below = MAX_CONTEXT;
+        const belowIndices = findOriginalIndices(currentHunk);
+        if (belowIndices.length > 0) budgets[belowIndices[0]].above = MAX_CONTEXT;
+      }
+    }
+
+    // --- Pick scroll anchor ---
     const scrollContainer = document.querySelector<HTMLElement>(
       '[data-scroll-container="diff"]'
     );
@@ -142,9 +214,6 @@ export default function FileSection({
       if (direction === 'up') {
         anchorLine = getFirstLine(hunkIndex);
       } else if (direction === 'down') {
-        // The hunk above the bar:
-        //   bottom bar: hunkIndex IS the hunk above
-        //   between bar: hunkIndex is the hunk below, so above = hunkIndex - 1
         const aboveIdx = position === 'bottom' ? hunkIndex : hunkIndex - 1;
         anchorLine = getLastLine(Math.max(0, aboveIdx));
       } else {
@@ -167,18 +236,36 @@ export default function FileSection({
       }
     }
 
+    // --- Fetch (if needed) and trim ---
+    const maxBudget = Math.max(...budgets.flatMap(b => [b.above, b.below]), 0);
+
     setExpandLoading(true);
-    const result = await expandFileContext(filePath, newLevel);
-    setExpandLoading(false);
-    if (result) {
-      setContextLevel(newLevel);
-      if (result.totalLines > 0) {
-        setTotalLines(result.totalLines);
+
+    let rawHunks: DiffHunk[] | null = null;
+    let newTotalLines = totalLines;
+
+    if (maxBudget > lastRequestedContextRef.current || !rawHunksRef.current) {
+      // Need fresh data from git
+      const result = await expandFileContext(filePath, maxBudget);
+      if (!result) {
+        setExpandLoading(false);
+        scrollCompensationRef.current = null;
+        return;
       }
+      rawHunks = result.hunks;
+      if (result.totalLines > 0) newTotalLines = result.totalLines;
+      rawHunksRef.current = rawHunks;
+      lastRequestedContextRef.current = maxBudget;
     } else {
-      scrollCompensationRef.current = null;
+      // Re-trim existing cached data
+      rawHunks = rawHunksRef.current;
     }
-  }, [isExpandable, expandLoading, contextLevel, filePath, expandFileContext, file.hunks]);
+
+    const trimmed = trimHunkContext(rawHunks, originalRanges, budgets);
+    updateFileHunks(filePath, trimmed);
+    setTotalLines(newTotalLines);
+    setExpandLoading(false);
+  }, [isExpandable, expandLoading, filePath, expandFileContext, updateFileHunks, file.hunks, totalLines]);
 
   // Effective view mode: added/deleted files are forced to unified view even when viewMode is 'split'
   const effectiveViewMode = viewMode === 'split' && (file.changeType === 'added' || file.changeType === 'deleted')
