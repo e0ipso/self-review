@@ -1,6 +1,7 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback, createContext, useContext } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import type { Components } from 'react-markdown';
 import { MessageSquarePlus } from 'lucide-react';
 import Prism from 'prismjs';
@@ -9,6 +10,12 @@ import { useReview } from '../../context/ReviewContext';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
+
+// ===== Nesting Context =====
+// Tracks whether we're inside a block that already has a gutter wrapper,
+// so nested elements (li inside ul, p inside blockquote) don't duplicate it.
+
+const GutterNestingContext = createContext(false);
 
 // ===== Mermaid Block =====
 
@@ -101,8 +108,11 @@ function BlockWrapper({
   tagProps,
 }: BlockWrapperProps) {
   const { getCommentsForFile } = useReview();
+  const isNested = useContext(GutterNestingContext);
 
-  if (startLine === undefined || endLine === undefined) {
+  // If nested inside another gutter-wrapped block, or no position data,
+  // render the tag directly without a gutter row.
+  if (isNested || startLine === undefined || endLine === undefined) {
     return <Tag className={className} {...tagProps}>{children}</Tag>;
   }
 
@@ -120,34 +130,53 @@ function BlockWrapper({
     commentRange.end >= startLine &&
     commentRange.end <= endLine;
 
-  return (
-    <>
-      <div
-        className='rendered-block flex group/rendered-block'
-        data-source-start-line={startLine}
-        data-source-end-line={endLine}
+  // Void elements (hr, img, etc.) can't have children — wrap in a div instead
+  const isVoid = Tag === 'hr';
+
+  const gutter = (
+    <div
+      className='rendered-gutter absolute left-0 top-0 w-16 text-right pr-2 select-none cursor-pointer text-[11px] text-muted-foreground/70'
+      style={{ lineHeight: 'inherit' }}
+      onMouseDown={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        onGutterMouseDown(startLine, endLine);
+      }}
+    >
+      <button
+        className='absolute left-0 top-0 h-[1lh] flex items-center justify-center w-7 opacity-0 group-hover/rendered-block:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
+        tabIndex={-1}
       >
-        {/* Gutter cell */}
+        <MessageSquarePlus className='h-4 w-4' />
+      </button>
+      <span className='pointer-events-none'>{rangeLabel}</span>
+    </div>
+  );
+
+  return (
+    <GutterNestingContext.Provider value={true}>
+      {isVoid ? (
         <div
-          className='rendered-gutter w-16 flex-shrink-0 text-right pr-2 pt-1 select-none cursor-pointer text-[11px] leading-[22px] text-muted-foreground/70 relative'
-          onMouseDown={e => {
-            e.preventDefault();
-            onGutterMouseDown(startLine, endLine);
-          }}
+          className='rendered-block group/rendered-block relative'
+          data-source-start-line={startLine}
+          data-source-end-line={endLine}
+          style={{ paddingLeft: '4rem' }}
         >
-          <button
-            className='absolute left-0 top-1 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/rendered-block:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
-            tabIndex={-1}
-          >
-            <MessageSquarePlus className='h-4 w-4' />
-          </button>
-          <span className='pointer-events-none'>{rangeLabel}</span>
+          {gutter}
+          <Tag className={className} {...tagProps} />
         </div>
-        {/* Content */}
-        <div className='flex-1 min-w-0'>
-          <Tag className={className} {...tagProps}>{children}</Tag>
-        </div>
-      </div>
+      ) : (
+        <Tag
+          className={`rendered-block group/rendered-block relative ${className || ''}`}
+          data-source-start-line={startLine}
+          data-source-end-line={endLine}
+          style={{ paddingLeft: '4rem' }}
+          {...tagProps}
+        >
+          {gutter}
+          {children}
+        </Tag>
+      )}
 
       {/* Existing comments for this block */}
       {blockComments.map(comment => (
@@ -174,7 +203,7 @@ function BlockWrapper({
           />
         </div>
       )}
-    </>
+    </GutterNestingContext.Provider>
   );
 }
 
@@ -278,7 +307,11 @@ export default function RenderedMarkdownView({
 
   return (
     <div className='prose dark:prose-invert max-w-none p-4 rendered-markdown-view'>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        components={components}
+      >
         {content}
       </ReactMarkdown>
     </div>

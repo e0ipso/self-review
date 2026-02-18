@@ -16,6 +16,9 @@ container before running the e2e tests.
 - **React + TypeScript** (renderer)
 - **shadcn/ui** (UI components, built on Radix primitives)
 - **Prism.js** (syntax highlighting)
+- **react-markdown** + **remark-gfm** (rendered markdown view with AST positions)
+- **mermaid** (Mermaid diagram rendering)
+- **@tailwindcss/typography** (prose styling for rendered markdown)
 - **Node.js** (main process: CLI, git, IPC, file I/O)
 - **Electron Forge** (build/packaging)
 
@@ -61,6 +64,7 @@ self-review/
 │           │   ├── UnifiedView.tsx    # Single-column unified diff rendering
 │           │   ├── HunkHeader.tsx     # @@ separator rendering
 │           │   ├── ExpandContextBar.tsx # Expand context buttons between hunks
+│           │   ├── RenderedMarkdownView.tsx # Rendered markdown with source-line-mapped gutter
 │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
 │           └── Comments/
 │               ├── CommentInput.tsx    # Text area + category selector + add/cancel
