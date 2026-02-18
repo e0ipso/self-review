@@ -10,6 +10,7 @@ import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
 import ExpandContextBar from './ExpandContextBar';
 import { getLineBg, getGutterBg } from '../../utils/diff-styles';
+import EmptyLinePane from './EmptyLinePane';
 
 export interface SplitViewProps {
   file: DiffFile;
@@ -117,12 +118,7 @@ export default function SplitView({
     hasComment = false
   ) => {
     if (!line) {
-      return (
-        <div className='w-1/2 flex'>
-          <div className='w-10 flex-shrink-0 bg-muted/20' />
-          <div className='flex-1 bg-muted/10' />
-        </div>
-      );
+      return <EmptyLinePane />;
     }
 
     const lineNumber = side === 'old' ? line.oldLineNumber : line.newLineNumber;
@@ -245,19 +241,13 @@ export default function SplitView({
                   {row.oldLine ? (
                     renderLineCell(row.oldLine, 'old', oldComments.length > 0)
                   ) : (
-                    <div className='w-1/2 flex'>
-                      <div className='w-10 flex-shrink-0 bg-muted/20' />
-                      <div className='flex-1 bg-muted/10' />
-                    </div>
+                    <EmptyLinePane />
                   )}
                   {/* New side (right) */}
                   {row.newLine ? (
                     renderLineCell(row.newLine, 'new', newComments.length > 0)
                   ) : (
-                    <div className='w-1/2 flex'>
-                      <div className='w-10 flex-shrink-0 bg-muted/20' />
-                      <div className='flex-1 bg-muted/10' />
-                    </div>
+                    <EmptyLinePane />
                   )}
                 </div>
 
