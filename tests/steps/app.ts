@@ -246,9 +246,25 @@ export async function closeAppWindow(): Promise<void> {
 export async function cleanup(): Promise<void> {
   if (electronApp) {
     try {
-      electronApp.process().kill();
+      const proc = electronApp.process();
+      try {
+        proc.kill();
+      } catch {
+        // Process may already be dead
+      }
+      // Wait for the process to fully exit before continuing, so the next
+      // test doesn't race against a dying Electron instance.
+      await new Promise<void>(resolve => {
+        if (proc.exitCode !== null || proc.killed) {
+          resolve();
+          return;
+        }
+        const timer = setTimeout(resolve, 3000);
+        proc.on('close', () => { clearTimeout(timer); resolve(); });
+      });
     } catch {
-      // Process may already be dead
+      // ElectronApplication may already be disposed (e.g. process crashed
+      // during the test). Accessing .process() on a disposed instance throws.
     }
     electronApp = null;
     appPage = null;
