@@ -5,11 +5,12 @@ Feature: File Tree Navigation
 
   Background:
     Given a git repository with changes to the following files:
-      | file              | change_type | additions | deletions |
-      | src/auth/login.ts | modified    | 10        | 3         |
-      | src/config.ts     | modified    | 25        | 0         |
-      | src/legacy.ts     | deleted     | 0         | 40        |
-      | README.md         | modified    | 2         | 1         |
+      | file               | change_type | additions | deletions |
+      | src/auth/login.ts  | modified    | 10        | 3         |
+      | src/config.ts      | modified    | 25        | 0         |
+      | src/legacy.ts      | deleted     | 0         | 40        |
+      | README.md          | modified    | 2         | 1         |
+      | src/new-feature.ts | added       | 20        | 0         |
     And I launch self-review
 
   Scenario: Clicking a file in the tree scrolls to that file's section
@@ -30,7 +31,7 @@ Feature: File Tree Navigation
   Scenario: Clearing file search restores the full list
     When I type "auth" in the file tree search input
     And I clear the file tree search input
-    Then the file tree should list 4 files
+    Then the file tree should list 5 files
 
   Scenario: File search with no matches shows empty list
     When I type "nonexistent" in the file tree search input

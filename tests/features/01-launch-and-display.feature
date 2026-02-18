@@ -5,17 +5,18 @@ Feature: App Launch and Diff Display
 
   Background:
     Given a git repository with changes to the following files:
-      | file              | change_type | additions | deletions |
-      | src/auth/login.ts | modified    | 10        | 3         |
-      | src/config.ts     | modified    | 25        | 0         |
-      | src/legacy.ts     | deleted     | 0         | 40        |
-      | README.md         | modified    | 2         | 1         |
+      | file               | change_type | additions | deletions |
+      | src/auth/login.ts  | modified    | 10        | 3         |
+      | src/config.ts      | modified    | 25        | 0         |
+      | src/legacy.ts      | deleted     | 0         | 40        |
+      | README.md          | modified    | 2         | 1         |
+      | src/new-feature.ts | added       | 20        | 0         |
 
   Scenario: App displays diff on launch
     When I launch self-review
     Then the Electron window should be visible
-    And the file tree should list 4 files
-    And the diff viewer should show 4 file sections
+    And the file tree should list 5 files
+    And the diff viewer should show 5 file sections
 
   Scenario: File tree shows correct metadata for each file
     When I launch self-review
@@ -27,11 +28,12 @@ Feature: App Launch and Diff Display
   Scenario: Diff viewer renders file sections in order
     When I launch self-review
     Then the diff viewer should show file sections in this order:
-      | file              |
-      | README.md         |
-      | src/auth/login.ts |
-      | src/config.ts     |
-      | src/legacy.ts     |
+      | file               |
+      | README.md          |
+      | src/auth/login.ts  |
+      | src/config.ts      |
+      | src/legacy.ts      |
+      | src/new-feature.ts |
 
   Scenario: Diff viewer shows syntax-highlighted code
     When I launch self-review

@@ -48,13 +48,13 @@ When(
       .filter({ hasText: commentBody });
     await comment.first().waitFor({ state: 'visible', timeout: 15000 });
     await comment.first().hover();
-    // Wait for hover action buttons to become visible
-    await comment.first().locator('button:has(.lucide-pencil), button:has(.lucide-trash-2)').first()
-      .waitFor({ state: 'visible', timeout: 3000 });
-    if (action === 'Edit') {
-      await comment.first().locator('button:has(.lucide-pencil)').click({ force: true });
-    } else if (action === 'Delete') {
-      await comment.first().locator('button:has(.lucide-trash-2)').click({ force: true });
+    // Wait for hover action buttons to become visible (use sr-only text for accessible name)
+    const actionBtn = comment.first().getByRole('button', { name: action });
+    await actionBtn.waitFor({ state: 'visible', timeout: 3000 });
+    await actionBtn.click();
+    if (action === 'Delete') {
+      // Wait for the comment to be removed from the DOM after deletion
+      await comment.first().waitFor({ state: 'detached', timeout: 5000 });
     }
   }
 );

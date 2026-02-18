@@ -15,12 +15,12 @@ Feature: XML Output
 
   Scenario: Empty review produces valid XML with all files
     When I launch self-review
-    And the file tree should list 5 files
+    And the file tree should list 6 files
     And I click "Finish Review"
     Then the output file should exist
     And the output file should contain valid XML
     And the XML should have a root element "review" with namespace "urn:self-review:v1"
-    And the XML should contain 5 file elements
+    And the XML should contain 6 file elements
     And the XML "review" element should have a "timestamp" attribute
     And the XML "review" element should have a "git-diff-args" attribute
     And the XML "review" element should have a "repository" attribute

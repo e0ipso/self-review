@@ -4,16 +4,20 @@ Feature: Rendered Markdown View
   So that I can review formatted content more naturally
 
   Scenario: New markdown file shows rendered toggle
-    Given a git repository with changes to the following files:
-      | file       | change_type | additions | deletions |
-      | README.md  | added       | 20        | 0         |
+    Given a git repository with a new markdown file "README.md" containing:
+      """
+      # Hello World
+
+      Some content here.
+      """
     And I launch self-review
     Then I should see a "Rendered" toggle in the file header for "README.md"
 
   Scenario: Non-markdown file does not show rendered toggle
-    Given a git repository with changes to the following files:
-      | file          | change_type | additions | deletions |
-      | src/index.ts  | added       | 15        | 0         |
+    Given a git repository with a new file "src/index.ts" containing:
+      """
+      export const main = () => console.log('hello');
+      """
     And I launch self-review
     Then I should not see a "Rendered" toggle in the file header for "src/index.ts"
 
@@ -25,9 +29,12 @@ Feature: Rendered Markdown View
     Then I should not see a "Rendered" toggle in the file header for "README.md"
 
   Scenario: Toggle switches to rendered view
-    Given a git repository with changes to the following files:
-      | file       | change_type | additions | deletions |
-      | README.md  | added       | 20        | 0         |
+    Given a git repository with a new markdown file "README.md" containing:
+      """
+      # Hello World
+
+      Some content here.
+      """
     And I launch self-review
     When I click the "Rendered" toggle for "README.md"
     Then I should see the markdown rendered as formatted HTML
@@ -56,7 +63,7 @@ Feature: Rendered Markdown View
       A paragraph of text.
       """
     And I launch self-review
-    And I switch to rendered view for "README.md"
+    And I click the "Rendered" toggle for "README.md"
     When I click on the gutter for a paragraph block
     Then the comment input should open with the correct line range
 
@@ -68,9 +75,9 @@ Feature: Rendered Markdown View
       A paragraph of text.
       """
     And I launch self-review
-    And I switch to rendered view for "README.md"
+    And I click the "Rendered" toggle for "README.md"
     When I add a comment on the paragraph block
-    And I switch to raw view for "README.md"
+    And I click the "Raw" toggle for "README.md"
     Then the comment should appear at the same source lines in the raw view
 
   Scenario: Mermaid code blocks render as SVG diagrams
