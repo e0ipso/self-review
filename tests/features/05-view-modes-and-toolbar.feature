@@ -40,8 +40,8 @@ Feature: View Modes and Toolbar
     And the "src/config.ts" file section should still be expanded
 
   Scenario: Toolbar displays diff stats summary
-    Then the toolbar should show "4 files changed"
-    And the toolbar should show additions count "+49"
+    Then the toolbar should show "5 files changed"
+    And the toolbar should show additions count "+69"
     And the toolbar should show deletions count "-51"
 
   Scenario: Toggle theme to dark mode

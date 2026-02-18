@@ -32,7 +32,7 @@ Feature: Empty Diff Help Message
       | src/index.ts  | modified    | 5         | 2         |
     When I launch self-review
     Then the diff viewer should not display an empty diff help message
-    And the diff viewer should show 4 file sections
+    And the diff viewer should show 5 file sections
 
   Scenario: File tree shows empty state alongside help message
     Given a git repository with no changes

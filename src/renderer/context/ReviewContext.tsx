@@ -3,6 +3,7 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useMemo,
   ReactNode,
@@ -79,11 +80,12 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
   const diffSourceRef = useRef(diffSource);
   const filesRef = useRef(reviewState.files);
 
-  // Update refs when values change
-  useEffect(() => {
+  // Update refs when values change — use useLayoutEffect so refs are
+  // current before any IPC handler (e.g. review:request) can read them.
+  useLayoutEffect(() => {
     diffSourceRef.current = diffSource;
   }, [diffSource]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     filesRef.current = reviewState.files;
   }, [reviewState.files]);
 
