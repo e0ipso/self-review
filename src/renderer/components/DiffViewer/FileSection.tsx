@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 import SplitView from './SplitView';
 import UnifiedView from './UnifiedView';
+import RenderedMarkdownView from './RenderedMarkdownView';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
+import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import {
   trimHunkContext,
   getHunkChangeRange,
@@ -53,7 +55,10 @@ export default function FileSection({
     side: 'old' | 'new';
   } | null>(null);
   const [showingFileComment, setShowingFileComment] = useState(false);
+  const [markdownViewMode, setMarkdownViewMode] = useState<'raw' | 'rendered'>('raw');
   const sectionRef = useRef<HTMLDivElement>(null);
+
+  const isEligibleForRenderedView = file.changeType === 'added' && /\.(md|markdown)$/i.test(file.newPath || file.oldPath || '');
 
   const filePath = file.newPath || file.oldPath;
   const comments = getCommentsForFile(filePath);
@@ -648,6 +653,25 @@ export default function FileSection({
           )}
         </span>
 
+        {/* Raw/Rendered toggle for eligible markdown files */}
+        {isEligibleForRenderedView && (
+          <ToggleGroup
+            type='single'
+            value={markdownViewMode}
+            onValueChange={(v) => v && setMarkdownViewMode(v as 'raw' | 'rendered')}
+            size='sm'
+            className='h-6'
+            onClick={e => e.stopPropagation()}
+          >
+            <ToggleGroupItem value='raw' aria-label='Raw view' className='text-[10px] h-6 px-1.5'>
+              Raw
+            </ToggleGroupItem>
+            <ToggleGroupItem value='rendered' aria-label='Rendered view' className='text-[10px] h-6 px-1.5'>
+              Rendered
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )}
+
         {/* Comment count */}
         {comments.length > 0 && (
           <span className='inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums'>
@@ -745,6 +769,16 @@ export default function FileSection({
             <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
               No changes to display
             </div>
+          ) : markdownViewMode === 'rendered' && isEligibleForRenderedView ? (
+            <RenderedMarkdownView
+              file={file}
+              commentRange={commentRange}
+              onCancelComment={handleCancelComment}
+              onCommentSaved={handleCommentSaved}
+              onGutterMouseDown={(startLine, endLine) => {
+                handleCommentRange(startLine, endLine, 'new');
+              }}
+            />
           ) : viewMode === 'split' && file.changeType !== 'added' && file.changeType !== 'deleted' ? (
             <SplitView
               file={file}
