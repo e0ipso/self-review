@@ -6,13 +6,7 @@ import { writeFileSync, existsSync, statSync } from 'fs';
 import { execSync } from 'child_process';
 import { resolve, join } from 'path';
 import { parseCliArgs, checkEarlyExit } from './cli';
-import {
-  runGitDiffAsync,
-  getRepoRootAsync,
-  getUntrackedFilesAsync,
-  generateUntrackedDiffs,
-} from './git';
-import { parseDiff } from './diff-parser';
+import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
 import { parseReviewXml } from './xml-parser';
@@ -201,41 +195,8 @@ async function initializeApp() {
       // Git mode: existing flow
       console.error('[main] Git diff args:', gitDiffArgs.join(' '));
 
-      console.error('[main] Getting repository root');
-      const repository = await getRepoRootAsync();
-      console.error('[main] Repository root:', repository);
-
-      console.error('[main] Running git diff');
-      const rawDiff = await runGitDiffAsync(gitDiffArgs);
-      console.error('[main] Git diff complete, size:', rawDiff.length, 'bytes');
-
-      console.error('[main] Parsing diff');
-      const files = parseDiff(rawDiff);
-      console.error('[main] Diff parsed:', files.length, 'files');
-
-      console.error('[main] Fetching untracked files');
-      const untrackedPaths = await getUntrackedFilesAsync();
-      console.error('[main] Found', untrackedPaths.length, 'untracked files');
-
-      let allFiles = files;
-      if (untrackedPaths.length > 0) {
-        const untrackedDiffStr = generateUntrackedDiffs(
-          untrackedPaths,
-          repository
-        );
-        if (untrackedDiffStr.length > 0) {
-          const untrackedFiles = parseDiff(untrackedDiffStr);
-          for (const file of untrackedFiles) {
-            file.isUntracked = true;
-          }
-          allFiles = [...files, ...untrackedFiles];
-          console.error(
-            '[main] Added',
-            untrackedFiles.length,
-            'untracked file diffs'
-          );
-        }
-      }
+      const { files: allFiles, repository } = await loadGitDiffWithUntracked(gitDiffArgs);
+      console.error('[main] Loaded', allFiles.length, 'files from git diff');
 
       diffData = {
         files: allFiles,

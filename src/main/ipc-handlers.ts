@@ -229,29 +229,8 @@ export function registerIpcHandlers(): void {
       let payload: DiffLoadPayload;
 
       if (isGitRepo) {
-        // Git mode: import and use git functions
-        const { runGitDiffAsync, getRepoRootAsync, getUntrackedFilesAsync, generateUntrackedDiffs } = await import('./git');
-        const { parseDiff } = await import('./diff-parser');
-
-        const repository = await getRepoRootAsync();
-        const rawDiff = await runGitDiffAsync([]);
-        const files = parseDiff(rawDiff);
-
-        const untrackedPaths = await getUntrackedFilesAsync();
-        let allFiles = files;
-        if (untrackedPaths.length > 0) {
-          const untrackedDiffStr = generateUntrackedDiffs(
-            untrackedPaths,
-            repository
-          );
-          if (untrackedDiffStr.length > 0) {
-            const untrackedFiles = parseDiff(untrackedDiffStr);
-            for (const file of untrackedFiles) {
-              file.isUntracked = true;
-            }
-            allFiles = [...files, ...untrackedFiles];
-          }
-        }
+        const { loadGitDiffWithUntracked } = await import('./git-diff-loader');
+        const { files: allFiles, repository } = await loadGitDiffWithUntracked([]);
 
         payload = {
           files: allFiles,

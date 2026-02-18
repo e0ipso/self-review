@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MessageSquarePlus } from 'lucide-react';
-import type { DiffFile, DiffLine } from '../../../shared/types';
+import type { DiffFile } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
@@ -9,6 +9,7 @@ import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
 import ExpandContextBar from './ExpandContextBar';
+import { getLineBg, getGutterBg } from '../../utils/diff-styles';
 
 export interface UnifiedViewProps {
   file: DiffFile;
@@ -42,20 +43,6 @@ export default function UnifiedView({
   const { getCommentsForLine } = useReview();
   const { config } = useConfig();
   const language = getLanguageFromPath(file.newPath || file.oldPath);
-
-  const getLineBg = (line: DiffLine) => {
-    if (line.type === 'addition')
-      return 'bg-emerald-50/70 dark:bg-emerald-900/40';
-    if (line.type === 'deletion') return 'bg-red-50/70 dark:bg-red-900/40';
-    return '';
-  };
-
-  const getGutterBg = (line: DiffLine) => {
-    if (line.type === 'addition')
-      return 'bg-emerald-100/80 dark:bg-emerald-900/50';
-    if (line.type === 'deletion') return 'bg-red-100/80 dark:bg-red-900/50';
-    return 'bg-muted/30';
-  };
 
   // Pre-compute row offsets per hunk for sequential row indexing
   const hunkRowOffsets = useMemo(() => {

@@ -11,76 +11,10 @@ import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
-import { Code2, Paperclip, X, ImageIcon } from 'lucide-react';
+import { Code2, Paperclip, ImageIcon } from 'lucide-react';
 import CategorySelector from './CategorySelector';
-
-async function resizeImageIfNeeded(blob: Blob, maxDimension = 1920): Promise<Blob> {
-  const bitmap = await createImageBitmap(blob);
-  try {
-    if (bitmap.width <= maxDimension && bitmap.height <= maxDimension) {
-      return blob;
-    }
-    const scale = Math.min(maxDimension / bitmap.width, maxDimension / bitmap.height);
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    return await new Promise<Blob>((resolve) => {
-      canvas.toBlob((resized) => resolve(resized || blob), blob.type);
-    });
-  } finally {
-    bitmap.close();
-  }
-}
-
-async function processImageFile(file: File | Blob): Promise<Attachment> {
-  const resized = await resizeImageIfNeeded(file);
-  const arrayBuffer = await resized.arrayBuffer();
-  const mediaType = file.type || 'image/png';
-  const ext = mediaType.split('/')[1] || 'png';
-  return {
-    id: crypto.randomUUID(),
-    fileName: `image.${ext}`,
-    mediaType,
-    data: arrayBuffer,
-  };
-}
-
-function AttachmentThumbnail({ attachment, onRemove }: { attachment: Attachment; onRemove: () => void }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!attachment.data) return;
-    const objectUrl = URL.createObjectURL(new Blob([attachment.data]));
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [attachment.id, attachment.data]);
-
-  return (
-    <div className='relative group'>
-      {url ? (
-        <img
-          src={url}
-          alt='Attachment preview'
-          className='h-16 w-16 object-cover rounded border'
-        />
-      ) : (
-        <div className='h-16 w-16 flex items-center justify-center rounded border bg-muted'>
-          <ImageIcon className='h-4 w-4 text-muted-foreground' />
-        </div>
-      )}
-      <Button
-        variant='ghost'
-        size='icon'
-        className='absolute -top-2 -right-2 h-5 w-5 rounded-full bg-background border shadow-sm opacity-0 group-hover:opacity-100'
-        onClick={onRemove}
-      >
-        <X className='h-3 w-3' />
-      </Button>
-    </div>
-  );
-}
+import { processImageFile } from '../../utils/image-utils';
+import AttachmentThumbnail from './AttachmentThumbnail';
 
 export interface CommentInputProps {
   filePath: string;
