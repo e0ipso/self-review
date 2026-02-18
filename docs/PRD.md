@@ -43,6 +43,9 @@ A single developer working locally with AI coding agents. They are comfortable w
 | UI components | shadcn/ui | Accessible, composable components built on Radix primitives |
 | Syntax highlighting | Prism.js | Broad language coverage, themeable, lightweight |
 | Backend | Node.js | Electron's main process, handles CLI, git, IPC, file I/O |
+| Markdown rendering | react-markdown + remark-gfm | Rendered markdown view with AST position data for line mapping |
+| Diagram rendering | mermaid | Renders Mermaid code blocks as inline SVG diagrams |
+| Prose styling | @tailwindcss/typography | Typography classes for rendered markdown content |
 | Build system | Electron Forge or electron-builder | Packaging for macOS and Linux |
 
 ### 2.1 Platform Support
@@ -283,6 +286,8 @@ Two view modes, togglable via a control in the toolbar:
 The selected view mode persists for the session and can be set as a default in configuration.
 
 **Added/deleted file override:** Files with change type `added` or `deleted` always render in unified view, regardless of the selected view mode. In split view, these files would waste half the screen — an added file shows content only on the right pane with the left pane empty, and a deleted file shows content only on the left pane with the right pane empty. Forcing unified view for these files uses the full width for the content that matters.
+
+**Rendered markdown view:** New markdown files (`.md`/`.markdown` with change type `added`) show a per-file "Raw / Rendered" toggle in the file header. When toggled to "Rendered", the file content is displayed as formatted HTML using `react-markdown` with a source-line-mapped gutter. Each rendered block (paragraph, heading, list, code block, table, etc.) is annotated with its source line range from the markdown AST, enabling click-to-comment on rendered content. Mermaid code blocks render as inline SVG diagrams. Comments placed in the rendered view use the same `LineRange` contract as the raw diff view, so switching between views preserves comment placement.
 
 #### 5.3.3 Syntax Highlighting
 
