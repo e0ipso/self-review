@@ -42,3 +42,20 @@ For each file:
    often implies a change is needed.
 
 3. **Complete all changes for one file before moving to the next.**
+
+## 5. Summary
+
+After all feedback has been applied, output a clearly delimited summary section.
+
+### Changes Applied
+
+List each change that was made, grouped by logical unit of work (e.g., "refactored validation logic",
+"updated API error handling") rather than by file. Keep entries concise (one line per change).
+
+### Questions & Answers
+
+For every `question` category comment in the review:
+
+- Quote the question.
+- Provide your answer.
+- State explicitly whether the question resulted in a code change (`Changed` or `No change`).
