@@ -2,7 +2,7 @@ import React, { useMemo, useCallback, createContext, useContext } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import type { Components } from 'react-markdown';
+import type { Components, ExtraProps } from 'react-markdown';
 import { MessageSquarePlus } from 'lucide-react';
 import Prism from 'prismjs';
 import type { DiffFile, LineRange } from '../../../shared/types';
@@ -186,7 +186,7 @@ export default function RenderedMarkdownView({
   // Factory for block-level renderers
   const createBlockRenderer = useCallback(
     (tag: keyof React.JSX.IntrinsicElements) => {
-      return function BlockRenderer({ node, children, ...props }: any) {
+      return function BlockRenderer({ node, children, ...props }: React.HTMLAttributes<HTMLElement> & ExtraProps) {
         const startLine = node?.position?.start?.line;
         const endLine = node?.position?.end?.line;
         return (
@@ -212,7 +212,7 @@ export default function RenderedMarkdownView({
 
   // Code renderer with Prism highlighting + Mermaid support
   const CodeRenderer = useCallback(
-    ({ className, children, node, ...props }: any) => {
+    ({ className, children, node, ...props }: React.HTMLAttributes<HTMLElement> & ExtraProps) => {
       const match = /language-(\w+)/.exec(className || '');
       const lang = match ? match[1] : '';
       const code = String(children).replace(/\n$/, '');
