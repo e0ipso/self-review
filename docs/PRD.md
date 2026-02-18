@@ -296,6 +296,10 @@ Both old and new line numbers are displayed. In split view, each side shows its 
 
 Diff hunks (sections starting with `@@`) are rendered with a visual separator showing the hunk header (e.g., `@@ -10,7 +10,8 @@ function authenticate()`).
 
+#### 5.3.6 Expand Context
+
+In git mode, expand-context bars appear at hunk boundaries (above the first hunk, between consecutive hunks, and below the last hunk) allowing the reviewer to incrementally load more surrounding context lines. Clicking an expand button re-runs `git diff -U<N>` for the single file via IPC and replaces that file's hunks in the renderer. Expansion is directional: clicking "expand up" only adds lines above the hunk, and "expand down" only adds lines below, tracked per-hunk as `{ above, below }` context budgets. When the gap between hunks is small (20 lines or fewer), a single "Show N hidden lines" button replaces the directional buttons. Bars auto-hide when no more lines remain (determined by reading the file's total line count). This feature is scoped to git mode only and is not shown for untracked or binary files.
+
 ### 5.4 Commenting System
 
 The commenting system is the core interaction of the application. It closely mirrors GitHub's PR review commenting.
