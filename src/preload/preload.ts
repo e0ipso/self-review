@@ -8,6 +8,7 @@ import {
   ResumeLoadPayload,
   AppConfig,
   ReviewState,
+  ExpandContextRequest,
 } from '../shared/types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -68,4 +69,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   startDirectoryReview: (path: string) =>
     ipcRenderer.invoke(IPC.REVIEW_START_DIRECTORY, path),
+
+  expandContext: (request: ExpandContextRequest) =>
+    ipcRenderer.invoke(IPC.DIFF_EXPAND_CONTEXT, request),
 });

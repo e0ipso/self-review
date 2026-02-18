@@ -43,6 +43,7 @@ export interface ReviewContextValue {
     lineNumber: number,
     side: 'old' | 'new'
   ) => ReviewComment[];
+  expandFileContext: (filePath: string, contextLines: number) => Promise<{ totalLines: number } | null>;
 }
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
@@ -151,6 +152,27 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
     window.electronAPI.requestDiffData();
   }, []); // Empty dependency array - register only once
 
+  const expandFileContext = async (filePath: string, contextLines: number): Promise<{ totalLines: number } | null> => {
+    if (!window.electronAPI) return null;
+    try {
+      const response = await window.electronAPI.expandContext({ filePath, contextLines });
+      if (!response) return null;
+      setAllDiffFiles(prev =>
+        prev.map(f => {
+          const fPath = f.newPath || f.oldPath;
+          if (fPath === filePath) {
+            return { ...f, hunks: response.hunks };
+          }
+          return f;
+        })
+      );
+      return { totalLines: response.totalLines };
+    } catch (error) {
+      console.error('[ReviewContext] Failed to expand context:', error);
+      return null;
+    }
+  };
+
   return (
     <ReviewContext.Provider
       value={{
@@ -164,6 +186,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
         toggleViewed: reviewState.toggleViewed,
         getCommentsForFile: reviewState.getCommentsForFile,
         getCommentsForLine: reviewState.getCommentsForLine,
+        expandFileContext,
       }}
     >
       {children}

@@ -60,6 +60,7 @@ self-review/
 │           │   ├── SplitView.tsx      # Side-by-side diff rendering
 │           │   ├── UnifiedView.tsx    # Single-column unified diff rendering
 │           │   ├── HunkHeader.tsx     # @@ separator rendering
+│           │   ├── ExpandContextBar.tsx # Expand context buttons between hunks
 │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
 │           └── Comments/
 │               ├── CommentInput.tsx    # Text area + category selector + add/cancel
@@ -105,6 +106,7 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | `app:close-requested` | Main → Renderer | (none)      | Notify renderer that user tried to close the window |
 | `app:save-and-quit`   | Renderer → Main | (none)      | Save review to file and exit          |
 | `app:discard-and-quit` | Renderer → Main | (none)     | Exit without saving                   |
+| `diff:expand-context`  | Renderer → Main | `ExpandContextRequest` | Re-run git diff with more context for a single file |
 
 ## Shared Types
 

@@ -8,6 +8,7 @@ import SyntaxLine, { getLanguageFromPath } from './SyntaxLine';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
+import ExpandContextBar from './ExpandContextBar';
 
 export interface SplitViewProps {
   file: DiffFile;
@@ -20,6 +21,10 @@ export interface SplitViewProps {
   onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
+  onExpandContext?: (direction: 'up' | 'down' | 'all', hunkIndex: number, position: 'top' | 'between' | 'bottom') => void;
+  isExpandable?: boolean;
+  expandLoading?: boolean;
+  totalLines?: number | null;
 }
 
 interface SplitLineRow {
@@ -34,6 +39,10 @@ export default function SplitView({
   onDragStart,
   onCancelComment,
   onCommentSaved,
+  onExpandContext,
+  isExpandable,
+  expandLoading,
+  totalLines,
 }: SplitViewProps) {
   const { getCommentsForLine } = useReview();
   const { config } = useConfig();
@@ -178,10 +187,39 @@ export default function SplitView({
     );
   };
 
+  const computeGapBefore = (hunkIndex: number): number | undefined => {
+    if (!isExpandable) return undefined;
+    if (hunkIndex === 0) {
+      const start = Math.max(file.hunks[0].oldStart, file.hunks[0].newStart);
+      return start > 1 ? start - 1 : 0;
+    }
+    const prev = file.hunks[hunkIndex - 1];
+    const curr = file.hunks[hunkIndex];
+    return curr.newStart - (prev.newStart + prev.newLines);
+  };
+
   return (
     <div className='font-mono text-[13px] leading-[22px] split-view'>
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
+          {isExpandable && onExpandContext && hunkIndex === 0 && (file.hunks[0].oldStart > 1 || file.hunks[0].newStart > 1) && (
+            <ExpandContextBar
+              position='top'
+              hunkIndex={0}
+              gapSize={computeGapBefore(0)}
+              onExpand={onExpandContext}
+              loading={expandLoading}
+            />
+          )}
+          {isExpandable && onExpandContext && hunkIndex > 0 && (
+            <ExpandContextBar
+              position='between'
+              hunkIndex={hunkIndex}
+              gapSize={computeGapBefore(hunkIndex)}
+              onExpand={onExpandContext}
+              loading={expandLoading}
+            />
+          )}
           <HunkHeader header={hunk.header} />
           {buildSplitRows(hunk.lines).map((row, rowIndex) => {
             const oldLineNumber = row.oldLine?.oldLineNumber;
@@ -279,6 +317,22 @@ export default function SplitView({
           })}
         </div>
       ))}
+      {isExpandable && onExpandContext && (() => {
+        const lastIdx = file.hunks.length - 1;
+        const lastHunk = file.hunks[lastIdx];
+        const lastNewLine = lastHunk.newStart + lastHunk.newLines - 1;
+        const bottomGap = totalLines != null ? totalLines - lastNewLine : undefined;
+        if (bottomGap !== undefined && bottomGap <= 0) return null;
+        return (
+          <ExpandContextBar
+            position='bottom'
+            hunkIndex={lastIdx}
+            gapSize={bottomGap}
+            onExpand={onExpandContext}
+            loading={expandLoading}
+          />
+        );
+      })()}
     </div>
   );
 }

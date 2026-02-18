@@ -14,4 +14,5 @@ export const IPC = {
   ATTACHMENT_READ: 'attachment:read',
   DIALOG_PICK_DIRECTORY: 'dialog:pick-directory',
   REVIEW_START_DIRECTORY: 'review:start-directory',
+  DIFF_EXPAND_CONTEXT: 'diff:expand-context',
 } as const;

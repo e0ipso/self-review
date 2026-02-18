@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import type { DiffFile } from '../../../shared/types';
 import { useReview } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
@@ -30,7 +30,7 @@ export default function FileSection({
   expanded: controlledExpanded,
   onToggleExpanded,
 }: FileSectionProps) {
-  const { toggleViewed, getCommentsForFile, files } = useReview();
+  const { toggleViewed, getCommentsForFile, files, diffSource, expandFileContext } = useReview();
   const [internalExpanded, setInternalExpanded] = useState(true);
   const expanded =
     controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
@@ -52,6 +52,133 @@ export default function FileSection({
   const fileComments = comments.filter(c => c.lineRange === null);
   const fileState = files.find(f => f.path === filePath);
   const isViewed = fileState?.viewed || false;
+
+  // Expand context state
+  const isExpandable = diffSource.type === 'git' && !file.isUntracked && !file.isBinary;
+  const [expandLoading, setExpandLoading] = useState(false);
+  const [totalLines, setTotalLines] = useState<number | null>(null);
+  const [contextLevel, setContextLevel] = useState(() => {
+    if (diffSource.type === 'git') {
+      const match = diffSource.gitDiffArgs.match(/-U(\d+)|--unified=(\d+)/);
+      if (match) return parseInt(match[1] || match[2], 10);
+    }
+    return 3;
+  });
+
+  // Scroll compensation: keep the user looking at the same code after expansion.
+  // We anchor on a specific diff line that existed before expansion:
+  //   - Expand up: the first line of the hunk (it will shift down as new lines appear above)
+  //   - Expand down/all: the last line of the hunk (stays in place, new lines appear below)
+  // We record that line's position relative to the scroll container before expansion,
+  // then after React commits the new DOM, find the same line and adjust scrollTop.
+  const scrollCompensationRef = useRef<{
+    anchorLineNumber: number;
+    anchorSide: 'old' | 'new';
+    anchorOffsetFromContainerTop: number;
+    scrollTop: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    const compensation = scrollCompensationRef.current;
+    if (!compensation) return;
+    scrollCompensationRef.current = null;
+
+    const scrollContainer = document.querySelector<HTMLElement>(
+      '[data-scroll-container="diff"]'
+    );
+    if (!scrollContainer || !sectionRef.current) return;
+
+    // Find the anchor line element in the updated DOM
+    const selector = `[data-line-number="${compensation.anchorLineNumber}"][data-line-side="${compensation.anchorSide}"]`;
+    const anchorEl = sectionRef.current.querySelector<HTMLElement>(selector);
+    if (!anchorEl) return;
+
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const anchorRect = anchorEl.getBoundingClientRect();
+    const currentOffset = anchorRect.top - containerRect.top;
+    const drift = currentOffset - compensation.anchorOffsetFromContainerTop;
+    if (Math.abs(drift) > 1) {
+      scrollContainer.scrollTop = compensation.scrollTop + drift;
+    }
+  }, [file.hunks]);
+
+  const handleExpandContext = useCallback(async (direction: 'up' | 'down' | 'all', hunkIndex: number, position: 'top' | 'between' | 'bottom') => {
+    if (!isExpandable || expandLoading) return;
+    const newLevel = direction === 'all' ? 99999 : contextLevel + 5;
+
+    // Pick the anchor line — the existing context line the user is "looking at".
+    //
+    // Bar positions and their hunkIndex semantics:
+    //   top bar:     hunkIndex = 0 (the hunk below the bar)
+    //   between bar: hunkIndex = N (the hunk below the bar; hunk above is N-1)
+    //   bottom bar:  hunkIndex = lastIdx (the hunk above the bar)
+    //
+    // Anchor rules:
+    //   up:   first line of hunkIndex (the hunk below the bar)
+    //   down: last line of the hunk ABOVE the bar
+    //         - between bar: last line of hunkIndex - 1
+    //         - bottom bar:  last line of hunkIndex (it IS the hunk above)
+    //   all:  same as up
+    const scrollContainer = document.querySelector<HTMLElement>(
+      '[data-scroll-container="diff"]'
+    );
+    if (scrollContainer && sectionRef.current && file.hunks.length > 0) {
+      let anchorLine: { lineNumber: number; side: 'old' | 'new' } | null = null;
+
+      const getFirstLine = (hi: number) => {
+        const line = file.hunks[hi].lines[0];
+        return line.type === 'deletion'
+          ? { lineNumber: line.oldLineNumber!, side: 'old' as const }
+          : { lineNumber: line.newLineNumber!, side: 'new' as const };
+      };
+      const getLastLine = (hi: number) => {
+        const lines = file.hunks[hi].lines;
+        const line = lines[lines.length - 1];
+        return line.type === 'deletion'
+          ? { lineNumber: line.oldLineNumber!, side: 'old' as const }
+          : { lineNumber: line.newLineNumber!, side: 'new' as const };
+      };
+
+      if (direction === 'up') {
+        anchorLine = getFirstLine(hunkIndex);
+      } else if (direction === 'down') {
+        // The hunk above the bar:
+        //   bottom bar: hunkIndex IS the hunk above
+        //   between bar: hunkIndex is the hunk below, so above = hunkIndex - 1
+        const aboveIdx = position === 'bottom' ? hunkIndex : hunkIndex - 1;
+        anchorLine = getLastLine(Math.max(0, aboveIdx));
+      } else {
+        anchorLine = getFirstLine(hunkIndex);
+      }
+
+      if (anchorLine) {
+        const selector = `[data-line-number="${anchorLine.lineNumber}"][data-line-side="${anchorLine.side}"]`;
+        const anchorEl = sectionRef.current.querySelector<HTMLElement>(selector);
+        if (anchorEl) {
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const anchorRect = anchorEl.getBoundingClientRect();
+          scrollCompensationRef.current = {
+            anchorLineNumber: anchorLine.lineNumber,
+            anchorSide: anchorLine.side,
+            anchorOffsetFromContainerTop: anchorRect.top - containerRect.top,
+            scrollTop: scrollContainer.scrollTop,
+          };
+        }
+      }
+    }
+
+    setExpandLoading(true);
+    const result = await expandFileContext(filePath, newLevel);
+    setExpandLoading(false);
+    if (result) {
+      setContextLevel(newLevel);
+      if (result.totalLines > 0) {
+        setTotalLines(result.totalLines);
+      }
+    } else {
+      scrollCompensationRef.current = null;
+    }
+  }, [isExpandable, expandLoading, contextLevel, filePath, expandFileContext, file.hunks]);
 
   // Effective view mode: added/deleted files are forced to unified view even when viewMode is 'split'
   const effectiveViewMode = viewMode === 'split' && (file.changeType === 'added' || file.changeType === 'deleted')
@@ -539,6 +666,10 @@ export default function FileSection({
               onDragStart={handleDragStart}
               onCancelComment={handleCancelComment}
               onCommentSaved={handleCommentSaved}
+              onExpandContext={isExpandable ? handleExpandContext : undefined}
+              isExpandable={isExpandable}
+              expandLoading={expandLoading}
+              totalLines={totalLines}
             />
           ) : (
             <UnifiedView
@@ -548,6 +679,10 @@ export default function FileSection({
               onDragStart={handleDragStart}
               onCancelComment={handleCancelComment}
               onCommentSaved={handleCommentSaved}
+              onExpandContext={isExpandable ? handleExpandContext : undefined}
+              isExpandable={isExpandable}
+              expandLoading={expandLoading}
+              totalLines={totalLines}
             />
           )}
         </div>

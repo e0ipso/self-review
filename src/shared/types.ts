@@ -117,6 +117,18 @@ export interface ResumeLoadPayload {
   comments: ReviewComment[];
 }
 
+// ===== Expand Context Types =====
+
+export interface ExpandContextRequest {
+  filePath: string;
+  contextLines: number;
+}
+
+export interface ExpandContextResponse {
+  hunks: DiffHunk[];
+  totalLines: number;
+}
+
 // ===== Electron API (preload bridge) =====
 
 export interface ElectronAPI {
@@ -134,6 +146,7 @@ export interface ElectronAPI {
   discardAndQuit: () => void;
   pickDirectory: () => Promise<string | null>;
   startDirectoryReview: (path: string) => Promise<void>;
+  expandContext: (request: ExpandContextRequest) => Promise<ExpandContextResponse | null>;
 }
 
 declare global {

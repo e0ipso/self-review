@@ -11,6 +11,7 @@ import {
   AppConfig,
   ReviewState,
   ReviewComment,
+  ExpandContextRequest,
 } from '../shared/types';
 import { scanDirectory, scanFile } from './directory-scanner';
 
@@ -89,6 +90,91 @@ export function registerIpcHandlers(): void {
     }
     return result.filePaths[0];
   });
+
+  // Expand context for a single file by re-running git diff with more context lines
+  ipcMain.handle(
+    IPC.DIFF_EXPAND_CONTEXT,
+    async (_event, request: ExpandContextRequest) => {
+      if (!diffDataCache || diffDataCache.source.type !== 'git') {
+        return null;
+      }
+
+      try {
+        const { runGitDiffAsync } = await import('./git');
+        const { parseDiff } = await import('./diff-parser');
+
+        const source = diffDataCache.source as { type: 'git'; gitDiffArgs: string; repository: string };
+        const originalArgs = source.gitDiffArgs
+          .split(/\s+/)
+          .filter(a => a.length > 0);
+
+        // Strip existing -U / --unified= flags
+        const filteredArgs: string[] = [];
+        for (let i = 0; i < originalArgs.length; i++) {
+          const arg = originalArgs[i];
+          if (arg.match(/^-U\d+$/) || arg.match(/^--unified=\d+$/)) {
+            continue;
+          }
+          if (arg === '-U' || arg === '--unified') {
+            i++; // skip next arg (the number)
+            continue;
+          }
+          // Strip trailing -- and paths
+          if (arg === '--') {
+            break;
+          }
+          filteredArgs.push(arg);
+        }
+
+        const expandArgs = [
+          ...filteredArgs,
+          `-U${request.contextLines}`,
+          '--',
+          request.filePath,
+        ];
+
+        const rawDiff = await runGitDiffAsync(expandArgs);
+        const parsedFiles = parseDiff(rawDiff);
+
+        if (parsedFiles.length === 0) {
+          return null;
+        }
+
+        const expandedFile = parsedFiles[0];
+
+        // Count total lines in the working tree file for gap detection
+        let totalLines = 0;
+        try {
+          const content = await fs.promises.readFile(request.filePath, 'utf-8');
+          totalLines = content.split('\n').length;
+          // If file ends with newline, last split element is empty — don't count it
+          if (content.endsWith('\n')) totalLines--;
+        } catch {
+          // Can't determine line count — leave as 0 (bars will stay visible)
+        }
+
+        // Update the cache
+        diffDataCache = {
+          ...diffDataCache,
+          files: diffDataCache.files.map(f => {
+            const fPath = f.newPath || f.oldPath;
+            if (fPath === request.filePath) {
+              return { ...f, hunks: expandedFile.hunks };
+            }
+            return f;
+          }),
+        };
+
+        return { hunks: expandedFile.hunks, totalLines };
+      } catch (error) {
+        console.error(
+          `[ipc] Failed to expand context for ${request.filePath}:`,
+          error
+        );
+        return null;
+      }
+    }
+  );
 
   // Start a directory review from a picked path
   ipcMain.handle(
