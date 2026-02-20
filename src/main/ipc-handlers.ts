@@ -108,7 +108,13 @@ export function registerIpcHandlers(): void {
           .split(/\s+/)
           .filter(a => a.length > 0);
 
-        // Strip existing -U / --unified= flags
+        // Strip existing -U / --unified= flags, path separators, and
+        // positional path arguments.  When we add `-- filePath` below, git
+        // treats everything before `--` as a revision.  If the original
+        // args contained a bare path (e.g. `web/`) that git auto-resolved
+        // as a filesystem path, it would now be mis-interpreted as a
+        // revision and cause "bad revision" errors.  We filter those out
+        // because the specific file is already provided after `--`.
         const filteredArgs: string[] = [];
         for (let i = 0; i < originalArgs.length; i++) {
           const arg = originalArgs[i];
@@ -122,6 +128,20 @@ export function registerIpcHandlers(): void {
           // Strip trailing -- and paths
           if (arg === '--') {
             break;
+          }
+          // Skip positional args that are filesystem paths (not flags or
+          // revisions).  These are path-restriction args from the original
+          // invocation (e.g. `self-review web/`).  We already specify the
+          // target file after `--`, so including them would only cause git
+          // to misinterpret them as revisions.
+          if (!arg.startsWith('-')) {
+            try {
+              if (fs.existsSync(arg)) {
+                continue;
+              }
+            } catch {
+              // stat failed — keep the arg (likely a revision)
+            }
           }
           filteredArgs.push(arg);
         }
