@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { parseCliArgs, checkEarlyExit } from './cli';
+import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
 
 describe('cli', () => {
   const originalArgv = process.argv;
@@ -148,6 +148,41 @@ describe('cli', () => {
 
       expect(args.resumeFrom).toBe('review.xml');
       expect(args.gitDiffArgs).toEqual(['--staged']);
+    });
+  });
+
+  describe('normalizeGitDiffArgs', () => {
+    it('returns unchanged when no positional path args', () => {
+      const args = ['--staged', '--ignore-space-change'];
+      expect(normalizeGitDiffArgs(args, '/nonexistent')).toEqual(args);
+    });
+
+    it('returns unchanged for revision-style args', () => {
+      const args = ['main..feature'];
+      // 'main..feature' won't exist on the filesystem
+      expect(normalizeGitDiffArgs(args, '/nonexistent')).toEqual(args);
+    });
+
+    it('inserts -- before an existing path arg', () => {
+      // Use a directory that definitely exists
+      const args = ['src'];
+      const result = normalizeGitDiffArgs(args, process.cwd());
+      expect(result).toEqual(['--', 'src']);
+    });
+
+    it('preserves flags before the path arg', () => {
+      const args = ['--staged', 'src'];
+      const result = normalizeGitDiffArgs(args, process.cwd());
+      expect(result).toEqual(['--staged', '--', 'src']);
+    });
+
+    it('returns unchanged when -- is already present (idempotent)', () => {
+      const args = ['--staged', '--', 'src'];
+      expect(normalizeGitDiffArgs(args, process.cwd())).toEqual(args);
+    });
+
+    it('returns unchanged for empty array', () => {
+      expect(normalizeGitDiffArgs([], process.cwd())).toEqual([]);
     });
   });
 

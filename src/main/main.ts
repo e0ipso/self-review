@@ -5,7 +5,7 @@ import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import { writeFileSync, existsSync, statSync } from 'fs';
 import { execSync } from 'child_process';
 import { resolve, join } from 'path';
-import { parseCliArgs, checkEarlyExit } from './cli';
+import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
@@ -186,6 +186,10 @@ async function initializeApp() {
         .split(' ')
         .filter((arg: string) => arg.length > 0);
     }
+
+    // Normalize: insert `--` before bare path args so expand-context
+    // never confuses them with revisions.
+    gitDiffArgs = normalizeGitDiffArgs(gitDiffArgs);
 
     // Phase 4: Determine startup mode
     const mode = determineMode(gitDiffArgs);
