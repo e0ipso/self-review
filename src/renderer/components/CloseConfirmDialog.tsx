@@ -14,7 +14,7 @@ export default function CloseConfirmDialog() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    window.electronAPI.onCloseRequested(() => {
+    return window.electronAPI.onCloseRequested(() => {
       setOpen(true);
     });
   }, []);
