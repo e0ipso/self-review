@@ -105,12 +105,19 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     return unsubscribe;
   }, [isOpen]);
 
-  // Global keydown listener to handle Enter even when input loses focus
+  // Global keydown listener to handle Escape and Enter even when input loses focus
+  // (Chromium's findInPage can steal focus from the input)
   useEffect(() => {
     if (!isOpen) return;
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Only handle if target is not a text input/textarea
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClose();
+        return;
+      }
+
+      // Only handle Enter if target is not a text input/textarea
       const target = e.target as HTMLElement;
       if (
         target.tagName === 'INPUT' ||
@@ -132,7 +139,28 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
 
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, query, findNext, findPrevious]);
+  }, [isOpen, query, findNext, findPrevious, handleClose]);
+
+  // Auto-search when query changes
+  useEffect(() => {
+    if (!isOpen || !query) {
+      if (!query && lastSearchedQueryRef.current) {
+        window.electronAPI.stopFindInPage('clearSelection');
+        setActiveMatch(0);
+        setTotalMatches(0);
+        lastSearchedQueryRef.current = '';
+      }
+      return;
+    }
+
+    if (query !== lastSearchedQueryRef.current) {
+      // WORKAROUND: Chromium doesn't fire 'found-in-page' event for the first
+      // findInPage call with findNext: false. Call it twice to get the event.
+      window.electronAPI.findInPage({ text: query, forward: true, findNext: false });
+      window.electronAPI.findInPage({ text: query, forward: true, findNext: true });
+      lastSearchedQueryRef.current = query;
+    }
+  }, [isOpen, query]);
 
   // Clear highlights when closing
   useEffect(() => {
