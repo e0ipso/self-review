@@ -175,7 +175,7 @@ There are two exit paths:
 
 **Finish Review button:** Clicking "Finish Review" in the toolbar saves the review to the configured output file and exits immediately with code 0. This is the primary exit path.
 
-**Window close (X / Cmd+Q / Alt+F4):** Closing the window by any OS-level method shows a three-way confirmation dialog:
+**Window close (X / Cmd+Q / Alt+F4):** Closing the window by any OS-level method shows a three-way confirmation dialog (skipped automatically if no comments have been added):
 
 1. **Save & Quit** — collects the review state, serializes to XML, writes to the output file, exits with code 0.
 2. **Discard** — exits immediately with code 0, without writing any output.
@@ -217,6 +217,8 @@ The application window consists of two main panels:
 - **Right panel — Diff viewer** (main content area)
 
 The layout is a horizontal split. The file tree takes approximately 20-25% of the window width by default and can be resized by dragging the divider.
+
+A loading state is displayed during initial render while diff data is being loaded from the main process.
 
 ### 5.2 File Tree Navigator
 
