@@ -71,6 +71,7 @@ export default function FileTree() {
               </TooltipTrigger>
               <TooltipContent side='right' className='text-xs space-y-1 p-2'>
                 <div className='font-medium mb-1'>Keyboard Shortcuts</div>
+                <div className='flex justify-between gap-4'><span>Find in page</span><kbd className='font-mono'>Ctrl+F</kbd></div>
                 <div className='flex justify-between gap-4'><span>Comment on line</span><kbd className='font-mono'>f</kbd></div>
                 <div className='flex justify-between gap-4'><span>Jump to file</span><kbd className='font-mono'>g</kbd></div>
                 <div className='flex justify-between gap-4'><span>Scroll diffs</span><kbd className='font-mono'>j/k</kbd></div>

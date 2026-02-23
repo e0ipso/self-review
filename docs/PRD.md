@@ -679,6 +679,8 @@ No artificial limit is imposed on diff size. Performance for very large diffs (t
 
 The app supports keyboard-driven code review via Vimium-style hint labels (`f` for line comments, `g` for file jumps) and smooth scrolling (`j`/`k`). All shortcuts are suppressed when text inputs have focus.
 
+- `Ctrl/Cmd+F` — Open native find-in-page search bar with match counter, prev/next navigation (Enter/Shift+Enter), and search highlighting
+
 ### 10.3 Error Handling
 
 - If `git` is not installed or not in PATH, the CLI prints a clear error to stderr and exits with code 1.

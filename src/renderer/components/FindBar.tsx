@@ -14,65 +14,30 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
   const [query, setQuery] = useState('');
   const [activeMatch, setActiveMatch] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
+  const lastSearchedQueryRef = useRef('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus input when opened
-  useEffect(() => {
-    if (isOpen) {
-      // Small delay to ensure portal is mounted
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      });
-    }
-  }, [isOpen]);
-
-  // Subscribe to find results from main process
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const unsubscribe = window.electronAPI.onFindResult((result: FindInPageResult) => {
-      if (result.finalUpdate) {
-        setActiveMatch(result.activeMatchOrdinal);
-        setTotalMatches(result.matches);
-      }
-    });
-
-    return unsubscribe;
-  }, [isOpen]);
-
-  // Trigger search when query changes
-  useEffect(() => {
-    if (!isOpen) return;
-
-    if (query) {
-      window.electronAPI.findInPage({ text: query, forward: true, findNext: false });
-    } else {
-      window.electronAPI.stopFindInPage('clearSelection');
-      setActiveMatch(0);
-      setTotalMatches(0);
-    }
-  }, [query, isOpen]);
-
-  // Clear highlights when closing
-  useEffect(() => {
-    if (!isOpen) {
-      window.electronAPI.stopFindInPage('clearSelection');
-      setActiveMatch(0);
-      setTotalMatches(0);
-    }
-  }, [isOpen]);
-
+  // Declare all callbacks first
   const findNext = useCallback(() => {
-    if (query) {
-      window.electronAPI.findInPage({ text: query, forward: true, findNext: true });
-    }
+    if (!query) return;
+
+    // Check if this is a new search or cycling through existing results
+    const isNewSearch = query !== lastSearchedQueryRef.current;
+    window.electronAPI.findInPage({ text: query, forward: true, findNext: !isNewSearch });
+
+    // Update the last searched query after initiating search
+    lastSearchedQueryRef.current = query;
   }, [query]);
 
   const findPrevious = useCallback(() => {
-    if (query) {
-      window.electronAPI.findInPage({ text: query, forward: false, findNext: true });
-    }
+    if (!query) return;
+
+    // Check if this is a new search or cycling through existing results
+    const isNewSearch = query !== lastSearchedQueryRef.current;
+    window.electronAPI.findInPage({ text: query, forward: false, findNext: !isNewSearch });
+
+    // Update the last searched query after initiating search
+    lastSearchedQueryRef.current = query;
   }, [query]);
 
   const handleClose = useCallback(() => {
@@ -96,6 +61,69 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     },
     [handleClose, findNext, findPrevious]
   );
+
+  // Auto-focus input when opened
+  useEffect(() => {
+    if (isOpen) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isOpen]);
+
+  // Subscribe to find results from main process
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const unsubscribe = window.electronAPI.onFindResult((result: FindInPageResult) => {
+      if (result.finalUpdate) {
+        setActiveMatch(result.activeMatchOrdinal);
+        setTotalMatches(result.matches);
+        // Don't refocus - let the global Enter handler work without input focus
+      }
+    });
+
+    return unsubscribe;
+  }, [isOpen]);
+
+  // Global keydown listener to handle Enter even when input loses focus
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Only handle if target is not a text input/textarea
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key === 'Enter' && query) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          findPrevious();
+        } else {
+          findNext();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isOpen, query, findNext, findPrevious]);
+
+  // Clear highlights when closing
+  useEffect(() => {
+    if (!isOpen) {
+      window.electronAPI.stopFindInPage('clearSelection');
+      setActiveMatch(0);
+      setTotalMatches(0);
+      setQuery('');
+      lastSearchedQueryRef.current = '';
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
