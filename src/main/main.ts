@@ -123,14 +123,18 @@ function isGitTracked(filePath: string): boolean {
  * Returns the DiffSource type to use.
  */
 function determineMode(gitDiffArgs: string[]): 'git' | 'directory' | 'file' | 'welcome' {
-  // Check if first arg is an existing file
-  if (gitDiffArgs.length > 0) {
-    const candidate = resolve(process.cwd(), gitDiffArgs[0]);
+  // Find the first positional arg, skipping flags and the '--' separator
+  // (normalizeGitDiffArgs may have inserted '--' before path args)
+  const firstPositional = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'));
+
+  // Check if first positional arg is an existing file
+  if (firstPositional) {
+    const candidate = resolve(process.cwd(), firstPositional);
     try {
       if (existsSync(candidate) && statSync(candidate).isFile()) {
         if (isInGitRepo()) {
           // In git repo: tracked files go through git diff, untracked use file mode
-          return isGitTracked(gitDiffArgs[0]) ? 'git' : 'file';
+          return isGitTracked(firstPositional) ? 'git' : 'file';
         }
         return 'file';
       }
@@ -144,8 +148,8 @@ function determineMode(gitDiffArgs: string[]): 'git' | 'directory' | 'file' | 'w
   }
 
   // Not in a git repo — check if first positional arg is an existing directory
-  if (gitDiffArgs.length > 0) {
-    const candidate = resolve(process.cwd(), gitDiffArgs[0]);
+  if (firstPositional) {
+    const candidate = resolve(process.cwd(), firstPositional);
     try {
       if (existsSync(candidate) && statSync(candidate).isDirectory()) {
         return 'directory';
@@ -209,7 +213,8 @@ async function initializeApp() {
       };
     } else if (mode === 'file') {
       // File mode: scan a single file as new addition
-      const filePath = resolve(process.cwd(), gitDiffArgs[0]);
+      const fileArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
+      const filePath = resolve(process.cwd(), fileArg);
       console.error('[main] Scanning file:', filePath);
 
       const files = await scanFile(filePath);
@@ -221,7 +226,8 @@ async function initializeApp() {
       };
     } else if (mode === 'directory') {
       // Directory mode: scan the specified directory
-      const directoryPath = resolve(process.cwd(), gitDiffArgs[0]);
+      const dirArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
+      const directoryPath = resolve(process.cwd(), dirArg);
       console.error('[main] Scanning directory:', directoryPath);
 
       const files = await scanDirectory(directoryPath);
