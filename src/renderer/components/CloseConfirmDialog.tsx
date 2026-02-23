@@ -9,15 +9,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
+import { useReview } from '../context/ReviewContext';
 
 export default function CloseConfirmDialog() {
   const [open, setOpen] = useState(false);
+  const { files } = useReview();
+
+  const hasComments = files.some(f => f.comments.length > 0);
 
   useEffect(() => {
     return window.electronAPI.onCloseRequested(() => {
+      if (!hasComments) {
+        window.electronAPI.discardAndQuit();
+        return;
+      }
       setOpen(true);
     });
-  }, []);
+  }, [hasComments]);
 
   const handleSaveAndQuit = () => {
     window.electronAPI.saveAndQuit();
