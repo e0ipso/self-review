@@ -832,6 +832,120 @@ describe('useReviewState', () => {
     });
   });
 
+  describe('setFiles with callback preserves existing state', () => {
+    it('preserves viewed flags and comments when merging via callback', () => {
+      const { result } = renderHook(() => useReviewState());
+
+      // Initialize with two files
+      act(() => {
+        result.current.setFiles([
+          {
+            path: 'src/file1.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [],
+          },
+          {
+            path: 'src/file2.ts',
+            changeType: 'added',
+            viewed: false,
+            comments: [],
+          },
+        ]);
+      });
+
+      // Mark file1 as viewed and add a comment to file2
+      act(() => {
+        result.current.toggleViewed('src/file1.ts');
+        result.current.addComment(
+          'src/file2.ts',
+          { side: 'new', start: 1, end: 1 },
+          'Review comment',
+          'note',
+          null
+        );
+      });
+
+      expect(result.current.files[0].viewed).toBe(true);
+      expect(result.current.files[1].comments).toHaveLength(1);
+
+      // Simulate what ReviewContext does on context expansion:
+      // use callback form to merge with previous state
+      act(() => {
+        result.current.setFiles(prev => {
+          const prevByPath = new Map(prev.map(f => [f.path, f]));
+          const newDiffFiles = [
+            { path: 'src/file1.ts', changeType: 'modified' as const },
+            { path: 'src/file2.ts', changeType: 'added' as const },
+          ];
+          return newDiffFiles.map(file => {
+            const existing = prevByPath.get(file.path);
+            if (existing) {
+              return { ...existing, changeType: file.changeType };
+            }
+            return {
+              path: file.path,
+              changeType: file.changeType,
+              viewed: false,
+              comments: [],
+            };
+          });
+        });
+      });
+
+      // Viewed flag and comments must be preserved
+      expect(result.current.files[0].viewed).toBe(true);
+      expect(result.current.files[1].comments).toHaveLength(1);
+      expect(result.current.files[1].comments[0].body).toBe('Review comment');
+    });
+
+    it('initializes new files with defaults during merge', () => {
+      const { result } = renderHook(() => useReviewState());
+
+      // Start with one file
+      act(() => {
+        result.current.setFiles([
+          {
+            path: 'src/existing.ts',
+            changeType: 'modified',
+            viewed: true,
+            comments: [],
+          },
+        ]);
+      });
+
+      // Merge in a new file alongside the existing one
+      act(() => {
+        result.current.setFiles(prev => {
+          const prevByPath = new Map(prev.map(f => [f.path, f]));
+          const newDiffFiles = [
+            { path: 'src/existing.ts', changeType: 'modified' as const },
+            { path: 'src/brand-new.ts', changeType: 'added' as const },
+          ];
+          return newDiffFiles.map(file => {
+            const existing = prevByPath.get(file.path);
+            if (existing) {
+              return { ...existing, changeType: file.changeType };
+            }
+            return {
+              path: file.path,
+              changeType: file.changeType,
+              viewed: false,
+              comments: [],
+            };
+          });
+        });
+      });
+
+      // Existing file preserves viewed state
+      expect(result.current.files[0].viewed).toBe(true);
+      // New file gets default state
+      expect(result.current.files[1].path).toBe('src/brand-new.ts');
+      expect(result.current.files[1].viewed).toBe(false);
+      expect(result.current.files[1].comments).toEqual([]);
+    });
+  });
+
   describe('state immutability', () => {
     it('addComment does not mutate files array', () => {
       const { result } = renderHook(() => useReviewState());
