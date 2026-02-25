@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   requestResumeData: () => {
-    ipcRenderer.send('resume:request');
+    ipcRenderer.send(IPC.RESUME_REQUEST);
   },
 
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => {

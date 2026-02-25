@@ -73,7 +73,7 @@ export function registerIpcHandlers(): void {
   });
 
   // Send resume comments when renderer is ready (after diff data is loaded)
-  ipcMain.on('resume:request', event => {
+  ipcMain.on(IPC.RESUME_REQUEST, event => {
     if (resumeCommentsCache.length > 0) {
       event.sender.send(IPC.RESUME_LOAD, { comments: resumeCommentsCache });
     }
