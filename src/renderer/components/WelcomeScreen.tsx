@@ -155,10 +155,6 @@ export default function WelcomeScreen() {
                 {error}
               </p>
             )}
-            <p className="text-xs text-muted-foreground">
-              If the selected directory is a git repository, git mode will be
-              used automatically.
-            </p>
           </CardContent>
         </Card>
       </div>
