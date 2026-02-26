@@ -10,7 +10,6 @@ import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
 import { parseReviewXml } from './xml-parser';
-import { matchResumeComments } from './resume-matcher';
 import { serializeReview } from './xml-serializer';
 import {
   registerIpcHandlers,
@@ -253,8 +252,7 @@ async function initializeApp() {
       try {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
         const parsed = parseReviewXml(cliArgs.resumeFrom);
-        const currentDiffFiles = diffData?.files ?? [];
-        resumeComments = matchResumeComments(parsed.comments, currentDiffFiles);
+        resumeComments = parsed.comments;
         console.error(
           '[main] Loaded',
           resumeComments.length,

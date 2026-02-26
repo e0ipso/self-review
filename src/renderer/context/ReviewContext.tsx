@@ -20,7 +20,6 @@ import type {
   LineRange,
   Suggestion,
 } from '../../shared/types';
-import { normalizeResumePath } from '../../shared/path-utils';
 import { useReviewState } from '../hooks/useReviewState';
 import { useConfig } from './ConfigContext';
 
@@ -126,48 +125,21 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
     });
 
     window.electronAPI.onResumeLoad(payload => {
-      // Merge prior comments into existing state.
-      // Build lookup maps for both exact and basename-fallback matching.
-      reviewState.setFiles(prev => {
-        // Map from exact path → FileReviewState index
-        const exactIndex = new Map<string, number>(
-          prev.map((f, i) => [f.path, i])
-        );
-        // Map from basename → array of indices (for collision detection)
-        const basenameIndex = new Map<string, number[]>();
-        prev.forEach((f, i) => {
-          const base = normalizeResumePath(f.path);
-          if (!basenameIndex.has(base)) basenameIndex.set(base, []);
-          basenameIndex.get(base)!.push(i);
-        });
-
-        // Group comments by resolved file index
-        const commentsByIndex = new Map<number, ReviewComment[]>();
-        payload.comments.forEach(comment => {
-          // Attempt exact match first
-          let idx = exactIndex.get(comment.filePath);
-
-          // Fallback: basename comparison when exact match fails
-          if (idx === undefined) {
-            const commentBase = normalizeResumePath(comment.filePath);
-            const candidates = basenameIndex.get(commentBase) ?? [];
-            // Only merge if unambiguous (exactly one candidate)
-            if (candidates.length === 1) {
-              idx = candidates[0];
-            }
-          }
-
-          if (idx !== undefined) {
-            if (!commentsByIndex.has(idx)) commentsByIndex.set(idx, []);
-            commentsByIndex.get(idx)!.push(comment);
-          }
-        });
-
-        return prev.map((file, i) => ({
-          ...file,
-          comments: commentsByIndex.get(i) ?? [],
-        }));
+      // Merge prior comments into existing state
+      const commentsByFile = new Map<string, ReviewComment[]>();
+      payload.comments.forEach(comment => {
+        if (!commentsByFile.has(comment.filePath)) {
+          commentsByFile.set(comment.filePath, []);
+        }
+        commentsByFile.get(comment.filePath)!.push(comment);
       });
+
+      reviewState.setFiles(prev =>
+        prev.map(file => ({
+          ...file,
+          comments: commentsByFile.get(file.path) || [],
+        }))
+      );
     });
 
     window.electronAPI.onRequestReview(() => {
