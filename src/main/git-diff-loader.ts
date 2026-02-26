@@ -3,13 +3,14 @@ import { runGitDiffAsync, getRepoRootAsync, getUntrackedFilesAsync, generateUntr
 import { parseDiff } from './diff-parser';
 
 export async function loadGitDiffWithUntracked(
-  gitDiffArgs: string[]
+  gitDiffArgs: string[],
+  cwd?: string
 ): Promise<{ files: DiffFile[]; repository: string }> {
-  const repository = await getRepoRootAsync();
-  const rawDiff = await runGitDiffAsync(gitDiffArgs);
+  const repository = await getRepoRootAsync(cwd);
+  const rawDiff = await runGitDiffAsync(gitDiffArgs, cwd);
   const files = parseDiff(rawDiff);
 
-  const untrackedPaths = await getUntrackedFilesAsync();
+  const untrackedPaths = await getUntrackedFilesAsync(cwd);
   let allFiles = files;
   if (untrackedPaths.length > 0) {
     const untrackedDiffStr = generateUntrackedDiffs(untrackedPaths, repository);

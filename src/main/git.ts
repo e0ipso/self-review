@@ -85,10 +85,11 @@ export function validateGitAvailable(): void {
 /**
  * Async version of getRepoRoot - called AFTER app.whenReady().
  */
-export async function getRepoRootAsync(): Promise<string> {
+export async function getRepoRootAsync(cwd?: string): Promise<string> {
   try {
     const { stdout } = await execAsync('git rev-parse --show-toplevel', {
       timeout: 10000, // 10 second timeout
+      cwd,
     });
     return stdout.trim();
   } catch (error) {
@@ -105,11 +106,12 @@ export async function getRepoRootAsync(): Promise<string> {
  * Async version of runGitDiff - called AFTER app.whenReady().
  * Uses timeout to prevent hanging in CI environments.
  */
-export async function runGitDiffAsync(args: string[]): Promise<string> {
+export async function runGitDiffAsync(args: string[], cwd?: string): Promise<string> {
   try {
     const { stdout } = await execAsync(`git diff ${args.join(' ')}`, {
       maxBuffer: 50 * 1024 * 1024, // 50MB buffer
       timeout: 30000, // 30 second timeout
+      cwd,
     });
     return stdout;
   } catch (error) {
@@ -125,13 +127,14 @@ export async function runGitDiffAsync(args: string[]): Promise<string> {
 /**
  * Get list of untracked files (respects .gitignore).
  */
-export async function getUntrackedFilesAsync(): Promise<string[]> {
+export async function getUntrackedFilesAsync(cwd?: string): Promise<string[]> {
   try {
     const { stdout } = await execAsync(
       'git ls-files --others --exclude-standard',
       {
         maxBuffer: 10 * 1024 * 1024,
         timeout: 10000,
+        cwd,
       }
     );
     return stdout

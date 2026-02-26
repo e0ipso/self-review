@@ -257,7 +257,7 @@ export function registerIpcHandlers(): void {
 
       if (isGitRepo) {
         const { loadGitDiffWithUntracked } = await import('./git-diff-loader');
-        const { files: allFiles, repository } = await loadGitDiffWithUntracked([]);
+        const { files: allFiles, repository } = await loadGitDiffWithUntracked([], directoryPath);
 
         payload = {
           files: allFiles,
