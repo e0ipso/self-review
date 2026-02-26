@@ -2,7 +2,6 @@
 // IPC handler registration
 
 import * as fs from 'fs';
-import { execSync } from 'child_process';
 import { ipcMain, BrowserWindow, dialog, app } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import {
@@ -241,36 +240,12 @@ export function registerIpcHandlers(): void {
         return;
       }
 
-      // Check if the selected directory is a git repo
-      let isGitRepo = false;
-      try {
-        execSync('git rev-parse --git-dir', {
-          cwd: directoryPath,
-          stdio: 'ignore',
-        });
-        isGitRepo = true;
-      } catch {
-        // Not a git repo — use directory mode
-      }
-
-      let payload: DiffLoadPayload;
-
-      if (isGitRepo) {
-        const { loadGitDiffWithUntracked } = await import('./git-diff-loader');
-        const { files: allFiles, repository } = await loadGitDiffWithUntracked([], directoryPath);
-
-        payload = {
-          files: allFiles,
-          source: { type: 'git', gitDiffArgs: '', repository },
-        };
-      } else {
-        // Directory mode: scan all files as new additions
-        const files = await scanDirectory(directoryPath);
-        payload = {
-          files,
-          source: { type: 'directory', sourcePath: directoryPath },
-        };
-      }
+      // Directory mode: scan all files as new additions
+      const files = await scanDirectory(directoryPath);
+      const payload: DiffLoadPayload = {
+        files,
+        source: { type: 'directory', sourcePath: directoryPath },
+      };
 
       // Update the cache and send to renderer
       diffDataCache = payload;
