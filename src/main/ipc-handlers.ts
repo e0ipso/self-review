@@ -2,7 +2,7 @@
 // IPC handler registration
 
 import * as fs from 'fs';
-import { ipcMain, BrowserWindow, dialog, app } from 'electron';
+import { ipcMain, BrowserWindow, dialog, app, shell } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import {
   DiffLoadPayload,
@@ -206,6 +206,14 @@ export function registerIpcHandlers(): void {
     win.webContents.stopFindInPage(
       action as 'clearSelection' | 'keepSelection' | 'activateSelection'
     );
+  });
+
+  // Handle open-external requests from renderer
+  ipcMain.handle(IPC.OPEN_EXTERNAL, async (_event, url: string) => {
+    // Security: only allow https://github.com/ URLs
+    if (typeof url === 'string' && url.startsWith('https://github.com/')) {
+      await shell.openExternal(url);
+    }
   });
 
   // Start a directory review from a picked path

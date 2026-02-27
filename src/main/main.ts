@@ -21,6 +21,7 @@ import {
   setResumeComments,
   requestReviewFromRenderer,
 } from './ipc-handlers';
+import { checkForUpdate } from './version-checker';
 import { IPC } from '../shared/ipc-channels';
 import { AppConfig, DiffLoadPayload, OutputPathInfo, ReviewComment } from '../shared/types';
 
@@ -287,6 +288,9 @@ async function initializeApp() {
     console.error('[main] Creating window');
     createWindow();
     console.error('[main] Window created successfully');
+
+    // Non-blocking version check (fire-and-forget)
+    checkForUpdate(mainWindow!).catch(() => {});
 
     clearTimeout(initTimeout);
     console.error('[main] Initialization complete');
