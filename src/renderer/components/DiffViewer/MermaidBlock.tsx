@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useConfig } from '../../context/ConfigContext';
 
 let mermaidIdCounter = 0;
@@ -13,7 +13,6 @@ function resolveIsDark(theme: 'light' | 'dark' | 'system'): boolean {
 export default function MermaidBlock({ code }: { code: string }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const idRef = useRef(`mermaid-${mermaidIdCounter++}`);
   const { config } = useConfig();
   const isDark = resolveIsDark(config.theme);
 
