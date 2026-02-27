@@ -55,7 +55,7 @@ self-review/
 │       │   └── useDiffNavigation.ts # File tree ↔ diff viewer scroll sync
 │       └── components/
 │           ├── Layout.tsx        # Two-panel layout (file tree + diff viewer)
-│           ├── FileTree.tsx      # Left panel: file list, search, viewed checkboxes
+│           ├── FileTree.tsx      # Left panel: file list, search, viewed checkboxes, output path footer
 │           ├── Toolbar.tsx       # Top bar: view mode, expand/collapse, theme
 │           ├── DiffViewer/
 │           │   ├── DiffViewer.tsx     # Orchestrator: renders file sections
@@ -112,6 +112,8 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | `app:save-and-quit`   | Renderer → Main | (none)      | Save review to file and exit          |
 | `app:discard-and-quit` | Renderer → Main | (none)     | Exit without saving                   |
 | `diff:expand-context`  | Renderer → Main | `ExpandContextRequest` | Re-run git diff with more context for a single file |
+| `output-path:change`   | Renderer → Main | `OutputPathInfo \| null` | Open native save dialog to change output path |
+| `output-path:changed`  | Main → Renderer | `OutputPathInfo`  | Notify renderer when output path changes       |
 
 ## Shared Types
 
@@ -181,7 +183,7 @@ E2E tests use Playwright with Cucumber BDD:
   `console.error()` for logging in the main process, never `console.log()`.
 - **No network access.** The app makes zero network requests. No telemetry, no analytics, no CDN
   fetches. All assets are bundled.
-- **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
+- **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
 - **XSD sync.** The XSD schema exists in two locations: `.claude/skills/self-review-apply/assets/self-review-v1.xsd` (standalone) and embedded as a string in `src/main/xml-serializer.ts`. Both copies must be kept in sync when the schema changes.
 - **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
   Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit /

@@ -2,9 +2,10 @@
 // Electron main process entry point
 
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
-import { writeFileSync, existsSync, statSync, accessSync, constants as fsConstants } from 'fs';
+import { writeFileSync, existsSync, statSync } from 'fs';
 import { execSync } from 'child_process';
-import { resolve, join, dirname } from 'path';
+import { resolve, join } from 'path';
+import { checkWritability } from './fs-utils';
 import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
@@ -88,19 +89,6 @@ let appConfig: AppConfig | null = null;
 let currentOutputPath: string = '';
 let outputPathWritable: boolean = false;
 let isQuitting = false;
-
-/**
- * Check if a file's parent directory is writable.
- */
-function checkWritability(filePath: string): boolean {
-  try {
-    const dir = dirname(filePath);
-    accessSync(dir, fsConstants.W_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 // When the app is quitting (SIGTERM, app.quit(), etc.), allow windows to close
 // without showing the confirmation dialog.
