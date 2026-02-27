@@ -23,6 +23,7 @@ Feature: Find in Page
   Scenario: Searching for text highlights matches
     When I press "Ctrl+F"
     And I type "token" in the find bar
+    And I press "Enter"
     Then the match counter should show "1 of 5"
     And the first match should be highlighted
 
@@ -30,15 +31,16 @@ Feature: Find in Page
     When I press "Ctrl+F"
     And I type "token" in the find bar
     And I press "Enter"
+    Then the match counter should show "1 of 5"
+    And I press "Enter"
     Then the match counter should show "2 of 5"
     And I press "Enter"
     Then the match counter should show "3 of 5"
-    And I press "Enter"
-    Then the match counter should show "4 of 5"
 
   Scenario: Searching for multi-character queries
     When I press "Ctrl+F"
     And I type "authenticate" in the find bar
+    And I press "Enter"
     Then the match counter should show "1 of 2"
 
   Scenario: Closing find bar with Escape
