@@ -5,7 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from 'react';
-import type { AppConfig } from '../../shared/types';
+import type { AppConfig, OutputPathInfo } from '../../shared/types';
 import lightThemeCss from 'prismjs/themes/prism.css?raw';
 import darkThemeCss from 'prism-themes/themes/prism-one-dark.css?raw';
 
@@ -57,12 +57,21 @@ interface ConfigContextValue {
   config: AppConfig;
   setConfig: (config: AppConfig) => void;
   updateConfig: (updates: Partial<AppConfig>) => void;
+  outputPathInfo: OutputPathInfo;
+  setOutputPathInfo: (info: OutputPathInfo) => void;
 }
+
+const defaultOutputPathInfo: OutputPathInfo = {
+  resolvedOutputPath: '',
+  outputPathWritable: true,
+};
 
 const ConfigContext = createContext<ConfigContextValue>({
   config: defaultConfig,
   setConfig: () => {},
   updateConfig: () => {},
+  outputPathInfo: defaultOutputPathInfo,
+  setOutputPathInfo: () => {},
 });
 
 export function useConfig() {
@@ -75,6 +84,7 @@ interface ConfigProviderProps {
 
 export function ConfigProvider({ children }: ConfigProviderProps) {
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
+  const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo>(defaultOutputPathInfo);
 
   const updateConfig = (updates: Partial<AppConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }));
@@ -119,8 +129,14 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
   // Register IPC listener for config from main process
   useEffect(() => {
     if (window.electronAPI) {
-      window.electronAPI.onConfigLoad(payload => {
+      window.electronAPI.onConfigLoad((payload, pathInfo) => {
         setConfig(payload);
+        if (pathInfo) {
+          setOutputPathInfo(pathInfo);
+        }
+      });
+      window.electronAPI.onOutputPathChanged((info) => {
+        setOutputPathInfo(info);
       });
       // Request config data
       window.electronAPI.requestConfig();
@@ -128,7 +144,7 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
   }, []);
 
   return (
-    <ConfigContext.Provider value={{ config, setConfig, updateConfig }}>
+    <ConfigContext.Provider value={{ config, setConfig, updateConfig, outputPathInfo, setOutputPathInfo }}>
       {children}
     </ConfigContext.Provider>
   );

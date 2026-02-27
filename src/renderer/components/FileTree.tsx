@@ -1,19 +1,30 @@
 import React, { useState, useMemo } from 'react';
 import { useReview } from '../context/ReviewContext';
+import { useConfig } from '../context/ConfigContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, CircleDashed, CircleCheck, MessageSquare, ChevronsDownUp, ChevronsUpDown, Keyboard } from 'lucide-react';
+import { Search, CircleDashed, CircleCheck, MessageSquare, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getFileStats, getChangeTypeInfo } from '../utils/diff-styles';
 
 export default function FileTree() {
   const { diffFiles, files, toggleViewed } = useReview();
+  const { outputPathInfo, setOutputPathInfo } = useConfig();
   const { activeFilePath, scrollToFile } = useDiffNavigationContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [allExpanded, setAllExpanded] = useState(true);
+
+  const outputBasename = outputPathInfo.resolvedOutputPath.split(/[/\\]/).pop() || 'review.xml';
+
+  const handleChangeOutputPath = async () => {
+    const result = await window.electronAPI.changeOutputPath();
+    if (result) {
+      setOutputPathInfo(result);
+    }
+  };
 
   const handleToggleAllSections = () => {
     const newExpanded = !allExpanded;
@@ -223,6 +234,42 @@ export default function FileTree() {
           </div>
         )}
       </div>
+
+      {/* Output Path Footer */}
+      {outputPathInfo.resolvedOutputPath && (
+        <>
+          <Separator />
+          <div className='px-3 py-2 space-y-1'>
+            <div className='flex items-center gap-1.5 text-xs text-muted-foreground'>
+              <span className='font-medium'>Output:</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className='truncate cursor-default'>{outputBasename}</span>
+                </TooltipTrigger>
+                <TooltipContent side='right' className='max-w-sm'>
+                  <p className='font-mono text-xs break-all'>{outputPathInfo.resolvedOutputPath}</p>
+                </TooltipContent>
+              </Tooltip>
+              {outputPathInfo.outputPathWritable ? (
+                <CheckCircle2 className='h-3.5 w-3.5 text-green-500 shrink-0' />
+              ) : (
+                <AlertCircle className='h-3.5 w-3.5 text-red-500 shrink-0' />
+              )}
+              <Button
+                variant='ghost'
+                size='sm'
+                className='h-5 px-1.5 text-xs ml-auto'
+                onClick={handleChangeOutputPath}
+              >
+                Change...
+              </Button>
+            </div>
+            {!outputPathInfo.outputPathWritable && (
+              <p className='text-xs text-red-500'>Path not writable</p>
+            )}
+          </div>
+        </>
+      )}
 
     </div>
   );
