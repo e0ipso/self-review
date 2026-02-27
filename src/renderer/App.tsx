@@ -9,6 +9,7 @@ import CloseConfirmDialog from './components/CloseConfirmDialog';
 import { KeyboardNavigationManager } from './components/KeyboardNavigationManager';
 import { FindBar } from './components/FindBar';
 import WelcomeScreen from './components/WelcomeScreen';
+import UpdateBanner from './components/UpdateBanner';
 
 function AppContent() {
   const { diffSource } = useReview();
@@ -66,6 +67,7 @@ function AppContent() {
       <TooltipProvider>
         <KeyboardNavigationManager />
         <div className='flex flex-col h-screen bg-background text-foreground antialiased'>
+          <UpdateBanner />
           <Toolbar />
           <Layout />
         </div>
