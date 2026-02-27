@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 export default function Toolbar() {
-  const { config, updateConfig } = useConfig();
+  const { config, updateConfig, outputPathInfo } = useConfig();
   const { diffFiles, diffSource } = useReview();
   const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
 
@@ -287,16 +287,28 @@ export default function Toolbar() {
 
         <Separator orientation='vertical' className='h-5' />
 
-        <Button
-          variant='default'
-          size='sm'
-          data-testid='finish-review-btn'
-          onClick={() => window.electronAPI.saveAndQuit()}
-          className='gap-1.5 h-8 px-3'
-        >
-          <CheckCircle2 className='h-3.5 w-3.5' />
-          <span className='text-xs font-medium'>Finish Review</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                variant='default'
+                size='sm'
+                data-testid='finish-review-btn'
+                onClick={() => window.electronAPI.saveAndQuit()}
+                className='gap-1.5 h-8 px-3'
+                disabled={!outputPathInfo.outputPathWritable}
+              >
+                <CheckCircle2 className='h-3.5 w-3.5' />
+                <span className='text-xs font-medium'>Finish Review</span>
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {!outputPathInfo.outputPathWritable && (
+            <TooltipContent>
+              Output path is not writable. Click &apos;Change...&apos; in the file tree to pick a save location.
+            </TooltipContent>
+          )}
+        </Tooltip>
       </div>
     </div>
   );

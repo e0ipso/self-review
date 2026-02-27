@@ -7,6 +7,7 @@ import {
   DiffLoadPayload,
   ResumeLoadPayload,
   AppConfig,
+  OutputPathInfo,
   ReviewState,
   ExpandContextRequest,
   FindInPageRequest,
@@ -28,9 +29,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send(IPC.CONFIG_REQUEST);
   },
 
-  onConfigLoad: (callback: (payload: AppConfig) => void) => {
-    ipcRenderer.on(IPC.CONFIG_LOAD, (_event, payload: AppConfig) =>
-      callback(payload)
+  onConfigLoad: (callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void) => {
+    ipcRenderer.on(IPC.CONFIG_LOAD, (_event, payload: AppConfig, outputPathInfo?: OutputPathInfo) =>
+      callback(payload, outputPathInfo)
     );
   },
 
@@ -76,6 +77,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   expandContext: (request: ExpandContextRequest) =>
     ipcRenderer.invoke(IPC.DIFF_EXPAND_CONTEXT, request),
+
+  changeOutputPath: () => ipcRenderer.invoke(IPC.OUTPUT_PATH_CHANGE),
+
+  onOutputPathChanged: (callback: (info: OutputPathInfo) => void) => {
+    ipcRenderer.on(IPC.OUTPUT_PATH_CHANGED, (_event, info: OutputPathInfo) =>
+      callback(info)
+    );
+  },
 
   findInPage: (request: FindInPageRequest) => {
     ipcRenderer.send(IPC.FIND_IN_PAGE, request);

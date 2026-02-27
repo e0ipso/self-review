@@ -1,10 +1,11 @@
 // src/main/main.ts
 // Electron main process entry point
 
-import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
 import { writeFileSync, existsSync, statSync } from 'fs';
 import { execSync } from 'child_process';
 import { resolve, join } from 'path';
+import { checkWritability } from './fs-utils';
 import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
@@ -16,11 +17,12 @@ import {
   registerFindInPageForWindow,
   setDiffData,
   setConfigData,
+  setOutputPathInfo,
   setResumeComments,
   requestReviewFromRenderer,
 } from './ipc-handlers';
 import { IPC } from '../shared/ipc-channels';
-import { AppConfig, DiffLoadPayload, ReviewComment } from '../shared/types';
+import { AppConfig, DiffLoadPayload, OutputPathInfo, ReviewComment } from '../shared/types';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -84,6 +86,8 @@ let mainWindow: BrowserWindow | null = null;
 let diffData: DiffLoadPayload | null = null;
 let resumeComments: ReviewComment[] = [];
 let appConfig: AppConfig | null = null;
+let currentOutputPath: string = '';
+let outputPathWritable: boolean = false;
 let isQuitting = false;
 
 // When the app is quitting (SIGTERM, app.quit(), etc.), allow windows to close
@@ -182,7 +186,9 @@ async function initializeApp() {
 
     // Phase 2: Load configuration
     appConfig = loadConfig();
-    console.error('[main] Config loaded');
+    currentOutputPath = resolve(process.cwd(), appConfig.outputFile);
+    outputPathWritable = checkWritability(currentOutputPath);
+    console.error('[main] Config loaded, output path:', currentOutputPath, 'writable:', outputPathWritable);
 
     // Phase 3: Determine git diff args
     let gitDiffArgs = cliArgs.gitDiffArgs;
@@ -268,6 +274,7 @@ async function initializeApp() {
     // Phase 6: Cache data for when renderer requests it
     setDiffData(diffData);
     setConfigData(appConfig);
+    setOutputPathInfo({ resolvedOutputPath: currentOutputPath, outputPathWritable });
     if (resumeComments.length > 0) {
       setResumeComments(resumeComments);
     }
@@ -341,11 +348,10 @@ function createWindow(): void {
     try {
       console.error('[main] Save and quit requested');
       const reviewState = await requestReviewFromRenderer(mainWindow);
-      const outputPath = resolve(process.cwd(), appConfig!.outputFile);
-      const xml = await serializeReview(reviewState, outputPath);
+      const xml = await serializeReview(reviewState, currentOutputPath);
 
-      writeFileSync(outputPath, xml + '\n', 'utf-8');
-      console.error(`[main] Review written to ${outputPath}`);
+      writeFileSync(currentOutputPath, xml + '\n', 'utf-8');
+      console.error(`[main] Review written to ${currentOutputPath}`);
 
       mainWindow.destroy();
       process.exit(0);
@@ -366,6 +372,27 @@ function createWindow(): void {
       mainWindow.destroy();
     }
     process.exit(0);
+  });
+
+  // Handle output path change via native save dialog
+  ipcMain.handle(IPC.OUTPUT_PATH_CHANGE, async (): Promise<OutputPathInfo | null> => {
+    if (!mainWindow) return null;
+
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Review As',
+      defaultPath: currentOutputPath,
+      filters: [{ name: 'XML Files', extensions: ['xml'] }],
+    });
+
+    if (result.canceled || !result.filePath) return null;
+
+    currentOutputPath = result.filePath;
+    outputPathWritable = checkWritability(currentOutputPath);
+    console.error('[main] Output path changed to:', currentOutputPath, 'writable:', outputPathWritable);
+
+    const info: OutputPathInfo = { resolvedOutputPath: currentOutputPath, outputPathWritable };
+    mainWindow.webContents.send(IPC.OUTPUT_PATH_CHANGED, info);
+    return info;
   });
 }
 

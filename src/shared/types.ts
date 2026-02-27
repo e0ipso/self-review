@@ -118,6 +118,13 @@ export interface ResumeLoadPayload {
   comments: ReviewComment[];
 }
 
+// ===== Output Path Types =====
+
+export interface OutputPathInfo {
+  resolvedOutputPath: string;
+  outputPathWritable: boolean;
+}
+
 // ===== Expand Context Types =====
 
 export interface ExpandContextRequest {
@@ -150,7 +157,7 @@ export interface ElectronAPI {
   requestDiffData: () => void;
   onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => void;
   requestConfig: () => void;
-  onConfigLoad: (callback: (payload: AppConfig) => void) => void;
+  onConfigLoad: (callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void) => void;
   requestResumeData: () => void;
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
   submitReview: (state: ReviewState) => void;
@@ -162,6 +169,8 @@ export interface ElectronAPI {
   pickDirectory: () => Promise<string | null>;
   startDirectoryReview: (path: string) => Promise<void>;
   expandContext: (request: ExpandContextRequest) => Promise<ExpandContextResponse | null>;
+  changeOutputPath: () => Promise<OutputPathInfo | null>;
+  onOutputPathChanged: (callback: (info: OutputPathInfo) => void) => void;
   findInPage: (request: FindInPageRequest) => void;
   stopFindInPage: (action: string) => void;
   onFindResult: (callback: (result: FindInPageResult) => void) => () => void;
