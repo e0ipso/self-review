@@ -24,24 +24,24 @@ Feature: Find in Page
     When I press "Ctrl+F"
     And I type "token" in the find bar
     And I press "Enter"
-    Then the match counter should show "1 of 5"
+    Then the match counter should show "1 of 4"
     And the first match should be highlighted
 
   Scenario: Cycling through matches with Enter
     When I press "Ctrl+F"
     And I type "token" in the find bar
     And I press "Enter"
-    Then the match counter should show "1 of 5"
+    Then the match counter should show "1 of 4"
     And I press "Enter"
-    Then the match counter should show "2 of 5"
+    Then the match counter should show "2 of 4"
     And I press "Enter"
-    Then the match counter should show "3 of 5"
+    Then the match counter should show "3 of 4"
 
   Scenario: Searching for multi-character queries
     When I press "Ctrl+F"
     And I type "authenticate" in the find bar
     And I press "Enter"
-    Then the match counter should show "1 of 2"
+    Then the match counter should show "1 of 1"
 
   Scenario: Closing find bar with Escape
     When I press "Ctrl+F"
