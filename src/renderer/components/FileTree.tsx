@@ -10,7 +10,7 @@ import { Search, CircleDashed, CircleCheck, MessageSquare, ChevronsDownUp, Chevr
 import { getFileStats, getChangeTypeInfo } from '../utils/diff-styles';
 
 export default function FileTree() {
-  const { diffFiles, files } = useReview();
+  const { diffFiles, files, toggleViewed } = useReview();
   const { activeFilePath, scrollToFile } = useDiffNavigationContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [allExpanded, setAllExpanded] = useState(true);
@@ -185,11 +185,27 @@ export default function FileTree() {
                           </span>
                         </span>
                       )}
-                      {viewed ? (
-                        <CircleCheck className='h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400' />
-                      ) : (
-                        <CircleDashed className='h-3.5 w-3.5 text-muted-foreground/60' />
-                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            data-testid={`viewed-toggle-${filePath}`}
+                            onClick={e => {
+                              e.stopPropagation();
+                              toggleViewed(filePath);
+                            }}
+                            className='inline-flex items-center justify-center h-5 w-5 rounded-sm hover:bg-accent/80 transition-colors cursor-pointer'
+                          >
+                            {viewed ? (
+                              <CircleCheck className='h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400' />
+                            ) : (
+                              <CircleDashed className='h-3.5 w-3.5 text-muted-foreground/60' />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side='right'>
+                          {viewed ? 'Mark as needs review' : 'Mark as done reviewing'}
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 </button>
