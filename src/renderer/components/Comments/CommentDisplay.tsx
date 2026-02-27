@@ -10,6 +10,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { Pencil, Trash2, ChevronDown, ChevronUp, ImageOff } from 'lucide-react';
 import CommentInput from './CommentInput';
 import SuggestionBlock from './SuggestionBlock';
+import { remarkEmoji } from '../../utils/remark-emoji';
 
 function AttachmentImage({ attachment }: { attachment: Attachment }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -226,7 +227,7 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
       {!isCollapsed && (
         <>
           <div className='px-3 pb-3 text-sm text-foreground leading-relaxed [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_pre]:my-2 [&_pre]:p-3 [&_pre]:bg-muted [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_code]:text-[0.85em] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-muted [&_h1]:text-base [&_h1]:font-bold [&_h1]:my-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:my-2 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:my-2 [&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400 [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_hr]:my-2 [&_hr]:border-border [&_pre_code]:bg-transparent [&_pre_code]:p-0'>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkEmoji]}>
               {comment.body}
             </ReactMarkdown>
           </div>

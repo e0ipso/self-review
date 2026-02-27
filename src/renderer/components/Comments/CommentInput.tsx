@@ -13,8 +13,10 @@ import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
 import { Code2, Paperclip, ImageIcon } from 'lucide-react';
 import CategorySelector from './CategorySelector';
+import EmojiAutocomplete from './EmojiAutocomplete';
 import { processImageFile } from '../../utils/image-utils';
 import AttachmentThumbnail from './AttachmentThumbnail';
+import { useEmojiAutocomplete } from '../../hooks/useEmojiAutocomplete';
 
 export interface CommentInputProps {
   filePath: string;
@@ -45,6 +47,8 @@ export default function CommentInput({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragCounter = useRef(0);
+
+  const emoji = useEmojiAutocomplete(body, setBody, editorContainerRef);
 
   const handleImageAttach = useCallback(async (files: (File | Blob)[]) => {
     try {
@@ -177,7 +181,7 @@ export default function CommentInput({
           </div>
         </div>
       )}
-      <div className='p-1' data-color-mode={isDark ? 'dark' : 'light'} ref={editorContainerRef}>
+      <div className='p-1 relative' data-color-mode={isDark ? 'dark' : 'light'} ref={editorContainerRef}>
         <MDEditor
           value={body}
           onChange={(val) => setBody(val || '')}
@@ -204,6 +208,9 @@ export default function CommentInput({
           textareaProps={{
             placeholder: 'Add your review comment... (paste or drop images here)',
             onKeyDown: (e) => {
+              // Let emoji autocomplete handle keys first when dropdown is open
+              if (emoji.onKeyDown(e)) return;
+
               if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault();
                 handleSubmit();
@@ -222,6 +229,14 @@ export default function CommentInput({
           }}
           height={240}
           className='md-editor-comment'
+        />
+        <EmojiAutocomplete
+          isOpen={emoji.isOpen}
+          results={emoji.results}
+          selectedIndex={emoji.selectedIndex}
+          position={emoji.position}
+          onSelect={emoji.selectEmoji}
+          onHover={emoji.setSelectedIndex}
         />
       </div>
 
