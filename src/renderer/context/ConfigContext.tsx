@@ -38,6 +38,11 @@ const defaultConfig: AppConfig = {
       color: '#805ad5',
     },
     {
+      name: 'task',
+      description: 'Action item or follow-up task',
+      color: '#38a169',
+    },
+    {
       name: 'nit',
       description: 'Minor nitpick, low priority',
       color: '#718096',
