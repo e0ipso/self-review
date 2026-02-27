@@ -185,3 +185,23 @@ body {
   margin-top: 0.75em;
   margin-bottom: 0.75em;
 }
+
+/*
+ * Rendered markdown view: align prose code theming with Prism light/dark themes.
+ *
+ * Tailwind Typography defaults to dark-bg code blocks even in light mode.
+ * We override the prose custom properties so ALL code elements (fenced blocks
+ * with/without language, inline backtick code) use colors that match the
+ * active Prism theme. Prism's token-level colors then layer on top correctly.
+ */
+.rendered-markdown-view {
+  --tw-prose-pre-bg: #f5f2f0;
+  --tw-prose-pre-code: #393a34;
+  --tw-prose-code: hsl(var(--foreground));
+}
+
+.dark .rendered-markdown-view {
+  --tw-prose-pre-bg: hsl(220, 13%, 18%);
+  --tw-prose-pre-code: hsl(220, 14%, 71%);
+  --tw-prose-code: hsl(var(--foreground));
+}

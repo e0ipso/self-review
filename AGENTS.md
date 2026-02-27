@@ -239,3 +239,8 @@ the single source of truth for the XML output format.
 - Do not create wrapper elements in the XML output (no `<files>`, no `<comments>` wrapper).
 - Do not store any state outside of React context in the renderer.
 - Do not use `console.log()` in the main process (use `console.error()` for stderr logging).
+
+## When submitting a PR
+
+Make sure the PR title follows the conventional commit naming convention.
+
