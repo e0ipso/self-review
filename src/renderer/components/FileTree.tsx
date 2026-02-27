@@ -9,6 +9,7 @@ import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { Search, CircleDashed, CircleCheck, MessageSquare, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getFileStats, getChangeTypeInfo } from '../utils/diff-styles';
+import TruncatedPath from './TruncatedPath';
 
 export default function FileTree() {
   const { diffFiles, files, toggleViewed } = useReview();
@@ -17,7 +18,6 @@ export default function FileTree() {
   const [searchQuery, setSearchQuery] = useState('');
   const [allExpanded, setAllExpanded] = useState(true);
 
-  const outputBasename = outputPathInfo.resolvedOutputPath.split(/[/\\]/).pop() || 'review.xml';
 
   const handleChangeOutputPath = async () => {
     const result = await window.electronAPI.changeOutputPath();
@@ -51,14 +51,6 @@ export default function FileTree() {
     return fileState?.viewed || false;
   };
 
-  const splitPath = (fullPath: string) => {
-    const lastSlash = fullPath.lastIndexOf('/');
-    if (lastSlash === -1) return { dir: '', fileName: fullPath };
-    return {
-      dir: fullPath.slice(0, lastSlash + 1),
-      fileName: fullPath.slice(lastSlash + 1),
-    };
-  };
 
   return (
     <div className='flex flex-col h-full' data-testid='file-tree'>
@@ -141,7 +133,6 @@ export default function FileTree() {
           const viewed = isViewed(filePath);
           const isActive = activeFilePath === filePath;
           const changeType = getChangeTypeInfo(file.changeType);
-          const { dir, fileName } = splitPath(filePath);
 
           return (
             <Tooltip key={filePath}>
@@ -165,16 +156,7 @@ export default function FileTree() {
                     </span>
 
                     {/* File path */}
-                    <span className='flex-1 min-w-0 flex font-mono text-xs leading-tight'>
-                      {dir && (
-                        <span className='truncate text-muted-foreground/70'>
-                          {dir}
-                        </span>
-                      )}
-                      <span className='flex-shrink-0 whitespace-nowrap'>
-                        {fileName}
-                      </span>
-                    </span>
+                    <TruncatedPath path={filePath} />
 
                     {/* Indicators */}
                     <div className='flex items-center gap-1 flex-shrink-0'>
@@ -244,7 +226,7 @@ export default function FileTree() {
               <span className='font-medium'>Output:</span>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className='truncate cursor-default'>{outputBasename}</span>
+                  <TruncatedPath path={outputPathInfo.resolvedOutputPath} className='cursor-default' />
                 </TooltipTrigger>
                 <TooltipContent side='right' className='max-w-sm'>
                   <p className='font-mono text-xs break-all'>{outputPathInfo.resolvedOutputPath}</p>
