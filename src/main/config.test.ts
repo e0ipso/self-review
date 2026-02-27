@@ -35,7 +35,7 @@ describe('config', () => {
       expect(config.diffView).toBe('split');
       expect(config.fontSize).toBe(14);
       expect(config.outputFile).toBe('./review.xml');
-      expect(config.categories).toHaveLength(5);
+      expect(config.categories).toHaveLength(6);
       expect(config.categories[0].name).toBe('question');
       expect(config.wordWrap).toBe(true);
     });
@@ -242,7 +242,7 @@ categories:
 
       const config = loadConfig();
 
-      // Should have only 1 category, not 6 (1 custom + 5 defaults)
+      // Should have only 1 category, not 7 (1 custom + 6 defaults)
       expect(config.categories).toHaveLength(1);
       expect(config.categories[0].name).toBe('only-this');
     });
