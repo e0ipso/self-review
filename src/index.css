@@ -127,6 +127,11 @@ body {
   background: hsl(var(--border) / 0.5);
 }
 
+/* Prevent Tailwind .table utility from overriding Prism token spans */
+.token.table {
+  display: inline;
+}
+
 /* MDEditor overrides for CommentInput */
 .md-editor-comment.w-md-editor {
   border: none !important;
