@@ -254,6 +254,7 @@ export default function RenderedMarkdownView({
     pre: createBlockRenderer('pre'),
     table: createBlockRenderer('table'),
     hr: createBlockRenderer('hr'),
+    details: createBlockRenderer('details'),
     code: CodeRenderer,
   }), [createBlockRenderer, CodeRenderer]);
 

@@ -44,5 +44,10 @@ export default function MermaidBlock({ code }: { code: string }) {
     );
   }
   if (!svg) return <div className='animate-pulse bg-muted h-32 rounded' />;
-  return <div dangerouslySetInnerHTML={{ __html: svg }} />;
+  return (
+    <div
+      className="overflow-hidden max-w-full [&>svg]:max-w-full [&>svg]:h-auto"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
 }

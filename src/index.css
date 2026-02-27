@@ -169,3 +169,19 @@ body {
   font-size: 0.875rem !important;
   line-height: 1.25rem !important;
 }
+
+/* Rendered markdown view: override prose margins that compound with gutter padding */
+.rendered-markdown-view table {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+.rendered-markdown-view pre {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+.rendered-markdown-view details {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
