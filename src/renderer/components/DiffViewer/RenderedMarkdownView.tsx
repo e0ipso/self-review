@@ -11,6 +11,7 @@ import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
 import MermaidBlock from './MermaidBlock';
+import { remarkEmoji } from '../../utils/remark-emoji';
 
 // ===== Nesting Context =====
 // Tracks whether we're inside a block that already has a gutter wrapper,
@@ -256,7 +257,7 @@ export default function RenderedMarkdownView({
   return (
     <div className='prose dark:prose-invert max-w-none p-4 rendered-markdown-view'>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkEmoji]}
         rehypePlugins={[rehypeRaw]}
         components={components}
       >

@@ -85,6 +85,7 @@
     "@base-ui/react": "^1.1.0",
     "@commitlint/cli": "^20.4.1",
     "@commitlint/config-conventional": "^20.4.1",
+    "@emoji-mart/data": "^1.2.1",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@semantic-release/github": "^11.0.6",
     "@semantic-release/npm": "^13.1.4",

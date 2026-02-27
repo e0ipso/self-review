@@ -41,6 +41,7 @@ self-review/
 │   │   ├── ipc-handlers.ts      # ipcMain handlers (diff:load, review:submit, etc.)
 │   │   ├── xml-serializer.ts    # ReviewState → XML string (validates against XSD)
 │   │   ├── xml-parser.ts        # XML string → ReviewState (for --resume-from)
+│   │   ├── version-checker.ts   # Checks GitHub Releases API for updates (startup only)
 │   │   └── config.ts            # YAML config loading & merging
 │   ├── preload/
 │   │   └── preload.ts           # contextBridge exposing IPC to renderer
@@ -52,7 +53,8 @@ self-review/
 │       │   └── ConfigContext.tsx  # Merged config (theme, categories, etc.)
 │       ├── hooks/
 │       │   ├── useReviewState.ts # Comment CRUD, state management
-│       │   └── useDiffNavigation.ts # File tree ↔ diff viewer scroll sync
+│       │   ├── useDiffNavigation.ts # File tree ↔ diff viewer scroll sync
+│       │   └── useEmojiAutocomplete.ts # Emoji shortcode autocomplete in comment editor
 │       └── components/
 │           ├── Layout.tsx        # Two-panel layout (file tree + diff viewer)
 │           ├── FileTree.tsx      # Left panel: file list, search, viewed checkboxes, output path footer
@@ -68,6 +70,7 @@ self-review/
 │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
 │           └── Comments/
 │               ├── CommentInput.tsx    # Text area + category selector + add/cancel
+│               ├── EmojiAutocomplete.tsx # Inline emoji shortcode dropdown
 │               ├── CommentDisplay.tsx  # Rendered comment with edit/delete
 │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
 │               └── CategorySelector.tsx # Dropdown/chip selector for categories
@@ -114,6 +117,8 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | `diff:expand-context`  | Renderer → Main | `ExpandContextRequest` | Re-run git diff with more context for a single file |
 | `output-path:change`   | Renderer → Main | `OutputPathInfo \| null` | Open native save dialog to change output path |
 | `output-path:changed`  | Main → Renderer | `OutputPathInfo`  | Notify renderer when output path changes       |
+| `version-update:available` | Main → Renderer | `VersionUpdateInfo` | Notify renderer of available update        |
+| `open-external`            | Renderer → Main | `string` (URL)      | Open URL in default browser                |
 
 ## Shared Types
 
@@ -181,8 +186,11 @@ E2E tests use Playwright with Cucumber BDD:
 - **stdout is unused.** Nothing is written to stdout. XML output is written to a file (default
   `./review.xml`, configurable via `output-file` in YAML config). All logging goes to stderr. Use
   `console.error()` for logging in the main process, never `console.log()`.
-- **No network access.** The app makes zero network requests. No telemetry, no analytics, no CDN
-  fetches. All assets are bundled.
+- **No network access (except version check).** The app makes zero network requests at runtime,
+  with one exception: on startup, it makes a single non-blocking request to the GitHub Releases
+  API (`api.github.com`) to check for updates. This request is fire-and-forget — if it fails for
+  any reason (offline, timeout, firewall), it is silently ignored. No telemetry, no analytics, no
+  CDN fetches. All assets are bundled.
 - **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
 - **XSD sync.** The XSD schema exists in two locations: `.claude/skills/self-review-apply/assets/self-review-v1.xsd` (standalone) and embedded as a string in `src/main/xml-serializer.ts`. Both copies must be kept in sync when the schema changes.
 - **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
@@ -200,6 +208,11 @@ E2E tests use Playwright with Cucumber BDD:
 - **MDEditor for comments.** `CommentInput` uses `@uiw/react-md-editor` (write-only mode, no
   preview) for the comment body textarea. Suggestion code textareas remain as plain shadcn
   `<Textarea>` components.
+- **Emoji shortcode support.** Typing `:` + 2 characters in the comment editor triggers an inline
+  autocomplete dropdown (via `useEmojiAutocomplete` hook + `EmojiAutocomplete` component). Emoji
+  data comes from `@emoji-mart/data`. A custom remark plugin (`remark-emoji.ts`) converts
+  `:shortcode:` text to Unicode emojis in all rendered markdown views (CommentDisplay and
+  RenderedMarkdownView).
 
 ## XSD Schema Location
 

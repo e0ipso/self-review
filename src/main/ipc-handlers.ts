@@ -2,7 +2,7 @@
 // IPC handler registration
 
 import * as fs from 'fs';
-import { ipcMain, BrowserWindow, dialog, app } from 'electron';
+import { ipcMain, BrowserWindow, dialog, app, shell } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import {
   DiffLoadPayload,
@@ -15,6 +15,7 @@ import {
   FindInPageRequest,
 } from '../shared/types';
 import { scanDirectory, scanFile } from './directory-scanner';
+import { getVersionUpdate } from './version-checker';
 
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
@@ -206,6 +207,22 @@ export function registerIpcHandlers(): void {
     win.webContents.stopFindInPage(
       action as 'clearSelection' | 'keepSelection' | 'activateSelection'
     );
+  });
+
+  // Handle version update request from renderer
+  ipcMain.on(IPC.VERSION_UPDATE_REQUEST, event => {
+    const update = getVersionUpdate();
+    if (update) {
+      event.sender.send(IPC.VERSION_UPDATE_AVAILABLE, update);
+    }
+  });
+
+  // Handle open-external requests from renderer
+  ipcMain.handle(IPC.OPEN_EXTERNAL, async (_event, url: string) => {
+    // Security: only allow https://github.com/ URLs
+    if (typeof url === 'string' && url.startsWith('https://github.com/')) {
+      await shell.openExternal(url);
+    }
   });
 
   // Start a directory review from a picked path

@@ -21,4 +21,7 @@ export const IPC = {
   FIND_IN_PAGE: 'find:in-page',
   FIND_STOP: 'find:stop',
   FIND_RESULT: 'find:result',
+  VERSION_UPDATE_REQUEST: 'version-update:request',
+  VERSION_UPDATE_AVAILABLE: 'version-update:available',
+  OPEN_EXTERNAL: 'open-external',
 } as const;

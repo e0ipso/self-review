@@ -151,6 +151,13 @@ export interface FindInPageResult {
   finalUpdate: boolean;
 }
 
+// ===== Version Update Types =====
+
+export interface VersionUpdateInfo {
+  latestVersion: string;
+  releaseUrl: string;
+}
+
 // ===== Electron API (preload bridge) =====
 
 export interface ElectronAPI {
@@ -174,6 +181,9 @@ export interface ElectronAPI {
   findInPage: (request: FindInPageRequest) => void;
   stopFindInPage: (action: string) => void;
   onFindResult: (callback: (result: FindInPageResult) => void) => () => void;
+  requestVersionUpdate: () => void;
+  onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => void;
+  openExternal: (url: string) => Promise<void>;
 }
 
 declare global {

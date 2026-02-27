@@ -12,6 +12,7 @@ import {
   ExpandContextRequest,
   FindInPageRequest,
   FindInPageResult,
+  VersionUpdateInfo,
 } from '../shared/types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -100,4 +101,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(IPC.FIND_RESULT, handler);
     return () => ipcRenderer.removeListener(IPC.FIND_RESULT, handler);
   },
+
+  requestVersionUpdate: () => {
+    ipcRenderer.send(IPC.VERSION_UPDATE_REQUEST);
+  },
+
+  onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => {
+    ipcRenderer.on(IPC.VERSION_UPDATE_AVAILABLE, (_event, info: VersionUpdateInfo) =>
+      callback(info)
+    );
+  },
+
+  openExternal: (url: string) => ipcRenderer.invoke(IPC.OPEN_EXTERNAL, url),
 });
