@@ -247,8 +247,8 @@ async function initializeApp() {
       };
     }
 
-    // Phase 5: Handle --resume-from if specified (git mode only)
-    if (cliArgs.resumeFrom && mode === 'git') {
+    // Phase 5: Handle --resume-from if specified
+    if (cliArgs.resumeFrom) {
       try {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
         const parsed = parseReviewXml(cliArgs.resumeFrom);
