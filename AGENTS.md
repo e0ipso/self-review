@@ -53,7 +53,8 @@ self-review/
 │       │   └── ConfigContext.tsx  # Merged config (theme, categories, etc.)
 │       ├── hooks/
 │       │   ├── useReviewState.ts # Comment CRUD, state management
-│       │   └── useDiffNavigation.ts # File tree ↔ diff viewer scroll sync
+│       │   ├── useDiffNavigation.ts # File tree ↔ diff viewer scroll sync
+│       │   └── useEmojiAutocomplete.ts # Emoji shortcode autocomplete in comment editor
 │       └── components/
 │           ├── Layout.tsx        # Two-panel layout (file tree + diff viewer)
 │           ├── FileTree.tsx      # Left panel: file list, search, viewed checkboxes, output path footer
@@ -69,6 +70,7 @@ self-review/
 │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
 │           └── Comments/
 │               ├── CommentInput.tsx    # Text area + category selector + add/cancel
+│               ├── EmojiAutocomplete.tsx # Inline emoji shortcode dropdown
 │               ├── CommentDisplay.tsx  # Rendered comment with edit/delete
 │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
 │               └── CategorySelector.tsx # Dropdown/chip selector for categories
@@ -206,6 +208,11 @@ E2E tests use Playwright with Cucumber BDD:
 - **MDEditor for comments.** `CommentInput` uses `@uiw/react-md-editor` (write-only mode, no
   preview) for the comment body textarea. Suggestion code textareas remain as plain shadcn
   `<Textarea>` components.
+- **Emoji shortcode support.** Typing `:` + 2 characters in the comment editor triggers an inline
+  autocomplete dropdown (via `useEmojiAutocomplete` hook + `EmojiAutocomplete` component). Emoji
+  data comes from `@emoji-mart/data`. A custom remark plugin (`remark-emoji.ts`) converts
+  `:shortcode:` text to Unicode emojis in all rendered markdown views (CommentDisplay and
+  RenderedMarkdownView).
 
 ## XSD Schema Location
 
