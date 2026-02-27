@@ -16,6 +16,8 @@ export const IPC = {
   DIALOG_PICK_DIRECTORY: 'dialog:pick-directory',
   REVIEW_START_DIRECTORY: 'review:start-directory',
   DIFF_EXPAND_CONTEXT: 'diff:expand-context',
+  OUTPUT_PATH_CHANGE: 'output-path:change',
+  OUTPUT_PATH_CHANGED: 'output-path:changed',
   FIND_IN_PAGE: 'find:in-page',
   FIND_STOP: 'find:stop',
   FIND_RESULT: 'find:result',

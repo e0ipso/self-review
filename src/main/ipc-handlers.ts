@@ -8,6 +8,7 @@ import {
   DiffLoadPayload,
   ResumeLoadPayload,
   AppConfig,
+  OutputPathInfo,
   ReviewState,
   ReviewComment,
   ExpandContextRequest,
@@ -18,6 +19,7 @@ import { scanDirectory, scanFile } from './directory-scanner';
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
 let configCache: AppConfig | null = null;
+let outputPathInfoCache: OutputPathInfo | null = null;
 let resumeCommentsCache: ReviewComment[] = [];
 
 export function setDiffData(data: DiffLoadPayload): void {
@@ -26,6 +28,10 @@ export function setDiffData(data: DiffLoadPayload): void {
 
 export function setConfigData(data: AppConfig): void {
   configCache = data;
+}
+
+export function setOutputPathInfo(info: OutputPathInfo): void {
+  outputPathInfoCache = info;
 }
 
 export function setResumeComments(comments: ReviewComment[]): void {
@@ -43,7 +49,7 @@ export function registerIpcHandlers(): void {
   // Handle config request from renderer
   ipcMain.on(IPC.CONFIG_REQUEST, event => {
     if (configCache) {
-      event.sender.send(IPC.CONFIG_LOAD, configCache);
+      event.sender.send(IPC.CONFIG_LOAD, configCache, outputPathInfoCache);
     }
   });
 
@@ -272,8 +278,8 @@ export function sendDiffLoad(
   window.webContents.send(IPC.DIFF_LOAD, payload);
 }
 
-export function sendConfigLoad(window: BrowserWindow, config: AppConfig): void {
-  window.webContents.send(IPC.CONFIG_LOAD, config);
+export function sendConfigLoad(window: BrowserWindow, config: AppConfig, outputPathInfo?: OutputPathInfo): void {
+  window.webContents.send(IPC.CONFIG_LOAD, config, outputPathInfo);
 }
 
 export function sendResumeLoad(
