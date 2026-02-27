@@ -82,9 +82,13 @@ function BlockWrapper({
     commentRange.end >= startLine &&
     commentRange.end <= endLine;
 
-  // Void elements (hr, img, etc.) can't have children — wrap in a div instead
+  // Void elements (hr, img, etc.) can't have children
   const isVoid = Tag === 'hr';
 
+  // Always wrap in a container <div> with the gutter. Putting paddingLeft
+  // directly on the semantic tag breaks for tables (border-collapse ignores
+  // padding), pre/code (background bleeds into padding), and potentially
+  // any future element with non-standard box-model behavior.
   const gutter = (
     <div
       className='rendered-gutter absolute left-0 top-0 w-16 text-right pr-2 select-none cursor-pointer text-[11px] text-muted-foreground/70'
@@ -107,28 +111,19 @@ function BlockWrapper({
 
   return (
     <GutterNestingContext.Provider value={true}>
-      {isVoid ? (
-        <div
-          className='rendered-block group/rendered-block relative'
-          data-source-start-line={startLine}
-          data-source-end-line={endLine}
-          style={{ paddingLeft: '4rem' }}
-        >
-          {gutter}
+      <div
+        className='rendered-block group/rendered-block relative'
+        data-source-start-line={startLine}
+        data-source-end-line={endLine}
+        style={{ paddingLeft: '4rem' }}
+      >
+        {gutter}
+        {isVoid ? (
           <Tag className={className} {...tagProps} />
-        </div>
-      ) : (
-        <Tag
-          className={`rendered-block group/rendered-block relative ${className || ''}`}
-          data-source-start-line={startLine}
-          data-source-end-line={endLine}
-          style={{ paddingLeft: '4rem' }}
-          {...tagProps}
-        >
-          {gutter}
-          {children}
-        </Tag>
-      )}
+        ) : (
+          <Tag className={className} {...tagProps}>{children}</Tag>
+        )}
+      </div>
 
       {/* Existing comments for this block */}
       {blockComments.map(comment => (
@@ -254,6 +249,7 @@ export default function RenderedMarkdownView({
     pre: createBlockRenderer('pre'),
     table: createBlockRenderer('table'),
     hr: createBlockRenderer('hr'),
+    details: createBlockRenderer('details'),
     code: CodeRenderer,
   }), [createBlockRenderer, CodeRenderer]);
 
