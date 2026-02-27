@@ -11,6 +11,7 @@ export default function UpdateBanner() {
     window.electronAPI.onVersionUpdate((info) => {
       setUpdateInfo(info);
     });
+    window.electronAPI.requestVersionUpdate();
   }, []);
 
   if (!updateInfo || dismissed) return null;

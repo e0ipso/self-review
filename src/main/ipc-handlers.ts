@@ -15,6 +15,7 @@ import {
   FindInPageRequest,
 } from '../shared/types';
 import { scanDirectory, scanFile } from './directory-scanner';
+import { getVersionUpdate } from './version-checker';
 
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
@@ -206,6 +207,14 @@ export function registerIpcHandlers(): void {
     win.webContents.stopFindInPage(
       action as 'clearSelection' | 'keepSelection' | 'activateSelection'
     );
+  });
+
+  // Handle version update request from renderer
+  ipcMain.on(IPC.VERSION_UPDATE_REQUEST, event => {
+    const update = getVersionUpdate();
+    if (update) {
+      event.sender.send(IPC.VERSION_UPDATE_AVAILABLE, update);
+    }
   });
 
   // Handle open-external requests from renderer

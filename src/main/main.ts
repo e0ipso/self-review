@@ -289,8 +289,8 @@ async function initializeApp() {
     createWindow();
     console.error('[main] Window created successfully');
 
-    // Non-blocking version check (fire-and-forget)
-    checkForUpdate(mainWindow!).catch(() => {});
+    // Non-blocking version check — caches result for renderer to request
+    checkForUpdate().catch(() => {});
 
     clearTimeout(initTimeout);
     console.error('[main] Initialization complete');

@@ -181,6 +181,7 @@ export interface ElectronAPI {
   findInPage: (request: FindInPageRequest) => void;
   stopFindInPage: (action: string) => void;
   onFindResult: (callback: (result: FindInPageResult) => void) => () => void;
+  requestVersionUpdate: () => void;
   onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => void;
   openExternal: (url: string) => Promise<void>;
 }

@@ -1,12 +1,17 @@
 // src/main/version-checker.ts
-// Checks GitHub for a newer release and notifies the renderer if one is available.
+// Checks GitHub for a newer release and caches the result for the renderer.
 
-import { net, BrowserWindow } from 'electron';
-import { IPC } from '../shared/ipc-channels';
+import { net } from 'electron';
 import { VersionUpdateInfo } from '../shared/types';
 
 const GITHUB_API_URL = 'https://api.github.com/repos/e0ipso/self-review/releases/latest';
 const TIMEOUT_MS = 5000;
+
+let versionUpdateCache: VersionUpdateInfo | null = null;
+
+export function getVersionUpdate(): VersionUpdateInfo | null {
+  return versionUpdateCache;
+}
 
 export function compareVersions(current: string, latest: string): boolean {
   const c = current.split('.').map(Number);
@@ -18,7 +23,7 @@ export function compareVersions(current: string, latest: string): boolean {
   return false;
 }
 
-export async function checkForUpdate(mainWindow: BrowserWindow): Promise<void> {
+export async function checkForUpdate(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { version: currentVersion } = require('../../package.json');
 
@@ -57,11 +62,10 @@ export async function checkForUpdate(mainWindow: BrowserWindow): Promise<void> {
           if (typeof tagName !== 'string') { resolve(); return; }
           const latestVersion = tagName.replace(/^v/, '');
           if (compareVersions(currentVersion, latestVersion)) {
-            const info: VersionUpdateInfo = {
+            versionUpdateCache = {
               latestVersion,
               releaseUrl: data.html_url || `https://github.com/e0ipso/self-review/releases/tag/${tagName}`,
             };
-            mainWindow.webContents.send(IPC.VERSION_UPDATE_AVAILABLE, info);
           }
         } catch {
           // Silently ignore parse errors

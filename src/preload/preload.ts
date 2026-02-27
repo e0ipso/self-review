@@ -102,6 +102,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(IPC.FIND_RESULT, handler);
   },
 
+  requestVersionUpdate: () => {
+    ipcRenderer.send(IPC.VERSION_UPDATE_REQUEST);
+  },
+
   onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => {
     ipcRenderer.on(IPC.VERSION_UPDATE_AVAILABLE, (_event, info: VersionUpdateInfo) =>
       callback(info)
