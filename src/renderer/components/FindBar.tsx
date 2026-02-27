@@ -98,7 +98,10 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
       if (result.finalUpdate) {
         setActiveMatch(result.activeMatchOrdinal);
         setTotalMatches(result.matches);
-        // Don't refocus - let the global Enter handler work without input focus
+        // Refocus input after Chromium's findInPage steals focus
+        requestAnimationFrame(() => {
+          inputRef.current?.focus();
+        });
       }
     });
 
@@ -141,26 +144,15 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
   }, [isOpen, query, findNext, findPrevious, handleClose]);
 
-  // Auto-search when query changes
+  // Clear highlights when query is emptied
   useEffect(() => {
-    if (!isOpen || !query) {
-      if (!query && lastSearchedQueryRef.current) {
-        window.electronAPI.stopFindInPage('clearSelection');
-        setActiveMatch(0);
-        setTotalMatches(0);
-        lastSearchedQueryRef.current = '';
-      }
-      return;
+    if (!query && lastSearchedQueryRef.current) {
+      window.electronAPI.stopFindInPage('clearSelection');
+      setActiveMatch(0);
+      setTotalMatches(0);
+      lastSearchedQueryRef.current = '';
     }
-
-    if (query !== lastSearchedQueryRef.current) {
-      // WORKAROUND: Chromium doesn't fire 'found-in-page' event for the first
-      // findInPage call with findNext: false. Call it twice to get the event.
-      window.electronAPI.findInPage({ text: query, forward: true, findNext: false });
-      window.electronAPI.findInPage({ text: query, forward: true, findNext: true });
-      lastSearchedQueryRef.current = query;
-    }
-  }, [isOpen, query]);
+  }, [query]);
 
   // Clear highlights when closing
   useEffect(() => {
