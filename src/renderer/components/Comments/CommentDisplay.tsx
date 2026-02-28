@@ -201,16 +201,18 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
           )}
         </div>
         {!isCollapsed && (
-          <div className='flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity'>
-            <Button
-              variant='ghost'
-              size='sm'
-              onClick={() => setIsEditing(true)}
-              className='h-6 w-6 p-0'
-            >
-              <Pencil className='h-3 w-3' />
-              <span className='sr-only'>Edit</span>
-            </Button>
+          <div className='flex gap-0.5'>
+            <div className='opacity-0 group-hover:opacity-100 transition-opacity'>
+              <Button
+                variant='ghost'
+                size='sm'
+                onClick={() => setIsEditing(true)}
+                className='h-6 w-6 p-0'
+              >
+                <Pencil className='h-3 w-3' />
+                <span className='sr-only'>Edit</span>
+              </Button>
+            </div>
             <Button
               variant='ghost'
               size='sm'
