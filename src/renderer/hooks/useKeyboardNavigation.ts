@@ -73,7 +73,7 @@ export function useKeyboardNavigation() {
 
         // Comment form buttons and file-level actions: just click them
         const hintAction = hint.element.getAttribute('data-hint-action');
-        if (testId === 'cancel-comment-btn' || testId === 'add-comment-btn' || testId?.startsWith('category-option-') || hintAction === 'toggle-viewed' || hintAction === 'add-file-comment') {
+        if (testId === 'cancel-comment-btn' || testId === 'add-comment-btn' || testId?.startsWith('category-option-') || hintAction === 'toggle-viewed' || hintAction === 'add-file-comment' || hintAction === 'delete-comment' || hintAction === 'finish-review') {
           hint.element.click();
           clearHintsRef.current();
           return;
@@ -130,7 +130,7 @@ export function useKeyboardNavigation() {
     let selector: string;
     if (newMode === 'hint-diff') {
       selector =
-        '[data-line-type="addition"][data-line-number][data-line-side], [data-line-type="deletion"][data-line-number][data-line-side], [data-testid="cancel-comment-btn"], [data-testid="add-comment-btn"], [data-testid^="category-option-"], [data-hint-action="toggle-viewed"], [data-hint-action="add-file-comment"]';
+        '[data-line-type="addition"][data-line-number][data-line-side], [data-line-type="deletion"][data-line-number][data-line-side], [data-testid="cancel-comment-btn"], [data-testid="add-comment-btn"], [data-testid^="category-option-"], [data-hint-action="toggle-viewed"], [data-hint-action="add-file-comment"], [data-hint-action="delete-comment"], [data-hint-action="finish-review"]';
     } else {
       selector =
         '.file-tree [data-file-path], [data-testid="file-tree"] [data-file-path], button[data-file-path]';

@@ -299,6 +299,7 @@ export default function Toolbar() {
                 variant='default'
                 size='sm'
                 data-testid='finish-review-btn'
+                data-hint-action='finish-review'
                 onClick={() => window.electronAPI.saveAndQuit()}
                 className='gap-1.5 h-8 px-3'
                 disabled={!outputPathInfo.outputPathWritable}
