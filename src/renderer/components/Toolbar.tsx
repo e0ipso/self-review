@@ -22,6 +22,7 @@ import {
   FileText,
   CheckCircle2,
 } from 'lucide-react';
+import ReviewProgress from './ReviewProgress';
 
 export default function Toolbar() {
   const { config, updateConfig, outputPathInfo } = useConfig();
@@ -284,6 +285,10 @@ export default function Toolbar() {
           <TooltipContent>System theme</TooltipContent>
         </Tooltip>
         </ToggleGroup>
+
+        <Separator orientation='vertical' className='h-5' />
+
+        <ReviewProgress />
 
         <Separator orientation='vertical' className='h-5' />
 
