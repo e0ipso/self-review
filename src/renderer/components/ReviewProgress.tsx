@@ -53,7 +53,7 @@ export default function ReviewProgress() {
           <TooltipTrigger asChild>
             <div
               className='flex items-center gap-1 text-xs text-muted-foreground'
-              data-testid='comment-stats'
+              data-testid='review-stats'
             >
               <MessageSquare className='h-3 w-3' />
               <span className='tabular-nums'>{commentCount}</span>

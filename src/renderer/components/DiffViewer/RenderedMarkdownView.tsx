@@ -29,6 +29,14 @@ function extractFileContent(file: DiffFile): string {
     .join('\n');
 }
 
+// Tags that accept phrasing (inline) content — the Tag itself can be the
+// positioned container with the gutter <span> inside. Tags NOT in this set
+// (ul, ol, table, hr) need a wrapper <div> because they can't contain inline
+// children directly.
+const INLINE_SAFE_TAGS: ReadonlySet<string> = new Set([
+  'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'li', 'details',
+]);
+
 // ===== Block Wrapper with Gutter =====
 
 interface BlockWrapperProps {
@@ -86,12 +94,15 @@ function BlockWrapper({
   // Void elements (hr, img, etc.) can't have children
   const isVoid = Tag === 'hr';
 
-  // Always wrap in a container <div> with the gutter. Putting paddingLeft
-  // directly on the semantic tag breaks for tables (border-collapse ignores
-  // padding), pre/code (background bleeds into padding), and potentially
-  // any future element with non-standard box-model behavior.
+  // Tags that accept phrasing (inline) content as children — the Tag itself
+  // becomes the positioned container so that selectors like `p.rendered-block`
+  // work and the gutter is a descendant of the semantic element.
+  // Tags that don't (ul, ol, table) keep a wrapper <div>.
+  const isInlineSafe = INLINE_SAFE_TAGS.has(Tag as string);
+  const GutterEl = isInlineSafe ? 'span' : 'div';
+
   const gutter = (
-    <div
+    <GutterEl
       className='rendered-gutter absolute left-0 top-0 w-16 text-right pr-2 select-none cursor-pointer text-[11px] text-muted-foreground/70'
       style={{ lineHeight: 'inherit' }}
       onMouseDown={e => {
@@ -107,31 +118,15 @@ function BlockWrapper({
         <MessageSquarePlus className='h-4 w-4' />
       </button>
       <span className='pointer-events-none'>{rangeLabel}</span>
-    </div>
+    </GutterEl>
   );
 
-  // Combine the original className with rendered-block so that tag-specific
-  // selectors (e.g. `p.rendered-block`) match the actual semantic element.
-  const tagClassName = className
-    ? `${className} rendered-block`
-    : 'rendered-block';
+  const blockClassName = [className, 'rendered-block group/rendered-block relative']
+    .filter(Boolean)
+    .join(' ');
 
-  return (
-    <GutterNestingContext.Provider value={true}>
-      <div
-        className='rendered-block group/rendered-block relative'
-        data-source-start-line={startLine}
-        data-source-end-line={endLine}
-        style={{ paddingLeft: '4rem' }}
-      >
-        {gutter}
-        {isVoid ? (
-          <Tag className={tagClassName} {...tagProps} />
-        ) : (
-          <Tag className={tagClassName} {...tagProps}>{children}</Tag>
-        )}
-      </div>
-
+  const commentElements = (
+    <>
       {/* Existing comments for this block */}
       {blockComments.map(comment => (
         <div
@@ -157,6 +152,46 @@ function BlockWrapper({
           />
         </div>
       )}
+    </>
+  );
+
+  if (isInlineSafe) {
+    // The semantic Tag is the positioned container; gutter lives inside it.
+    return (
+      <GutterNestingContext.Provider value={true}>
+        <Tag
+          className={blockClassName}
+          data-source-start-line={startLine}
+          data-source-end-line={endLine}
+          style={{ paddingLeft: '4rem' }}
+          {...tagProps}
+        >
+          {gutter}
+          {children}
+        </Tag>
+        {commentElements}
+      </GutterNestingContext.Provider>
+    );
+  }
+
+  // For tags that can't contain inline content (ul, ol, table) or void
+  // elements (hr), wrap in a container <div> with the gutter alongside.
+  return (
+    <GutterNestingContext.Provider value={true}>
+      <div
+        className='rendered-block group/rendered-block relative'
+        data-source-start-line={startLine}
+        data-source-end-line={endLine}
+        style={{ paddingLeft: '4rem' }}
+      >
+        {gutter}
+        {isVoid ? (
+          <Tag className={className} {...tagProps} />
+        ) : (
+          <Tag className={className} {...tagProps}>{children}</Tag>
+        )}
+      </div>
+      {commentElements}
     </GutterNestingContext.Provider>
   );
 }
