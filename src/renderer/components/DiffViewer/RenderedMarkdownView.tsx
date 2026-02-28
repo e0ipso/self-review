@@ -110,6 +110,12 @@ function BlockWrapper({
     </div>
   );
 
+  // Combine the original className with rendered-block so that tag-specific
+  // selectors (e.g. `p.rendered-block`) match the actual semantic element.
+  const tagClassName = className
+    ? `${className} rendered-block`
+    : 'rendered-block';
+
   return (
     <GutterNestingContext.Provider value={true}>
       <div
@@ -120,9 +126,9 @@ function BlockWrapper({
       >
         {gutter}
         {isVoid ? (
-          <Tag className={className} {...tagProps} />
+          <Tag className={tagClassName} {...tagProps} />
         ) : (
-          <Tag className={className} {...tagProps}>{children}</Tag>
+          <Tag className={tagClassName} {...tagProps}>{children}</Tag>
         )}
       </div>
 

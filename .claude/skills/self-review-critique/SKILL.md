@@ -91,14 +91,18 @@ Review each file's changes. Look for:
 
 ## 6. Build the Review XML
 
-Construct the XML using the Write tool. Follow this exact structure:
+Read the XSD schema at `.claude/skills/self-review-apply/assets/self-review-v1.xsd` for the
+complete XML structure and validation rules. The `<xs:documentation>` annotations in the schema
+describe all element and attribute semantics.
+
+Construct the XML using the Write tool. Here is a minimal example for reference:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <review xmlns="urn:self-review:v1" timestamp="2026-02-28T14:30:00.000Z" git-diff-args="--staged" repository="/absolute/path/to/repo">
   <file path="src/utils.ts" change-type="modified" viewed="true">
-    <comment new-line-start="42" new-line-end="44">
-      <body>This function doesn't handle the case where `input` is an empty array, which would cause a division by zero on line 44.</body>
+    <comment new-line-start="42" new-line-end="42">
+      <body>Division by zero when input is empty.</body>
       <category>bug</category>
       <suggestion>
         <original-code>  const avg = sum / input.length;</original-code>
@@ -111,26 +115,12 @@ Construct the XML using the Write tool. Follow this exact structure:
 </review>
 ```
 
-**Critical rules:**
-- `timestamp`: Current time in ISO 8601 format. Get it with: `node -e "console.log(new Date().toISOString())"`
-- `repository`: Absolute path from `git rev-parse --show-toplevel`
-- `git-diff-args`: The exact arguments passed to `git diff` (from `$ARGUMENTS`)
-- `change-type`: Must be one of: `added`, `modified`, `deleted`, `renamed`
-- `viewed`: Always `"true"` for all files
-- For comments on **added or context lines**: use `new-line-start` and `new-line-end` attributes.
-  These reference line numbers in the **post-change** (current) version of the file.
-- For comments on **deleted lines**: use `old-line-start` and `old-line-end` attributes.
-  These reference line numbers in the **pre-change** (old) version of the file.
-- **Never use both** old-line and new-line attributes on the same comment.
-- **No line attributes** = file-level comment (applies to the file as a whole).
-- For **single-line** comments, start and end are the same number.
-- `<original-code>` must contain the **exact text** at the referenced lines in the file, copied
-  verbatim. Whitespace and indentation must match exactly.
-- **XML-escape** all text content: `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`,
+**Additional notes not in the schema:**
+- `timestamp`: Get current time with `node -e "console.log(new Date().toISOString())"`
+- `repository`: Get absolute path with `git rev-parse --show-toplevel`
+- `viewed`: Always `"true"` for all files (the assistant "viewed" them all)
+- XML-escape all text content: `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`,
   `'` → `&apos;`
-- Files with **no comments**: use self-closing tag `<file ... />`
-- **No wrapper elements**: `<file>` elements are direct children of `<review>`, `<comment>`
-  elements are direct children of `<file>`.
 
 ## 7. Validate the XML
 

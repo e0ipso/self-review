@@ -240,7 +240,7 @@ export default function FileTree() {
               <Button
                 variant='ghost'
                 size='sm'
-                className='h-5 px-1.5 text-xs ml-auto'
+                className='h-6 px-2 text-xs ml-auto'
                 onClick={handleChangeOutputPath}
               >
                 Change...
