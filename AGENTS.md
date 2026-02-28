@@ -214,6 +214,33 @@ E2E tests use Playwright with Cucumber BDD:
   `:shortcode:` text to Unicode emojis in all rendered markdown views (CommentDisplay and
   RenderedMarkdownView).
 
+## Assistant Skills
+
+### self-review-critique
+
+The `/self-review-critique` skill critiques a git diff and generates a `review.xml` file with
+line-level comments and code suggestions. The output can be loaded into self-review for human
+validation:
+
+```bash
+# Critique staged changes
+/self-review-critique --staged
+
+# Critique changes between branches
+/self-review-critique main..feature-branch
+
+# Human reviews the critique in self-review
+self-review --staged --resume-from review.xml
+```
+
+The skill reads categories from `.self-review.yaml` and validates output against the XSD schema.
+It is the counterpart to `self-review-apply`: critique generates review feedback, apply consumes it.
+
+### self-review-apply
+
+The `/self-review-apply` skill reads a `review.xml` file and applies the feedback (suggestions,
+comments) to the codebase. See `.claude/skills/self-review-apply/SKILL.md` for details.
+
 ## XSD Schema Location
 
 The XSD schema lives at `.claude/skills/self-review-apply/assets/self-review-v1.xsd`. This is
