@@ -253,7 +253,7 @@ export default function SplitView({
 
                 {/* Comments spanning full width (rendered at last line of range) */}
                 {hasCommentsToRender && (
-                  <div className='border-y border-blue-200/60 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-950/30 px-4 py-3 space-y-2'>
+                  <div className='border-y border-border bg-muted/50 px-4 py-3 space-y-2'>
                     {oldCommentsToRender.map(comment => (
                       <CommentDisplay
                         key={comment.id}
@@ -273,7 +273,7 @@ export default function SplitView({
 
                 {/* Comment input spanning full width */}
                 {showCommentInputHere && (
-                  <div className='border-y border-blue-200/60 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-950/30 px-4 py-3'>
+                  <div className='border-y border-border bg-muted/50 px-4 py-3'>
                     <CommentInput
                       filePath={file.newPath || file.oldPath}
                       lineRange={{

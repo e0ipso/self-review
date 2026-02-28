@@ -132,7 +132,7 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
 
   return (
     <div
-      className='rounded-lg border border-blue-300 dark:border-blue-700 bg-card text-sm group shadow-sm'
+      className='rounded-lg border border-foreground/15 bg-card text-sm group shadow-sm'
       data-testid={`comment-${comment.id}`}
     >
       <div className='flex items-center justify-between px-3 py-2'>

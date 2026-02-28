@@ -207,7 +207,7 @@ export default function UnifiedView({
                 {commentsToRender.map(comment => (
                   <div
                     key={comment.id}
-                    className='border-y border-blue-200/60 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-950/30 px-4 py-3 ml-[100px]'
+                    className='border-y border-border bg-muted/50 px-4 py-3 ml-[100px]'
                   >
                     <CommentDisplay
                       comment={comment}
@@ -218,7 +218,7 @@ export default function UnifiedView({
 
                 {/* Comment input */}
                 {showCommentInputHere && (
-                  <div className='border-y border-blue-200/60 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-950/30 px-4 py-3 ml-[100px]'>
+                  <div className='border-y border-border bg-muted/50 px-4 py-3 ml-[100px]'>
                     <CommentInput
                       filePath={file.newPath || file.oldPath}
                       lineRange={{
