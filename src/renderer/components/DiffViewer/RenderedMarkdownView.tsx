@@ -130,7 +130,7 @@ function BlockWrapper({
       {blockComments.map(comment => (
         <div
           key={comment.id}
-          className='border-y border-border/50 bg-muted/20 px-4 py-3 ml-16'
+          className='border-y border-blue-200/60 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-950/30 px-4 py-3 ml-16'
         >
           <CommentDisplay
             comment={comment}
@@ -141,7 +141,7 @@ function BlockWrapper({
 
       {/* Comment input */}
       {showCommentInput && (
-        <div className='border-y border-border/50 bg-muted/20 px-4 py-3 ml-16'>
+        <div className='border-y border-blue-200/60 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-950/30 px-4 py-3 ml-16'>
           <CommentInput
             filePath={filePath}
             lineRange={commentRange}

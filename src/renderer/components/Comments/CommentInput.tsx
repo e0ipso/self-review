@@ -165,7 +165,7 @@ export default function CommentInput({
 
   return (
     <div
-      className={`rounded-lg border bg-card shadow-sm overflow-hidden relative ${isDragging ? 'border-primary border-2' : 'border-border'}`}
+      className={`rounded-lg border bg-card shadow-sm overflow-hidden relative ${isDragging ? 'border-primary border-2' : 'border-blue-300 dark:border-blue-700'}`}
       data-testid='comment-input'
       onPaste={handlePasteImages}
       onDrop={handleDropImages}
