@@ -264,7 +264,8 @@ export function registerIpcHandlers(): void {
       }
 
       // Directory mode: scan all files as new additions
-      const files = await scanDirectory(directoryPath);
+      const ignorePatterns = configCache?.ignore ?? [];
+      const files = await scanDirectory(directoryPath, ignorePatterns);
       const payload: DiffLoadPayload = {
         files,
         source: { type: 'directory', sourcePath: directoryPath },

@@ -6,16 +6,19 @@ import { join, relative, basename, dirname } from 'path';
 import { DiffFile } from '../shared/types';
 import { generateSyntheticDiffs } from './synthetic-diff';
 import { parseDiff } from './diff-parser';
+import { createIgnoreFilter } from './ignore-filter';
 
 /**
  * Recursively scan a directory and return DiffFile[] with every file
  * treated as a new addition (changeType: 'added').
  *
  * @param directoryPath - Absolute path to the directory to scan
+ * @param ignorePatterns - Optional gitignore-compatible patterns to exclude files
  * @returns Parsed DiffFile array for all files in the directory
  */
 export async function scanDirectory(
-  directoryPath: string
+  directoryPath: string,
+  ignorePatterns: string[] = []
 ): Promise<DiffFile[]> {
   // Verify the path is a directory
   try {
@@ -74,11 +77,15 @@ export async function scanDirectory(
   // Sort for deterministic output
   filePaths.sort();
 
-  if (filePaths.length === 0) {
+  // Apply ignore patterns
+  const shouldKeep = createIgnoreFilter(ignorePatterns);
+  const filteredPaths = filePaths.filter(p => shouldKeep(p));
+
+  if (filteredPaths.length === 0) {
     return [];
   }
 
-  const diffText = generateSyntheticDiffs(filePaths, directoryPath);
+  const diffText = generateSyntheticDiffs(filteredPaths, directoryPath);
   return parseDiff(diffText);
 }
 

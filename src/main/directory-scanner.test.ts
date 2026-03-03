@@ -123,6 +123,20 @@ describe('scanDirectory', () => {
     expect(paths).toEqual(['root.txt', 'subdir/nested.txt']);
   });
 
+  it('filters files matching ignore patterns', async () => {
+    const dir = await createTempDir();
+    await mkdir(join(dir, 'node_modules', 'pkg'), { recursive: true });
+    await mkdir(join(dir, 'src'), { recursive: true });
+    await writeFile(join(dir, 'node_modules', 'pkg', 'index.js'), 'module.exports = {};\n');
+    await writeFile(join(dir, 'src', 'app.ts'), 'const app = 1;\n');
+    await writeFile(join(dir, 'readme.txt'), 'Hello\n');
+
+    const result = await scanDirectory(dir, ['node_modules']);
+
+    const paths = result.map(f => f.newPath).sort();
+    expect(paths).toEqual(['readme.txt', 'src/app.ts']);
+  });
+
   it('produces parseable hunks with correct line content', async () => {
     const dir = await createTempDir();
     await writeFile(join(dir, 'sample.ts'), 'line1\nline2\nline3\n');
