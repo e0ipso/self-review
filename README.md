@@ -166,7 +166,7 @@ Project config overrides user config, which overrides built-in defaults.
 - `diff-view`: split or unified (default: split)
 - `font-size`: editor font size in pixels (default: 14)
 - `output-file`: path for the review XML output (default: `./review.xml`)
-- `ignore`: file patterns to exclude from diff (glob syntax)
+- `ignore`: file patterns to exclude from diff (gitignore-compatible syntax; defaults cover common vendor/build dirs and lock files)
 - `categories`: custom comment tags (see example above)
 - `default-diff-args`: default arguments passed to `git diff`
 - `show-untracked`: show new files not yet added to git (default: true)

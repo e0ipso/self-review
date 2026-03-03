@@ -533,14 +533,16 @@ word-wrap: true
 ```yaml
 # .self-review.yaml (in repo root)
 
-# File patterns to ignore (glob syntax, matched against file paths in the diff)
+# File patterns to ignore (gitignore-compatible syntax via the `ignore` npm package)
+# Defaults include common vendor/build directories and lock files:
+#   .git, node_modules, vendor, .vendor, __pycache__, .venv, venv, .env,
+#   dist, build, .next, .nuxt, .svelte-kit, target, *.min.js, *.min.css,
+#   package-lock.json, yarn.lock, pnpm-lock.yaml, composer.lock,
+#   Gemfile.lock, Cargo.lock, poetry.lock, go.sum
+# Setting this replaces the defaults entirely. Use `ignore: []` to disable.
 ignore:
-  - "package-lock.json"
-  - "yarn.lock"
-  - "pnpm-lock.yaml"
   - "*.generated.ts"
-  - "*.min.js"
-  - "dist/**"
+  - "some-custom-dir/"
 
 # Custom comment categories/tags available in the UI
 categories:

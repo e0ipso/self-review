@@ -10,6 +10,7 @@ import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
+import { createIgnoreFilter } from './ignore-filter';
 import { parseReviewXml } from './xml-parser';
 import { serializeReview } from './xml-serializer';
 import {
@@ -214,8 +215,11 @@ async function initializeApp() {
       const { files: allFiles, repository } = await loadGitDiffWithUntracked(gitDiffArgs);
       console.error('[main] Loaded', allFiles.length, 'files from git diff');
 
+      const shouldKeep = createIgnoreFilter(appConfig.ignore);
+      const filteredFiles = allFiles.filter(f => shouldKeep(f.newPath || f.oldPath));
+
       diffData = {
-        files: allFiles,
+        files: filteredFiles,
         source: { type: 'git', gitDiffArgs: gitDiffArgs.join(' '), repository },
       };
     } else if (mode === 'file') {
@@ -237,7 +241,7 @@ async function initializeApp() {
       const directoryPath = resolve(process.cwd(), dirArg);
       console.error('[main] Scanning directory:', directoryPath);
 
-      const files = await scanDirectory(directoryPath);
+      const files = await scanDirectory(directoryPath, appConfig.ignore);
       console.error('[main] Directory scan complete:', files.length, 'files');
 
       diffData = {
