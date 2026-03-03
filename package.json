@@ -96,6 +96,7 @@
     "clsx": "^2.1.1",
     "electron-squirrel-startup": "^1.0.1",
     "fast-xml-parser": "^5.3.5",
+    "ignore": "^7.0.5",
     "lucide-react": "^0.563.0",
     "mermaid": "^11.12.3",
     "postcss": "^8.5.6",
