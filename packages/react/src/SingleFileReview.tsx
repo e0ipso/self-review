@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo } from 'react';
 import type { AppConfig, DiffFile, DiffSource, ReviewComment, DiffLoadPayload } from '@self-review/core';
 import type { ReviewAdapter } from './adapter';
 import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
@@ -45,7 +45,7 @@ export function SingleFileReview({
   file,
   source,
   config,
-  onReviewChange,
+  onReviewChange: _onReviewChange,
   className,
   defaultViewMode = 'unified',
   prismLightCss,

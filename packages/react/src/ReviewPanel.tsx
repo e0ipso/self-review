@@ -1,5 +1,5 @@
 import React from 'react';
-import type { AppConfig, DiffFile, DiffSource, ReviewComment } from '@self-review/core';
+import type { AppConfig } from '@self-review/core';
 import type { ReviewAdapter } from './adapter';
 import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
 import { ConfigProvider } from './context/ConfigContext';

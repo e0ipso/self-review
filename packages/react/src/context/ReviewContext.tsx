@@ -16,7 +16,6 @@ import type {
   DiffSource,
   FileReviewState,
   ReviewComment,
-  ReviewState,
   LineRange,
   Suggestion,
 } from '@self-review/core';
