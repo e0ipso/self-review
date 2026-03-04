@@ -171,6 +171,10 @@ Project config overrides user config, which overrides built-in defaults.
 - `default-diff-args`: default arguments passed to `git diff`
 - `show-untracked`: show new files not yet added to git (default: true)
 - `word-wrap`: wrap long lines in the diff viewer (default: true)
+- `max-files`: maximum number of files before the large payload guard triggers (default: 500). Set to `0` to disable.
+- `max-total-lines`: maximum total diff lines before the large payload guard triggers (default: 100000). Set to `0` to disable.
+
+When either threshold is exceeded, a confirmation dialog appears. Cancelling exits the app; continuing enters large-payload mode with lazy content loading (file hunks are fetched on demand as you scroll).
 
 <details>
 <summary>Example: Custom comment categories</summary>

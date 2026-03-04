@@ -660,7 +660,25 @@ This mode is useful for reviewing AI-generated code that exists as standalone fi
 
 ### 9.5 Large Diffs
 
-No artificial limit is imposed on diff size. Performance for very large diffs (thousands of files, hundreds of thousands of lines) is a concern but not a v1 blocker. The UI should remain responsive through virtualized rendering of the file list and diff content if performance issues arise.
+The application includes a configurable **large payload guard** with dual thresholds:
+
+```yaml
+# .self-review.yaml or ~/.config/self-review/config.yaml
+max-files: 500
+max-total-lines: 100000
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `max-files` | `500` | Maximum number of files before the guard triggers. Set to `0` to disable this dimension. |
+| `max-total-lines` | `100000` | Maximum total diff lines before the guard triggers. Set to `0` to disable this dimension. |
+
+When either threshold is exceeded, a confirmation dialog appears showing the payload stats (file count and total lines). The user can:
+
+- **Cancel** — exit the application without loading the diff.
+- **Continue** — enter large-payload mode, where file content is loaded lazily. The initial `diff:load` payload includes file metadata (paths, change types, stats) but omits hunks. Hunks are fetched on demand via the `diff:load-file` IPC channel as the user navigates to each file.
+
+This prevents the renderer from being overwhelmed by very large diffs while still allowing full review capability.
 
 ---
 
