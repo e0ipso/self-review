@@ -74,6 +74,8 @@ const defaults: AppConfig = {
   defaultDiffArgs: '',
   showUntracked: true,
   wordWrap: true,
+  maxFiles: 500,
+  maxTotalLines: 100000,
 };
 
 export function loadConfig(): AppConfig {
@@ -182,6 +184,14 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
 
   if ('word-wrap' in raw && typeof raw['word-wrap'] === 'boolean') {
     config.wordWrap = raw['word-wrap'];
+  }
+
+  if ('max-files' in raw && typeof raw['max-files'] === 'number') {
+    config.maxFiles = raw['max-files'] >= 0 ? raw['max-files'] : defaults.maxFiles;
+  }
+
+  if ('max-total-lines' in raw && typeof raw['max-total-lines'] === 'number') {
+    config.maxTotalLines = raw['max-total-lines'] >= 0 ? raw['max-total-lines'] : defaults.maxTotalLines;
   }
 
   if (
