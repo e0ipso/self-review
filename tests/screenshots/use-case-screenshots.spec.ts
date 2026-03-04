@@ -14,7 +14,7 @@ import {
   ElectronApplication,
   Page,
 } from '@playwright/test';
-import { existsSync, mkdirSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import * as path from 'path';
 import {
   createPlanReviewFixture,
@@ -169,25 +169,100 @@ test.describe('Use Case Screenshots', () => {
       ({ electronApp } = await launchElectron([], repoDir));
       const page = await electronApp.firstWindow();
 
-      // Screenshot 1: diff view showing plan.md
+      // Capture raw diff view of plan.md
       const planEntry = page.locator('[data-testid="file-entry-plan.md"]');
       await planEntry.click();
       await page.waitForTimeout(500);
-      await page.screenshot({
-        path: path.join(SCREENSHOTS_DIR, 'uc1-plan-diff.png'),
-      });
+      const rawBuffer = await page.screenshot();
 
-      // Screenshot 2: rendered markdown view
+      // Switch to rendered markdown view and capture
       const planHeader = page.locator('[data-testid="file-header-plan.md"]');
       const renderedToggle = planHeader.locator('[aria-label="Rendered view"]');
       await renderedToggle.waitFor({ state: 'visible', timeout: 5000 });
       await renderedToggle.click();
       await page.waitForTimeout(800);
-      await page.screenshot({
-        path: path.join(SCREENSHOTS_DIR, 'uc1-rendered.png'),
-      });
+      const renderedBuffer = await page.screenshot();
 
-      // Screenshot 3: inline comment on rendered markdown
+      // Composite: diagonal split — raw on the left, rendered on the right
+      const compositeBuffer = await page.evaluate(
+        async ({ rawB64, renderedB64 }) => {
+          const loadImg = (b64: string): Promise<HTMLImageElement> =>
+            new Promise((resolve, reject) => {
+              const img = new Image();
+              img.onload = () => resolve(img);
+              img.onerror = reject;
+              img.src = `data:image/png;base64,${b64}`;
+            });
+
+          const [rawImg, renderedImg] = await Promise.all([
+            loadImg(rawB64),
+            loadImg(renderedB64),
+          ]);
+
+          const w = rawImg.width;
+          const h = rawImg.height;
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d')!;
+
+          // Draw raw diff on the left half (diagonal clip)
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(w * 0.6, 0);
+          ctx.lineTo(w * 0.4, h);
+          ctx.lineTo(0, h);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(rawImg, 0, 0);
+          ctx.restore();
+
+          // Draw rendered on the right half (diagonal clip)
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(w * 0.6, 0);
+          ctx.lineTo(w, 0);
+          ctx.lineTo(w, h);
+          ctx.lineTo(w * 0.4, h);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(renderedImg, 0, 0);
+          ctx.restore();
+
+          // Draw diagonal divider line
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(w * 0.6, 0);
+          ctx.lineTo(w * 0.4, h);
+          ctx.stroke();
+
+          // Labels
+          ctx.font = 'bold 14px system-ui, sans-serif';
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.fillRect(8, h - 36, 70, 24);
+          ctx.fillRect(w - 98, 12, 90, 24);
+          ctx.fillStyle = '#fff';
+          ctx.fillText('Raw diff', 14, h - 18);
+          ctx.fillText('Rendered', w - 92, 30);
+
+          return canvas
+            .toDataURL('image/png')
+            .replace('data:image/png;base64,', '');
+        },
+        {
+          rawB64: rawBuffer.toString('base64'),
+          renderedB64: renderedBuffer.toString('base64'),
+        },
+      );
+
+      writeFileSync(
+        path.join(SCREENSHOTS_DIR, 'uc1-raw-vs-rendered.png'),
+        Buffer.from(compositeBuffer, 'base64'),
+      );
+
+      // Screenshot 2: inline comment on rendered markdown
       const planSection = page.locator(
         '[data-testid="file-section-plan.md"]',
       );
@@ -249,12 +324,7 @@ test.describe('Use Case Screenshots', () => {
       await loginEntry.click();
       await page.waitForTimeout(500);
 
-      // Screenshot 1: split diff view
-      await page.screenshot({
-        path: path.join(SCREENSHOTS_DIR, 'uc2-split-diff.png'),
-      });
-
-      // Screenshot 2: add a line comment on line 9
+      // Screenshot 1: add a line comment on line 9
       const loginSection = page.locator(
         '[data-testid="file-section-src/auth/login.ts"]',
       );
@@ -335,13 +405,7 @@ test.describe('Use Case Screenshots', () => {
       ({ electronApp } = await launchElectron([], repoDir));
       const page = await electronApp.firstWindow();
 
-      // Screenshot 1: full app view with file tree
-      await page.waitForTimeout(500);
-      await page.screenshot({
-        path: path.join(SCREENSHOTS_DIR, 'uc3-file-tree.png'),
-      });
-
-      // Screenshot 2: add comments with different categories on different files
+      // Add comments with different categories on different files
       // Comment 1: question on src/auth/middleware.ts
       await triggerCommentIcon(page, 'src/auth/middleware.ts', 10, 'new');
       const section1 = page.locator(
@@ -434,25 +498,6 @@ test.describe('Use Case Screenshots', () => {
         path: path.join(SCREENSHOTS_DIR, 'uc3-categorized.png'),
       });
 
-      // Screenshot 3: open a category selector dropdown
-      // Add a file-level comment to show the category dropdown open
-      const fileCommentBtn = page.locator(
-        '[data-testid="add-file-comment-docs/api-guide.md"]',
-      );
-      await fileCommentBtn.scrollIntoViewIfNeeded();
-      await fileCommentBtn.click();
-      await page.waitForTimeout(300);
-      const input4 = section3
-        .locator('[data-testid="comment-input"]')
-        .first();
-      const catSelector4 = input4.locator(
-        '[data-testid="category-selector"]',
-      );
-      await catSelector4.click();
-      await page.waitForTimeout(300);
-      await page.screenshot({
-        path: path.join(SCREENSHOTS_DIR, 'uc3-categories.png'),
-      });
     } finally {
       if (electronApp) {
         await closeElectron(electronApp);
@@ -485,12 +530,7 @@ test.describe('Use Case Screenshots', () => {
       await loginEntry.click();
       await page.waitForTimeout(800);
 
-      // Screenshot 1: AI comments visible in the diff
-      await page.screenshot({
-        path: path.join(SCREENSHOTS_DIR, 'uc4-ai-comments.png'),
-      });
-
-      // Screenshot 2: add a new user comment alongside the AI ones
+      // Add a new user comment alongside the pre-loaded AI ones
       await triggerCommentIcon(page, 'src/auth/login.ts', 6, 'new');
       const loginSection = page.locator(
         '[data-testid="file-section-src/auth/login.ts"]',
