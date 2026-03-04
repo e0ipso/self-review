@@ -16,6 +16,7 @@ import {
 } from '../shared/types';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { getVersionUpdate } from './version-checker';
+import { computePayloadStats, countTotalLines } from './payload-sizing';
 
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
@@ -249,6 +250,33 @@ export function registerIpcHandlers(): void {
           source: { type: 'file', sourcePath: directoryPath },
         };
 
+        // Large payload guard
+        if (configCache) {
+          const stats = computePayloadStats(
+            payload.files.length,
+            countTotalLines(payload.files),
+            configCache
+          );
+          if (stats.exceedsAny) {
+            const win = BrowserWindow.fromWebContents(event.sender);
+            if (win) {
+              const result = dialog.showMessageBoxSync(win, {
+                type: 'warning',
+                buttons: ['Continue', 'Cancel'],
+                defaultId: 1,
+                title: 'Large Review Detected',
+                message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
+                detail: `Thresholds: ${configCache.maxFiles} files, ${configCache.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
+              });
+              if (result === 1) {
+                console.error('[ipc] User cancelled large file review');
+                return;
+              }
+              payload.isLargePayload = true;
+            }
+          }
+        }
+
         diffDataCache = payload;
         const window = BrowserWindow.fromWebContents(event.sender);
         if (window) {
@@ -270,6 +298,33 @@ export function registerIpcHandlers(): void {
         files,
         source: { type: 'directory', sourcePath: directoryPath },
       };
+
+      // Large payload guard
+      if (configCache) {
+        const stats = computePayloadStats(
+          payload.files.length,
+          countTotalLines(payload.files),
+          configCache
+        );
+        if (stats.exceedsAny) {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          if (win) {
+            const result = dialog.showMessageBoxSync(win, {
+              type: 'warning',
+              buttons: ['Continue', 'Cancel'],
+              defaultId: 1,
+              title: 'Large Review Detected',
+              message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
+              detail: `Thresholds: ${configCache.maxFiles} files, ${configCache.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
+            });
+            if (result === 1) {
+              console.error('[ipc] User cancelled large directory review');
+              return;
+            }
+            payload.isLargePayload = true;
+          }
+        }
+      }
 
       // Update the cache and send to renderer
       diffDataCache = payload;

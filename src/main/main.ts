@@ -23,6 +23,7 @@ import {
   requestReviewFromRenderer,
 } from './ipc-handlers';
 import { checkForUpdate } from './version-checker';
+import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { IPC } from '../shared/ipc-channels';
 import { AppConfig, DiffLoadPayload, OutputPathInfo, ReviewComment } from '../shared/types';
 
@@ -256,6 +257,36 @@ async function initializeApp() {
         files: [],
         source: { type: 'welcome' },
       };
+    }
+
+    // Phase 4b: Large payload guard
+    if (diffData && diffData.source.type !== 'welcome') {
+      const stats = computePayloadStats(
+        diffData.files.length,
+        countTotalLines(diffData.files),
+        appConfig
+      );
+      if (stats.exceedsAny) {
+        console.error(
+          `[main] Large payload detected: ${stats.fileCount} files, ${stats.totalLines} lines`
+        );
+        const result = dialog.showMessageBoxSync({
+          type: 'warning',
+          buttons: ['Continue', 'Cancel'],
+          defaultId: 1,
+          title: 'Large Review Detected',
+          message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
+          detail: `Thresholds: ${appConfig.maxFiles} files, ${appConfig.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
+        });
+        if (result === 1) {
+          console.error('[main] User cancelled large payload review');
+          app.quit();
+          clearTimeout(initTimeout);
+          return;
+        }
+        diffData.isLargePayload = true;
+        console.error('[main] User chose to continue with large payload');
+      }
     }
 
     // Phase 5: Handle --resume-from if specified
