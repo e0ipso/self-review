@@ -1,0 +1,58 @@
+{
+  "name": "@self-review/react",
+  "version": "0.1.0",
+  "description": "React components for self-review: embeddable code review UI with diff viewer and commenting",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@self-review/core": "workspace:*",
+    "@base-ui/react": "^1.1.0",
+    "@emoji-mart/data": "^1.2.1",
+    "@radix-ui/react-alert-dialog": "^1.1.15",
+    "@uiw/react-md-editor": "^4.0.11",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.563.0",
+    "mermaid": "^11.12.3",
+    "prism-themes": "^1.9.0",
+    "prismjs": "^1.30.0",
+    "react-markdown": "^10.1.0",
+    "react-resizable-panels": "^4.6.2",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.4.0"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/typography": "^0.5.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/prismjs": "^1.26.6",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tsup": "^8.0.0",
+    "typescript": "~5.9.0",
+    "vitest": "^4.0.18",
+    "jsdom": "^28.0.0"
+  },
+  "license": "MIT"
+}
