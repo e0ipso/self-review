@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import {
   ChevronDown,
   ChevronRight,
+  Loader2,
   MessageSquare,
   CircleDashed,
   CircleCheck,
@@ -66,6 +67,29 @@ export default function FileSection({
   const fileComments = comments.filter(c => c.lineRange === null);
   const fileState = files.find(f => f.path === filePath);
   const isViewed = fileState?.viewed || false;
+
+  // Lazy content loading state (for large-payload mode)
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState(false);
+
+  useEffect(() => {
+    if (!expanded || file.contentLoaded !== false || contentLoading) return;
+
+    setContentLoading(true);
+    setContentError(false);
+
+    window.electronAPI.loadFileContent(filePath).then(hunks => {
+      if (hunks) {
+        updateFileHunks(filePath, hunks);
+      } else {
+        setContentError(true);
+      }
+      setContentLoading(false);
+    }).catch(() => {
+      setContentError(true);
+      setContentLoading(false);
+    });
+  }, [expanded, file.contentLoaded, contentLoading, filePath, updateFileHunks]);
 
   // Expand context state
   const isExpandable = diffSource.type === 'git' && !file.isUntracked && !file.isBinary;
@@ -735,11 +759,25 @@ export default function FileSection({
 
           {/* Diff content */}
           {/* Force unified view for pure additions/deletions to avoid wasted empty pane in split view */}
-          {file.isBinary ? (
+          {contentLoading ? (
+            <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
+              <Loader2 className='h-4 w-4 animate-spin mr-2' />
+              Loading file content...
+            </div>
+          ) : contentError ? (
+            <div className='flex flex-col items-center justify-center py-12 text-sm text-muted-foreground gap-2'>
+              <span>Failed to load file content</span>
+              <Button variant='outline' size='sm' onClick={() => {
+                setContentError(false);
+              }}>
+                Retry
+              </Button>
+            </div>
+          ) : file.isBinary ? (
             <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
               Binary file — no diff available
             </div>
-          ) : file.hunks.length === 0 ? (
+          ) : file.hunks.length === 0 && file.contentLoaded !== false ? (
             <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
               No changes to display
             </div>

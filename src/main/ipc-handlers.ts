@@ -6,6 +6,7 @@ import { ipcMain, BrowserWindow, dialog, app, shell } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import {
   DiffLoadPayload,
+  DiffHunk,
   ResumeLoadPayload,
   AppConfig,
   OutputPathInfo,
@@ -44,8 +45,16 @@ export function registerIpcHandlers(): void {
   // Handle diff data request from renderer
   ipcMain.on(IPC.DIFF_REQUEST, event => {
     if (diffDataCache) {
-      event.sender.send(IPC.DIFF_LOAD, diffDataCache);
+      event.sender.send(IPC.DIFF_LOAD, preparePayload(diffDataCache));
     }
+  });
+
+  // Handle single-file content loading for lazy (large-payload) mode
+  ipcMain.handle(IPC.DIFF_LOAD_FILE, async (_event, filePath: string) => {
+    if (!diffDataCache) return null;
+    const file = diffDataCache.files.find(f => (f.newPath || f.oldPath) === filePath);
+    if (!file) return null;
+    return file.hunks;
   });
 
   // Handle config request from renderer
@@ -280,7 +289,7 @@ export function registerIpcHandlers(): void {
         diffDataCache = payload;
         const window = BrowserWindow.fromWebContents(event.sender);
         if (window) {
-          window.webContents.send(IPC.DIFF_LOAD, payload);
+          window.webContents.send(IPC.DIFF_LOAD, preparePayload(payload));
         }
 
         console.error(
@@ -330,7 +339,7 @@ export function registerIpcHandlers(): void {
       diffDataCache = payload;
       const window = BrowserWindow.fromWebContents(event.sender);
       if (window) {
-        window.webContents.send(IPC.DIFF_LOAD, payload);
+        window.webContents.send(IPC.DIFF_LOAD, preparePayload(payload));
       }
 
       console.error(
@@ -344,11 +353,29 @@ export function registerIpcHandlers(): void {
   );
 }
 
+/**
+ * Prepare a DiffLoadPayload for IPC transmission.
+ * In large-payload mode, strips hunks from files to reduce initial transfer size.
+ * The full data stays in diffDataCache for on-demand loading via DIFF_LOAD_FILE.
+ */
+function preparePayload(payload: DiffLoadPayload): DiffLoadPayload {
+  if (payload.isLargePayload) {
+    return {
+      ...payload,
+      files: payload.files.map(f => ({ ...f, hunks: [] as DiffHunk[], contentLoaded: false })),
+    };
+  }
+  return {
+    ...payload,
+    files: payload.files.map(f => ({ ...f, contentLoaded: true })),
+  };
+}
+
 export function sendDiffLoad(
   window: BrowserWindow,
   payload: DiffLoadPayload
 ): void {
-  window.webContents.send(IPC.DIFF_LOAD, payload);
+  window.webContents.send(IPC.DIFF_LOAD, preparePayload(payload));
 }
 
 export function sendConfigLoad(window: BrowserWindow, config: AppConfig, outputPathInfo?: OutputPathInfo): void {

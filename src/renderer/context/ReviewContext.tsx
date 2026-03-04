@@ -182,7 +182,7 @@ export function ReviewProvider({ children }: ReviewProviderProps) {
       prev.map(f => {
         const fPath = f.newPath || f.oldPath;
         if (fPath === filePath) {
-          return { ...f, hunks };
+          return { ...f, hunks, contentLoaded: true };
         }
         return f;
       })
