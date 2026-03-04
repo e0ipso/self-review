@@ -8,7 +8,7 @@ import { DiffNavigationProvider } from './context/DiffNavigationContext';
 import { TooltipProvider } from './components/ui/tooltip';
 import Layout from './components/Layout';
 import Toolbar from './components/Toolbar';
-import KeyboardNavigationManager from './components/KeyboardNavigationManager';
+import { KeyboardNavigationManager } from './components/KeyboardNavigationManager';
 
 export interface ReviewPanelProps {
   /** Platform adapter for data loading and lifecycle hooks. */

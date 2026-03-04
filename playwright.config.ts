@@ -6,6 +6,12 @@ const bddTestDir = defineBddConfig({
   steps: 'tests/steps/**/*.ts',
 });
 
+const webappBddTestDir = defineBddConfig({
+  features: 'tests/webapp-features/**/*.feature',
+  steps: 'tests/webapp-steps/**/*.ts',
+  outputDir: '.features-gen/webapp',
+});
+
 export default defineConfig({
   retries: process.env.CI ? 2 : 1,
   workers: 1,
@@ -14,6 +20,15 @@ export default defineConfig({
       name: 'e2e',
       testDir: bddTestDir,
       timeout: process.env.CI ? 90_000 : 30_000,
+      use: {
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'webapp',
+      testDir: webappBddTestDir,
+      timeout: 60_000,
       use: {
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',
