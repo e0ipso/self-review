@@ -51,6 +51,8 @@ const defaultConfig: AppConfig = {
   defaultDiffArgs: '--staged',
   showUntracked: true,
   wordWrap: true,
+  maxFiles: 500,
+  maxTotalLines: 100000,
 };
 
 interface ConfigContextValue {

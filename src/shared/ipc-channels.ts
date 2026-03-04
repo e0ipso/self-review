@@ -24,4 +24,6 @@ export const IPC = {
   VERSION_UPDATE_REQUEST: 'version-update:request',
   VERSION_UPDATE_AVAILABLE: 'version-update:available',
   OPEN_EXTERNAL: 'open-external',
+  DIFF_LOAD_FILE: 'diff:load-file',
+  PAYLOAD_GUARD_SHOW: 'payload-guard:show',
 } as const;

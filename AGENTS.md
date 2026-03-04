@@ -42,6 +42,7 @@ self-review/
 │   │   ├── xml-serializer.ts    # ReviewState → XML string (validates against XSD)
 │   │   ├── xml-parser.ts        # XML string → ReviewState (for --resume-from)
 │   │   ├── version-checker.ts   # Checks GitHub Releases API for updates (startup only)
+│   │   ├── payload-sizing.ts    # Compute payload stats & check large-payload thresholds
 │   │   └── config.ts            # YAML config loading & merging
 │   ├── preload/
 │   │   └── preload.ts           # contextBridge exposing IPC to renderer
@@ -101,6 +102,11 @@ Two-process model:
 The preload script uses `contextBridge.exposeInMainWorld` to expose a typed `electronAPI` object.
 The renderer NEVER imports from `electron` directly.
 
+**Large-payload mode:** When the diff exceeds configurable thresholds (`max-files` or
+`max-total-lines`), the main process sends file metadata without hunks in the initial `diff:load`
+payload. The renderer lazily requests each file's hunks via the `diff:load-file` IPC channel as
+the user navigates, avoiding memory pressure from loading the entire diff at once.
+
 ## IPC Channels
 
 Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here.
@@ -118,6 +124,7 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | `output-path:change`   | Renderer → Main | `OutputPathInfo \| null` | Open native save dialog to change output path |
 | `output-path:changed`  | Main → Renderer | `OutputPathInfo`  | Notify renderer when output path changes       |
 | `version-update:available` | Main → Renderer | `VersionUpdateInfo` | Notify renderer of available update        |
+| `diff:load-file`               | Renderer → Main | `string` (filePath)  | Load single file's hunks on demand (large mode) |
 | `open-external`            | Renderer → Main | `string` (URL)      | Open URL in default browser                |
 
 ## Shared Types
@@ -126,7 +133,7 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 and renderer imports types from here. **Never duplicate type definitions.**
 
 Key types: `DiffFile`, `DiffHunk`, `DiffLine`, `ReviewComment`, `Suggestion`, `ReviewState`,
-`AppConfig`, `CategoryDef`.
+`AppConfig`, `CategoryDef`, `PayloadStats`.
 
 See the file itself for full definitions.
 

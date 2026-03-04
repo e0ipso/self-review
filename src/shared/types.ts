@@ -31,6 +31,7 @@ export interface DiffFile {
   isBinary: boolean;
   hunks: DiffHunk[];
   isUntracked?: boolean;
+  contentLoaded?: boolean;
 }
 
 // ===== Diff Source Types =====
@@ -105,6 +106,8 @@ export interface AppConfig {
   defaultDiffArgs: string;
   showUntracked: boolean;
   wordWrap: boolean;
+  maxFiles: number;
+  maxTotalLines: number;
 }
 
 // ===== IPC Payload Types =====
@@ -112,6 +115,7 @@ export interface AppConfig {
 export interface DiffLoadPayload {
   files: DiffFile[];
   source: DiffSource;
+  isLargePayload?: boolean;
 }
 
 export interface ResumeLoadPayload {
@@ -158,6 +162,16 @@ export interface VersionUpdateInfo {
   releaseUrl: string;
 }
 
+// ===== Payload Guard Types =====
+
+export interface PayloadStats {
+  fileCount: number;
+  totalLines: number;
+  exceedsFiles: boolean;
+  exceedsLines: boolean;
+  exceedsAny: boolean;
+}
+
 // ===== Electron API (preload bridge) =====
 
 export interface ElectronAPI {
@@ -184,6 +198,7 @@ export interface ElectronAPI {
   requestVersionUpdate: () => void;
   onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => void;
   openExternal: (url: string) => Promise<void>;
+  loadFileContent: (filePath: string) => Promise<DiffHunk[]>;
 }
 
 declare global {

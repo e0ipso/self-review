@@ -3,17 +3,21 @@ import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import FileSection from './FileSection';
 
+/** When the file count exceeds this threshold, all sections start collapsed. */
+export const COLLAPSE_THRESHOLD = 50;
+
 export default function DiffViewer() {
   const { diffFiles, diffSource } = useReview();
   const { config } = useConfig();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Initialize all files as expanded
+  // Initialize files as expanded (small sets) or collapsed (large sets)
   const [expandedState, setExpandedState] = useState<Record<string, boolean>>(
     () => {
+      const defaultExpanded = diffFiles.length <= COLLAPSE_THRESHOLD;
       const initial: Record<string, boolean> = {};
       diffFiles.forEach(file => {
-        initial[file.newPath || file.oldPath] = true;
+        initial[file.newPath || file.oldPath] = defaultExpanded;
       });
       return initial;
     }
@@ -22,11 +26,12 @@ export default function DiffViewer() {
   // Update expanded state when diffFiles changes
   useEffect(() => {
     setExpandedState(prev => {
+      const defaultExpanded = diffFiles.length <= COLLAPSE_THRESHOLD;
       const updated = { ...prev };
       diffFiles.forEach(file => {
         const filePath = file.newPath || file.oldPath;
         if (!(filePath in updated)) {
-          updated[filePath] = true;
+          updated[filePath] = defaultExpanded;
         }
       });
       return updated;
