@@ -24,5 +24,10 @@ export default defineConfig({
       testDir: 'tests/recording',
       timeout: 120_000,
     },
+    {
+      name: 'screenshots',
+      testDir: 'tests/screenshots',
+      timeout: 120_000,
+    },
   ],
 });
