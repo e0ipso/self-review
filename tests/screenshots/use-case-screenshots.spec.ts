@@ -405,7 +405,7 @@ test.describe('Use Case Screenshots', () => {
       );
       await docsEntry.click();
       await page.waitForTimeout(500);
-      await triggerCommentIcon(page, 'docs/api-guide.md', 5, 'new');
+      await triggerCommentIcon(page, 'docs/api-guide.md', 13, 'new');
       const section3 = page.locator(
         '[data-testid="file-section-docs/api-guide.md"]',
       );

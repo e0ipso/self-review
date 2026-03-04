@@ -436,6 +436,58 @@ export function createExplorationFixture(): string {
     ].join('\n')
   );
 
+  // Modify docs/api-guide.md: add rate limiting section
+  writeFileSync(
+    join(repoDir, 'docs', 'api-guide.md'),
+    [
+      '# API Guide',
+      '',
+      '## Authentication',
+      '',
+      'All protected endpoints require a Bearer token in the `Authorization` header.',
+      '',
+      '```',
+      'Authorization: Bearer <token>',
+      '```',
+      '',
+      '## Rate Limiting',
+      '',
+      'Authentication endpoints enforce rate limiting per client IP.',
+      'After 5 failed attempts within 60 seconds, further requests receive `429 Too Many Requests`.',
+      '',
+      '## Endpoints',
+      '',
+      '### POST /auth/login',
+      '',
+      'Authenticate a user and receive an access token.',
+      '',
+      '| Field      | Type   | Required |',
+      '|------------|--------|----------|',
+      '| `username` | string | yes      |',
+      '| `password` | string | yes      |',
+      '',
+      '### POST /auth/refresh',
+      '',
+      'Exchange a refresh token for a new access token.',
+      '',
+      '### GET /users/me',
+      '',
+      'Returns the current authenticated user profile.',
+      '',
+      '### PUT /users/me',
+      '',
+      'Update the current user profile. Accepts partial updates.',
+      '',
+      '## Error Responses',
+      '',
+      'All errors return a JSON body with an `error` field:',
+      '',
+      '```json',
+      '{ "error": "Human-readable error message" }',
+      '```',
+    ].join('\n')
+  );
+
   // Add .self-review.yaml with exploration-oriented categories
   writeFileSync(
     join(repoDir, '.self-review.yaml'),
