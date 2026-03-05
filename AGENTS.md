@@ -178,11 +178,23 @@ not enforced.
 
 ### E2E Tests
 
-E2E tests use Playwright with Cucumber BDD:
+E2E tests use Playwright with Cucumber BDD in a two-tier approach:
 
-- **Cannot run in dev container** — requires host machine with display
-- Test complete user workflows from CLI invocation to XML output
-- Run with `npm run test:e2e` (headless) or `npm run test:e2e:headed`
+1. **Webapp e2e** (primary, runs in CI) — Tests the `@self-review/react` components via a Vite
+   dev server with fixture data. Fast, no Electron packaging needed.
+2. **Electron e2e** (supplementary, local only) — Tests Electron-specific behavior (XML output,
+   resume, error handling, welcome screen, expand context, find-in-page). Requires packaging + xvfb.
+
+**Cannot run in dev container** — requires host machine with display.
+
+**Running e2e tests**:
+
+```bash
+npm run test:e2e                  # Webapp e2e (CI, fast)
+npm run test:e2e:headed           # Webapp e2e with visible browser
+npm run test:e2e:electron         # Electron e2e (local only, requires packaging + xvfb)
+npm run test:e2e:electron:headed  # Electron e2e with visible browser
+```
 
 ### Testing Conventions
 
