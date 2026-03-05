@@ -24,7 +24,12 @@ function findMainBundle(): string {
   throw new Error(`Cannot find webpack main bundle in ${root}`);
 }
 
-const MAIN_BUNDLE = findMainBundle();
+// Lazy — resolved on first use so bddgen can load this file without .webpack present.
+let _mainBundle: string | undefined;
+function getMainBundle(): string {
+  if (!_mainBundle) _mainBundle = findMainBundle();
+  return _mainBundle;
+}
 
 // Chromium sandbox requires SUID helper which isn't available in containers
 const CHROMIUM_FLAGS = [
@@ -83,7 +88,7 @@ async function launchAppWithRetry(
 
   electronApp = await electron.launch({
     executablePath: ELECTRON_BIN,
-    args: [...CHROMIUM_FLAGS, MAIN_BUNDLE, ...cliArgs],
+    args: [...CHROMIUM_FLAGS, getMainBundle(), ...cliArgs],
     cwd,
     env: { ...process.env, NODE_ENV: 'test' },
   });
@@ -148,7 +153,7 @@ export async function launchAppExpectExit(
   return new Promise<void>((resolve, reject) => {
     const proc = spawn(
       ELECTRON_BIN,
-      [...CHROMIUM_FLAGS, MAIN_BUNDLE, ...cliArgs],
+      [...CHROMIUM_FLAGS, getMainBundle(), ...cliArgs],
       {
         cwd,
         stdio: ['pipe', 'pipe', 'pipe'],
