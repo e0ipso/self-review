@@ -59,3 +59,4 @@ jobs:
           name: e2e-test-results
           path: test-results/
           retention-days: 7
+
