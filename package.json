@@ -3,6 +3,9 @@
   "productName": "Self Review",
   "version": "1.23.0",
   "description": "GitHub-style PR review UI for local git diffs",
+  "workspaces": [
+    "packages/*"
+  ],
   "main": ".webpack/main",
   "scripts": {
     "start": "electron-forge start",
