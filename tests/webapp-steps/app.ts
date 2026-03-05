@@ -63,7 +63,7 @@ async function startViteServer(): Promise<void> {
   viteProcess = spawn('npx', ['vite', '--config', VITE_CONFIG], {
     cwd: path.resolve(__dirname, '../..'),
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env },
+    env: { ...process.env, NO_COLOR: '1' },
   });
 
   let stderrOutput = '';
