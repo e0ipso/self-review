@@ -56,8 +56,8 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
           }
         });
 
-        if (mostVisible && mostVisible.isIntersecting) {
-          const filePath = mostVisible.target.getAttribute('data-file-path');
+        if (mostVisible && (mostVisible as IntersectionObserverEntry).isIntersecting) {
+          const filePath = (mostVisible as IntersectionObserverEntry).target.getAttribute('data-file-path');
           if (filePath) {
             setActiveFilePath(filePath);
           }
