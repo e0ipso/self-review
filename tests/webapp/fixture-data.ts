@@ -308,6 +308,116 @@ export function createFixturePayload(): DiffLoadPayload {
   };
 }
 
+export function createEmptyPayload(gitDiffArgs?: string): DiffLoadPayload {
+  return {
+    files: [],
+    source: { type: 'git' as const, gitDiffArgs, repository: '/mock-test-repo' },
+  };
+}
+
+// ── Markdown fixture data ──
+
+const markdownNewDocsLines = [
+  '# Documentation',
+  '',
+  'This is a paragraph that spans',
+  'multiple lines for testing.',
+  '',
+  '## Features',
+  '',
+  '- Item one',
+  '- Item two',
+  '- Item three',
+  '',
+  '### Code Example',
+  '',
+  '```typescript',
+  'const x = 1;',
+  '```',
+  '',
+  '```mermaid',
+  'graph TD',
+  '    A --> B',
+  '```',
+];
+
+const markdownNewDocsFile: DiffFile = {
+  oldPath: '/dev/null',
+  newPath: 'docs/new-docs.md',
+  changeType: 'added',
+  isBinary: false,
+  hunks: [
+    {
+      header: `@@ -0,0 +1,${markdownNewDocsLines.length} @@`,
+      oldStart: 0,
+      oldLines: 0,
+      newStart: 1,
+      newLines: markdownNewDocsLines.length,
+      lines: markdownNewDocsLines.map((line, i) => ({
+        type: 'addition' as const,
+        oldLineNumber: null,
+        newLineNumber: i + 1,
+        content: '+' + line,
+      })),
+    },
+  ],
+};
+
+const markdownIndexLines = [
+  "export const version = '1.0.0';",
+];
+
+const markdownIndexFile: DiffFile = {
+  oldPath: '/dev/null',
+  newPath: 'src/index.ts',
+  changeType: 'added',
+  isBinary: false,
+  hunks: [
+    {
+      header: `@@ -0,0 +1,${markdownIndexLines.length} @@`,
+      oldStart: 0,
+      oldLines: 0,
+      newStart: 1,
+      newLines: markdownIndexLines.length,
+      lines: markdownIndexLines.map((line, i) => ({
+        type: 'addition' as const,
+        oldLineNumber: null,
+        newLineNumber: i + 1,
+        content: '+' + line,
+      })),
+    },
+  ],
+};
+
+const markdownReadmeFile: DiffFile = {
+  oldPath: 'README.md',
+  newPath: 'README.md',
+  changeType: 'modified',
+  isBinary: false,
+  hunks: [
+    {
+      header: '@@ -1,3 +1,3 @@',
+      oldStart: 1,
+      oldLines: 3,
+      newStart: 1,
+      newLines: 3,
+      lines: [
+        { type: 'context', oldLineNumber: 1, newLineNumber: 1, content: ' # README' },
+        { type: 'deletion', oldLineNumber: 2, newLineNumber: null, content: '-Old content.' },
+        { type: 'addition', newLineNumber: 2, oldLineNumber: null, content: '+New content.' },
+        { type: 'context', oldLineNumber: 3, newLineNumber: 3, content: ' ' },
+      ],
+    },
+  ],
+};
+
+export function createMarkdownPayload(): DiffLoadPayload {
+  return {
+    files: [markdownNewDocsFile, markdownIndexFile, markdownReadmeFile],
+    source: { type: 'git' as const, gitDiffArgs: '', repository: '/mock-test-repo' },
+  };
+}
+
 /** Default categories matching what test features expect */
 export const defaultCategories: CategoryDef[] = [
   { name: 'bug', description: 'Likely defect', color: '#e53e3e' },

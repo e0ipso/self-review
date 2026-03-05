@@ -7,7 +7,7 @@ import {
 import type { ReviewPanelHandle } from '../../packages/react/src/index';
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, DiffLoadPayload, CategoryDef } from '../../packages/core/src/types';
-import { createFixturePayload, defaultCategories, commentingCategories } from './fixture-data';
+import { createFixturePayload, createEmptyPayload, createMarkdownPayload, defaultCategories, commentingCategories } from './fixture-data';
 import './styles.css';
 
 /**
@@ -18,9 +18,11 @@ import './styles.css';
  * read the review state when ready.
  *
  * URL parameters control behavior:
- * - ?categories=commenting  — Use commenting test categories (bug, nit, question)
- * - ?theme=dark|light        — Set initial theme
- * - ?view=split|unified      — Set initial view mode
+ * - ?fixture=empty|markdown   — Select fixture dataset (default: full fixture)
+ * - ?gitDiffArgs=...          — Pass gitDiffArgs to empty fixture
+ * - ?categories=commenting    — Use commenting test categories (bug, nit, question)
+ * - ?theme=dark|light         — Set initial theme
+ * - ?view=split|unified       — Set initial view mode
  */
 
 function getUrlParam(name: string): string | null {
@@ -50,9 +52,17 @@ function getConfig(): Partial<AppConfig> {
   return config;
 }
 
+function getFixturePayload(): DiffLoadPayload {
+  const fixture = getUrlParam('fixture');
+  const gitDiffArgs = getUrlParam('gitDiffArgs') ?? undefined;
+  if (fixture === 'empty') return createEmptyPayload(gitDiffArgs);
+  if (fixture === 'markdown') return createMarkdownPayload();
+  return createFixturePayload();
+}
+
 const adapter: ReviewAdapter = {
   loadDiff: async (): Promise<DiffLoadPayload> => {
-    return createFixturePayload();
+    return getFixturePayload();
   },
 };
 

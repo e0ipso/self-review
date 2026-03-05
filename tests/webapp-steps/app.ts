@@ -141,11 +141,17 @@ export async function launchWebapp(
   await appPage.goto(url);
   await appPage.waitForLoadState('domcontentloaded');
 
-  // Wait for the ReviewPanel to render (file tree should appear)
-  await appPage
-    .locator('[data-testid^="file-entry-"]')
-    .first()
-    .waitFor({ state: 'visible', timeout: 15000 });
+  // Wait for the ReviewPanel to render
+  if (queryParams.fixture === 'empty') {
+    await appPage
+      .locator('[data-testid="empty-diff-help"]')
+      .waitFor({ state: 'visible', timeout: 15000 });
+  } else {
+    await appPage
+      .locator('[data-testid^="file-entry-"]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 });
+  }
 
   return appPage;
 }
