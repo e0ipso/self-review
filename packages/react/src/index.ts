@@ -2,7 +2,7 @@
 
 // Main entry components
 export { ReviewPanel } from './ReviewPanel';
-export type { ReviewPanelProps } from './ReviewPanel';
+export type { ReviewPanelProps, ReviewPanelHandle } from './ReviewPanel';
 export { SingleFileReview } from './SingleFileReview';
 export type { SingleFileReviewProps } from './SingleFileReview';
 
