@@ -1,9 +1,11 @@
 import type { Configuration } from 'webpack';
+import path from 'path';
 
 import { baseRules } from './webpack.rules';
 import { plugins } from './webpack.plugins';
 
 export const rendererConfig: Configuration = {
+  context: path.resolve(__dirname),
   module: {
     rules: [
       ...baseRules,

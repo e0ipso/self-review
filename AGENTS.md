@@ -75,7 +75,12 @@ self-review/
 │               ├── CommentDisplay.tsx  # Rendered comment with edit/delete
 │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
 │               └── CategorySelector.tsx # Dropdown/chip selector for categories
+├── packages/
+│   ├── core/                    # @self-review/core — headless diff parsing & review logic
+│   └── react/                   # @self-review/react — React components for review UI
 ```
+
+The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace packages `@self-review/core` and `@self-review/react` expose shared logic and UI components. The Electron app imports these packages via relative path imports to their source (not through workspace symlinks), so no build step is needed for the packages during development.
 
 ## Keyboard Shortcuts
 
@@ -173,11 +178,23 @@ not enforced.
 
 ### E2E Tests
 
-E2E tests use Playwright with Cucumber BDD:
+E2E tests use Playwright with Cucumber BDD in a two-tier approach:
 
-- **Cannot run in dev container** — requires host machine with display
-- Test complete user workflows from CLI invocation to XML output
-- Run with `npm run test:e2e` (headless) or `npm run test:e2e:headed`
+1. **Webapp e2e** (primary, runs in CI) — Tests the `@self-review/react` components via a Vite
+   dev server with fixture data. Fast, no Electron packaging needed.
+2. **Electron e2e** (supplementary, local only) — Tests Electron-specific behavior (XML output,
+   resume, error handling, welcome screen, expand context, find-in-page). Requires packaging + xvfb.
+
+**Cannot run in dev container** — requires host machine with display.
+
+**Running e2e tests**:
+
+```bash
+npm run test:e2e                  # Webapp e2e (CI, fast)
+npm run test:e2e:headed           # Webapp e2e with visible browser
+npm run test:e2e:electron         # Electron e2e (local only, requires packaging + xvfb)
+npm run test:e2e:electron:headed  # Electron e2e with visible browser
+```
 
 ### Testing Conventions
 

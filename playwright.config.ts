@@ -4,6 +4,13 @@ import { defineBddConfig } from 'playwright-bdd';
 const bddTestDir = defineBddConfig({
   features: 'tests/features/**/*.feature',
   steps: 'tests/steps/**/*.ts',
+  outputDir: '.features-gen/electron',
+});
+
+const webappBddTestDir = defineBddConfig({
+  features: 'tests/webapp-features/**/*.feature',
+  steps: 'tests/webapp-steps/**/*.ts',
+  outputDir: '.features-gen/webapp',
 });
 
 export default defineConfig({
@@ -11,9 +18,18 @@ export default defineConfig({
   workers: 1,
   projects: [
     {
-      name: 'e2e',
+      name: 'electron',
       testDir: bddTestDir,
       timeout: process.env.CI ? 90_000 : 30_000,
+      use: {
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'e2e',
+      testDir: webappBddTestDir,
+      timeout: 60_000,
       use: {
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',

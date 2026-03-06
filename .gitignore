@@ -100,6 +100,10 @@ typings/
 
 # Electron-Forge
 out/
+
+# Build output (packages)
+packages/*/dist/
+apps/*/dist/
 dist/
 
 # IDE
@@ -124,6 +128,6 @@ dist/
 # Test artifacts
 test-results/
 .features-gen/
-core
+/core
 review.xml
 /.self-review-assets
