@@ -68,6 +68,8 @@ self-review/
 │           │   ├── HunkHeader.tsx     # @@ separator rendering
 │           │   ├── ExpandContextBar.tsx # Expand context buttons between hunks
 │           │   ├── RenderedMarkdownView.tsx # Rendered markdown with source-line-mapped gutter
+│           │   ├── RenderedImageView.tsx # Rendered preview for raster images (JPG, PNG, GIF, WebP, ICO, BMP)
+│           │   ├── RenderedSvgView.tsx  # Rendered SVG preview via secure img+data-URI
 │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
 │           └── Comments/
 │               ├── CommentInput.tsx    # Text area + category selector + add/cancel
@@ -112,6 +114,19 @@ The renderer NEVER imports from `electron` directly.
 payload. The renderer lazily requests each file's hunks via the `diff:load-file` IPC channel as
 the user navigates, avoiding memory pressure from loading the entire diff at once.
 
+**Rendered previews:** Newly added files (`changeType === 'added'`) of certain types support a
+Raw/Rendered toggle in the file header, following the same eligibility pattern as Markdown:
+- **Markdown** (`.md`, `.markdown`): rendered via `react-markdown` with line-mapped comment gutter
+- **Raster images** (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.ico`, `.bmp`): loaded as base64
+  data URIs via the `diff:load-image` IPC channel and displayed in a constrained `<img>` tag;
+  defaults to Rendered view; files over 10 MB show an error message
+- **SVG** (`.svg`): content extracted from addition lines and rendered via `<img>` with a
+  `data:image/svg+xml;base64,...` URI (blocks script execution); defaults to Raw view
+
+File-level comments are available on all preview types. Line-level comments are only available
+in the Raw diff view. Detection utilities (`isPreviewableImage`, `isPreviewableSvg`) live in
+`@self-review/core` (`packages/core/src/file-type-utils.ts`).
+
 ## IPC Channels
 
 Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here.
@@ -130,6 +145,7 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | `output-path:changed`  | Main → Renderer | `OutputPathInfo`  | Notify renderer when output path changes       |
 | `version-update:available` | Main → Renderer | `VersionUpdateInfo` | Notify renderer of available update        |
 | `diff:load-file`               | Renderer → Main | `string` (filePath)  | Load single file's hunks on demand (large mode) |
+| `diff:load-image`              | Renderer → Main | `{ filePath }` / `ImageLoadResult` | Load a binary image as base64 data URI for rendered preview |
 | `open-external`            | Renderer → Main | `string` (URL)      | Open URL in default browser                |
 
 ## Shared Types
