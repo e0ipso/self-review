@@ -25,7 +25,7 @@ function extractFileContent(file: DiffFile): string {
   return file.hunks
     .flatMap(hunk => hunk.lines)
     .filter(line => line.type === 'addition')
-    .map(line => line.content.slice(1))
+    .map(line => line.content)
     .join('\n');
 }
 
