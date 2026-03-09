@@ -116,4 +116,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   loadFileContent: (filePath: string) =>
     ipcRenderer.invoke(IPC.DIFF_LOAD_FILE, filePath),
+
+  loadImage: (filePath: string) =>
+    ipcRenderer.invoke(IPC.DIFF_LOAD_IMAGE, filePath),
 });

@@ -26,6 +26,11 @@ export type {
   PayloadStats,
 } from '../../packages/core/src/types';
 
+// ===== Image Loading =====
+// Electron-specific — not part of @self-review/core.
+
+export type ImageLoadResult = { dataUri: string } | { error: string };
+
 // ===== Electron API (preload bridge) =====
 // Electron-specific — not part of @self-review/core.
 
@@ -68,6 +73,7 @@ export interface ElectronAPI {
   onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => void;
   openExternal: (url: string) => Promise<void>;
   loadFileContent: (filePath: string) => Promise<DiffHunk[]>;
+  loadImage: (filePath: string) => Promise<ImageLoadResult>;
 }
 
 declare global {

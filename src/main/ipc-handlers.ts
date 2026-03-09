@@ -4,6 +4,7 @@
 import * as fs from 'fs';
 import { ipcMain, BrowserWindow, dialog, app, shell } from 'electron';
 import { IPC } from '../shared/ipc-channels';
+import path from 'path';
 import {
   DiffLoadPayload,
   DiffHunk,
@@ -14,6 +15,7 @@ import {
   ReviewComment,
   ExpandContextRequest,
   FindInPageRequest,
+  ImageLoadResult,
 } from '../shared/types';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { getVersionUpdate } from './version-checker';
@@ -46,6 +48,35 @@ export function registerIpcHandlers(): void {
   ipcMain.on(IPC.DIFF_REQUEST, event => {
     if (diffDataCache) {
       event.sender.send(IPC.DIFF_LOAD, preparePayload(diffDataCache));
+    }
+  });
+
+  // Handle image loading for rendered preview
+  ipcMain.handle(IPC.DIFF_LOAD_IMAGE, async (_event, filePath: string): Promise<ImageLoadResult> => {
+    const MIME_MAP: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.ico': 'image/x-icon',
+      '.bmp': 'image/bmp',
+      '.svg': 'image/svg+xml',
+    };
+    const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+    const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeType = MIME_MAP[ext] ?? 'application/octet-stream';
+
+    try {
+      const stat = await fs.promises.stat(resolved);
+      if (stat.size > MAX_SIZE) {
+        return { error: 'File too large to preview (>10 MB)' };
+      }
+      const data = await fs.promises.readFile(resolved);
+      return { dataUri: `data:${mimeType};base64,${data.toString('base64')}` };
+    } catch {
+      return { error: 'Image preview unavailable — file not found on disk.' };
     }
   });
 
