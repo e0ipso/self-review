@@ -69,7 +69,7 @@ export default function FileSection({
   const isEligibleForRenderedView = isAddedFile && /\.(md|markdown)$/i.test(filePath_);
   const isPreviewable = showImagePreview || showSvgPreview || isEligibleForRenderedView;
 
-  const initialViewMode = showImagePreview ? 'rendered' : 'raw';
+  const initialViewMode = isPreviewable ? 'rendered' : 'raw';
   const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
 
   const filePath = file.newPath || file.oldPath;
