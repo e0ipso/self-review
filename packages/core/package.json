@@ -1,7 +1,15 @@
 {
   "name": "@self-review/core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Core library for self-review: diff parsing, git operations, XML serialization, and configuration",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/e0ipso/self-review.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
