@@ -52,7 +52,7 @@ export default function SuggestionBlock({
               -
             </span>
             <span
-              className='flex-1 text-foreground/80'
+              className='flex-1 text-foreground/80 whitespace-pre'
               dangerouslySetInnerHTML={{
                 __html: highlightCode(line, language),
               }}
@@ -68,7 +68,7 @@ export default function SuggestionBlock({
               +
             </span>
             <span
-              className='flex-1 text-foreground/80'
+              className='flex-1 text-foreground/80 whitespace-pre'
               dangerouslySetInnerHTML={{
                 __html: highlightCode(line, language),
               }}
