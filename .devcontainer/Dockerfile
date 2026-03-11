@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=node:22
+ARG BASE_IMAGE=node:24
 FROM ${BASE_IMAGE}
 
 ARG TZ=Europe/Madrid

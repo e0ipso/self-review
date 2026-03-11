@@ -3,7 +3,7 @@
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
-      "BASE_IMAGE": "node:22",
+      "BASE_IMAGE": "node:24",
       "TZ": "${localEnv:TZ:Europe/Madrid}",
       "CLAUDE_CODE_VERSION": "latest",
       "GEMINI_VERSION": "latest",
