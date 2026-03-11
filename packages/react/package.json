@@ -23,6 +23,7 @@
   "files": [
     "dist"
   ],
+  "sideEffects": ["./dist/styles.css"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
