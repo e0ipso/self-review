@@ -67,18 +67,15 @@ jobs:
             echo "tag=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Diagnose OIDC environment
+      - name: Upgrade npm for OIDC trusted publisher support
         if: steps.tag.outputs.tag != ''
-        run: |
-          echo "GITHUB_ACTIONS=$GITHUB_ACTIONS"
-          echo "ACTIONS_ID_TOKEN_REQUEST_URL set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]] && echo yes || echo no)"
-          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]] && echo yes || echo no)"
+        run: npm install -g npm@11
 
       - name: Publish workspace packages to npm
         if: steps.tag.outputs.tag != ''
         run: |
           for pkg in packages/core packages/react; do
-            (cd "$pkg" && npm run build && npm publish --provenance --access public --loglevel silly)
+            (cd "$pkg" && npm run build && npm publish --provenance --access public)
           done
         env:
           NODE_AUTH_TOKEN: ''
