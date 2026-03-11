@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
 import { ConfigProvider, useConfig } from '../../packages/react/src/context/ConfigContext';
 import { ReviewProvider, useReview } from '../../packages/react/src/context/ReviewContext';
 import { DiffNavigationProvider } from '../../packages/react/src/context/DiffNavigationContext';
@@ -65,6 +65,24 @@ function AppContent() {
       setOutputPathInfo(info);
     });
   }, [setOutputPathInfo]);
+
+  // Keep refs current so the onRequestReview fallback always sends fresh state
+  const diffSourceRef = useRef(diffSource);
+  const filesRef = useRef(files);
+  useLayoutEffect(() => { diffSourceRef.current = diffSource; }, [diffSource]);
+  useLayoutEffect(() => { filesRef.current = files; }, [files]);
+
+  // Fallback: respond when main process pulls state via review:request
+  // (e.g. when saveAndQuit is called without a prior submitReview)
+  useEffect(() => {
+    window.electronAPI.onRequestReview(() => {
+      window.electronAPI.submitReview({
+        timestamp: new Date().toISOString(),
+        source: diffSourceRef.current,
+        files: filesRef.current,
+      });
+    });
+  }, []);
 
   // Host-driven finish: push state then trigger save
   const handleFinishReview = useCallback(() => {

@@ -138,7 +138,7 @@ Then(
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     await expect(section).toBeVisible({ timeout: 10000 });
-    // Binary files show a "Binary file" indicator instead of diff content
-    await expect(section).toContainText(/[Bb]inary/);
+    // Previewable binary files (e.g. PNG) show a Raw/Rendered toggle instead of diff content
+    await expect(section).toContainText(/Raw|Rendered|[Bb]inary/);
   }
 );
