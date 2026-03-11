@@ -71,7 +71,7 @@ jobs:
         if: steps.tag.outputs.tag != ''
         run: |
           for pkg in packages/core packages/react; do
-            (cd "$pkg" && npm run build && npm publish --provenance --access public)
+            (cd "$pkg" && npm run build && npm publish --access public)
           done
 
       - name: Install Linux maker dependencies
