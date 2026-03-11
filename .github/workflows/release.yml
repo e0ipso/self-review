@@ -39,7 +39,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
@@ -66,10 +66,6 @@ jobs:
             echo "No new release tag created"
             echo "tag=" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Upgrade npm for OIDC trusted publisher support
-        if: steps.tag.outputs.tag != ''
-        run: npm install -g npm@11
 
       - name: Publish workspace packages to npm
         if: steps.tag.outputs.tag != ''
