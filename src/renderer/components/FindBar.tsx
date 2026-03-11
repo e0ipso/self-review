@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Input } from './ui/input';
-import { Button } from './ui/button';
+import { Input } from '../../../packages/react/src/components/ui/input';
+import { Button } from '../../../packages/react/src/components/ui/button';
 import { ChevronUp, ChevronDown, X } from 'lucide-react';
 import { FindInPageResult } from '../../shared/types';
 

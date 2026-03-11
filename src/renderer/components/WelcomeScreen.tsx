@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Button } from './ui/button';
+import { Button } from '../../../packages/react/src/components/ui/button';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from './ui/card';
+} from '../../../packages/react/src/components/ui/card';
 
 function Logo({ className }: { className?: string }) {
   return (

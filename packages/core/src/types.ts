@@ -162,6 +162,10 @@ export interface VersionUpdateInfo {
   releaseUrl: string;
 }
 
+// ===== Image Preview Types =====
+
+export type ImageLoadResult = { dataUri: string } | { error: string };
+
 // ===== Payload Guard Types =====
 
 export interface PayloadStats {

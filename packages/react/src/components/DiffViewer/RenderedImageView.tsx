@@ -1,27 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { ImageLoadResult } from '../../../shared/types';
+import type { ImageLoadResult } from '@self-review/core';
 
 interface RenderedImageViewProps {
   filePath: string;
-  dataUri?: string; // pre-loaded (React package context); when absent, load via IPC
+  onLoadImage?: (filePath: string) => Promise<ImageLoadResult>;
 }
 
-export default function RenderedImageView({ filePath, dataUri: propDataUri }: RenderedImageViewProps) {
-  const [dataUri, setDataUri] = useState<string | null>(propDataUri ?? null);
+export default function RenderedImageView({ filePath, onLoadImage }: RenderedImageViewProps) {
+  const [dataUri, setDataUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(!propDataUri);
+  const [loading, setLoading] = useState(true);
   const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
-    if (propDataUri) return; // already provided
+    if (!onLoadImage) {
+      setError('Image loading not supported in this context.');
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setError(null);
     setDataUri(null);
     setDimensions(null);
 
-    window.electronAPI.loadImage(filePath).then((result: ImageLoadResult) => {
+    onLoadImage(filePath).then((result: ImageLoadResult) => {
       if (cancelled) return;
       if ('error' in result) {
         setError(result.error);
@@ -34,7 +39,7 @@ export default function RenderedImageView({ filePath, dataUri: propDataUri }: Re
     return () => {
       cancelled = true;
     };
-  }, [filePath, propDataUri]);
+  }, [filePath, onLoadImage]);
 
   if (loading) {
     return (

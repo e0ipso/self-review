@@ -4,7 +4,7 @@ import path from 'path';
 export default defineConfig({
   test: {
     environment: 'jsdom',
-    include: ['src/renderer/**/*.test.{ts,tsx}'],
+    include: ['packages/react/src/**/*.test.{ts,tsx}'],
     exclude: [
       'node_modules/**',
       '.webpack/**',
@@ -20,6 +20,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@self-review/core': path.resolve(__dirname, 'packages/core/src/index.ts'),
     },
   },
   coverage: {

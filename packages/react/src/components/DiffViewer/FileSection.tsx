@@ -17,6 +17,9 @@ import {
 import SplitView from './SplitView';
 import UnifiedView from './UnifiedView';
 import RenderedMarkdownView from './RenderedMarkdownView';
+import RenderedImageView from './RenderedImageView';
+import RenderedSvgView from './RenderedSvgView';
+import { isPreviewableImage, isPreviewableSvg } from '@self-review/core';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
@@ -59,10 +62,17 @@ export default function FileSection({
     side: 'old' | 'new';
   } | null>(null);
   const [showingFileComment, setShowingFileComment] = useState(false);
-  const [markdownViewMode, setMarkdownViewMode] = useState<'raw' | 'rendered'>('raw');
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  const isEligibleForRenderedView = file.changeType === 'added' && /\.(md|markdown)$/i.test(file.newPath || file.oldPath || '');
+  const isAddedFile = file.changeType === 'added';
+  const filePath_ = file.newPath || file.oldPath || '';
+  const showImagePreview = isAddedFile && file.isBinary === true && isPreviewableImage(filePath_);
+  const showSvgPreview = isAddedFile && isPreviewableSvg(filePath_);
+  const isEligibleForRenderedView = isAddedFile && /\.(md|markdown)$/i.test(filePath_);
+  const isPreviewable = showImagePreview || showSvgPreview || isEligibleForRenderedView;
+
+  const initialViewMode = isPreviewable ? 'rendered' : 'raw';
+  const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
 
   const filePath = file.newPath || file.oldPath;
   const comments = getCommentsForFile(filePath);
@@ -654,12 +664,12 @@ export default function FileSection({
           )}
         </span>
 
-        {/* Raw/Rendered toggle for eligible markdown files */}
-        {isEligibleForRenderedView && (
+        {/* Raw/Rendered toggle for eligible files (markdown, images, SVGs) */}
+        {isPreviewable && (
           <ToggleGroup
             type='single'
-            value={markdownViewMode}
-            onValueChange={(v) => v && setMarkdownViewMode(v as 'raw' | 'rendered')}
+            value={renderViewMode}
+            onValueChange={(v) => v && setRenderViewMode(v as 'raw' | 'rendered')}
             size='sm'
             className='h-6'
             onClick={e => e.stopPropagation()}
@@ -776,6 +786,13 @@ export default function FileSection({
                 Retry
               </Button>
             </div>
+          ) : showImagePreview && renderViewMode === 'rendered' ? (
+            <RenderedImageView
+              filePath={filePath ?? ''}
+              onLoadImage={adapter?.loadImage}
+            />
+          ) : showSvgPreview && renderViewMode === 'rendered' ? (
+            <RenderedSvgView file={file} />
           ) : file.isBinary ? (
             <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
               Binary file — no diff available
@@ -784,7 +801,7 @@ export default function FileSection({
             <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
               No changes to display
             </div>
-          ) : markdownViewMode === 'rendered' && isEligibleForRenderedView ? (
+          ) : renderViewMode === 'rendered' && isEligibleForRenderedView ? (
             <RenderedMarkdownView
               file={file}
               commentRange={commentRange}
