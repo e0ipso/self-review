@@ -13,3 +13,71 @@ export function isPreviewableImage(filePath: string): boolean {
 export function isPreviewableSvg(filePath: string): boolean {
   return getExtension(filePath) === '.svg';
 }
+
+export function getLanguageFromPath(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() || '';
+  const langMap: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'tsx',
+    js: 'javascript',
+    jsx: 'jsx',
+    py: 'python',
+    css: 'css',
+    json: 'json',
+    md: 'markdown',
+    sh: 'bash',
+    bash: 'bash',
+    yml: 'yaml',
+    yaml: 'yaml',
+    java: 'java',
+    go: 'go',
+    rs: 'rust',
+    sql: 'sql',
+    html: 'markup',
+    xml: 'markup',
+    rb: 'ruby',
+    php: 'php',
+    twig: 'twig',
+    c: 'c',
+    cpp: 'cpp',
+    h: 'c',
+    hpp: 'cpp',
+    // Config and data formats
+    ini: 'ini',
+    toml: 'toml',
+    csv: 'csv',
+    diff: 'diff',
+    patch: 'diff',
+    // Web and infrastructure
+    scss: 'scss',
+    sass: 'sass',
+    graphql: 'graphql',
+    gql: 'graphql',
+    conf: 'nginx',
+    // Database
+    mongodb: 'mongodb',
+    // Tooling
+    makefile: 'makefile',
+    mk: 'makefile',
+    mak: 'makefile',
+    vim: 'vim',
+    vimrc: 'vim',
+  };
+
+  // Check for special filenames without extensions
+  const filename = filePath.split('/').pop()?.toLowerCase() || '';
+  if (filename === 'dockerfile' || filename.startsWith('dockerfile.')) {
+    return 'docker';
+  }
+  if (filename === 'makefile' || filename.startsWith('makefile.')) {
+    return 'makefile';
+  }
+  if (filename.startsWith('.git')) {
+    return 'git';
+  }
+  if (filename === '.vimrc' || filename.startsWith('.vim')) {
+    return 'vim';
+  }
+
+  return langMap[ext] || 'plaintext';
+}

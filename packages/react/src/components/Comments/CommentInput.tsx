@@ -9,14 +9,15 @@ import type {
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
-import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
-import { Code2, Paperclip, ImageIcon } from 'lucide-react';
+import { Code2, Paperclip } from 'lucide-react';
 import CategorySelector from './CategorySelector';
 import EmojiAutocomplete from './EmojiAutocomplete';
-import { processImageFile } from '../../utils/image-utils';
 import AttachmentThumbnail from './AttachmentThumbnail';
 import { useEmojiAutocomplete } from '../../hooks/useEmojiAutocomplete';
+import { processImageFile } from '../../utils/image-utils';
+import { AttachmentDropZone } from './AttachmentDropZone';
+import { SuggestionPanel } from './SuggestionPanel';
 
 export interface CommentInputProps {
   filePath: string;
@@ -46,57 +47,11 @@ export default function CommentInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const dragCounter = useRef(0);
 
   const emoji = useEmojiAutocomplete(body, setBody, editorContainerRef);
 
-  const handleImageAttach = useCallback(async (files: (File | Blob)[]) => {
-    try {
-      const newAttachments = await Promise.all(files.map(processImageFile));
-      setAttachments(prev => [...prev, ...newAttachments]);
-    } catch (err) {
-      console.error('Failed to attach image:', err);
-    }
-  }, []);
-
-  const handlePasteImages = useCallback((e: React.ClipboardEvent | ClipboardEvent) => {
-    const clipboardData = 'clipboardData' in e ? e.clipboardData : null;
-    if (!clipboardData) return;
-    const items = Array.from(clipboardData.items);
-    const imageItems = items.filter(item => item.type.startsWith('image/'));
-    if (imageItems.length === 0) return;
-    e.preventDefault();
-    const files = imageItems
-      .map(item => item.getAsFile())
-      .filter((f): f is File => f !== null);
-    if (files.length > 0) {
-      handleImageAttach(files);
-    }
-  }, [handleImageAttach]);
-
-  const handleDropImages = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current = 0;
-    setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    if (files.length === 0) return;
-    handleImageAttach(files);
-  }, [handleImageAttach]);
-
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current++;
-    if (e.dataTransfer.types.includes('Files')) {
-      setIsDragging(true);
-    }
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current--;
-    if (dragCounter.current === 0) {
-      setIsDragging(false);
-    }
+  const handleAttach = useCallback((newAttachments: Attachment[]) => {
+    setAttachments(prev => [...prev, ...newAttachments]);
   }, []);
 
   useEffect(() => {
@@ -167,20 +122,12 @@ export default function CommentInput({
     <div
       className={`rounded-lg border bg-card shadow-sm overflow-hidden relative ${isDragging ? 'border-primary border-2' : 'border-foreground/15'}`}
       data-testid='comment-input'
-      onPaste={handlePasteImages}
-      onDrop={handleDropImages}
-      onDragOver={(e) => e.preventDefault()}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
     >
-      {isDragging && (
-        <div className='absolute inset-0 z-50 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] rounded-lg pointer-events-none'>
-          <div className='flex items-center gap-2 text-sm font-medium text-primary'>
-            <ImageIcon className='h-5 w-5' />
-            Drop image to attach
-          </div>
-        </div>
-      )}
+      <AttachmentDropZone
+        onAttach={handleAttach}
+        isDragging={isDragging}
+        onDragChange={setIsDragging}
+      >
       <div className='p-1 relative' data-color-mode={isDark ? 'dark' : 'light'} ref={editorContainerRef}>
         <MDEditor
           value={body}
@@ -225,7 +172,7 @@ export default function CommentInput({
                 }
               }
             },
-            onPaste: handlePasteImages as unknown as React.ClipboardEventHandler<HTMLTextAreaElement>,
+            onPaste: undefined,
           }}
           height={240}
           className='md-editor-comment'
@@ -239,6 +186,7 @@ export default function CommentInput({
           onHover={emoji.setSelectedIndex}
         />
       </div>
+      </AttachmentDropZone>
 
       {attachments.length > 0 && (
         <div className='flex gap-2 flex-wrap px-3 py-2 border-t border-border/50'>
@@ -256,40 +204,12 @@ export default function CommentInput({
       )}
 
       {showSuggestion && originalCode && (
-        <>
-          <Separator />
-          <div className='p-3 space-y-2 bg-muted/20'>
-            <div data-testid='suggestion-original'>
-              <label className='text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1 block'>
-                Original
-              </label>
-              <Textarea
-                value={originalCode}
-                disabled
-                className='font-mono text-xs bg-muted/30 resize-none'
-                rows={3}
-              />
-            </div>
-            <div data-testid='suggestion-proposed'>
-              <label className='text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1 block'>
-                Suggested
-              </label>
-              <Textarea
-                value={proposedCode}
-                onChange={e => setProposedCode(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                    e.preventDefault();
-                    handleSubmit();
-                  }
-                }}
-                placeholder='Enter your suggested code...'
-                className='font-mono text-xs resize-y'
-                rows={3}
-              />
-            </div>
-          </div>
-        </>
+        <SuggestionPanel
+          originalCode={originalCode}
+          proposedCode={proposedCode}
+          onProposedChange={setProposedCode}
+          onSubmit={handleSubmit}
+        />
       )}
 
       <Separator />
@@ -330,7 +250,9 @@ export default function CommentInput({
             onChange={(e) => {
               const files = Array.from(e.target.files || []);
               if (files.length > 0) {
-                handleImageAttach(files);
+                Promise.all(files.map(processImageFile))
+                  .then(newAttachments => setAttachments(prev => [...prev, ...newAttachments]))
+                  .catch(err => console.error('Failed to attach image:', err));
               }
               e.target.value = '';
             }}

@@ -4,10 +4,10 @@ import type { DiffFile } from '@self-review/core';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
-import SyntaxLine, { getLanguageFromPath } from './SyntaxLine';
-import CommentInput from '../Comments/CommentInput';
-import CommentDisplay from '../Comments/CommentDisplay';
+import SyntaxLine from './SyntaxLine';
+import { getLanguageFromPath } from '../../../../core/src/file-type-utils';
 import { extractOriginalCode } from './diff-utils';
+import { InlineCommentSlot } from './InlineCommentSlot';
 import ExpandContextBar from './ExpandContextBar';
 import { getLineBg, getGutterBg } from '../../utils/diff-styles';
 
@@ -203,35 +203,19 @@ export default function UnifiedView({
                   </div>
                 </div>
 
-                {/* Comments for this line (rendered at last line of range) */}
-                {commentsToRender.map(comment => (
-                  <div
-                    key={comment.id}
-                    className='border-y border-border bg-muted/50 px-4 py-3 ml-[100px]'
-                  >
-                    <CommentDisplay
-                      comment={comment}
-                      originalCode={comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined}
-                    />
-                  </div>
-                ))}
-
-                {/* Comment input */}
-                {showCommentInputHere && (
-                  <div className='border-y border-border bg-muted/50 px-4 py-3 ml-[100px]'>
-                    <CommentInput
-                      filePath={file.newPath || file.oldPath}
-                      lineRange={{
-                        side: commentRange.side,
-                        start: commentRange.start,
-                        end: commentRange.end,
-                      }}
-                      onCancel={onCancelComment}
-                      onSubmit={onCommentSaved}
-                      originalCode={getOriginalCode()}
-                    />
-                  </div>
-                )}
+                <InlineCommentSlot
+                  commentsToRender={commentsToRender}
+                  showCommentInput={!!showCommentInputHere}
+                  commentRange={commentRange}
+                  filePath={file.newPath || file.oldPath}
+                  originalCode={getOriginalCode()}
+                  onCancel={onCancelComment}
+                  onSaved={onCommentSaved}
+                  indentClass='ml-[100px]'
+                  getOriginalCodeForComment={(comment) =>
+                    comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
+                  }
+                />
               </React.Fragment>
             );
           })}
