@@ -19,7 +19,7 @@ import UnifiedView from './UnifiedView';
 import RenderedMarkdownView from './RenderedMarkdownView';
 import RenderedImageView from './RenderedImageView';
 import RenderedSvgView from './RenderedSvgView';
-import { isPreviewableImage, isPreviewableSvg } from '@self-review/core';
+import { isPreviewableImage, isPreviewableSvg } from '../../file-type-utils';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
