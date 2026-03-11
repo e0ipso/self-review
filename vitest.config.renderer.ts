@@ -4,7 +4,7 @@ import path from 'path';
 export default defineConfig({
   test: {
     environment: 'jsdom',
-    include: ['src/renderer/**/*.test.{ts,tsx}'],
+    include: ['packages/react/src/**/*.test.{ts,tsx}'],
     exclude: [
       'node_modules/**',
       '.webpack/**',
