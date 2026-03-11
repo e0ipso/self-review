@@ -60,9 +60,17 @@ self-review/
 │           ├── Layout.tsx        # Two-panel layout (file tree + diff viewer)
 │           ├── FileTree.tsx      # Left panel: file list, search, viewed checkboxes, output path footer
 │           ├── Toolbar.tsx       # Top bar: view mode, expand/collapse, theme
+│           ├── FileTreeEntry.tsx # Per-file row: badge, path, stats, viewed toggle
 │           ├── DiffViewer/
 │           │   ├── DiffViewer.tsx     # Orchestrator: renders file sections
-│           │   ├── FileSection.tsx    # Collapsible file header + diff content
+│           │   ├── EmptyDiffMessage.tsx # Empty-state messaging by diff source type
+│           │   ├── FileSection.tsx    # Orchestrator: hooks + layout composition
+│           │   ├── FileSectionHeader.tsx # Sticky header: path, badges, toggles
+│           │   ├── FileSectionBody.tsx   # File comments + DiffContentArea
+│           │   ├── DiffContentArea.tsx   # Loading/error/binary/view dispatcher
+│           │   ├── useDragSelection.ts   # Hook: drag-to-select comment ranges
+│           │   ├── useExpandContext.ts   # Hook: expand context lines via git
+│           │   ├── InlineCommentSlot.tsx # Shared inline comment row (Split+Unified)
 │           │   ├── SplitView.tsx      # Side-by-side diff rendering
 │           │   ├── UnifiedView.tsx    # Single-column unified diff rendering
 │           │   ├── HunkHeader.tsx     # @@ separator rendering
@@ -73,6 +81,9 @@ self-review/
 │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
 │           └── Comments/
 │               ├── CommentInput.tsx    # Text area + category selector + add/cancel
+│               ├── AttachmentDropZone.tsx # Drag-and-drop + paste attachment wrapper
+│               ├── SuggestionPanel.tsx    # Original/proposed code textareas
+│               ├── AttachmentImage.tsx    # Blob URL lifecycle + image display
 │               ├── EmojiAutocomplete.tsx # Inline emoji shortcode dropdown
 │               ├── CommentDisplay.tsx  # Rendered comment with edit/delete
 │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
@@ -124,8 +135,8 @@ Raw/Rendered toggle in the file header, following the same eligibility pattern a
   `data:image/svg+xml;base64,...` URI (blocks script execution); defaults to Raw view
 
 File-level comments are available on all preview types. Line-level comments are only available
-in the Raw diff view. Detection utilities (`isPreviewableImage`, `isPreviewableSvg`) live in
-`@self-review/core` (`packages/core/src/file-type-utils.ts`).
+in the Raw diff view. Detection utilities (`isPreviewableImage`, `isPreviewableSvg`,
+`getLanguageFromPath`) live in `@self-review/core` (`packages/core/src/file-type-utils.ts`).
 
 ## IPC Channels
 
