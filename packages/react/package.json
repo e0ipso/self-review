@@ -1,6 +1,6 @@
 {
   "name": "@self-review/react",
-  "version": "1.27.0",
+  "version": "1.27.1",
   "description": "React components for self-review: embeddable code review UI with diff viewer and commenting",
   "repository": {
     "type": "git",
