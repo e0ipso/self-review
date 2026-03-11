@@ -41,7 +41,6 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci
 
@@ -70,11 +69,8 @@ jobs:
       - name: Publish workspace packages to npm
         if: steps.tag.outputs.tag != ''
         run: |
-          VERSION="${{ steps.tag.outputs.tag }}"
-          VERSION="${VERSION#v}"
-          echo "Publishing workspace packages at version $VERSION"
           for pkg in packages/core packages/react; do
-            (cd "$pkg" && npm pkg set "version=$VERSION" && npm run build && npm publish --provenance --access public)
+            (cd "$pkg" && npm run build && npm publish --provenance --access public)
           done
 
       - name: Install Linux maker dependencies
