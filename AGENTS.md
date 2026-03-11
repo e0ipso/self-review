@@ -125,7 +125,7 @@ Raw/Rendered toggle in the file header, following the same eligibility pattern a
 
 File-level comments are available on all preview types. Line-level comments are only available
 in the Raw diff view. Detection utilities (`isPreviewableImage`, `isPreviewableSvg`) live in
-`@self-review/core` (`packages/core/src/file-type-utils.ts`).
+`@self-review/react` (`packages/react/src/file-type-utils.ts`).
 
 ## IPC Channels
 
