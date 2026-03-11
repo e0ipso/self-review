@@ -7,6 +7,7 @@ import type {
   ExpandContextResponse,
   OutputPathInfo,
   AppConfig,
+  ImageLoadResult,
 } from '@self-review/core';
 
 /**
@@ -35,6 +36,9 @@ export interface ReviewAdapter {
 
   /** Change the output file path (e.g., open save dialog). */
   changeOutputPath?: () => Promise<OutputPathInfo | null>;
+
+  /** Load a binary image as a base64 data URI for rendered preview. */
+  loadImage?: (filePath: string) => Promise<ImageLoadResult>;
 }
 
 /**

@@ -434,11 +434,18 @@ export function requestReviewFromRenderer(
   window: BrowserWindow
 ): Promise<ReviewState> {
   return new Promise(resolve => {
-    // Clear cached state
-    reviewStateCache = null;
+    // Host-driven flow: renderer pushes state before triggering save.
+    // If the cache is already populated, use it directly.
+    if (reviewStateCache) {
+      console.error('[ipc] Using pre-submitted review state (host-driven)');
+      const state = reviewStateCache;
+      reviewStateCache = null;
+      resolve(state);
+      return;
+    }
 
-    // Send request to renderer
-    console.error('[ipc] Sending review:request to renderer');
+    // Fallback: pull-based request for backward compatibility.
+    console.error('[ipc] Sending review:request to renderer (fallback)');
     window.webContents.send('review:request');
 
     // Wait for response with timeout
@@ -460,7 +467,9 @@ export function requestReviewFromRenderer(
         console.error('[ipc] Review state received from renderer');
         clearTimeout(timeout);
         clearInterval(interval);
-        resolve(reviewStateCache);
+        const state = reviewStateCache;
+        reviewStateCache = null;
+        resolve(state);
       }
     }, 100);
   });

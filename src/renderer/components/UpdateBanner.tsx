@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from './ui/button';
+import { Button } from '../../../packages/react/src/components/ui/button';
 import { ArrowUpCircle, X } from 'lucide-react';
 import { VersionUpdateInfo } from '../../shared/types';
 

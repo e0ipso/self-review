@@ -1,9 +1,8 @@
 import React, { useMemo } from 'react';
-import type { DiffFile } from '../../../shared/types';
+import type { DiffFile } from '@self-review/core';
 
 interface RenderedSvgViewProps {
   file: DiffFile;
-  svgContent?: string; // pre-extracted (React package context)
 }
 
 function extractSvgContent(file: DiffFile): string {
@@ -15,15 +14,11 @@ function extractSvgContent(file: DiffFile): string {
 }
 
 function svgToDataUri(svgContent: string): string {
-  // Handle non-ASCII characters safely
   return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgContent)))}`;
 }
 
-export default function RenderedSvgView({ file, svgContent: propContent }: RenderedSvgViewProps) {
-  const svgContent = useMemo(
-    () => propContent ?? extractSvgContent(file),
-    [file, propContent]
-  );
+export default function RenderedSvgView({ file }: RenderedSvgViewProps) {
+  const svgContent = useMemo(() => extractSvgContent(file), [file]);
 
   if (!svgContent.trim()) {
     return (

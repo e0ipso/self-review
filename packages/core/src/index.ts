@@ -25,6 +25,7 @@ export type {
   FindInPageResult,
   VersionUpdateInfo,
   PayloadStats,
+  ImageLoadResult,
 } from './types';
 
 // Diff parsing

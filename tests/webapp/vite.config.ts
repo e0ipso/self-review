@@ -11,7 +11,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@self-review/core': path.resolve(__dirname, '../../packages/core/src'),
+      '@self-review/core': path.resolve(__dirname, '../../packages/core/src/browser.ts'),
     },
   },
   server: {

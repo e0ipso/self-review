@@ -8,12 +8,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from './ui/alert-dialog';
-import { useReview } from '../context/ReviewContext';
+} from '../../../packages/react/src/components/ui/alert-dialog';
+import { useReview } from '../../../packages/react/src/context/ReviewContext';
 
 export default function CloseConfirmDialog() {
   const [open, setOpen] = useState(false);
-  const { files } = useReview();
+  const { files, diffSource } = useReview();
 
   const hasComments = files.some(f => f.comments.length > 0);
 
@@ -28,6 +28,12 @@ export default function CloseConfirmDialog() {
   }, [hasComments]);
 
   const handleSaveAndQuit = () => {
+    // Host-driven save: push state before triggering main-process save
+    window.electronAPI.submitReview({
+      timestamp: new Date().toISOString(),
+      source: diffSource,
+      files,
+    });
     window.electronAPI.saveAndQuit();
   };
 
