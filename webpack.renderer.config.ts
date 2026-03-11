@@ -37,7 +37,7 @@ export const rendererConfig: Configuration = {
   resolve: {
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.css'],
     alias: {
-      '@self-review/core': path.resolve(__dirname, 'packages/core/src/index.ts'),
+      '@self-review/core': path.resolve(__dirname, 'packages/core/src/browser.ts'),
     },
   },
 };
