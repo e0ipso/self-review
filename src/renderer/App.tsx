@@ -1,18 +1,46 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { ConfigProvider } from './context/ConfigContext';
-import { ReviewProvider, useReview } from './context/ReviewContext';
-import { DiffNavigationProvider } from './context/DiffNavigationContext';
-import { TooltipProvider } from './components/ui/tooltip';
-import Toolbar from './components/Toolbar';
-import Layout from './components/Layout';
+import { ConfigProvider, useConfig } from '../../packages/react/src/context/ConfigContext';
+import { ReviewProvider, useReview } from '../../packages/react/src/context/ReviewContext';
+import { DiffNavigationProvider } from '../../packages/react/src/context/DiffNavigationContext';
+import { ReviewAdapterProvider } from '../../packages/react/src/context/ReviewAdapterContext';
+import { TooltipProvider } from '../../packages/react/src/components/ui/tooltip';
+import Toolbar from '../../packages/react/src/components/Toolbar';
+import Layout from '../../packages/react/src/components/Layout';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
-import { KeyboardNavigationManager } from './components/KeyboardNavigationManager';
+import { KeyboardNavigationManager } from '../../packages/react/src/components/KeyboardNavigationManager';
 import { FindBar } from './components/FindBar';
 import WelcomeScreen from './components/WelcomeScreen';
 import UpdateBanner from './components/UpdateBanner';
+import type { ReviewAdapter } from '../../packages/react/src/adapter';
+import type { AppConfig, OutputPathInfo } from '@self-review/core';
+import lightThemeCss from 'prismjs/themes/prism.css?raw';
+import darkThemeCss from 'prism-themes/themes/prism-one-dark.css?raw';
+
+// Electron platform adapter — wraps window.electronAPI for the package context.
+const electronAdapter: ReviewAdapter = {
+  loadDiff: () =>
+    new Promise(resolve => {
+      window.electronAPI.onDiffLoad(resolve);
+      window.electronAPI.requestDiffData();
+    }),
+  loadResumedComments: () =>
+    new Promise(resolve => {
+      window.electronAPI.onResumeLoad(payload => resolve(payload.comments));
+      window.electronAPI.requestResumeData();
+    }),
+  submitReview: state => {
+    window.electronAPI.submitReview(state);
+  },
+  expandContext: request => window.electronAPI.expandContext(request),
+  loadFileContent: filePath => window.electronAPI.loadFileContent(filePath),
+  readAttachment: filePath => window.electronAPI.readAttachment(filePath),
+  changeOutputPath: () => window.electronAPI.changeOutputPath(),
+  loadImage: filePath => window.electronAPI.loadImage(filePath),
+};
 
 function AppContent() {
-  const { diffSource } = useReview();
+  const { diffSource, files } = useReview();
+  const { setOutputPathInfo } = useConfig();
   const [isFindBarOpen, setIsFindBarOpen] = useState(false);
 
   const toggleFindBar = useCallback(() => {
@@ -30,6 +58,23 @@ function AppContent() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [toggleFindBar]);
+
+  // Forward IPC output-path changes into the package config context
+  useEffect(() => {
+    window.electronAPI.onOutputPathChanged(info => {
+      setOutputPathInfo(info);
+    });
+  }, [setOutputPathInfo]);
+
+  // Host-driven finish: push state then trigger save
+  const handleFinishReview = useCallback(() => {
+    window.electronAPI.submitReview({
+      timestamp: new Date().toISOString(),
+      source: diffSource,
+      files,
+    });
+    window.electronAPI.saveAndQuit();
+  }, [diffSource, files]);
 
   if (diffSource.type === 'welcome') {
     return <WelcomeScreen />;
@@ -68,7 +113,7 @@ function AppContent() {
         <KeyboardNavigationManager />
         <div className='flex flex-col h-screen bg-background text-foreground antialiased'>
           <UpdateBanner />
-          <Toolbar />
+          <Toolbar onFinishReview={handleFinishReview} />
           <Layout />
         </div>
         <FindBar isOpen={isFindBarOpen} onClose={() => setIsFindBarOpen(false)} />
@@ -79,11 +124,32 @@ function AppContent() {
 }
 
 export default function App() {
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo | null>(null);
+
+  // Load config via IPC before mounting package providers
+  useEffect(() => {
+    window.electronAPI.onConfigLoad((cfg, pathInfo) => {
+      setConfig(cfg);
+      if (pathInfo) setOutputPathInfo(pathInfo);
+    });
+    window.electronAPI.requestConfig();
+  }, []);
+
+  if (!config) return null;
+
   return (
-    <ConfigProvider>
-      <ReviewProvider>
-        <AppContent />
-      </ReviewProvider>
-    </ConfigProvider>
+    <ReviewAdapterProvider adapter={electronAdapter}>
+      <ConfigProvider
+        initialConfig={config}
+        initialOutputPath={outputPathInfo ?? undefined}
+        prismLightCss={lightThemeCss}
+        prismDarkCss={darkThemeCss}
+      >
+        <ReviewProvider>
+          <AppContent />
+        </ReviewProvider>
+      </ConfigProvider>
+    </ReviewAdapterProvider>
   );
 }
