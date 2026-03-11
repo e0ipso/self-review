@@ -11,7 +11,7 @@ import darkThemeCss from 'prism-themes/themes/prism-one-dark.css?raw';
 
 const defaultConfig: AppConfig = {
   theme: 'system',
-  diffView: 'split',
+  diffView: 'unified',
   fontSize: 14,
   outputFormat: 'xml',
   outputFile: './review.xml',
