@@ -87,6 +87,9 @@ Then(
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     const tokens = section.locator('.token');
+    // Prism.js is lazy-loaded asynchronously; wait for the first token to appear
+    // before counting, so the assertion is not racy.
+    await expect(tokens.first()).toBeAttached({ timeout: 10000 });
     expect(await tokens.count()).toBeGreaterThan(0);
   }
 );
