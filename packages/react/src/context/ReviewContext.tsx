@@ -18,7 +18,7 @@ import type {
   ReviewComment,
   LineRange,
   Suggestion,
-} from '@self-review/core';
+} from '@self-review/types';
 import { useReviewState } from '../hooks/useReviewState';
 import { useConfig } from './ConfigContext';
 import { useAdapter } from './ReviewAdapterContext';

@@ -1,6 +1,6 @@
 import React from 'react';
 import Prism from 'prismjs';
-import type { Suggestion } from '@self-review/core';
+import type { Suggestion } from '@self-review/types';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-jsx';

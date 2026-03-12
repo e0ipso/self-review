@@ -32,7 +32,7 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
-    "@self-review/core": "*",
+    "@self-review/types": "*",
     "@base-ui/react": "^1.1.0",
     "@emoji-mart/data": "^1.2.1",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -56,6 +56,7 @@
     "@tailwindcss/typography": "^0.5.0"
   },
   "devDependencies": {
+    "@self-review/core": "*",
     "@testing-library/react": "^16.3.2",
     "@types/prismjs": "^1.26.6",
     "@types/react": "^19.2.14",

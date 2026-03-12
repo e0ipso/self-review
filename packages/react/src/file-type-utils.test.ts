@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isPreviewableImage, isPreviewableSvg } from './file-type-utils';
+import { isPreviewableImage, isPreviewableSvg } from './utils/file-type-utils';
 
 describe('isPreviewableImage', () => {
   it('returns true for .jpg', () => {

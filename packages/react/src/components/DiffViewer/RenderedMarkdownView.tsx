@@ -5,7 +5,7 @@ import rehypeRaw from 'rehype-raw';
 import type { Components, ExtraProps } from 'react-markdown';
 import { MessageSquarePlus } from 'lucide-react';
 import Prism from 'prismjs';
-import type { DiffFile, LineRange } from '@self-review/core';
+import type { DiffFile, LineRange } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';

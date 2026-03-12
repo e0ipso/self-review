@@ -1,4 +1,4 @@
-import type { DiffFile, DiffHunk, LineRange } from '@self-review/core';
+import type { DiffFile, DiffHunk, LineRange } from '@self-review/types';
 
 /**
  * Extract the original code content for a given line range from a DiffFile.

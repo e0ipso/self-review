@@ -6,5 +6,4 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: true,
-  external: ['xmllint-wasm', 'fast-xml-parser', 'yaml', 'ignore', '@self-review/types'],
 });

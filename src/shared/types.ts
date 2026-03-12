@@ -1,4 +1,4 @@
-// Re-export all types from the canonical source in @self-review/core.
+// Re-export all types from the canonical source in @self-review/types.
 // This file exists for backward compatibility — all src/ code imports from here.
 export type {
   ChangeType,
@@ -24,15 +24,11 @@ export type {
   FindInPageResult,
   VersionUpdateInfo,
   PayloadStats,
-} from '../../packages/core/src/types';
-
-// ===== Image Loading =====
-// Electron-specific — not part of @self-review/core.
-
-export type ImageLoadResult = { dataUri: string } | { error: string };
+  ImageLoadResult,
+} from '../../packages/types/src/index';
 
 // ===== Electron API (preload bridge) =====
-// Electron-specific — not part of @self-review/core.
+// Electron-specific — not part of @self-review/types.
 
 import type {
   DiffLoadPayload,
@@ -46,7 +42,8 @@ import type {
   FindInPageResult,
   VersionUpdateInfo,
   DiffHunk,
-} from '../../packages/core/src/types';
+  ImageLoadResult,
+} from '../../packages/types/src/index';
 
 export interface ElectronAPI {
   requestDiffData: () => void;

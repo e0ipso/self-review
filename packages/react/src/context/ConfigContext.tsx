@@ -5,7 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from 'react';
-import type { AppConfig, OutputPathInfo } from '@self-review/core';
+import type { AppConfig, OutputPathInfo } from '@self-review/types';
 
 export const defaultConfig: AppConfig = {
   theme: 'system',

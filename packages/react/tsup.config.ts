@@ -12,5 +12,6 @@ export default defineConfig({
     'react',
     'react-dom',
     'react/jsx-runtime',
+    '@self-review/types',
   ],
 });

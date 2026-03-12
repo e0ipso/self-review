@@ -31,7 +31,7 @@ export type {
   ExpandContextResponse,
   ResumeLoadPayload,
   PayloadStats,
-} from '@self-review/core';
+} from '@self-review/types';
 
 // Context providers (for advanced/custom composition)
 export { ReviewProvider, useReview } from './context/ReviewContext';

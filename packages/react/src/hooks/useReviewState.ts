@@ -5,7 +5,7 @@ import type {
   ReviewComment,
   LineRange,
   Suggestion,
-} from '@self-review/core';
+} from '@self-review/types';
 
 export interface UseReviewStateReturn {
   files: FileReviewState[];

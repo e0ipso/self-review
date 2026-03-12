@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Attachment } from '@self-review/core';
+import type { Attachment } from '@self-review/types';
 import { Button } from '../ui/button';
 import { X, ImageIcon } from 'lucide-react';
 

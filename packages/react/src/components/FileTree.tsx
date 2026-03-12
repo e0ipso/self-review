@@ -8,9 +8,9 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, CircleDashed, CircleCheck, MessageSquare, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getFileStats, getChangeTypeInfo } from '../utils/diff-styles';
+import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle } from 'lucide-react';
 import TruncatedPath from './TruncatedPath';
+import { FileTreeEntry } from './FileTreeEntry';
 
 export default function FileTree() {
   const { diffFiles, files, toggleViewed } = useReview();
@@ -131,85 +131,16 @@ export default function FileTree() {
       <div className='flex-1 overflow-y-auto overflow-x-hidden p-1'>
         {filteredFiles.map(file => {
           const filePath = file.newPath || file.oldPath;
-          const stats = getFileStats(file);
-          const commentCount = getCommentCount(filePath);
-          const viewed = isViewed(filePath);
-          const isActive = activeFilePath === filePath;
-          const changeType = getChangeTypeInfo(file.changeType);
-
           return (
-            <Tooltip key={filePath}>
-              <TooltipTrigger asChild>
-                <button
-                  data-testid={`file-entry-${filePath}`}
-                  data-file-path={filePath}
-                  onClick={() => scrollToFile(filePath)}
-                  className={`w-full text-left px-2 py-1.5 rounded-md transition-colors cursor-pointer ${
-                    isActive
-                      ? 'bg-accent text-accent-foreground'
-                      : 'hover:bg-accent/50 text-foreground'
-                  }`}
-                >
-                  <div className='flex items-center gap-1.5 min-w-0'>
-                    {/* Change type indicator */}
-                    <span
-                      className={`change-type-badge flex-shrink-0 inline-flex items-center justify-center w-[18px] h-[18px] rounded-sm text-[10px] font-bold leading-none ${changeType.className}`}
-                    >
-                      {changeType.label}
-                    </span>
-
-                    {/* File path */}
-                    <TruncatedPath path={filePath} />
-
-                    {/* Indicators */}
-                    <div className='flex items-center gap-1 flex-shrink-0'>
-                      {stats.additions > 0 && (
-                        <span className='text-[10px] tabular-nums font-medium text-emerald-600 dark:text-emerald-400'>
-                          +{stats.additions}
-                        </span>
-                      )}
-                      {stats.deletions > 0 && (
-                        <span className='text-[10px] tabular-nums font-medium text-red-600 dark:text-red-400'>
-                          -{stats.deletions}
-                        </span>
-                      )}
-                      {commentCount > 0 && (
-                        <span className='inline-flex items-center gap-0.5 text-muted-foreground'>
-                          <MessageSquare className='h-3 w-3' />
-                          <span className='text-[10px] tabular-nums'>
-                            {commentCount}
-                          </span>
-                        </span>
-                      )}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            data-testid={`viewed-toggle-${filePath}`}
-                            onClick={e => {
-                              e.stopPropagation();
-                              toggleViewed(filePath);
-                            }}
-                            className='inline-flex items-center justify-center h-5 w-5 rounded-sm hover:bg-accent/80 transition-colors cursor-pointer'
-                          >
-                            {viewed ? (
-                              <CircleCheck className='h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400' />
-                            ) : (
-                              <CircleDashed className='h-3.5 w-3.5 text-muted-foreground/60' />
-                            )}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side='right'>
-                          {viewed ? 'Mark as needs review' : 'Mark as done reviewing'}
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </div>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side='right' className='max-w-sm'>
-                <p className='font-mono text-xs break-all'>{filePath}</p>
-              </TooltipContent>
-            </Tooltip>
+            <FileTreeEntry
+              key={filePath}
+              file={file}
+              isActive={activeFilePath === filePath}
+              commentCount={getCommentCount(filePath)}
+              viewed={isViewed(filePath)}
+              onScrollToFile={scrollToFile}
+              onToggleViewed={toggleViewed}
+            />
           );
         })}
 

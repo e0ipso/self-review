@@ -60,9 +60,17 @@ self-review/
 │           ├── Layout.tsx        # Two-panel layout (file tree + diff viewer)
 │           ├── FileTree.tsx      # Left panel: file list, search, viewed checkboxes, output path footer
 │           ├── Toolbar.tsx       # Top bar: view mode, expand/collapse, theme
+│           ├── FileTreeEntry.tsx # Per-file row: badge, path, stats, viewed toggle
 │           ├── DiffViewer/
 │           │   ├── DiffViewer.tsx     # Orchestrator: renders file sections
-│           │   ├── FileSection.tsx    # Collapsible file header + diff content
+│           │   ├── EmptyDiffMessage.tsx # Empty-state messaging by diff source type
+│           │   ├── FileSection.tsx    # Orchestrator: hooks + layout composition
+│           │   ├── FileSectionHeader.tsx # Sticky header: path, badges, toggles
+│           │   ├── FileSectionBody.tsx   # File comments + DiffContentArea
+│           │   ├── DiffContentArea.tsx   # Loading/error/binary/view dispatcher
+│           │   ├── useDragSelection.ts   # Hook: drag-to-select comment ranges
+│           │   ├── useExpandContext.ts   # Hook: expand context lines via git
+│           │   ├── InlineCommentSlot.tsx # Shared inline comment row (Split+Unified)
 │           │   ├── SplitView.tsx      # Side-by-side diff rendering
 │           │   ├── UnifiedView.tsx    # Single-column unified diff rendering
 │           │   ├── HunkHeader.tsx     # @@ separator rendering
@@ -73,16 +81,20 @@ self-review/
 │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
 │           └── Comments/
 │               ├── CommentInput.tsx    # Text area + category selector + add/cancel
+│               ├── AttachmentDropZone.tsx # Drag-and-drop + paste attachment wrapper
+│               ├── SuggestionPanel.tsx    # Original/proposed code textareas
+│               ├── AttachmentImage.tsx    # Blob URL lifecycle + image display
 │               ├── EmojiAutocomplete.tsx # Inline emoji shortcode dropdown
 │               ├── CommentDisplay.tsx  # Rendered comment with edit/delete
 │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
 │               └── CategorySelector.tsx # Dropdown/chip selector for categories
 ├── packages/
 │   ├── core/                    # @self-review/core — headless diff parsing & review logic
-│   └── react/                   # @self-review/react — React components for review UI
+│   ├── react/                   # @self-review/react — React components for review UI
+│   └── types/                   # @self-review/types — shared TypeScript interfaces (zero runtime deps)
 ```
 
-The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace packages `@self-review/core` and `@self-review/react` expose shared logic and UI components. The Electron app imports these packages via relative path imports to their source (not through workspace symlinks), so no build step is needed for the packages during development.
+The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace packages `@self-review/core`, `@self-review/react`, and `@self-review/types` expose shared logic, UI components, and shared TypeScript interfaces respectively. The Electron app imports these packages via relative path imports to their source (not through workspace symlinks), so no build step is needed for the packages during development. The Electron app's `src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source.
 
 ## Keyboard Shortcuts
 
@@ -124,8 +136,10 @@ Raw/Rendered toggle in the file header, following the same eligibility pattern a
   `data:image/svg+xml;base64,...` URI (blocks script execution); defaults to Raw view
 
 File-level comments are available on all preview types. Line-level comments are only available
-in the Raw diff view. Detection utilities (`isPreviewableImage`, `isPreviewableSvg`) live in
-`@self-review/react` (`packages/react/src/file-type-utils.ts`).
+in the Raw diff view. Detection utilities (`isPreviewableImage`, `isPreviewableSvg`,
+`getLanguageFromPath`) are intentionally duplicated in both `@self-review/core`
+(`packages/core/src/file-type-utils.ts`) and `@self-review/react`
+(`packages/react/src/utils/file-type-utils.ts`). See the package AGENTS.md files for rationale.
 
 ## IPC Channels
 

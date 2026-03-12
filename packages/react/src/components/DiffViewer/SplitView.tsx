@@ -1,13 +1,13 @@
 import React from 'react';
 import { MessageSquarePlus } from 'lucide-react';
-import type { DiffFile, DiffLine } from '@self-review/core';
+import type { DiffFile, DiffLine } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
-import SyntaxLine, { getLanguageFromPath } from './SyntaxLine';
-import CommentInput from '../Comments/CommentInput';
-import CommentDisplay from '../Comments/CommentDisplay';
+import SyntaxLine from './SyntaxLine';
+import { getLanguageFromPath } from '../../utils/file-type-utils';
 import { extractOriginalCode } from './diff-utils';
+import { InlineCommentSlot } from './InlineCommentSlot';
 import ExpandContextBar from './ExpandContextBar';
 import { getLineBg, getGutterBg } from '../../utils/diff-styles';
 import EmptyLinePane from './EmptyLinePane';
@@ -225,8 +225,6 @@ export default function SplitView({
             const newCommentsToRender = newComments.filter(
               c => c.lineRange!.end === newLineNumber
             );
-            const hasCommentsToRender =
-              oldCommentsToRender.length > 0 || newCommentsToRender.length > 0;
             const showCommentInputHere =
               commentRange &&
               ((commentRange.side === 'old' &&
@@ -251,42 +249,18 @@ export default function SplitView({
                   )}
                 </div>
 
-                {/* Comments spanning full width (rendered at last line of range) */}
-                {hasCommentsToRender && (
-                  <div className='border-y border-border bg-muted/50 px-4 py-3 space-y-2'>
-                    {oldCommentsToRender.map(comment => (
-                      <CommentDisplay
-                        key={comment.id}
-                        comment={comment}
-                        originalCode={comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined}
-                      />
-                    ))}
-                    {newCommentsToRender.map(comment => (
-                      <CommentDisplay
-                        key={comment.id}
-                        comment={comment}
-                        originalCode={comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* Comment input spanning full width */}
-                {showCommentInputHere && (
-                  <div className='border-y border-border bg-muted/50 px-4 py-3'>
-                    <CommentInput
-                      filePath={file.newPath || file.oldPath}
-                      lineRange={{
-                        side: commentRange.side,
-                        start: commentRange.start,
-                        end: commentRange.end,
-                      }}
-                      onCancel={onCancelComment}
-                      onSubmit={onCommentSaved}
-                      originalCode={getOriginalCode()}
-                    />
-                  </div>
-                )}
+                <InlineCommentSlot
+                  commentsToRender={[...oldCommentsToRender, ...newCommentsToRender]}
+                  showCommentInput={!!showCommentInputHere}
+                  commentRange={commentRange}
+                  filePath={file.newPath || file.oldPath}
+                  originalCode={getOriginalCode()}
+                  onCancel={onCancelComment}
+                  onSaved={onCommentSaved}
+                  getOriginalCodeForComment={(comment) =>
+                    comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
+                  }
+                />
               </React.Fragment>
             );
           })}

@@ -1,5 +1,5 @@
 import React, { forwardRef, useRef, useImperativeHandle, type ReactNode } from 'react';
-import type { AppConfig, ReviewState } from '@self-review/core';
+import type { AppConfig, ReviewState } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
 import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
 import { ConfigProvider } from './context/ConfigContext';

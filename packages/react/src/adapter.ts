@@ -8,7 +8,7 @@ import type {
   OutputPathInfo,
   AppConfig,
   ImageLoadResult,
-} from '@self-review/core';
+} from '@self-review/types';
 
 /**
  * Platform adapter — consumers implement this to provide
