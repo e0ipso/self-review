@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useRef } from 'react';
 import { useDragSelection } from './useDragSelection';
-import type { DiffFile } from '@self-review/core';
+import type { DiffFile } from '@self-review/types';
 
 function makeFile(lines: { type: 'addition' | 'deletion' | 'context'; old: number | null; new: number | null }[]): DiffFile {
   return {

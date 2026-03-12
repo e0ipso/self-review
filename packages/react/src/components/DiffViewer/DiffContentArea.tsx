@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DiffFile } from '@self-review/core';
+import type { DiffFile } from '@self-review/types';
 import { Button } from '../ui/button';
 import { Loader2 } from 'lucide-react';
 import SplitView from './SplitView';

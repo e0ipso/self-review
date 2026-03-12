@@ -5,7 +5,7 @@ import type {
   LineRange,
   ReviewComment,
   Suggestion,
-} from '@self-review/core';
+} from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';

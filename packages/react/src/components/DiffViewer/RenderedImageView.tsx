@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { ImageLoadResult } from '@self-review/core';
+import type { ImageLoadResult } from '@self-review/types';
 
 interface RenderedImageViewProps {
   filePath: string;

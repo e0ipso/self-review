@@ -30,6 +30,7 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@self-review/types": "*",
     "fast-xml-parser": "^5.3.5",
     "ignore": "^7.0.5",
     "xmllint-wasm": "^5.1.0",

@@ -90,10 +90,11 @@ self-review/
 │               └── CategorySelector.tsx # Dropdown/chip selector for categories
 ├── packages/
 │   ├── core/                    # @self-review/core — headless diff parsing & review logic
-│   └── react/                   # @self-review/react — React components for review UI
+│   ├── react/                   # @self-review/react — React components for review UI
+│   └── types/                   # @self-review/types — shared TypeScript interfaces (zero runtime deps)
 ```
 
-The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace packages `@self-review/core` and `@self-review/react` expose shared logic and UI components. The Electron app imports these packages via relative path imports to their source (not through workspace symlinks), so no build step is needed for the packages during development.
+The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace packages `@self-review/core`, `@self-review/react`, and `@self-review/types` expose shared logic, UI components, and shared TypeScript interfaces respectively. The Electron app imports these packages via relative path imports to their source (not through workspace symlinks), so no build step is needed for the packages during development. The Electron app's `src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source.
 
 ## Keyboard Shortcuts
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRef } from 'react';
 import { useExpandContext } from './useExpandContext';
-import type { DiffFile, DiffHunk } from '@self-review/core';
+import type { DiffFile, DiffHunk } from '@self-review/types';
 
 const mockExpandFileContext = vi.fn();
 const mockUpdateFileHunks = vi.fn();

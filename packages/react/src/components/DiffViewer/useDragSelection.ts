@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type { DiffFile } from '@self-review/core';
+import type { DiffFile } from '@self-review/types';
 
 export type DragState = {
   startLine: number;
@@ -14,7 +14,7 @@ export type CommentRange = {
 };
 
 interface UseDragSelectionParams {
-  sectionRef: React.RefObject<HTMLElement>;
+  sectionRef: React.RefObject<HTMLElement | null>;
   effectiveViewMode: 'split' | 'unified';
   file: DiffFile;
   filePath: string;

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DiffSource } from '@self-review/core';
+import type { DiffSource } from '@self-review/types';
 
 export interface EmptyDiffMessageProps {
   diffSource: DiffSource;

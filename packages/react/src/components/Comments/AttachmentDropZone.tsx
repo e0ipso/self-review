@@ -1,7 +1,7 @@
 import React, { useRef, useCallback } from 'react';
 import { ImageIcon } from 'lucide-react';
 import { processImageFile } from '../../utils/image-utils';
-import type { Attachment } from '@self-review/core';
+import type { Attachment } from '@self-review/types';
 
 export interface AttachmentDropZoneProps {
   onAttach: (attachments: Attachment[]) => void;

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type Prism from 'prismjs';
-import type { DiffLineType } from '@self-review/core';
+import type { DiffLineType } from '@self-review/types';
 import { getLanguageFromPath } from '../../../../core/src/file-type-utils';
 
 // Module-level cache: Prism is loaded once and reused synchronously on all subsequent mounts.

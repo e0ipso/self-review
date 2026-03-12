@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DiffFile } from '@self-review/core';
+import type { DiffFile } from '@self-review/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { CircleDashed, CircleCheck, MessageSquare } from 'lucide-react';
 import { getFileStats, getChangeTypeInfo } from '../utils/diff-styles';

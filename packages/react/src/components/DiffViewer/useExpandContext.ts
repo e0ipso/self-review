@@ -1,5 +1,5 @@
 import { useState, useLayoutEffect, useRef, useCallback } from 'react';
-import type { DiffFile, DiffHunk } from '@self-review/core';
+import type { DiffFile, DiffHunk } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import {
   trimHunkContext,
@@ -14,7 +14,7 @@ interface UseExpandContextParams {
   file: DiffFile;
   filePath: string;
   isExpandable: boolean;
-  sectionRef: React.RefObject<HTMLElement>;
+  sectionRef: React.RefObject<HTMLElement | null>;
 }
 
 interface UseExpandContextResult {

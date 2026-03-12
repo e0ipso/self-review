@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DiffFile, ReviewComment } from '@self-review/core';
+import type { DiffFile, ReviewComment } from '@self-review/types';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';

@@ -1,4 +1,4 @@
-import type { DiffFile, DiffLine } from '@self-review/core';
+import type { DiffFile, DiffLine } from '@self-review/types';
 
 export function getLineBg(line: DiffLine | null): string {
   if (!line) return '';

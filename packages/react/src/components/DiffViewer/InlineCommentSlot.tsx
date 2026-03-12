@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ReviewComment } from '@self-review/core';
+import type { ReviewComment } from '@self-review/types';
 import CommentDisplay from '../Comments/CommentDisplay';
 import CommentInput from '../Comments/CommentInput';
 

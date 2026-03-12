@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
-import type { DiffFile } from '@self-review/core';
+import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import { isPreviewableImage, isPreviewableSvg } from '@self-review/core';

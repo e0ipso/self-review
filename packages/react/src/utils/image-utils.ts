@@ -1,4 +1,4 @@
-import type { Attachment } from '@self-review/core';
+import type { Attachment } from '@self-review/types';
 
 async function resizeImageIfNeeded(blob: Blob, maxDimension = 1920): Promise<Blob> {
   const bitmap = await createImageBitmap(blob);

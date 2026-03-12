@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import type { DiffFile } from '@self-review/core';
+import type { DiffFile } from '@self-review/types';
 
 interface RenderedSvgViewProps {
   file: DiffFile;

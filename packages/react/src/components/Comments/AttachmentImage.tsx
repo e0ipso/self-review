@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Attachment } from '@self-review/core';
+import type { Attachment } from '@self-review/types';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import { ImageOff } from 'lucide-react';
 

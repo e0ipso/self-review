@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import DiffViewer, { COLLAPSE_THRESHOLD } from './DiffViewer';
-import type { DiffFile } from '@self-review/core';
+import type { DiffFile } from '@self-review/types';
 
 // Mock context hooks
 const mockDiffFiles: DiffFile[] = [];

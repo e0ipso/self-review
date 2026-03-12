@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MessageSquarePlus } from 'lucide-react';
-import type { DiffFile } from '@self-review/core';
+import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
