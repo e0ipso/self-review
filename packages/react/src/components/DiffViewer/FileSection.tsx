@@ -4,7 +4,7 @@ import { useExpandContext } from './useExpandContext';
 import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
-import { isPreviewableImage, isPreviewableSvg } from '@self-review/core';
+import { isPreviewableImage, isPreviewableSvg } from '../../utils/file-type-utils';
 import { FileSectionHeader } from './FileSectionHeader';
 import { FileSectionBody } from './FileSectionBody';
 

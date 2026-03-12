@@ -1,9 +1,13 @@
 /**
- * File-type detection utilities.
+ * File-type detection utilities for the renderer.
  *
- * NOTE: This file is intentionally duplicated in packages/react/src/utils/file-type-utils.ts.
- * @self-review/core has Node-only dependencies, so @self-review/react cannot safely import
- * from this package. Both copies must be kept in sync.
+ * NOTE: This is intentionally duplicated from @self-review/core's file-type-utils.ts.
+ * @self-review/core has Node-only dependencies (child_process, fs, xmllint-wasm),
+ * so @self-review/react cannot import from it without pulling Node code into the
+ * browser bundle. These functions are pure string manipulation with no dependencies,
+ * making duplication the safest option over cross-package coupling.
+ *
+ * If you change the logic here, update the copy in packages/core/src/file-type-utils.ts too.
  */
 
 const RASTER_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.ico', '.bmp']);

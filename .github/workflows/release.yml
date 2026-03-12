@@ -70,7 +70,7 @@ jobs:
       - name: Publish workspace packages to npm
         if: steps.tag.outputs.tag != ''
         run: |
-          for pkg in packages/core packages/react; do
+          for pkg in packages/types packages/core packages/react; do
             (cd "$pkg" && npm run build && npm publish --provenance --access public)
           done
         env:

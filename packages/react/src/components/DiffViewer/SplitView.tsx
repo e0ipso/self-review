@@ -5,7 +5,7 @@ import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
 import SyntaxLine from './SyntaxLine';
-import { getLanguageFromPath } from '../../../../core/src/file-type-utils';
+import { getLanguageFromPath } from '../../utils/file-type-utils';
 import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
 import ExpandContextBar from './ExpandContextBar';
