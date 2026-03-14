@@ -44,6 +44,54 @@ src/
 └── utils/                 # Pure utility functions (browser-safe)
 ```
 
+## CSS Build & Theming
+
+### Compiled CSS output
+
+`npm run build` runs `tsup && npm run build:css`. The `build:css` script uses `@tailwindcss/cli`
+to compile `src/build-styles.css` into `dist/styles.css` — a self-contained CSS file that includes
+all Tailwind utility classes used by the library. Host apps import it as:
+
+```js
+import '@self-review/react/styles.css';
+```
+
+No Tailwind dependency is needed in the consuming application.
+
+### Build entrypoints
+
+- `src/styles.css` — **build input only**. Contains Tailwind `@custom-variant`/`@theme inline`
+  directives, CSS custom property definitions (`:root`, `.dark`), and component-level overrides.
+  Do not import this file directly from a host app.
+- `src/build-styles.css` — **Tailwind CLI entrypoint**. Imports `tailwindcss`, the typography
+  plugin, `styles.css`, and adds `@source "../dist"` to scan compiled JS for class names. Not
+  shipped in the package.
+
+### Dependencies
+
+`tailwindcss` and `@tailwindcss/typography` are `devDependencies` (not `peerDependencies`).
+Host apps do not need Tailwind in their project.
+
+### `.self-review` wrapper div
+
+`ConfigProvider` renders a `<div className="self-review">` around its children with
+`style={{ display: 'contents' }}`. This div serves two purposes:
+
+1. **Theme scoping** — the `dark` class is toggled on this wrapper instead of
+   `document.documentElement`. Dark mode utility classes activate via
+   `@custom-variant dark (&:is(.dark *))` in `styles.css`.
+2. **CSS containment** — all `*` selectors and component-specific overrides in `styles.css` are
+   prefixed with `.self-review`, preventing style leakage into host applications.
+
+### Radix/Base UI portal containers
+
+All shadcn/ui portal-based components (`alert-dialog`, `dropdown-menu`, `select`, `tooltip`)
+receive the `.self-review` wrapper div as their `container` prop via `useConfig().portalContainer`.
+This ensures portals render inside the scoped subtree and inherit dark-mode CSS variables.
+
+The `portalContainer` is `null` on the first render (portals fall back to `document.body`) and
+is set to the wrapper div after mount via `useEffect`.
+
 ## Testing
 
 ```bash

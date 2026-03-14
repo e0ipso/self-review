@@ -1,0 +1,9 @@
+/* Build entrypoint for @self-review/react — not shipped directly.
+ * This file is used only by the Tailwind CLI build step.
+ * It imports tailwindcss and the library styles, then tells Tailwind
+ * to scan the compiled JS for class names.
+ */
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@import "./styles.css";
+@source "../dist";

@@ -1,11 +1,13 @@
 /*
- * @self-review/react styles
+ * @self-review/react styles — BUILD INPUT
  *
- * Import this file in your app:
- *   import '@self-review/react/styles.css';
+ * This file is processed by the Tailwind CLI build step (via src/build-styles.css)
+ * to produce dist/styles.css. Do NOT import this file directly.
  *
- * Requires Tailwind CSS v4+ and @tailwindcss/typography to be configured
- * in your consuming application.
+ * Host apps should import the compiled output:
+ *   import '@self-review/react/styles.css';  // points to dist/styles.css
+ *
+ * No Tailwind dependency is needed in the consuming application.
  */
 
 @custom-variant dark (&:is(.dark *));
@@ -87,109 +89,109 @@
   --sidebar-foreground: 240 4.8% 95.9%;
 }
 
-* {
+.self-review * {
   border-color: hsl(var(--border));
 }
 
 /* Ultra-subtle scrollbars */
-* {
+.self-review * {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
 
-*:hover {
+.self-review *:hover {
   scrollbar-color: hsl(var(--border) / 0.3) transparent;
 }
 
-*::-webkit-scrollbar {
+.self-review *::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-*::-webkit-scrollbar-track {
+.self-review *::-webkit-scrollbar-track {
   background: transparent;
 }
 
-*::-webkit-scrollbar-thumb {
+.self-review *::-webkit-scrollbar-thumb {
   background: transparent;
   border-radius: 3px;
 }
 
-*:hover::-webkit-scrollbar-thumb {
+.self-review *:hover::-webkit-scrollbar-thumb {
   background: hsl(var(--border) / 0.3);
 }
 
-*::-webkit-scrollbar-thumb:hover {
+.self-review *::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--border) / 0.5);
 }
 
 /* Prevent Tailwind .table utility from overriding Prism token spans */
-.token.table {
+.self-review .token.table {
   display: inline;
 }
 
 /* MDEditor overrides for CommentInput */
-.md-editor-comment.w-md-editor {
+.self-review .md-editor-comment.w-md-editor {
   border: none !important;
   box-shadow: none !important;
   background-color: transparent !important;
   --color-border-default: hsl(var(--border)) !important;
 }
 
-.md-editor-comment .w-md-editor-toolbar {
+.self-review .md-editor-comment .w-md-editor-toolbar {
   border-bottom: 1px solid hsl(var(--border)) !important;
   background-color: transparent !important;
   padding: 4px !important;
   min-height: auto !important;
 }
 
-.md-editor-comment .w-md-editor-toolbar li > button {
+.self-review .md-editor-comment .w-md-editor-toolbar li > button {
   height: 24px !important;
 }
 
-.md-editor-comment .w-md-editor-content {
+.self-review .md-editor-comment .w-md-editor-content {
   flex: 1 !important;
 }
 
-.md-editor-comment .w-md-editor-text {
+.self-review .md-editor-comment .w-md-editor-text {
   min-height: 80px;
   height: 100% !important;
 }
 
-.md-editor-comment .w-md-editor-preview {
+.self-review .md-editor-comment .w-md-editor-preview {
   display: none !important;
 }
 
-.md-editor-comment .w-md-editor-text-input,
-.md-editor-comment .w-md-editor-text-pre {
+.self-review .md-editor-comment .w-md-editor-text-input,
+.self-review .md-editor-comment .w-md-editor-text-pre {
   font-size: 0.875rem !important;
   line-height: 1.25rem !important;
 }
 
 /* Rendered markdown view: override prose margins */
-.rendered-markdown-view table {
+.self-review .rendered-markdown-view table {
   margin-top: 0.75em;
   margin-bottom: 0.75em;
 }
 
-.rendered-markdown-view pre {
+.self-review .rendered-markdown-view pre {
   margin-top: 0.75em;
   margin-bottom: 0.75em;
 }
 
-.rendered-markdown-view details {
+.self-review .rendered-markdown-view details {
   margin-top: 0.75em;
   margin-bottom: 0.75em;
 }
 
 /* Rendered markdown code theming aligned with Prism light/dark */
-.rendered-markdown-view {
+.self-review .rendered-markdown-view {
   --tw-prose-pre-bg: #f5f2f0;
   --tw-prose-pre-code: #393a34;
   --tw-prose-code: hsl(var(--foreground));
 }
 
-.dark .rendered-markdown-view {
+.self-review.dark .rendered-markdown-view {
   --tw-prose-pre-bg: hsl(220, 13%, 18%);
   --tw-prose-pre-code: hsl(220, 14%, 71%);
   --tw-prose-code: hsl(var(--foreground));

@@ -3,6 +3,7 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useRef,
   ReactNode,
 } from 'react';
 import type { AppConfig, OutputPathInfo } from '@self-review/types';
@@ -59,6 +60,8 @@ export interface ConfigContextValue {
   updateConfig: (updates: Partial<AppConfig>) => void;
   outputPathInfo: OutputPathInfo;
   setOutputPathInfo: (info: OutputPathInfo) => void;
+  /** The .self-review wrapper div — used as container for Radix/Base UI portals */
+  portalContainer: HTMLDivElement | null;
 }
 
 const defaultOutputPathInfo: OutputPathInfo = {
@@ -72,6 +75,7 @@ const ConfigContext = createContext<ConfigContextValue>({
   updateConfig: () => {},
   outputPathInfo: defaultOutputPathInfo,
   setOutputPathInfo: () => {},
+  portalContainer: null,
 });
 
 export function useConfig() {
@@ -105,14 +109,26 @@ export function ConfigProvider({
     initialOutputPath || defaultOutputPathInfo
   );
 
+  // Ref for the .self-review wrapper div — used for theme scoping and portal containment
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
+
+  // Expose the wrapper div as the portal container after mount
+  useEffect(() => {
+    setPortalContainer(wrapperRef.current);
+  }, []);
+
   const updateConfig = (updates: Partial<AppConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }));
   };
 
-  // Apply theme to document element and swap Prism syntax theme
+  // Apply theme to the .self-review wrapper (scoped) and swap Prism syntax theme
   useEffect(() => {
     const applyTheme = (isDark: boolean) => {
-      document.documentElement.classList.toggle('dark', isDark);
+      // Toggle dark class on the scoped wrapper instead of document.documentElement
+      if (wrapperRef.current) {
+        wrapperRef.current.classList.toggle('dark', isDark);
+      }
 
       // Apply Prism theme CSS if provided
       if (prismLightCss || prismDarkCss) {
@@ -149,8 +165,10 @@ export function ConfigProvider({
   }, [config.theme, prismLightCss, prismDarkCss]);
 
   return (
-    <ConfigContext.Provider value={{ config, setConfig, updateConfig, outputPathInfo, setOutputPathInfo }}>
-      {children}
+    <ConfigContext.Provider value={{ config, setConfig, updateConfig, outputPathInfo, setOutputPathInfo, portalContainer }}>
+      <div ref={wrapperRef} className="self-review" style={{ display: 'contents' }}>
+        {children}
+      </div>
     </ConfigContext.Provider>
   );
 }

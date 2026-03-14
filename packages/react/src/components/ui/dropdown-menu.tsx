@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useConfig } from '../../context/ConfigContext';
 
 const DropdownMenu = MenuPrimitive.Root;
 const DropdownMenuTrigger = MenuPrimitive.Trigger;
@@ -34,20 +35,23 @@ DropdownMenuSubTrigger.displayName = 'DropdownMenuSubTrigger';
 const DropdownMenuSubContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <MenuPrimitive.Portal>
-    <MenuPrimitive.Positioner>
-      <MenuPrimitive.Popup
-        ref={ref}
-        className={cn(
-          'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-          className
-        )}
-        {...props}
-      />
-    </MenuPrimitive.Positioner>
-  </MenuPrimitive.Portal>
-));
+>(({ className, ...props }, ref) => {
+  const { portalContainer } = useConfig();
+  return (
+    <MenuPrimitive.Portal container={portalContainer}>
+      <MenuPrimitive.Positioner>
+        <MenuPrimitive.Popup
+          ref={ref}
+          className={cn(
+            'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+            className
+          )}
+          {...props}
+        />
+      </MenuPrimitive.Positioner>
+    </MenuPrimitive.Portal>
+  );
+});
 DropdownMenuSubContent.displayName = 'DropdownMenuSubContent';
 
 const DropdownMenuContent = React.forwardRef<
@@ -56,20 +60,23 @@ const DropdownMenuContent = React.forwardRef<
     sideOffset?: number;
     side?: 'top' | 'right' | 'bottom' | 'left';
   }
->(({ className, sideOffset = 4, side, ...props }, ref) => (
-  <MenuPrimitive.Portal>
-    <MenuPrimitive.Positioner sideOffset={sideOffset} side={side}>
-      <MenuPrimitive.Popup
-        ref={ref}
-        className={cn(
-          'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-          className
-        )}
-        {...props}
-      />
-    </MenuPrimitive.Positioner>
-  </MenuPrimitive.Portal>
-));
+>(({ className, sideOffset = 4, side, ...props }, ref) => {
+  const { portalContainer } = useConfig();
+  return (
+    <MenuPrimitive.Portal container={portalContainer}>
+      <MenuPrimitive.Positioner sideOffset={sideOffset} side={side}>
+        <MenuPrimitive.Popup
+          ref={ref}
+          className={cn(
+            'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+            className
+          )}
+          {...props}
+        />
+      </MenuPrimitive.Positioner>
+    </MenuPrimitive.Portal>
+  );
+});
 DropdownMenuContent.displayName = 'DropdownMenuContent';
 
 const DropdownMenuItem = React.forwardRef<
