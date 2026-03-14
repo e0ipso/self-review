@@ -38,6 +38,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Build workspace packages
+        run: |
+          for pkg in packages/types packages/core packages/react; do
+            (cd "$pkg" && npm run build)
+          done
+
       - name: Wait for GitHub Release to exist
         run: |
           TAG="${{ inputs.tag }}"
