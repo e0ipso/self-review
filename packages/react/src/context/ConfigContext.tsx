@@ -3,7 +3,7 @@ import React, {
   useContext,
   useState,
   useEffect,
-  useRef,
+  useCallback,
   ReactNode,
 } from 'react';
 import type { AppConfig, OutputPathInfo } from '@self-review/types';
@@ -109,13 +109,14 @@ export function ConfigProvider({
     initialOutputPath || defaultOutputPathInfo
   );
 
-  // Ref for the .self-review wrapper div — used for theme scoping and portal containment
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
-  // Expose the wrapper div as the portal container after mount
-  useEffect(() => {
-    setPortalContainer(wrapperRef.current);
+  // Callback ref fires synchronously during React's commit phase — before effects and before
+  // the browser paints. This ensures portalContainer is non-null from the first render.
+  const wrapperCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    if (node !== null) {
+      setPortalContainer(node);
+    }
   }, []);
 
   const updateConfig = (updates: Partial<AppConfig>) => {
@@ -126,8 +127,8 @@ export function ConfigProvider({
   useEffect(() => {
     const applyTheme = (isDark: boolean) => {
       // Toggle dark class on the scoped wrapper instead of document.documentElement
-      if (wrapperRef.current) {
-        wrapperRef.current.classList.toggle('dark', isDark);
+      if (portalContainer) {
+        portalContainer.classList.toggle('dark', isDark);
       }
 
       // Apply Prism theme CSS if provided
@@ -162,11 +163,11 @@ export function ConfigProvider({
       mediaQuery.addEventListener('change', listener);
       return () => mediaQuery.removeEventListener('change', listener);
     }
-  }, [config.theme, prismLightCss, prismDarkCss]);
+  }, [config.theme, prismLightCss, prismDarkCss, portalContainer]);
 
   return (
     <ConfigContext.Provider value={{ config, setConfig, updateConfig, outputPathInfo, setOutputPathInfo, portalContainer }}>
-      <div ref={wrapperRef} className="self-review" style={{ display: 'contents' }}>
+      <div ref={wrapperCallbackRef} className="self-review" style={{ display: 'contents' }}>
         {children}
       </div>
     </ConfigContext.Provider>
