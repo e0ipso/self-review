@@ -15,6 +15,9 @@ concurrency:
   group: release-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
+env:
+  NO_COLOR: "1"
+
 jobs:
   release:
     name: Release

@@ -17,6 +17,9 @@ concurrency:
   group: release-darwin-${{ inputs.tag }}
   cancel-in-progress: false
 
+env:
+  NO_COLOR: "1"
+
 jobs:
   release:
     name: macOS Release
