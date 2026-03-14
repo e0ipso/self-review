@@ -59,7 +59,7 @@ describe('useReviewBridge', () => {
     expect(typeof state?.timestamp).toBe('string');
   });
 
-  it('does not call onReviewChange when files have no comments', () => {
+  it('calls onReviewChange with empty array when files have no comments', () => {
     vi.mocked(useReview).mockReturnValue({
       files: [makeFile([])],
       diffSource: mockDiffSource,
@@ -70,6 +70,30 @@ describe('useReviewBridge', () => {
     renderHook(() => useReviewBridge(ref, onReviewChange));
 
     expect(onReviewChange).toHaveBeenCalledWith([]);
+  });
+
+  it('does not re-fire onReviewChange when files change but comments stay the same', () => {
+    const comment = { id: '1', body: 'hi' } as any;
+    vi.mocked(useReview).mockReturnValue({
+      files: [makeFile([comment])],
+      diffSource: mockDiffSource,
+    } as any);
+
+    const onReviewChange = vi.fn();
+    const ref = React.createRef<ReviewHandle>();
+    const { rerender } = renderHook(() => useReviewBridge(ref, onReviewChange));
+
+    expect(onReviewChange).toHaveBeenCalledTimes(1);
+
+    // Simulate a files reference change (e.g., viewed flag toggle) with same comments
+    vi.mocked(useReview).mockReturnValue({
+      files: [{ ...makeFile([comment]), viewed: true }],
+      diffSource: mockDiffSource,
+    } as any);
+    rerender();
+
+    // Should still be 1 — not re-fired
+    expect(onReviewChange).toHaveBeenCalledTimes(1);
   });
 
   it('flattens comments from multiple files', () => {

@@ -7,7 +7,7 @@ import { ReviewProvider } from './context/ReviewContext';
 import { DiffNavigationProvider } from './context/DiffNavigationContext';
 import { TooltipProvider } from './components/ui/tooltip';
 import FileSection from './components/DiffViewer/FileSection';
-import { ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
+import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
 
 export type SingleFileReviewHandle = ReviewHandle;
 

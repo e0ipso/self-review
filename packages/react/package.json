@@ -28,7 +28,7 @@
   ],
   "scripts": {
     "build": "tsup && npm run build:css",
-    "build:css": "npx @tailwindcss/cli -i src/build-styles.css -o dist/styles.css --minify",
+    "build:css": "tailwindcss -i src/build-styles.css -o dist/styles.css --minify",
     "dev": "tsup --watch",
     "test:unit": "vitest run"
   },
