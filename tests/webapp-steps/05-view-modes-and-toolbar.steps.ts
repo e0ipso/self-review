@@ -125,7 +125,7 @@ Then(
 Then('the application should use dark theme colors', async () => {
   const page = getPage();
   const hasDarkClass = await page.evaluate(() =>
-    document.documentElement.classList.contains('dark')
+    document.querySelector('.self-review')?.classList.contains('dark') ?? false
   );
   expect(hasDarkClass).toBe(true);
 });
@@ -133,7 +133,7 @@ Then('the application should use dark theme colors', async () => {
 Then('the application should use light theme colors', async () => {
   const page = getPage();
   const hasDarkClass = await page.evaluate(() =>
-    document.documentElement.classList.contains('dark')
+    document.querySelector('.self-review')?.classList.contains('dark') ?? false
   );
   expect(hasDarkClass).toBe(false);
 });
