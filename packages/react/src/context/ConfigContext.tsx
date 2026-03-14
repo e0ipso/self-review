@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
   ReactNode,
 } from 'react';
 import type { AppConfig, OutputPathInfo } from '@self-review/types';
@@ -111,6 +112,9 @@ export function ConfigProvider({
 
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
+  // Tracks the scoped <style> element injected into the wrapper div for Prism theme CSS
+  const styleRef = useRef<HTMLStyleElement | null>(null);
+
   // Callback ref fires synchronously during React's commit phase — before effects and before
   // the browser paints. This ensures portalContainer is non-null from the first render.
   const wrapperCallbackRef = useCallback((node: HTMLDivElement | null) => {
@@ -131,17 +135,16 @@ export function ConfigProvider({
         portalContainer.classList.toggle('dark', isDark);
       }
 
-      // Apply Prism theme CSS if provided
+      // Apply Prism theme CSS scoped to this instance's wrapper div (not document.head)
       if (prismLightCss || prismDarkCss) {
-        let styleEl = document.getElementById(
-          'prism-theme'
-        ) as HTMLStyleElement | null;
-        if (!styleEl) {
-          styleEl = document.createElement('style');
-          styleEl.id = 'prism-theme';
-          document.head.appendChild(styleEl);
+        if (!styleRef.current && portalContainer) {
+          const el = document.createElement('style');
+          portalContainer.appendChild(el);
+          styleRef.current = el;
         }
-        styleEl.textContent = isDark ? (prismDarkCss || '') : (prismLightCss || '');
+        if (styleRef.current) {
+          styleRef.current.textContent = isDark ? (prismDarkCss || '') : (prismLightCss || '');
+        }
       }
     };
 
@@ -154,6 +157,7 @@ export function ConfigProvider({
 
     applyTheme(resolveIsDark(config.theme));
 
+    let removeMediaListener: (() => void) | undefined;
     // Listen for system theme changes when in system mode
     if (config.theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -161,8 +165,16 @@ export function ConfigProvider({
         applyTheme(e.matches);
       };
       mediaQuery.addEventListener('change', listener);
-      return () => mediaQuery.removeEventListener('change', listener);
+      removeMediaListener = () => mediaQuery.removeEventListener('change', listener);
     }
+
+    return () => {
+      removeMediaListener?.();
+      if (styleRef.current) {
+        styleRef.current.remove();
+        styleRef.current = null;
+      }
+    };
   }, [config.theme, prismLightCss, prismDarkCss, portalContainer]);
 
   return (
