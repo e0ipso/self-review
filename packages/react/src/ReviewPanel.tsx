@@ -1,13 +1,14 @@
-import React, { forwardRef, useRef, useImperativeHandle, type ReactNode } from 'react';
-import type { AppConfig, ReviewState } from '@self-review/types';
+import React, { forwardRef, type ReactNode } from 'react';
+import type { AppConfig, ReviewComment } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
 import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
 import { ConfigProvider } from './context/ConfigContext';
-import { ReviewProvider, useReview } from './context/ReviewContext';
+import { ReviewProvider } from './context/ReviewContext';
 import { DiffNavigationProvider } from './context/DiffNavigationContext';
 import { TooltipProvider } from './components/ui/tooltip';
 import Layout from './components/Layout';
 import { KeyboardNavigationManager } from './components/KeyboardNavigationManager';
+import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
 
 /**
  * Imperative handle exposed by ReviewPanel via React ref.
@@ -25,10 +26,7 @@ import { KeyboardNavigationManager } from './components/KeyboardNavigationManage
  * }}>Submit Review</button>
  * ```
  */
-export interface ReviewPanelHandle {
-  /** Return the current review state (comments, viewed flags, source metadata). */
-  getReviewState: () => ReviewState;
-}
+export type ReviewPanelHandle = ReviewHandle;
 
 export interface ReviewPanelProps {
   /** Platform adapter for data loading and lifecycle hooks. */
@@ -49,6 +47,8 @@ export interface ReviewPanelProps {
    * useConfig, useDiffNavigationContext, etc.).
    */
   children?: ReactNode;
+  /** Called when review comments change. */
+  onReviewChange?: (comments: ReviewComment[]) => void;
 }
 
 /**
@@ -80,7 +80,7 @@ export interface ReviewPanelProps {
  */
 export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(
   function ReviewPanel(
-    { adapter, config, className, prismLightCss, prismDarkCss, children },
+    { adapter, config, className, prismLightCss, prismDarkCss, children, onReviewChange },
     ref,
   ) {
     return (
@@ -93,7 +93,7 @@ export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(
           <ReviewProvider>
             <DiffNavigationProvider>
               <TooltipProvider>
-                <ReviewPanelInner ref={ref} className={className}>
+                <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
                   {children}
                 </ReviewPanelInner>
               </TooltipProvider>
@@ -107,23 +107,12 @@ export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(
 
 /**
  * Inner component that lives inside all providers and can therefore
- * use useReview() to expose state through the imperative handle.
+ * use useReviewBridge() to expose state through the imperative handle
+ * and reactive callback.
  */
-const ReviewPanelInner = forwardRef<ReviewPanelHandle, { className?: string; children?: ReactNode }>(
-  function ReviewPanelInner({ className, children }, ref) {
-    const { files, diffSource } = useReview();
-    const filesRef = useRef(files);
-    const diffSourceRef = useRef(diffSource);
-    filesRef.current = files;
-    diffSourceRef.current = diffSource;
-
-    useImperativeHandle(ref, () => ({
-      getReviewState: (): ReviewState => ({
-        timestamp: new Date().toISOString(),
-        source: diffSourceRef.current,
-        files: filesRef.current,
-      }),
-    }));
+const ReviewPanelInner = forwardRef<ReviewPanelHandle, { className?: string; children?: ReactNode; onReviewChange?: (comments: ReviewComment[]) => void }>(
+  function ReviewPanelInner({ className, children, onReviewChange }, ref) {
+    useReviewBridge(ref, onReviewChange);
 
     return (
       <div className={className}>

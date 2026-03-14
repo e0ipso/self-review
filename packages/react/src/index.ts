@@ -4,7 +4,8 @@
 export { ReviewPanel } from './ReviewPanel';
 export type { ReviewPanelProps, ReviewPanelHandle } from './ReviewPanel';
 export { SingleFileReview } from './SingleFileReview';
-export type { SingleFileReviewProps } from './SingleFileReview';
+export type { SingleFileReviewProps, SingleFileReviewHandle } from './SingleFileReview';
+export type { ReviewHandle } from './hooks/useReviewBridge';
 
 // Adapter interface
 export type { ReviewAdapter, ConfigAdapter } from './adapter';
