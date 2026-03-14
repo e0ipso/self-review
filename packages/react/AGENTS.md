@@ -89,8 +89,9 @@ All shadcn/ui portal-based components (`alert-dialog`, `dropdown-menu`, `select`
 receive the `.self-review` wrapper div as their `container` prop via `useConfig().portalContainer`.
 This ensures portals render inside the scoped subtree and inherit dark-mode CSS variables.
 
-The `portalContainer` is `null` on the first render (portals fall back to `document.body`) and
-is set to the wrapper div after mount via `useEffect`.
+`portalContainer` is set synchronously via a callback ref during React's commit phase — before
+effects and before the browser paints. Portals always render inside the scoped subtree from the
+first render onwards; there is no null-on-first-render window.
 
 ## Testing
 
