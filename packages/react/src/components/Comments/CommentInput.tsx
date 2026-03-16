@@ -116,7 +116,12 @@ export default function CommentInput({
     onCancel();
   };
 
-  const isDark = document.documentElement.classList.contains('dark');
+  const resolveIsDark = () => {
+    if (config.theme === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return config.theme === 'dark';
+  };
 
   return (
     <div
@@ -128,7 +133,7 @@ export default function CommentInput({
         isDragging={isDragging}
         onDragChange={setIsDragging}
       >
-      <div className='p-1 relative' data-color-mode={isDark ? 'dark' : 'light'} ref={editorContainerRef}>
+      <div className='p-1 relative' data-color-mode={resolveIsDark() ? 'dark' : 'light'} ref={editorContainerRef}>
         <MDEditor
           value={body}
           onChange={(val) => setBody(val || '')}
