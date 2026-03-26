@@ -12,6 +12,8 @@ import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
 import MermaidBlock from './MermaidBlock';
 import { remarkEmoji } from '../../utils/remark-emoji';
+import { parseFrontMatter } from '../../utils/front-matter';
+import FrontMatterTable from './FrontMatterTable';
 
 // ===== Nesting Context =====
 // Tracks whether we're inside a block that already has a gutter wrapper,
@@ -214,6 +216,9 @@ export default function RenderedMarkdownView({
   onGutterMouseDown,
 }: RenderedMarkdownViewProps) {
   const content = useMemo(() => extractFileContent(file), [file]);
+  const frontMatter = useMemo(() => parseFrontMatter(content), [content]);
+  const markdownBody = frontMatter ? frontMatter.body : content;
+  const lineOffset = frontMatter ? frontMatter.lineOffset : 0;
   const filePath = file.newPath || file.oldPath;
 
   const lineRange: LineRange | null = commentRange
@@ -224,8 +229,8 @@ export default function RenderedMarkdownView({
   const createBlockRenderer = useCallback(
     (tag: keyof React.JSX.IntrinsicElements) => {
       return function BlockRenderer({ node, children, ...props }: React.HTMLAttributes<HTMLElement> & ExtraProps) {
-        const startLine = node?.position?.start?.line;
-        const endLine = node?.position?.end?.line;
+        const startLine = node?.position?.start?.line !== undefined ? node.position.start.line + lineOffset : undefined;
+        const endLine = node?.position?.end?.line !== undefined ? node.position.end.line + lineOffset : undefined;
         return (
           <BlockWrapper
             startLine={startLine}
@@ -244,7 +249,7 @@ export default function RenderedMarkdownView({
         );
       };
     },
-    [filePath, file, lineRange, onGutterMouseDown, onCancelComment, onCommentSaved]
+    [filePath, file, lineRange, lineOffset, onGutterMouseDown, onCancelComment, onCommentSaved]
   );
 
   // Code renderer with Prism highlighting + Mermaid support
@@ -297,12 +302,13 @@ export default function RenderedMarkdownView({
 
   return (
     <div className='prose dark:prose-invert max-w-none p-4 rendered-markdown-view'>
+      {frontMatter && <FrontMatterTable metadata={frontMatter.metadata} />}
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkEmoji]}
         rehypePlugins={[rehypeRaw]}
         components={components}
       >
-        {content}
+        {markdownBody}
       </ReactMarkdown>
     </div>
   );
