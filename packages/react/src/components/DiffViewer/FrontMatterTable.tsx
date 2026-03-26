@@ -4,9 +4,9 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TableHeader,
   TableRow,
 } from '../ui/table';
+import { Separator } from '../ui/separator';
 
 interface FrontMatterTableProps {
   metadata: Record<string, unknown>;
@@ -42,7 +42,7 @@ function renderValue(value: unknown): React.ReactNode {
         <TableBody>
           {entries.map(([key, val]) => (
             <TableRow key={key}>
-              <TableCell className="font-medium">{key}</TableCell>
+              <TableHead className="font-medium">{key}</TableHead>
               <TableCell>{renderValue(val)}</TableCell>
             </TableRow>
           ))}
@@ -62,23 +62,18 @@ export default function FrontMatterTable({ metadata }: FrontMatterTableProps) {
   }
 
   return (
-    <div className="mb-6 not-prose">
+    <div className="not-prose">
       <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-1/4">Key</TableHead>
-            <TableHead>Value</TableHead>
-          </TableRow>
-        </TableHeader>
         <TableBody>
           {entries.map(([key, value]) => (
             <TableRow key={key}>
-              <TableCell className="font-medium align-top">{key}</TableCell>
+              <TableHead className="font-bold w-[120px]">{key}</TableHead>
               <TableCell>{renderValue(value)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+      <Separator className="my-6" />
     </div>
   );
 }
