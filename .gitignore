@@ -131,3 +131,5 @@ test-results/
 /core
 review.xml
 /.self-review-assets
+
+.claude/worktrees
