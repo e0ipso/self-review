@@ -70,6 +70,7 @@ export interface ReviewComment {
   body: string;
   category: string;
   suggestion: Suggestion | null;
+  author?: string;
   orphaned?: boolean; // for --resume-from conflict handling
   attachments?: Attachment[];
 }
