@@ -128,7 +128,9 @@ the user navigates, avoiding memory pressure from loading the entire diff at onc
 
 **Rendered previews:** Newly added files (`changeType === 'added'`) of certain types support a
 Raw/Rendered toggle in the file header, following the same eligibility pattern as Markdown:
-- **Markdown** (`.md`, `.markdown`): rendered via `react-markdown` with line-mapped comment gutter
+- **Markdown** (`.md`, `.markdown`): rendered via `react-markdown` with line-mapped comment gutter;
+  files with YAML front matter (`---` delimited) display the metadata as a styled key-value table
+  above the prose content, with arrays as `<ul>` lists and objects as nested tables
 - **Raster images** (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.ico`, `.bmp`): loaded as base64
   data URIs via the `diff:load-image` IPC channel and displayed in a constrained `<img>` tag;
   defaults to Rendered view; files over 10 MB show an error message

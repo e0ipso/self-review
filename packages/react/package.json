@@ -1,6 +1,6 @@
 {
   "name": "@self-review/react",
-  "version": "1.28.8",
+  "version": "1.29.0",
   "description": "React components for self-review: embeddable code review UI with diff viewer and commenting",
   "repository": {
     "type": "git",
@@ -48,7 +48,8 @@
     "react-resizable-panels": "^4.6.2",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "yaml": "^2.8.2"
   },
   "peerDependencies": {
     "react": ">=18",
