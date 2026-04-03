@@ -267,6 +267,8 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   data comes from `@emoji-mart/data`. A custom remark plugin (`remark-emoji.ts`) converts
   `:shortcode:` text to Unicode emojis in all rendered markdown views (CommentDisplay and
   RenderedMarkdownView).
+- **Author attribution.** Comments from the self-review-critique skill include an `author` attribute
+  with the model name. When absent, the UI shows "You" with a person icon (human reviewer).
 
 ## Assistant Skills
 

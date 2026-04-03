@@ -885,6 +885,48 @@ describe('parseReviewXmlString', () => {
     });
   });
 
+  describe('author attribute', () => {
+    it('parses comment with author attribute', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1"
+        timestamp="2024-01-15T10:30:00Z"
+        git-diff-args="--staged"
+        repository="/repo">
+  <file path="src/main.ts" change-type="modified" viewed="true">
+    <comment new-line-start="10" new-line-end="10" author="alice">
+      <body>Looks good</body>
+      <category>praise</category>
+    </comment>
+  </file>
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.comments).toHaveLength(1);
+      expect(result.comments[0].author).toBe('alice');
+    });
+
+    it('has undefined author when attribute is not present', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1"
+        timestamp="2024-01-15T10:30:00Z"
+        git-diff-args="--staged"
+        repository="/repo">
+  <file path="src/main.ts" change-type="modified" viewed="true">
+    <comment new-line-start="10" new-line-end="10">
+      <body>No author</body>
+      <category>note</category>
+    </comment>
+  </file>
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.comments).toHaveLength(1);
+      expect(result.comments[0].author).toBeUndefined();
+    });
+  });
+
   describe('generated IDs', () => {
     it('generates unique IDs for parsed comments', () => {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>

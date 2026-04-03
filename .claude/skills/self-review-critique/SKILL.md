@@ -22,6 +22,7 @@ Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-revie
 - **`change-type` values:** `added`, `modified`, `deleted`, `renamed`.
 - **`original-code`:** Must be the exact text at the referenced lines — copied verbatim from the
   file content. The applying agent uses text matching to locate the replacement target.
+- **`author`:** Set to your model name on every comment you generate (e.g., "Claude Sonnet 4.6").
 
 ## 1. Parse Arguments
 
@@ -101,7 +102,7 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
 <?xml version="1.0" encoding="UTF-8"?>
 <review xmlns="urn:self-review:v1" timestamp="2026-02-28T14:30:00.000Z" git-diff-args="--staged" repository="/absolute/path/to/repo">
   <file path="src/utils.ts" change-type="modified" viewed="true">
-    <comment new-line-start="42" new-line-end="42">
+    <comment new-line-start="42" new-line-end="42" author="Claude Sonnet 4.6">
       <body>Division by zero when input is empty.</body>
       <category>bug</category>
       <suggestion>
@@ -119,6 +120,7 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
 - `timestamp`: Get current time with `node -e "console.log(new Date().toISOString())"`
 - `repository`: Get absolute path with `git rev-parse --show-toplevel`
 - `viewed`: Always `"true"` for all files (the assistant "viewed" them all)
+- `author`: Set to your model name on every comment you generate (e.g., "Claude Sonnet 4.6")
 - XML-escape all text content: `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`,
   `'` → `&apos;`
 

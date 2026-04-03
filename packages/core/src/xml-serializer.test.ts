@@ -731,6 +731,93 @@ describe('serializeReview', () => {
       expect(xml).toContain('<category></category>');
     });
 
+    it('serializes comment with author attribute', async () => {
+      const comment: ReviewComment = {
+        id: 'author-test',
+        filePath: 'src/main.ts',
+        lineRange: { side: 'new', start: 5, end: 5 },
+        body: 'Reviewed this line',
+        category: 'note',
+        suggestion: null,
+        author: 'alice',
+      };
+
+      const file: FileReviewState = {
+        path: 'src/main.ts',
+        changeType: 'modified',
+        viewed: true,
+        comments: [comment],
+      };
+
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        files: [file],
+      };
+
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+
+      expect(xml).toContain('author="alice"');
+      expect(xml).toContain('<comment new-line-start="5" new-line-end="5" author="alice">');
+    });
+
+    it('omits author attribute when author is not set', async () => {
+      const comment: ReviewComment = {
+        id: 'no-author',
+        filePath: 'src/main.ts',
+        lineRange: null,
+        body: 'No author here',
+        category: 'note',
+        suggestion: null,
+      };
+
+      const file: FileReviewState = {
+        path: 'src/main.ts',
+        changeType: 'modified',
+        viewed: true,
+        comments: [comment],
+      };
+
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        files: [file],
+      };
+
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+
+      expect(xml).not.toContain('author=');
+    });
+
+    it('escapes special characters in author attribute', async () => {
+      const comment: ReviewComment = {
+        id: 'author-escape',
+        filePath: 'src/main.ts',
+        lineRange: null,
+        body: 'Test',
+        category: 'note',
+        suggestion: null,
+        author: 'O\'Brien & "Co"',
+      };
+
+      const file: FileReviewState = {
+        path: 'src/main.ts',
+        changeType: 'modified',
+        viewed: true,
+        comments: [comment],
+      };
+
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        files: [file],
+      };
+
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+
+      expect(xml).toContain('author="O&apos;Brien &amp; &quot;Co&quot;"');
+    });
+
     it('handles multiline comment body', async () => {
       const comment: ReviewComment = {
         id: 'multiline',

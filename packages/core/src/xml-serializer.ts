@@ -439,6 +439,10 @@ function buildCommentXml(comment: ReviewComment): string[] {
     }
   }
 
+  if (comment.author) {
+    attrs.push(`author="${escapeXml(comment.author)}"`);
+  }
+
   const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
 
   // Opening tag

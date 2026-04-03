@@ -7,7 +7,7 @@ import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, ChevronUp, Bot, User } from 'lucide-react';
 import CommentInput from './CommentInput';
 import SuggestionBlock from './SuggestionBlock';
 import { remarkEmoji } from '../../utils/remark-emoji';
@@ -94,7 +94,19 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
               {isCollapsed ? 'Expand' : 'Collapse'}
             </span>
           </Button>
-          <span className='text-xs font-semibold text-foreground'>You</span>
+          <span className='flex items-center gap-1 text-xs font-semibold text-foreground'>
+            {comment.author ? (
+              <>
+                <Bot className='h-3.5 w-3.5' />
+                {comment.author}
+              </>
+            ) : (
+              <>
+                <User className='h-3.5 w-3.5' />
+                You
+              </>
+            )}
+          </span>
           {comment.lineRange && (
             <span className='text-[11px] text-muted-foreground'>
               {comment.lineRange.start === comment.lineRange.end
