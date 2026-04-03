@@ -70,7 +70,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
           body: comment.body || '',
           category: comment.category || '',
           suggestion: parseSuggestion(comment),
-          ...(comment['@_author'] ? { author: String(comment['@_author']) } : {}),
+          author: comment['@_author'] ? String(comment['@_author']) : undefined,
         };
 
         // Parse attachments

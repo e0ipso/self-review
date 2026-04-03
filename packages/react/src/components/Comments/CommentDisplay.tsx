@@ -94,15 +94,15 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
               {isCollapsed ? 'Expand' : 'Collapse'}
             </span>
           </Button>
-          <span className='flex items-center gap-1 text-xs font-semibold text-foreground'>
+          <span className='flex items-center gap-1 text-xs font-semibold text-foreground max-w-[200px] truncate'>
             {comment.author ? (
               <>
-                <Bot className='h-3.5 w-3.5' />
+                <Bot className='h-3.5 w-3.5 shrink-0' />
                 {comment.author}
               </>
             ) : (
               <>
-                <User className='h-3.5 w-3.5' />
+                <User className='h-3.5 w-3.5 shrink-0' />
                 You
               </>
             )}
