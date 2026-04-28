@@ -10,6 +10,8 @@ import {
   MessageSquare,
   CircleDashed,
   CircleCheck,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { getFileStats, getChangeTypeInfo } from '../../utils/diff-styles';
@@ -51,6 +53,18 @@ export function FileSectionHeader({
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyPath = async () => {
+    const pathToCopy = file.changeType === 'renamed' ? file.newPath : filePath;
+    try {
+      await navigator.clipboard.writeText(pathToCopy);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard API may be unavailable; silently ignore.
+    }
+  };
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -84,6 +98,30 @@ export function FileSectionHeader({
       <span className='font-mono text-[13px] font-medium truncate flex-1 min-w-0'>
         {displayPath}
       </span>
+
+      {/* Copy file path */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant='ghost'
+            size='sm'
+            data-testid={`copy-file-path-${filePath}`}
+            onClick={e => {
+              e.stopPropagation();
+              copyPath();
+            }}
+            className='h-7 w-7 p-0 text-muted-foreground hover:text-foreground'
+          >
+            {copied ? (
+              <Check className='h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400' />
+            ) : (
+              <Copy className='h-3.5 w-3.5' />
+            )}
+            <span className='sr-only'>Copy file path</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{copied ? 'Copied!' : 'Copy file path'}</TooltipContent>
+      </Tooltip>
 
       {/* Change type */}
       <Badge
