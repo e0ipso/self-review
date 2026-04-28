@@ -51,7 +51,7 @@ export function FileSectionHeader({
 
   return (
     <div
-      className='sticky top-0 z-10 flex items-center gap-2 h-10 px-3 bg-muted/50 backdrop-blur-sm border-b border-border cursor-pointer select-none'
+      className='sticky top-0 z-10 flex items-center gap-2 h-10 px-3 bg-muted/80 backdrop-blur-sm border-b border-border cursor-pointer select-none'
       data-testid={`file-header-${filePath}`}
       onClick={onToggle}
     >

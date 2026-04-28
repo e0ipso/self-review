@@ -125,7 +125,7 @@ export default function FileSection({
   return (
     <div
       ref={sectionRef}
-      className={`border-b border-border${dragState ? ' select-none' : ''}`}
+      className={`mx-2 mt-2 border border-border rounded-lg shadow-sm overflow-hidden${dragState ? ' select-none' : ''}`}
       data-file-path={filePath}
       data-testid={`file-section-${filePath}`}
     >
