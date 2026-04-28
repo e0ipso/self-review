@@ -22,7 +22,7 @@ export function FileSectionBody({
   contentAreaProps,
 }: FileSectionBodyProps) {
   return (
-    <div className='bg-background file-diff-content'>
+    <div className='bg-background file-diff-content rounded-b-lg overflow-hidden'>
       {/* File-level comments */}
       {fileComments.length > 0 && (
         <div className='p-3 space-y-2 bg-muted/20 border-b border-border'>

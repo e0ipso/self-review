@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { DiffFile, ReviewComment } from '@self-review/types';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -49,9 +49,25 @@ export function FileSectionHeader({
   const changeLabel =
     file.changeType.charAt(0).toUpperCase() + file.changeType.slice(1);
 
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [isStuck, setIsStuck] = useState(false);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsStuck(!entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
+
   return (
+    <>
+    <div ref={sentinelRef} className='h-0 w-0' aria-hidden />
     <div
-      className='sticky top-0 z-10 flex items-center gap-2 h-10 px-3 bg-muted/80 backdrop-blur-sm border-b border-border cursor-pointer select-none'
+      className={`sticky top-0 z-10 flex items-center gap-2 h-10 px-3 bg-muted/80 backdrop-blur-sm border-b border-border cursor-pointer select-none${isStuck ? '' : ' rounded-t-lg'}`}
       data-testid={`file-header-${filePath}`}
       onClick={onToggle}
     >
@@ -170,5 +186,6 @@ export function FileSectionHeader({
         <TooltipContent>Add file comment</TooltipContent>
       </Tooltip>
     </div>
+    </>
   );
 }
