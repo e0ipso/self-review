@@ -1,7 +1,7 @@
 {
   "name": "@e0ipso/self-review",
   "productName": "Self Review",
-  "version": "1.32.0",
+  "version": "1.32.1",
   "description": "GitHub-style PR review UI for local git diffs",
   "workspaces": [
     "packages/*"
