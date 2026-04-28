@@ -14,3 +14,13 @@ Feature: Webapp Code Suggestions
     When I type "const fixed = true;" in the proposed code editor
     And I click "Comment"
     Then the displayed comment should show a suggestion block
+
+  Scenario: Editing a comment with a suggestion shows the saved proposed code, not the original
+    When I click the "+" icon on new line 5 in "src/auth/login.ts"
+    And I type "Suggestion comment" in the comment input
+    And I click "Add suggestion"
+    And I type "const fixed = true;" in the proposed code editor
+    And I click "Comment"
+    Then the displayed comment should show a suggestion block
+    When I click "Edit" on that comment
+    Then the proposed code editor should contain "const fixed = true;"

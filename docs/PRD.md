@@ -339,6 +339,7 @@ GitHub-style suggestions allow the reviewer to propose literal code replacements
 - **Activation:** Within any comment (line, multi-line, or file-level), the user can insert a suggestion block.
 - **Format:** A code block prefixed with `suggestion` (mimicking GitHub's triple-backtick suggestion syntax).
 - **Semantics:** The suggestion represents "replace the selected line(s) with this code." The original lines and the proposed replacement are both preserved in the output XML.
+- **Prefill:** When the user activates a suggestion, the proposed-code editor is prefilled with the original code so the user can edit in place rather than retyping (matching GitHub/GitLab behavior).
 - **Display:** Suggestions are rendered as a diff-within-a-diff: the original lines shown as removed (red), the suggestion shown as added (green), within the comment body.
 
 #### 5.4.5 Comment Categories / Tags

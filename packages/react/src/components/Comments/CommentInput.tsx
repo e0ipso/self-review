@@ -229,7 +229,12 @@ export default function CommentInput({
               variant={showSuggestion ? 'secondary' : 'ghost'}
               size='sm'
               data-testid='add-suggestion-btn'
-              onClick={() => setShowSuggestion(!showSuggestion)}
+              onClick={() => {
+                if (!showSuggestion && proposedCode.length === 0) {
+                  setProposedCode(originalCode);
+                }
+                setShowSuggestion(!showSuggestion);
+              }}
               className='h-7 gap-1.5 text-xs'
             >
               <Code2 className='h-3.5 w-3.5' />

@@ -24,10 +24,25 @@ Then(
     await expect(
       page.locator('[data-testid="suggestion-original"]')
     ).toBeVisible();
-    const value = await page
+    const original = await page
       .locator('[data-testid="suggestion-original"] textarea')
       .inputValue();
-    expect(value.length).toBeGreaterThan(0);
+    expect(original.length).toBeGreaterThan(0);
+    const proposed = await page
+      .locator('[data-testid="suggestion-proposed"] textarea')
+      .inputValue();
+    expect(proposed).toBe(original);
+  }
+);
+
+Then(
+  'the proposed code editor should contain {string}',
+  async ({}, expected: string) => {
+    const page = getPage();
+    const value = await page
+      .locator('[data-testid="suggestion-proposed"] textarea')
+      .inputValue();
+    expect(value).toBe(expected);
   }
 );
 
