@@ -215,6 +215,39 @@ diff-view: invalid-view
       );
     });
 
+    it('treats an empty config file as "use defaults" without warning', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('');
+
+      const config = loadConfig();
+
+      expect(config.theme).toBe('system');
+      expect(config.diffView).toBe('split');
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it('treats a config file containing only `null` as "use defaults" without warning', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('null\n');
+
+      const config = loadConfig();
+
+      expect(config.theme).toBe('system');
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it('warns when YAML parses to a non-object (e.g. an array at the top level)', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('- one\n- two\n');
+
+      const config = loadConfig();
+
+      expect(config.theme).toBe('system');
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid YAML format')
+      );
+    });
+
     it('loads ignore patterns from config', () => {
       const mockYaml = `
 ignore:
