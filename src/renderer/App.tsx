@@ -129,10 +129,12 @@ function AppContent() {
     <DiffNavigationProvider>
       <TooltipProvider>
         <KeyboardNavigationManager />
-        <div className='flex flex-col h-screen bg-background text-foreground antialiased'>
+        <div className='flex flex-col h-screen overflow-hidden bg-background text-foreground antialiased'>
           <UpdateBanner />
           <Toolbar onFinishReview={handleFinishReview} />
-          <Layout />
+          <div className='flex-1 min-h-0'>
+            <Layout />
+          </div>
         </div>
         <FindBar isOpen={isFindBarOpen} onClose={() => setIsFindBarOpen(false)} />
         <CloseConfirmDialog />
