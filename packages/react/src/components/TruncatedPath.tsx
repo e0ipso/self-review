@@ -24,7 +24,7 @@ export default function TruncatedPath({ path, className = '' }: TruncatedPathPro
           {dir}
         </span>
       )}
-      <span className='flex-shrink-0 whitespace-nowrap'>
+      <span className='truncate flex-shrink-0 max-w-full'>
         {fileName}
       </span>
     </span>
