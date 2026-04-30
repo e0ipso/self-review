@@ -57,3 +57,8 @@ Feature: Webapp View Modes and Toolbar
     Then the diff viewer should be in "split" view mode
     And the "src/auth/login.ts" file section should use "split" view
     And the "src/legacy.ts" file section should use "unified" view
+
+  Scenario: Toolbar stays pinned when the diff pane scrolls
+    When I scroll the diff pane to the bottom
+    Then the toolbar should remain anchored at the top of the viewport
+    And the document itself should not have scrolled
