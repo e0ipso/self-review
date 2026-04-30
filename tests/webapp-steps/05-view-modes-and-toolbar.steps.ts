@@ -157,3 +157,33 @@ Then('long lines should scroll horizontally', async () => {
   const codeLine = page.locator('[data-testid="diff-viewer"] code').first();
   await expect(codeLine).toHaveCSS('white-space', 'pre');
 });
+
+When('I scroll the diff pane to the bottom', async () => {
+  const page = getPage();
+  const container = page.locator('[data-scroll-container="diff"]');
+  await container.evaluate(el => {
+    el.scrollTop = el.scrollHeight;
+  });
+});
+
+Then(
+  'the toolbar should remain anchored at the top of the viewport',
+  async () => {
+    const page = getPage();
+    const toolbar = page.locator('[data-testid="toolbar"]');
+    await expect(toolbar).toBeVisible();
+    const box = await toolbar.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeLessThanOrEqual(1);
+  }
+);
+
+Then('the document itself should not have scrolled', async () => {
+  const page = getPage();
+  const scroll = await page.evaluate(() => ({
+    body: document.body.scrollTop,
+    html: document.documentElement.scrollTop,
+  }));
+  expect(scroll.body).toBe(0);
+  expect(scroll.html).toBe(0);
+});

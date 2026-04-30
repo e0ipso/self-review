@@ -69,7 +69,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
 
   return (
     <div
-      className='flex items-center justify-between h-11 px-3 border-b border-border bg-background'
+      className='flex shrink-0 z-20 items-center justify-between h-11 px-3 border-b border-border bg-background'
       data-testid='toolbar'
     >
       <div className='flex items-center gap-2'>
