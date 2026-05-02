@@ -20,6 +20,16 @@ export interface SingleFileReviewProps {
   config?: Partial<AppConfig>;
   /** Called when review comments change. */
   onReviewChange?: (comments: ReviewComment[]) => void;
+  /**
+   * Optional partial `ReviewAdapter`. Consumers use this to wire optional adapter methods
+   * such as `expandContext`, `loadFileContent`, `loadImage`, `readAttachment`,
+   * `loadResumedComments`, `submitReview`, and `changeOutputPath`.
+   *
+   * Note: a consumer-supplied `loadDiff` is intentionally ignored — `file` and `source`
+   * are the source of truth in single-file mode. Memoize this object on the consumer side
+   * to avoid unnecessary re-renders, the same way `ReviewPanel` expects.
+   */
+  adapter?: Partial<ReviewAdapter>;
   /** CSS class applied to the root container. */
   className?: string;
   /** Default view mode for markdown files: 'raw' shows diff, 'rendered' shows rendered markdown. */
@@ -68,21 +78,25 @@ export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
     source,
     config,
     onReviewChange,
+    adapter,
     className,
     defaultViewMode = 'unified',
     prismLightCss,
     prismDarkCss,
   }, ref) {
-    // Create a minimal adapter that provides the single file
-    const adapter: ReviewAdapter = useMemo(() => ({
+    // Merge consumer-supplied adapter under the internally-generated loadDiff.
+    // Spread order is load-bearing: the internal loadDiff must always win, since
+    // file/source are the source of truth in single-file mode.
+    const mergedAdapter: ReviewAdapter = useMemo(() => ({
+      ...adapter,
       loadDiff: async (): Promise<DiffLoadPayload> => ({
         files: [file],
         source: source || { type: 'file', sourcePath: file.newPath || file.oldPath },
       }),
-    }), [file, source]);
+    }), [file, source, adapter]);
 
     return (
-      <ReviewAdapterProvider adapter={adapter}>
+      <ReviewAdapterProvider adapter={mergedAdapter}>
         <ConfigProvider
           initialConfig={{ ...config, diffView: defaultViewMode }}
           prismLightCss={prismLightCss}
