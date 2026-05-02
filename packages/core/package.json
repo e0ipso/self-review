@@ -1,6 +1,6 @@
 {
   "name": "@self-review/core",
-  "version": "1.33.5",
+  "version": "1.34.0",
   "description": "Core library for self-review: diff parsing, git operations, XML serialization, and configuration",
   "repository": {
     "type": "git",
