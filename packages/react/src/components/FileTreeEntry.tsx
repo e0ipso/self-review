@@ -72,11 +72,20 @@ export function FileTreeEntry({
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
+                  <span
                     data-testid={`viewed-toggle-${filePath}`}
+                    role='button'
+                    tabIndex={0}
                     onClick={e => {
                       e.stopPropagation();
                       onToggleViewed(filePath);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onToggleViewed(filePath);
+                      }
                     }}
                     className='inline-flex items-center justify-center h-5 w-5 rounded-sm hover:bg-accent/80 transition-colors cursor-pointer'
                   >
@@ -85,7 +94,7 @@ export function FileTreeEntry({
                     ) : (
                       <CircleDashed className='h-3.5 w-3.5 text-muted-foreground/60' />
                     )}
-                  </button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent side='right'>
                   {viewed ? 'Mark as needs review' : 'Mark as done reviewing'}
