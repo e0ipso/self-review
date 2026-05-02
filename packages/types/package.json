@@ -1,6 +1,6 @@
 {
   "name": "@self-review/types",
-  "version": "1.33.4",
+  "version": "1.33.5",
   "description": "Shared TypeScript types for self-review packages",
   "repository": {
     "type": "git",
