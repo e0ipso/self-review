@@ -6,8 +6,6 @@ import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import {
-  Columns2,
-  AlignJustify,
   Sun,
   Moon,
   Monitor,
@@ -57,12 +55,6 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
     document.dispatchEvent(event);
   };
 
-  const handleViewModeChange = (value: string) => {
-    if (value === 'split' || value === 'unified') {
-      updateConfig({ diffView: value });
-    }
-  };
-
   const handleThemeChange = (theme: 'light' | 'dark' | 'system') => {
     updateConfig({ theme });
   };
@@ -106,43 +98,6 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
             <Separator orientation='vertical' className='h-5' />
           </>
         )}
-
-        <ToggleGroup
-          type='single'
-          variant='outline'
-          size='sm'
-          value={config.diffView}
-          onValueChange={handleViewModeChange}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value='split'
-                data-testid='view-mode-split'
-                className='gap-1.5 px-2.5'
-              >
-                <Columns2 className='h-3.5 w-3.5' />
-                <span className='text-xs'>Split</span>
-              </ToggleGroupItem>
-            </TooltipTrigger>
-            <TooltipContent>Side-by-side view</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value='unified'
-                data-testid='view-mode-unified'
-                className='gap-1.5 px-2.5'
-              >
-                <AlignJustify className='h-3.5 w-3.5' />
-                <span className='text-xs'>Unified</span>
-              </ToggleGroupItem>
-            </TooltipTrigger>
-            <TooltipContent>Unified view</TooltipContent>
-          </Tooltip>
-        </ToggleGroup>
-
-        <Separator orientation='vertical' className='h-5' />
 
         <Tooltip>
           <TooltipTrigger asChild>

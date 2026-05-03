@@ -7,14 +7,15 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle, Columns2, AlignJustify } from 'lucide-react';
 import TruncatedPath from './TruncatedPath';
 import { FileTreeEntry } from './FileTreeEntry';
 
 export default function FileTree() {
   const { diffFiles, files, toggleViewed } = useReview();
-  const { outputPathInfo, setOutputPathInfo } = useConfig();
+  const { config, updateConfig, outputPathInfo, setOutputPathInfo } = useConfig();
   const { activeFilePath, scrollToFile } = useDiffNavigationContext();
   const adapter = useAdapter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,6 +27,12 @@ export default function FileTree() {
     const result = await adapter.changeOutputPath();
     if (result) {
       setOutputPathInfo(result);
+    }
+  };
+
+  const handleViewModeChange = (value: string) => {
+    if (value === 'split' || value === 'unified') {
+      updateConfig({ diffView: value });
     }
   };
 
@@ -64,6 +71,41 @@ export default function FileTree() {
             Changed files
           </span>
           <div className='flex items-center gap-1'>
+            <ToggleGroup
+              type='single'
+              variant='outline'
+              size='sm'
+              value={config.diffView}
+              onValueChange={handleViewModeChange}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value='split'
+                    data-testid='view-mode-split'
+                    className='h-5 w-5 p-0'
+                  >
+                    <Columns2 className='h-3.5 w-3.5' />
+                    <span className='sr-only'>Split view</span>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>Side-by-side view</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value='unified'
+                    data-testid='view-mode-unified'
+                    className='h-5 w-5 p-0'
+                  >
+                    <AlignJustify className='h-3.5 w-3.5' />
+                    <span className='sr-only'>Unified view</span>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>Unified view</TooltipContent>
+              </Tooltip>
+            </ToggleGroup>
+            <Separator orientation='vertical' className='h-4' />
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

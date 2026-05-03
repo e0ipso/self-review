@@ -234,6 +234,7 @@ A vertical list of all files in the diff, displayed as a flat list with file pat
 - Clicking a file scrolls the diff viewer to that file.
 - The currently visible file in the diff viewer is highlighted in the file tree.
 - File order matches the order returned by `git diff` (alphabetical by default).
+- The header includes a Split/Unified diff-view toggle that controls the diff viewer's render mode.
 
 **File search/filter:**
 
@@ -280,7 +281,7 @@ Each file in the diff is rendered as a collapsible section:
 
 #### 5.3.2 Diff View Modes
 
-Two view modes, togglable via a control in the toolbar:
+Two view modes, togglable via a control in the file tree header:
 
 - **Split view (side-by-side):** Old file on the left, new file on the right. Lines are aligned. This is the default.
 - **Unified view:** Single column showing both old and new lines interleaved, with `-` and `+` prefixes. Traditional unified diff format.
@@ -357,7 +358,6 @@ A top toolbar provides global controls:
 
 | Control | Type | Description |
 |---------|------|-------------|
-| View mode toggle | Segmented button | Switch between Split and Unified diff views |
 | Expand/Collapse all | Button | Expand or collapse all file sections at once |
 | Show/hide untracked | Toggle button | Show or hide untracked files (new files not yet added to git). Default: on, except for `--staged` / `--cached` reviews where untracked files are hidden by default. |
 | Line wrap toggle | Toggle button | Wrap or unwrap long lines in the code content area. When off, long lines scroll horizontally. Default: on. |
