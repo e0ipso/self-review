@@ -8,7 +8,7 @@ import { getPage } from './app';
 const { When, Then } = createBdd();
 
 When(
-  'I click the {string} view mode toggle in the toolbar',
+  'I click the {string} view mode toggle in the file tree',
   async ({}, mode: string) => {
     const page = getPage();
     if (mode === 'Unified') {

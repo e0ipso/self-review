@@ -11,13 +11,13 @@ Feature: Webapp View Modes and Toolbar
     And the split view should show two columns
 
   Scenario: Switch to unified view mode
-    When I click the "Unified" view mode toggle in the toolbar
+    When I click the "Unified" view mode toggle in the file tree
     Then the diff viewer should be in "unified" view mode
     And the unified view should show a single column layout
 
   Scenario: Switch back to split view mode
-    When I click the "Unified" view mode toggle in the toolbar
-    And I click the "Split" view mode toggle in the toolbar
+    When I click the "Unified" view mode toggle in the file tree
+    And I click the "Split" view mode toggle in the file tree
     Then the diff viewer should be in "split" view mode
 
   Scenario: Collapse all file sections
