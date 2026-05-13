@@ -1,7 +1,6 @@
-import { defineConfig } from 'vitest/config';
 import path from 'path';
 
-export default defineConfig({
+export default {
   test: {
     environment: 'node',
     include: ['src/main/**/*.test.ts'],
@@ -36,4 +35,4 @@ export default defineConfig({
       '**/*.d.ts',
     ],
   },
-});
+};

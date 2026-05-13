@@ -11,6 +11,10 @@
  */
 
 const RASTER_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.ico', '.bmp']);
+const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown']);
+const HTML_EXTENSIONS = new Set(['.html', '.htm']);
+
+export type RenderedTextMode = 'markdown' | 'html';
 
 function getExtension(filePath: string): string {
   const lastDot = filePath.lastIndexOf('.');
@@ -26,6 +30,24 @@ export function isPreviewableSvg(filePath: string): boolean {
   return getExtension(filePath) === '.svg';
 }
 
+export function isMarkdownFile(filePath: string): boolean {
+  return MARKDOWN_EXTENSIONS.has(getExtension(filePath));
+}
+
+export function isHtmlFile(filePath: string): boolean {
+  return HTML_EXTENSIONS.has(getExtension(filePath));
+}
+
+export function getRenderedTextMode(filePath: string): RenderedTextMode | null {
+  if (isMarkdownFile(filePath)) return 'markdown';
+  if (isHtmlFile(filePath)) return 'html';
+  return null;
+}
+
+export function isPreviewableRenderedText(filePath: string): boolean {
+  return getRenderedTextMode(filePath) !== null;
+}
+
 export function getLanguageFromPath(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() || '';
   const langMap: Record<string, string> = {
@@ -37,6 +59,7 @@ export function getLanguageFromPath(filePath: string): string {
     css: 'css',
     json: 'json',
     md: 'markdown',
+    markdown: 'markdown',
     sh: 'bash',
     bash: 'bash',
     yml: 'yaml',
@@ -46,6 +69,7 @@ export function getLanguageFromPath(filePath: string): string {
     rs: 'rust',
     sql: 'sql',
     html: 'markup',
+    htm: 'markup',
     xml: 'markup',
     rb: 'ruby',
     php: 'php',

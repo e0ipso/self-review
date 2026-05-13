@@ -1,7 +1,6 @@
-import { defineConfig } from 'vitest/config';
 import path from 'path';
 
-export default defineConfig({
+export default {
   test: {
     environment: 'jsdom',
     include: ['packages/react/src/**/*.test.{ts,tsx}'],
@@ -38,4 +37,4 @@ export default defineConfig({
       'src/renderer/components/**/*', // UI components not tested initially
     ],
   },
-});
+};

@@ -65,4 +65,13 @@ export { createIgnoreFilter } from './ignore-filter';
 export { checkWritability } from './fs-utils';
 
 // File type detection utilities
-export { isPreviewableImage, isPreviewableSvg, getLanguageFromPath } from './file-type-utils';
+export {
+  getLanguageFromPath,
+  getRenderedTextMode,
+  isHtmlFile,
+  isMarkdownFile,
+  isPreviewableImage,
+  isPreviewableRenderedText,
+  isPreviewableSvg,
+} from './file-type-utils';
+export type { RenderedTextMode } from './file-type-utils';

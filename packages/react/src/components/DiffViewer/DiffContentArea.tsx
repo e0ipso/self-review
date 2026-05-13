@@ -8,6 +8,7 @@ import RenderedMarkdownView from './RenderedMarkdownView';
 import RenderedImageView from './RenderedImageView';
 import RenderedSvgView from './RenderedSvgView';
 import { useAdapter } from '../../context/ReviewAdapterContext';
+import type { RenderedTextMode } from '../../utils/file-type-utils';
 
 export interface DiffContentAreaProps {
   file: DiffFile;
@@ -15,6 +16,7 @@ export interface DiffContentAreaProps {
   viewMode: 'split' | 'unified';
   renderViewMode: 'raw' | 'rendered';
   isEligibleForRenderedView: boolean;
+  renderedTextMode: RenderedTextMode | null;
   showImagePreview: boolean;
   showSvgPreview: boolean;
   contentLoading: boolean;
@@ -42,6 +44,7 @@ export function DiffContentArea({
   viewMode,
   renderViewMode,
   isEligibleForRenderedView,
+  renderedTextMode,
   showImagePreview,
   showSvgPreview,
   contentLoading,
@@ -113,6 +116,7 @@ export function DiffContentArea({
     return (
       <RenderedMarkdownView
         file={file}
+        renderedTextMode={renderedTextMode}
         commentRange={commentRange}
         onCancelComment={onCancelComment}
         onCommentSaved={onCommentSaved}

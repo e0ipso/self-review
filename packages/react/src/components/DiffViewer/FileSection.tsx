@@ -4,7 +4,7 @@ import { useExpandContext } from './useExpandContext';
 import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
-import { isPreviewableImage, isPreviewableSvg } from '../../utils/file-type-utils';
+import { getRenderedTextMode, isPreviewableImage, isPreviewableSvg } from '../../utils/file-type-utils';
 import { FileSectionHeader } from './FileSectionHeader';
 import { FileSectionBody } from './FileSectionBody';
 
@@ -38,7 +38,8 @@ export default function FileSection({
   const filePath_ = file.newPath || file.oldPath || '';
   const showImagePreview = isAddedFile && file.isBinary === true && isPreviewableImage(filePath_);
   const showSvgPreview = isAddedFile && isPreviewableSvg(filePath_);
-  const isEligibleForRenderedView = isAddedFile && /\.(md|markdown)$/i.test(filePath_);
+  const renderedTextMode = isAddedFile ? getRenderedTextMode(filePath_) : null;
+  const isEligibleForRenderedView = renderedTextMode !== null;
   const isPreviewable = showImagePreview || showSvgPreview || isEligibleForRenderedView;
 
   const initialViewMode = isPreviewable ? 'rendered' : 'raw';
@@ -162,6 +163,7 @@ export default function FileSection({
             viewMode: effectiveViewMode,
             renderViewMode,
             isEligibleForRenderedView,
+            renderedTextMode,
             showImagePreview,
             showSvgPreview,
             contentLoading,

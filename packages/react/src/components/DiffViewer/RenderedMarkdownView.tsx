@@ -14,6 +14,7 @@ import MermaidBlock from './MermaidBlock';
 import { remarkEmoji } from '../../utils/remark-emoji';
 import { parseFrontMatter } from '../../utils/front-matter';
 import FrontMatterTable from './FrontMatterTable';
+import type { RenderedTextMode } from '../../utils/file-type-utils';
 
 // ===== Nesting Context =====
 // Tracks whether we're inside a block that already has a gutter wrapper,
@@ -202,6 +203,7 @@ function BlockWrapper({
 
 export interface RenderedMarkdownViewProps {
   file: DiffFile;
+  renderedTextMode?: RenderedTextMode | null;
   commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
   onCancelComment: () => void;
   onCommentSaved: () => void;
@@ -210,6 +212,7 @@ export interface RenderedMarkdownViewProps {
 
 export default function RenderedMarkdownView({
   file,
+  renderedTextMode = 'markdown',
   commentRange,
   onCancelComment,
   onCommentSaved,
@@ -301,7 +304,10 @@ export default function RenderedMarkdownView({
   }), [createBlockRenderer, CodeRenderer]);
 
   return (
-    <div className='prose dark:prose-invert max-w-none p-4 rendered-markdown-view'>
+    <div
+      className='prose dark:prose-invert max-w-none p-4 rendered-markdown-view'
+      data-rendered-text-mode={renderedTextMode}
+    >
       {frontMatter && <FrontMatterTable metadata={frontMatter.metadata} />}
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkEmoji]}
