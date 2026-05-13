@@ -118,6 +118,9 @@ describe('FileSection preview eligibility', () => {
 
   it('preserves image and SVG preview flags without rendered-text mode', () => {
     const image = renderFileSection(makeDiffFile('photo.png', { isBinary: true }));
+    expect(image.header.getAttribute('data-previewable')).toBe('true');
+    expect(image.header.getAttribute('data-render-view-mode')).toBe('rendered');
+    expect(image.body.getAttribute('data-render-view-mode')).toBe('rendered');
     expect(image.body.getAttribute('data-show-image-preview')).toBe('true');
     expect(image.body.getAttribute('data-show-svg-preview')).toBe('false');
     expect(image.body.getAttribute('data-rendered-text-mode')).toBe('null');
@@ -125,6 +128,9 @@ describe('FileSection preview eligibility', () => {
     cleanup();
 
     const svg = renderFileSection(makeDiffFile('icon.svg'));
+    expect(svg.header.getAttribute('data-previewable')).toBe('true');
+    expect(svg.header.getAttribute('data-render-view-mode')).toBe('raw');
+    expect(svg.body.getAttribute('data-render-view-mode')).toBe('raw');
     expect(svg.body.getAttribute('data-show-image-preview')).toBe('false');
     expect(svg.body.getAttribute('data-show-svg-preview')).toBe('true');
     expect(svg.body.getAttribute('data-rendered-text-mode')).toBe('null');

@@ -43,9 +43,9 @@ A single developer working locally with AI coding agents. They are comfortable w
 | UI components | shadcn/ui | Accessible, composable components built on Radix primitives |
 | Syntax highlighting | Prism.js | Broad language coverage, themeable, lightweight |
 | Backend | Node.js | Electron's main process, handles CLI, git, IPC, file I/O |
-| Markdown rendering | react-markdown + remark-gfm | Rendered markdown view with AST position data for line mapping |
+| Rendered text review | react-markdown + remark-gfm, browser HTML parsing | Rendered Markdown and added HTML views with source-line data for line mapping |
 | Diagram rendering | mermaid | Renders Mermaid code blocks as inline SVG diagrams |
-| Prose styling | @tailwindcss/typography | Typography classes for rendered markdown content |
+| Prose styling | @tailwindcss/typography | Typography classes for rendered text content |
 | Build system | Electron Forge or electron-builder | Packaging for macOS and Linux |
 
 ### 2.1 Platform Support
@@ -290,7 +290,7 @@ The selected view mode persists for the session and can be set as a default in c
 
 **Added/deleted file override:** Files with change type `added` or `deleted` always render in unified view, regardless of the selected view mode. In split view, these files would waste half the screen — an added file shows content only on the right pane with the left pane empty, and a deleted file shows content only on the left pane with the right pane empty. Forcing unified view for these files uses the full width for the content that matters.
 
-**Rendered markdown view:** New markdown files (`.md`/`.markdown` with change type `added`) show a per-file "Raw / Rendered" toggle in the file header. When toggled to "Rendered", the file content is displayed as formatted HTML using `react-markdown` with a source-line-mapped gutter. Each rendered block (paragraph, heading, list, code block, table, etc.) is annotated with its source line range from the markdown AST, enabling click-to-comment on rendered content. Mermaid code blocks render as inline SVG diagrams. Comments placed in the rendered view use the same `LineRange` contract as the raw diff view, so switching between views preserves comment placement.
+**Rendered text view:** New Markdown files (`.md`/`.markdown` with change type `added`) and new HTML files (`.html`/`.htm` with change type `added`) show a per-file "Raw / Rendered" toggle in the file header. Raw diff mode remains available for these files. In rendered mode, Markdown content is displayed as formatted HTML using `react-markdown`, while HTML content is rendered directly through the same source-line-mapped gutter path. Each rendered block is annotated with its source line range, enabling gutter-based line-range comments mapped to the new-file line numbers. Mermaid code blocks in Markdown render as inline SVG diagrams. Comments placed in the rendered text view use the same `LineRange` contract as the raw diff view, so switching between raw and rendered views preserves comment placement. Modified, deleted, or otherwise non-added HTML files do not use rendered HTML mode and remain in the raw diff flow.
 
 #### 5.3.3 Syntax Highlighting
 

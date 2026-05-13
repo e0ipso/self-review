@@ -42,7 +42,7 @@ export default function FileSection({
   const isEligibleForRenderedView = renderedTextMode !== null;
   const isPreviewable = showImagePreview || showSvgPreview || isEligibleForRenderedView;
 
-  const initialViewMode = isPreviewable ? 'rendered' : 'raw';
+  const initialViewMode = showSvgPreview ? 'raw' : isPreviewable ? 'rendered' : 'raw';
   const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
 
   const filePath = file.newPath || file.oldPath;

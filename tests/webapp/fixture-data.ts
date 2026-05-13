@@ -363,6 +363,45 @@ const markdownNewDocsFile: DiffFile = {
   ],
 };
 
+// ── Rendered HTML fixture data ──
+
+const renderedHtmlLines = [
+  '<main>',
+  '  <h1>Release Notes</h1>',
+  '  <p>Intro paragraph for rendered review.</p>',
+  '  <section>',
+  '    <h2>Highlights</h2>',
+  '    <p>Second paragraph for another comment.</p>',
+  '    <ul>',
+  '      <li>First listed item</li>',
+  '      <li>Second listed item</li>',
+  '    </ul>',
+  '  </section>',
+  '</main>',
+];
+
+const renderedHtmlFile: DiffFile = {
+  oldPath: '/dev/null',
+  newPath: 'docs/page.html',
+  changeType: 'added',
+  isBinary: false,
+  hunks: [
+    {
+      header: `@@ -0,0 +1,${renderedHtmlLines.length} @@`,
+      oldStart: 0,
+      oldLines: 0,
+      newStart: 1,
+      newLines: renderedHtmlLines.length,
+      lines: renderedHtmlLines.map((line, i) => ({
+        type: 'addition' as const,
+        oldLineNumber: null,
+        newLineNumber: i + 1,
+        content: line,
+      })),
+    },
+  ],
+};
+
 const markdownIndexLines = [
   "export const version = '1.0.0';",
 ];
@@ -414,6 +453,13 @@ const markdownReadmeFile: DiffFile = {
 export function createMarkdownPayload(): DiffLoadPayload {
   return {
     files: [markdownNewDocsFile, markdownIndexFile, markdownReadmeFile],
+    source: { type: 'git' as const, gitDiffArgs: '', repository: '/mock-test-repo' },
+  };
+}
+
+export function createRenderedHtmlPayload(): DiffLoadPayload {
+  return {
+    files: [renderedHtmlFile, markdownNewDocsFile, markdownIndexFile, markdownReadmeFile],
     source: { type: 'git' as const, gitDiffArgs: '', repository: '/mock-test-repo' },
   };
 }

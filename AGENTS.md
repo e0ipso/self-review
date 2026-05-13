@@ -16,9 +16,9 @@ container before running the e2e tests.
 - **React + TypeScript** (renderer)
 - **shadcn/ui** (UI components, built on Radix primitives)
 - **Prism.js** (syntax highlighting)
-- **react-markdown** + **remark-gfm** (rendered markdown view with AST positions)
+- **react-markdown** + **remark-gfm** (rendered Markdown view with AST positions)
 - **mermaid** (Mermaid diagram rendering)
-- **@tailwindcss/typography** (prose styling for rendered markdown)
+- **@tailwindcss/typography** (prose styling for rendered text content)
 - **Node.js** (main process: CLI, git, IPC, file I/O)
 - **Electron Forge** (build/packaging)
 
@@ -75,7 +75,7 @@ self-review/
 │           │   ├── UnifiedView.tsx    # Single-column unified diff rendering
 │           │   ├── HunkHeader.tsx     # @@ separator rendering
 │           │   ├── ExpandContextBar.tsx # Expand context buttons between hunks
-│           │   ├── RenderedMarkdownView.tsx # Rendered markdown with source-line-mapped gutter
+│           │   ├── RenderedMarkdownView.tsx # Rendered Markdown/HTML with source-line-mapped gutter
 │           │   ├── RenderedImageView.tsx # Rendered preview for raster images (JPG, PNG, GIF, WebP, ICO, BMP)
 │           │   ├── RenderedSvgView.tsx  # Rendered SVG preview via secure img+data-URI
 │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
@@ -127,19 +127,24 @@ payload. The renderer lazily requests each file's hunks via the `diff:load-file`
 the user navigates, avoiding memory pressure from loading the entire diff at once.
 
 **Rendered previews:** Newly added files (`changeType === 'added'`) of certain types support a
-Raw/Rendered toggle in the file header, following the same eligibility pattern as Markdown:
+Raw/Rendered toggle in the file header:
 - **Markdown** (`.md`, `.markdown`): rendered via `react-markdown` with line-mapped comment gutter;
   files with YAML front matter (`---` delimited) display the metadata as a styled key-value table
   above the prose content, with arrays as `<ul>` lists and objects as nested tables
+- **HTML** (`.html`, `.htm`): rendered directly through the shared rendered-text path used by
+  Markdown, with a source-line-mapped gutter for line-range comments against new-file lines;
+  raw diff mode remains available, and modified/deleted HTML files are not rendered
 - **Raster images** (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.ico`, `.bmp`): loaded as base64
   data URIs via the `diff:load-image` IPC channel and displayed in a constrained `<img>` tag;
   defaults to Rendered view; files over 10 MB show an error message
 - **SVG** (`.svg`): content extracted from addition lines and rendered via `<img>` with a
   `data:image/svg+xml;base64,...` URI (blocks script execution); defaults to Raw view
 
-File-level comments are available on all preview types. Line-level comments are only available
-in the Raw diff view. Detection utilities (`isPreviewableImage`, `isPreviewableSvg`,
-`getLanguageFromPath`) are intentionally duplicated in both `@self-review/core`
+File-level comments are available on all preview types. Line-level comments are available in the
+Raw diff view, and through the source-line-mapped gutter for Markdown and HTML rendered text views.
+Image and SVG rendered previews support file-level comments only. Detection utilities
+(`getRenderedTextMode`, `isPreviewableImage`, `isPreviewableSvg`, `getLanguageFromPath`) are
+intentionally duplicated in both `@self-review/core`
 (`packages/core/src/file-type-utils.ts`) and `@self-review/react`
 (`packages/react/src/utils/file-type-utils.ts`). See the package AGENTS.md files for rationale.
 
