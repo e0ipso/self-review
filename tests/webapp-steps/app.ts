@@ -11,6 +11,11 @@ import * as http from 'http';
 const VITE_PORT = 5199;
 const VITE_URL = `http://localhost:${VITE_PORT}`;
 const VITE_CONFIG = path.resolve(__dirname, '../webapp/vite.config.ts');
+const VITE_BIN = path.resolve(
+  __dirname,
+  '../../node_modules/.bin',
+  process.platform === 'win32' ? 'vite.cmd' : 'vite'
+);
 
 let viteProcess: ChildProcess | null = null;
 let browser: Browser | null = null;
@@ -60,7 +65,7 @@ async function startViteServer(): Promise<void> {
   // Kill any orphaned process on our port
   killPortProcess(VITE_PORT);
 
-  viteProcess = spawn('npx', ['vite', '--config', VITE_CONFIG], {
+  viteProcess = spawn(VITE_BIN, ['--config', VITE_CONFIG], {
     cwd: path.resolve(__dirname, '../..'),
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, NO_COLOR: '1' },
