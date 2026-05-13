@@ -24,12 +24,30 @@ const GutterNestingContext = createContext(false);
 
 // ===== Content Extraction =====
 
-function extractFileContent(file: DiffFile): string {
-  return file.hunks
-    .flatMap(hunk => hunk.lines)
-    .filter(line => line.type === 'addition')
-    .map(line => line.content)
-    .join('\n');
+interface AddedFileLine {
+  lineNumber: number;
+  content: string;
+}
+
+function extractAddedFileLines(file: DiffFile): AddedFileLine[] {
+  const lines: AddedFileLine[] = [];
+  let fallbackLineNumber = 1;
+
+  for (const hunk of file.hunks) {
+    for (const line of hunk.lines) {
+      if (line.type !== 'addition') continue;
+
+      const lineNumber = line.newLineNumber ?? fallbackLineNumber;
+      lines.push({ lineNumber, content: line.content });
+      fallbackLineNumber = lineNumber + 1;
+    }
+  }
+
+  return lines;
+}
+
+function extractFileContent(lines: AddedFileLine[]): string {
+  return lines.map(line => line.content).join('\n');
 }
 
 // Tags that accept phrasing (inline) content — the Tag itself can be the
@@ -39,6 +57,115 @@ function extractFileContent(file: DiffFile): string {
 const INLINE_SAFE_TAGS: ReadonlySet<string> = new Set([
   'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'li', 'details',
 ]);
+
+const HTML_VOID_TAGS: ReadonlySet<string> = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta',
+  'param', 'source', 'track', 'wbr',
+]);
+
+const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
+  'address', 'article', 'aside', 'blockquote', 'details', 'dialog', 'div', 'dl',
+  'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4',
+  'h5', 'h6', 'header', 'hr', 'li', 'main', 'nav', 'ol', 'p', 'pre', 'section',
+  'table', 'ul',
+]);
+
+const HTML_CONTAINER_TAGS: ReadonlySet<string> = new Set([
+  'article', 'aside', 'div', 'footer', 'header', 'main', 'nav', 'section',
+]);
+
+const HTML_SKIPPED_TAGS: ReadonlySet<string> = new Set([
+  'base', 'embed', 'iframe', 'link', 'meta', 'object', 'script', 'style',
+]);
+
+const HTML_SKIPPED_ATTRIBUTES: ReadonlySet<string> = new Set([
+  'href', 'src', 'srcdoc', 'srcset', 'style',
+]);
+
+interface HtmlToken {
+  tagName: string;
+  line: number;
+  kind: 'open' | 'close';
+  selfClosing: boolean;
+}
+
+interface HtmlLinePosition {
+  startLine: number | undefined;
+  endLine: number | undefined;
+}
+
+function getLineNumberAtIndex(content: string, index: number): number {
+  let line = 1;
+  for (let i = 0; i < index; i++) {
+    if (content[i] === '\n') line++;
+  }
+  return line;
+}
+
+function getAddedLineNumber(contentLineNumber: number, lines: AddedFileLine[]): number {
+  return lines[contentLineNumber - 1]?.lineNumber ?? contentLineNumber;
+}
+
+function tokenizeHtml(content: string, lines: AddedFileLine[]): HtmlToken[] {
+  const tokens: HtmlToken[] = [];
+  const tagPattern = /<\s*(\/)?\s*([a-zA-Z][\w:-]*)([\s\S]*?)>/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = tagPattern.exec(content)) !== null) {
+    const [, closingSlash, rawTagName, rawRest] = match;
+    const tagName = rawTagName.toLowerCase();
+    const kind = closingSlash ? 'close' : 'open';
+    tokens.push({
+      tagName,
+      line: getAddedLineNumber(getLineNumberAtIndex(content, match.index), lines),
+      kind,
+      selfClosing: kind === 'open' && (HTML_VOID_TAGS.has(tagName) || /\/\s*$/.test(rawRest)),
+    });
+  }
+
+  return tokens;
+}
+
+function createHtmlLineResolver(content: string, lines: AddedFileLine[]) {
+  const tokens = tokenizeHtml(content, lines);
+  let tokenCursor = 0;
+
+  return (tagName: string): HtmlLinePosition => {
+    const normalizedTagName = tagName.toLowerCase();
+    const startTokenIndex = tokens.findIndex((token, index) =>
+      index >= tokenCursor &&
+      token.kind === 'open' &&
+      token.tagName === normalizedTagName
+    );
+
+    if (startTokenIndex === -1) {
+      return { startLine: undefined, endLine: undefined };
+    }
+
+    tokenCursor = startTokenIndex + 1;
+    const startToken = tokens[startTokenIndex];
+    let endLine = startToken.line;
+
+    if (!startToken.selfClosing) {
+      let depth = 0;
+      for (let i = startTokenIndex; i < tokens.length; i++) {
+        const token = tokens[i];
+        if (token.tagName !== normalizedTagName) continue;
+        if (token.kind === 'open' && !token.selfClosing) {
+          depth++;
+        } else if (token.kind === 'close') {
+          depth--;
+          if (depth === 0) {
+            endLine = token.line;
+            break;
+          }
+        }
+      }
+    }
+
+    return { startLine: startToken.line, endLine };
+  };
+}
 
 // ===== Block Wrapper with Gutter =====
 
@@ -95,7 +222,7 @@ function BlockWrapper({
     commentRange.end <= endLine;
 
   // Void elements (hr, img, etc.) can't have children
-  const isVoid = Tag === 'hr';
+  const isVoid = HTML_VOID_TAGS.has(Tag as string);
 
   // Tags that accept phrasing (inline) content as children — the Tag itself
   // becomes the positioned container so that selectors like `p.rendered-block`
@@ -203,23 +330,141 @@ function BlockWrapper({
 
 export interface RenderedMarkdownViewProps {
   file: DiffFile;
-  renderedTextMode?: RenderedTextMode | null;
+  contentMode: RenderedTextMode;
   commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
   onCancelComment: () => void;
   onCommentSaved: () => void;
   onGutterMouseDown: (startLine: number, endLine: number) => void;
 }
 
+interface HtmlRenderedContentProps {
+  content: string;
+  lines: AddedFileLine[];
+  file: DiffFile;
+  filePath: string;
+  lineRange: LineRange | null;
+  onGutterMouseDown: (startLine: number, endLine: number) => void;
+  onCancelComment: () => void;
+  onCommentSaved: () => void;
+}
+
+function getHtmlAttributeProps(element: Element): Record<string, unknown> {
+  const props: Record<string, unknown> = {};
+
+  for (const attribute of Array.from(element.attributes)) {
+    const attributeName = attribute.name.toLowerCase();
+    if (attributeName.startsWith('on') || HTML_SKIPPED_ATTRIBUTES.has(attributeName)) continue;
+    if (attributeName === 'class') {
+      props.className = attribute.value;
+    } else if (attributeName === 'for') {
+      props.htmlFor = attribute.value;
+    } else {
+      props[attribute.name] = attribute.value;
+    }
+  }
+
+  return props;
+}
+
+function hasBlockElementChild(element: Element): boolean {
+  return Array.from(element.children).some(child =>
+    HTML_BLOCK_TAGS.has(child.tagName.toLowerCase())
+  );
+}
+
+function shouldWrapHtmlElement(element: Element): boolean {
+  const tagName = element.tagName.toLowerCase();
+  if (!HTML_BLOCK_TAGS.has(tagName)) return false;
+  if (HTML_CONTAINER_TAGS.has(tagName) && hasBlockElementChild(element)) return false;
+  return true;
+}
+
+function HtmlRenderedContent({
+  content,
+  lines,
+  file,
+  filePath,
+  lineRange,
+  onGutterMouseDown,
+  onCancelComment,
+  onCommentSaved,
+}: HtmlRenderedContentProps) {
+  const lineResolver = createHtmlLineResolver(content, lines);
+  const document = useMemo(() => {
+    const parser = new DOMParser();
+    return parser.parseFromString(content, 'text/html');
+  }, [content]);
+
+  const renderNode = useCallback((
+    node: Node,
+    key: React.Key,
+    insideWrappedBlock = false
+  ): React.ReactNode => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return null;
+    }
+
+    const element = node as Element;
+    const tagName = element.tagName.toLowerCase() as keyof React.JSX.IntrinsicElements;
+    if (HTML_SKIPPED_TAGS.has(tagName)) {
+      return null;
+    }
+
+    const tagProps = getHtmlAttributeProps(element);
+    const shouldWrap = !insideWrappedBlock && shouldWrapHtmlElement(element);
+    const children = Array.from(element.childNodes).map((child, index) =>
+      renderNode(child, index, insideWrappedBlock || shouldWrap)
+    );
+
+    if (shouldWrap) {
+      const { startLine, endLine } = lineResolver(tagName);
+      return (
+        <BlockWrapper
+          key={key}
+          startLine={startLine}
+          endLine={endLine}
+          tag={tagName}
+          filePath={filePath}
+          file={file}
+          commentRange={lineRange}
+          onGutterMouseDown={onGutterMouseDown}
+          onCancelComment={onCancelComment}
+          onCommentSaved={onCommentSaved}
+          tagProps={tagProps}
+        >
+          {children}
+        </BlockWrapper>
+      );
+    }
+
+    return React.createElement(
+      tagName,
+      { key, ...tagProps },
+      HTML_VOID_TAGS.has(tagName) ? undefined : children
+    );
+  }, [file, filePath, lineRange, lineResolver, onCancelComment, onCommentSaved, onGutterMouseDown]);
+
+  return <>{Array.from(document.body.childNodes).map((node, index) => renderNode(node, index))}</>;
+}
+
 export default function RenderedMarkdownView({
   file,
-  renderedTextMode = 'markdown',
+  contentMode,
   commentRange,
   onCancelComment,
   onCommentSaved,
   onGutterMouseDown,
 }: RenderedMarkdownViewProps) {
-  const content = useMemo(() => extractFileContent(file), [file]);
-  const frontMatter = useMemo(() => parseFrontMatter(content), [content]);
+  const addedLines = useMemo(() => extractAddedFileLines(file), [file]);
+  const content = useMemo(() => extractFileContent(addedLines), [addedLines]);
+  const frontMatter = useMemo(
+    () => contentMode === 'markdown' ? parseFrontMatter(content) : null,
+    [content, contentMode]
+  );
   const markdownBody = frontMatter ? frontMatter.body : content;
   const lineOffset = frontMatter ? frontMatter.lineOffset : 0;
   const filePath = file.newPath || file.oldPath;
@@ -306,16 +551,29 @@ export default function RenderedMarkdownView({
   return (
     <div
       className='prose dark:prose-invert max-w-none p-4 rendered-markdown-view'
-      data-rendered-text-mode={renderedTextMode}
+      data-rendered-text-mode={contentMode}
     >
       {frontMatter && <FrontMatterTable metadata={frontMatter.metadata} />}
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkEmoji]}
-        rehypePlugins={[rehypeRaw]}
-        components={components}
-      >
-        {markdownBody}
-      </ReactMarkdown>
+      {contentMode === 'markdown' ? (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkEmoji]}
+          rehypePlugins={[rehypeRaw]}
+          components={components}
+        >
+          {markdownBody}
+        </ReactMarkdown>
+      ) : (
+        <HtmlRenderedContent
+          content={content}
+          lines={addedLines}
+          file={file}
+          filePath={filePath}
+          lineRange={lineRange}
+          onGutterMouseDown={onGutterMouseDown}
+          onCancelComment={onCancelComment}
+          onCommentSaved={onCommentSaved}
+        />
+      )}
     </div>
   );
 }

@@ -112,11 +112,11 @@ export function DiffContentArea({
     );
   }
 
-  if (renderViewMode === 'rendered' && isEligibleForRenderedView) {
+  if (renderViewMode === 'rendered' && isEligibleForRenderedView && renderedTextMode !== null) {
     return (
       <RenderedMarkdownView
         file={file}
-        renderedTextMode={renderedTextMode}
+        contentMode={renderedTextMode}
         commentRange={commentRange}
         onCancelComment={onCancelComment}
         onCommentSaved={onCommentSaved}
