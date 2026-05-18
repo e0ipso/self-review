@@ -4,8 +4,6 @@ FROM ${BASE_IMAGE}
 ARG TZ=Europe/Madrid
 ENV TZ="$TZ"
 
-ARG CLAUDE_CODE_VERSION=latest
-
 # Install basic development tools and iptables/ipset
 RUN apt-get update && apt-get install -y --no-install-recommends \
   less \
@@ -28,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   tree \
   python3-yaml \
   tmux \
+  libxml2-utils \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Ensure default node user has access to /usr/local/share
@@ -43,18 +42,13 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
   && chown -R $USERNAME /commandhistory
 
 # Pre-create directories that will be needed for bind mounts
-RUN mkdir -p /home/$USERNAME/.claude/debug && chown -R $USERNAME:$USERNAME /home/$USERNAME/.claude
+RUN mkdir -p /home/$USERNAME/.config/opencode && chown -R $USERNAME:$USERNAME /home/$USERNAME/.config/opencode
+RUN mkdir -p /home/$USERNAME/.local/share/opencode && chown -R $USERNAME:$USERNAME /home/$USERNAME/.local/share/opencode
 
 # Set `DEVCONTAINER` environment variable to help with orientation
 ENV DEVCONTAINER=true
 
 WORKDIR /workspace
-
-ARG GIT_DELTA_VERSION=0.18.2
-RUN ARCH=$(dpkg --print-architecture) && \
-  wget "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
-  sudo dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
-  rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
 
 # Configure passwordless sudo for node user
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/node && \
@@ -102,5 +96,5 @@ ENV HISTFILE=/commandhistory/.bash_history
 ENV EDITOR=vim
 ENV VISUAL=vim
 
-# Install Claude & Gemini
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# Install OpenCode
+RUN curl -fsSL https://opencode.ai/install | bash
