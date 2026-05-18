@@ -89,7 +89,7 @@ Avoid vague statements like "verify it works" or "ensure quality". Each step mus
 
 ## Documentation
 
-[Required documentation updates to existing documentation, either human-focused documentation, the project's README.md or assistant-focused documentation like AGENTS.md, .claude/skills/* for the site, etc.]
+[Required documentation updates to existing documentation, either human-focused documentation, the project's README.md or assistant-focused documentation like AGENTS.md, .agents/skills/* for the site, etc.]
 
 ## Resource Requirements
 
