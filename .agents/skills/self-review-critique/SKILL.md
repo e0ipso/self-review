@@ -92,7 +92,7 @@ Review each file's changes. Look for:
 
 ## 6. Build the Review XML
 
-Read the XSD schema at `.claude/skills/self-review-apply/assets/self-review-v1.xsd` for the
+Read the XSD schema at `.agents/skills/self-review-apply/assets/self-review-v1.xsd` for the
 complete XML structure and validation rules. The `<xs:documentation>` annotations in the schema
 describe all element and attribute semantics.
 
@@ -128,7 +128,7 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
 
 Use the Bash tool to run:
 ```bash
-xmllint --schema .claude/skills/self-review-apply/assets/self-review-v1.xsd REVIEW_XML_PATH --noout
+xmllint --schema .agents/skills/self-review-apply/assets/self-review-v1.xsd REVIEW_XML_PATH --noout
 ```
 
 Where `REVIEW_XML_PATH` is the output path from step 2.

@@ -225,7 +225,7 @@ Copy the skill directory into your project:
 
 ```bash
 # From the self-review repo (or download the folder from GitHub)
-cp -r .claude/skills/self-review-apply /path/to/your/project/.claude/skills/
+cp -r .agents/skills/self-review-apply /path/to/your/project/.agents/skills/
 ```
 
 ### Usage
@@ -242,7 +242,7 @@ Your project should end up with:
 
 <code>
 your-project/
-└── .claude/
+└── .agents/
     └── skills/
         └──self-review-apply/
             ├── SKILL.md

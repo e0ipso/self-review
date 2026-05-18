@@ -253,7 +253,7 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   any reason (offline, timeout, firewall), it is silently ignored. No telemetry, no analytics, no
   CDN fetches. All assets are bundled.
 - **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
-- **XSD sync.** The XSD schema exists in two locations: `.claude/skills/self-review-apply/assets/self-review-v1.xsd` (standalone) and embedded as a string in `src/main/xml-serializer.ts`. Both copies must be kept in sync when the schema changes.
+- **XSD sync.** The XSD schema exists in two locations: `.agents/skills/self-review-apply/assets/self-review-v1.xsd` (standalone) and embedded as a string in `src/main/xml-serializer.ts`. Both copies must be kept in sync when the schema changes.
 - **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
   Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit /
   Discard / Cancel.
@@ -302,11 +302,11 @@ It is the counterpart to `self-review-apply`: critique generates review feedback
 ### self-review-apply
 
 The `/self-review-apply` skill reads a `review.xml` file and applies the feedback (suggestions,
-comments) to the codebase. See `.claude/skills/self-review-apply/SKILL.md` for details.
+comments) to the codebase. See `.agents/skills/self-review-apply/SKILL.md` for details.
 
 ## XSD Schema Location
 
-The XSD schema lives at `.claude/skills/self-review-apply/assets/self-review-v1.xsd`. This is
+The XSD schema lives at `.agents/skills/self-review-apply/assets/self-review-v1.xsd`. This is
 the single source of truth for the XML output format.
 
 ## Code Reuse
