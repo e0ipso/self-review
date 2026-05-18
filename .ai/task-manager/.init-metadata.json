@@ -1,12 +1,12 @@
 {
-  "version": "1.32.0",
-  "timestamp": "2026-03-10T21:17:22.887Z",
+  "version": "1.36.1",
+  "timestamp": "2026-05-18T09:06:39.121Z",
   "files": {
     "config/TASK_MANAGER.md": "ad37290f6f5bced23be611198f288f8c196452183aa139197085c3da73174b49",
     "config/hooks/POST_ERROR_DETECTION.md": "ed4e1691880ea54ea43c318dc236c326ed81a3ce2785321a25e6db747a6e7e88",
     "config/hooks/POST_EXECUTION.md": "09241e85e98000a354357141ba468acf46283699529da1dfb837d037d4f6d297",
     "config/hooks/POST_PHASE.md": "d79fccfee4629ffc226db97f6f755c4dd068ee9c30f7d8bf98dfc55b104003c5",
-    "config/hooks/POST_PLAN.md": "4c9850cb6d11d74065b6c4a00137fe00540aeea7b44d9edbfc8211ff5ea34662",
+    "config/hooks/POST_PLAN.md": "91e5e7f47c2d224bb08084c9872cf1ed5e9bded0b2da832d190ba0f3803156f3",
     "config/hooks/POST_TASK_GENERATION_ALL.md": "f801cb9d32eeb22e97de903aa2f7ce7dd9ca13671ebc3a007ceffa1fc55e52ef",
     "config/hooks/PRE_PHASE.md": "f679ee0ba65979c778b8613ff9743a4dcf87347671110f8e645604fe7a2508f5",
     "config/hooks/PRE_PLAN.md": "c25f722a8cd507664683ee2b46a4b9f0518ef97c7fd438eb6d295fad55d9c3c6",
