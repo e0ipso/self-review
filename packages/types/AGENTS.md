@@ -14,7 +14,7 @@ Both `@self-review/core` and `@self-review/react` depend on this package. The El
   `package.json`. It exists solely for type exports.
 - **Types only.** No runtime code, no utility functions, no constants. If it emits JavaScript,
   it does not belong here.
-- **No imports from sibling packages.** This is a leaf dependency — it must never import from
+- **No imports from sibling packages.** This is a leaf dependency, it must never import from
   `@self-review/core` or `@self-review/react`.
 
 ## Structure

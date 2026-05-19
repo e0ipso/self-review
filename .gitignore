@@ -119,7 +119,9 @@ dist/
 
 # Claude Code (user-specific)
 .claude/*
-!.claude/skills/
+
+# OpenCode (user-specific)
+.opencode/*
 
 # AI task manager (plans and archive)
 .ai/task-manager/plans/

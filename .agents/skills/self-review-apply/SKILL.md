@@ -14,7 +14,7 @@ Read structured review feedback from a self-review XML file and execute the chan
 
 Non-obvious semantics (keep in sync with `assets/self-review-v1.xsd`):
 
-- **Line number pairing:** A comment has exactly one pair — `new-line-start`/`new-line-end` (for
+- **Line number pairing:** A comment has exactly one pair, `new-line-start`/`new-line-end` (for
   added/context lines) OR `old-line-start`/`old-line-end` (for deleted lines). Never both. If
   neither pair is present, it's a file-level comment.
 - **`viewed` attribute:** `true` = reviewer looked at this file. `false` = reviewer did not mark it
@@ -44,7 +44,7 @@ Check the `<review>` root element attributes to determine the review mode and lo
   `source-path` directory (file `path` attributes are relative to it). Skip deleted files. If a file
   is too large, read only the line ranges referenced by comments (with surrounding context).
 
-This context is essential — without it you're working blind.
+This context is essential, without it you're working blind.
 
 ## 4. Execute the Feedback
 
@@ -65,7 +65,7 @@ For each file:
    numbers as hints but match on text to handle drift.
 
 3. **Address all other comments.** Read the referenced lines, understand the `<body>`, and implement
-   the change. Use your judgment. Every comment category is actionable — including `question`, which
+   the change. Use your judgment. Every comment category is actionable, including `question`, which
    often implies a change is needed. If a question is purely informational (no code change needed),
    answer it in the summary instead.
 
