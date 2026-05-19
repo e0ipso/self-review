@@ -1,4 +1,4 @@
-# self-review — Product Requirements Document
+# self-review, Product Requirements Document
 
 **Version:** 1.0
 **Date:** 2026-02-10
@@ -137,9 +137,9 @@ The CLI accepts any arguments that `git diff` accepts. These are passed through 
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--resume-from <file>` | string | — | Path to a previously exported XML file. Loads prior comments back into the UI overlaid on the same diff. |
-| `--help` | boolean | — | Print usage information and exit. |
-| `--version` | boolean | — | Print version and exit. |
+| `--resume-from <file>` | string |, | Path to a previously exported XML file. Loads prior comments back into the UI overlaid on the same diff. |
+| `--help` | boolean |, | Print usage information and exit. |
+| `--version` | boolean |, | Print version and exit. |
 
 ### 4.3 Usage Examples
 
@@ -177,9 +177,9 @@ There are two exit paths:
 
 **Window close (X / Cmd+Q / Alt+F4):** Closing the window by any OS-level method shows a three-way confirmation dialog (skipped automatically if no comments have been added):
 
-1. **Save & Quit** — collects the review state, serializes to XML, writes to the output file, exits with code 0.
-2. **Discard** — exits immediately with code 0, without writing any output.
-3. **Cancel** — dismisses the dialog and returns to the review.
+1. **Save & Quit**, collects the review state, serializes to XML, writes to the output file, exits with code 0.
+2. **Discard**, exits immediately with code 0, without writing any output.
+3. **Cancel**, dismisses the dialog and returns to the review.
 
 In both save paths, the application:
 
@@ -213,8 +213,8 @@ The UI is modeled after GitHub's pull request "Files changed" review interface. 
 
 The application window consists of two main panels:
 
-- **Left panel — File tree navigator** (collapsible, resizable)
-- **Right panel — Diff viewer** (main content area)
+- **Left panel, File tree navigator** (collapsible, resizable)
+- **Right panel, Diff viewer** (main content area)
 
 The layout is a horizontal split. The file tree takes approximately 20-25% of the window width by default and can be resized by dragging the divider.
 
@@ -227,7 +227,7 @@ A vertical list of all files in the diff, displayed as a flat list with file pat
 - **File path** relative to the repository root (e.g., `src/auth/login.ts`)
 - **Change type badge**: Added (green), Modified (yellow), Deleted (red), Renamed (blue)
 - **Additions / deletions count** (e.g., `+42 -17`)
-- **Comment count indicator** — shows the number of comments on this file (if any)
+- **Comment count indicator**, shows the number of comments on this file (if any)
 
 **Behaviors:**
 
@@ -250,9 +250,9 @@ The main content area displays diffs for all files in a single scrollable view (
 
 When `git diff` returns no changes (zero files), the diff viewer area displays a help message instead of file sections. This message explains:
 
-1. **Why the diff is empty** — the arguments passed to `self-review` produced no changes.
-2. **How arguments work** — all arguments (except `--resume-from`, `--help`, `--version`) are passed directly to `git diff`.
-3. **Common examples** — a table of example commands with brief explanations to help the user select the right diff scope.
+1. **Why the diff is empty**, the arguments passed to `self-review` produced no changes.
+2. **How arguments work**, all arguments (except `--resume-from`, `--help`, `--version`) are passed directly to `git diff`.
+3. **Common examples**, a table of example commands with brief explanations to help the user select the right diff scope.
 
 The examples shown:
 
@@ -288,7 +288,7 @@ Two view modes, togglable via a control in the file tree header:
 
 The selected view mode persists for the session and can be set as a default in configuration.
 
-**Added/deleted file override:** Files with change type `added` or `deleted` always render in unified view, regardless of the selected view mode. In split view, these files would waste half the screen — an added file shows content only on the right pane with the left pane empty, and a deleted file shows content only on the left pane with the right pane empty. Forcing unified view for these files uses the full width for the content that matters.
+**Added/deleted file override:** Files with change type `added` or `deleted` always render in unified view, regardless of the selected view mode. In split view, these files would waste half the screen, an added file shows content only on the right pane with the left pane empty, and a deleted file shows content only on the left pane with the right pane empty. Forcing unified view for these files uses the full width for the content that matters.
 
 **Rendered text view:** New Markdown files (`.md`/`.markdown` with change type `added`) and new HTML files (`.html`/`.htm` with change type `added`) show a per-file "Raw / Rendered" toggle in the file header. Raw diff mode remains available for these files. In rendered mode, Markdown content is displayed as formatted HTML using `react-markdown`, while HTML content is rendered directly through the same source-line-mapped gutter path. Each rendered block is annotated with its source line range, enabling gutter-based line-range comments mapped to the new-file line numbers. Mermaid code blocks in Markdown render as inline SVG diagrams. Comments placed in the rendered text view use the same `LineRange` contract as the raw diff view, so switching between raw and rendered views preserves comment placement. Modified, deleted, or otherwise non-added HTML files do not use rendered HTML mode and remain in the raw diff flow.
 
@@ -345,7 +345,7 @@ GitHub-style suggestions allow the reviewer to propose literal code replacements
 
 #### 5.4.5 Comment Categories / Tags
 
-Every comment must be assigned a category (e.g., `bug`, `style`, `question`, `nit`, `security`). Categories are defined in the project-level configuration (see Section 7) and the first category is selected by default when creating a new comment. The category selector uses radio-button semantics — exactly one category is always selected and cannot be deselected. Categories are included in the XML output to help AI agents prioritize and categorize feedback.
+Every comment must be assigned a category (e.g., `bug`, `style`, `question`, `nit`, `security`). Categories are defined in the project-level configuration (see Section 7) and the first category is selected by default when creating a new comment. The category selector uses radio-button semantics, exactly one category is always selected and cannot be deselected. Categories are included in the XML output to help AI agents prioritize and categorize feedback.
 
 #### 5.4.6 Editing and Deleting Comments
 
@@ -368,9 +368,9 @@ A top toolbar provides global controls:
 
 The application supports three theme modes:
 
-- **Light** — light background, dark text
-- **Dark** — dark background, light text
-- **System** — follows the operating system's appearance preference (via `prefers-color-scheme`)
+- **Light**, light background, dark text
+- **Dark**, dark background, light text
+- **System**, follows the operating system's appearance preference (via `prefers-color-scheme`)
 
 The theme affects all UI elements including the Prism syntax highlighting theme. shadcn/ui provides built-in light/dark support. The Prism theme should be swapped to match (e.g., `prism-one-light` / `prism-one-dark` or similar).
 
@@ -380,9 +380,9 @@ The default is **System**.
 
 The welcome screen is displayed when the app is launched outside a git repository with no directory argument (e.g., from macOS Finder or a Linux app launcher). It provides a centered, single-column layout with:
 
-- **App title and tagline** — "self-review" heading with a short description.
-- **Git Mode card** — an informational card explaining that git mode requires launching from the CLI with diff arguments. This card is not interactive; it serves as a hint to use the CLI.
-- **Directory Mode card** — an interactive card with:
+- **App title and tagline**, "self-review" heading with a short description.
+- **Git Mode card**, an informational card explaining that git mode requires launching from the CLI with diff arguments. This card is not interactive; it serves as a hint to use the CLI.
+- **Directory Mode card**, an interactive card with:
   - A **Browse...** button that opens a native directory picker dialog.
   - The selected directory path displayed next to the button.
   - A **Start Review** button (appears after selecting a directory) that initiates a directory review, scanning all files recursively and treating them as new additions.
@@ -559,7 +559,7 @@ categories:
     description: "Code style, naming, or formatting issue"
     color: "#3182ce"
   - name: question
-    description: "Clarification needed — not necessarily a problem"
+    description: "Clarification needed, not necessarily a problem"
     color: "#805ad5"
   - name: nit
     description: "Minor nitpick, low priority"
@@ -681,8 +681,8 @@ max-total-lines: 100000
 
 When either threshold is exceeded, a confirmation dialog appears showing the payload stats (file count and total lines). The user can:
 
-- **Cancel** — exit the application without loading the diff.
-- **Continue** — enter large-payload mode, where file content is loaded lazily. The initial `diff:load` payload includes file metadata (paths, change types, stats) but omits hunks. Hunks are fetched on demand via the `diff:load-file` IPC channel as the user navigates to each file.
+- **Cancel**, exit the application without loading the diff.
+- **Continue**, enter large-payload mode, where file content is loaded lazily. The initial `diff:load` payload includes file metadata (paths, change types, stats) but omits hunks. Hunks are fetched on demand via the `diff:load-file` IPC channel as the user navigates to each file.
 
 This prevents the renderer from being overwhelmed by very large diffs while still allowing full review capability.
 
@@ -707,7 +707,7 @@ This prevents the renderer from being overwhelmed by very large diffs while stil
 
 The app supports keyboard-driven code review via Vimium-style hint labels (`f` for line comments, `g` for file jumps) and smooth scrolling (`j`/`k`). All shortcuts are suppressed when text inputs have focus.
 
-- `Ctrl/Cmd+F` — Open native find-in-page search bar with match counter, prev/next navigation (Enter/Shift+Enter), and search highlighting
+- `Ctrl/Cmd+F`, Open native find-in-page search bar with match counter, prev/next navigation (Enter/Shift+Enter), and search highlighting
 
 ### 10.3 Error Handling
 
@@ -755,7 +755,7 @@ The following are explicitly not part of the v1 release:
 | **Suggestion** | A proposed code replacement within a comment, specifying both the original code and the replacement code |
 | **Category** | A required tag on every comment (e.g., "bug", "nit") used to help AI agents prioritize feedback |
 | **Resume** | Loading a prior XML review output back into the UI to continue reviewing |
-| **XSD** | XML Schema Definition — a formal description of the structure of the XML output |
+| **XSD** | XML Schema Definition, a formal description of the structure of the XML output |
 
 ---
 
@@ -764,5 +764,5 @@ The following are explicitly not part of the v1 release:
 | # | Question | Status |
 |---|----------|--------|
 | 1 | Should the XSD schema file be written alongside the XML output, or only bundled within the app? | Open |
-| 2 | For `--resume-from`, how aggressive should the line-matching heuristic be? Simple line-number-based or context-aware? | Open — start with line-number-based, iterate |
+| 2 | For `--resume-from`, how aggressive should the line-matching heuristic be? Simple line-number-based or context-aware? | Open, start with line-number-based, iterate |
 | 3 | Should the app support reviewing diffs from sources other than `git diff` (e.g., piped unified diff from any tool)? | Deferred to v2 |

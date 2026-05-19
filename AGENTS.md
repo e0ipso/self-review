@@ -31,7 +31,7 @@ self-review/
 │   └── PRD.md                    # Product requirements (source of truth)
 ├── src/
 │   ├── shared/                   # Shared between main and renderer
-│   │   ├── types.ts              # All TypeScript interfaces — THE CONTRACT
+│   │   ├── types.ts              # All TypeScript interfaces, THE CONTRACT
 │   │   └── ipc-channels.ts      # IPC channel name constants
 │   ├── main/                     # Electron main process
 │   │   ├── main.ts              # App entry point, window creation, exit handler
@@ -89,9 +89,9 @@ self-review/
 │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
 │               └── CategorySelector.tsx # Dropdown/chip selector for categories
 ├── packages/
-│   ├── core/                    # @self-review/core — headless diff parsing & review logic
-│   ├── react/                   # @self-review/react — React components for review UI
-│   └── types/                   # @self-review/types — shared TypeScript interfaces (zero runtime deps)
+│   ├── core/                    # @self-review/core, headless diff parsing & review logic
+│   ├── react/                   # @self-review/react, React components for review UI
+│   └── types/                   # @self-review/types, shared TypeScript interfaces (zero runtime deps)
 ```
 
 The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace packages `@self-review/core`, `@self-review/react`, and `@self-review/types` expose shared logic, UI components, and shared TypeScript interfaces respectively. The Electron app imports these packages via relative path imports to their source (not through workspace symlinks), so no build step is needed for the packages during development. The Electron app's `src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source.
@@ -100,11 +100,11 @@ The project uses **npm workspaces** to manage reusable packages under `packages/
 
 The app supports Vimium-style keyboard navigation:
 
-- `Ctrl/Cmd+F` — Open find-in-page search bar (Chromium native text search)
-- `f` — Activate hint labels on changed diff lines to open a comment input
-- `g` — Activate hint labels on file tree entries to jump to a file
-- `j` / `k` — Smooth scroll the diff pane down/up
-- `Escape` — Dismiss active hint overlay or close find bar
+- `Ctrl/Cmd+F`, Open find-in-page search bar (Chromium native text search)
+- `f`, Activate hint labels on changed diff lines to open a comment input
+- `g`, Activate hint labels on file tree entries to jump to a file
+- `j` / `k`, Smooth scroll the diff pane down/up
+- `Escape`, Dismiss active hint overlay or close find bar
 
 All shortcuts are suppressed when a text input has focus. The implementation lives in `useKeyboardNavigation` hook with `HintOverlay` for rendering hint badges.
 
@@ -112,10 +112,10 @@ All shortcuts are suppressed when a text input has focus. The implementation liv
 
 Two-process model:
 
-1. **Main process** — parses CLI args, runs `git diff`, parses the unified diff into a structured
+1. **Main process**, parses CLI args, runs `git diff`, parses the unified diff into a structured
    AST (`DiffFile[]`), sends it to the renderer via IPC. On "Finish Review" or "Save & Quit",
    collects review state from renderer via IPC, serializes to XML, writes to the output file, exits.
-2. **Renderer process** — React app that renders the review UI. Manages all review state (comments,
+2. **Renderer process**, React app that renders the review UI. Manages all review state (comments,
    suggestions, viewed flags) in React context. Communicates with main via the preload bridge.
 
 The preload script uses `contextBridge.exposeInMainWorld` to expose a typed `electronAPI` object.
@@ -183,8 +183,8 @@ See the file itself for full definitions.
 
 The app has two testing layers:
 
-1. **Unit tests** (Vitest) — Fast, isolated tests for business logic and state management
-2. **E2E tests** (Playwright + Cucumber) — Slow, comprehensive tests for user workflows
+1. **Unit tests** (Vitest), Fast, isolated tests for business logic and state management
+2. **E2E tests** (Playwright + Cucumber), Slow, comprehensive tests for user workflows
 
 ### Unit Tests
 
@@ -217,12 +217,12 @@ not enforced.
 
 E2E tests use Playwright with Cucumber BDD in a two-tier approach:
 
-1. **Webapp e2e** (primary, runs in CI) — Tests the `@self-review/react` components via a Vite
+1. **Webapp e2e** (primary, runs in CI), Tests the `@self-review/react` components via a Vite
    dev server with fixture data. Fast, no Electron packaging needed.
-2. **Electron e2e** (supplementary, local only) — Tests Electron-specific behavior (XML output,
+2. **Electron e2e** (supplementary, local only), Tests Electron-specific behavior (XML output,
    resume, error handling, welcome screen, expand context, find-in-page). Requires packaging + xvfb.
 
-**Cannot run in dev container** — requires host machine with display.
+**Cannot run in dev container**, requires host machine with display.
 
 **Running e2e tests**:
 
@@ -249,7 +249,7 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   `console.error()` for logging in the main process, never `console.log()`.
 - **No network access (except version check).** The app makes zero network requests at runtime,
   with one exception: on startup, it makes a single non-blocking request to the GitHub Releases
-  API (`api.github.com`) to check for updates. This request is fire-and-forget — if it fails for
+  API (`api.github.com`) to check for updates. This request is fire-and-forget, if it fails for
   any reason (offline, timeout, firewall), it is silently ignored. No telemetry, no analytics, no
   CDN fetches. All assets are bundled.
 - **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
@@ -322,10 +322,10 @@ the single source of truth for the XML output format.
 
 ## What NOT To Do
 
-- Do not install or use `webpack` — Electron Forge handles bundling.
+- Do not install or use `webpack`, Electron Forge handles bundling.
 - Do not use `localStorage` or any browser storage APIs.
-- Do not use `require()` in the renderer — use ES module imports.
-- Do not use `nodeIntegration: true` — use the preload script.
+- Do not use `require()` in the renderer, use ES module imports.
+- Do not use `nodeIntegration: true`, use the preload script.
 - Do not create wrapper elements in the XML output (no `<files>`, no `<comments>` wrapper).
 - Do not store any state outside of React context in the renderer.
 - Do not use `console.log()` in the main process (use `console.error()` for stderr logging).

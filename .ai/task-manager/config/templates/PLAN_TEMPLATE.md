@@ -76,7 +76,7 @@ Example:
 
 ## Self Validation
 
-[Describe the concrete steps an LLM should execute after all tasks are completed to verify the implementation works correctly. These must be actionable verification procedures that inspect the real system — not just running pre-existing tests.
+[Describe the concrete steps an LLM should execute after all tasks are completed to verify the implementation works correctly. These must be actionable verification procedures that inspect the real system, not just running pre-existing tests.
 
 Examples of good validation steps:
 - Use Playwright CLI to open a browser, navigate to the affected pages, and take screenshots to confirm the UI renders correctly

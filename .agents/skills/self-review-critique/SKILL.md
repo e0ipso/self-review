@@ -14,13 +14,13 @@ self-review via `--resume-from` for human validation.
 
 Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-review-v1.xsd`):
 
-- **Line number pairing:** A comment has exactly one pair — `new-line-start`/`new-line-end` (for
+- **Line number pairing:** A comment has exactly one pair, `new-line-start`/`new-line-end` (for
   added/context lines) OR `old-line-start`/`old-line-end` (for deleted lines). Never both. If
   neither pair is present, it's a file-level comment.
 - **`viewed` attribute:** Set to `true` for all files (the AI "viewed" them all).
 - **`path` on renames:** For renamed files (`change-type="renamed"`), `path` is the **new** path.
 - **`change-type` values:** `added`, `modified`, `deleted`, `renamed`.
-- **`original-code`:** Must be the exact text at the referenced lines — copied verbatim from the
+- **`original-code`:** Must be the exact text at the referenced lines, copied verbatim from the
   file content. The applying agent uses text matching to locate the replacement target.
 - **`author`:** Set to your model name on every comment you generate (e.g., "Claude Sonnet 4.6").
 
@@ -33,17 +33,17 @@ The arguments support the same format as self-review CLI: `--staged`, `HEAD~3`,
 ## 2. Load Configuration
 
 Check if `.self-review.yaml` exists in the current directory. If it does, read it to extract:
-- **`categories`**: Array of `{name, description, color}` objects — use only these category names
+- **`categories`**: Array of `{name, description, color}` objects, use only these category names
   in your comments
 - **`output-file`**: Output path (default `./review.xml`)
 
 If no config file exists, use these default categories:
-- `question` — Clarification needed
-- `bug` — Likely defect or incorrect behavior
-- `security` — Security vulnerability or concern
-- `style` — Code style, naming, or formatting issue
-- `task` — Action item or follow-up task
-- `nit` — Minor nitpick, low priority
+- `question`, Clarification needed
+- `bug`, Likely defect or incorrect behavior
+- `security`, Security vulnerability or concern
+- `style`, Code style, naming, or formatting issue
+- `task`, Action item or follow-up task
+- `nit`, Minor nitpick, low priority
 
 ## 3. Get the Diff
 
@@ -64,8 +64,8 @@ git rev-parse --show-toplevel
 For each file in the diff:
 - **Added/Modified files**: Use the Read tool to read the full current file content. This gives
   you context beyond just the changed lines to understand the surrounding code.
-- **Deleted files**: Skip reading — the diff contains all the content you need.
-- **Binary files**: Skip — note them but don't attempt to review.
+- **Deleted files**: Skip reading, the diff contains all the content you need.
+- **Binary files**: Skip, note them but don't attempt to review.
 - **Renamed files**: Read the file at its new path.
 
 If there are many files (>15), prioritize reading files with the largest diffs first. For very
@@ -85,7 +85,7 @@ Review each file's changes. Look for:
 - Focus on substantive issues. Prioritize bugs and security over style nitpicks.
 - Use `suggestion` blocks for every comment where you can propose a concrete fix. The human
   reviewer can then accept or reject each suggestion individually.
-- Skip files that look correct — do not force comments on every file.
+- Skip files that look correct, do not force comments on every file.
 - Keep comment bodies concise and actionable (1-3 sentences).
 - Use file-level comments (no line attributes) for architectural or design concerns that span
   the whole file.
