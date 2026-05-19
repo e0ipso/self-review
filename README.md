@@ -214,10 +214,11 @@ self-review HEAD^
 self-review
 ```
 
-## Claude Code Skill
+## Assistant Skill
 
-self-review ships with a Claude Code skill that closes the feedback loop: it reads your review XML,
-prioritizes the feedback, and executes the changes.
+self-review ships with an AI assistant skill that closes the feedback loop: it reads your review XML,
+prioritizes the feedback, and executes the changes. It works with any assistant that supports
+skill directories — such as **Claude Code**, **Codex**, **OpenCode**, and others.
 
 ### Install
 
@@ -230,7 +231,7 @@ cp -r .agents/skills/self-review-apply /path/to/your/project/.agents/skills/
 
 ### Usage
 
-After running self-review and producing a `review.xml`, invoke the skill in Claude Code:
+After running self-review and producing a `review.xml`, invoke the skill in your assistant:
 
 ```
 /self-review-apply review.xml
@@ -244,7 +245,7 @@ Your project should end up with:
 your-project/
 └── .agents/
     └── skills/
-        └──self-review-apply/
+        └── self-review-apply/
             ├── SKILL.md
             └── self-review-v1.xsd
 </code>
