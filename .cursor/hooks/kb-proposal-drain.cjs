@@ -19911,6 +19911,70 @@ var import_node_fs11 = require("fs");
 var import_node_path11 = require("path");
 var import_split22 = __toESM(require_split2(), 1);
 
+// src/lib/json-extract.ts
+init_cjs_shims();
+function extractJsonPayload(raw) {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return trimmed;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return trimmed;
+  const fenced = extractFromFence(trimmed);
+  if (fenced !== null) return fenced;
+  const balanced = extractLastBalanced(trimmed);
+  if (balanced !== null) return balanced;
+  return trimmed;
+}
+var FENCE_RE = /```(?:[a-zA-Z0-9_-]+)?\r?\n([\s\S]*?)\r?\n```/g;
+function extractFromFence(text) {
+  FENCE_RE.lastIndex = 0;
+  let match;
+  while ((match = FENCE_RE.exec(text)) !== null) {
+    const inner = match[1]?.trim() ?? "";
+    if (inner.startsWith("{") || inner.startsWith("[")) return inner;
+  }
+  return null;
+}
+function extractLastBalanced(text) {
+  let best = null;
+  for (let i2 = 0; i2 < text.length; i2 += 1) {
+    const ch = text[i2];
+    if (ch !== "{" && ch !== "[") continue;
+    const end = findBalancedEnd(text, i2);
+    if (end !== -1) {
+      best = { start: i2, end };
+      i2 = end;
+    }
+  }
+  if (!best) return null;
+  return text.slice(best.start, best.end + 1);
+}
+function findBalancedEnd(text, start) {
+  const open = text[start];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  for (let i2 = start; i2 < text.length; i2 += 1) {
+    const ch = text[i2];
+    if (inString) {
+      if (ch === "\\") {
+        i2 += 1;
+        continue;
+      }
+      if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === open) depth += 1;
+    else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) return i2;
+    }
+  }
+  return -1;
+}
+
 // src/harnesses/cursor/opts.ts
 init_cjs_shims();
 var CursorHarnessOptsSchema = external_exports.object({
@@ -20030,7 +20094,7 @@ async function runHeadlessCursor(promptBody, stdin, schema2, opts = {}) {
   }
   let parsedJson;
   try {
-    parsedJson = JSON.parse(lastResultText.trim());
+    parsedJson = JSON.parse(extractJsonPayload(lastResultText));
   } catch (parseError) {
     throw new Error(
       `curator output was not valid JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}. See ${opts.logFile ?? "log"} for the full transcript.`
