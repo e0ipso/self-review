@@ -1,0 +1,379 @@
+---
+schema_version: 1
+nodes_hash: 'sha256:ec32e0ab75d63f01c8074f96f0a3244c3b57d1f23e4eb469ec2a38a0219a36eb'
+node_count: 172
+---
+# kenkeep Index
+
+_172 nodes • ~25870 estimated tokens_
+
+
+## Conventions (how we build)
+- **_sessions/ is gitignored; provenance does not travel with the repo** [`nodes/practice/practice-sessions-is-gitignored-provenance-does-not-travel-with-the-repo.md`] #knowledge-base #sessions #provenance
+- **Accept only y/n/s/k tokens when resolving curator conflicts** [`nodes/practice/practice-accept-only-y-n-s-k-tokens-when-resolving-curator-conflicts.md`] #kb-curate #conflicts #reply-contract
+- **Append a blueprint with dependency diagram and execution phases to the plan** [`nodes/practice/practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md`] #task-management #blueprint #dependencies
+- **Apply config precedence: CLI > project YAML > user YAML > defaults** [`nodes/practice/practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults.md`] #config #precedence
+- **Apply config precedence: project overrides user overrides defaults** [`nodes/practice/practice-apply-config-precedence-project-overrides-user-overrides-defaults.md`] #config #precedence
+- **Apply curator conflict outcomes via targeted git commands** [`nodes/practice/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md`] #kb-curate #outcomes #git
+- **Apply review suggestions bottom-to-top by line number** [`nodes/practice/practice-apply-review-suggestions-bottom-to-top-by-line-number.md`] #self-review #suggestions #ordering
+- **Attach a suggestion block whenever a concrete fix is possible** [`nodes/practice/practice-attach-a-suggestion-block-whenever-a-concrete-fix-is-possible.md`] #self-review #critique #suggestions
+- **Check plans for architecture and code reuse improvements** [`nodes/practice/practice-check-plans-for-architecture-and-code-reuse-improvements.md`] #planning #architecture #code-reuse
+- **Clamp multi-line drag-selection to a single hunk and a single side** [`nodes/practice/practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side.md`] #drag-select #hunks #split-view
+- **Compute conflict-resolution defaults from diff ratio and confidence** [`nodes/practice/practice-compute-conflict-resolution-defaults-from-diff-ratio-and-confidence.md`] #kb-curate #conflicts #defaults
+- **Conclude bootstrap with a structured final report** [`nodes/practice/practice-conclude-bootstrap-with-a-structured-final-report.md`] #knowledge-base #reporting
+- **Consolidate multi-source candidates into a single node with multiple `derived_from`** [`nodes/practice/practice-consolidate-multi-source-candidates-into-a-single-node-with-multiple-derived-from.md`] #knowledge-base #deduplication
+- **Copy original-code verbatim from the source file** [`nodes/practice/practice-copy-original-code-verbatim-from-the-source-file.md`] #self-review #suggestions #xml
+- **Default critique to unstaged changes when no diff args are passed** [`nodes/practice/practice-default-critique-to-unstaged-changes-when-no-diff-args-are-passed.md`] #self-review #critique #cli
+- **Default node confidence to medium during bootstrap** [`nodes/practice/practice-default-node-confidence-to-medium-during-bootstrap.md`] #knowledge-base #confidence
+- **Defer file discovery to the CLI's bootstrap-incremental dry run** [`nodes/practice/practice-defer-file-discovery-to-the-cli-s-bootstrap-incremental-dry-run.md`] #knowledge-base #cli #discovery
+- **Define shared data structures only in @self-review/types** [`nodes/practice/practice-define-shared-data-structures-only-in-self-review-types.md`] #types #single-source #shared
+- **Design XML output to be parsed by LLMs** [`nodes/practice/practice-design-xml-output-to-be-parsed-by-llms.md`] #output #xml #ai
+- **Detect sub-agents across .claude, .gemini, and .opencode directories** [`nodes/practice/practice-detect-sub-agents-across-claude-gemini-and-opencode-directories.md`] #agents #discovery #conventions
+- **Differentiate Finish Review from window close** [`nodes/practice/practice-differentiate-finish-review-from-window-close.md`] #exit #save #ux
+- **Do not add Tailwind as a peer dependency for host apps** [`nodes/practice/practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps.md`] #css #tailwind #dependencies
+- **Do not hand-edit INDEX.md or GRAPH.md** [`nodes/practice/practice-do-not-hand-edit-index-md-or-graph-md.md`] #knowledge-base #index #hooks
+- **Do not import from @self-review/core in the react package** [`nodes/practice/practice-do-not-import-from-self-review-core-in-the-react-package.md`] #react #imports #bundling
+- **Do not import sibling packages from @self-review/types** [`nodes/practice/practice-do-not-import-sibling-packages-from-self-review-types.md`] #types #imports #architecture
+- **Do not install or use webpack** [`nodes/practice/practice-do-not-install-or-use-webpack.md`] #task-manager #build #webpack
+- **Do not run e2e tests inside the dev container** [`nodes/practice/practice-do-not-run-e2e-tests-inside-the-dev-container.md`] #task-manager #testing #devcontainer
+- **Do not store renderer state outside React context** [`nodes/practice/practice-do-not-store-renderer-state-outside-react-context.md`] #task-manager #state #renderer
+- **Do not use Node.js APIs in @self-review/react** [`nodes/practice/practice-do-not-use-node-js-apis-in-self-review-react.md`] #react #browser #constraints
+- **Don't hallucinate rationale in node bodies** [`nodes/practice/practice-don-t-hallucinate-rationale-in-node-bodies.md`] #knowledge-base #node-authoring #rationale
+- **Don't support Windows** [`nodes/practice/practice-don-t-support-windows.md`] #platform #scope
+- **Emit no wrapper elements in the XML output** [`nodes/practice/practice-emit-no-wrapper-elements-in-the-xml-output.md`] #xml #schema
+- **Engage relevant assistant skills based on task skills** [`nodes/practice/practice-engage-relevant-assistant-skills-based-on-task-skills.md`] #task-assignment #skills #assistant-skills
+- **Extract shared logic before duplicating across call sites** [`nodes/practice/practice-extract-shared-logic-before-duplicating-across-call-sites.md`] #task-manager #code-reuse #duplication
+- **Favor simple, maintainable solutions over clever ones** [`nodes/practice/practice-favor-simple-maintainable-solutions-over-clever-ones.md`] #simplicity #code-quality #maintainability
+- **Fix the root cause in tests, never write test-specific code in production** [`nodes/practice/practice-fix-the-root-cause-in-tests-never-write-test-specific-code-in-production.md`] #task-manager #testing #root-cause
+- **Follow the allowed task status transitions** [`nodes/practice/practice-follow-the-allowed-task-status-transitions.md`] #workflow #task-status
+- **Force unified view for added and deleted files** [`nodes/practice/practice-force-unified-view-for-added-and-deleted-files.md`] #ui #diff-view
+- **Hand off curate runs via git diff and optional pre-commit index rebuild** [`nodes/practice/practice-hand-off-curate-runs-via-git-diff-and-optional-pre-commit-index-rebuild.md`] #kb-curate #handoff #index
+- **Hide untracked files by default for --staged/--cached reviews** [`nodes/practice/practice-hide-untracked-files-by-default-for-staged-cached-reviews.md`] #staged #untracked #defaults
+- **Honor `bootstrapModel.name` from KB config when delegating to sub-agents** [`nodes/practice/practice-honor-bootstrapmodel-name-from-kb-config-when-delegating-to-sub-agents.md`] #knowledge-base #config #sub-agents
+- **Implement only what the user explicitly requests** [`nodes/practice/practice-implement-only-what-the-user-explicitly-requests.md`] #scope #planning #yagni
+- **Import only the compiled dist/styles.css from host apps** [`nodes/practice/practice-import-only-the-compiled-dist-styles-css-from-host-apps.md`] #css #build #imports
+- **Keep @self-review/types free of runtime dependencies** [`nodes/practice/practice-keep-self-review-types-free-of-runtime-dependencies.md`] #types #dependencies #package
+- **Keep all @self-review/types definitions in src/index.ts** [`nodes/practice/practice-keep-all-self-review-types-definitions-in-src-index-ts.md`] #types #structure #layout
+- **Keep file-type detection utilities duplicated across core and react packages** [`nodes/practice/practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md`] #task-manager #file-type-utils #duplication
+- **Keep file-type-utils.ts duplicates in sync across core and react** [`nodes/practice/practice-keep-file-type-utils-ts-duplicates-in-sync-across-core-and-react.md`] #duplication #sync #utils
+- **Keep self-review local-only with no network access** [`nodes/practice/practice-keep-self-review-local-only-with-no-network-access.md`] #privacy #network #local
+- **Keep the XSD schema in sync across its two locations** [`nodes/practice/practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md`] #task-manager #xsd #sync
+- **Lazy-load file hunks in large-payload mode** [`nodes/practice/practice-lazy-load-file-hunks-in-large-payload-mode.md`] #large-diff #performance #payload
+- **Limit file writes to the review XML and assets directory** [`nodes/practice/practice-limit-file-writes-to-the-review-xml-and-assets-directory.md`] #task-manager #filesystem #scope
+- **Line comments reference either old or new line numbers, never both** [`nodes/practice/practice-line-comments-reference-either-old-or-new-line-numbers-never-both.md`] #xml #comments #line-numbers
+- **Load the original diff context before applying review feedback** [`nodes/practice/practice-load-the-original-diff-context-before-applying-review-feedback.md`] #self-review #git-diff #context
+- **Make no network connections at runtime** [`nodes/practice/practice-make-no-network-connections-at-runtime.md`] #network #privacy #local-only
+- **Make zero network requests except the startup version check** [`nodes/practice/practice-make-zero-network-requests-except-the-startup-version-check.md`] #task-manager #network #privacy
+- **Mark completed phases and tasks in the blueprint before advancing** [`nodes/practice/practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing.md`] #workflow #progress-tracking #blueprint
+- **Match task skills to sub-agents during PRE_TASK_ASSIGNMENT** [`nodes/practice/practice-match-task-skills-to-sub-agents-during-pre-task-assignment.md`] #task-assignment #agents #hooks
+- **Never auto-resolve contradictions during bootstrap** [`nodes/practice/practice-never-auto-resolve-contradictions-during-bootstrap.md`] #knowledge-base #contradictions
+- **Never import electron directly in the renderer** [`nodes/practice/practice-never-import-electron-directly-in-the-renderer.md`] #task-manager #ipc #security
+- **Never overwrite an existing node during bootstrap** [`nodes/practice/practice-never-overwrite-an-existing-node-during-bootstrap.md`] #knowledge-base #node-authoring #collision
+- **Never write to stdout in the main process** [`nodes/practice/practice-never-write-to-stdout-in-the-main-process.md`] #task-manager #logging #stdout
+- **Never write to stdout; use stderr for all logging** [`nodes/practice/practice-never-write-to-stdout-use-stderr-for-all-logging.md`] #logging #stdout #cli
+- **Pair comment line numbers as either new or old, never both** [`nodes/practice/practice-pair-comment-line-numbers-as-either-new-or-old-never-both.md`] #self-review #xml #line-numbers
+- **Pair line-number attributes correctly in review comments** [`nodes/practice/practice-pair-line-number-attributes-correctly-in-review-comments.md`] #self-review #xml #comments
+- **Pair line-number attributes correctly on review comments** [`nodes/practice/practice-pair-line-number-attributes-correctly-on-review-comments.md`] #self-review #xml #comments
+- **Parallelize self-review application per file above a 3-file threshold** [`nodes/practice/practice-parallelize-self-review-application-per-file-above-a-3-file-threshold.md`] #self-review #workflow #subagents
+- **Pass linting and create a descriptive conventional commit at the end of each phase** [`nodes/practice/practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md`] #workflow #linting #commits
+- **Pass portalContainer to all Radix/shadcn portal components** [`nodes/practice/practice-pass-portalcontainer-to-all-radix-shadcn-portal-components.md`] #radix #portals #theming
+- **Prefill the suggestion proposed-code editor with the original code** [`nodes/practice/practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code.md`] #suggestions #ux
+- **Preserve orphaned comments on resume; never silently drop them** [`nodes/practice/practice-preserve-orphaned-comments-on-resume-never-silently-drop-them.md`] #resume #comments #data-integrity
+- **Prioritize the largest diffs when reviewing many files** [`nodes/practice/practice-prioritize-the-largest-diffs-when-reviewing-many-files.md`] #self-review #critique #performance
+- **Read categories from .self-review.yaml before generating critique** [`nodes/practice/practice-read-categories-from-self-review-yaml-before-generating-critique.md`] #self-review #critique #categories
+- **Read entry points first, then sample and follow cross-references** [`nodes/practice/practice-read-entry-points-first-then-sample-and-follow-cross-references.md`] #knowledge-base #reading-strategy
+- **Read full file contents for added/modified files when critiquing** [`nodes/practice/practice-read-full-file-contents-for-added-modified-files-when-critiquing.md`] #self-review #critique #context
+- **Refresh INDEX.md and GRAPH.md after writing nodes** [`nodes/practice/practice-refresh-index-md-and-graph-md-after-writing-nodes.md`] #knowledge-base #cli #indexing
+- **Require a category on every comment** [`nodes/practice/practice-require-a-category-on-every-comment.md`] #xml #categories
+- **Resolve the active KB harness and pass `--harness "$HARNESS"` to every CLI call** [`nodes/practice/practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call.md`] #knowledge-base #harness #cli
+- **Review every generated task for complexity, vagueness, and triviality** [`nodes/practice/practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md`] #task-management #planning #quality
+- **Review knowledge-base changes via git diff before committing** [`nodes/practice/practice-review-knowledge-base-changes-via-git-diff-before-committing.md`] #knowledge-base #git #review
+- **Review plans against PRD and test/features updates** [`nodes/practice/practice-review-plans-against-prd-and-test-features-updates.md`] #planning #prd #tests
+- **Run kb curator via npx with explicit harness id** [`nodes/practice/practice-run-kb-curator-via-npx-with-explicit-harness-id.md`] #kb-curate #cli #harness
+- **Run kb-bootstrap as a one-pass, supervised operation** [`nodes/practice/practice-run-kb-bootstrap-as-a-one-pass-supervised-operation.md`] #knowledge-base #bootstrap #workflow
+- **Scope styles and dark mode via the .self-review wrapper div** [`nodes/practice/practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div.md`] #css #scoping #theming
+- **Set `viewed="true"` on every file in AI-generated review.xml** [`nodes/practice/practice-set-viewed-true-on-every-file-in-ai-generated-review-xml.md`] #self-review #xml #attributes
+- **Set author to your model name on every generated comment** [`nodes/practice/practice-set-author-to-your-model-name-on-every-generated-comment.md`] #self-review #attribution #critique
+- **Set the comment `author` attribute to the model name** [`nodes/practice/practice-set-the-comment-author-attribute-to-the-model-name.md`] #self-review #attribution #author
+- **Set viewed="true" on every file in critique output** [`nodes/practice/practice-set-viewed-true-on-every-file-in-critique-output.md`] #self-review #xml #critique
+- **Short-circuit kb-curate with one-line summary when no conflicts and no failures** [`nodes/practice/practice-short-circuit-kb-curate-with-one-line-summary-when-no-conflicts-and-no-failures.md`] #kb-curate #fast-path #summary
+- **Show welcome screen when launched outside a git repo with no directory arg** [`nodes/practice/practice-show-welcome-screen-when-launched-outside-a-git-repo-with-no-directory-arg.md`] #startup #launcher #welcome
+- **Skip files that look correct rather than forcing comments** [`nodes/practice/practice-skip-files-that-look-correct-rather-than-forcing-comments.md`] #self-review #critique #scope
+- **Skip files that look correct; do not force comments on every file** [`nodes/practice/practice-skip-files-that-look-correct-do-not-force-comments-on-every-file.md`] #self-review #critique #scope
+- **Sort and group pending conflicts before resolving** [`nodes/practice/practice-sort-and-group-pending-conflicts-before-resolving.md`] #kb-curate #conflicts #grouping
+- **Split combined content across practice and map nodes** [`nodes/practice/practice-split-combined-content-across-practice-and-map-nodes.md`] #knowledge-base #node-authoring #ownership
+- **Stick to markdown documentation; do not read code files during bootstrap** [`nodes/practice/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md`] #knowledge-base #scope
+- **Stop and ask the user when bootstrap conditions go off-track** [`nodes/practice/practice-stop-and-ask-the-user-when-bootstrap-conditions-go-off-track.md`] #knowledge-base #escalation
+- **Treat every review comment as actionable, including questions** [`nodes/practice/practice-treat-every-review-comment-as-actionable-including-questions.md`] #self-review #comments #questions
+- **Treat self-review as a CLI-first, one-shot tool** [`nodes/practice/practice-treat-self-review-as-a-cli-first-one-shot-tool.md`] #cli #workflow #output
+- **Trigger large-payload guard at configurable file/line thresholds** [`nodes/practice/practice-trigger-large-payload-guard-at-configurable-file-line-thresholds.md`] #payload #performance #ux
+- **Use <suggestion> blocks whenever a concrete fix can be proposed** [`nodes/practice/practice-use-suggestion-blocks-whenever-a-concrete-fix-can-be-proposed.md`] #self-review #suggestions #critique
+- **Use categories from .self-review.yaml when present** [`nodes/practice/practice-use-categories-from-self-review-yaml-when-present.md`] #self-review #critique #categories
+- **Use conventional commit naming for PR titles** [`nodes/practice/practice-use-conventional-commit-naming-for-pr-titles.md`] #task-manager #pr #conventional-commits
+- **Use ES module imports in the renderer, not require()** [`nodes/practice/practice-use-es-module-imports-in-the-renderer-not-require.md`] #task-manager #modules #imports
+- **Use old vs new line numbers based on the commented line type** [`nodes/practice/practice-use-old-vs-new-line-numbers-based-on-the-commented-line-type.md`] #task-manager #line-numbers #comments
+- **Use Prism.js for syntax highlighting with theme matching** [`nodes/practice/practice-use-prism-js-for-syntax-highlighting-with-theme-matching.md`] #task-manager #syntax-highlighting #prism
+- **Use shadcn/ui components instead of raw HTML for UI** [`nodes/practice/practice-use-shadcn-ui-components-instead-of-raw-html-for-ui.md`] #task-manager #ui #shadcn
+- **Use src/shared/types.ts as the single source of truth for shared types** [`nodes/practice/practice-use-src-shared-types-ts-as-the-single-source-of-truth-for-shared-types.md`] #task-manager #types #duplication
+- **Use the new path for renamed files in review XML** [`nodes/practice/practice-use-the-new-path-for-renamed-files-in-review-xml.md`] #self-review #xml #renames
+- **Use the ReviewAdapter pattern for platform-specific operations** [`nodes/practice/practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md`] #architecture #adapter #platform
+- **Validate generated review.xml against the XSD before finishing** [`nodes/practice/practice-validate-generated-review-xml-against-the-xsd-before-finishing.md`] #self-review #xml #validation
+- **Validate generated review.xml against the XSD with xmllint** [`nodes/practice/practice-validate-generated-review-xml-against-the-xsd-with-xmllint.md`] #self-review #critique #validation
+- **Validate self-review XML against the XSD before applying** [`nodes/practice/practice-validate-self-review-xml-against-the-xsd-before-applying.md`] #self-review #validation #xmllint
+- **Validate XML output against the XSD before writing** [`nodes/practice/practice-validate-xml-output-against-the-xsd-before-writing.md`] #task-manager #xml #validation
+- **Write PRDs without tasks or phases during plan creation** [`nodes/practice/practice-write-prds-without-tasks-or-phases-during-plan-creation.md`] #planning #prd #workflow
+- **XML-escape all text content in review.xml** [`nodes/practice/practice-xml-escape-all-text-content-in-review-xml.md`] #self-review #xml #escaping
+
+## Components (what exists)
+- **--resume-from for continuing a prior review** [`nodes/map/map-resume-from-for-continuing-a-prior-review.md`] #resume #cli
+- **.ai/knowledge-base/ directory** [`nodes/map/map-ai-knowledge-base-directory.md`] #knowledge-base #structure
+- **.self-review wrapper div** [`nodes/map/map-self-review-wrapper-div.md`] #dom #scoping #theming
+- **.self-review.yaml project config** [`nodes/map/map-self-review-yaml-project-config.md`] #self-review #config
+- **@e0ipso/ai-knowledge-base CLI commands used by kb-curate** [`nodes/map/map-e0ipso-ai-knowledge-base-cli-commands-used-by-kb-curate.md`] #kb-curate #cli #subcommands
+- **@self-review/react package** [`nodes/map/map-self-review-react-package.md`] #package #react #ui
+- **@self-review/types package** [`nodes/map/map-self-review-types-package.md`] #package #types #workspace
+- **ai-knowledge-base CLI** [`nodes/map/map-ai-knowledge-base-cli.md`] #knowledge-base #cli
+- **CLI static skip list** [`nodes/map/map-cli-static-skip-list.md`] #knowledge-base #cli #skip-list
+- **CLI static skip list for bootstrap candidates** [`nodes/map/map-cli-static-skip-list-for-bootstrap-candidates.md`] #knowledge-base #cli #skip-list #bootstrap
+- **Comment author attribution** [`nodes/map/map-comment-author-attribution.md`] #task-manager #comments #author
+- **CSS build pipeline for @self-review/react** [`nodes/map/map-css-build-pipeline-for-self-review-react.md`] #css #build #tailwind
+- **Curator failure modes: add_collision and modify_missing_target** [`nodes/map/map-curator-failure-modes-add-collision-and-modify-missing-target.md`] #kb-curate #failures #reasons
+- **Default bootstrap scope** [`nodes/map/map-default-bootstrap-scope.md`] #knowledge-base #scope
+- **Default critique categories** [`nodes/map/map-default-critique-categories.md`] #self-review #categories #critique
+- **Emoji shortcode support in comments** [`nodes/map/map-emoji-shortcode-support-in-comments.md`] #task-manager #emoji #comments
+- **extract-task-skills.cjs** [`nodes/map/map-extract-task-skills-cjs.md`] #scripts #task-manager #skills
+- **Finish Review vs window-close behavior** [`nodes/map/map-finish-review-vs-window-close-behavior.md`] #task-manager #close-behavior #save
+- **IPC channel contract between main and renderer** [`nodes/map/map-ipc-channel-contract-between-main-and-renderer.md`] #ipc #channels
+- **IPC channel registry** [`nodes/map/map-ipc-channel-registry.md`] #task-manager #ipc #channels
+- **KB harness detection script at /tmp/kb-detect-harness.mjs** [`nodes/map/map-kb-harness-detection-script-at-tmp-kb-detect-harness-mjs.md`] #kb #harness #detection
+- **kb-bootstrap skill** [`nodes/map/map-kb-bootstrap-skill.md`] #knowledge-base #skill
+- **kb-detect-harness helper script** [`nodes/map/map-kb-detect-harness-helper-script.md`] #knowledge-base #harness #detection
+- **Knowledge base config locations** [`nodes/map/map-knowledge-base-config-locations.md`] #knowledge-base #config
+- **Knowledge base node layout** [`nodes/map/map-knowledge-base-node-layout.md`] #knowledge-base #layout #nodes
+- **Knowledge-base capture-curate-review workflow** [`nodes/map/map-knowledge-base-capture-curate-review-workflow.md`] #knowledge-base #workflow #skills
+- **Knowledge-base directory layout under .ai/knowledge-base/** [`nodes/map/map-knowledge-base-directory-layout-under-ai-knowledge-base.md`] #kb #layout #paths
+- **Knowledge-base node kinds and frontmatter** [`nodes/map/map-knowledge-base-node-kinds-and-frontmatter.md`] #knowledge-base #node #schema
+- **Large-payload lazy-loading mode** [`nodes/map/map-large-payload-lazy-loading-mode.md`] #task-manager #large-payload #perf
+- **npm workspaces packages** [`nodes/map/map-npm-workspaces-packages.md`] #task-manager #packages #workspaces
+- **POST_PHASE hook** [`nodes/map/map-post-phase-hook.md`] #hook #workflow #task-manager
+- **POST_PLAN hook** [`nodes/map/map-post-plan-hook.md`] #hooks #task-manager #planning
+- **POST_TASK_GENERATION_ALL hook** [`nodes/map/map-post-task-generation-all-hook.md`] #task-management #hooks #lifecycle
+- **PRE_PLAN hook** [`nodes/map/map-pre-plan-hook.md`] #task-manager #hook #workflow
+- **PRE_TASK_ASSIGNMENT hook** [`nodes/map/map-pre-task-assignment-hook.md`] #hooks #task-manager #ai
+- **Rendered file previews** [`nodes/map/map-rendered-file-previews.md`] #task-manager #rendered-preview #file-types
+- **Rendered image and SVG previews for added files** [`nodes/map/map-rendered-image-and-svg-previews-for-added-files.md`] #preview #image #svg
+- **Rendered text view for added Markdown and HTML files** [`nodes/map/map-rendered-text-view-for-added-markdown-and-html-files.md`] #preview #markdown #html #rendered
+- **review.xml format and XSD** [`nodes/map/map-review-xml-format-and-xsd.md`] #self-review #schema #xml
+- **ReviewAdapter interface** [`nodes/map/map-reviewadapter-interface.md`] #interface #adapter #platform
+- **ReviewPanel and SingleFileReview entry components** [`nodes/map/map-reviewpanel-and-singlefilereview-entry-components.md`] #component #entrypoint
+- **self-review** [`nodes/map/map-self-review.md`] #task-manager #app #overview
+- **self-review application** [`nodes/map/map-self-review-application.md`] #overview #app
+- **self-review CLI invocations** [`nodes/map/map-self-review-cli-invocations.md`] #cli #flags
+- **self-review XML schema (self-review-v1.xsd)** [`nodes/map/map-self-review-xml-schema-self-review-v1-xsd.md`] #self-review #xsd #schema
+- **self-review XML v1 schema** [`nodes/map/map-self-review-xml-v1-schema.md`] #self-review #xml #schema
+- **self-review YAML configuration options** [`nodes/map/map-self-review-yaml-configuration-options.md`] #config #yaml
+- **self-review-apply assistant skill** [`nodes/map/map-self-review-apply-assistant-skill.md`] #skill #ai #workflow
+- **self-review-apply skill** [`nodes/map/map-self-review-apply-skill.md`] #self-review #skills #apply
+- **self-review-critique skill** [`nodes/map/map-self-review-critique-skill.md`] #self-review #skills #critique
+- **self-review-v1 XSD output format** [`nodes/map/map-self-review-v1-xsd-output-format.md`] #xml #schema #output
+- **Testing layers (unit + e2e)** [`nodes/map/map-testing-layers-unit-e2e.md`] #task-manager #testing #layers
+- **Three startup modes: git, directory, welcome** [`nodes/map/map-three-startup-modes-git-directory-welcome.md`] #mode #git #directory #welcome
+- **Two-process Electron architecture** [`nodes/map/map-two-process-electron-architecture.md`] #task-manager #architecture #electron
+- **User and project YAML configuration** [`nodes/map/map-user-and-project-yaml-configuration.md`] #config #yaml #files
+- **Vimium-style keyboard navigation** [`nodes/map/map-vimium-style-keyboard-navigation.md`] #keyboard #navigation #vimium
+- **Vimium-style keyboard shortcuts** [`nodes/map/map-vimium-style-keyboard-shortcuts.md`] #task-manager #keyboard #vimium
+- **XSD schema location** [`nodes/map/map-xsd-schema-location.md`] #task-manager #xsd #schema
+
+## By topic
+
+- **#task-manager (35):** Comment author attribution, Do not install or use webpack, Do not run e2e tests inside the dev container, Do not store renderer state outside React context, Emoji shortcode support in comments, Extract shared logic before duplicating across call sites, extract-task-skills.cjs, Finish Review vs window-close behavior, Fix the root cause in tests, never write test-specific code in production, IPC channel registry, Keep file-type detection utilities duplicated across core and react packages, Keep the XSD schema in sync across its two locations, Large-payload lazy-loading mode, Limit file writes to the review XML and assets directory, Make zero network requests except the startup version check, Never import electron directly in the renderer, Never write to stdout in the main process, npm workspaces packages, POST_PHASE hook, POST_PLAN hook, PRE_PLAN hook, PRE_TASK_ASSIGNMENT hook, Rendered file previews, self-review, Testing layers (unit + e2e), Two-process Electron architecture, Use conventional commit naming for PR titles, Use ES module imports in the renderer, not require(), Use old vs new line numbers based on the commented line type, Use Prism.js for syntax highlighting with theme matching, Use shadcn/ui components instead of raw HTML for UI, Use src/shared/types.ts as the single source of truth for shared types, Validate XML output against the XSD before writing, Vimium-style keyboard shortcuts, XSD schema location
+- **#self-review (33):** .self-review.yaml project config, Apply review suggestions bottom-to-top by line number, Attach a suggestion block whenever a concrete fix is possible, Copy original-code verbatim from the source file, Default critique categories, Default critique to unstaged changes when no diff args are passed, Load the original diff context before applying review feedback, Pair comment line numbers as either new or old, never both, Pair line-number attributes correctly in review comments, Pair line-number attributes correctly on review comments, Parallelize self-review application per file above a 3-file threshold, Prioritize the largest diffs when reviewing many files, Read categories from .self-review.yaml before generating critique, Read full file contents for added/modified files when critiquing, review.xml format and XSD, self-review XML schema (self-review-v1.xsd), self-review XML v1 schema, self-review-apply skill, self-review-critique skill, Set `viewed="true"` on every file in AI-generated review.xml, Set author to your model name on every generated comment, Set the comment `author` attribute to the model name, Set viewed="true" on every file in critique output, Skip files that look correct rather than forcing comments, Skip files that look correct; do not force comments on every file, Treat every review comment as actionable, including questions, Use <suggestion> blocks whenever a concrete fix can be proposed, Use categories from .self-review.yaml when present, Use the new path for renamed files in review XML, Validate generated review.xml against the XSD before finishing, Validate generated review.xml against the XSD with xmllint, Validate self-review XML against the XSD before applying, XML-escape all text content in review.xml
+- **#knowledge-base (29):** _sessions/ is gitignored; provenance does not travel with the repo, .ai/knowledge-base/ directory, ai-knowledge-base CLI, CLI static skip list, CLI static skip list for bootstrap candidates, Conclude bootstrap with a structured final report, Consolidate multi-source candidates into a single node with multiple `derived_from`, Default bootstrap scope, Default node confidence to medium during bootstrap, Defer file discovery to the CLI's bootstrap-incremental dry run, Do not hand-edit INDEX.md or GRAPH.md, Don't hallucinate rationale in node bodies, Honor `bootstrapModel.name` from KB config when delegating to sub-agents, kb-bootstrap skill, kb-detect-harness helper script, Knowledge base config locations, Knowledge base node layout, Knowledge-base capture-curate-review workflow, Knowledge-base node kinds and frontmatter, Never auto-resolve contradictions during bootstrap, Never overwrite an existing node during bootstrap, Read entry points first, then sample and follow cross-references, Refresh INDEX.md and GRAPH.md after writing nodes, Resolve the active KB harness and pass `--harness "$HARNESS"` to every CLI call, Review knowledge-base changes via git diff before committing, Run kb-bootstrap as a one-pass, supervised operation, Split combined content across practice and map nodes, Stick to markdown documentation; do not read code files during bootstrap, Stop and ask the user when bootstrap conditions go off-track
+- **#xml (17):** Copy original-code verbatim from the source file, Design XML output to be parsed by LLMs, Emit no wrapper elements in the XML output, Line comments reference either old or new line numbers, never both, Pair comment line numbers as either new or old, never both, Pair line-number attributes correctly in review comments, Pair line-number attributes correctly on review comments, Require a category on every comment, review.xml format and XSD, self-review XML v1 schema, self-review-v1 XSD output format, Set `viewed="true"` on every file in AI-generated review.xml, Set viewed="true" on every file in critique output, Use the new path for renamed files in review XML, Validate generated review.xml against the XSD before finishing, Validate XML output against the XSD before writing, XML-escape all text content in review.xml
+- **#critique (14):** Attach a suggestion block whenever a concrete fix is possible, Default critique categories, Default critique to unstaged changes when no diff args are passed, Prioritize the largest diffs when reviewing many files, Read categories from .self-review.yaml before generating critique, Read full file contents for added/modified files when critiquing, self-review-critique skill, Set author to your model name on every generated comment, Set viewed="true" on every file in critique output, Skip files that look correct rather than forcing comments, Skip files that look correct; do not force comments on every file, Use <suggestion> blocks whenever a concrete fix can be proposed, Use categories from .self-review.yaml when present, Validate generated review.xml against the XSD with xmllint
+- **#cli (13):** --resume-from for continuing a prior review, @e0ipso/ai-knowledge-base CLI commands used by kb-curate, ai-knowledge-base CLI, CLI static skip list, CLI static skip list for bootstrap candidates, Default critique to unstaged changes when no diff args are passed, Defer file discovery to the CLI's bootstrap-incremental dry run, Never write to stdout; use stderr for all logging, Refresh INDEX.md and GRAPH.md after writing nodes, Resolve the active KB harness and pass `--harness "$HARNESS"` to every CLI call, Run kb curator via npx with explicit harness id, self-review CLI invocations, Treat self-review as a CLI-first, one-shot tool
+- **#workflow (11):** Follow the allowed task status transitions, Knowledge-base capture-curate-review workflow, Mark completed phases and tasks in the blueprint before advancing, Parallelize self-review application per file above a 3-file threshold, Pass linting and create a descriptive conventional commit at the end of each phase, POST_PHASE hook, PRE_PLAN hook, Run kb-bootstrap as a one-pass, supervised operation, self-review-apply assistant skill, Treat self-review as a CLI-first, one-shot tool, Write PRDs without tasks or phases during plan creation
+- **#kb-curate (9):** @e0ipso/ai-knowledge-base CLI commands used by kb-curate, Accept only y/n/s/k tokens when resolving curator conflicts, Apply curator conflict outcomes via targeted git commands, Compute conflict-resolution defaults from diff ratio and confidence, Curator failure modes: add_collision and modify_missing_target, Hand off curate runs via git diff and optional pre-commit index rebuild, Run kb curator via npx with explicit harness id, Short-circuit kb-curate with one-line summary when no conflicts and no failures, Sort and group pending conflicts before resolving
+- **#comments (8):** Comment author attribution, Emoji shortcode support in comments, Line comments reference either old or new line numbers, never both, Pair line-number attributes correctly in review comments, Pair line-number attributes correctly on review comments, Preserve orphaned comments on resume; never silently drop them, Treat every review comment as actionable, including questions, Use old vs new line numbers based on the commented line type
+- **#config (7):** .self-review.yaml project config, Apply config precedence: CLI > project YAML > user YAML > defaults, Apply config precedence: project overrides user overrides defaults, Honor `bootstrapModel.name` from KB config when delegating to sub-agents, Knowledge base config locations, self-review YAML configuration options, User and project YAML configuration
+- **#schema (7):** Emit no wrapper elements in the XML output, Knowledge-base node kinds and frontmatter, review.xml format and XSD, self-review XML schema (self-review-v1.xsd), self-review XML v1 schema, self-review-v1 XSD output format, XSD schema location
+- **#scope (7):** Default bootstrap scope, Don't support Windows, Implement only what the user explicitly requests, Limit file writes to the review XML and assets directory, Skip files that look correct rather than forcing comments, Skip files that look correct; do not force comments on every file, Stick to markdown documentation; do not read code files during bootstrap
+- **#planning (6):** Check plans for architecture and code reuse improvements, Implement only what the user explicitly requests, POST_PLAN hook, Review every generated task for complexity, vagueness, and triviality, Review plans against PRD and test/features updates, Write PRDs without tasks or phases during plan creation
+- **#types (6):** @self-review/types package, Define shared data structures only in @self-review/types, Do not import sibling packages from @self-review/types, Keep @self-review/types free of runtime dependencies, Keep all @self-review/types definitions in src/index.ts, Use src/shared/types.ts as the single source of truth for shared types
+- **#hooks (5):** Do not hand-edit INDEX.md or GRAPH.md, Match task skills to sub-agents during PRE_TASK_ASSIGNMENT, POST_PLAN hook, POST_TASK_GENERATION_ALL hook, PRE_TASK_ASSIGNMENT hook
+- **#skills (5):** Engage relevant assistant skills based on task skills, extract-task-skills.cjs, Knowledge-base capture-curate-review workflow, self-review-apply skill, self-review-critique skill
+- **#suggestions (5):** Apply review suggestions bottom-to-top by line number, Attach a suggestion block whenever a concrete fix is possible, Copy original-code verbatim from the source file, Prefill the suggestion proposed-code editor with the original code, Use <suggestion> blocks whenever a concrete fix can be proposed
+- **#architecture (4):** Check plans for architecture and code reuse improvements, Do not import sibling packages from @self-review/types, Two-process Electron architecture, Use the ReviewAdapter pattern for platform-specific operations
+- **#categories (4):** Default critique categories, Read categories from .self-review.yaml before generating critique, Require a category on every comment, Use categories from .self-review.yaml when present
+- **#css (4):** CSS build pipeline for @self-review/react, Do not add Tailwind as a peer dependency for host apps, Import only the compiled dist/styles.css from host apps, Scope styles and dark mode via the .self-review wrapper div
+- **#duplication (4):** Extract shared logic before duplicating across call sites, Keep file-type detection utilities duplicated across core and react packages, Keep file-type-utils.ts duplicates in sync across core and react, Use src/shared/types.ts as the single source of truth for shared types
+- **#harness (4):** KB harness detection script at /tmp/kb-detect-harness.mjs, kb-detect-harness helper script, Resolve the active KB harness and pass `--harness "$HARNESS"` to every CLI call, Run kb curator via npx with explicit harness id
+- **#imports (4):** Do not import from @self-review/core in the react package, Do not import sibling packages from @self-review/types, Import only the compiled dist/styles.css from host apps, Use ES module imports in the renderer, not require()
+- **#validation (4):** Validate generated review.xml against the XSD before finishing, Validate generated review.xml against the XSD with xmllint, Validate self-review XML against the XSD before applying, Validate XML output against the XSD before writing
+- **#ai (3):** Design XML output to be parsed by LLMs, PRE_TASK_ASSIGNMENT hook, self-review-apply assistant skill
+- **#build (3):** CSS build pipeline for @self-review/react, Do not install or use webpack, Import only the compiled dist/styles.css from host apps
+- **#conflicts (3):** Accept only y/n/s/k tokens when resolving curator conflicts, Compute conflict-resolution defaults from diff ratio and confidence, Sort and group pending conflicts before resolving
+- **#dependencies (3):** Append a blueprint with dependency diagram and execution phases to the plan, Do not add Tailwind as a peer dependency for host apps, Keep @self-review/types free of runtime dependencies
+- **#git (3):** Apply curator conflict outcomes via targeted git commands, Review knowledge-base changes via git diff before committing, Three startup modes: git, directory, welcome
+- **#ipc (3):** IPC channel contract between main and renderer, IPC channel registry, Never import electron directly in the renderer
+- **#layout (3):** Keep all @self-review/types definitions in src/index.ts, Knowledge base node layout, Knowledge-base directory layout under .ai/knowledge-base/
+- **#line-numbers (3):** Line comments reference either old or new line numbers, never both, Pair comment line numbers as either new or old, never both, Use old vs new line numbers based on the commented line type
+- **#network (3):** Keep self-review local-only with no network access, Make no network connections at runtime, Make zero network requests except the startup version check
+- **#node-authoring (3):** Don't hallucinate rationale in node bodies, Never overwrite an existing node during bootstrap, Split combined content across practice and map nodes
+- **#output (3):** Design XML output to be parsed by LLMs, self-review-v1 XSD output format, Treat self-review as a CLI-first, one-shot tool
+- **#package (3):** @self-review/react package, @self-review/types package, Keep @self-review/types free of runtime dependencies
+- **#performance (3):** Lazy-load file hunks in large-payload mode, Prioritize the largest diffs when reviewing many files, Trigger large-payload guard at configurable file/line thresholds
+- **#platform (3):** Don't support Windows, ReviewAdapter interface, Use the ReviewAdapter pattern for platform-specific operations
+- **#privacy (3):** Keep self-review local-only with no network access, Make no network connections at runtime, Make zero network requests except the startup version check
+- **#react (3):** @self-review/react package, Do not import from @self-review/core in the react package, Do not use Node.js APIs in @self-review/react
+- **#task-management (3):** Append a blueprint with dependency diagram and execution phases to the plan, POST_TASK_GENERATION_ALL hook, Review every generated task for complexity, vagueness, and triviality
+- **#testing (3):** Do not run e2e tests inside the dev container, Fix the root cause in tests, never write test-specific code in production, Testing layers (unit + e2e)
+- **#theming (3):** .self-review wrapper div, Pass portalContainer to all Radix/shadcn portal components, Scope styles and dark mode via the .self-review wrapper div
+- **#ui (3):** @self-review/react package, Force unified view for added and deleted files, Use shadcn/ui components instead of raw HTML for UI
+- **#ux (3):** Differentiate Finish Review from window close, Prefill the suggestion proposed-code editor with the original code, Trigger large-payload guard at configurable file/line thresholds
+- **#xsd (3):** Keep the XSD schema in sync across its two locations, self-review XML schema (self-review-v1.xsd), XSD schema location
+- **#adapter (2):** ReviewAdapter interface, Use the ReviewAdapter pattern for platform-specific operations
+- **#agents (2):** Detect sub-agents across .claude, .gemini, and .opencode directories, Match task skills to sub-agents during PRE_TASK_ASSIGNMENT
+- **#app (2):** self-review, self-review application
+- **#attribution (2):** Set author to your model name on every generated comment, Set the comment `author` attribute to the model name
+- **#author (2):** Comment author attribution, Set the comment `author` attribute to the model name
+- **#blueprint (2):** Append a blueprint with dependency diagram and execution phases to the plan, Mark completed phases and tasks in the blueprint before advancing
+- **#bootstrap (2):** CLI static skip list for bootstrap candidates, Run kb-bootstrap as a one-pass, supervised operation
+- **#channels (2):** IPC channel contract between main and renderer, IPC channel registry
+- **#code-reuse (2):** Check plans for architecture and code reuse improvements, Extract shared logic before duplicating across call sites
+- **#context (2):** Load the original diff context before applying review feedback, Read full file contents for added/modified files when critiquing
+- **#defaults (2):** Compute conflict-resolution defaults from diff ratio and confidence, Hide untracked files by default for --staged/--cached reviews
+- **#detection (2):** KB harness detection script at /tmp/kb-detect-harness.mjs, kb-detect-harness helper script
+- **#discovery (2):** Defer file discovery to the CLI's bootstrap-incremental dry run, Detect sub-agents across .claude, .gemini, and .opencode directories
+- **#hook (2):** POST_PHASE hook, PRE_PLAN hook
+- **#index (2):** Do not hand-edit INDEX.md or GRAPH.md, Hand off curate runs via git diff and optional pre-commit index rebuild
+- **#kb (2):** KB harness detection script at /tmp/kb-detect-harness.mjs, Knowledge-base directory layout under .ai/knowledge-base/
+- **#keyboard (2):** Vimium-style keyboard navigation, Vimium-style keyboard shortcuts
+- **#logging (2):** Never write to stdout in the main process, Never write to stdout; use stderr for all logging
+- **#overview (2):** self-review, self-review application
+- **#payload (2):** Lazy-load file hunks in large-payload mode, Trigger large-payload guard at configurable file/line thresholds
+- **#prd (2):** Review plans against PRD and test/features updates, Write PRDs without tasks or phases during plan creation
+- **#precedence (2):** Apply config precedence: CLI > project YAML > user YAML > defaults, Apply config precedence: project overrides user overrides defaults
+- **#preview (2):** Rendered image and SVG previews for added files, Rendered text view for added Markdown and HTML files
+- **#resume (2):** --resume-from for continuing a prior review, Preserve orphaned comments on resume; never silently drop them
+- **#save (2):** Differentiate Finish Review from window close, Finish Review vs window-close behavior
+- **#scoping (2):** .self-review wrapper div, Scope styles and dark mode via the .self-review wrapper div
+- **#skill (2):** kb-bootstrap skill, self-review-apply assistant skill
+- **#skip-list (2):** CLI static skip list, CLI static skip list for bootstrap candidates
+- **#stdout (2):** Never write to stdout in the main process, Never write to stdout; use stderr for all logging
+- **#structure (2):** .ai/knowledge-base/ directory, Keep all @self-review/types definitions in src/index.ts
+- **#sync (2):** Keep file-type-utils.ts duplicates in sync across core and react, Keep the XSD schema in sync across its two locations
+- **#tailwind (2):** CSS build pipeline for @self-review/react, Do not add Tailwind as a peer dependency for host apps
+- **#task-assignment (2):** Engage relevant assistant skills based on task skills, Match task skills to sub-agents during PRE_TASK_ASSIGNMENT
+- **#vimium (2):** Vimium-style keyboard navigation, Vimium-style keyboard shortcuts
+- **#welcome (2):** Show welcome screen when launched outside a git repo with no directory arg, Three startup modes: git, directory, welcome
+- **#yaml (2):** self-review YAML configuration options, User and project YAML configuration
+- **#apply (1):** self-review-apply skill
+- **#assistant-skills (1):** Engage relevant assistant skills based on task skills
+- **#attributes (1):** Set `viewed="true"` on every file in AI-generated review.xml
+- **#browser (1):** Do not use Node.js APIs in @self-review/react
+- **#bundling (1):** Do not import from @self-review/core in the react package
+- **#close-behavior (1):** Finish Review vs window-close behavior
+- **#code-quality (1):** Favor simple, maintainable solutions over clever ones
+- **#collision (1):** Never overwrite an existing node during bootstrap
+- **#commits (1):** Pass linting and create a descriptive conventional commit at the end of each phase
+- **#component (1):** ReviewPanel and SingleFileReview entry components
+- **#confidence (1):** Default node confidence to medium during bootstrap
+- **#constraints (1):** Do not use Node.js APIs in @self-review/react
+- **#contradictions (1):** Never auto-resolve contradictions during bootstrap
+- **#conventional-commits (1):** Use conventional commit naming for PR titles
+- **#conventions (1):** Detect sub-agents across .claude, .gemini, and .opencode directories
+- **#data-integrity (1):** Preserve orphaned comments on resume; never silently drop them
+- **#deduplication (1):** Consolidate multi-source candidates into a single node with multiple `derived_from`
+- **#devcontainer (1):** Do not run e2e tests inside the dev container
+- **#diff-view (1):** Force unified view for added and deleted files
+- **#directory (1):** Three startup modes: git, directory, welcome
+- **#dom (1):** .self-review wrapper div
+- **#drag-select (1):** Clamp multi-line drag-selection to a single hunk and a single side
+- **#electron (1):** Two-process Electron architecture
+- **#emoji (1):** Emoji shortcode support in comments
+- **#entrypoint (1):** ReviewPanel and SingleFileReview entry components
+- **#escalation (1):** Stop and ask the user when bootstrap conditions go off-track
+- **#escaping (1):** XML-escape all text content in review.xml
+- **#exit (1):** Differentiate Finish Review from window close
+- **#failures (1):** Curator failure modes: add_collision and modify_missing_target
+- **#fast-path (1):** Short-circuit kb-curate with one-line summary when no conflicts and no failures
+- **#file-type-utils (1):** Keep file-type detection utilities duplicated across core and react packages
+- **#file-types (1):** Rendered file previews
+- **#files (1):** User and project YAML configuration
+- **#filesystem (1):** Limit file writes to the review XML and assets directory
+- **#flags (1):** self-review CLI invocations
+- **#git-diff (1):** Load the original diff context before applying review feedback
+- **#grouping (1):** Sort and group pending conflicts before resolving
+- **#handoff (1):** Hand off curate runs via git diff and optional pre-commit index rebuild
+- **#html (1):** Rendered text view for added Markdown and HTML files
+- **#hunks (1):** Clamp multi-line drag-selection to a single hunk and a single side
+- **#image (1):** Rendered image and SVG previews for added files
+- **#indexing (1):** Refresh INDEX.md and GRAPH.md after writing nodes
+- **#interface (1):** ReviewAdapter interface
+- **#large-diff (1):** Lazy-load file hunks in large-payload mode
+- **#large-payload (1):** Large-payload lazy-loading mode
+- **#launcher (1):** Show welcome screen when launched outside a git repo with no directory arg
+- **#layers (1):** Testing layers (unit + e2e)
+- **#lifecycle (1):** POST_TASK_GENERATION_ALL hook
+- **#linting (1):** Pass linting and create a descriptive conventional commit at the end of each phase
+- **#local (1):** Keep self-review local-only with no network access
+- **#local-only (1):** Make no network connections at runtime
+- **#maintainability (1):** Favor simple, maintainable solutions over clever ones
+- **#markdown (1):** Rendered text view for added Markdown and HTML files
+- **#mode (1):** Three startup modes: git, directory, welcome
+- **#modules (1):** Use ES module imports in the renderer, not require()
+- **#navigation (1):** Vimium-style keyboard navigation
+- **#node (1):** Knowledge-base node kinds and frontmatter
+- **#nodes (1):** Knowledge base node layout
+- **#ordering (1):** Apply review suggestions bottom-to-top by line number
+- **#outcomes (1):** Apply curator conflict outcomes via targeted git commands
+- **#ownership (1):** Split combined content across practice and map nodes
+- **#packages (1):** npm workspaces packages
+- **#paths (1):** Knowledge-base directory layout under .ai/knowledge-base/
+- **#perf (1):** Large-payload lazy-loading mode
+- **#portals (1):** Pass portalContainer to all Radix/shadcn portal components
+- **#pr (1):** Use conventional commit naming for PR titles
+- **#prism (1):** Use Prism.js for syntax highlighting with theme matching
+- **#progress-tracking (1):** Mark completed phases and tasks in the blueprint before advancing
+- **#provenance (1):** _sessions/ is gitignored; provenance does not travel with the repo
+- **#quality (1):** Review every generated task for complexity, vagueness, and triviality
+- **#questions (1):** Treat every review comment as actionable, including questions
+- **#radix (1):** Pass portalContainer to all Radix/shadcn portal components
+- **#rationale (1):** Don't hallucinate rationale in node bodies
+- **#reading-strategy (1):** Read entry points first, then sample and follow cross-references
+- **#reasons (1):** Curator failure modes: add_collision and modify_missing_target
+- **#renames (1):** Use the new path for renamed files in review XML
+- **#rendered (1):** Rendered text view for added Markdown and HTML files
+- **#rendered-preview (1):** Rendered file previews
+- **#renderer (1):** Do not store renderer state outside React context
+- **#reply-contract (1):** Accept only y/n/s/k tokens when resolving curator conflicts
+- **#reporting (1):** Conclude bootstrap with a structured final report
+- **#review (1):** Review knowledge-base changes via git diff before committing
+- **#root-cause (1):** Fix the root cause in tests, never write test-specific code in production
+- **#scripts (1):** extract-task-skills.cjs
+- **#security (1):** Never import electron directly in the renderer
+- **#sessions (1):** _sessions/ is gitignored; provenance does not travel with the repo
+- **#shadcn (1):** Use shadcn/ui components instead of raw HTML for UI
+- **#shared (1):** Define shared data structures only in @self-review/types
+- **#simplicity (1):** Favor simple, maintainable solutions over clever ones
+- **#single-source (1):** Define shared data structures only in @self-review/types
+- **#split-view (1):** Clamp multi-line drag-selection to a single hunk and a single side
+- **#staged (1):** Hide untracked files by default for --staged/--cached reviews
+- **#startup (1):** Show welcome screen when launched outside a git repo with no directory arg
+- **#state (1):** Do not store renderer state outside React context
+- **#sub-agents (1):** Honor `bootstrapModel.name` from KB config when delegating to sub-agents
+- **#subagents (1):** Parallelize self-review application per file above a 3-file threshold
+- **#subcommands (1):** @e0ipso/ai-knowledge-base CLI commands used by kb-curate
+- **#summary (1):** Short-circuit kb-curate with one-line summary when no conflicts and no failures
+- **#svg (1):** Rendered image and SVG previews for added files
+- **#syntax-highlighting (1):** Use Prism.js for syntax highlighting with theme matching
+- **#task-status (1):** Follow the allowed task status transitions
+- **#tests (1):** Review plans against PRD and test/features updates
+- **#untracked (1):** Hide untracked files by default for --staged/--cached reviews
+- **#utils (1):** Keep file-type-utils.ts duplicates in sync across core and react
+- **#webpack (1):** Do not install or use webpack
+- **#workspace (1):** @self-review/types package
+- **#workspaces (1):** npm workspaces packages
+- **#xmllint (1):** Validate self-review XML against the XSD before applying
+- **#yagni (1):** Implement only what the user explicitly requests
