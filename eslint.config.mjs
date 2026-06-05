@@ -12,6 +12,7 @@ export default defineConfig([
       '**/coverage/**',
       '**/.ai/**',
       '**/.claude/**',
+      '**/.codex/**',
       '**/.cursor/**',
       '**/.opencode/**',
       '**/build/**',

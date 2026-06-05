@@ -334,3 +334,7 @@ the single source of truth for the XML output format.
 
 Make sure the PR title follows the conventional commit naming convention.
 
+
+<!-- >>> kenkeep:kk-index >>> -->
+Curated project knowledge lives in [.ai/kenkeep/INDEX.md](.ai/kenkeep/INDEX.md). Consult it before designing a non-trivial change.
+<!-- <<< kenkeep:kk-index <<< -->
