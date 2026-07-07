@@ -114,7 +114,9 @@
           meta = {
             description = "GitHub-style PR review UI for local git diffs";
             homepage = "https://github.com/e0ipso/self-review";
-            license = lib.licenses.mit;
+            # package.json declares MIT but the LICENSE file is a proprietary
+            # revocable license — using unfree pending upstream clarification.
+            license = lib.licenses.unfree;
             platforms = [
               "x86_64-linux"
               "aarch64-linux"
