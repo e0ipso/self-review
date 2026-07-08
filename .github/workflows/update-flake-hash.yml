@@ -1,8 +1,12 @@
 name: Update flake hash
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.2.3)'
+        required: true
+        type: string
 
 jobs:
   update:
@@ -19,7 +23,7 @@ jobs:
       - name: Compute new zip hash
         id: hash
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${{ inputs.tag }}"
           VERSION="${VERSION#v}"
           URL="https://github.com/e0ipso/self-review/releases/download/v${VERSION}/self-review-${VERSION}-linux-x64.zip"
           HASH=$(nix store prefetch-file --hash-type sha256 --json "$URL" | jq -r '.hash')
@@ -31,9 +35,9 @@ jobs:
 
       - uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "chore: update flake hash for ${{ github.event.release.tag_name }}"
-          title: "chore: update flake hash for ${{ github.event.release.tag_name }}"
+          commit-message: "chore: update flake hash for ${{ inputs.tag }}"
+          title: "chore: update flake hash for ${{ inputs.tag }}"
           body: |
-            Automated update of `flake.nix` zip hash for release ${{ github.event.release.tag_name }}.
-          branch: flake-hash-${{ github.event.release.tag_name }}
+            Automated update of `flake.nix` zip hash for release ${{ inputs.tag }}.
+          branch: flake-hash-${{ inputs.tag }}
           labels: dependencies

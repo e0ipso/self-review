@@ -89,7 +89,29 @@ jobs:
 
       - name: Upload release assets
         if: steps.tag.outputs.tag != ''
-        run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm --clobber
+        run: |
+          VERSION="${{ steps.tag.outputs.tag }}"
+          VERSION="${VERSION#v}"
+          ZIP_SRC=(out/make/zip/linux/x64/*.zip)
+          ZIP_DST="out/make/zip/linux/x64/self-review-${VERSION}-linux-x64.zip"
+          if [ ! -e "${ZIP_SRC[0]}" ]; then
+            echo "No Linux zip found"
+            exit 1
+          fi
+          if [ "${ZIP_SRC[0]}" != "$ZIP_DST" ]; then
+            mv "${ZIP_SRC[0]}" "$ZIP_DST"
+          fi
+          gh release upload "${{ steps.tag.outputs.tag }}" \
+            out/make/deb/x64/*.deb \
+            out/make/rpm/x64/*.rpm \
+            "$ZIP_DST" \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger flake hash update
+        if: steps.tag.outputs.tag != ''
+        run: gh workflow run update-flake-hash.yml -f tag="${{ steps.tag.outputs.tag }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
