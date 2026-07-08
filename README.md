@@ -128,38 +128,25 @@ self-review --staged --resume-from review.xml
 
 ## Installation
 
-Download the latest release from [GitHub Releases](https://github.com/e0ipso/self-review/releases).
+### macOS
 
-<details>
-<summary>Linux (Debian/Ubuntu)</summary>
-
-Download the `.deb` package and install it:
+Install with [Homebrew](https://brew.sh/):
 
 ```bash
-# Replace X.Y.Z with the version you downloaded
-sudo dpkg -i self-review_X.Y.Z_amd64.deb
+brew install --cask e0ipso/self-review/self-review
 ```
 
-The `self-review` command will be available system-wide.
-
-</details>
-
-<details>
-<summary>Linux (Fedora/RHEL)</summary>
-
-Download the `.rpm` package and install it:
+To upgrade later:
 
 ```bash
-# Replace X.Y.Z with the version you downloaded
-sudo rpm -i self-review-X.Y.Z-1.x86_64.rpm
+brew upgrade --cask self-review
 ```
 
-The `self-review` command will be available system-wide.
-
-</details>
-
 <details>
-<summary>macOS</summary>
+<summary>Advanced Installation Instructions</summary>
+
+Prefer to install manually? Download the latest release from
+[GitHub Releases](https://github.com/e0ipso/self-review/releases).
 
 Download the `.zip` archive, extract it, and move the app to your Applications folder:
 
@@ -183,6 +170,44 @@ exec "/Applications/Self Review.app/Contents/MacOS/Self Review" "$@"
 SCRIPT
 sudo chmod +x /usr/local/bin/self-review
 ```
+
+</details>
+
+### Linux
+
+Install with [Homebrew](https://brew.sh/):
+
+```bash
+brew install e0ipso/self-review/self-review
+```
+
+To upgrade later:
+
+```bash
+brew upgrade self-review
+```
+
+<details>
+<summary>Advanced Installation Instructions</summary>
+
+Prefer to install manually? Download the latest release from
+[GitHub Releases](https://github.com/e0ipso/self-review/releases).
+
+**Debian/Ubuntu** — download the `.deb` package and install it:
+
+```bash
+# Replace X.Y.Z with the version you downloaded
+sudo dpkg -i self-review_X.Y.Z_amd64.deb
+```
+
+**Fedora/RHEL** — download the `.rpm` package and install it:
+
+```bash
+# Replace X.Y.Z with the version you downloaded
+sudo rpm -i self-review-X.Y.Z-1.x86_64.rpm
+```
+
+The `self-review` command will be available system-wide.
 
 </details>
 
