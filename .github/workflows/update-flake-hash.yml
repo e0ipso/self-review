@@ -1,0 +1,43 @@
+name: Update flake hash
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.2.3)'
+        required: true
+        type: string
+
+jobs:
+  update:
+    name: Update flake.nix hash for new release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Compute new zip hash
+        id: hash
+        run: |
+          VERSION="${{ inputs.tag }}"
+          VERSION="${VERSION#v}"
+          URL="https://github.com/e0ipso/self-review/releases/download/v${VERSION}/Self.Review-linux-x64-${VERSION}.zip"
+          HASH=$(nix store prefetch-file --hash-type sha256 --json "$URL" | jq -r '.hash')
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Update hash in flake.nix
+        run: |
+          sed -i 's|hash = "sha256-.*"|hash = "${{ steps.hash.outputs.hash }}"|' flake.nix
+
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update flake hash for ${{ inputs.tag }}"
+          title: "chore: update flake hash for ${{ inputs.tag }}"
+          body: |
+            Automated update of `flake.nix` zip hash for release ${{ inputs.tag }}.
+          branch: flake-hash-${{ inputs.tag }}
+          labels: dependencies

@@ -93,6 +93,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Trigger flake hash update
+        if: steps.tag.outputs.tag != ''
+        run: gh workflow run update-flake-hash.yml -f tag="${{ steps.tag.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Trigger macOS build
         if: steps.tag.outputs.tag != ''
         run: gh workflow run release-darwin.yml -f tag="${{ steps.tag.outputs.tag }}"
