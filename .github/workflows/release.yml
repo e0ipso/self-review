@@ -30,7 +30,7 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -40,7 +40,7 @@ jobs:
       - name: Restore branch ref for semantic-release
         run: git checkout -B ${{ github.event.workflow_run.head_branch }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: 'npm'
