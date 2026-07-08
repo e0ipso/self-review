@@ -25,7 +25,7 @@ jobs:
         run: |
           VERSION="${{ inputs.tag }}"
           VERSION="${VERSION#v}"
-          URL="https://github.com/e0ipso/self-review/releases/download/v${VERSION}/self-review-${VERSION}-linux-x64.zip"
+          URL="https://github.com/e0ipso/self-review/releases/download/v${VERSION}/Self.Review-linux-x64-${VERSION}.zip"
           HASH=$(nix store prefetch-file --hash-type sha256 --json "$URL" | jq -r '.hash')
           echo "hash=$HASH" >> "$GITHUB_OUTPUT"
 
