@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload release assets
         if: steps.tag.outputs.tag != ''
-        run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm --clobber
+        run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm out/make/zip/linux/x64/*.zip --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
