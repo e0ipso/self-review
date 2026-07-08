@@ -1,20 +1,34 @@
 {
-  "name": "OpenCode Sandbox",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "args": {
-      "BASE_IMAGE": "node:24",
-      "TZ": "${localEnv:TZ:Europe/Madrid}"
+  "name": "${localWorkspaceFolderBasename}",
+  "runArgs": [
+    "--hostname=${localWorkspaceFolderBasename}-dev",
+    "--publish",
+    "127.0.0.1:21437:34489"
+  ],
+  "image": "node:24",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": false,
+      "installOhMyZsh": false,
+      "configureZshAsDefaultShell": false,
+      "upgradePackages": false,
+      "username": "node",
+      "userUid": "automatic",
+      "userGid": "automatic"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers-extra/features/apt-get-packages:1": {
+      "packages": "less,procps,fzf,man-db,unzip,gnupg2,gawk,jq,nano,vim,tree,python3-yaml,libxml2-utils"
+    },
+    "ghcr.io/e0ipso/devcontainer-feature-ai-assistant/claude:1": {},
+    "ghcr.io/e0ipso/devcontainer-feature-ai-assistant/codex:1": {},
+    "ghcr.io/e0ipso/devcontainer-feature-ai-assistant/copilot:1": {},
+    "ghcr.io/e0ipso/devcontainer-feature-ai-assistant/cursor:1": {},
+    "ghcr.io/e0ipso/devcontainer-feature-ai-assistant/opencode:1": {},
+    "ghcr.io/e0ipso/devcontainer-feature-ai-assistant/t3:1": {
+      "providersCursorEnabled": true
     }
   },
-  "runArgs": [
-    "--cap-add=NET_ADMIN",
-    "--cap-add=NET_RAW",
-    "--cap-add=SYS_ADMIN",
-    "--security-opt=seccomp=unconfined",
-    "--security-opt=apparmor=unconfined",
-    "--ipc=host"
-  ],
   "customizations": {
     "vscode": {
       "extensions": [
@@ -60,14 +74,26 @@
     "source=${localEnv:HOME}/.config/opencode/node_modules,target=/home/node/.config/opencode/node_modules,readonly,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.cache/opencode,target=/home/node/.cache/opencode,type=bind,consistency=cached",
     "source=opencode-data-${devcontainerId},target=/home/node/.local/share/opencode,type=volume",
-    "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/node/.local/share/opencode/auth.json,readonly,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/node/.cred-seed/opencode/auth.json,readonly,type=bind,consistency=cached",
 
-    "source=${localEnv:HOME}/.claude/CLAUDE.md,target=/home/node/.claude/CLAUDE.md,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude.json,target=/home/node/.claude.json,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude/settings.json,target=/home/node/.claude/settings.json,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude/skills,target=/home/node/.claude/skills,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude/hooks,target=/home/node/.claude/hooks,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude/commands,target=/home/node/.claude/commands,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/node/.cred-seed/claude/.credentials.json,readonly,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude/CLAUDE.md,target=/home/node/.claude/CLAUDE.md,readonly,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude.json,target=/home/node/.claude.json,type=bind,readonly,consistency=cached",
+    "source=${localEnv:HOME}/.claude/settings.json,target=/home/node/.claude/settings.json,readonly,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude/skills,target=/home/node/.claude/skills,readonly,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude/hooks,target=/home/node/.claude/hooks,readonly,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude/commands,target=/home/node/.claude/commands,readonly,type=bind,consistency=cached",
+
+    "source=${localEnv:HOME}/.codex/prompts,target=/home/node/.codex/prompts,readonly,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.codex/auth.json,target=/home/node/.cred-seed/codex/auth.json,readonly,type=bind,consistency=cached",
+
+    "source=${localEnv:HOME}/.copilot/config.json,target=/home/node/.copilot/config.json,readonly,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.copilot/hooks,target=/home/node/.copilot/hooks,readonly,type=bind,consistency=cached",
+
+    "source=${localEnv:HOME}/.cursor/cli-config.json,target=/home/node/.cursor/cli-config.json,readonly,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.config/cursor/auth.json,target=/home/node/.cred-seed/cursor/auth.json,readonly,type=bind,consistency=cached",
+
+    "source=t3code-home-${devcontainerId},target=/home/node/.t3,type=volume",
 
     "source=${localEnv:HOME}/.config/gh/hosts.yml,target=/home/node/.config/gh/hosts.yml,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.gitconfig,target=/home/node/.gitconfig,type=bind,consistency=cached"
@@ -77,11 +103,28 @@
     "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
     "SSH_AUTH_SOCK": "/ssh-agent",
     "LC_ALL": "C.UTF-8",
-    "DISPLAY": ":99"
+    "TZ": "${localEnv:TZ:Europe/Madrid}",
+    "DEVCONTAINER": "true",
+    "EDITOR": "vim",
+    "VISUAL": "vim",
+    "NPM_CONFIG_PREFIX": "/usr/local/share/npm-global",
+    "T3CODE_HOME": "/home/node/.t3",
+    "T3CODE_TELEMETRY_ENABLED": "false",
+    "HISTFILE": "/commandhistory/.bash_history",
+    "PROMPT_COMMAND": "history -a"
+  },
+  "remoteEnv": {
+    "PATH": "/home/node/.local/bin:/usr/local/share/npm-global/bin:${containerEnv:PATH}"
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
-  "postCreateCommand": "sudo chown -R node:node /home/node/.claude || true && ([ -f node_modules/electron/dist/chrome-sandbox ] && sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox || true)",
-  "postStartCommand": "bash -c 'pkill Xvfb 2>/dev/null || true; Xvfb :99 -screen 0 1280x1024x24 -ac +extension GLX +render -noreset &>/dev/null & sleep 2; dbus-daemon --session --fork 2>/dev/null; opencode upgrade || true'",
+  "postCreateCommand": {
+    "fix-perms": "sudo mkdir -p /commandhistory /usr/local/share/npm-global && sudo touch /commandhistory/.bash_history && sudo chown -R node:node /home/node /commandhistory /usr/local/share/npm-global > /dev/null 2>&1 || true"
+  },
+  "postStartCommand": {
+    "seed-auth": ".devcontainer/scripts/seed-auth.sh",
+    "seed-t3-settings": ".devcontainer/scripts/seed-t3-settings.sh",
+    "copilot-auth": "grep -q COPILOT_GITHUB_TOKEN /home/node/.bashrc 2>/dev/null || echo 'export COPILOT_GITHUB_TOKEN=\"$(gh auth token 2>/dev/null)\"' >> /home/node/.bashrc"
+  },
   "waitFor": "postStartCommand"
 }
