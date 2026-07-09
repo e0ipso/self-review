@@ -154,6 +154,8 @@ Download the `.zip` archive, extract it, and move the app to your Applications f
 unzip Self.Review-darwin-*.zip -d /Applications
 ```
 
+</details>
+
 Because the app is not yet code-signed, macOS Gatekeeper will flag it as damaged. Remove the
 quarantine attribute before opening:
 
@@ -170,8 +172,6 @@ exec "/Applications/Self Review.app/Contents/MacOS/Self Review" "$@"
 SCRIPT
 sudo chmod +x /usr/local/bin/self-review
 ```
-
-</details>
 
 ### Linux
 
