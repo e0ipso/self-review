@@ -30,6 +30,14 @@ export type {
 // ===== Electron API (preload bridge) =====
 // Electron-specific — not part of @self-review/types.
 
+/** Application metadata shown in the About dialog. */
+export interface AppInfo {
+  /** App version, from package.json via app.getVersion(). */
+  version: string;
+  /** App icon as a base64 data URI, or null if it could not be loaded. */
+  iconDataUri: string | null;
+}
+
 import type {
   DiffLoadPayload,
   AppConfig,
@@ -68,6 +76,8 @@ export interface ElectronAPI {
   onFindResult: (callback: (result: FindInPageResult) => void) => () => void;
   requestVersionUpdate: () => void;
   onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => void;
+  onShowAbout: (callback: () => void) => () => void;
+  getAppInfo: () => Promise<AppInfo>;
   openExternal: (url: string) => Promise<void>;
   loadFileContent: (filePath: string) => Promise<DiffHunk[]>;
   loadImage: (filePath: string) => Promise<ImageLoadResult>;

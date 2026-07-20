@@ -16,10 +16,12 @@ import {
   ExpandContextRequest,
   FindInPageRequest,
   ImageLoadResult,
+  AppInfo,
 } from '../shared/types';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { getVersionUpdate } from './version-checker';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
+import { getAppIconDataUri } from './app-assets';
 
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
@@ -93,6 +95,14 @@ export function registerIpcHandlers(): void {
     if (configCache) {
       event.sender.send(IPC.CONFIG_LOAD, configCache, outputPathInfoCache);
     }
+  });
+
+  // Handle app info request from renderer (version + icon for the About dialog)
+  ipcMain.handle(IPC.APP_GET_INFO, async (): Promise<AppInfo> => {
+    return {
+      version: app.getVersion(),
+      iconDataUri: await getAppIconDataUri(),
+    };
   });
 
   // Handle review submission from renderer

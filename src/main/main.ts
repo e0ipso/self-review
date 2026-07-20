@@ -4,7 +4,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
 import { writeFileSync, existsSync, statSync } from 'fs';
 import { execSync } from 'child_process';
-import { resolve, join } from 'path';
+import { resolve } from 'path';
 import { checkWritability } from './fs-utils';
 import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
@@ -25,6 +25,8 @@ import {
 } from './ipc-handlers';
 import { checkForUpdate } from './version-checker';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
+import { setupMenu } from './menu';
+import { getAppIconPath } from './app-assets';
 import { IPC } from '../shared/ipc-channels';
 import { AppConfig, DiffLoadPayload, OutputPathInfo, ReviewComment } from '../shared/types';
 
@@ -326,6 +328,10 @@ async function initializeApp() {
     console.error('[main] Registering IPC handlers');
     registerIpcHandlers();
 
+    // Phase 7b: Setup menu
+    console.error('[main] Setting up menu');
+    setupMenu();
+
     // Phase 8: Create window
     console.error('[main] Creating window');
     createWindow();
@@ -357,10 +363,7 @@ async function initializeApp() {
 function createWindow(): void {
   // On Linux, set the window icon explicitly so alt+tab and taskbar show
   // the correct icon. macOS uses the .icns from the app bundle automatically.
-  const iconPath = app.isPackaged
-    ? join(process.resourcesPath, 'icon.png')
-    : join(__dirname, '..', '..', 'assets', 'icon.png');
-  const iconImage = nativeImage.createFromPath(iconPath);
+  const iconImage = nativeImage.createFromPath(getAppIconPath());
 
   mainWindow = new BrowserWindow({
     width: 1400,

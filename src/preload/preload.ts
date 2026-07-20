@@ -119,4 +119,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   loadImage: (filePath: string) =>
     ipcRenderer.invoke(IPC.DIFF_LOAD_IMAGE, filePath),
+
+  onShowAbout: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC.APP_SHOW_ABOUT, handler);
+    return () => ipcRenderer.removeListener(IPC.APP_SHOW_ABOUT, handler);
+  },
+
+  getAppInfo: () => ipcRenderer.invoke(IPC.APP_GET_INFO),
 });

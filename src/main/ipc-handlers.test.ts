@@ -23,10 +23,15 @@ vi.mock('electron', () => ({
   },
   app: {
     getPath: vi.fn(),
+    getVersion: vi.fn(() => '9.9.9'),
   },
   shell: {
     openExternal: vi.fn(),
   },
+}));
+
+vi.mock('./app-assets', () => ({
+  getAppIconDataUri: vi.fn(async () => 'data:image/png;base64,ICON'),
 }));
 
 vi.mock('./version-checker', () => ({
@@ -150,6 +155,19 @@ describe('ipc-handlers', () => {
       const handler = handlers[IPC.DIFF_LOAD_FILE];
       const result = await handler({}, 'src/deleted.ts');
       expect(result).toEqual(file.hunks);
+    });
+  });
+
+  describe('APP_GET_INFO handler', () => {
+    it('returns the app version and icon data URI', async () => {
+      const handler = handlers[IPC.APP_GET_INFO];
+      expect(handler).toBeDefined();
+
+      const result = await handler({});
+      expect(result).toEqual({
+        version: '9.9.9',
+        iconDataUri: 'data:image/png;base64,ICON',
+      });
     });
   });
 
