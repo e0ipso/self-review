@@ -7,6 +7,7 @@ import { TooltipProvider } from '../../packages/react/src/components/ui/tooltip'
 import Toolbar from '../../packages/react/src/components/Toolbar';
 import Layout from '../../packages/react/src/components/Layout';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
+import AboutDialog from './components/AboutDialog';
 import { KeyboardNavigationManager } from '../../packages/react/src/components/KeyboardNavigationManager';
 import { FindBar } from './components/FindBar';
 import WelcomeScreen from './components/WelcomeScreen';
@@ -138,6 +139,7 @@ function AppContent() {
         </div>
         <FindBar isOpen={isFindBarOpen} onClose={() => setIsFindBarOpen(false)} />
         <CloseConfirmDialog />
+        <AboutDialog />
       </TooltipProvider>
     </DiffNavigationProvider>
   );

@@ -27,4 +27,6 @@ export const IPC = {
   DIFF_LOAD_FILE: 'diff:load-file',
   PAYLOAD_GUARD_SHOW: 'payload-guard:show',
   DIFF_LOAD_IMAGE: 'diff:load-image',
+  APP_SHOW_ABOUT: 'app:show-about',
+  APP_GET_INFO: 'app:get-info',
 } as const;
