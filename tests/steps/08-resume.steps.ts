@@ -38,6 +38,19 @@ Given(
   }
 );
 
+Given(
+  'a prior review XML file {string} with these viewed files:',
+  async ({}, fileName: string, table: DataTable) => {
+    const repoDir = getTestRepoDir();
+    const fileStates = table.hashes().map(row => ({
+      path: row.file,
+      viewed: row.viewed === 'true',
+    }));
+    const xmlContent = createPriorReviewXml(repoDir, [], fileStates);
+    writeFileSync(join(repoDir, fileName), xmlContent);
+  }
+);
+
 // ── When: resume-specific actions ──
 
 When(
@@ -78,6 +91,46 @@ Then(
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
     await expect(section).toContainText(body);
+  }
+);
+
+Then(
+  'the file {string} should be marked as done reviewing',
+  async ({}, filePath: string) => {
+    const page = getPage();
+    await expect(
+      page.locator(`[data-testid="viewed-${filePath}"]`)
+    ).toContainText('Done reviewing');
+  }
+);
+
+Then(
+  'the file {string} should not be marked as done reviewing',
+  async ({}, filePath: string) => {
+    const page = getPage();
+    await expect(
+      page.locator(`[data-testid="viewed-${filePath}"]`)
+    ).toContainText('To review');
+  }
+);
+
+Then(
+  'the output file should mark {string} as viewed',
+  async ({}, filePath: string) => {
+    const xmlContent = readOutputFile();
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: '@_',
+    });
+    const parsed = parser.parse(xmlContent);
+    const files = Array.isArray(parsed.review.file)
+      ? parsed.review.file
+      : parsed.review.file
+        ? [parsed.review.file]
+        : [];
+    const fileEl = files.find((f: any) => f['@_path'] === filePath);
+    expect(fileEl).toBeDefined();
+    expect(String(fileEl['@_viewed'])).toBe('true');
   }
 );
 

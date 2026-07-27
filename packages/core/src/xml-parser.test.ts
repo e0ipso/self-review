@@ -994,6 +994,58 @@ describe('parseReviewXmlString', () => {
     });
   });
 
+  describe('viewed attribute', () => {
+    function xmlWithFiles(files: string): string {
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1"
+        timestamp="2024-01-15T10:30:00Z"
+        git-diff-args="--staged"
+        repository="/repo">
+${files}
+</review>`;
+    }
+
+    it('collects paths of files marked as viewed', () => {
+      const result = parseReviewXmlString(
+        xmlWithFiles(`  <file path="src/a.ts" change-type="modified" viewed="true" />
+  <file path="src/b.ts" change-type="modified" viewed="false" />
+  <file path="src/c.ts" change-type="added" viewed="true" />`)
+      );
+
+      expect(result.viewedFiles).toEqual(['src/a.ts', 'src/c.ts']);
+    });
+
+    it('treats a missing viewed attribute as not viewed', () => {
+      const result = parseReviewXmlString(
+        xmlWithFiles(`  <file path="src/a.ts" change-type="modified" />`)
+      );
+
+      expect(result.viewedFiles).toEqual([]);
+    });
+
+    it('collects viewed files that also carry comments', () => {
+      const result = parseReviewXmlString(
+        xmlWithFiles(`  <file path="src/a.ts" change-type="modified" viewed="true">
+    <comment new-line-start="10" new-line-end="10">
+      <body>Needs a test</body>
+      <category>issue</category>
+    </comment>
+  </file>`)
+      );
+
+      expect(result.viewedFiles).toEqual(['src/a.ts']);
+      expect(result.comments).toHaveLength(1);
+    });
+
+    it('treats an unrecognised viewed value as not viewed', () => {
+      const result = parseReviewXmlString(
+        xmlWithFiles(`  <file path="src/a.ts" change-type="modified" viewed="yes" />`)
+      );
+
+      expect(result.viewedFiles).toEqual([]);
+    });
+  });
+
   describe('severity and confidence attributes', () => {
     function xmlWithCommentAttrs(attrs: string): string {
       return `<?xml version="1.0" encoding="UTF-8"?>

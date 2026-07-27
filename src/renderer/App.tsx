@@ -24,9 +24,9 @@ const electronAdapter: ReviewAdapter = {
       window.electronAPI.onDiffLoad(resolve);
       window.electronAPI.requestDiffData();
     }),
-  loadResumedComments: () =>
+  loadResumedReview: () =>
     new Promise(resolve => {
-      window.electronAPI.onResumeLoad(payload => resolve(payload.comments));
+      window.electronAPI.onResumeLoad(resolve);
       window.electronAPI.requestResumeData();
     }),
   submitReview: state => {

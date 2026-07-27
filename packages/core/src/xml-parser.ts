@@ -17,6 +17,8 @@ const CONFIDENCE_VALUES: readonly CommentConfidence[] = ['high', 'medium', 'low'
 
 export interface ParsedReview {
   comments: ReviewComment[];
+  /** Paths of files the previous review marked as done (`viewed="true"`). */
+  viewedFiles: string[];
   gitDiffArgs: string;
   source: DiffSource;
 }
@@ -53,6 +55,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     const gitDiffArgs = review['@_git-diff-args'] || '';
     const source = parseSource(review);
     const comments: ReviewComment[] = [];
+    const viewedFiles: string[] = [];
 
     // Handle files array
     const files = Array.isArray(review.file)
@@ -64,6 +67,10 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     for (const file of files) {
       const filePath = file['@_path'];
       if (!filePath) continue;
+
+      if (parseViewed(file['@_viewed'])) {
+        viewedFiles.push(String(filePath));
+      }
 
       // Handle comments array
       const fileComments = Array.isArray(file.comment)
@@ -106,7 +113,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
       }
     }
 
-    return { comments, gitDiffArgs, source };
+    return { comments, viewedFiles, gitDiffArgs, source };
   } catch (error) {
     if (error instanceof Error) {
       console.error(`Error parsing XML: ${error.message}`);
@@ -132,6 +139,17 @@ function parseEnumAttribute<T extends string>(
   if (raw === undefined || raw === null) return undefined;
   const value = String(raw);
   return allowed.includes(value as T) ? (value as T) : undefined;
+}
+
+/**
+ * Read the `viewed` attribute of a <file> element.
+ *
+ * Anything other than an explicit true reads as not viewed: the attribute is
+ * optional, and treating an unknown value as "already reviewed" would silently
+ * hide files from the resumed review.
+ */
+function parseViewed(raw: unknown): boolean {
+  return raw === true || String(raw) === 'true';
 }
 
 function parseSource(review: Record<string, unknown>): DiffSource {

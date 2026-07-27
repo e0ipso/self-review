@@ -156,7 +156,7 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | --------------- | --------------- | ----------------- | ------------------------------------- |
 | `diff:load`     | Main → Renderer | `DiffFile[]`      | Send parsed diff on startup           |
 | `review:submit` | Renderer → Main | `ReviewState`     | Collect review on window close        |
-| `resume:load`   | Main → Renderer | `ReviewComment[]` | Load prior comments for --resume-from |
+| `resume:load`   | Main → Renderer | `ResumeLoadPayload` | Load prior comments and viewed files for --resume-from |
 | `config:load`   | Main → Renderer | `AppConfig`       | Send merged configuration             |
 | `app:close-requested` | Main → Renderer | (none)      | Notify renderer that user tried to close the window |
 | `app:save-and-quit`   | Renderer → Main | (none)      | Save review to file and exit          |
