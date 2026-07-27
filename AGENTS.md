@@ -253,13 +253,18 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   any reason (offline, timeout, firewall), it is silently ignored. No telemetry, no analytics, no
   CDN fetches. All assets are bundled.
 - **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
-- **XSD sync.** The XSD schema exists in three places and all three must be byte-identical:
-  `.agents/skills/self-review-apply/assets/self-review-v2.xsd`,
-  `.opencode/skills/self-review-apply/assets/self-review-v2.xsd`, and the `XSD_SCHEMA` string
+- **XSD sync.** The XSD schema exists in two places and both must be byte-identical:
+  `.agents/skills/self-review-apply/assets/self-review-v2.xsd` and the `XSD_SCHEMA` string
   embedded in `packages/core/src/xml-serializer.ts`. The sync test in
   `packages/core/src/xsd-schema.test.ts` enforces this, so editing one copy alone fails the unit
-  suite. `self-review-v1.xsd` is frozen at both on-disk locations for consumers of older
-  documents, and must not be edited.
+  suite. `self-review-v1.xsd` is frozen for consumers of older documents, and must not be edited.
+- **Harness skill directories.** `.agents/skills/` holds the real skill files.
+  `.opencode/skills/self-review-apply` and `.opencode/skills/self-review-critique` are **symlinks**
+  into it, because opencode discovers project skills under `.opencode/skills/`. Never replace a
+  symlink with a copy: duplicated skills collide by name and opencode resolves the collision
+  nondeterministically, so a drifted copy silently wins on some runs. `xsd-schema.test.ts` asserts
+  both entries are still symlinks. Root `opencode.json` additionally declares `.agents/skills` as
+  a skill path. `.claude/skills/` is gitignored and purely local.
 - **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
   Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit /
   Discard / Cancel.
@@ -321,7 +326,7 @@ comments) to the codebase. See `.agents/skills/self-review-apply/SKILL.md` for d
 
 The XSD schema lives at `.agents/skills/self-review-apply/assets/self-review-v2.xsd`. This is
 the single source of truth for the XML output format. See the **XSD sync** convention above for
-the other two copies that must track it.
+the embedded copy that must track it.
 
 ## Code Reuse
 

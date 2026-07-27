@@ -1,5 +1,7 @@
-// Guards the XSD contract itself: that every copy of the schema is identical,
-// and that the schema actually accepts the documents the serializer emits.
+// Guards the XSD contract itself: that the on-disk schema and the copy embedded
+// in xml-serializer.ts agree, that the opencode harness still reaches the schema
+// through a symlink rather than a duplicate, and that the schema actually accepts
+// the documents the serializer emits.
 //
 // This lives in its own file because xml-serializer.test.ts mocks xmllint-wasm
 // away, so validation there is a no-op. Here the real validator runs.
@@ -13,10 +15,14 @@ import type { ReviewState } from './types';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
-const SCHEMA_COPIES = [
-  '.agents/skills/self-review-apply/assets/self-review-v2.xsd',
-  '.opencode/skills/self-review-apply/assets/self-review-v2.xsd',
-];
+const CANONICAL_SCHEMA =
+  '.agents/skills/self-review-apply/assets/self-review-v2.xsd';
+
+// opencode discovers skills under .opencode/skills, so those entries are
+// symlinks to the .agents originals rather than copies. Byte-comparing them
+// would be tautological, so guard the link itself: that is what stops a real
+// copy, and the drift it invites, from creeping back in.
+const SYMLINKED_SKILLS = ['self-review-apply', 'self-review-critique'];
 
 const SCHEMA_FILE_NAME = 'self-review-v2.xsd';
 
@@ -43,18 +49,23 @@ function reviewXml(comments: string): string {
 }
 
 describe('XSD schema copies', () => {
-  it.each(SCHEMA_COPIES)('%s matches the schema embedded in xml-serializer.ts', copy => {
+  it('matches the schema embedded in xml-serializer.ts', () => {
     // Exact equality, not normalized: the embedded copy is generated from the
     // on-disk file verbatim, so any drift is a mistake rather than formatting.
-    expect(readCopy(copy)).toBe(`${XSD_SCHEMA}\n`);
+    expect(readCopy(CANONICAL_SCHEMA)).toBe(`${XSD_SCHEMA}\n`);
   });
 
-  it('keeps the two on-disk copies identical to each other', () => {
-    const [first, ...rest] = SCHEMA_COPIES.map(readCopy);
-    for (const other of rest) {
-      expect(other).toBe(first);
+  it.each(SYMLINKED_SKILLS)(
+    '.opencode/skills/%s is a symlink to the .agents copy, not a duplicate',
+    name => {
+      const link = path.join(REPO_ROOT, '.opencode/skills', name);
+
+      expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+      expect(path.resolve(path.dirname(link), fs.readlinkSync(link))).toBe(
+        path.join(REPO_ROOT, '.agents/skills', name)
+      );
     }
-  });
+  );
 });
 
 describe('XSD conformance', () => {
