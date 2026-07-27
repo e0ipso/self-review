@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { ReviewComment } from '@self-review/types';
+import type {
+  ReviewComment,
+  CommentSeverity,
+  CommentConfidence,
+} from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
@@ -16,6 +20,72 @@ import { AttachmentImage } from './AttachmentImage';
 export interface CommentDisplayProps {
   comment: ReviewComment;
   originalCode?: string;
+}
+
+/**
+ * Presentation for the thresholding signals carried by a comment. The values
+ * are fixed by the XSD rather than configured, so unlike categories they use
+ * fixed classes instead of a colour from config. Descriptions restate the
+ * schema documentation, because these are exactly the values the human is
+ * being asked to sanity-check.
+ */
+const SEVERITY_STYLES: Record<CommentSeverity, { className: string; description: string }> = {
+  critical: {
+    className: 'bg-red-500/15 text-red-600 dark:text-red-400',
+    description: 'Critical: data loss, a security hole, or a crash on a path real usage reaches.',
+  },
+  major: {
+    className: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+    description: 'Major: wrong behaviour or a broken contract on a path real usage reaches.',
+  },
+  minor: {
+    className: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
+    description: 'Minor: real but bounded. Behaviour is correct today.',
+  },
+  info: {
+    className: 'bg-muted text-muted-foreground',
+    description: 'Info: no defect. Style, naming, a question, or a note.',
+  },
+};
+
+const CONFIDENCE_STYLES: Record<CommentConfidence, { className: string; description: string }> = {
+  high: {
+    className: 'bg-muted text-muted-foreground',
+    description: 'High confidence: traceable from the diff, no unverified assumption needed.',
+  },
+  medium: {
+    className: 'bg-muted text-muted-foreground',
+    description: 'Medium confidence: rests on one assumption the author did not verify.',
+  },
+  low: {
+    className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    description: 'Low confidence: speculative. Worth your eyes, not worth acting on unattended.',
+  },
+};
+
+function SignalBadge({
+  label,
+  styles,
+  testId,
+}: {
+  label: string;
+  styles: { className: string; description: string };
+  testId: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge
+          variant='secondary'
+          className={`h-5 px-1.5 text-[10px] font-medium ${styles.className}`}
+          data-testid={testId}
+        >
+          {label}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent side='bottom'>{styles.description}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export default function CommentDisplay({ comment, originalCode: originalCodeProp }: CommentDisplayProps) {
@@ -144,6 +214,20 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
                 {comment.category}
               </Badge>
             ))}
+          {comment.severity && (
+            <SignalBadge
+              label={comment.severity}
+              styles={SEVERITY_STYLES[comment.severity]}
+              testId={`comment-severity-${comment.severity}`}
+            />
+          )}
+          {comment.confidence && (
+            <SignalBadge
+              label={`${comment.confidence} confidence`}
+              styles={CONFIDENCE_STYLES[comment.confidence]}
+              testId={`comment-confidence-${comment.confidence}`}
+            />
+          )}
           {comment.orphaned && (
             <Badge
               variant='secondary'

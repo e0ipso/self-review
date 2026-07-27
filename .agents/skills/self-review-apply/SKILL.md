@@ -3,7 +3,7 @@ name: self-review-apply
 description: Parse self-review XML feedback and execute the review comments as organized tasks
 metadata:
   disable-model-invocation: "true"
-  argument-hint: "[review.xml path]"
+  argument-hint: "[review.xml path] [--min-severity=<level>] [--min-confidence=<level>]"
 ---
 
 # Apply Self-Review Feedback
@@ -12,7 +12,7 @@ Read structured review feedback from a self-review XML file and execute the chan
 
 ## XML Reference
 
-Non-obvious semantics (keep in sync with `assets/self-review-v1.xsd`):
+Non-obvious semantics (keep in sync with `assets/self-review-v2.xsd`):
 
 - **Line number pairing:** A comment has exactly one pair, `new-line-start`/`new-line-end` (for
   added/context lines) OR `old-line-start`/`old-line-end` (for deleted lines). Never both. If
@@ -21,6 +21,14 @@ Non-obvious semantics (keep in sync with `assets/self-review-v1.xsd`):
   as viewed. Distinguishes "reviewed, no comments" from "not yet reviewed."
 - **`path` on renames:** For renamed files (`change-type="renamed"`), `path` is the **new** path.
 - **`change-type` values:** `added`, `modified`, `deleted`, `renamed`.
+- **`severity`:** How consequential the finding is if it is real, most to least: `critical`,
+  `major`, `minor`, `info`. Optional.
+- **`confidence`:** How sure the comment's author was that the finding is real, most to least:
+  `high`, `medium`, `low`. Optional. Low confidence means the author could not trace the failure
+  from the code itself, so the finding may not be real at all.
+- **Absent is not neutral.** A comment with no `severity` or no `confidence` is **below every
+  threshold**. Never infer a value for it. Comments written by a human in the self-review UI
+  normally carry neither, which is why thresholding is opt-in (see step 4).
 
 ## 1. Read the Review XML
 
@@ -28,7 +36,7 @@ Read the XML file from `$ARGUMENTS` or default to `./review.xml`. Stop if the fi
 
 ## 2. Validate the XML
 
-Use the Bash tool to run `xmllint --schema assets/self-review-v1.xsd <review-xml-path> --noout`
+Use the Bash tool to run `xmllint --schema assets/self-review-v2.xsd <review-xml-path> --noout`
 (where `assets/` is relative to this skill's directory). If validation fails, stop and report the
 xmllint errors to the user. If `xmllint` is not installed, warn the user and continue without
 validation.
@@ -46,7 +54,28 @@ Check the `<review>` root element attributes to determine the review mode and lo
 
 This context is essential, without it you're working blind.
 
-## 4. Execute the Feedback
+## 4. Apply the Threshold (only if asked)
+
+**Default: apply every comment.** A review reaching this skill has normally already been curated
+by a human, who kept the comments they wanted acted on. Dropping some of those silently would
+discard their work.
+
+Thresholding exists for the unattended case, where nothing has filtered the comments and acting
+on a wrong one is worse than acting on nothing. Apply it **only** when `--min-severity` or
+`--min-confidence` is present in `$ARGUMENTS`:
+
+- `--min-severity=<level>`, ordered `critical` > `major` > `minor` > `info`.
+- `--min-confidence=<level>`, ordered `high` > `medium` > `low`.
+
+A comment passes only if it meets **every** floor that was given. A comment missing the attribute
+a floor names always fails that floor, since absent is below every level. Comments that do not
+pass are **parked**: do not edit code for them, do not answer them, and do not silently drop
+them either. Carry them to the summary.
+
+A caller wanting an unattended run that acts only on findings worth acting on unattended should
+pass `--min-severity=major --min-confidence=high`.
+
+## 5. Execute the Feedback
 
 Skip files with zero comments. For files with comments, create one **TaskCreate** task per file,
 then spawn subagents to work on independent files concurrently. For small reviews (3 or fewer
@@ -71,7 +100,7 @@ For each file:
 
 4. **Complete all changes for one file before moving to the next.**
 
-## 5. Summary
+## 6. Summary
 
 After all feedback has been applied, output a clearly delimited summary section.
 
@@ -87,3 +116,10 @@ For every `question` category comment in the review:
 - Quote the question.
 - Provide your answer.
 - State explicitly whether the question resulted in a code change (`Changed` or `No change`).
+
+### Parked Comments
+
+Only when a threshold was applied. For every comment that did not pass, list the file, the line
+range, its `severity` and `confidence` (writing `absent` where an attribute was missing), and a
+one-line summary of the body. State the floors that were in effect. These were not acted on and
+need a human to decide.

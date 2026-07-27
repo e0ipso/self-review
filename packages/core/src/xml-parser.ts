@@ -3,7 +3,17 @@
 
 import { readFileSync } from 'fs';
 import { XMLParser } from 'fast-xml-parser';
-import { ReviewComment, Suggestion, LineRange, DiffSource } from './types';
+import {
+  ReviewComment,
+  Suggestion,
+  LineRange,
+  DiffSource,
+  CommentSeverity,
+  CommentConfidence,
+} from './types';
+
+const SEVERITY_VALUES: readonly CommentSeverity[] = ['critical', 'major', 'minor', 'info'];
+const CONFIDENCE_VALUES: readonly CommentConfidence[] = ['high', 'medium', 'low'];
 
 export interface ParsedReview {
   comments: ReviewComment[];
@@ -71,6 +81,8 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
           category: comment.category || '',
           suggestion: parseSuggestion(comment),
           author: comment['@_author'] ? String(comment['@_author']) : undefined,
+          severity: parseEnumAttribute(comment['@_severity'], SEVERITY_VALUES),
+          confidence: parseEnumAttribute(comment['@_confidence'], CONFIDENCE_VALUES),
         };
 
         // Parse attachments
@@ -103,6 +115,23 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     }
     process.exit(1);
   }
+}
+
+/**
+ * Read an enumerated attribute, dropping values the schema does not define.
+ *
+ * An unrecognised value becomes undefined rather than being passed through:
+ * undefined is the fail-safe reading (below every threshold floor), and it
+ * keeps a resumed review serializable, since the serializer validates its
+ * output against the XSD before writing.
+ */
+function parseEnumAttribute<T extends string>(
+  raw: unknown,
+  allowed: readonly T[]
+): T | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const value = String(raw);
+  return allowed.includes(value as T) ? (value as T) : undefined;
 }
 
 function parseSource(review: Record<string, unknown>): DiffSource {

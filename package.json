@@ -15,7 +15,7 @@
     "publish": "electron-forge publish",
     "lint": "eslint .",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "vitest run --config vitest.config.main.ts && vitest run --config vitest.config.renderer.ts",
+    "test:unit": "vitest run --config vitest.config.main.ts && vitest run --config vitest.config.renderer.ts && npm run test:unit --workspace @self-review/core",
     "test:e2e": "npx bddgen && npx playwright test --project e2e",
     "test:e2e:headed": "npx bddgen && npx playwright test --project e2e --headed",
     "test:e2e:electron": "npm run package && npx bddgen && xvfb-run --auto-servernum npx playwright test --project electron",

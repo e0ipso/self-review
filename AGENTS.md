@@ -174,8 +174,8 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 `src/shared/types.ts` is the single source of truth for all data structures. Every file in both main
 and renderer imports types from here. **Never duplicate type definitions.**
 
-Key types: `DiffFile`, `DiffHunk`, `DiffLine`, `ReviewComment`, `Suggestion`, `ReviewState`,
-`AppConfig`, `CategoryDef`, `PayloadStats`.
+Key types: `DiffFile`, `DiffHunk`, `DiffLine`, `ReviewComment`, `CommentSeverity`,
+`CommentConfidence`, `Suggestion`, `ReviewState`, `AppConfig`, `CategoryDef`, `PayloadStats`.
 
 See the file itself for full definitions.
 
@@ -253,7 +253,13 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   any reason (offline, timeout, firewall), it is silently ignored. No telemetry, no analytics, no
   CDN fetches. All assets are bundled.
 - **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
-- **XSD sync.** The XSD schema exists in two locations: `.agents/skills/self-review-apply/assets/self-review-v1.xsd` (standalone) and embedded as a string in `src/main/xml-serializer.ts`. Both copies must be kept in sync when the schema changes.
+- **XSD sync.** The XSD schema exists in three places and all three must be byte-identical:
+  `.agents/skills/self-review-apply/assets/self-review-v2.xsd`,
+  `.opencode/skills/self-review-apply/assets/self-review-v2.xsd`, and the `XSD_SCHEMA` string
+  embedded in `packages/core/src/xml-serializer.ts`. The sync test in
+  `packages/core/src/xsd-schema.test.ts` enforces this, so editing one copy alone fails the unit
+  suite. `self-review-v1.xsd` is frozen at both on-disk locations for consumers of older
+  documents, and must not be edited.
 - **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
   Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit /
   Discard / Cancel.
@@ -276,6 +282,13 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   RenderedMarkdownView).
 - **Author attribution.** Comments from the self-review-critique skill include an `author` attribute
   with the model name. When absent, the UI shows "You" with a person icon (human reviewer).
+- **Severity and confidence.** `<comment>` carries two optional attributes that let an unattended
+  consumer threshold on findings: `severity` (`critical`, `major`, `minor`, `info`) is how
+  consequential the finding is if real, `confidence` (`high`, `medium`, `low`) is how sure the
+  author is that it is real. Neither has a schema default. **Absent means below every threshold**,
+  never "medium", so the serializer omits them when unset and the parser leaves them undefined,
+  including for values outside the enumeration. Human-authored comments normally carry neither;
+  the UI displays both as badges but does not author them.
 
 ## Assistant Skills
 
@@ -306,8 +319,9 @@ comments) to the codebase. See `.agents/skills/self-review-apply/SKILL.md` for d
 
 ## XSD Schema Location
 
-The XSD schema lives at `.agents/skills/self-review-apply/assets/self-review-v1.xsd`. This is
-the single source of truth for the XML output format.
+The XSD schema lives at `.agents/skills/self-review-apply/assets/self-review-v2.xsd`. This is
+the single source of truth for the XML output format. See the **XSD sync** convention above for
+the other two copies that must track it.
 
 ## Code Reuse
 

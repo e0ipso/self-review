@@ -15,4 +15,4 @@ summary: >-
   Slash command that consumes a review.xml file and applies its
   suggestions/comments to the codebase.
 ---
-`/self-review-apply` is the consumer counterpart to [[self-review-critique-skill]]. It reads `review.xml` and applies feedback (suggestions, comments) to the codebase. It owns the canonical XSD schema at `.agents/skills/self-review-apply/assets/self-review-v1.xsd`, which defines the review document format used by both skills.
+`/self-review-apply` is the consumer counterpart to [[self-review-critique-skill]]. It reads `review.xml` and applies feedback (suggestions, comments) to the codebase. It owns the canonical XSD schema at `.agents/skills/self-review-apply/assets/self-review-v2.xsd`, which defines the review document format used by both skills.

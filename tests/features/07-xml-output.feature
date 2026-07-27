@@ -19,7 +19,7 @@ Feature: XML Output
     And I click "Finish Review"
     Then the output file should exist
     And the output file should contain valid XML
-    And the XML should have a root element "review" with namespace "urn:self-review:v1"
+    And the XML should have a root element "review" with namespace "urn:self-review:v2"
     And the XML should contain 7 file elements
     And the XML "review" element should have a "timestamp" attribute
     And the XML "review" element should have a "git-diff-args" attribute
@@ -77,7 +77,7 @@ Feature: XML Output
     When I launch self-review
     And I add a comment "Test" on new line 5 of "src/auth/login.ts"
     And I click "Finish Review"
-    Then the output file should validate against ".agents/skills/self-review-apply/assets/self-review-v1.xsd"
+    Then the output file should validate against ".agents/skills/self-review-apply/assets/self-review-v2.xsd"
 
   Scenario: Nothing is written to stdout
     When I launch self-review

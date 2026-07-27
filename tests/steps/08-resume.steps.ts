@@ -30,6 +30,8 @@ Given(
       newLineEnd: row.new_line_end ? parseInt(row.new_line_end, 10) : undefined,
       body: row.body,
       category: row.category || undefined,
+      severity: row.severity || undefined,
+      confidence: row.confidence || undefined,
     }));
     const xmlContent = createPriorReviewXml(repoDir, comments);
     writeFileSync(join(repoDir, fileName), xmlContent);
@@ -107,3 +109,44 @@ Then(
   }
 );
 
+
+Then(
+  'the comment {string} should show a {string} severity badge and {string} confidence badge',
+  async ({}, body: string, severity: string, confidence: string) => {
+    const page = getPage();
+    const comment = page
+      .locator('[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid^="comment-collapse"]):not([data-testid="comment-input"])')
+      .filter({ hasText: body })
+      .first();
+    await expect(
+      comment.locator(`[data-testid="comment-severity-${severity}"]`)
+    ).toBeVisible();
+    await expect(
+      comment.locator(`[data-testid="comment-confidence-${confidence}"]`)
+    ).toBeVisible();
+  }
+);
+
+Then(
+  'the output file should preserve severity {string} and confidence {string} for the comment {string}',
+  async ({}, severity: string, confidence: string, body: string) => {
+    const xmlContent = readOutputFile();
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: '@_',
+    });
+    const parsed = parser.parse(xmlContent);
+    const files = Array.isArray(parsed.review.file)
+      ? parsed.review.file
+      : parsed.review.file
+        ? [parsed.review.file]
+        : [];
+    const allComments = files.flatMap((f: any) =>
+      Array.isArray(f.comment) ? f.comment : f.comment ? [f.comment] : []
+    );
+    const match = allComments.find((c: any) => String(c.body) === body);
+    expect(match).toBeDefined();
+    expect(match['@_severity']).toBe(severity);
+    expect(match['@_confidence']).toBe(confidence);
+  }
+);

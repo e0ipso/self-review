@@ -545,6 +545,73 @@ describe('parseReviewXmlString', () => {
       expect(parsed.gitDiffArgs).toBe((original.source as { type: 'git'; gitDiffArgs: string }).gitDiffArgs);
     });
 
+    it('round-trip preserves severity and confidence', async () => {
+      const original: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        files: [
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: true,
+            comments: [
+              {
+                id: 'id-1',
+                filePath: 'src/test.ts',
+                lineRange: { side: 'new', start: 5, end: 10 },
+                body: 'Test comment',
+                category: 'bug',
+                suggestion: null,
+                author: 'Claude Opus 5',
+                severity: 'major',
+                confidence: 'medium',
+              },
+            ],
+          },
+        ],
+      };
+
+      const parsed = parseReviewXmlString(await serializeReview(original, '/tmp/test-review.xml'));
+
+      expect(parsed.comments[0].author).toBe('Claude Opus 5');
+      expect(parsed.comments[0].severity).toBe('major');
+      expect(parsed.comments[0].confidence).toBe('medium');
+    });
+
+    // Absent must stay absent: a consumer reads absent as "below every floor",
+    // so materializing a default here would silently change that meaning.
+    it('round-trip leaves absent signals absent rather than defaulting them', async () => {
+      const original: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        files: [
+          {
+            path: 'src/test.ts',
+            changeType: 'modified',
+            viewed: true,
+            comments: [
+              {
+                id: 'id-1',
+                filePath: 'src/test.ts',
+                lineRange: null,
+                body: 'Human comment',
+                category: 'note',
+                suggestion: null,
+              },
+            ],
+          },
+        ],
+      };
+
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const parsed = parseReviewXmlString(xml);
+
+      expect(xml).not.toContain('severity=');
+      expect(xml).not.toContain('confidence=');
+      expect(parsed.comments[0].severity).toBeUndefined();
+      expect(parsed.comments[0].confidence).toBeUndefined();
+    });
+
     it('round-trip with directory source', async () => {
       const original: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
@@ -924,6 +991,82 @@ describe('parseReviewXmlString', () => {
 
       expect(result.comments).toHaveLength(1);
       expect(result.comments[0].author).toBeUndefined();
+    });
+  });
+
+  describe('severity and confidence attributes', () => {
+    function xmlWithCommentAttrs(attrs: string): string {
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v2"
+        timestamp="2024-01-15T10:30:00Z"
+        git-diff-args="--staged"
+        repository="/repo">
+  <file path="src/main.ts" change-type="modified" viewed="true">
+    <comment new-line-start="10" new-line-end="10"${attrs}>
+      <body>Body</body>
+      <category>bug</category>
+    </comment>
+  </file>
+</review>`;
+    }
+
+    it('parses severity and confidence', () => {
+      const result = parseReviewXmlString(
+        xmlWithCommentAttrs(' severity="critical" confidence="high"')
+      );
+
+      expect(result.comments[0].severity).toBe('critical');
+      expect(result.comments[0].confidence).toBe('high');
+    });
+
+    it('parses each attribute independently of the other', () => {
+      const severityOnly = parseReviewXmlString(xmlWithCommentAttrs(' severity="minor"'));
+      expect(severityOnly.comments[0].severity).toBe('minor');
+      expect(severityOnly.comments[0].confidence).toBeUndefined();
+
+      const confidenceOnly = parseReviewXmlString(xmlWithCommentAttrs(' confidence="low"'));
+      expect(confidenceOnly.comments[0].severity).toBeUndefined();
+      expect(confidenceOnly.comments[0].confidence).toBe('low');
+    });
+
+    it('leaves both undefined when the attributes are absent', () => {
+      const result = parseReviewXmlString(xmlWithCommentAttrs(''));
+
+      expect(result.comments[0].severity).toBeUndefined();
+      expect(result.comments[0].confidence).toBeUndefined();
+    });
+
+    // Undefined is the fail-safe reading, and it keeps the resumed review
+    // serializable: the serializer validates its output against the XSD.
+    it('drops values outside the enumeration instead of passing them through', () => {
+      const result = parseReviewXmlString(
+        xmlWithCommentAttrs(' severity="blocker" confidence="certain"')
+      );
+
+      expect(result.comments[0].severity).toBeUndefined();
+      expect(result.comments[0].confidence).toBeUndefined();
+    });
+
+    it('parses a v1 document, which never carries the signals', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v1"
+        timestamp="2024-01-15T10:30:00Z"
+        git-diff-args="--staged"
+        repository="/repo">
+  <file path="src/main.ts" change-type="modified" viewed="true">
+    <comment new-line-start="10" new-line-end="10">
+      <body>Legacy comment</body>
+      <category>bug</category>
+    </comment>
+  </file>
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.comments).toHaveLength(1);
+      expect(result.comments[0].body).toBe('Legacy comment');
+      expect(result.comments[0].severity).toBeUndefined();
+      expect(result.comments[0].confidence).toBeUndefined();
     });
   });
 

@@ -63,6 +63,18 @@ export interface LineRange {
   end: number;
 }
 
+/**
+ * How consequential a finding is if it is real, most to least.
+ * See SeverityEnum in self-review-v2.xsd for the semantics of each value.
+ */
+export type CommentSeverity = 'critical' | 'major' | 'minor' | 'info';
+
+/**
+ * How sure the author is that a finding is real, most to least.
+ * See ConfidenceEnum in self-review-v2.xsd for the semantics of each value.
+ */
+export type CommentConfidence = 'high' | 'medium' | 'low';
+
 export interface ReviewComment {
   id: string;
   filePath: string;
@@ -71,6 +83,10 @@ export interface ReviewComment {
   category: string;
   suggestion: Suggestion | null;
   author?: string;
+  // Thresholding signals. Undefined means the author took no position, and a
+  // consumer must treat that as below any floor it applies.
+  severity?: CommentSeverity;
+  confidence?: CommentConfidence;
   orphaned?: boolean; // for --resume-from conflict handling
   attachments?: Attachment[];
 }
