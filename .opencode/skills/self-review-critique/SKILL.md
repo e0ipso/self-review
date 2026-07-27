@@ -89,12 +89,35 @@ Review each file's changes. Look for:
 - **Performance**: Unnecessary re-renders, N+1 queries, missing memoization
 - **Style**: Unclear naming, inconsistent patterns, dead code
 
+### The evidence bar
+
+Every comment must name the concrete trigger, the line, value, call path, or condition that
+makes the problem real in *this* code, on a path that is actually reachable. If the failure
+needs a caller, config value, or type you never opened, open it. "This could theoretically fail
+if X" where X appears nowhere you read is rejected, not emitted, and a file with no evidenced
+problems gets no comments.
+
+| If you find yourself thinking…                 | What it actually signals                       |
+| ---------------------------------------------- | ---------------------------------------------- |
+| "Defensive coding never hurts."                | No defect found; you invented the requirement. |
+| "The caller might pass null."                  | You did not open the caller. Go open it.       |
+| "This isn't wrong, but it would be better if…" | Preference, not a defect. `info` at most.      |
+| "A future refactor would break this."          | That refactor is not in the diff. Drop it.     |
+| "I should flag something in this file."        | Quota-filling. Clean files get no comments.    |
+| "It's cheap for the human to dismiss."         | It is not; curator attention is scarce.        |
+
+Evidenced but unconfirmed is a downgrade, not a deletion: keep it at `confidence="low"` under
+`question` or `nit`, with the unverified assumption in the body. Unevidenced is a drop,
+`confidence="low"` is not a parking spot for speculation.
+
 **Guidelines:**
 - Focus on substantive issues. Prioritize bugs and security over style nitpicks.
 - Use `suggestion` blocks for every comment where you can propose a concrete fix. The human
   reviewer can then accept or reject each suggestion individually.
 - Skip files that look correct, do not force comments on every file.
 - Keep comment bodies concise and actionable (1-3 sentences).
+- Lead the body with the evidence, the line, value, or path that triggers the problem, then the
+  consequence.
 - Use file-level comments (no line attributes) for architectural or design concerns that span
   the whole file.
 
