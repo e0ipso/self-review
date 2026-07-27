@@ -198,6 +198,8 @@ export function createPriorReviewXml(
     oldLineEnd?: number;
     body: string;
     category?: string;
+    severity?: string;
+    confidence?: string;
   }>
 ): string {
   const commentXml = (c: (typeof comments)[0]) => {
@@ -210,7 +212,15 @@ export function createPriorReviewXml(
       .filter(Boolean)
       .join(' ');
 
-    const attrs = lineAttrs ? ` ${lineAttrs}` : '';
+    const signalAttrs = [
+      c.severity ? `severity="${c.severity}"` : '',
+      c.confidence ? `confidence="${c.confidence}"` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const allAttrs = [lineAttrs, signalAttrs].filter(Boolean).join(' ');
+    const attrs = allAttrs ? ` ${allAttrs}` : '';
     const categoryEl = c.category
       ? `\n      <category>${c.category}</category>`
       : '';
@@ -235,9 +245,9 @@ export function createPriorReviewXml(
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <review
-  xmlns="urn:self-review:v1"
+  xmlns="urn:self-review:v2"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="urn:self-review:v1 self-review-v1.xsd"
+  xsi:schemaLocation="urn:self-review:v2 self-review-v2.xsd"
   timestamp="2026-02-10T12:00:00Z"
   git-diff-args=""
   repository="${repoDir}"

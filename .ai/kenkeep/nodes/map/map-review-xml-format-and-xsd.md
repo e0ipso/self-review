@@ -17,4 +17,4 @@ summary: >-
 ---
 The `review.xml` document has a `<review>` root with attributes `timestamp`, `git-diff-args`, and `repository` (absolute repo path). It contains `<file>` entries with `path`, `change-type` (`added` | `modified` | `deleted` | `renamed`), and `viewed`. Each file may contain `<comment>` elements with body, category, optional line-number pair, and optional `<suggestion>` block (with `<original-code>` and `<proposed-code>`).
 
-Canonical schema: `.agents/skills/self-review-apply/assets/self-review-v1.xsd`. Namespace: `urn:self-review:v1`. The XSD's `<xs:documentation>` annotations describe element and attribute semantics.
+Canonical schema: `.agents/skills/self-review-apply/assets/self-review-v2.xsd`. Namespace: `urn:self-review:v2`. The XSD's `<xs:documentation>` annotations describe element and attribute semantics.

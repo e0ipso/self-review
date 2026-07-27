@@ -18,6 +18,17 @@ Feature: Resume from Prior Review
     Then the comment "Fix this typo" should be displayed at new line 5 of "src/auth/login.ts"
     And the file-level comment "Needs refactor" should be displayed on "src/auth/login.ts"
 
+  Scenario: Resumed comments display and preserve severity and confidence
+    Given a prior review XML file "review.xml" with these comments:
+      | file              | new_line_start | new_line_end | body            | category | severity | confidence |
+      | src/auth/login.ts | 5              | 5            | Traced defect   | bug      | critical | high       |
+      | src/auth/login.ts | 6              | 6            | Might be an issue | bug    | minor    | low        |
+    When I launch self-review with "--resume-from review.xml"
+    Then the comment "Traced defect" should show a "critical" severity badge and "high" confidence badge
+    And the comment "Might be an issue" should show a "minor" severity badge and "low" confidence badge
+    When I click "Finish Review"
+    Then the output file should preserve severity "critical" and confidence "high" for the comment "Traced defect"
+
   Scenario: Resumed comments can be edited
     Given a prior review XML file "review.xml" with these comments:
       | file              | new_line_start | new_line_end | body          |

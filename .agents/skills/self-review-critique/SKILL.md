@@ -12,7 +12,7 @@ self-review via `--resume-from` for human validation.
 
 ## XML Reference
 
-Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-review-v1.xsd`):
+Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-review-v2.xsd`):
 
 - **Line number pairing:** A comment has exactly one pair, `new-line-start`/`new-line-end` (for
   added/context lines) OR `old-line-start`/`old-line-end` (for deleted lines). Never both. If
@@ -23,6 +23,14 @@ Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-revie
 - **`original-code`:** Must be the exact text at the referenced lines, copied verbatim from the
   file content. The applying agent uses text matching to locate the replacement target.
 - **`author`:** Set to your model name on every comment you generate (e.g., "Claude Sonnet 4.6").
+- **`severity`:** How consequential the finding is **if it is real**: `critical` (data loss,
+  security hole, or a crash on a path real usage reaches), `major` (wrong behaviour or a broken
+  contract on a path real usage reaches), `minor` (real but bounded; behaviour is correct today),
+  `info` (no defect at all: style, naming, a question, a note). Judge impact, not effort.
+- **`confidence`:** How sure you are the finding is **real**, not how strongly you worded it:
+  `high` (traceable from the diff itself, no assumption about unseen code needed), `medium`
+  (rests on one assumption you did not verify, which you must state in the body), `low`
+  (speculative: you imagined the failure rather than traced it, or you could not tell intent).
 
 ## 1. Parse Arguments
 
@@ -92,7 +100,7 @@ Review each file's changes. Look for:
 
 ## 6. Build the Review XML
 
-Read the XSD schema at `.agents/skills/self-review-apply/assets/self-review-v1.xsd` for the
+Read the XSD schema at `.agents/skills/self-review-apply/assets/self-review-v2.xsd` for the
 complete XML structure and validation rules. The `<xs:documentation>` annotations in the schema
 describe all element and attribute semantics.
 
@@ -100,9 +108,9 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<review xmlns="urn:self-review:v1" timestamp="2026-02-28T14:30:00.000Z" git-diff-args="--staged" repository="/absolute/path/to/repo">
+<review xmlns="urn:self-review:v2" timestamp="2026-02-28T14:30:00.000Z" git-diff-args="--staged" repository="/absolute/path/to/repo">
   <file path="src/utils.ts" change-type="modified" viewed="true">
-    <comment new-line-start="42" new-line-end="42" author="Claude Sonnet 4.6">
+    <comment new-line-start="42" new-line-end="42" author="Claude Sonnet 4.6" severity="major" confidence="high">
       <body>Division by zero when input is empty.</body>
       <category>bug</category>
       <suggestion>
@@ -121,6 +129,15 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
 - `repository`: Get absolute path with `git rev-parse --show-toplevel`
 - `viewed`: Always `"true"` for all files (the assistant "viewed" them all)
 - `author`: Set to your model name on every comment you generate (e.g., "Claude Sonnet 4.6")
+- `severity` and `confidence`: Set both on every comment you generate. They are what lets an
+  unattended consumer decide whether to act on a finding, so a comment without them is treated
+  as below every threshold and is never applied automatically.
+- Calibrating `confidence` honestly is the point of the attribute. Reviewers of this kind
+  systematically overstate certainty, wrapping false findings in confident rationales that
+  introduce constraints nobody stated. Before writing `high`, check that the failure follows
+  from code you actually read. If the argument needs a caller you did not open, a requirement
+  you inferred, or a scenario you imagined, it is `medium` or `low`. Lowering confidence is not
+  a weaker comment, it is the signal working.
 - XML-escape all text content: `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`,
   `'` → `&apos;`
 
@@ -128,7 +145,7 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
 
 Use the Bash tool to run:
 ```bash
-xmllint --schema .agents/skills/self-review-apply/assets/self-review-v1.xsd REVIEW_XML_PATH --noout
+xmllint --schema .agents/skills/self-review-apply/assets/self-review-v2.xsd REVIEW_XML_PATH --noout
 ```
 
 Where `REVIEW_XML_PATH` is the output path from step 2.
@@ -141,7 +158,7 @@ Where `REVIEW_XML_PATH` is the output path from step 2.
 
 After writing the file, print a summary:
 - Number of files reviewed
-- Number of comments generated (by category)
+- Number of comments generated (by category, and by severity)
 - Output file path
 
 Then remind the user how to load the review:

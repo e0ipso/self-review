@@ -12,9 +12,9 @@ derived_from:
 relates_to: []
 confidence: high
 summary: >-
-  Run xmllint against assets/self-review-v1.xsd before processing review
+  Run xmllint against assets/self-review-v2.xsd before processing review
   feedback; stop on failure.
 ---
-Before consuming a `review.xml` file, validate it with `xmllint --schema assets/self-review-v1.xsd <review-xml-path> --noout`. If validation fails, stop and report the errors instead of attempting to apply broken feedback.
+Before consuming a `review.xml` file, validate it with `xmllint --schema assets/self-review-v2.xsd <review-xml-path> --noout`. If validation fails, stop and report the errors instead of attempting to apply broken feedback.
 
 If `xmllint` is not installed in the environment, warn the user and continue without validation rather than blocking the workflow.

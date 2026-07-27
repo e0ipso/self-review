@@ -15,6 +15,6 @@ summary: >-
   Run `xmllint --schema ... --noout` against the output. If validation fails,
   fix the XML and re-validate. If xmllint is missing, warn and continue.
 ---
-After writing `review.xml`, validate it against `.claude/skills/self-review-apply/assets/self-review-v1.xsd` using `xmllint`. On validation errors, read the messages, correct the XML, and re-run validation.
+After writing `review.xml`, validate it against `.agents/skills/self-review-apply/assets/self-review-v2.xsd` using `xmllint`. On validation errors, read the messages, correct the XML, and re-run validation.
 
 If `xmllint` is not installed on the system, warn the user and proceed without validation rather than failing the workflow.

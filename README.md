@@ -272,14 +272,14 @@ your-project/
     └── skills/
         └── self-review-apply/
             ├── SKILL.md
-            └── self-review-v1.xsd
+            └── self-review-v2.xsd
 </code>
 
 The skill will:
 
 1. Read the XSD schema to understand the review format
 2. Parse your review XML
-3. Categorize and prioritize comments (security > bug > style > nit)
+3. Categorize and prioritize comments, honouring `--min-severity` / `--min-confidence` floors when given
 4. Output a task plan showing parallel and sequential work groups
 5. Execute the changes, applying suggestions first, then addressing open-ended
    feedback

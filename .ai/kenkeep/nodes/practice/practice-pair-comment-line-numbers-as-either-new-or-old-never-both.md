@@ -17,4 +17,4 @@ summary: >-
 ---
 In the self-review XML format, a comment has exactly one line-number pair: `new-line-start`/`new-line-end` for added or context lines, OR `old-line-start`/`old-line-end` for deleted lines. Never both.
 
-If neither pair is present, the comment is a file-level comment. This rule is enforced by `assets/self-review-v1.xsd` and must be respected by any producer or consumer of the format.
+If neither pair is present, the comment is a file-level comment. This rule is enforced by `assets/self-review-v2.xsd` and must be respected by any producer or consumer of the format.

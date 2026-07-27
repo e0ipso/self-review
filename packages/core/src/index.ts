@@ -12,6 +12,8 @@ export type {
   Attachment,
   LineRange,
   ReviewComment,
+  CommentSeverity,
+  CommentConfidence,
   FileReviewState,
   ReviewState,
   CategoryDef,

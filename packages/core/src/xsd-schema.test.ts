@@ -1,0 +1,158 @@
+// Guards the XSD contract itself: that every copy of the schema is identical,
+// and that the schema actually accepts the documents the serializer emits.
+//
+// This lives in its own file because xml-serializer.test.ts mocks xmllint-wasm
+// away, so validation there is a no-op. Here the real validator runs.
+
+import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import { validateXML } from 'xmllint-wasm';
+import { XSD_SCHEMA, serializeReview } from './xml-serializer';
+import type { ReviewState } from './types';
+
+const REPO_ROOT = path.resolve(__dirname, '../../..');
+
+const SCHEMA_COPIES = [
+  '.agents/skills/self-review-apply/assets/self-review-v2.xsd',
+  '.opencode/skills/self-review-apply/assets/self-review-v2.xsd',
+];
+
+const SCHEMA_FILE_NAME = 'self-review-v2.xsd';
+
+function readCopy(relativePath: string): string {
+  return fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf-8');
+}
+
+async function validate(xml: string) {
+  return validateXML({
+    xml: [{ fileName: 'review.xml', contents: xml }],
+    schema: [{ fileName: SCHEMA_FILE_NAME, contents: XSD_SCHEMA }],
+  });
+}
+
+function reviewXml(comments: string): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<review xmlns="urn:self-review:v2" timestamp="2024-01-15T10:30:00Z">',
+    '  <file path="src/main.ts" change-type="modified" viewed="true">',
+    comments,
+    '  </file>',
+    '</review>',
+  ].join('\n');
+}
+
+describe('XSD schema copies', () => {
+  it.each(SCHEMA_COPIES)('%s matches the schema embedded in xml-serializer.ts', copy => {
+    // Exact equality, not normalized: the embedded copy is generated from the
+    // on-disk file verbatim, so any drift is a mistake rather than formatting.
+    expect(readCopy(copy)).toBe(`${XSD_SCHEMA}\n`);
+  });
+
+  it('keeps the two on-disk copies identical to each other', () => {
+    const [first, ...rest] = SCHEMA_COPIES.map(readCopy);
+    for (const other of rest) {
+      expect(other).toBe(first);
+    }
+  });
+});
+
+describe('XSD conformance', () => {
+  it('accepts every severity and confidence value', async () => {
+    const severities = ['critical', 'major', 'minor', 'info'];
+    const confidences = ['high', 'medium', 'low'];
+    const comments = severities
+      .flatMap(severity =>
+        confidences.map(
+          confidence =>
+            `    <comment new-line-start="1" new-line-end="1" severity="${severity}" confidence="${confidence}"><body>b</body><category>bug</category></comment>`
+        )
+      )
+      .join('\n');
+
+    const result = await validate(reviewXml(comments));
+
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts comments that omit both signals, since absent is a valid position', async () => {
+    const result = await validate(
+      reviewXml('    <comment><body>b</body><category>bug</category></comment>')
+    );
+
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a severity value outside the enumeration', async () => {
+    const result = await validate(
+      reviewXml('    <comment severity="blocker"><body>b</body><category>bug</category></comment>')
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a confidence value outside the enumeration', async () => {
+    const result = await validate(
+      reviewXml('    <comment confidence="certain"><body>b</body><category>bug</category></comment>')
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a v1-namespaced document, so the version bump is observable', async () => {
+    const result = await validate(
+      reviewXml('    <comment><body>b</body><category>bug</category></comment>').replace(
+        'urn:self-review:v2',
+        'urn:self-review:v1'
+      )
+    );
+
+    expect(result.valid).toBe(false);
+  });
+});
+
+describe('serializer output conforms to the schema', () => {
+  // serializeReview validates internally, and nothing is mocked in this file,
+  // so this exercises the real emitter against the real validator.
+  it('emits a valid v2 document carrying both signals', async () => {
+    const state: ReviewState = {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [
+        {
+          path: 'src/main.ts',
+          changeType: 'modified',
+          viewed: true,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/main.ts',
+              lineRange: { side: 'new', start: 5, end: 7 },
+              body: 'Traced defect',
+              category: 'bug',
+              suggestion: { originalCode: 'a', proposedCode: 'b' },
+              author: 'Claude Opus 5',
+              severity: 'critical',
+              confidence: 'high',
+            },
+            {
+              id: 'c2',
+              filePath: 'src/main.ts',
+              lineRange: null,
+              body: 'Human note with no signals',
+              category: 'note',
+              suggestion: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    const xml = await serializeReview(state, '/tmp/test-review.xml');
+
+    expect(xml).toContain('xmlns="urn:self-review:v2"');
+    expect(xml).toContain('severity="critical" confidence="high"');
+    expect((await validate(xml)).valid).toBe(true);
+  });
+});

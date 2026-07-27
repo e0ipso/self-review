@@ -42,7 +42,7 @@ describe('serializeReview', () => {
       const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(xml).toContain('xmlns="urn:self-review:v1"');
+      expect(xml).toContain('xmlns="urn:self-review:v2"');
       expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
       expect(xml).toContain('git-diff-args="--staged"');
       expect(xml).toContain('repository="/path/to/repo"');
@@ -490,7 +490,7 @@ describe('serializeReview', () => {
       expect(callArgs.xml).toHaveLength(1);
       expect(callArgs.xml[0].fileName).toBe('review.xml');
       expect(callArgs.schema).toHaveLength(1);
-      expect(callArgs.schema[0].fileName).toBe('self-review-v1.xsd');
+      expect(callArgs.schema[0].fileName).toBe('self-review-v2.xsd');
     });
 
     it('throws error if validation fails', async () => {
@@ -525,7 +525,7 @@ describe('serializeReview', () => {
 
       // Should return XML without throwing (graceful fallback)
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(xml).toContain('xmlns="urn:self-review:v1"');
+      expect(xml).toContain('xmlns="urn:self-review:v2"');
       expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
       expect(xml).toContain('</review>');
     });
@@ -845,5 +845,79 @@ describe('serializeReview', () => {
 
       expect(xml).toContain('<body>First line\nSecond line\nThird line</body>');
     });
+  });
+});
+
+describe('severity and confidence attributes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function reviewWith(overrides: Partial<ReviewComment>): ReviewState {
+    const comment: ReviewComment = {
+      id: 'signal-test',
+      filePath: 'src/main.ts',
+      lineRange: { side: 'new', start: 5, end: 5 },
+      body: 'Body',
+      category: 'bug',
+      suggestion: null,
+      ...overrides,
+    };
+
+    const file: FileReviewState = {
+      path: 'src/main.ts',
+      changeType: 'modified',
+      viewed: true,
+      comments: [comment],
+    };
+
+    return {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [file],
+    };
+  }
+
+  it('serializes severity when set', async () => {
+    const xml = await serializeReview(reviewWith({ severity: 'critical' }), TEST_OUTPUT_PATH);
+
+    expect(xml).toContain('severity="critical"');
+    expect(xml).not.toContain('confidence=');
+  });
+
+  it('serializes confidence when set', async () => {
+    const xml = await serializeReview(reviewWith({ confidence: 'low' }), TEST_OUTPUT_PATH);
+
+    expect(xml).toContain('confidence="low"');
+    expect(xml).not.toContain('severity=');
+  });
+
+  it('omits both attributes when neither is set', async () => {
+    const xml = await serializeReview(reviewWith({}), TEST_OUTPUT_PATH);
+
+    expect(xml).not.toContain('severity=');
+    expect(xml).not.toContain('confidence=');
+  });
+
+  // Attribute order is asserted deliberately: the signals are appended after
+  // author so existing exact-string expectations keep holding.
+  it('emits the signals after the line attributes and author', async () => {
+    const xml = await serializeReview(
+      reviewWith({ author: 'Claude Opus 5', severity: 'major', confidence: 'high' }),
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain(
+      '<comment new-line-start="5" new-line-end="5" author="Claude Opus 5" severity="major" confidence="high">'
+    );
+  });
+
+  it('emits the signals on a file-level comment', async () => {
+    const xml = await serializeReview(
+      reviewWith({ lineRange: null, severity: 'info', confidence: 'medium' }),
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain('<comment severity="info" confidence="medium">');
   });
 });

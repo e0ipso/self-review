@@ -325,7 +325,7 @@ Total nodes: 172
 ## map-self-review-v1-xsd-output-format
 
 - **kind:** map
-- **title:** self-review-v1 XSD output format
+- **title:** self-review-v2 XSD output format
 - **tags:** xml, schema, output
 - **derived_from:** docs/PRD.md
 
@@ -339,14 +339,14 @@ Total nodes: 172
 ## map-self-review-xml-schema-self-review-v1-xsd
 
 - **kind:** map
-- **title:** self-review XML schema (self-review-v1.xsd)
+- **title:** self-review XML schema (self-review-v2.xsd)
 - **tags:** self-review, xsd, schema
 - **derived_from:** .opencode/skills/self-review-apply/SKILL.md
 
 ## map-self-review-xml-v1-schema
 
 - **kind:** map
-- **title:** self-review XML v1 schema
+- **title:** self-review XML v2 schema
 - **tags:** self-review, xml, schema
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
@@ -745,7 +745,7 @@ Total nodes: 172
 ## practice-keep-the-xsd-schema-in-sync-across-its-two-locations
 
 - **kind:** practice
-- **title:** Keep the XSD schema in sync across its two locations
+- **title:** Keep the XSD schema in sync across its three locations
 - **tags:** task-manager, xsd, sync
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 

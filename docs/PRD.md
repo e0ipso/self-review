@@ -407,9 +407,9 @@ The following is the target structure. The exact XSD will be generated as part o
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <review
-  xmlns="urn:self-review:v1"
+  xmlns="urn:self-review:v2"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="urn:self-review:v1 self-review-v1.xsd"
+  xsi:schemaLocation="urn:self-review:v2 self-review-v2.xsd"
   timestamp="2026-02-10T14:30:00Z"
   git-diff-args="--staged"
   repository="/path/to/repo"
@@ -470,12 +470,15 @@ return user;</original-code>
 - **Line comments reference either old or new line numbers.** Comments on added or context lines use `new-line-start` / `new-line-end` (line numbers from the post-change version). Comments on deleted lines use `old-line-start` / `old-line-end` (line numbers from the pre-change version). Exactly one pair should be present for line-level comments; this constraint is enforced by the application (not expressible in XSD 1.0). For single-line comments, start equals end.
 - **Suggestions** include both the original code (from the diff) and the proposed replacement, as literal text. The AI agent can apply the suggestion by performing a text replacement.
 - **Categories** are required on every comment. The first configured category is selected by default.
+- **Severity and confidence are optional and independent.** `severity` says how consequential a finding is if real (`critical`, `major`, `minor`, `info`); `confidence` says how sure the author is that it is real (`high`, `medium`, `low`). They exist so an unattended consumer can threshold on findings instead of applying all or none. Neither carries a schema default: an absent attribute means the author took no position and must be read as below every threshold floor. Comments authored by a human in the UI normally carry neither.
 - **No wrapper elements.** `<file>` elements are direct children of `<review>`. No `<files>` or `<summary>` wrappers.
 - **Source attributes are mode-dependent.** In git mode, the `<review>` element carries `git-diff-args` and `repository` attributes. In directory mode, it carries a `source-path` attribute (the absolute path to the scanned directory) and omits `git-diff-args` and `repository`. All three attributes are optional in the XSD.
 
 ### 6.4 XSD Schema File
 
-The XSD schema file (`self-review-v1.xsd`) is bundled with the application and also written alongside the XML output (or referenced by path). The schema is versioned (`v1`) to allow future evolution without breaking existing consumers.
+The XSD schema file (`self-review-v2.xsd`) is bundled with the application and also written alongside the XML output (or referenced by path). The schema is versioned in both its namespace URI and its filename to allow future evolution without breaking existing consumers.
+
+`v2` added the optional `severity` and `confidence` attributes on `<comment>`. The previous schema is kept on disk as `self-review-v1.xsd` so consumers holding v1 documents retain a validator. The application emits v2 and validates against v2; the `--resume-from` parser is namespace-agnostic and still reads v1 documents, but re-saving one writes it back as v2.
 
 ---
 
