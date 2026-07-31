@@ -516,9 +516,9 @@ graph TD
 - ✔️ Task 008: Update `self-review-apply/SKILL.md` and `self-review-critique/SKILL.md` for v3 and reply authoring (depends on: 001) — `completed`
 - ✔️ Task 009: Update `AGENTS.md`, `docs/PRD.md` and `README.md` for v3 and threaded replies (depends on: 001) — `completed`
 
-### Phase 3: Composer extraction
+### ✅ Phase 3: Composer extraction
 **Parallel Tasks:**
-- Task 006: Extract `ComposerCore` from `CommentInput` and build `ReplyInput` on it (depends on: 005)
+- ✔️ Task 006: Extract `ComposerCore` from `CommentInput` and build `ReplyInput` on it (depends on: 005) — `completed`
 
 ### Phase 4: Thread rendering
 **Parallel Tasks:**
