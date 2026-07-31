@@ -1,11 +1,5 @@
 # POST_PLAN Hook
 
-Answer these questions:
+Ensure the plan includes a _Self Validation_ section describing the steps the LLM will take to validate that the plan was completed successfully.
 
-- [ ] Does this plan include the necessary updates to PRD.md and `test/features`? Make sure to be
-      succint in your inclusions and updates. Also consider not ammending PRD.md and tests for
-      minimal feature changes.
-- [ ] Has this plan identified how the architecture and code reuse can be improved in its areas of
-      influence?
-
-Update the plan if necessary.
+Also, answer the question _Does this plan need to update the documentation, or the AGENTS.md_.

@@ -1,7 +1,5 @@
 # PRE_TASK_ASSIGNMENT Hook
 
-This hook executes before task assignment to determine the most appropriate agent for each task based on skill requirements and available sub-agents.
-
 ## Agent Selection and Task Assignment
 
 - For each task in the current phase:
@@ -11,12 +9,12 @@ This hook executes before task assignment to determine the most appropriate agen
     - Select the most appropriate sub-agent (if any are available). If no sub-agent is appropriate, use the general-purpose one.
     - Consider task-specific requirements from the task document
 
-[IMPORTANT] Analyze the set of tasks skills in order to engage any relevant assistant skills as necessary (either global
+[IMPORTANT] Analyze the set of tasks skills in order to engage any relevant harness skills as necessary (either global
 or project skills).
 
 
 ## Available Sub-Agents
-Analyze the sub-agents available in your current assistant's agents directory. If none are available or the available
+Analyze the sub-agents available in your current harness's agents directory. If none are available or the available
 ones do not match the task's requirements, then use a generic agent.
 
 ## Matching Criteria
@@ -28,25 +26,7 @@ Select agents based on:
 
 ## Skills Extraction and Agent Detection
 
-Read task skills and select appropriate task-specific agent:
-
-```bash
-# Extract skills from task frontmatter
-TASK_SKILLS=$(node "$root/config/scripts/extract-task-skills.cjs" "$TASK_FILE")
-
-echo "Task skills required: $TASK_SKILLS"
-
-# Check for available sub-agents across assistant directories
-AGENT_FOUND=false
-for assistant_dir in .claude .gemini .opencode; do
-    if [ -d "$assistant_dir/agents" ] && [ -n "$(ls $assistant_dir/agents 2>/dev/null)" ]; then
-        echo "Available sub-agents detected in $assistant_dir - will match to task requirements"
-        AGENT_FOUND=true
-        break
-    fi
-done
-
-if [ "$AGENT_FOUND" = false ]; then
-    echo "Using general-purpose agent for task execution"
-fi
-```
+1. Read the `skills` array from the task's YAML frontmatter directly.
+2. Check for available sub-agents in your harness's agents directory.
+3. If matching sub-agents are found, select the most appropriate one based on the task's required skills.
+4. If no sub-agents are available or none match, use a general-purpose agent for task execution.
