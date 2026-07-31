@@ -520,9 +520,9 @@ graph TD
 **Parallel Tasks:**
 - ✔️ Task 006: Extract `ComposerCore` from `CommentInput` and build `ReplyInput` on it (depends on: 005) — `completed`
 
-### Phase 4: Thread rendering
+### ✅ Phase 4: Thread rendering
 **Parallel Tasks:**
-- Task 007: Render replies, the Reply affordance, and ungated reply edit/delete in `CommentDisplay` (depends on: 006)
+- ✔️ Task 007: Render replies, the Reply affordance, and ungated reply edit/delete in `CommentDisplay` (depends on: 006) — `completed`
 
 ### Phase 5: End-to-end coverage
 **Parallel Tasks:**
