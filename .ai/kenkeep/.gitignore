@@ -1,4 +1,6 @@
-_sessions/
-_logs/
-.state/
+/_sessions/
+/_logs/
+/hooks/
+.state/*
 !.state/installed-version
+.state/

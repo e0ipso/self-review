@@ -409,5 +409,7 @@ Make sure the PR title follows the conventional commit naming convention.
 When developing in a Cursor Cloud Agent VM, read [`.cursor/cloud-instructions.md`](.cursor/cloud-instructions.md) for environment setup and run caveats (building the workspace packages before the app builds, the headless Electron launch recipe, e2e browser install). Load it on demand — it is not needed for routine local work.
 
 <!-- >>> kenkeep:kk-index >>> -->
-Curated project knowledge lives in [.ai/kenkeep/INDEX.md](.ai/kenkeep/INDEX.md). Consult it before designing a non-trivial change.
+You are required to load [.ai/kenkeep/ENTRY.md](.ai/kenkeep/ENTRY.md), the small curated entry catalog for this repo. Enter there and descend using progressive disclosure principles.
+
+
 <!-- <<< kenkeep:kk-index <<< -->
