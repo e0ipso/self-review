@@ -200,7 +200,9 @@ export function createPriorReviewXml(
     category?: string;
     severity?: string;
     confidence?: string;
-  }>
+  }>,
+  /** Viewed state per file. Files carrying comments default to not viewed. */
+  fileStates: Array<{ path: string; viewed: boolean }> = []
 ): string {
   const commentXml = (c: (typeof comments)[0]) => {
     const lineAttrs = [
@@ -235,12 +237,19 @@ export function createPriorReviewXml(
     arr.push(c);
     byFile.set(c.filePath, arr);
   }
+  // A file can be marked done without carrying any comment.
+  for (const { path } of fileStates) {
+    if (!byFile.has(path)) byFile.set(path, []);
+  }
+  const viewedByPath = new Map(fileStates.map(f => [f.path, f.viewed]));
 
   const fileElements = Array.from(byFile.entries())
-    .map(
-      ([path, fileComments]) =>
-        `  <file path="${path}" change-type="modified" viewed="false">\n${fileComments.map(commentXml).join('\n')}\n  </file>`
-    )
+    .map(([path, fileComments]) => {
+      const viewed = viewedByPath.get(path) ?? false;
+      const openTag = `  <file path="${path}" change-type="modified" viewed="${viewed}"`;
+      if (fileComments.length === 0) return `${openTag} />`;
+      return `${openTag}>\n${fileComments.map(commentXml).join('\n')}\n  </file>`;
+    })
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>

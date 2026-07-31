@@ -138,6 +138,8 @@ export interface DiffLoadPayload {
 
 export interface ResumeLoadPayload {
   comments: ReviewComment[];
+  /** Paths the prior review marked as done. Absent when nothing was marked. */
+  viewedFiles?: string[];
 }
 
 // ===== Output Path Types =====

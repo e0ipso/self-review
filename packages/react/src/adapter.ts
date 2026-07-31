@@ -1,7 +1,7 @@
 import type {
   DiffHunk,
   DiffLoadPayload,
-  ReviewComment,
+  ResumeLoadPayload,
   ReviewState,
   ExpandContextRequest,
   ExpandContextResponse,
@@ -19,8 +19,8 @@ export interface ReviewAdapter {
   /** Load diff data. Called once on mount. */
   loadDiff: () => Promise<DiffLoadPayload>;
 
-  /** Load previously saved comments (resume flow). */
-  loadResumedComments?: () => Promise<ReviewComment[]>;
+  /** Load a previously saved review — comments and viewed files (resume flow). */
+  loadResumedReview?: () => Promise<ResumeLoadPayload>;
 
   /** Submit/save a completed review. */
   submitReview?: (state: ReviewState) => Promise<void> | void;

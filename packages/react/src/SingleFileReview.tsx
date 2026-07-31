@@ -23,7 +23,7 @@ export interface SingleFileReviewProps {
   /**
    * Optional partial `ReviewAdapter`. Consumers use this to wire optional adapter methods
    * such as `expandContext`, `loadFileContent`, `loadImage`, `readAttachment`,
-   * `loadResumedComments`, `submitReview`, and `changeOutputPath`.
+   * `loadResumedReview`, `submitReview`, and `changeOutputPath`.
    *
    * Note: a consumer-supplied `loadDiff` is intentionally ignored — `file` and `source`
    * are the source of truth in single-file mode. Memoize this object on the consumer side

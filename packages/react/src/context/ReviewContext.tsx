@@ -16,6 +16,7 @@ import type {
   DiffSource,
   FileReviewState,
   ReviewComment,
+  ResumeLoadPayload,
   LineRange,
   Suggestion,
 } from '@self-review/types';
@@ -51,6 +52,19 @@ export interface ReviewContextValue {
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
 
+function groupCommentsByFile(
+  comments: ReviewComment[]
+): Map<string, ReviewComment[]> {
+  const byFile = new Map<string, ReviewComment[]>();
+  comments.forEach(comment => {
+    if (!byFile.has(comment.filePath)) {
+      byFile.set(comment.filePath, []);
+    }
+    byFile.get(comment.filePath)!.push(comment);
+  });
+  return byFile;
+}
+
 export function useReview() {
   const context = useContext(ReviewContext);
   if (!context) {
@@ -79,6 +93,10 @@ export function ReviewProvider({
   const [diffSource, setDiffSource] = useState<DiffSource>(
     initialSource || (initialFiles ? { type: 'directory', sourcePath: '' } : { type: 'loading' })
   );
+  const [resumedReview, setResumedReview] = useState<ResumeLoadPayload | null>(
+    null
+  );
+  const resumeAppliedRef = useRef(false);
   const { config } = useConfig();
   const adapter = useAdapter();
 
@@ -123,6 +141,29 @@ export function ReviewProvider({
     }
   }, [allDiffFiles]);
 
+  // Merge the resumed review once the file state it applies to exists.
+  //
+  // The seeding effect above is declared first, so when both run in the same
+  // commit its updater is queued first and this one sees the seeded files.
+  // Applying only once keeps later allDiffFiles updates (lazy hunk loads,
+  // expanded context) from resurrecting comments the user has since deleted.
+  useEffect(() => {
+    if (!resumedReview || resumeAppliedRef.current) return;
+    if (allDiffFiles.length === 0) return;
+    resumeAppliedRef.current = true;
+
+    const commentsByFile = groupCommentsByFile(resumedReview.comments);
+    const viewedPaths = new Set(resumedReview.viewedFiles ?? []);
+
+    reviewState.setFiles(prev =>
+      prev.map(file => ({
+        ...file,
+        comments: commentsByFile.get(file.path) || file.comments,
+        viewed: viewedPaths.has(file.path) || file.viewed,
+      }))
+    );
+  }, [resumedReview, allDiffFiles]);
+
   // Load data from adapter (if provided and no initialFiles)
   useEffect(() => {
     if (initialFiles || !adapter) return;
@@ -136,24 +177,13 @@ export function ReviewProvider({
         setAllDiffFiles(payload.files);
         setDiffSource(payload.source);
 
-        // Load resumed comments if adapter supports it
-        if (adapter.loadResumedComments) {
-          const comments = await adapter.loadResumedComments();
+        // Load resumed review if adapter supports it. Applying it is deferred to
+        // the effect below: the per-file state it merges into does not exist
+        // until the allDiffFiles effect has seeded it.
+        if (adapter.loadResumedReview) {
+          const resumed = await adapter.loadResumedReview();
           if (cancelled) return;
-          const commentsByFile = new Map<string, ReviewComment[]>();
-          comments.forEach(comment => {
-            if (!commentsByFile.has(comment.filePath)) {
-              commentsByFile.set(comment.filePath, []);
-            }
-            commentsByFile.get(comment.filePath)!.push(comment);
-          });
-
-          reviewState.setFiles(prev =>
-            prev.map(file => ({
-              ...file,
-              comments: commentsByFile.get(file.path) || file.comments,
-            }))
-          );
+          setResumedReview(resumed);
         }
       } catch (error) {
         console.error('[ReviewContext] Failed to load diff:', error);
@@ -167,13 +197,7 @@ export function ReviewProvider({
   useEffect(() => {
     if (!initialComments || initialComments.length === 0) return;
 
-    const commentsByFile = new Map<string, ReviewComment[]>();
-    initialComments.forEach(comment => {
-      if (!commentsByFile.has(comment.filePath)) {
-        commentsByFile.set(comment.filePath, []);
-      }
-      commentsByFile.get(comment.filePath)!.push(comment);
-    });
+    const commentsByFile = groupCommentsByFile(initialComments);
 
     reviewState.setFiles(prev =>
       prev.map(file => ({

@@ -4,34 +4,9 @@ import { render } from '@testing-library/react';
 import type { DiffFile } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
 
-// jsdom does not implement these browser APIs that the inner providers touch
-// during their passive effects. Without the polyfills, the render call surfaces
-// IntersectionObserver / matchMedia errors even though we only care about the
-// adapter captured at the outer ReviewAdapterProvider.
-class MockIntersectionObserver implements IntersectionObserver {
-  readonly root = null;
-  readonly rootMargin = '';
-  readonly thresholds: ReadonlyArray<number> = [];
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-  takeRecords(): IntersectionObserverEntry[] { return []; }
-}
-(globalThis as { IntersectionObserver: typeof IntersectionObserver }).IntersectionObserver =
-  MockIntersectionObserver as unknown as typeof IntersectionObserver;
+import { installBrowserApiStubs } from './test-helpers';
 
-if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
-  window.matchMedia = (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => false,
-  });
-}
+installBrowserApiStubs();
 
 let capturedAdapter: ReviewAdapter | null = null;
 
@@ -107,7 +82,7 @@ describe('SingleFileReview adapter merge', () => {
     expect(capturedAdapter!.loadFileContent).toBeUndefined();
     expect(capturedAdapter!.loadImage).toBeUndefined();
     expect(capturedAdapter!.readAttachment).toBeUndefined();
-    expect(capturedAdapter!.loadResumedComments).toBeUndefined();
+    expect(capturedAdapter!.loadResumedReview).toBeUndefined();
     expect(capturedAdapter!.submitReview).toBeUndefined();
     expect(capturedAdapter!.changeOutputPath).toBeUndefined();
   });

@@ -137,7 +137,7 @@ The CLI accepts any arguments that `git diff` accepts. These are passed through 
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--resume-from <file>` | string |, | Path to a previously exported XML file. Loads prior comments back into the UI overlaid on the same diff. |
+| `--resume-from <file>` | string |, | Path to a previously exported XML file. Loads prior comments and files marked as done back into the UI overlaid on the same diff. |
 | `--help` | boolean |, | Print usage information and exit. |
 | `--version` | boolean |, | Print version and exit. |
 
@@ -595,7 +595,8 @@ The application must not crash due to malformed configuration.
 
 The `--resume-from` flag accepts a path to a previously exported XML file. The application:
 
-1. Parses the XML file and extracts all comments, suggestions, and categories.
+1. Parses the XML file and extracts all comments, suggestions, categories, and the
+   per-file `viewed` flags.
 2. Runs `git diff` with the provided arguments to generate the current diff.
 3. Launches the Electron window with the diff data and the prior review state overlaid.
 4. The user can edit, delete, or add new comments.

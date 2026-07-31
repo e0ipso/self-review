@@ -28,6 +28,7 @@ let diffDataCache: DiffLoadPayload | null = null;
 let configCache: AppConfig | null = null;
 let outputPathInfoCache: OutputPathInfo | null = null;
 let resumeCommentsCache: ReviewComment[] = [];
+let resumeViewedFilesCache: string[] = [];
 
 export function setDiffData(data: DiffLoadPayload): void {
   diffDataCache = data;
@@ -41,8 +42,12 @@ export function setOutputPathInfo(info: OutputPathInfo): void {
   outputPathInfoCache = info;
 }
 
-export function setResumeComments(comments: ReviewComment[]): void {
+export function setResumeData(
+  comments: ReviewComment[],
+  viewedFiles: string[] = []
+): void {
   resumeCommentsCache = comments;
+  resumeViewedFilesCache = viewedFiles;
 }
 
 export function registerIpcHandlers(): void {
@@ -129,10 +134,14 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // Send resume comments when renderer is ready (after diff data is loaded)
+  // Send resumed comments and viewed files when the renderer is ready
+  // (after diff data is loaded)
   ipcMain.on(IPC.RESUME_REQUEST, event => {
-    if (resumeCommentsCache.length > 0) {
-      event.sender.send(IPC.RESUME_LOAD, { comments: resumeCommentsCache });
+    if (resumeCommentsCache.length > 0 || resumeViewedFilesCache.length > 0) {
+      event.sender.send(IPC.RESUME_LOAD, {
+        comments: resumeCommentsCache,
+        viewedFiles: resumeViewedFilesCache,
+      });
     }
   });
 

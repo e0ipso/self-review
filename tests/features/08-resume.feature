@@ -18,6 +18,17 @@ Feature: Resume from Prior Review
     Then the comment "Fix this typo" should be displayed at new line 5 of "src/auth/login.ts"
     And the file-level comment "Needs refactor" should be displayed on "src/auth/login.ts"
 
+  Scenario: Resume restores files previously marked as done
+    Given a prior review XML file "review.xml" with these viewed files:
+      | file              | viewed |
+      | src/auth/login.ts | true   |
+      | src/config.ts     | false  |
+    When I launch self-review with "--resume-from review.xml"
+    Then the file "src/auth/login.ts" should be marked as done reviewing
+    And the file "src/config.ts" should not be marked as done reviewing
+    When I click "Finish Review"
+    Then the output file should mark "src/auth/login.ts" as viewed
+
   Scenario: Resumed comments display and preserve severity and confidence
     Given a prior review XML file "review.xml" with these comments:
       | file              | new_line_start | new_line_end | body            | category | severity | confidence |

@@ -20,7 +20,7 @@ import {
   setDiffData,
   setConfigData,
   setOutputPathInfo,
-  setResumeComments,
+  setResumeData,
   requestReviewFromRenderer,
 } from './ipc-handlers';
 import { checkForUpdate } from './version-checker';
@@ -91,6 +91,7 @@ if (process.env.NODE_ENV === 'test' || process.env.DISPLAY === ':99') {
 let mainWindow: BrowserWindow | null = null;
 let diffData: DiffLoadPayload | null = null;
 let resumeComments: ReviewComment[] = [];
+let resumeViewedFiles: string[] = [];
 let appConfig: AppConfig | null = null;
 let currentOutputPath: string = '';
 let outputPathWritable: boolean = false;
@@ -304,10 +305,13 @@ async function initializeApp() {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
         const parsed = parseReviewXml(cliArgs.resumeFrom);
         resumeComments = parsed.comments;
+        resumeViewedFiles = parsed.viewedFiles;
         console.error(
           '[main] Loaded',
           resumeComments.length,
-          'comments from resume file'
+          'comments and',
+          resumeViewedFiles.length,
+          'viewed files from resume file'
         );
       } catch {
         console.error('[main] Error loading resume file');
@@ -320,8 +324,8 @@ async function initializeApp() {
     setDiffData(diffData);
     setConfigData(appConfig);
     setOutputPathInfo({ resolvedOutputPath: currentOutputPath, outputPathWritable });
-    if (resumeComments.length > 0) {
-      setResumeComments(resumeComments);
+    if (resumeComments.length > 0 || resumeViewedFiles.length > 0) {
+      setResumeData(resumeComments, resumeViewedFiles);
     }
 
     // Phase 7: Register IPC handlers
