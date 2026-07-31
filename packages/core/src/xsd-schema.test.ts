@@ -16,7 +16,7 @@ import type { ReviewState } from './types';
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
 const CANONICAL_SCHEMA =
-  '.agents/skills/self-review-apply/assets/self-review-v2.xsd';
+  '.agents/skills/self-review-apply/assets/self-review-v3.xsd';
 
 // opencode discovers skills under .opencode/skills, so those entries are
 // symlinks to the .agents originals rather than copies. Byte-comparing them
@@ -24,7 +24,7 @@ const CANONICAL_SCHEMA =
 // copy, and the drift it invites, from creeping back in.
 const SYMLINKED_SKILLS = ['self-review-apply', 'self-review-critique'];
 
-const SCHEMA_FILE_NAME = 'self-review-v2.xsd';
+const SCHEMA_FILE_NAME = 'self-review-v3.xsd';
 
 function readCopy(relativePath: string): string {
   return fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf-8');
@@ -40,7 +40,7 @@ async function validate(xml: string) {
 function reviewXml(comments: string): string {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<review xmlns="urn:self-review:v2" timestamp="2024-01-15T10:30:00Z">',
+    '<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z">',
     '  <file path="src/main.ts" change-type="modified" viewed="true">',
     comments,
     '  </file>',
@@ -111,11 +111,48 @@ describe('XSD conformance', () => {
     expect(result.valid).toBe(false);
   });
 
-  it('rejects a v1-namespaced document, so the version bump is observable', async () => {
+  it('accepts a comment carrying an ordered list of replies', async () => {
+    const result = await validate(
+      reviewXml(
+        [
+          '    <comment new-line-start="1" new-line-end="1">',
+          '      <body>b</body>',
+          '      <category>bug</category>',
+          '      <reply><body>first turn</body></reply>',
+          '      <reply author="Claude Opus 5"><body>second turn</body></reply>',
+          '    </comment>',
+        ].join('\n')
+      )
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it.each([
+    ['nested', '<reply><body>r</body><reply><body>nested</body></reply></reply>'],
+    ['categorized', '<reply><body>r</body><category>bug</category></reply>'],
+    ['thresholded', '<reply severity="major"><body>r</body></reply>'],
+    [
+      'suggesting',
+      '<reply><body>r</body><suggestion><original-code>a</original-code><proposed-code>b</proposed-code></suggestion></reply>',
+    ],
+  ])(
+    'rejects a %s reply, since a reply is a flat turn without its own metadata',
+    async (_label, reply) => {
+      const result = await validate(
+        reviewXml(`    <comment><body>b</body><category>bug</category>${reply}</comment>`)
+      );
+
+      expect(result.valid).toBe(false);
+    }
+  );
+
+  it('rejects a v2-namespaced document, so the version bump is observable', async () => {
     const result = await validate(
       reviewXml('    <comment><body>b</body><category>bug</category></comment>').replace(
-        'urn:self-review:v2',
-        'urn:self-review:v1'
+        'urn:self-review:v3',
+        'urn:self-review:v2'
       )
     );
 
@@ -126,7 +163,7 @@ describe('XSD conformance', () => {
 describe('serializer output conforms to the schema', () => {
   // serializeReview validates internally, and nothing is mocked in this file,
   // so this exercises the real emitter against the real validator.
-  it('emits a valid v2 document carrying both signals', async () => {
+  it('emits a valid v3 document carrying both signals', async () => {
     const state: ReviewState = {
       timestamp: '2024-01-15T10:30:00Z',
       source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
@@ -162,7 +199,7 @@ describe('serializer output conforms to the schema', () => {
 
     const xml = await serializeReview(state, '/tmp/test-review.xml');
 
-    expect(xml).toContain('xmlns="urn:self-review:v2"');
+    expect(xml).toContain('xmlns="urn:self-review:v3"');
     expect(xml).toContain('severity="critical" confidence="high"');
     expect((await validate(xml)).valid).toBe(true);
   });

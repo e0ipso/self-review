@@ -65,15 +65,39 @@ export interface LineRange {
 
 /**
  * How consequential a finding is if it is real, most to least.
- * See SeverityEnum in self-review-v2.xsd for the semantics of each value.
+ * See SeverityEnum in self-review-v3.xsd for the semantics of each value.
  */
 export type CommentSeverity = 'critical' | 'major' | 'minor' | 'info';
 
 /**
  * How sure the author is that a finding is real, most to least.
- * See ConfidenceEnum in self-review-v2.xsd for the semantics of each value.
+ * See ConfidenceEnum in self-review-v3.xsd for the semantics of each value.
  */
 export type CommentConfidence = 'high' | 'medium' | 'low';
+
+/**
+ * One turn in the conversation about a comment.
+ *
+ * A reply is deliberately thin. It carries no category, no severity, no
+ * confidence and no suggestion: all four are properties of the finding, and
+ * the finding is the root comment. A counter-proposal goes in `body` as a
+ * fenced code block.
+ *
+ * Ordering is positional. The array order is the document order is the
+ * conversation order, in all three directions. Nothing sorts replies.
+ */
+export interface Reply {
+  /**
+   * In-memory render key only. Like `ReviewComment.id`, this is regenerated
+   * on every parse and is never written to XML — the tree supplies parent
+   * linkage and document order supplies ordering, so nothing needs naming.
+   */
+  id: string;
+  body: string;
+  /** Absent means the human reviewer, present means a bot or LLM. */
+  author?: string;
+  attachments?: Attachment[];
+}
 
 export interface ReviewComment {
   id: string;
@@ -89,6 +113,8 @@ export interface ReviewComment {
   confidence?: CommentConfidence;
   orphaned?: boolean; // for --resume-from conflict handling
   attachments?: Attachment[];
+  /** Ordered conversation turns on this comment. Undefined when there are none. */
+  replies?: Reply[];
 }
 
 export interface FileReviewState {

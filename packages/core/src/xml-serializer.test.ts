@@ -42,7 +42,7 @@ describe('serializeReview', () => {
       const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(xml).toContain('xmlns="urn:self-review:v2"');
+      expect(xml).toContain('xmlns="urn:self-review:v3"');
       expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
       expect(xml).toContain('git-diff-args="--staged"');
       expect(xml).toContain('repository="/path/to/repo"');
@@ -490,7 +490,7 @@ describe('serializeReview', () => {
       expect(callArgs.xml).toHaveLength(1);
       expect(callArgs.xml[0].fileName).toBe('review.xml');
       expect(callArgs.schema).toHaveLength(1);
-      expect(callArgs.schema[0].fileName).toBe('self-review-v2.xsd');
+      expect(callArgs.schema[0].fileName).toBe('self-review-v3.xsd');
     });
 
     it('throws error if validation fails', async () => {
@@ -525,7 +525,7 @@ describe('serializeReview', () => {
 
       // Should return XML without throwing (graceful fallback)
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(xml).toContain('xmlns="urn:self-review:v2"');
+      expect(xml).toContain('xmlns="urn:self-review:v3"');
       expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
       expect(xml).toContain('</review>');
     });
