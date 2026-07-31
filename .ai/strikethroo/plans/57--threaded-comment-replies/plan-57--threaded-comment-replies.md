@@ -524,10 +524,16 @@ graph TD
 **Parallel Tasks:**
 - ✔️ Task 007: Render replies, the Reply affordance, and ungated reply edit/delete in `CommentDisplay` (depends on: 006) — `completed`
 
-### Phase 5: End-to-end coverage
+### ✅ Phase 5: End-to-end coverage
 **Parallel Tasks:**
-- Task 010: Webapp e2e scenarios for reply create / order / edit / delete (depends on: 007)
-- Task 011: Electron e2e scenarios for reply serialization and the v2-in / v3-out resume round-trip (depends on: 003, 004, 007)
+- ✔️ Task 010: Webapp e2e scenarios for reply create / order / edit / delete (depends on: 007) — `completed`
+- ✔️ Task 011: Electron e2e scenarios for reply serialization and the v2-in / v3-out resume round-trip (depends on: 003, 004, 007) — `completed`
+
+**Not executed in this environment:** both e2e suites need a display and are forbidden in the dev
+container per AGENTS.md. `npx bddgen` was used as the executable proxy and was itself falsified — a
+deliberately undefined step makes it exit 1 with `Missing step definitions`, so its clean exit is
+meaningful. Whether the scenarios go green against the real app is unproven and belongs to Self
+Validation step 7 on the host.
 
 ### Post-phase Actions
 

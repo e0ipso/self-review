@@ -200,6 +200,12 @@ export function createPriorReviewXml(
     category?: string;
     severity?: string;
     confidence?: string;
+    /**
+     * Ordered conversation turns under this comment. Document order is
+     * conversation order — there are no timestamps and no ids — so the
+     * generator emits these exactly as given.
+     */
+    replies?: Array<{ body: string; author?: string }>;
   }>,
   /** Viewed state per file. Files carrying comments default to not viewed. */
   fileStates: Array<{ path: string; viewed: boolean }> = []
@@ -227,7 +233,11 @@ export function createPriorReviewXml(
       ? `\n      <category>${c.category}</category>`
       : '';
 
-    return `    <comment${attrs}>\n      <body>${escapeXml(c.body)}</body>${categoryEl}\n    </comment>`;
+    // `<reply>` follows `<category>` because CommentType is an xs:sequence of
+    // body, category, suggestion, attachment, reply.
+    const replyEls = (c.replies ?? []).map(replyXml).join('');
+
+    return `    <comment${attrs}>\n      <body>${escapeXml(c.body)}</body>${categoryEl}${replyEls}\n    </comment>`;
   };
 
   // Group comments by file
@@ -252,6 +262,15 @@ export function createPriorReviewXml(
     })
     .join('\n');
 
+  // The root element stays on `urn:self-review:v2` on purpose. These fixtures
+  // exist to prove the app still reads documents written before v3, and the
+  // resume scenarios assert that such a document is re-saved as v3. Do not
+  // bump this namespace.
+  //
+  // Note a fixture carrying <reply> children declares v2 while <reply> was
+  // only added in v3, so it does not validate against the frozen v2 schema.
+  // That is deliberate and harmless: nothing validates the fixture, and the
+  // parser matches elements by local name regardless of namespace.
   return `<?xml version="1.0" encoding="UTF-8"?>
 <review
   xmlns="urn:self-review:v2"
@@ -263,6 +282,15 @@ export function createPriorReviewXml(
 >
 ${fileElements}
 </review>`;
+}
+
+/**
+ * One `<reply>` child of a prior-review `<comment>`. An absent author means the
+ * turn is the human reviewer's, which the UI renders as "You".
+ */
+function replyXml(reply: { body: string; author?: string }): string {
+  const authorAttr = reply.author ? ` author="${escapeXml(reply.author)}"` : '';
+  return `\n      <reply${authorAttr}>\n        <body>${escapeXml(reply.body)}</body>\n      </reply>`;
 }
 
 function escapeXml(s: string): string {

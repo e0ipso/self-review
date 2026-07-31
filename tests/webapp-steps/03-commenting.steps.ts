@@ -9,6 +9,40 @@ import { getPage, triggerCommentIcon } from './app';
 
 const { Given, When, Then } = createBdd();
 
+/**
+ * Root comments only: the bare `comment-` prefix also matches the gutter
+ * icons, the composer and each comment's collapse toggle.
+ */
+const COMMENT_SELECTOR =
+  '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])';
+
+/**
+ * Rendered replies only. `[data-testid^="reply-"]` on its own also matches
+ * `reply-btn-<commentId>`, `reply-input` and `reply-actions`, so the anchor is
+ * a direct child of a thread container; the `:not` then drops the edit
+ * composer, which replaces a reply in place inside that same container.
+ */
+const REPLY_SELECTOR =
+  '[data-testid^="thread-"] > [data-testid^="reply-"]:not([data-testid="reply-input"])';
+
+function lastComment(page: Page) {
+  return page.locator(COMMENT_SELECTOR).last();
+}
+
+/** The thread of the comment under test, in rendered order. */
+function repliesOfLastComment(page: Page) {
+  return lastComment(page).locator(REPLY_SELECTOR);
+}
+
+/** `index` is 1-based, matching the Gherkin "reply 1" wording. */
+function replyAt(page: Page, index: number) {
+  return repliesOfLastComment(page).nth(index - 1);
+}
+
+async function fillReplyInput(page: Page, text: string): Promise<void> {
+  await page.locator('[data-testid="reply-input"] textarea').fill(text);
+}
+
 const activeDragFile: string | null = null;
 
 async function dragMoveToLine(page: Page, line: number, side: 'new' | 'old'): Promise<void> {
@@ -122,21 +156,21 @@ When(
 );
 
 When('I click {string} on that comment', async ({}, action: string) => {
-  const page = getPage();
-  const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-  );
-  const lastComment = comments.last();
+  const comment = lastComment(getPage());
   if (action === 'Edit') {
-    await lastComment.hover();
-    await lastComment
+    await comment.hover();
+    await comment
       .locator('button:has(> .lucide-pencil), button:has-text("Edit")')
       .click();
   } else if (action === 'Delete') {
-    await lastComment.hover();
-    await lastComment
+    await comment.hover();
+    await comment
       .locator('button:has(> .lucide-trash-2), button:has-text("Delete")')
       .click();
+  } else if (action === 'Reply') {
+    // Addressed by test id rather than by the pencil/trash icon trick above,
+    // because a thread's own per-reply controls sit inside this container.
+    await comment.locator('[data-testid^="reply-btn-"]').click();
   }
 });
 
@@ -187,9 +221,7 @@ Then(
   'a comment should be displayed below new line {int} of {string}',
   async ({}, _line: number, _filePath: string) => {
     const page = getPage();
-    const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-    );
+    const comments = page.locator(COMMENT_SELECTOR);
     expect(await comments.count()).toBeGreaterThan(0);
   }
 );
@@ -198,9 +230,7 @@ Then(
   'a comment should be displayed below old line {int} of {string}',
   async ({}, _line: number, _filePath: string) => {
     const page = getPage();
-    const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-    );
+    const comments = page.locator(COMMENT_SELECTOR);
     expect(await comments.count()).toBeGreaterThan(0);
   }
 );
@@ -217,17 +247,13 @@ Then(
 
 Then('the comment should show {string}', async ({}, expectedText: string) => {
   const page = getPage();
-  const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-  );
+  const comments = page.locator(COMMENT_SELECTOR);
   await expect(comments.last()).toContainText(expectedText);
 });
 
 Then('the comment header should show {string}', async ({}, text: string) => {
   const page = getPage();
-  const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-  );
+  const comments = page.locator(COMMENT_SELECTOR);
   await expect(comments.last()).toContainText(text);
 });
 
@@ -251,9 +277,7 @@ Then(
   'the displayed comment should show a {string} category badge',
   async ({}, category: string) => {
     const page = getPage();
-    const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-    );
+    const comments = page.locator(COMMENT_SELECTOR);
     await expect(comments.last().locator('.category-badge')).toContainText(category);
   }
 );
@@ -270,9 +294,7 @@ Then(
 
 Then('the comment should be removed', async () => {
   const page = getPage();
-  const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-  );
+  const comments = page.locator(COMMENT_SELECTOR);
   await expect(comments).toHaveCount(0);
 });
 
@@ -280,9 +302,7 @@ Then(
   'no comment should be displayed below new line {int}',
   async ({}, _line: number) => {
     const page = getPage();
-    const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-    );
+    const comments = page.locator(COMMENT_SELECTOR);
     await expect(comments).toHaveCount(0);
   }
 );
@@ -291,17 +311,108 @@ Then(
   'the comment body should render {string} as bold text',
   async ({}, text: string) => {
     const page = getPage();
-    const comments = page.locator(
-      '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-    );
+    const comments = page.locator(COMMENT_SELECTOR);
     await expect(comments.last().locator('strong')).toContainText(text);
   }
 );
 
 Then('{string} as italic text', async ({}, text: string) => {
   const page = getPage();
-  const comments = page.locator(
-    '[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid="comment-input"]):not([data-testid^="comment-collapse"])'
-  );
+  const comments = page.locator(COMMENT_SELECTOR);
   await expect(comments.last().locator('em')).toContainText(text);
 });
+
+// ── Replies ──
+
+Given('I have replied {string} to that comment', async ({}, body: string) => {
+  const page = getPage();
+  const before = await repliesOfLastComment(page).count();
+  await lastComment(page).locator('[data-testid^="reply-btn-"]').click();
+  await fillReplyInput(page, body);
+  await page.locator('[data-testid="add-reply-btn"]').click();
+  // Settle before the next step composes another reply, so the ordering
+  // assertion cannot pass on a half-rendered thread.
+  await expect(repliesOfLastComment(page)).toHaveCount(before + 1);
+});
+
+When('I type {string} in the reply input', async ({}, text: string) => {
+  await fillReplyInput(getPage(), text);
+});
+
+When('I replace the reply text with {string}', async ({}, text: string) => {
+  await fillReplyInput(getPage(), text);
+});
+
+When('I click {string} in the reply input', async ({}, buttonText: string) => {
+  const page = getPage();
+  // "Reply" composes a new turn, "Update" commits an edit — same button.
+  if (buttonText === 'Reply' || buttonText === 'Update') {
+    await page.locator('[data-testid="add-reply-btn"]').click();
+  } else if (buttonText === 'Cancel') {
+    await page.locator('[data-testid="cancel-reply-btn"]').click();
+  } else {
+    throw new Error(`Unknown reply input action: ${buttonText}`);
+  }
+});
+
+When('I click {string} on reply {int}', async ({}, action: string, index: number) => {
+  const reply = replyAt(getPage(), index);
+  await reply.hover();
+  // The per-reply controls are `edit-reply-btn-<replyId>` /
+  // `delete-reply-btn-<replyId>`; scoping to the reply itself avoids
+  // re-deriving the id from the container's test id.
+  if (action === 'Edit') {
+    await reply.locator('[data-testid^="edit-reply-btn-"]').click();
+  } else if (action === 'Delete') {
+    await reply.locator('[data-testid^="delete-reply-btn-"]').click();
+  } else {
+    throw new Error(`Unknown reply action: ${action}`);
+  }
+});
+
+Then('a reply input box should appear beneath that comment', async () => {
+  const page = getPage();
+  await expect(page.locator('[data-testid="reply-input"]')).toBeVisible();
+});
+
+Then('the comment should have {int} reply/replies', async ({}, count: number) => {
+  await expect(repliesOfLastComment(getPage())).toHaveCount(count);
+});
+
+Then('reply {int} should show {string}', async ({}, index: number, text: string) => {
+  await expect(replyAt(getPage(), index)).toContainText(text);
+});
+
+Then(
+  'reply {int} should be attributed to {string}',
+  async ({}, index: number, author: string) => {
+    // The author span is the reply header's first element.
+    await expect(replyAt(getPage(), index).locator('span').first()).toHaveText(
+      author
+    );
+  }
+);
+
+Then(
+  'the comment replies should read {string}, {string} in that order',
+  async ({}, first: string, second: string) => {
+    const page = getPage();
+    const replies = repliesOfLastComment(page);
+    // Settle first: allInnerTexts() is a one-shot read with no auto-retry.
+    await expect(replies).toHaveCount(2);
+    const bodies = await replies.allInnerTexts();
+    expect(bodies[0]).toContain(first);
+    expect(bodies[0]).not.toContain(second);
+    expect(bodies[1]).toContain(second);
+  }
+);
+
+Then(
+  'the reply should become an editable input pre-filled with {string}',
+  async ({}, text: string) => {
+    const page = getPage();
+    const textarea = page.locator('[data-testid="reply-input"] textarea');
+    await expect(textarea).toBeVisible();
+    await expect(textarea).toHaveValue(text);
+  }
+);
