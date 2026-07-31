@@ -10,6 +10,8 @@ import {
   DiffSource,
   CommentSeverity,
   CommentConfidence,
+  Attachment,
+  Reply,
 } from './types';
 
 const SEVERITY_VALUES: readonly CommentSeverity[] = ['critical', 'major', 'minor', 'info'];
@@ -58,56 +60,38 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     const viewedFiles: string[] = [];
 
     // Handle files array
-    const files = Array.isArray(review.file)
-      ? review.file
-      : review.file
-        ? [review.file]
-        : [];
+    const files = toChildArray(review.file);
 
     for (const file of files) {
-      const filePath = file['@_path'];
-      if (!filePath) continue;
+      const rawPath = file['@_path'];
+      if (!rawPath) continue;
+      const filePath = String(rawPath);
 
       if (parseViewed(file['@_viewed'])) {
-        viewedFiles.push(String(filePath));
+        viewedFiles.push(filePath);
       }
 
       // Handle comments array
-      const fileComments = Array.isArray(file.comment)
-        ? file.comment
-        : file.comment
-          ? [file.comment]
-          : [];
+      const fileComments = toChildArray(file.comment);
 
       for (const comment of fileComments) {
         const reviewComment: ReviewComment = {
           id: generateId(),
           filePath,
           lineRange: parseLineRange(comment),
-          body: comment.body || '',
-          category: comment.category || '',
+          body: comment.body !== undefined ? String(comment.body) : '',
+          category: comment.category !== undefined ? String(comment.category) : '',
           suggestion: parseSuggestion(comment),
           author: comment['@_author'] ? String(comment['@_author']) : undefined,
           severity: parseEnumAttribute(comment['@_severity'], SEVERITY_VALUES),
           confidence: parseEnumAttribute(comment['@_confidence'], CONFIDENCE_VALUES),
         };
 
-        // Parse attachments
-        const commentAttachments = Array.isArray(comment.attachment)
-          ? comment.attachment
-          : comment.attachment
-            ? [comment.attachment]
-            : [];
+        const attachments = parseAttachments(comment, reviewComment.id);
+        if (attachments) reviewComment.attachments = attachments;
 
-        if (commentAttachments.length > 0) {
-          reviewComment.attachments = commentAttachments.map(
-            (att: Record<string, unknown>, i: number) => ({
-              id: `${reviewComment.id}-att-${i}`,
-              fileName: String(att['@_path'] || ''),
-              mediaType: String(att['@_media-type'] || 'image/png'),
-            })
-          );
-        }
+        const replies = parseReplies(comment);
+        if (replies) reviewComment.replies = replies;
 
         comments.push(reviewComment);
       }
@@ -208,6 +192,69 @@ function parseSuggestion(comment: Record<string, unknown>): Suggestion | null {
     originalCode: String(suggestion['original-code'] || ''),
     proposedCode: String(suggestion['proposed-code'] || ''),
   };
+}
+
+/**
+ * Normalize a repeatable child element into an array.
+ *
+ * fast-xml-parser collapses a single occurrence into a bare object and only
+ * produces an array from two or more, so every repeatable child in this file
+ * has to be widened before it can be iterated. An absent child yields an empty
+ * array.
+ */
+function toChildArray(raw: unknown): Record<string, unknown>[] {
+  if (Array.isArray(raw)) return raw as Record<string, unknown>[];
+  if (raw === undefined || raw === null) return [];
+  return [raw as Record<string, unknown>];
+}
+
+/**
+ * Read `<attachment>` children of a comment or a reply.
+ *
+ * Attachment ids are synthetic: nothing in the document names them, so they are
+ * derived from the id of their owner, which is why the prefix is a parameter
+ * rather than read off the node. Returns undefined rather than [] when there
+ * are none, matching the optional field on the type.
+ */
+function parseAttachments(
+  node: Record<string, unknown>,
+  idPrefix: string
+): Attachment[] | undefined {
+  const raw = toChildArray(node.attachment);
+  if (raw.length === 0) return undefined;
+
+  return raw.map((att, i) => ({
+    id: `${idPrefix}-att-${i}`,
+    fileName: String(att['@_path'] || ''),
+    mediaType: String(att['@_media-type'] || 'image/png'),
+  }));
+}
+
+/**
+ * Read `<reply>` children in document order.
+ *
+ * Document order is conversation order: a reply carries no timestamp and no
+ * identifier, so the order of this array is the only ordering signal a thread
+ * ever has. Returns undefined rather than [] when there are none, so a
+ * reply-free comment keeps exactly the shape it had before threads existed.
+ */
+function parseReplies(comment: Record<string, unknown>): Reply[] | undefined {
+  const raw = toChildArray(comment.reply);
+  if (raw.length === 0) return undefined;
+
+  return raw.map(node => {
+    const id = generateId();
+    const reply: Reply = {
+      id,
+      body: node.body !== undefined ? String(node.body) : '',
+      author: node['@_author'] ? String(node['@_author']) : undefined,
+    };
+
+    const attachments = parseAttachments(node, id);
+    if (attachments) reply.attachments = attachments;
+
+    return reply;
+  });
 }
 
 function generateId(): string {

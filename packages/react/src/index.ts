@@ -20,6 +20,7 @@ export type {
   DiffSource,
   DiffLoadPayload,
   ReviewComment,
+  Reply,
   ReviewState,
   FileReviewState,
   Suggestion,

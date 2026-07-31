@@ -272,7 +272,7 @@ your-project/
     └── skills/
         └── self-review-apply/
             ├── SKILL.md
-            └── self-review-v2.xsd
+            └── self-review-v3.xsd
 </code>
 
 The skill will:

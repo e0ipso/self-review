@@ -3,7 +3,7 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { ReviewState, FileReviewState, ReviewComment } from './types';
+import { ReviewState, FileReviewState, ReviewComment, Reply, Attachment } from './types';
 import { validateXML } from 'xmllint-wasm';
 
 // Embed the XSD schema for validation.
@@ -542,33 +542,75 @@ function extFromMediaType(mediaType: string): string {
   return map[mediaType] || 'png';
 }
 
+/**
+ * Copies one attachment list's in-memory blobs into the asset directory and
+ * returns the list with each fileName rewritten to its on-disk location and the
+ * data buffer stripped.
+ *
+ * Shared by the comment walk and the reply walk. Serialization emits the
+ * fileName it is given without checking that anything was written, so an
+ * attachment list that misses this function produces a document that validates
+ * against the schema while pointing at a file that does not exist. That failure
+ * has no error surface, which is why both walks go through here.
+ *
+ * The idPrefix names the resulting files. Comments pass their own id, so
+ * existing asset names are unchanged; replies pass a prefix that cannot collide
+ * with a comment's.
+ */
+function persistAttachments(
+  attachments: Attachment[] | undefined,
+  idPrefix: string,
+  assetDir: string,
+  onWrite: () => void
+): Attachment[] | undefined {
+  if (!attachments?.length) return attachments;
+
+  return attachments.map((att, index) => {
+    if (!att.data) return att;
+    onWrite();
+
+    const ext = extFromMediaType(att.mediaType);
+    const fileName = `${idPrefix}-${index}.${ext}`;
+    const relativePath = `.self-review-assets/${fileName}`;
+
+    if (!fs.existsSync(assetDir)) {
+      fs.mkdirSync(assetDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(assetDir, fileName), Buffer.from(att.data));
+
+    return { ...att, fileName: relativePath, data: undefined };
+  });
+}
+
 function writeAttachments(state: ReviewState, outputFilePath: string): ReviewState {
   const assetDir = path.join(path.dirname(outputFilePath), '.self-review-assets');
   let hasAttachments = false;
+  const markWritten = () => {
+    hasAttachments = true;
+  };
 
   const updatedFiles = state.files.map(file => ({
     ...file,
-    comments: file.comments.map(comment => {
-      if (!comment.attachments?.length) return comment;
-
-      const updatedAttachments = comment.attachments.map((att, index) => {
-        if (!att.data) return att;
-        hasAttachments = true;
-
-        const ext = extFromMediaType(att.mediaType);
-        const fileName = `${comment.id}-${index}.${ext}`;
-        const relativePath = `.self-review-assets/${fileName}`;
-
-        if (!fs.existsSync(assetDir)) {
-          fs.mkdirSync(assetDir, { recursive: true });
-        }
-        fs.writeFileSync(path.join(assetDir, fileName), Buffer.from(att.data));
-
-        return { ...att, fileName: relativePath, data: undefined };
-      });
-
-      return { ...comment, attachments: updatedAttachments };
-    }),
+    // Every comment is walked, including one with no attachments of its own:
+    // its replies may carry attachments, and short-circuiting on the comment's
+    // own list would drop those blobs without a word.
+    comments: file.comments.map(comment => ({
+      ...comment,
+      attachments: persistAttachments(comment.attachments, comment.id, assetDir, markWritten),
+      ...(comment.replies
+        ? {
+            replies: comment.replies.map(reply => ({
+              ...reply,
+              attachments: persistAttachments(
+                reply.attachments,
+                `${comment.id}-r-${reply.id}`,
+                assetDir,
+                markWritten
+              ),
+            })),
+          }
+        : {}),
+    })),
   }));
 
   if (hasAttachments) {
@@ -726,16 +768,48 @@ function buildCommentXml(comment: ReviewComment): string[] {
   }
 
   // Attachments
-  if (comment.attachments?.length) {
-    for (const att of comment.attachments) {
-      lines.push(`      <attachment path="${escapeXml(att.fileName)}" media-type="${escapeXml(att.mediaType)}" />`);
-    }
+  lines.push(...buildAttachmentXml(comment.attachments, '      '));
+
+  // Replies, in array order: document order is conversation order, and it is
+  // the only ordering signal a reply has.
+  for (const reply of comment.replies ?? []) {
+    lines.push(...buildReplyXml(reply));
   }
 
   // Closing tag
   lines.push('    </comment>');
 
   return lines;
+}
+
+/**
+ * Attachment elements are identical in form and meaning under a comment and
+ * under a reply, so both call sites emit them from here.
+ */
+function buildAttachmentXml(attachments: Attachment[] | undefined, indent: string): string[] {
+  if (!attachments?.length) return [];
+
+  return attachments.map(
+    att =>
+      `${indent}<attachment path="${escapeXml(att.fileName)}" media-type="${escapeXml(att.mediaType)}" />`
+  );
+}
+
+/**
+ * A reply is a flat turn in the thread: a body, optional attachments and an
+ * optional author. It carries no category, severity, confidence, suggestion or
+ * nested replies — those belong to the root comment, which owns the finding.
+ * See ReplyType in the XSD for the reasoning.
+ */
+function buildReplyXml(reply: Reply): string[] {
+  const attrStr = reply.author ? ` author="${escapeXml(reply.author)}"` : '';
+
+  return [
+    `      <reply${attrStr}>`,
+    `        <body>${escapeXml(reply.body)}</body>`,
+    ...buildAttachmentXml(reply.attachments, '        '),
+    '      </reply>',
+  ];
 }
 
 function escapeXml(str: string): string {

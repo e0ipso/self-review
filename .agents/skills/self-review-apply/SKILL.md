@@ -12,7 +12,7 @@ Read structured review feedback from a self-review XML file and execute the chan
 
 ## XML Reference
 
-Non-obvious semantics (keep in sync with `assets/self-review-v2.xsd`):
+Non-obvious semantics (keep in sync with `assets/self-review-v3.xsd`):
 
 - **Line number pairing:** A comment has exactly one pair, `new-line-start`/`new-line-end` (for
   added/context lines) OR `old-line-start`/`old-line-end` (for deleted lines). Never both. If
@@ -29,14 +29,52 @@ Non-obvious semantics (keep in sync with `assets/self-review-v2.xsd`):
 - **Absent is not neutral.** A comment with no `severity` or no `confidence` is **below every
   threshold**. Never infer a value for it. Comments written by a human in the self-review UI
   normally carry neither, which is why thresholding is opt-in (see step 4).
+- **A `<comment>` may carry an ordered list of `<reply>` children.** The comment is the root of the
+  thread; each reply is a later turn in the conversation about it.
+- **Document order is conversation order.** There are no timestamps and no identifiers, the earlier
+  reply is the earlier turn, and nothing else sorts them.
+- **Replies are flat.** A reply is never nested inside another reply. A reply that answers an
+  earlier reply says so in prose.
+- **A reply carries `<body>`, an optional `author`, and optional `<attachment>` children.** It
+  carries no category, no severity, no confidence and no `<suggestion>`, all four are properties of
+  the finding, and the finding is the root comment.
 
 ## 1. Read the Review XML
 
 Read the XML file from `$ARGUMENTS` or default to `./review.xml`. Stop if the file does not exist.
 
+### Reading a thread
+
+Read a thread top to bottom before acting on it. The root comment states a finding; the replies
+argue about it. **The last human turn wins.** A reply with no `author` attribute is the human
+reviewer's, and it overrides every earlier machine assertion in that thread, including the root
+comment's `severity` and `confidence`. If the human's last reply refutes the finding, do not apply
+it, whatever the root comment claims about how consequential or certain it is.
+
+```xml
+<review xmlns="urn:self-review:v3" timestamp="2026-02-28T14:30:00.000Z" git-diff-args="--staged" repository="/absolute/path/to/repo">
+  <file path="src/parse.ts" change-type="modified" viewed="true">
+    <comment new-line-start="42" new-line-end="44" author="Claude Opus 5" severity="major" confidence="medium">
+      <body>`parseId` can return undefined here.</body>
+      <category>bug</category>
+      <reply>
+        <body>The caller at line 40 guarantees non-null.</body>
+      </reply>
+      <reply author="Claude Opus 5">
+        <body>Confirmed — withdrawing.</body>
+      </reply>
+    </comment>
+  </file>
+</review>
+```
+
+Here the last reply is the model's own concession, not a human turn, so it is not the tie-breaker
+by the "no `author`" rule, it is simply the model agreeing with the human turn that preceded it.
+Either way the outcome is the same: do not apply this finding.
+
 ## 2. Validate the XML
 
-Use the Bash tool to run `xmllint --schema assets/self-review-v2.xsd <review-xml-path> --noout`
+Use the Bash tool to run `xmllint --schema assets/self-review-v3.xsd <review-xml-path> --noout`
 (where `assets/` is relative to this skill's directory). If validation fails, stop and report the
 xmllint errors to the user. If `xmllint` is not installed, warn the user and continue without
 validation.

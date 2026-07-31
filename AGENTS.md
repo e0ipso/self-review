@@ -254,10 +254,16 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   CDN fetches. All assets are bundled.
 - **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
 - **XSD sync.** The XSD schema exists in two places and both must be byte-identical:
-  `.agents/skills/self-review-apply/assets/self-review-v2.xsd` and the `XSD_SCHEMA` string
+  `.agents/skills/self-review-apply/assets/self-review-v3.xsd` and the `XSD_SCHEMA` string
   embedded in `packages/core/src/xml-serializer.ts`. The sync test in
   `packages/core/src/xsd-schema.test.ts` enforces this, so editing one copy alone fails the unit
-  suite. `self-review-v1.xsd` is frozen for consumers of older documents, and must not be edited.
+  suite. `self-review-v1.xsd` and `self-review-v2.xsd` are both frozen for consumers of older
+  documents, and must not be edited.
+- **Read any version, write v3.** The parser is namespace-blind, so `--resume-from` loads v1, v2
+  and v3 documents identically. The serializer always emits `urn:self-review:v3`, so a document
+  that round-trips through the app is silently upgraded. This is deliberate: `self-review-v1.xsd`
+  and `self-review-v2.xsd` stay frozen on disk so a consumer holding an older document keeps a
+  working validator.
 - **Harness skill directories.** `.agents/skills/` holds the real skill files.
   `.opencode/skills/self-review-apply` and `.opencode/skills/self-review-critique` are **symlinks**
   into it, because opencode discovers project skills under `.opencode/skills/`. Never replace a
@@ -294,6 +300,14 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   never "medium", so the serializer omits them when unset and the parser leaves them undefined,
   including for values outside the enumeration. Human-authored comments normally carry neither;
   the UI displays both as badges but does not author them.
+- **Threaded replies.** A `<comment>` may carry an ordered list of `<reply>` children. The root
+  comment *is* the thread: it owns the anchor, `category`, `severity` and `confidence`, and its
+  replies are turns in a conversation about it. Document order is conversation order — there are no
+  reply IDs and no timestamps, and nothing else sorts them. Replies are flat, never nested. A reply
+  carries a body, an optional `author` and optional attachments, and deliberately carries no
+  category, severity, confidence or `<suggestion>`: a counter-proposal goes in the body as a fenced
+  code block. For a consumer, the last human turn (a reply with no `author`) is the tie-breaker over
+  any earlier machine assertion in that thread.
 
 ## Assistant Skills
 
@@ -324,7 +338,7 @@ comments) to the codebase. See `.agents/skills/self-review-apply/SKILL.md` for d
 
 ## XSD Schema Location
 
-The XSD schema lives at `.agents/skills/self-review-apply/assets/self-review-v2.xsd`. This is
+The XSD schema lives at `.agents/skills/self-review-apply/assets/self-review-v3.xsd`. This is
 the single source of truth for the XML output format. See the **XSD sync** convention above for
 the embedded copy that must track it.
 

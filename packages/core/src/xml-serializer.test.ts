@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { serializeReview } from './xml-serializer';
 import type {
   ReviewState,
@@ -23,6 +25,12 @@ vi.mock('fs', async (importOriginal) => {
     readFileSync: actual.readFileSync,
   };
 });
+
+// The fs mock above wraps the real implementations, but individual tests
+// replace them with stubs, and vi.clearAllMocks() clears recorded calls without
+// restoring implementations. Suites that assert against a real directory
+// reinstate the pass-throughs from this untouched copy.
+const actualFs = await vi.importActual<typeof import('fs')>('fs');
 
 const TEST_OUTPUT_PATH = '/tmp/test-review.xml';
 
@@ -919,5 +927,211 @@ describe('severity and confidence attributes', () => {
     );
 
     expect(xml).toContain('<comment severity="info" confidence="medium">');
+  });
+});
+
+describe('replies', () => {
+  let outputDir: string;
+  let outputPath: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Earlier suites stub these three; put the real implementations back so the
+    // attachment assertions below observe an actual directory.
+    vi.mocked(fs.existsSync).mockImplementation(actualFs.existsSync);
+    vi.mocked(fs.mkdirSync).mockImplementation(actualFs.mkdirSync);
+    vi.mocked(fs.writeFileSync).mockImplementation(actualFs.writeFileSync);
+
+    outputDir = actualFs.mkdtempSync(path.join(os.tmpdir(), 'sr-replies-'));
+    outputPath = path.join(outputDir, 'review.xml');
+  });
+
+  afterEach(() => {
+    actualFs.rmSync(outputDir, { recursive: true, force: true });
+  });
+
+  function reviewWithThread(overrides: Partial<ReviewComment>): ReviewState {
+    const comment: ReviewComment = {
+      id: 'c1',
+      filePath: 'src/main.ts',
+      lineRange: { side: 'new', start: 5, end: 5 },
+      body: 'Root finding',
+      category: 'bug',
+      suggestion: null,
+      ...overrides,
+    };
+
+    const file: FileReviewState = {
+      path: 'src/main.ts',
+      changeType: 'modified',
+      viewed: true,
+      comments: [comment],
+    };
+
+    return {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [file],
+    };
+  }
+
+  function assetsIn(dir: string): string[] {
+    return actualFs.readdirSync(path.join(dir, '.self-review-assets')).sort();
+  }
+
+  it('emits replies in array order, after the comment attachments', async () => {
+    const xml = await serializeReview(
+      reviewWithThread({
+        // No data buffer, so this attachment keeps its fileName and nothing is
+        // written: the assertion here is purely about element order.
+        attachments: [{ id: 'a1', fileName: 'shot.png', mediaType: 'image/png' }],
+        replies: [
+          { id: 'r1', body: 'first turn' },
+          { id: 'r2', body: 'second turn', author: 'Claude Opus 5' },
+          { id: 'r3', body: 'third turn' },
+        ],
+      }),
+      outputPath
+    );
+
+    expect(xml).toContain(
+      [
+        '      <attachment path="shot.png" media-type="image/png" />',
+        '      <reply>',
+        '        <body>first turn</body>',
+        '      </reply>',
+        '      <reply author="Claude Opus 5">',
+        '        <body>second turn</body>',
+        '      </reply>',
+        '      <reply>',
+        '        <body>third turn</body>',
+        '      </reply>',
+        '    </comment>',
+      ].join('\n')
+    );
+  });
+
+  it('emits a reply attachment nested inside the reply element', async () => {
+    const xml = await serializeReview(
+      reviewWithThread({
+        replies: [
+          {
+            id: 'r1',
+            body: 'see this',
+            attachments: [{ id: 'a1', fileName: 'shot.png', mediaType: 'image/webp' }],
+          },
+        ],
+      }),
+      outputPath
+    );
+
+    expect(xml).toContain(
+      [
+        '      <reply>',
+        '        <body>see this</body>',
+        '        <attachment path="shot.png" media-type="image/webp" />',
+        '      </reply>',
+      ].join('\n')
+    );
+  });
+
+  it('emits no reply element for a comment without replies', async () => {
+    const withoutKey = await serializeReview(reviewWithThread({}), outputPath);
+    const withEmptyList = await serializeReview(reviewWithThread({ replies: [] }), outputPath);
+
+    expect(withoutKey).not.toContain('<reply');
+    expect(withEmptyList).not.toContain('<reply');
+  });
+
+  it('escapes markup in a reply body, where a pasted code fence is likeliest', async () => {
+    const body = ['```ts', 'if (a < b && c > d) emit("<x>");', '```'].join('\n');
+
+    const xml = await serializeReview(
+      reviewWithThread({ replies: [{ id: 'r1', body }] }),
+      outputPath
+    );
+
+    const replyBody = xml.match(/<reply>\n\s*<body>([\s\S]*?)<\/body>/)?.[1];
+
+    expect(replyBody).toBeDefined();
+    expect(replyBody).toContain('&lt;');
+    expect(replyBody).toContain('&gt;');
+    expect(replyBody).toContain('&amp;&amp;');
+    // Nothing raw survives inside the body, or the document stops being XML.
+    expect(replyBody).not.toMatch(/[<>]/);
+    expect(replyBody).not.toMatch(/&(?!(amp|lt|gt|quot|apos);)/);
+  });
+
+  // The regression this file exists to prevent: writeAttachments used to
+  // short-circuit on a comment whose own attachment list was empty, which
+  // skipped its replies. The XML still validated and still named an asset file,
+  // but the blob was never written and nothing reported it.
+  it('writes a reply attachment to disk even when its comment has none', async () => {
+    const state = reviewWithThread({
+      replies: [
+        {
+          id: 'r1',
+          body: 'screenshot attached',
+          attachments: [
+            {
+              id: 'a1',
+              fileName: 'shot.png',
+              mediaType: 'image/png',
+              data: new Uint8Array([1, 2, 3]).buffer,
+            },
+          ],
+        },
+      ],
+    });
+
+    const xml = await serializeReview(state, outputPath);
+
+    expect(assetsIn(outputDir)).toEqual(['c1-r-r1-0.png']);
+    expect(
+      actualFs.readFileSync(path.join(outputDir, '.self-review-assets', 'c1-r-r1-0.png'))
+    ).toEqual(Buffer.from([1, 2, 3]));
+    // The emitted path names the file that now exists on disk.
+    expect(xml).toContain(
+      '<attachment path=".self-review-assets/c1-r-r1-0.png" media-type="image/png" />'
+    );
+    // The caller's state is untouched: the buffer is stripped from a copy.
+    expect(state.files[0].comments[0].replies?.[0].attachments?.[0].data).toBeDefined();
+  });
+
+  it('names reply assets so they cannot collide with the comment attachments', async () => {
+    const png = (byte: number) => ({
+      id: `a${byte}`,
+      fileName: 'shot.png',
+      mediaType: 'image/png',
+      data: new Uint8Array([byte]).buffer,
+    });
+
+    const xml = await serializeReview(
+      reviewWithThread({
+        attachments: [png(1)],
+        replies: [
+          { id: 'r1', body: 'first', attachments: [png(2)] },
+          { id: 'r2', body: 'second', attachments: [png(3)] },
+        ],
+      }),
+      outputPath
+    );
+
+    // The comment prefix is still bare comment.id, so existing asset names are
+    // unchanged; the reply prefix cannot produce the same name.
+    expect(assetsIn(outputDir)).toEqual(['c1-0.png', 'c1-r-r1-0.png', 'c1-r-r2-0.png']);
+    expect(xml).toContain('<attachment path=".self-review-assets/c1-0.png"');
+    expect(xml).toContain('<attachment path=".self-review-assets/c1-r-r1-0.png"');
+    expect(xml).toContain('<attachment path=".self-review-assets/c1-r-r2-0.png"');
+  });
+
+  it('leaves the asset directory alone when a thread carries no blobs', async () => {
+    await serializeReview(
+      reviewWithThread({ replies: [{ id: 'r1', body: 'text only' }] }),
+      outputPath
+    );
+
+    expect(actualFs.existsSync(path.join(outputDir, '.self-review-assets'))).toBe(false);
   });
 });

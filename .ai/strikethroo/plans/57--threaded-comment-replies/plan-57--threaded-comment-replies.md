@@ -508,13 +508,13 @@ graph TD
 - ✔️ Task 001: Cut `self-review-v3.xsd`, sync the embedded `XSD_SCHEMA`, flip the serializer namespace, retarget `xsd-schema.test.ts` and `xml-serializer.test.ts` — `completed`
 - ✔️ Task 002: Add the `Reply` interface and `ReviewComment.replies` to `@self-review/types` — `completed`
 
-### Phase 2: Core read/write, state, and prose
+### ✅ Phase 2: Core read/write, state, and prose
 **Parallel Tasks:**
-- Task 003: Emit `<reply>` children, extract attachment emission, walk reply attachments in `writeAttachments` (depends on: 001, 002)
-- Task 004: Parse `<reply>` children, extract prefix-parameterized attachment parsing, stay namespace-blind (depends on: 002)
-- Task 005: `addReply` / `updateReply` / `deleteReply` in `useReviewState` and `ReviewContext` (depends on: 002)
-- Task 008: Update `self-review-apply/SKILL.md` and `self-review-critique/SKILL.md` for v3 and reply authoring (depends on: 001)
-- Task 009: Update `AGENTS.md`, `docs/PRD.md` and `README.md` for v3 and threaded replies (depends on: 001)
+- ✔️ Task 003: Emit `<reply>` children, extract attachment emission, walk reply attachments in `writeAttachments` (depends on: 001, 002) — `completed`
+- ✔️ Task 004: Parse `<reply>` children, extract prefix-parameterized attachment parsing, stay namespace-blind (depends on: 002) — `completed`
+- ✔️ Task 005: `addReply` / `updateReply` / `deleteReply` in `useReviewState` and `ReviewContext` (depends on: 002) — `completed`
+- ✔️ Task 008: Update `self-review-apply/SKILL.md` and `self-review-critique/SKILL.md` for v3 and reply authoring (depends on: 001) — `completed`
+- ✔️ Task 009: Update `AGENTS.md`, `docs/PRD.md` and `README.md` for v3 and threaded replies (depends on: 001) — `completed`
 
 ### Phase 3: Composer extraction
 **Parallel Tasks:**

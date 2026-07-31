@@ -10,6 +10,7 @@ export type {
   Suggestion,
   Attachment,
   LineRange,
+  Reply,
   ReviewComment,
   CommentSeverity,
   CommentConfidence,

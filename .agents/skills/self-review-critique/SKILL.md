@@ -12,7 +12,7 @@ self-review via `--resume-from` for human validation.
 
 ## XML Reference
 
-Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-review-v2.xsd`):
+Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-review-v3.xsd`):
 
 - **Line number pairing:** A comment has exactly one pair, `new-line-start`/`new-line-end` (for
   added/context lines) OR `old-line-start`/`old-line-end` (for deleted lines). Never both. If
@@ -31,6 +31,15 @@ Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-revie
   `high` (traceable from the diff itself, no assumption about unseen code needed), `medium`
   (rests on one assumption you did not verify, which you must state in the body), `low`
   (speculative: you imagined the failure rather than traced it, or you could not tell intent).
+- **A `<comment>` may carry an ordered list of `<reply>` children.** The comment is the root of the
+  thread; each reply is a later turn in the conversation about it.
+- **Document order is conversation order.** There are no timestamps and no identifiers, the earlier
+  reply is the earlier turn, and nothing else sorts them.
+- **Replies are flat.** A reply is never nested inside another reply. A reply that answers an
+  earlier reply says so in prose.
+- **A reply carries `<body>`, an optional `author`, and optional `<attachment>` children.** It
+  carries no category, no severity, no confidence and no `<suggestion>`, all four are properties of
+  the finding, and the finding is the root comment.
 
 ## 1. Parse Arguments
 
@@ -121,9 +130,33 @@ Evidenced but unconfirmed is a downgrade, not a deletion: keep it at `confidence
 - Use file-level comments (no line attributes) for architectural or design concerns that span
   the whole file.
 
+## Replying to an existing review
+
+Before building the XML, check whether the target output file already exists. If it does — a
+second critique round, or a document a human has answered — you are joining a conversation, not
+starting one.
+
+- **Do not re-raise a finding that is already in the document.** If a comment already covers the
+  issue you found, append a `<reply>` to that comment. Emitting a fresh root comment for a finding
+  already present is a duplicate, and duplicates are the failure mode this rule exists to prevent.
+- Set `author` to your model name on **every** reply you write, exactly as you already do for
+  comments. A reply with no `author` is read as the human's, so omitting it misattributes your
+  words.
+- A reply carries no `<suggestion>` and no `severity`/`confidence`/`<category>`. If you want to
+  propose concrete code, put it in the reply body as a fenced code block.
+- Replies go at the end of the comment's children, after any `<attachment>`, and in the order the
+  conversation happened.
+- **A human reply that refutes your finding is evidence your finding was wrong.** Read it as
+  evidence, not as an obstacle. Conceding — "Confirmed, withdrawing" — is a valid and expected
+  turn, and it is more useful than restating the original claim in different words.
+
+**Exit criterion:** when run against a document that already contains comments, the output
+contains no duplicate root comment for a finding already present, and every `<reply>` you added
+carries an `author` attribute.
+
 ## 6. Build the Review XML
 
-Read the XSD schema at `.agents/skills/self-review-apply/assets/self-review-v2.xsd` for the
+Read the XSD schema at `.agents/skills/self-review-apply/assets/self-review-v3.xsd` for the
 complete XML structure and validation rules. The `<xs:documentation>` annotations in the schema
 describe all element and attribute semantics.
 
@@ -131,7 +164,7 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<review xmlns="urn:self-review:v2" timestamp="2026-02-28T14:30:00.000Z" git-diff-args="--staged" repository="/absolute/path/to/repo">
+<review xmlns="urn:self-review:v3" timestamp="2026-02-28T14:30:00.000Z" git-diff-args="--staged" repository="/absolute/path/to/repo">
   <file path="src/utils.ts" change-type="modified" viewed="true">
     <comment new-line-start="42" new-line-end="42" author="Claude Sonnet 4.6" severity="major" confidence="high">
       <body>Division by zero when input is empty.</body>
@@ -144,6 +177,27 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
     </comment>
   </file>
   <file path="src/other.ts" change-type="added" viewed="true" />
+</review>
+```
+
+Here is an example of appending replies to an existing thread instead of raising a duplicate
+finding. Both replies are shown so the shape of a concession is visible: the unauthored reply is
+the human's, the authored one is the model conceding.
+
+```xml
+<review xmlns="urn:self-review:v3" timestamp="2026-02-28T14:30:00.000Z" git-diff-args="--staged" repository="/absolute/path/to/repo">
+  <file path="src/parse.ts" change-type="modified" viewed="true">
+    <comment new-line-start="42" new-line-end="44" author="Claude Opus 5" severity="major" confidence="medium">
+      <body>`parseId` can return undefined here.</body>
+      <category>bug</category>
+      <reply>
+        <body>The caller at line 40 guarantees non-null.</body>
+      </reply>
+      <reply author="Claude Opus 5">
+        <body>Confirmed — withdrawing.</body>
+      </reply>
+    </comment>
+  </file>
 </review>
 ```
 
@@ -168,7 +222,7 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
 
 Use the Bash tool to run:
 ```bash
-xmllint --schema .agents/skills/self-review-apply/assets/self-review-v2.xsd REVIEW_XML_PATH --noout
+xmllint --schema .agents/skills/self-review-apply/assets/self-review-v3.xsd REVIEW_XML_PATH --noout
 ```
 
 Where `REVIEW_XML_PATH` is the output path from step 2.

@@ -148,6 +148,43 @@ describe('XSD conformance', () => {
     }
   );
 
+  it('accepts an attachment on a reply, in the same position it takes on a comment', async () => {
+    const result = await validate(
+      reviewXml(
+        [
+          '    <comment>',
+          '      <body>b</body>',
+          '      <category>bug</category>',
+          '      <reply>',
+          '        <body>see the capture</body>',
+          '        <attachment path=".self-review-assets/c1-r-r1-0.png" media-type="image/png" />',
+          '      </reply>',
+          '    </comment>',
+        ].join('\n')
+      )
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a reply whose attachment precedes its body, since the sequence is fixed', async () => {
+    const result = await validate(
+      reviewXml(
+        [
+          '    <comment><body>b</body><category>bug</category>',
+          '      <reply>',
+          '        <attachment path="a.png" media-type="image/png" />',
+          '        <body>see the capture</body>',
+          '      </reply>',
+          '    </comment>',
+        ].join('\n')
+      )
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
   it('rejects a v2-namespaced document, so the version bump is observable', async () => {
     const result = await validate(
       reviewXml('    <comment><body>b</body><category>bug</category></comment>').replace(
@@ -202,5 +239,87 @@ describe('serializer output conforms to the schema', () => {
     expect(xml).toContain('xmlns="urn:self-review:v3"');
     expect(xml).toContain('severity="critical" confidence="high"');
     expect((await validate(xml)).valid).toBe(true);
+  });
+
+  it('emits a valid v3 document carrying a three-reply thread', async () => {
+    const state: ReviewState = {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [
+        {
+          path: 'src/main.ts',
+          changeType: 'modified',
+          viewed: true,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/main.ts',
+              lineRange: { side: 'new', start: 5, end: 7 },
+              body: 'Traced defect',
+              category: 'bug',
+              suggestion: { originalCode: 'a', proposedCode: 'b' },
+              author: 'Claude Opus 5',
+              severity: 'major',
+              confidence: 'medium',
+              replies: [
+                { id: 'r1', body: 'reply 1' },
+                { id: 'r2', body: 'reply 2', author: 'Claude Opus 5' },
+                { id: 'r3', body: 'reply 3' },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const xml = await serializeReview(state, '/tmp/test-review-replies.xml');
+
+    expect((await validate(xml)).valid).toBe(true);
+    // Document order is conversation order, and it is the only ordering signal.
+    expect([...xml.matchAll(/<body>(reply [123])<\/body>/g)].map(m => m[1])).toEqual([
+      'reply 1',
+      'reply 2',
+      'reply 3',
+    ]);
+    expect(xml).toContain('<reply>');
+    expect(xml).toContain('<reply author="Claude Opus 5">');
+  });
+
+  it('emits a valid document when a reply body carries a fenced code block', async () => {
+    // Replies are where a human pastes a counter-proposal, since a reply has no
+    // suggestion element. A single unescaped & or < here would leave the
+    // document unparseable, so validity is the assertion that matters.
+    const state: ReviewState = {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [
+        {
+          path: 'src/main.ts',
+          changeType: 'modified',
+          viewed: true,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/main.ts',
+              lineRange: null,
+              body: 'Root finding',
+              category: 'bug',
+              suggestion: null,
+              replies: [
+                {
+                  id: 'r1',
+                  body: ['```ts', 'if (a < b && c > d) emit("<x>");', '```'].join('\n'),
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const xml = await serializeReview(state, '/tmp/test-review-fenced-reply.xml');
+
+    expect((await validate(xml)).valid).toBe(true);
+    expect(xml).toContain('if (a &lt; b &amp;&amp; c &gt; d) emit(&quot;&lt;x&gt;&quot;);');
   });
 });

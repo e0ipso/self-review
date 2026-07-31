@@ -2,7 +2,7 @@
 id: 3
 group: "core-serialization"
 dependencies: [1, 2]
-status: "pending"
+status: "completed"
 created: 2026-07-31
 skills:
   - typescript

@@ -15,6 +15,7 @@ import type {
   DiffLoadPayload,
   DiffSource,
   FileReviewState,
+  Reply,
   ReviewComment,
   ResumeLoadPayload,
   LineRange,
@@ -39,6 +40,18 @@ export interface ReviewContextValue {
   ) => void;
   editComment: (id: string, updates: Partial<ReviewComment>) => void;
   deleteComment: (id: string) => void;
+  addReply: (
+    commentId: string,
+    body: string,
+    author?: string,
+    attachments?: Attachment[]
+  ) => void;
+  updateReply: (
+    commentId: string,
+    replyId: string,
+    updates: Partial<Reply>
+  ) => void;
+  deleteReply: (commentId: string, replyId: string) => void;
   toggleViewed: (filePath: string) => void;
   getCommentsForFile: (filePath: string) => ReviewComment[];
   getCommentsForLine: (
@@ -241,6 +254,9 @@ export function ReviewProvider({
         addComment: reviewState.addComment,
         editComment: reviewState.updateComment,
         deleteComment: reviewState.deleteComment,
+        addReply: reviewState.addReply,
+        updateReply: reviewState.updateReply,
+        deleteReply: reviewState.deleteReply,
         toggleViewed: reviewState.toggleViewed,
         getCommentsForFile: reviewState.getCommentsForFile,
         getCommentsForLine: reviewState.getCommentsForLine,
