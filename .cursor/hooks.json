@@ -7,7 +7,7 @@
         "timeout": 30
       },
       {
-        "command": "node ./.cursor/hooks/kk-capture.cjs",
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-capture.cjs",
         "timeout": 30
       }
     ],
@@ -21,11 +21,11 @@
         "timeout": 30
       },
       {
-        "command": "node ./.cursor/hooks/kk-capture.cjs",
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-capture.cjs",
         "timeout": 30
       },
       {
-        "command": "node ./.cursor/hooks/kk-lint-tick.cjs",
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-lint-tick.cjs",
         "timeout": 30
       }
     ],
@@ -35,7 +35,7 @@
         "timeout": 30
       },
       {
-        "command": "node ./.cursor/hooks/kk-capture.cjs",
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-capture.cjs",
         "timeout": 30
       }
     ],
@@ -49,11 +49,11 @@
         "timeout": 30
       },
       {
-        "command": "node ./.cursor/hooks/kk-session-start.cjs",
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-session-start.cjs",
         "timeout": 30
       },
       {
-        "command": "node ./.cursor/hooks/kk-proposal-drain.cjs",
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-proposal-drain.cjs",
         "timeout": 30
       }
     ]
