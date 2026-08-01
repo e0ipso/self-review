@@ -28,6 +28,11 @@ export type {
   VersionUpdateInfo,
   PayloadStats,
   ImageLoadResult,
+  ReviewGuide,
+  GuideGroup,
+  GuideFileEntry,
+  ResolvedGuideGroup,
+  ResolvedGuideFile,
 } from './types';
 
 // Diff parsing
@@ -36,6 +41,17 @@ export { parseDiff } from './diff-parser';
 // XML I/O
 export { serializeReview } from './xml-serializer';
 export { parseReviewXml, parseReviewXmlString } from './xml-parser';
+
+// Walkthrough guide schema
+export { GUIDE_XSD_SCHEMA } from './guide-schema';
+
+// Walkthrough guide parsing and reconciliation
+export {
+  parseGuideXml,
+  reconcileGuide,
+  IMPLICIT_GUIDE_GROUP_NAME,
+} from './guide-parser';
+export type { GuideParseResult } from './guide-parser';
 
 // Git operations
 export {

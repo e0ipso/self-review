@@ -18,11 +18,13 @@ import {
   registerIpcHandlers,
   registerFindInPageForWindow,
   setDiffData,
+  setGuideData,
   setConfigData,
   setOutputPathInfo,
   setResumeData,
   requestReviewFromRenderer,
 } from './ipc-handlers';
+import { loadGuide } from './guide-loader';
 import { checkForUpdate } from './version-checker';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { setupMenu } from './menu';
@@ -317,6 +319,21 @@ async function initializeApp() {
         console.error('[main] Error loading resume file');
         clearTimeout(initTimeout);
         process.exit(1);
+      }
+    }
+
+    // Phase 5b: Discover the walkthrough guide sidecar next to the output
+    // path. Tolerant by contract: loadGuide never throws — a missing file
+    // is silent, a bad one logs one stderr warning and yields no guide.
+    if (diffData && diffData.source.type !== 'welcome') {
+      const guidePayload = await loadGuide(
+        currentOutputPath,
+        appConfig,
+        diffData.files.map(f => f.newPath || f.oldPath)
+      );
+      if (guidePayload) {
+        console.error('[main] Walkthrough guide loaded:', guidePayload.groups.length, 'groups');
+        setGuideData(guidePayload);
       }
     }
 

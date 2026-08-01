@@ -9,6 +9,7 @@ import {
   DiffLoadPayload,
   DiffHunk,
   ResumeLoadPayload,
+  GuideLoadPayload,
   AppConfig,
   OutputPathInfo,
   ReviewState,
@@ -25,6 +26,7 @@ import { getAppIconDataUri } from './app-assets';
 
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
+let guideDataCache: GuideLoadPayload | null = null;
 let configCache: AppConfig | null = null;
 let outputPathInfoCache: OutputPathInfo | null = null;
 let resumeCommentsCache: ReviewComment[] = [];
@@ -32,6 +34,10 @@ let resumeViewedFilesCache: string[] = [];
 
 export function setDiffData(data: DiffLoadPayload): void {
   diffDataCache = data;
+}
+
+export function setGuideData(data: GuideLoadPayload | null): void {
+  guideDataCache = data;
 }
 
 export function setConfigData(data: AppConfig): void {
@@ -55,6 +61,12 @@ export function registerIpcHandlers(): void {
   ipcMain.on(IPC.DIFF_REQUEST, event => {
     if (diffDataCache) {
       event.sender.send(IPC.DIFF_LOAD, preparePayload(diffDataCache));
+      // The guide rides after the diff payload in both normal and
+      // large-payload modes — it is metadata-only (paths, names,
+      // descriptions) and never triggers eager hunk loading.
+      if (guideDataCache) {
+        event.sender.send(IPC.GUIDE_LOAD, guideDataCache);
+      }
     }
   });
 

@@ -8,7 +8,8 @@ metadata:
 # Critique a Git Diff
 
 Analyze a git diff, identify issues, and produce a `review.xml` file that can be loaded into
-self-review via `--resume-from` for human validation.
+self-review via `--resume-from` for human validation. The first step generates the walkthrough
+guide sidecar via the `self-review-guide` skill, so a critique run yields both artifacts.
 
 ## XML Reference
 
@@ -32,13 +33,22 @@ Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-revie
   (rests on one assumption you did not verify, which you must state in the body), `low`
   (speculative: you imagined the failure rather than traced it, or you could not tell intent).
 
-## 1. Parse Arguments
+## 1. Generate the Walkthrough Guide
+
+Run the `self-review-guide` skill (`../self-review-guide/SKILL.md`) with the same diff arguments
+you received. It analyzes the diff and writes the guide sidecar (`review.guide.xml` by default)
+that self-review uses to present the diff as an ordered walkthrough. Then proceed to critique.
+A critique run therefore produces both artifacts; the guide skill also runs standalone when a
+walkthrough without pre-seeded comments is wanted. If the user explicitly asked to skip the
+guide, continue without it — the guide is orientation, never a prerequisite.
+
+## 2. Parse Arguments
 
 Read `$ARGUMENTS` for git diff args. If empty, default to unstaged changes (plain `git diff`).
 The arguments support the same format as self-review CLI: `--staged`, `HEAD~3`,
 `main..feature-branch`, `-- path/to/file`, etc.
 
-## 2. Load Configuration
+## 3. Load Configuration
 
 Check if `.self-review.yaml` exists in the current directory. If it does, read it to extract:
 - **`categories`**: Array of `{name, description, color}` objects, use only these category names
@@ -53,7 +63,7 @@ If no config file exists, use these default categories:
 - `task`, Action item or follow-up task
 - `nit`, Minor nitpick, low priority
 
-## 3. Get the Diff
+## 4. Get the Diff
 
 Use the Bash tool to run:
 ```bash
@@ -67,7 +77,7 @@ Also capture the repository root for the XML header:
 git rev-parse --show-toplevel
 ```
 
-## 4. Read File Context
+## 5. Read File Context
 
 For each file in the diff:
 - **Added/Modified files**: Use the Read tool to read the full current file content. This gives
@@ -79,7 +89,7 @@ For each file in the diff:
 If there are many files (>15), prioritize reading files with the largest diffs first. For very
 large files, read only the regions around the changed lines (with 50 lines of surrounding context).
 
-## 5. Critique the Changes
+## 6. Critique the Changes
 
 Review each file's changes. Look for:
 - **Bugs**: Logic errors, off-by-one errors, null/undefined access, race conditions
@@ -121,7 +131,7 @@ Evidenced but unconfirmed is a downgrade, not a deletion: keep it at `confidence
 - Use file-level comments (no line attributes) for architectural or design concerns that span
   the whole file.
 
-## 6. Build the Review XML
+## 7. Build the Review XML
 
 Read the XSD schema at `.agents/skills/self-review-apply/assets/self-review-v2.xsd` for the
 complete XML structure and validation rules. The `<xs:documentation>` annotations in the schema
@@ -164,20 +174,20 @@ Construct the XML using the Write tool. Here is a minimal example for reference:
 - XML-escape all text content: `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`,
   `'` → `&apos;`
 
-## 7. Validate the XML
+## 8. Validate the XML
 
 Use the Bash tool to run:
 ```bash
 xmllint --schema .agents/skills/self-review-apply/assets/self-review-v2.xsd REVIEW_XML_PATH --noout
 ```
 
-Where `REVIEW_XML_PATH` is the output path from step 2.
+Where `REVIEW_XML_PATH` is the output path from step 3.
 
-- If validation **passes**: proceed to step 8.
+- If validation **passes**: proceed to step 9.
 - If validation **fails**: read the xmllint errors, fix the XML, and re-validate.
 - If `xmllint` is **not installed**: warn the user and continue without validation.
 
-## 8. Output Summary
+## 9. Output Summary
 
 After writing the file, print a summary:
 - Number of files reviewed
