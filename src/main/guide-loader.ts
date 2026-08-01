@@ -4,7 +4,18 @@
 // The guide is orientation garnish on a deterministic tool (see
 // docs/intent/llm-review-guide.md): a missing file is a silent no-op, and
 // an unreadable or invalid one produces exactly one stderr warning and no
-// guide. Nothing in this module may throw out of it or block startup.
+// guide. Nothing in this module may throw out of it — every failure mode
+// resolves to null.
+//
+// Note on startup cost: loadGuide IS awaited before window creation
+// (main.ts Phase 5b), deliberately — `guide:load` piggybacks on the
+// DIFF_REQUEST handler, so the payload must be cached via setGuideData
+// before the renderer's first request arrives. When a guide exists, the
+// xmllint-wasm init and validation delay window paint by a few hundred ms;
+// when none exists the cost is a single failed stat.
+//
+// Discovery is one-shot: the guide is resolved from the startup output
+// path. Changing the output path at runtime does not re-discover.
 
 import { readFile } from 'fs/promises';
 import { extname, resolve } from 'path';

@@ -133,6 +133,7 @@ the user navigates, avoiding memory pressure from loading the entire diff at onc
 **Guided walkthrough mode:** At startup, the main process looks for an LLM-generated guide
 sidecar next to the resolved output path: `<output-basename>.guide.xml` (default `review.xml` →
 `review.guide.xml`), overridable via the `guide-file` YAML config key. No CLI flag is involved.
+Discovery is one-shot at startup; changing the output path at runtime does not re-discover.
 The guide (schema `self-review-guide-v1.xsd`, namespace `urn:self-review-guide:v1`) is parsed
 and XSD-validated in `@self-review/core`, then sent to the renderer over the `guide:load` IPC
 channel. When present and valid, the file tree reorganizes into the guide's named, ordered

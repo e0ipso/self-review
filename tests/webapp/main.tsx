@@ -72,6 +72,7 @@ const adapter: ReviewAdapter = {
     if (getUrlParam('guide') === 'walkthrough') {
       callback(createGuideFixturePayload());
     }
+    return () => {};
   },
 };
 

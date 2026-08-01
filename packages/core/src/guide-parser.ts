@@ -74,6 +74,10 @@ function readGuide(xmlContent: string): ReviewGuide {
     // "true" must stay a string, not become a number or boolean.
     parseTagValue: false,
     parseAttributeValue: false,
+    // A prefixed form (<sg:guide xmlns:sg="urn:self-review-guide:v1">) is
+    // schema-valid, so reading must accept it too; without this the lookup
+    // of `.guide` below finds nothing.
+    removeNSPrefix: true,
   });
 
   const root = parser.parse(xmlContent).guide as Record<string, unknown>;

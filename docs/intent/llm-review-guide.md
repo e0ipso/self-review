@@ -28,7 +28,12 @@ Confirmed statement of intent, extracted via interview on 2026-08-01.
     also runs standalone (walkthrough without pre-seeded comments).
 - **Out of scope (v1):**
   - Hiding or collapsing files by LLM judgment.
+  - Reordering the diff pane. The guide's reading order applies to the file tree only; the
+    diff pane keeps rendering file sections in diff order, so walking the tree top-to-bottom
+    may scroll the pane non-monotonically. Deliberate v1 boundary.
   - Reordering hunks within a file.
+  - Re-discovering the guide when the output path changes at runtime — discovery happens
+    once, from the startup output path.
   - Cross-file interleaved narratives (CodeRabbit-style hunk weaving).
   - Any change to the comment/apply pipeline.
   - Any runtime LLM integration in the app itself (the app stays deterministic and

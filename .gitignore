@@ -130,6 +130,7 @@ dist/
 # AI task manager (plans and archive)
 .ai/task-manager/plans/
 .ai/task-manager/archive/
+
 # Test artifacts
 test-results/
 .features-gen/

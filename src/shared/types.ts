@@ -69,7 +69,7 @@ export interface ElectronAPI {
   onConfigLoad: (callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void) => void;
   requestResumeData: () => void;
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
-  onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => void;
+  onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => () => void;
   submitReview: (state: ReviewState) => void;
   onRequestReview: (callback: () => void) => void;
   onCloseRequested: (callback: () => void) => () => void;

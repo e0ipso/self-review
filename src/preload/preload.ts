@@ -48,9 +48,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => {
-    ipcRenderer.on(IPC.GUIDE_LOAD, (_event, payload: GuideLoadPayload) =>
-      callback(payload)
-    );
+    const handler = (_event: Electron.IpcRendererEvent, payload: GuideLoadPayload) =>
+      callback(payload);
+    ipcRenderer.on(IPC.GUIDE_LOAD, handler);
+    return () => ipcRenderer.removeListener(IPC.GUIDE_LOAD, handler);
   },
 
   submitReview: (state: ReviewState) => {

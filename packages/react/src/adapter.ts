@@ -45,8 +45,10 @@ export interface ReviewAdapter {
    * Subscribe to walkthrough guide payloads. Push-style: the host calls the
    * callback if/when a guide sidecar is discovered; it may never fire.
    * The payload is display-ready (already reconciled against the diff).
+   * Returns an unsubscribe function — required, because the subscribing
+   * effect re-runs whenever the adapter identity changes.
    */
-  onGuideLoad?: (callback: (payload: GuideLoadPayload) => void) => void;
+  onGuideLoad?: (callback: (payload: GuideLoadPayload) => void) => () => void;
 }
 
 /**

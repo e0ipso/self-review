@@ -142,6 +142,37 @@ describe('parseGuideXml', () => {
     }
   });
 
+  it('parses a guide that binds the correct namespace to a prefix', async () => {
+    // Schema-valid: XSD validation is namespace-based, not prefix-based. An
+    // LLM authoring from the schema alone may well emit this form.
+    const result = await parseGuideXml(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<sg:guide xmlns:sg="urn:self-review-guide:v1">',
+        '  <sg:overview>o</sg:overview>',
+        '  <sg:group name="Core change">',
+        '    <sg:rationale>r</sg:rationale>',
+        '    <sg:file path="a.ts"><sg:description>d</sg:description></sg:file>',
+        '  </sg:group>',
+        '</sg:guide>',
+      ].join('\n')
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      guide: {
+        overview: 'o',
+        groups: [
+          {
+            name: 'Core change',
+            rationale: 'r',
+            files: [{ path: 'a.ts', description: 'd' }],
+          },
+        ],
+      },
+    });
+  });
+
   it('returns a failure value for a document in the wrong namespace', async () => {
     const result = await parseGuideXml(
       '<?xml version="1.0" encoding="UTF-8"?>\n<guide xmlns="urn:self-review:v2" />'

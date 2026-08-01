@@ -69,8 +69,10 @@ Check if `.self-review.yaml` exists in the current directory. If it does, read i
 Determine the guide output path:
 
 1. If `guide-file` is set, use it.
-2. Otherwise derive it from the review output path by inserting `.guide` before the `.xml`
-   extension: `review.xml` → `review.guide.xml`, `out/my-review.xml` → `out/my-review.guide.xml`.
+2. Otherwise derive it from the review output path by stripping the last extension (whatever it
+   is) and appending `.guide.xml`: `review.xml` → `review.guide.xml`, `out/my-review.xml` →
+   `out/my-review.guide.xml`, `review.out` → `review.guide.xml`. An output filename with no
+   extension gets `.guide.xml` appended verbatim.
 
 This pairing is how self-review discovers the guide at launch — it looks for
 `<output-basename>.guide.xml` next to its configured output path, with no CLI flag.

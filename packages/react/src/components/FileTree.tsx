@@ -183,7 +183,10 @@ export default function FileTree() {
       <div className='flex-1 overflow-y-auto overflow-x-hidden p-1'>
         {displaySections.map((section, sectionIndex) => (
           <React.Fragment
-            key={section.header ? `group-${section.header.name}` : `flat-${sectionIndex}`}
+            // Keyed by position, not name alone: nothing forbids a guide
+            // from repeating a group name (or naming one "Everything else",
+            // colliding with the implicit group).
+            key={`section-${sectionIndex}-${section.header?.name ?? 'flat'}`}
           >
             {section.header && (
               <div

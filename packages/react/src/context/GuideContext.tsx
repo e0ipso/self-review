@@ -59,7 +59,7 @@ export function GuideProvider({ children, initialGuide }: GuideProviderProps) {
 
   useEffect(() => {
     if (initialGuide || !adapter?.onGuideLoad) return;
-    adapter.onGuideLoad(payload => setGuide(payload));
+    return adapter.onGuideLoad(payload => setGuide(payload));
   }, [adapter, initialGuide]);
 
   const descriptionsByPath = useMemo(() => {
