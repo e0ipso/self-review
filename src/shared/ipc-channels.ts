@@ -8,6 +8,7 @@ export const IPC = {
   RESUME_LOAD: 'resume:load',
   RESUME_REQUEST: 'resume:request',
   CONFIG_LOAD: 'config:load',
+  GUIDE_LOAD: 'guide:load',
   CONFIG_REQUEST: 'config:request',
   APP_CLOSE_REQUESTED: 'app:close-requested',
   APP_SAVE_AND_QUIT: 'app:save-and-quit',

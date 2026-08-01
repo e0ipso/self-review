@@ -187,7 +187,7 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | `version-update:available` | Main → Renderer | `VersionUpdateInfo` | Notify renderer of available update        |
 | `diff:load-file`               | Renderer → Main | `string` (filePath)  | Load single file's hunks on demand (large mode) |
 | `diff:load-image`              | Renderer → Main | `{ filePath }` / `ImageLoadResult` | Load a binary image as base64 data URI for rendered preview |
-| `guide:load`               | Main → Renderer | `ReviewGuide`       | Send parsed walkthrough guide when a valid sidecar is discovered |
+| `guide:load`               | Main → Renderer | `GuideLoadPayload`  | Send reconciled walkthrough guide when a valid sidecar is discovered |
 | `open-external`            | Renderer → Main | `string` (URL)      | Open URL in default browser                |
 
 ## Shared Types

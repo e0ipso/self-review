@@ -209,6 +209,14 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     config.outputFile = raw['output-file'];
   }
 
+  if (
+    'guide-file' in raw &&
+    typeof raw['guide-file'] === 'string' &&
+    raw['guide-file'].length > 0
+  ) {
+    config.guideFile = raw['guide-file'];
+  }
+
   return config;
 }
 

@@ -203,6 +203,12 @@ export interface AppConfig {
   wordWrap: boolean;
   maxFiles: number;
   maxTotalLines: number;
+  /**
+   * Path to the walkthrough guide sidecar (`guide-file` YAML key). When
+   * unset, the guide path is derived from the resolved output path as
+   * `<output-basename>.guide.xml`.
+   */
+  guideFile?: string;
 }
 
 // ===== IPC Payload Types =====
@@ -217,6 +223,20 @@ export interface ResumeLoadPayload {
   comments: ReviewComment[];
   /** Paths the prior review marked as done. Absent when nothing was marked. */
   viewedFiles?: string[];
+}
+
+/**
+ * Payload for the `guide:load` channel (Main → Renderer). Sent only when a
+ * valid walkthrough guide sidecar was discovered; carries display-ready
+ * data — the overview plus groups already reconciled against the parsed
+ * diff — so the renderer stays free of tolerance logic. Metadata only
+ * (paths, names, descriptions): safe to send in large-payload mode.
+ */
+export interface GuideLoadPayload {
+  /** Review-level orientation prose (Markdown, optionally Mermaid). */
+  overview?: string;
+  /** Resolved display groups, in reading order. */
+  groups: ResolvedGuideGroup[];
 }
 
 // ===== Output Path Types =====

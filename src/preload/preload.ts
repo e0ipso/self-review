@@ -6,6 +6,7 @@ import { IPC } from '../shared/ipc-channels';
 import {
   DiffLoadPayload,
   ResumeLoadPayload,
+  GuideLoadPayload,
   AppConfig,
   OutputPathInfo,
   ReviewState,
@@ -42,6 +43,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => {
     ipcRenderer.on(IPC.RESUME_LOAD, (_event, payload: ResumeLoadPayload) =>
+      callback(payload)
+    );
+  },
+
+  onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => {
+    ipcRenderer.on(IPC.GUIDE_LOAD, (_event, payload: GuideLoadPayload) =>
       callback(payload)
     );
   },
