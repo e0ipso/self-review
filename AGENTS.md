@@ -90,8 +90,12 @@ self-review/
 │               └── CategorySelector.tsx # Dropdown/chip selector for categories
 ├── packages/
 │   ├── core/                    # @self-review/core, headless diff parsing & review logic
+│   │                            #   incl. guide-schema.ts (embedded guide XSD) and the guide
+│   │                            #   parser/reconciliation for the walkthrough sidecar
 │   ├── react/                   # @self-review/react, React components for review UI
+│   │                            #   incl. guided-mode presentation (grouped tree, overview)
 │   └── types/                   # @self-review/types, shared TypeScript interfaces (zero runtime deps)
+│                                #   incl. ReviewGuide/GuideGroup/ResolvedGuideGroup guide types
 ```
 
 The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace packages `@self-review/core`, `@self-review/react`, and `@self-review/types` expose shared logic, UI components, and shared TypeScript interfaces respectively. The Electron app imports these packages via relative path imports to their source (not through workspace symlinks), so no build step is needed for the packages during development. The Electron app's `src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source.
@@ -125,6 +129,22 @@ The renderer NEVER imports from `electron` directly.
 `max-total-lines`), the main process sends file metadata without hunks in the initial `diff:load`
 payload. The renderer lazily requests each file's hunks via the `diff:load-file` IPC channel as
 the user navigates, avoiding memory pressure from loading the entire diff at once.
+
+**Guided walkthrough mode:** At startup, the main process looks for an LLM-generated guide
+sidecar next to the resolved output path: `<output-basename>.guide.xml` (default `review.xml` →
+`review.guide.xml`), overridable via the `guide-file` YAML config key. No CLI flag is involved.
+The guide (schema `self-review-guide-v1.xsd`, namespace `urn:self-review-guide:v1`) is parsed
+and XSD-validated in `@self-review/core`, then sent to the renderer over the `guide:load` IPC
+channel. When present and valid, the file tree reorganizes into the guide's named, ordered
+groups (each with a rationale), files show one-line descriptions, and a review-level overview
+(Markdown, optional Mermaid) renders before the first file. A Guided/Flat toolbar toggle (shown
+only when a guide is loaded) restores the exact alphabetical tree. Loading is tolerant, never
+fatal: guide entries whose paths are not in the diff are dropped; diff files the guide never
+mentions land in an implicit trailing "Everything else" group; a missing, unparseable, or
+schema-invalid guide produces a single stderr warning and the app behaves exactly as without
+one. The guide is read-only orientation — it never hides content, never blocks the review, and
+never affects the `review.xml` output. It is authored ahead of time by the `self-review-guide`
+skill (see Assistant Skills).
 
 **Rendered previews:** Newly added files (`changeType === 'added'`) of certain types support a
 Raw/Rendered toggle in the file header:
@@ -167,6 +187,7 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | `version-update:available` | Main → Renderer | `VersionUpdateInfo` | Notify renderer of available update        |
 | `diff:load-file`               | Renderer → Main | `string` (filePath)  | Load single file's hunks on demand (large mode) |
 | `diff:load-image`              | Renderer → Main | `{ filePath }` / `ImageLoadResult` | Load a binary image as base64 data URI for rendered preview |
+| `guide:load`               | Main → Renderer | `ReviewGuide`       | Send parsed walkthrough guide when a valid sidecar is discovered |
 | `open-external`            | Renderer → Main | `string` (URL)      | Open URL in default browser                |
 
 ## Shared Types
@@ -253,17 +274,21 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   any reason (offline, timeout, firewall), it is silently ignored. No telemetry, no analytics, no
   CDN fetches. All assets are bundled.
 - **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. No other files are written.
-- **XSD sync.** The XSD schema exists in two places and both must be byte-identical:
-  `.agents/skills/self-review-apply/assets/self-review-v2.xsd` and the `XSD_SCHEMA` string
-  embedded in `packages/core/src/xml-serializer.ts`. The sync test in
-  `packages/core/src/xsd-schema.test.ts` enforces this, so editing one copy alone fails the unit
-  suite. `self-review-v1.xsd` is frozen for consumers of older documents, and must not be edited.
+- **XSD sync.** Each XSD schema exists in two places and both copies must be byte-identical:
+  `.agents/skills/self-review-apply/assets/self-review-v2.xsd` pairs with the `XSD_SCHEMA` string
+  embedded in `packages/core/src/xml-serializer.ts`, and
+  `.agents/skills/self-review-guide/assets/self-review-guide-v1.xsd` pairs with the
+  `GUIDE_XSD_SCHEMA` string embedded in `packages/core/src/guide-schema.ts`. The sync tests in
+  `packages/core/src/xsd-schema.test.ts` enforce both pairs, so editing one copy alone fails the
+  unit suite. `self-review-v1.xsd` is frozen for consumers of older documents, and must not be
+  edited.
 - **Harness skill directories.** `.agents/skills/` holds the real skill files.
-  `.opencode/skills/self-review-apply` and `.opencode/skills/self-review-critique` are **symlinks**
+  `.opencode/skills/self-review-apply`, `.opencode/skills/self-review-critique`, and
+  `.opencode/skills/self-review-guide` are **symlinks**
   into it, because opencode discovers project skills under `.opencode/skills/`. Never replace a
   symlink with a copy: duplicated skills collide by name and opencode resolves the collision
   nondeterministically, so a drifted copy silently wins on some runs. `xsd-schema.test.ts` asserts
-  both entries are still symlinks. Root `opencode.json` additionally declares `.agents/skills` as
+  all three entries are still symlinks. Root `opencode.json` additionally declares `.agents/skills` as
   a skill path. `.claude/skills/` is gitignored and purely local.
 - **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
   Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit /
@@ -297,11 +322,34 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
 
 ## Assistant Skills
 
+### self-review-guide
+
+The `/self-review-guide` skill analyzes a git diff and generates the walkthrough guide sidecar
+(`review.guide.xml` by default, honoring `output-file`/`guide-file` config) that self-review
+discovers at launch for guided mode. The guide orders files into named groups with rationales,
+one-line per-file descriptions, and a review-level overview. It asserts reading order only —
+no severity, no findings, no skip judgments; that is critique's job:
+
+```bash
+# Guide for staged changes
+/self-review-guide --staged
+
+# Guide for changes between branches
+/self-review-guide main..feature-branch
+
+# self-review picks the guide up automatically (no flag)
+self-review --staged
+```
+
+The skill validates its output against `self-review-guide-v1.xsd` before writing. It runs
+standalone, and `self-review-critique` invokes it as its first step.
+
 ### self-review-critique
 
 The `/self-review-critique` skill critiques a git diff and generates a `review.xml` file with
-line-level comments and code suggestions. The output can be loaded into self-review for human
-validation:
+line-level comments and code suggestions. Its first step invokes `self-review-guide` with the
+same diff arguments, so one run yields both the guide sidecar and the review file. The output
+can be loaded into self-review for human validation:
 
 ```bash
 # Critique staged changes
@@ -324,9 +372,11 @@ comments) to the codebase. See `.agents/skills/self-review-apply/SKILL.md` for d
 
 ## XSD Schema Location
 
-The XSD schema lives at `.agents/skills/self-review-apply/assets/self-review-v2.xsd`. This is
-the single source of truth for the XML output format. See the **XSD sync** convention above for
-the embedded copy that must track it.
+The review XSD schema lives at `.agents/skills/self-review-apply/assets/self-review-v2.xsd`.
+This is the single source of truth for the XML output format. The guide sidecar XSD lives at
+`.agents/skills/self-review-guide/assets/self-review-guide-v1.xsd` and is the single source of
+truth for the walkthrough guide format. See the **XSD sync** convention above for the embedded
+copies that must track them.
 
 ## Code Reuse
 

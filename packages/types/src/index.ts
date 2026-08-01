@@ -151,6 +151,36 @@ export interface ReviewGuide {
   groups: GuideGroup[];
 }
 
+/**
+ * One file inside a resolved display group. Unlike {@link GuideFileEntry},
+ * the description is optional: files swept into the implicit
+ * "Everything else" group have no guide-authored one-liner.
+ */
+export interface ResolvedGuideFile {
+  /** File path relative to the repository root. For renames, the new path. */
+  path: string;
+  /** One-line description from the guide; absent for implicit-group files. */
+  description?: string;
+}
+
+/**
+ * A display group produced by reconciling a {@link ReviewGuide} with the
+ * actual diff file list. Guide entries missing from the diff are dropped,
+ * duplicate references keep only their first group, and diff files the
+ * guide never mentions land in a terminal implicit group (in diff order)
+ * marked with `implicit: true` so the UI can label it.
+ */
+export interface ResolvedGuideGroup {
+  /** Display name for the group heading. */
+  name: string;
+  /** One-line rationale from the guide; absent for the implicit group. */
+  rationale?: string;
+  /** True only for the derived trailing "Everything else" group. */
+  implicit: boolean;
+  /** The files shown under this group, in display order. Never empty. */
+  files: ResolvedGuideFile[];
+}
+
 // ===== Configuration Types =====
 
 export interface CategoryDef {
