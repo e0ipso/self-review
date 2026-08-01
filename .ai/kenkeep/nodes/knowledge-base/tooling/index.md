@@ -22,8 +22,8 @@ _None._
 
 ### #knowledge-base
 - Open [**ai-knowledge-base CLI**](map-ai-knowledge-base-cli.md) — \`npx @e0ipso/ai-knowledge-base\` provides \`bootstrap-incremental\` and \`index rebuild\` subcommands used by kb-bootstrap.
-- Open [**Default bootstrap scope**](../bootstrap/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
-- Open [**Stick to markdown documentation; do not read code files during bootstrap**](../bootstrap/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
+- Open [**Stick to markdown documentation; do not read code files during bootstrap**](../bootstrap/discovery/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
+- Open [**Default bootstrap scope**](../bootstrap/discovery/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
 ### #cli
 - Open [**ai-knowledge-base CLI**](map-ai-knowledge-base-cli.md) — \`npx @e0ipso/ai-knowledge-base\` provides \`bootstrap-incremental\` and \`index rebuild\` subcommands used by kb-bootstrap.
 - Open [**CLI static skip list**](map-cli-static-skip-list.md) — The CLI pre-filters \`LICENSE\`, \`CHANGELOG\`, \`CODE_OF_CONDUCT\`, \`CONTRIBUTORS\`, \`INDEX.md\`, \`GRAPH.md\`, and \`releases/**/*.md\` from bootstrap candidates.
@@ -40,4 +40,4 @@ _None._
 - Open [**Knowledge-base directory layout under .ai/knowledge-base/**](../structure/map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes live in nodes/<kind>/, conflicts in conflicts/<id>.md, curator state in .state/state.json, indexes are INDEX.md/GRAPH.md.
 ### #skip-list
 - Open [**CLI static skip list**](map-cli-static-skip-list.md) — The CLI pre-filters \`LICENSE\`, \`CHANGELOG\`, \`CODE_OF_CONDUCT\`, \`CONTRIBUTORS\`, \`INDEX.md\`, \`GRAPH.md\`, and \`releases/**/*.md\` from bootstrap candidates.
-- Open [**CLI static skip list for bootstrap candidates**](../bootstrap/map-cli-static-skip-list-for-bootstrap-candidates.md) — Pre-filter list of filenames the ai-knowledge-base CLI excludes from bootstrap candidates before the skill runs.
+- Open [**CLI static skip list for bootstrap candidates**](../bootstrap/discovery/map-cli-static-skip-list-for-bootstrap-candidates.md) — Pre-filter list of filenames the ai-knowledge-base CLI excludes from bootstrap candidates before the skill runs.

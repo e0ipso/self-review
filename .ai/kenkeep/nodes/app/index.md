@@ -33,8 +33,8 @@
 - Open [**Make no network connections at runtime**](practice-make-no-network-connections-at-runtime.md) — The app is fully local: no network calls, no telemetry, no analytics, no CDN fetches.
 - Open [**Make zero network requests except the startup version check**](practice-make-zero-network-requests-except-the-startup-version-check.md) — No telemetry, analytics, or CDN fetches; only a fire-and-forget GitHub Releases check at startup.
 ### #task-manager
-- Open [**POST_PHASE hook**](../planning/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
-- Open [**PRE_PLAN hook**](../planning/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**POST_PHASE hook**](../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+- Open [**PRE_PLAN hook**](../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
 - Open [**Extract shared logic before duplicating across call sites**](../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
 ### #app
 - Open [**self-review**](map-self-review.md) — Local-only Electron desktop app providing a GitHub-style PR review UI for local git diffs and directory reviews.
@@ -49,6 +49,6 @@
 ### #local-only
 - Open [**Make no network connections at runtime**](practice-make-no-network-connections-at-runtime.md) — The app is fully local: no network calls, no telemetry, no analytics, no CDN fetches.
 ### #scope
-- Open [**Default bootstrap scope**](../knowledge-base/bootstrap/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
-- Open [**Stick to markdown documentation; do not read code files during bootstrap**](../knowledge-base/bootstrap/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
-- Open [**Skip files that look correct rather than forcing comments**](../skills/critique/practice-skip-files-that-look-correct-rather-than-forcing-comments.md) — Critique should leave a file un-commented when nothing substantive is wrong; do not manufacture review comments on every file.
+- Open [**Default bootstrap scope**](../knowledge-base/bootstrap/discovery/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
+- Open [**Stick to markdown documentation; do not read code files during bootstrap**](../knowledge-base/bootstrap/discovery/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
+- Open [**Skip files that look correct rather than forcing comments**](../skills/critique/review-strategy/practice-skip-files-that-look-correct-rather-than-forcing-comments.md) — Critique should leave a file un-commented when nothing substantive is wrong; do not manufacture review comments on every file.

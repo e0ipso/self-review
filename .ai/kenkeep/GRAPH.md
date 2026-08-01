@@ -1,11 +1,11 @@
 ---
 schema_version: 3
-nodes_hash: 'sha256:d64f87e753d92fc25e725421ce1c4a359797efa010a87d6c64d07093ee907157'
-node_count: 172
+nodes_hash: 'sha256:6dd78e566f7b94f6cb212c57abc9cb96c6e585e39ba939cb6a91d276cbe50c78'
+node_count: 175
 ---
 # kenkeep Graph
 
-Total nodes: 172
+Total nodes: 175
 
 ## map-ai-knowledge-base-cli
 
@@ -35,7 +35,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** CLI static skip list for bootstrap candidates
-- **path:** knowledge-base/bootstrap/map-cli-static-skip-list-for-bootstrap-candidates.md
+- **path:** knowledge-base/bootstrap/discovery/map-cli-static-skip-list-for-bootstrap-candidates.md
 - **tags:** knowledge-base, cli, skip-list, bootstrap
 - **derived_from:** .ai/knowledge-base/nodes/map/map-cli-static-skip-list.md
 
@@ -43,7 +43,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Comment author attribution
-- **path:** review-xml/map-comment-author-attribution.md
+- **path:** review-xml/comments/map-comment-author-attribution.md
 - **tags:** task-manager, comments, author
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -51,7 +51,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** CSS build pipeline for @self-review/react
-- **path:** packages/map-css-build-pipeline-for-self-review-react.md
+- **path:** packages/styling/map-css-build-pipeline-for-self-review-react.md
 - **tags:** css, build, tailwind
 - **derived_from:** packages/react/AGENTS.md
 
@@ -67,7 +67,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Default bootstrap scope
-- **path:** knowledge-base/bootstrap/map-default-bootstrap-scope.md
+- **path:** knowledge-base/bootstrap/discovery/map-default-bootstrap-scope.md
 - **tags:** knowledge-base, scope
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -75,7 +75,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Default critique categories
-- **path:** skills/critique/map-default-critique-categories.md
+- **path:** skills/critique/configuration/map-default-critique-categories.md
 - **tags:** self-review, categories, critique
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -91,7 +91,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Emoji shortcode support in comments
-- **path:** app/ui/map-emoji-shortcode-support-in-comments.md
+- **path:** app/ui/interactions/map-emoji-shortcode-support-in-comments.md
 - **tags:** task-manager, emoji, comments
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -99,7 +99,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** extract-task-skills.cjs
-- **path:** planning/map-extract-task-skills-cjs.md
+- **path:** planning/assignment/map-extract-task-skills-cjs.md
 - **tags:** scripts, task-manager, skills
 - **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
 
@@ -107,7 +107,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Finish Review vs window-close behavior
-- **path:** app/ui/map-finish-review-vs-window-close-behavior.md
+- **path:** app/ui/lifecycle/map-finish-review-vs-window-close-behavior.md
 - **tags:** task-manager, close-behavior, save
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -131,7 +131,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** kb-bootstrap skill
-- **path:** knowledge-base/bootstrap/map-kb-bootstrap-skill.md
+- **path:** knowledge-base/bootstrap/workflow/map-kb-bootstrap-skill.md
 - **tags:** knowledge-base, skill
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -203,7 +203,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** npm workspaces packages
-- **path:** packages/map-npm-workspaces-packages.md
+- **path:** packages/architecture/map-npm-workspaces-packages.md
 - **tags:** task-manager, packages, workspaces
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -211,7 +211,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** POST_PHASE hook
-- **path:** planning/map-post-phase-hook.md
+- **path:** planning/execution/map-post-phase-hook.md
 - **tags:** hook, workflow, task-manager
 - **derived_from:** .ai/task-manager/config/hooks/POST_PHASE.md
 
@@ -219,7 +219,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** POST_PLAN hook
-- **path:** planning/map-post-plan-hook.md
+- **path:** planning/authoring/map-post-plan-hook.md
 - **tags:** hooks, task-manager, planning
 - **derived_from:** .ai/task-manager/config/hooks/POST_PLAN.md
 
@@ -227,7 +227,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** POST_TASK_GENERATION_ALL hook
-- **path:** planning/map-post-task-generation-all-hook.md
+- **path:** planning/task-generation/map-post-task-generation-all-hook.md
 - **tags:** task-management, hooks, lifecycle
 - **derived_from:** .ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md
 
@@ -235,7 +235,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** PRE_PLAN hook
-- **path:** planning/map-pre-plan-hook.md
+- **path:** planning/authoring/map-pre-plan-hook.md
 - **tags:** task-manager, hook, workflow
 - **derived_from:** .ai/task-manager/config/hooks/PRE_PLAN.md
 
@@ -243,7 +243,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** PRE_TASK_ASSIGNMENT hook
-- **path:** planning/map-pre-task-assignment-hook.md
+- **path:** planning/assignment/map-pre-task-assignment-hook.md
 - **tags:** hooks, task-manager, ai
 - **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
 
@@ -251,7 +251,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Rendered file previews
-- **path:** app/ui/map-rendered-file-previews.md
+- **path:** app/ui/previews/map-rendered-file-previews.md
 - **tags:** task-manager, rendered-preview, file-types
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -259,7 +259,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Rendered image and SVG previews for added files
-- **path:** app/ui/map-rendered-image-and-svg-previews-for-added-files.md
+- **path:** app/ui/previews/map-rendered-image-and-svg-previews-for-added-files.md
 - **tags:** preview, image, svg
 - **derived_from:** docs/PRD.md
 
@@ -267,7 +267,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Rendered text view for added Markdown and HTML files
-- **path:** app/ui/map-rendered-text-view-for-added-markdown-and-html-files.md
+- **path:** app/ui/previews/map-rendered-text-view-for-added-markdown-and-html-files.md
 - **tags:** preview, markdown, html, rendered
 - **derived_from:** docs/PRD.md
 
@@ -283,7 +283,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** review.xml format and XSD
-- **path:** review-xml/map-review-xml-format-and-xsd.md
+- **path:** review-xml/schema/map-review-xml-format-and-xsd.md
 - **tags:** self-review, schema, xml
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -291,7 +291,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** ReviewAdapter interface
-- **path:** packages/map-reviewadapter-interface.md
+- **path:** packages/architecture/map-reviewadapter-interface.md
 - **tags:** interface, adapter, platform
 - **derived_from:** packages/react/AGENTS.md
 
@@ -299,7 +299,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** ReviewPanel and SingleFileReview entry components
-- **path:** packages/map-reviewpanel-and-singlefilereview-entry-components.md
+- **path:** packages/architecture/map-reviewpanel-and-singlefilereview-entry-components.md
 - **tags:** component, entrypoint
 - **derived_from:** packages/react/AGENTS.md
 
@@ -325,7 +325,7 @@ Total nodes: 172
 - **title:** self-review-apply assistant skill
 - **path:** skills/apply/map-self-review-apply-assistant-skill.md
 - **tags:** skill, ai, workflow
-- **derived_from:** README.md
+- **derived_from:** README.md, .agents/skills/self-review-apply/SKILL.md
 
 ## map-self-review-apply-skill
 
@@ -333,7 +333,7 @@ Total nodes: 172
 - **title:** self-review-apply skill
 - **path:** skills/apply/map-self-review-apply-skill.md
 - **tags:** self-review, skills, apply
-- **derived_from:** .agents/skills/self-review-critique/SKILL.md
+- **derived_from:** .agents/skills/self-review-critique/SKILL.md, .agents/skills/self-review-apply/SKILL.md
 
 ## map-self-review-cli-invocations
 
@@ -347,7 +347,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** self-review-critique skill
-- **path:** skills/critique/map-self-review-critique-skill.md
+- **path:** skills/critique/configuration/map-self-review-critique-skill.md
 - **tags:** self-review, skills, critique
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -355,7 +355,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** @self-review/react package
-- **path:** packages/map-self-review-react-package.md
+- **path:** packages/architecture/map-self-review-react-package.md
 - **tags:** package, react, ui
 - **derived_from:** packages/react/AGENTS.md
 
@@ -363,15 +363,15 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** @self-review/types package
-- **path:** packages/map-self-review-types-package.md
+- **path:** packages/types/map-self-review-types-package.md
 - **tags:** package, types, workspace
 - **derived_from:** packages/types/AGENTS.md
 
 ## map-self-review-v1-xsd-output-format
 
 - **kind:** map
-- **title:** self-review-v2 XSD output format
-- **path:** review-xml/map-self-review-v1-xsd-output-format.md
+- **title:** self-review-v3 XSD output format
+- **path:** review-xml/schema/map-self-review-v1-xsd-output-format.md
 - **tags:** xml, schema, output
 - **derived_from:** docs/PRD.md
 
@@ -379,25 +379,25 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** .self-review wrapper div
-- **path:** packages/map-self-review-wrapper-div.md
+- **path:** packages/styling/map-self-review-wrapper-div.md
 - **tags:** dom, scoping, theming
 - **derived_from:** packages/react/AGENTS.md
 
 ## map-self-review-xml-schema-self-review-v1-xsd
 
 - **kind:** map
-- **title:** self-review XML schema (self-review-v2.xsd)
-- **path:** review-xml/map-self-review-xml-schema-self-review-v1-xsd.md
+- **title:** self-review XML schema (self-review-v3.xsd)
+- **path:** review-xml/schema/map-self-review-xml-schema-self-review-v1-xsd.md
 - **tags:** self-review, xsd, schema
-- **derived_from:** .opencode/skills/self-review-apply/SKILL.md
+- **derived_from:** .opencode/skills/self-review-apply/SKILL.md, .agents/skills/self-review-apply/SKILL.md
 
 ## map-self-review-xml-v1-schema
 
 - **kind:** map
-- **title:** self-review XML v2 schema
-- **path:** review-xml/map-self-review-xml-v1-schema.md
+- **title:** self-review XML v3 schema
+- **path:** review-xml/schema/map-self-review-xml-v1-schema.md
 - **tags:** self-review, xml, schema
-- **derived_from:** .opencode/skills/self-review-critique/SKILL.md
+- **derived_from:** .opencode/skills/self-review-critique/SKILL.md, .agents/skills/self-review-critique/SKILL.md
 
 ## map-self-review-yaml-configuration-options
 
@@ -451,7 +451,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Vimium-style keyboard navigation
-- **path:** app/ui/map-vimium-style-keyboard-navigation.md
+- **path:** app/ui/interactions/map-vimium-style-keyboard-navigation.md
 - **tags:** keyboard, navigation, vimium
 - **derived_from:** docs/PRD.md
 
@@ -459,7 +459,7 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** Vimium-style keyboard shortcuts
-- **path:** app/ui/map-vimium-style-keyboard-shortcuts.md
+- **path:** app/ui/interactions/map-vimium-style-keyboard-shortcuts.md
 - **tags:** task-manager, keyboard, vimium
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -467,10 +467,10 @@ Total nodes: 172
 
 - **kind:** map
 - **title:** XSD schema location
-- **path:** review-xml/map-xsd-schema-location.md
-- **tags:** task-manager, xsd, schema
+- **path:** review-xml/schema/map-xsd-schema-location.md
+- **tags:** self-review, xsd, schema
 - **relates_to:** practice-keep-the-xsd-schema-in-sync-across-its-two-locations
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md, AGENTS.md
 
 ## practice-accept-only-y-n-s-k-tokens-when-resolving-curator-conflicts
 
@@ -484,7 +484,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Append a blueprint with dependency diagram and execution phases to the plan
-- **path:** planning/practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md
+- **path:** planning/task-generation/practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md
 - **tags:** task-management, blueprint, dependencies
 - **derived_from:** .ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md
 
@@ -524,7 +524,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Attach a suggestion block whenever a concrete fix is possible
-- **path:** skills/critique/practice-attach-a-suggestion-block-whenever-a-concrete-fix-is-possible.md
+- **path:** skills/critique/suggestions/practice-attach-a-suggestion-block-whenever-a-concrete-fix-is-possible.md
 - **tags:** self-review, critique, suggestions
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
@@ -532,7 +532,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Check plans for architecture and code reuse improvements
-- **path:** planning/practice-check-plans-for-architecture-and-code-reuse-improvements.md
+- **path:** planning/authoring/practice-check-plans-for-architecture-and-code-reuse-improvements.md
 - **tags:** planning, architecture, code-reuse
 - **derived_from:** .ai/task-manager/config/hooks/POST_PLAN.md
 
@@ -540,7 +540,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Clamp multi-line drag-selection to a single hunk and a single side
-- **path:** app/ui/practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side.md
+- **path:** app/ui/interactions/practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side.md
 - **tags:** drag-select, hunks, split-view
 - **derived_from:** docs/PRD.md
 
@@ -556,7 +556,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Conclude bootstrap with a structured final report
-- **path:** knowledge-base/bootstrap/practice-conclude-bootstrap-with-a-structured-final-report.md
+- **path:** knowledge-base/bootstrap/workflow/practice-conclude-bootstrap-with-a-structured-final-report.md
 - **tags:** knowledge-base, reporting
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -564,15 +564,24 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Consolidate multi-source candidates into a single node with multiple `derived_from`
-- **path:** knowledge-base/bootstrap/practice-consolidate-multi-source-candidates-into-a-single-node-with-multiple-derived-from.md
+- **path:** knowledge-base/bootstrap/admission/practice-consolidate-multi-source-candidates-into-a-single-node-with-multiple-derived-from.md
 - **tags:** knowledge-base, deduplication
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+
+## practice-convert-v2-gate-reviews-to-v3-before-applying
+
+- **kind:** practice
+- **title:** Convert v2 gate reviews to v3 before applying
+- **path:** skills/apply/practice-convert-v2-gate-reviews-to-v3-before-applying.md
+- **tags:** self-review, xml, compatibility, workflow
+- **relates_to:** map-self-review-apply-skill, map-review-xml-format-and-xsd
+- **derived_from:** 77699372-867d-4d60-9007-5aa0b672863d:practice:0
 
 ## practice-copy-original-code-verbatim-from-the-source-file
 
 - **kind:** practice
 - **title:** Copy original-code verbatim from the source file
-- **path:** skills/critique/practice-copy-original-code-verbatim-from-the-source-file.md
+- **path:** skills/critique/suggestions/practice-copy-original-code-verbatim-from-the-source-file.md
 - **tags:** self-review, suggestions, xml
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -580,7 +589,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Default critique to unstaged changes when no diff args are passed
-- **path:** skills/critique/practice-default-critique-to-unstaged-changes-when-no-diff-args-are-passed.md
+- **path:** skills/critique/configuration/practice-default-critique-to-unstaged-changes-when-no-diff-args-are-passed.md
 - **tags:** self-review, critique, cli
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -588,7 +597,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Default node confidence to medium during bootstrap
-- **path:** knowledge-base/bootstrap/practice-default-node-confidence-to-medium-during-bootstrap.md
+- **path:** knowledge-base/bootstrap/admission/practice-default-node-confidence-to-medium-during-bootstrap.md
 - **tags:** knowledge-base, confidence
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -596,7 +605,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Defer file discovery to the CLI's bootstrap-incremental dry run
-- **path:** knowledge-base/bootstrap/practice-defer-file-discovery-to-the-cli-s-bootstrap-incremental-dry-run.md
+- **path:** knowledge-base/bootstrap/discovery/practice-defer-file-discovery-to-the-cli-s-bootstrap-incremental-dry-run.md
 - **tags:** knowledge-base, cli, discovery
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -604,7 +613,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Define shared data structures only in @self-review/types
-- **path:** packages/practice-define-shared-data-structures-only-in-self-review-types.md
+- **path:** packages/types/practice-define-shared-data-structures-only-in-self-review-types.md
 - **tags:** types, single-source, shared
 - **derived_from:** packages/types/AGENTS.md
 
@@ -612,7 +621,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Design XML output to be parsed by LLMs
-- **path:** review-xml/practice-design-xml-output-to-be-parsed-by-llms.md
+- **path:** review-xml/schema/practice-design-xml-output-to-be-parsed-by-llms.md
 - **tags:** output, xml, ai
 - **derived_from:** README.md
 
@@ -620,7 +629,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Detect sub-agents across .claude, .gemini, and .opencode directories
-- **path:** planning/practice-detect-sub-agents-across-claude-gemini-and-opencode-directories.md
+- **path:** planning/assignment/practice-detect-sub-agents-across-claude-gemini-and-opencode-directories.md
 - **tags:** agents, discovery, conventions
 - **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
 
@@ -628,7 +637,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Differentiate Finish Review from window close
-- **path:** app/ui/practice-differentiate-finish-review-from-window-close.md
+- **path:** app/ui/lifecycle/practice-differentiate-finish-review-from-window-close.md
 - **tags:** exit, save, ux
 - **derived_from:** docs/PRD.md
 
@@ -636,7 +645,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Do not add Tailwind as a peer dependency for host apps
-- **path:** packages/practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps.md
+- **path:** packages/styling/practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps.md
 - **tags:** css, tailwind, dependencies
 - **derived_from:** packages/react/AGENTS.md
 
@@ -652,7 +661,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Do not import from @self-review/core in the react package
-- **path:** packages/practice-do-not-import-from-self-review-core-in-the-react-package.md
+- **path:** packages/architecture/practice-do-not-import-from-self-review-core-in-the-react-package.md
 - **tags:** react, imports, bundling
 - **derived_from:** packages/react/AGENTS.md
 
@@ -660,7 +669,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Do not import sibling packages from @self-review/types
-- **path:** packages/practice-do-not-import-sibling-packages-from-self-review-types.md
+- **path:** packages/types/practice-do-not-import-sibling-packages-from-self-review-types.md
 - **tags:** types, imports, architecture
 - **derived_from:** packages/types/AGENTS.md
 
@@ -692,7 +701,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Do not use Node.js APIs in @self-review/react
-- **path:** packages/practice-do-not-use-node-js-apis-in-self-review-react.md
+- **path:** packages/architecture/practice-do-not-use-node-js-apis-in-self-review-react.md
 - **tags:** react, browser, constraints
 - **derived_from:** packages/react/AGENTS.md
 
@@ -716,7 +725,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Emit no wrapper elements in the XML output
-- **path:** review-xml/practice-emit-no-wrapper-elements-in-the-xml-output.md
+- **path:** review-xml/schema/practice-emit-no-wrapper-elements-in-the-xml-output.md
 - **tags:** xml, schema
 - **derived_from:** docs/PRD.md
 
@@ -724,7 +733,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Engage relevant assistant skills based on task skills
-- **path:** planning/practice-engage-relevant-assistant-skills-based-on-task-skills.md
+- **path:** planning/assignment/practice-engage-relevant-assistant-skills-based-on-task-skills.md
 - **tags:** task-assignment, skills, assistant-skills
 - **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
 
@@ -756,7 +765,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Follow the allowed task status transitions
-- **path:** planning/practice-follow-the-allowed-task-status-transitions.md
+- **path:** planning/execution/practice-follow-the-allowed-task-status-transitions.md
 - **tags:** workflow, task-status
 - **derived_from:** .ai/task-manager/config/hooks/POST_PHASE.md
 
@@ -764,7 +773,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Force unified view for added and deleted files
-- **path:** app/ui/practice-force-unified-view-for-added-and-deleted-files.md
+- **path:** app/ui/previews/practice-force-unified-view-for-added-and-deleted-files.md
 - **tags:** ui, diff-view
 - **derived_from:** docs/PRD.md
 
@@ -788,7 +797,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Honor `bootstrapModel.name` from KB config when delegating to sub-agents
-- **path:** knowledge-base/bootstrap/practice-honor-bootstrapmodel-name-from-kb-config-when-delegating-to-sub-agents.md
+- **path:** knowledge-base/bootstrap/workflow/practice-honor-bootstrapmodel-name-from-kb-config-when-delegating-to-sub-agents.md
 - **tags:** knowledge-base, config, sub-agents
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -804,7 +813,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Import only the compiled dist/styles.css from host apps
-- **path:** packages/practice-import-only-the-compiled-dist-styles-css-from-host-apps.md
+- **path:** packages/styling/practice-import-only-the-compiled-dist-styles-css-from-host-apps.md
 - **tags:** css, build, imports
 - **derived_from:** packages/react/AGENTS.md
 
@@ -812,7 +821,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Keep all @self-review/types definitions in src/index.ts
-- **path:** packages/practice-keep-all-self-review-types-definitions-in-src-index-ts.md
+- **path:** packages/types/practice-keep-all-self-review-types-definitions-in-src-index-ts.md
 - **tags:** types, structure, layout
 - **derived_from:** packages/types/AGENTS.md
 
@@ -820,7 +829,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Keep file-type detection utilities duplicated across core and react packages
-- **path:** packages/practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md
+- **path:** packages/architecture/practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md
 - **tags:** task-manager, file-type-utils, duplication
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -828,9 +837,18 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Keep file-type-utils.ts duplicates in sync across core and react
-- **path:** packages/practice-keep-file-type-utils-ts-duplicates-in-sync-across-core-and-react.md
+- **path:** packages/architecture/practice-keep-file-type-utils-ts-duplicates-in-sync-across-core-and-react.md
 - **tags:** duplication, sync, utils
 - **derived_from:** packages/react/AGENTS.md
+
+## practice-keep-review-comment-mutations-immutable
+
+- **kind:** practice
+- **title:** Keep review comment mutations immutable
+- **path:** packages/architecture/practice-keep-review-comment-mutations-immutable.md
+- **tags:** react, review-state, callbacks, immutability
+- **relates_to:** map-reviewpanel-and-singlefilereview-entry-components, map-self-review-react-package
+- **derived_from:** 77699372-867d-4d60-9007-5aa0b672863d:practice:2
 
 ## practice-keep-self-review-local-only-with-no-network-access
 
@@ -844,18 +862,18 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Keep @self-review/types free of runtime dependencies
-- **path:** packages/practice-keep-self-review-types-free-of-runtime-dependencies.md
+- **path:** packages/types/practice-keep-self-review-types-free-of-runtime-dependencies.md
 - **tags:** types, dependencies, package
 - **derived_from:** packages/types/AGENTS.md
 
 ## practice-keep-the-xsd-schema-in-sync-across-its-two-locations
 
 - **kind:** practice
-- **title:** Keep the XSD schema in sync across its three locations
-- **path:** review-xml/practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md
-- **tags:** task-manager, xsd, sync
+- **title:** Keep the v3 XSD schema in sync across its two locations
+- **path:** review-xml/schema/practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md
+- **tags:** self-review, xsd, sync
 - **relates_to:** map-xsd-schema-location
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md, AGENTS.md
 
 ## practice-lazy-load-file-hunks-in-large-payload-mode
 
@@ -877,7 +895,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Line comments reference either old or new line numbers, never both
-- **path:** review-xml/practice-line-comments-reference-either-old-or-new-line-numbers-never-both.md
+- **path:** review-xml/line-anchors/practice-line-comments-reference-either-old-or-new-line-numbers-never-both.md
 - **tags:** xml, comments, line-numbers
 - **derived_from:** docs/PRD.md
 
@@ -909,7 +927,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Mark completed phases and tasks in the blueprint before advancing
-- **path:** planning/practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing.md
+- **path:** planning/execution/practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing.md
 - **tags:** workflow, progress-tracking, blueprint
 - **derived_from:** .ai/task-manager/config/hooks/POST_PHASE.md
 
@@ -917,7 +935,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Match task skills to sub-agents during PRE_TASK_ASSIGNMENT
-- **path:** planning/practice-match-task-skills-to-sub-agents-during-pre-task-assignment.md
+- **path:** planning/assignment/practice-match-task-skills-to-sub-agents-during-pre-task-assignment.md
 - **tags:** task-assignment, agents, hooks
 - **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
 
@@ -925,7 +943,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Never auto-resolve contradictions during bootstrap
-- **path:** knowledge-base/bootstrap/practice-never-auto-resolve-contradictions-during-bootstrap.md
+- **path:** knowledge-base/bootstrap/admission/practice-never-auto-resolve-contradictions-during-bootstrap.md
 - **tags:** knowledge-base, contradictions
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -941,7 +959,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Never overwrite an existing node during bootstrap
-- **path:** knowledge-base/bootstrap/practice-never-overwrite-an-existing-node-during-bootstrap.md
+- **path:** knowledge-base/bootstrap/admission/practice-never-overwrite-an-existing-node-during-bootstrap.md
 - **tags:** knowledge-base, node-authoring, collision
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -965,15 +983,15 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Pair comment line numbers as either new or old, never both
-- **path:** review-xml/practice-pair-comment-line-numbers-as-either-new-or-old-never-both.md
+- **path:** review-xml/line-anchors/practice-pair-comment-line-numbers-as-either-new-or-old-never-both.md
 - **tags:** self-review, xml, line-numbers
-- **derived_from:** .opencode/skills/self-review-apply/SKILL.md
+- **derived_from:** .opencode/skills/self-review-apply/SKILL.md, .agents/skills/self-review-apply/SKILL.md
 
 ## practice-pair-line-number-attributes-correctly-in-review-comments
 
 - **kind:** practice
 - **title:** Pair line-number attributes correctly in review comments
-- **path:** review-xml/practice-pair-line-number-attributes-correctly-in-review-comments.md
+- **path:** review-xml/line-anchors/practice-pair-line-number-attributes-correctly-in-review-comments.md
 - **tags:** self-review, xml, comments
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -981,7 +999,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Pair line-number attributes correctly on review comments
-- **path:** review-xml/practice-pair-line-number-attributes-correctly-on-review-comments.md
+- **path:** review-xml/line-anchors/practice-pair-line-number-attributes-correctly-on-review-comments.md
 - **tags:** self-review, xml, comments
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
@@ -997,7 +1015,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Pass linting and create a descriptive conventional commit at the end of each phase
-- **path:** planning/practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md
+- **path:** planning/execution/practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md
 - **tags:** workflow, linting, commits
 - **derived_from:** .ai/task-manager/config/hooks/POST_PHASE.md
 
@@ -1005,7 +1023,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Pass portalContainer to all Radix/shadcn portal components
-- **path:** packages/practice-pass-portalcontainer-to-all-radix-shadcn-portal-components.md
+- **path:** packages/styling/practice-pass-portalcontainer-to-all-radix-shadcn-portal-components.md
 - **tags:** radix, portals, theming
 - **derived_from:** packages/react/AGENTS.md
 
@@ -1013,7 +1031,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Prefill the suggestion proposed-code editor with the original code
-- **path:** app/ui/practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code.md
+- **path:** app/ui/interactions/practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code.md
 - **tags:** suggestions, ux
 - **derived_from:** docs/PRD.md
 
@@ -1025,11 +1043,20 @@ Total nodes: 172
 - **tags:** resume, comments, data-integrity
 - **derived_from:** docs/PRD.md
 
+## practice-preserve-review-body-whitespace-during-xml-parsing
+
+- **kind:** practice
+- **title:** Preserve review body whitespace during XML parsing
+- **path:** review-xml/comments/practice-preserve-review-body-whitespace-during-xml-parsing.md
+- **tags:** self-review, xml, parsing, markdown
+- **relates_to:** map-review-xml-format-and-xsd
+- **derived_from:** 77699372-867d-4d60-9007-5aa0b672863d:practice:1
+
 ## practice-prioritize-the-largest-diffs-when-reviewing-many-files
 
 - **kind:** practice
 - **title:** Prioritize the largest diffs when reviewing many files
-- **path:** skills/critique/practice-prioritize-the-largest-diffs-when-reviewing-many-files.md
+- **path:** skills/critique/review-strategy/practice-prioritize-the-largest-diffs-when-reviewing-many-files.md
 - **tags:** self-review, critique, performance
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -1037,7 +1064,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Read categories from .self-review.yaml before generating critique
-- **path:** skills/critique/practice-read-categories-from-self-review-yaml-before-generating-critique.md
+- **path:** skills/critique/configuration/practice-read-categories-from-self-review-yaml-before-generating-critique.md
 - **tags:** self-review, critique, categories
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -1045,7 +1072,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Read entry points first, then sample and follow cross-references
-- **path:** knowledge-base/bootstrap/practice-read-entry-points-first-then-sample-and-follow-cross-references.md
+- **path:** knowledge-base/bootstrap/discovery/practice-read-entry-points-first-then-sample-and-follow-cross-references.md
 - **tags:** knowledge-base, reading-strategy
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -1053,7 +1080,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Read full file contents for added/modified files when critiquing
-- **path:** skills/critique/practice-read-full-file-contents-for-added-modified-files-when-critiquing.md
+- **path:** skills/critique/review-strategy/practice-read-full-file-contents-for-added-modified-files-when-critiquing.md
 - **tags:** self-review, critique, context
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
@@ -1069,7 +1096,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Require a category on every comment
-- **path:** review-xml/practice-require-a-category-on-every-comment.md
+- **path:** review-xml/comments/practice-require-a-category-on-every-comment.md
 - **tags:** xml, categories
 - **derived_from:** docs/PRD.md
 
@@ -1085,7 +1112,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Review every generated task for complexity, vagueness, and triviality
-- **path:** planning/practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md
+- **path:** planning/task-generation/practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md
 - **tags:** task-management, planning, quality
 - **derived_from:** .ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md
 
@@ -1101,7 +1128,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Review plans against PRD and test/features updates
-- **path:** planning/practice-review-plans-against-prd-and-test-features-updates.md
+- **path:** planning/authoring/practice-review-plans-against-prd-and-test-features-updates.md
 - **tags:** planning, prd, tests
 - **derived_from:** .ai/task-manager/config/hooks/POST_PLAN.md
 
@@ -1109,7 +1136,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Run kb-bootstrap as a one-pass, supervised operation
-- **path:** knowledge-base/bootstrap/practice-run-kb-bootstrap-as-a-one-pass-supervised-operation.md
+- **path:** knowledge-base/bootstrap/workflow/practice-run-kb-bootstrap-as-a-one-pass-supervised-operation.md
 - **tags:** knowledge-base, bootstrap, workflow
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -1125,7 +1152,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Scope styles and dark mode via the .self-review wrapper div
-- **path:** packages/practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div.md
+- **path:** packages/styling/practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div.md
 - **tags:** css, scoping, theming
 - **derived_from:** packages/react/AGENTS.md
 
@@ -1141,7 +1168,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Set author to your model name on every generated comment
-- **path:** skills/critique/practice-set-author-to-your-model-name-on-every-generated-comment.md
+- **path:** skills/critique/output/practice-set-author-to-your-model-name-on-every-generated-comment.md
 - **tags:** self-review, attribution, critique
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -1149,7 +1176,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Set the comment `author` attribute to the model name
-- **path:** skills/critique/practice-set-the-comment-author-attribute-to-the-model-name.md
+- **path:** skills/critique/output/practice-set-the-comment-author-attribute-to-the-model-name.md
 - **tags:** self-review, attribution, author
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
@@ -1157,7 +1184,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Set `viewed="true"` on every file in AI-generated review.xml
-- **path:** skills/critique/practice-set-viewed-true-on-every-file-in-ai-generated-review-xml.md
+- **path:** skills/critique/output/practice-set-viewed-true-on-every-file-in-ai-generated-review-xml.md
 - **tags:** self-review, xml, attributes
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
@@ -1165,7 +1192,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Set viewed="true" on every file in critique output
-- **path:** skills/critique/practice-set-viewed-true-on-every-file-in-critique-output.md
+- **path:** skills/critique/output/practice-set-viewed-true-on-every-file-in-critique-output.md
 - **tags:** self-review, xml, critique
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -1189,7 +1216,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Skip files that look correct; do not force comments on every file
-- **path:** skills/critique/practice-skip-files-that-look-correct-do-not-force-comments-on-every-file.md
+- **path:** skills/critique/review-strategy/practice-skip-files-that-look-correct-do-not-force-comments-on-every-file.md
 - **tags:** self-review, critique, scope
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -1197,7 +1224,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Skip files that look correct rather than forcing comments
-- **path:** skills/critique/practice-skip-files-that-look-correct-rather-than-forcing-comments.md
+- **path:** skills/critique/review-strategy/practice-skip-files-that-look-correct-rather-than-forcing-comments.md
 - **tags:** self-review, critique, scope
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
@@ -1221,7 +1248,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Stick to markdown documentation; do not read code files during bootstrap
-- **path:** knowledge-base/bootstrap/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md
+- **path:** knowledge-base/bootstrap/discovery/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md
 - **tags:** knowledge-base, scope
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -1229,7 +1256,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Stop and ask the user when bootstrap conditions go off-track
-- **path:** knowledge-base/bootstrap/practice-stop-and-ask-the-user-when-bootstrap-conditions-go-off-track.md
+- **path:** knowledge-base/bootstrap/workflow/practice-stop-and-ask-the-user-when-bootstrap-conditions-go-off-track.md
 - **tags:** knowledge-base, escalation
 - **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
 
@@ -1261,7 +1288,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Use categories from .self-review.yaml when present
-- **path:** skills/critique/practice-use-categories-from-self-review-yaml-when-present.md
+- **path:** skills/critique/configuration/practice-use-categories-from-self-review-yaml-when-present.md
 - **tags:** self-review, critique, categories
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
@@ -1285,7 +1312,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Use old vs new line numbers based on the commented line type
-- **path:** review-xml/practice-use-old-vs-new-line-numbers-based-on-the-commented-line-type.md
+- **path:** review-xml/line-anchors/practice-use-old-vs-new-line-numbers-based-on-the-commented-line-type.md
 - **tags:** task-manager, line-numbers, comments
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -1293,7 +1320,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Use Prism.js for syntax highlighting with theme matching
-- **path:** app/ui/practice-use-prism-js-for-syntax-highlighting-with-theme-matching.md
+- **path:** app/ui/previews/practice-use-prism-js-for-syntax-highlighting-with-theme-matching.md
 - **tags:** task-manager, syntax-highlighting, prism
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -1301,7 +1328,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Use shadcn/ui components instead of raw HTML for UI
-- **path:** app/ui/practice-use-shadcn-ui-components-instead-of-raw-html-for-ui.md
+- **path:** app/ui/interactions/practice-use-shadcn-ui-components-instead-of-raw-html-for-ui.md
 - **tags:** task-manager, ui, shadcn
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -1317,7 +1344,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Use <suggestion> blocks whenever a concrete fix can be proposed
-- **path:** skills/critique/practice-use-suggestion-blocks-whenever-a-concrete-fix-can-be-proposed.md
+- **path:** skills/critique/suggestions/practice-use-suggestion-blocks-whenever-a-concrete-fix-can-be-proposed.md
 - **tags:** self-review, suggestions, critique
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -1325,7 +1352,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Use the new path for renamed files in review XML
-- **path:** review-xml/practice-use-the-new-path-for-renamed-files-in-review-xml.md
+- **path:** review-xml/comments/practice-use-the-new-path-for-renamed-files-in-review-xml.md
 - **tags:** self-review, xml, renames
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -1333,7 +1360,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Use the ReviewAdapter pattern for platform-specific operations
-- **path:** packages/practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md
+- **path:** packages/architecture/practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md
 - **tags:** architecture, adapter, platform
 - **derived_from:** packages/react/AGENTS.md
 
@@ -1341,7 +1368,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Validate generated review.xml against the XSD before finishing
-- **path:** skills/critique/practice-validate-generated-review-xml-against-the-xsd-before-finishing.md
+- **path:** skills/critique/output/practice-validate-generated-review-xml-against-the-xsd-before-finishing.md
 - **tags:** self-review, xml, validation
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
@@ -1349,9 +1376,9 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Validate generated review.xml against the XSD with xmllint
-- **path:** skills/critique/practice-validate-generated-review-xml-against-the-xsd-with-xmllint.md
+- **path:** skills/critique/output/practice-validate-generated-review-xml-against-the-xsd-with-xmllint.md
 - **tags:** self-review, critique, validation
-- **derived_from:** .opencode/skills/self-review-critique/SKILL.md
+- **derived_from:** .opencode/skills/self-review-critique/SKILL.md, .agents/skills/self-review-critique/SKILL.md
 
 ## practice-validate-self-review-xml-against-the-xsd-before-applying
 
@@ -1359,13 +1386,13 @@ Total nodes: 172
 - **title:** Validate self-review XML against the XSD before applying
 - **path:** skills/apply/practice-validate-self-review-xml-against-the-xsd-before-applying.md
 - **tags:** self-review, validation, xmllint
-- **derived_from:** .opencode/skills/self-review-apply/SKILL.md
+- **derived_from:** .opencode/skills/self-review-apply/SKILL.md, .agents/skills/self-review-apply/SKILL.md
 
 ## practice-validate-xml-output-against-the-xsd-before-writing
 
 - **kind:** practice
 - **title:** Validate XML output against the XSD before writing
-- **path:** review-xml/practice-validate-xml-output-against-the-xsd-before-writing.md
+- **path:** review-xml/schema/practice-validate-xml-output-against-the-xsd-before-writing.md
 - **tags:** task-manager, xml, validation
 - **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
 
@@ -1373,7 +1400,7 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** Write PRDs without tasks or phases during plan creation
-- **path:** planning/practice-write-prds-without-tasks-or-phases-during-plan-creation.md
+- **path:** planning/authoring/practice-write-prds-without-tasks-or-phases-during-plan-creation.md
 - **tags:** planning, prd, workflow
 - **derived_from:** .ai/task-manager/config/hooks/PRE_PLAN.md
 
@@ -1381,6 +1408,6 @@ Total nodes: 172
 
 - **kind:** practice
 - **title:** XML-escape all text content in review.xml
-- **path:** review-xml/practice-xml-escape-all-text-content-in-review-xml.md
+- **path:** review-xml/comments/practice-xml-escape-all-text-content-in-review-xml.md
 - **tags:** self-review, xml, escaping
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md

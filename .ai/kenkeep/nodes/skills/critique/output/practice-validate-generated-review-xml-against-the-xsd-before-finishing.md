@@ -2,7 +2,7 @@
 type: practice
 title: Validate generated review.xml against the XSD before finishing
 description: >-
-  Run xmllint against .agents/skills/self-review-apply/assets/self-review-v2.xsd
+  Run xmllint against .agents/skills/self-review-apply/assets/self-review-v3.xsd
   after writing the file; fix and re-validate on failure.
 tags:
   - self-review
@@ -19,7 +19,7 @@ kk_confidence: high
 After writing `review.xml`, validate it with:
 
 ```bash
-xmllint --schema .agents/skills/self-review-apply/assets/self-review-v2.xsd <path> --noout
+xmllint --schema .agents/skills/self-review-apply/assets/self-review-v3.xsd <path> --noout
 ```
 
 If validation fails, read the xmllint errors, fix the XML, and re-validate. If `xmllint` is not installed on the system, warn the user and continue without validation rather than failing the workflow.

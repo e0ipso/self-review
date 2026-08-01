@@ -41,9 +41,9 @@ _None._
 - Open [**Show welcome screen when launched outside a git repo with no directory arg**](practice-show-welcome-screen-when-launched-outside-a-git-repo-with-no-directory-arg.md) — Don't error-exit when launched from Finder or an app launcher; show the welcome screen with a directory picker instead.
 - Open [**Three startup modes: git, directory, welcome**](map-three-startup-modes-git-directory-welcome.md) — git mode reviews a git diff; directory mode treats all files as new additions; welcome mode shows a picker when launched without context.
 ### #comments
-- Open [**Pair line-number attributes correctly in review comments**](../../review-xml/practice-pair-line-number-attributes-correctly-in-review-comments.md) — A comment uses exactly one of new-line-start/end OR old-line-start/end; never both. Neither pair means file-level.
-- Open [**Pair line-number attributes correctly on review comments**](../../review-xml/practice-pair-line-number-attributes-correctly-on-review-comments.md) — A comment has exactly one pair: new-line-start/end for added/context lines OR old-line-start/end for deleted lines. Never both.
-- Open [**Line comments reference either old or new line numbers, never both**](../../review-xml/practice-line-comments-reference-either-old-or-new-line-numbers-never-both.md) — Comments on added/context lines use new-line-start/end; comments on deleted lines use old-line-start/end. File-level comments have neither.
+- Open [**Pair line-number attributes correctly in review comments**](../../review-xml/line-anchors/practice-pair-line-number-attributes-correctly-in-review-comments.md) — Use exactly one complete new-line or old-line pair on line comments; omit both pairs for file-level comments.
+- Open [**Pair line-number attributes correctly on review comments**](../../review-xml/line-anchors/practice-pair-line-number-attributes-correctly-on-review-comments.md) — A comment has exactly one pair: new-line-start/end for added/context lines OR old-line-start/end for deleted lines. Never both.
+- Open [**Line comments reference either old or new line numbers, never both**](../../review-xml/line-anchors/practice-line-comments-reference-either-old-or-new-line-numbers-never-both.md) — Comments on added/context lines use new-line-start/end; comments on deleted lines use old-line-start/end. File-level comments have neither.
 ### #data-integrity
 - Open [**Preserve orphaned comments on resume; never silently drop them**](practice-preserve-orphaned-comments-on-resume-never-silently-drop-them.md) — Comments from a resumed review that can't be mapped to current lines get orphaned="true" and a visual indicator, never deleted.
 ### #defaults
@@ -62,20 +62,20 @@ _None._
 ### #mode
 - Open [**Three startup modes: git, directory, welcome**](map-three-startup-modes-git-directory-welcome.md) — git mode reviews a git diff; directory mode treats all files as new additions; welcome mode shows a picker when launched without context.
 ### #output
-- Open [**Design XML output to be parsed by LLMs**](../../review-xml/practice-design-xml-output-to-be-parsed-by-llms.md) — Review output is structured XML with an XSD schema so LLMs can reliably parse and act on feedback.
-- Open [**self-review-v2 XSD output format**](../../review-xml/map-self-review-v1-xsd-output-format.md) — Versioned XSD schema for review output; namespace urn:self-review:v2; file is bundled with the app.
+- Open [**Design XML output to be parsed by LLMs**](../../review-xml/schema/practice-design-xml-output-to-be-parsed-by-llms.md) — Review output is structured XML with an XSD schema so LLMs can reliably parse and act on feedback.
+- Open [**self-review-v3 XSD output format**](../../review-xml/schema/map-self-review-v1-xsd-output-format.md) — Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 schemas remain frozen for older consumers.
 - Open [**Treat self-review as a CLI-first, one-shot tool**](practice-treat-self-review-as-a-cli-first-one-shot-tool.md) — self-review launches from the terminal, writes review output to a file, then exits. No servers or persistent state.
 ### #staged
 - Open [**Hide untracked files by default for --staged/--cached reviews**](practice-hide-untracked-files-by-default-for-staged-cached-reviews.md) — Index-vs-HEAD reviews hide untracked files by default since they aren't part of the index; users can reveal them via toolbar toggle.
 ### #startup
 - Open [**Show welcome screen when launched outside a git repo with no directory arg**](practice-show-welcome-screen-when-launched-outside-a-git-repo-with-no-directory-arg.md) — Don't error-exit when launched from Finder or an app launcher; show the welcome screen with a directory picker instead.
 ### #task-manager
-- Open [**POST_PHASE hook**](../../planning/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
-- Open [**PRE_PLAN hook**](../../planning/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+- Open [**PRE_PLAN hook**](../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
 - Open [**Extract shared logic before duplicating across call sites**](../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
 ### #untracked
 - Open [**Hide untracked files by default for --staged/--cached reviews**](practice-hide-untracked-files-by-default-for-staged-cached-reviews.md) — Index-vs-HEAD reviews hide untracked files by default since they aren't part of the index; users can reveal them via toolbar toggle.
 ### #workflow
-- Open [**POST_PHASE hook**](../../planning/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
-- Open [**PRE_PLAN hook**](../../planning/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Follow the allowed task status transitions**](../../planning/practice-follow-the-allowed-task-status-transitions.md) — Use only the defined transitions: pending→in-progress, in-progress→completed, in-progress→failed, failed→in-progress.
+- Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+- Open [**PRE_PLAN hook**](../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**Follow the allowed task status transitions**](../../planning/execution/practice-follow-the-allowed-task-status-transitions.md) — Use only the defined transitions: pending→in-progress, in-progress→completed, in-progress→failed, failed→in-progress.

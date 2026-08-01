@@ -26,8 +26,8 @@ _None._
 ## By topic
 
 ### #task-manager
-- Open [**POST_PHASE hook**](../../planning/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
-- Open [**PRE_PLAN hook**](../../planning/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+- Open [**PRE_PLAN hook**](../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
 - Open [**Extract shared logic before duplicating across call sites**](../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
 ### #ipc
 - Open [**IPC channel registry**](map-ipc-channel-registry.md) — Channels defined in src/shared/ipc-channels.ts cover diff loading, review submission, resume, config, output path, and lifecycle events.
@@ -42,21 +42,21 @@ _None._
 ### #performance
 - Open [**Lazy-load file hunks in large-payload mode**](practice-lazy-load-file-hunks-in-large-payload-mode.md) — When max-files or max-total-lines is exceeded, send file metadata only in diff:load and fetch hunks per file on demand.
 - Open [**Trigger large-payload guard at configurable file/line thresholds**](practice-trigger-large-payload-guard-at-configurable-file-line-thresholds.md) — When diff exceeds \`max-files\` (default 500) or \`max-total-lines\` (default 100000), prompt the user; continuing enables lazy loading.
-- Open [**Prioritize the largest diffs when reviewing many files**](../../skills/critique/practice-prioritize-the-largest-diffs-when-reviewing-many-files.md) — For diffs with >15 files, read files with the largest diffs first; for very large files, read only ±50 lines around changed regions.
+- Open [**Prioritize the largest diffs when reviewing many files**](../../skills/critique/review-strategy/practice-prioritize-the-largest-diffs-when-reviewing-many-files.md) — For diffs with >15 files, read files with the largest diffs first; for very large files, read only ±50 lines around changed regions.
 ### #architecture
-- Open [**Check plans for architecture and code reuse improvements**](../../planning/practice-check-plans-for-architecture-and-code-reuse-improvements.md) — Each plan must identify how architecture and code reuse can be improved in its areas of influence; update the plan if missing.
-- Open [**Do not import sibling packages from @self-review/types**](../../packages/practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
+- Open [**Check plans for architecture and code reuse improvements**](../../planning/authoring/practice-check-plans-for-architecture-and-code-reuse-improvements.md) — Each plan must identify how architecture and code reuse can be improved in its areas of influence; update the plan if missing.
+- Open [**Do not import sibling packages from @self-review/types**](../../packages/types/practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
 - Open [**Two-process Electron architecture**](map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
 ### #duplication
 - Open [**Extract shared logic before duplicating across call sites**](../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
-- Open [**Keep file-type detection utilities duplicated across core and react packages**](../../packages/practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md) — getRenderedTextMode, isPreviewableImage, isPreviewableSvg, getLanguageFromPath are intentionally duplicated.
+- Open [**Keep file-type detection utilities duplicated across core and react packages**](../../packages/architecture/practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md) — getRenderedTextMode, isPreviewableImage, isPreviewableSvg, getLanguageFromPath are intentionally duplicated.
 - Open [**Use src/shared/types.ts as the single source of truth for shared types**](practice-use-src-shared-types-ts-as-the-single-source-of-truth-for-shared-types.md) — All main and renderer code imports shared types from src/shared/types.ts; never duplicate definitions.
 ### #electron
 - Open [**Two-process Electron architecture**](map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
 ### #imports
-- Open [**Do not import from @self-review/core in the react package**](../../packages/practice-do-not-import-from-self-review-core-in-the-react-package.md) — Importing core risks pulling Node-only code into the browser bundle.
-- Open [**Do not import sibling packages from @self-review/types**](../../packages/practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
-- Open [**Import only the compiled dist/styles.css from host apps**](../../packages/practice-import-only-the-compiled-dist-styles-css-from-host-apps.md) — src/styles.css and src/build-styles.css are build inputs only; never import them.
+- Open [**Do not import from @self-review/core in the react package**](../../packages/architecture/practice-do-not-import-from-self-review-core-in-the-react-package.md) — Importing core risks pulling Node-only code into the browser bundle.
+- Open [**Do not import sibling packages from @self-review/types**](../../packages/types/practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
+- Open [**Import only the compiled dist/styles.css from host apps**](../../packages/styling/practice-import-only-the-compiled-dist-styles-css-from-host-apps.md) — src/styles.css and src/build-styles.css are build inputs only; never import them.
 ### #large-diff
 - Open [**Lazy-load file hunks in large-payload mode**](practice-lazy-load-file-hunks-in-large-payload-mode.md) — When max-files or max-total-lines is exceeded, send file metadata only in diff:load and fetch hunks per file on demand.
 ### #large-payload
@@ -72,10 +72,10 @@ _None._
 ### #state
 - Open [**Do not store renderer state outside React context**](practice-do-not-store-renderer-state-outside-react-context.md) — All review state (comments, suggestions, viewed flags) lives in React context; no localStorage or globals.
 ### #types
-- Open [**@self-review/types package**](../../packages/map-self-review-types-package.md) — Shared TypeScript type definitions for the self-review workspace, with zero runtime dependencies.
-- Open [**Keep @self-review/types free of runtime dependencies**](../../packages/practice-keep-self-review-types-free-of-runtime-dependencies.md) — The types package must never add runtime dependencies in package.json; it exists solely for type exports.
-- Open [**Define shared data structures only in @self-review/types**](../../packages/practice-define-shared-data-structures-only-in-self-review-types.md) — Use @self-review/types as the single source of truth for data structures shared across packages and the Electron app.
+- Open [**@self-review/types package**](../../packages/types/map-self-review-types-package.md) — Shared TypeScript type definitions for the self-review workspace, with zero runtime dependencies.
+- Open [**Keep @self-review/types free of runtime dependencies**](../../packages/types/practice-keep-self-review-types-free-of-runtime-dependencies.md) — The types package must never add runtime dependencies in package.json; it exists solely for type exports.
+- Open [**Define shared data structures only in @self-review/types**](../../packages/types/practice-define-shared-data-structures-only-in-self-review-types.md) — Use @self-review/types as the single source of truth for data structures shared across packages and the Electron app.
 ### #ux
-- Open [**Prefill the suggestion proposed-code editor with the original code**](../ui/practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code.md) — When the user activates a suggestion, prefill the proposed-code field with the original so they can edit in place.
-- Open [**Differentiate Finish Review from window close**](../ui/practice-differentiate-finish-review-from-window-close.md) — Finish Review saves and exits immediately. Closing the window via OS shows a three-way Save & Quit / Discard / Cancel dialog.
+- Open [**Prefill the suggestion proposed-code editor with the original code**](../ui/interactions/practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code.md) — When the user activates a suggestion, prefill the proposed-code field with the original so they can edit in place.
+- Open [**Differentiate Finish Review from window close**](../ui/lifecycle/practice-differentiate-finish-review-from-window-close.md) — Finish Review saves and exits immediately. Closing the window via OS shows a three-way Save & Quit / Discard / Cancel dialog.
 - Open [**Trigger large-payload guard at configurable file/line thresholds**](practice-trigger-large-payload-guard-at-configurable-file-line-thresholds.md) — When diff exceeds \`max-files\` (default 500) or \`max-total-lines\` (default 100000), prompt the user; continuing enables lazy loading.

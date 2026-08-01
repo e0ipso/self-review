@@ -61,8 +61,8 @@ _None._
 - Open [**Hand off curate runs via git diff and optional pre-commit index rebuild**](practice-hand-off-curate-runs-via-git-diff-and-optional-pre-commit-index-rebuild.md) — Tell the user to review with \`git diff .ai/knowledge-base/\`; the curator already regenerated INDEX/GRAPH at end-of-run.
 ### #knowledge-base
 - Open [**ai-knowledge-base CLI**](../tooling/map-ai-knowledge-base-cli.md) — \`npx @e0ipso/ai-knowledge-base\` provides \`bootstrap-incremental\` and \`index rebuild\` subcommands used by kb-bootstrap.
-- Open [**Default bootstrap scope**](../bootstrap/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
-- Open [**Stick to markdown documentation; do not read code files during bootstrap**](../bootstrap/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
+- Open [**Stick to markdown documentation; do not read code files during bootstrap**](../bootstrap/discovery/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
+- Open [**Default bootstrap scope**](../bootstrap/discovery/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
 ### #outcomes
 - Open [**Apply curator conflict outcomes via targeted git commands**](practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept rewrites the node and restores the conflict file; reject restores it; skip leaves it; keep commits it.
 ### #reasons
@@ -70,14 +70,14 @@ _None._
 ### #reply-contract
 - Open [**Accept only y/n/s/k tokens when resolving curator conflicts**](practice-accept-only-y-n-s-k-tokens-when-resolving-curator-conflicts.md) — Parse conflict replies strictly as y/n/s/k (or long forms / empty for default); re-prompt on anything else.
 ### #skills
-- Open [**self-review-apply skill**](../../skills/apply/map-self-review-apply-skill.md) — Slash command that consumes a review.xml file and applies its suggestions/comments to the codebase.
-- Open [**self-review-critique skill**](../../skills/critique/map-self-review-critique-skill.md) — Slash command that critiques a git diff and emits review.xml for human validation via self-review --resume-from.
-- Open [**Engage relevant assistant skills based on task skills**](../../planning/practice-engage-relevant-assistant-skills-based-on-task-skills.md) — Analyze the set of task skills to engage any relevant assistant skills (global or project) during task assignment.
+- Open [**self-review-apply skill**](../../skills/apply/map-self-review-apply-skill.md) — Slash command that consumes a v3 review.xml, reads threaded replies in order, and applies accepted feedback to the codebase.
+- Open [**self-review-critique skill**](../../skills/critique/configuration/map-self-review-critique-skill.md) — Slash command that critiques a git diff and emits review.xml for human validation via self-review --resume-from.
+- Open [**Engage relevant assistant skills based on task skills**](../../planning/assignment/practice-engage-relevant-assistant-skills-based-on-task-skills.md) — Analyze the set of task skills to engage any relevant assistant skills (global or project) during task assignment.
 ### #subcommands
 - Open [**@e0ipso/ai-knowledge-base CLI commands used by kb-curate**](map-e0ipso-ai-knowledge-base-cli-commands-used-by-kb-curate.md) — \`curate --harness <id>\` runs the curator; \`index rebuild --harness <id> --stage\` regenerates INDEX/GRAPH for pre-commit hooks.
 ### #summary
 - Open [**Short-circuit kb-curate with one-line summary when no conflicts and no failures**](practice-short-circuit-kb-curate-with-one-line-summary-when-no-conflicts-and-no-failures.md) — If conflicts==0 AND failures.length==0, print one summary line and stop — skip every later step.
 ### #workflow
-- Open [**POST_PHASE hook**](../../planning/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
-- Open [**PRE_PLAN hook**](../../planning/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Follow the allowed task status transitions**](../../planning/practice-follow-the-allowed-task-status-transitions.md) — Use only the defined transitions: pending→in-progress, in-progress→completed, in-progress→failed, failed→in-progress.
+- Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+- Open [**PRE_PLAN hook**](../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**Follow the allowed task status transitions**](../../planning/execution/practice-follow-the-allowed-task-status-transitions.md) — Use only the defined transitions: pending→in-progress, in-progress→completed, in-progress→failed, failed→in-progress.

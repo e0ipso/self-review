@@ -28,15 +28,15 @@ _None._
 
 ### #knowledge-base
 - Open [**ai-knowledge-base CLI**](../tooling/map-ai-knowledge-base-cli.md) — \`npx @e0ipso/ai-knowledge-base\` provides \`bootstrap-incremental\` and \`index rebuild\` subcommands used by kb-bootstrap.
-- Open [**Default bootstrap scope**](../bootstrap/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
-- Open [**Stick to markdown documentation; do not read code files during bootstrap**](../bootstrap/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
+- Open [**Stick to markdown documentation; do not read code files during bootstrap**](../bootstrap/discovery/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
+- Open [**Default bootstrap scope**](../bootstrap/discovery/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
 ### #layout
-- Open [**Keep all @self-review/types definitions in src/index.ts**](../../packages/practice-keep-all-self-review-types-definitions-in-src-index-ts.md) — At current scale, all types live in src/index.ts with no subdirectories.
+- Open [**Keep all @self-review/types definitions in src/index.ts**](../../packages/types/practice-keep-all-self-review-types-definitions-in-src-index-ts.md) — At current scale, all types live in src/index.ts with no subdirectories.
 - Open [**Knowledge base node layout**](map-knowledge-base-node-layout.md) — Nodes live under \`.ai/knowledge-base/nodes/<kind>/<kind>-<slug>.md\`, with \`<kind>\` being \`practice\` or \`map\`.
 - Open [**Knowledge-base directory layout under .ai/knowledge-base/**](map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes live in nodes/<kind>/, conflicts in conflicts/<id>.md, curator state in .state/state.json, indexes are INDEX.md/GRAPH.md.
 ### #node-authoring
 - Open [**Don't hallucinate rationale in node bodies**](practice-don-t-hallucinate-rationale-in-node-bodies.md) — Only include "because…" content that is actually present in the source doc; do not generate plausible-sounding rationale.
-- Open [**Never overwrite an existing node during bootstrap**](../bootstrap/practice-never-overwrite-an-existing-node-during-bootstrap.md) — Bootstrap is conservative: if a target node file already exists, refine the title or skip the candidate and report it.
+- Open [**Never overwrite an existing node during bootstrap**](../bootstrap/admission/practice-never-overwrite-an-existing-node-during-bootstrap.md) — Bootstrap is conservative: if a target node file already exists, refine the title or skip the candidate and report it.
 - Open [**Split combined content across practice and map nodes**](practice-split-combined-content-across-practice-and-map-nodes.md) — When content has both imperative and named-entity aspects, split it: practice owns the rule; map owns the definition.
 ### #cli
 - Open [**ai-knowledge-base CLI**](../tooling/map-ai-knowledge-base-cli.md) — \`npx @e0ipso/ai-knowledge-base\` provides \`bootstrap-incremental\` and \`index rebuild\` subcommands used by kb-bootstrap.
@@ -51,8 +51,8 @@ _None._
 - Open [**Review knowledge-base changes via git diff before committing**](practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
 - Open [**Three startup modes: git, directory, welcome**](../../app/cli/map-three-startup-modes-git-directory-welcome.md) — git mode reviews a git diff; directory mode treats all files as new additions; welcome mode shows a picker when launched without context.
 ### #hooks
-- Open [**POST_PLAN hook**](../../planning/map-post-plan-hook.md) — Task-manager hook at .ai/task-manager/config/hooks/POST_PLAN.md that gates plans on PRD/test updates and architecture review.
-- Open [**PRE_TASK_ASSIGNMENT hook**](../../planning/map-pre-task-assignment-hook.md) — Hook that runs before task assignment to select an appropriate agent for each task based on required skills.
+- Open [**PRE_TASK_ASSIGNMENT hook**](../../planning/assignment/map-pre-task-assignment-hook.md) — Hook that runs before task assignment to select an appropriate agent for each task based on required skills.
+- Open [**POST_PLAN hook**](../../planning/authoring/map-post-plan-hook.md) — Task-manager hook at .ai/task-manager/config/hooks/POST_PLAN.md that gates plans on PRD/test updates and architecture review.
 - Open [**Do not hand-edit INDEX.md or GRAPH.md**](practice-do-not-hand-edit-index-md-or-graph-md.md) — Both files are regenerated automatically by the lint-staged pre-commit hook and staged into the commit.
 ### #index
 - Open [**Do not hand-edit INDEX.md or GRAPH.md**](practice-do-not-hand-edit-index-md-or-graph-md.md) — Both files are regenerated automatically by the lint-staged pre-commit hook and staged into the commit.
@@ -77,11 +77,11 @@ _None._
 ### #review
 - Open [**Review knowledge-base changes via git diff before committing**](practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
 ### #schema
-- Open [**review.xml format and XSD**](../../review-xml/map-review-xml-format-and-xsd.md) — XML document with <review> root containing <file> entries; comments carry line ranges, categories, and optional suggestion blocks.
-- Open [**self-review XML v2 schema**](../../review-xml/map-self-review-xml-v1-schema.md) — XSD schema at .agents/skills/self-review-apply/assets/self-review-v2.xsd defining the review.xml format.
-- Open [**Emit no wrapper elements in the XML output**](../../review-xml/practice-emit-no-wrapper-elements-in-the-xml-output.md) — file elements are direct children of review; no files or comments wrapper, no summary element.
+- Open [**review.xml format and XSD**](../../review-xml/schema/map-review-xml-format-and-xsd.md) — v3 XML review documents contain files, comments, suggestions, attachments, and ordered flat reply threads.
+- Open [**self-review XML v3 schema**](../../review-xml/schema/map-self-review-xml-v1-schema.md) — The canonical v3 XSD defines files, comments, suggestions, attachments, and ordered reply threads.
+- Open [**Emit no wrapper elements in the XML output**](../../review-xml/schema/practice-emit-no-wrapper-elements-in-the-xml-output.md) — file elements are direct children of review; no files or comments wrapper, no summary element.
 ### #sessions
 - Open [**_sessions/ is gitignored; provenance does not travel with the repo**](practice-sessions-is-gitignored-provenance-does-not-travel-with-the-repo.md) — derived_from session filenames only resolve for the original contributor unless your team explicitly commits _sessions/.
 ### #structure
 - Open [**.ai/knowledge-base/ directory**](map-ai-knowledge-base-directory.md) — AI-session-derived project knowledge base built and maintained by @e0ipso/ai-knowledge-base.
-- Open [**Keep all @self-review/types definitions in src/index.ts**](../../packages/practice-keep-all-self-review-types-definitions-in-src-index-ts.md) — At current scale, all types live in src/index.ts with no subdirectories.
+- Open [**Keep all @self-review/types definitions in src/index.ts**](../../packages/types/practice-keep-all-self-review-types-definitions-in-src-index-ts.md) — At current scale, all types live in src/index.ts with no subdirectories.
