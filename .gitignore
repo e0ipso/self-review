@@ -131,6 +131,11 @@ dist/
 .ai/task-manager/plans/
 .ai/task-manager/archive/
 
+# Strikethroo (plans, archive, and runtime cache)
+.ai/strikethroo/plans/
+.ai/strikethroo/archive/
+.ai/strikethroo/runtime/
+
 # Test artifacts
 test-results/
 .features-gen/
