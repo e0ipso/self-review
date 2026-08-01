@@ -3,6 +3,7 @@ import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import FileSection from './FileSection';
 import { EmptyDiffMessage } from './EmptyDiffMessage';
+import GuideOverviewPanel from './GuideOverviewPanel';
 
 /** When the file count exceeds this threshold, all sections start collapsed. */
 export const COLLAPSE_THRESHOLD = 50;
@@ -120,6 +121,7 @@ export default function DiffViewer() {
       data-testid='diff-viewer'
       data-diff-viewer
     >
+      <GuideOverviewPanel />
       {diffFiles.map(file => {
         const filePath = file.newPath || file.oldPath;
         return (

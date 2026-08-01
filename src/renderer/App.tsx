@@ -3,6 +3,7 @@ import { ConfigProvider, useConfig } from '../../packages/react/src/context/Conf
 import { ReviewProvider, useReview } from '../../packages/react/src/context/ReviewContext';
 import { DiffNavigationProvider } from '../../packages/react/src/context/DiffNavigationContext';
 import { ReviewAdapterProvider } from '../../packages/react/src/context/ReviewAdapterContext';
+import { GuideProvider } from '../../packages/react/src/context/GuideContext';
 import { TooltipProvider } from '../../packages/react/src/components/ui/tooltip';
 import Toolbar from '../../packages/react/src/components/Toolbar';
 import Layout from '../../packages/react/src/components/Layout';
@@ -37,6 +38,7 @@ const electronAdapter: ReviewAdapter = {
   readAttachment: filePath => window.electronAPI.readAttachment(filePath),
   changeOutputPath: () => window.electronAPI.changeOutputPath(),
   loadImage: filePath => window.electronAPI.loadImage(filePath),
+  onGuideLoad: callback => window.electronAPI.onGuideLoad(callback),
 };
 
 function AppContent() {
@@ -168,9 +170,11 @@ export default function App() {
         prismLightCss={lightThemeCss}
         prismDarkCss={darkThemeCss}
       >
-        <ReviewProvider>
-          <AppContent />
-        </ReviewProvider>
+        <GuideProvider>
+          <ReviewProvider>
+            <AppContent />
+          </ReviewProvider>
+        </GuideProvider>
       </ConfigProvider>
     </ReviewAdapterProvider>
   );

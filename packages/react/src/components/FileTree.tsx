@@ -3,6 +3,8 @@ import { useReview } from '../context/ReviewContext';
 import { useConfig } from '../context/ConfigContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 import { useAdapter } from '../context/ReviewAdapterContext';
+import { useGuide } from '../context/GuideContext';
+import { buildGuideDisplaySections } from '../utils/guide-display';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
@@ -18,6 +20,7 @@ export default function FileTree() {
   const { config, updateConfig, outputPathInfo, setOutputPathInfo } = useConfig();
   const { activeFilePath, scrollToFile } = useDiffNavigationContext();
   const adapter = useAdapter();
+  const { guide, mode } = useGuide();
   const [searchQuery, setSearchQuery] = useState('');
   const [allExpanded, setAllExpanded] = useState(true);
 
@@ -50,6 +53,13 @@ export default function FileTree() {
     const query = searchQuery.toLowerCase();
     return diffFiles.filter(file => file.newPath.toLowerCase().includes(query));
   }, [diffFiles, searchQuery]);
+
+  // Ordering/annotation layer: flat mode (or no guide) yields a single
+  // headerless section with the files untouched — today's tree by construction.
+  const displaySections = useMemo(
+    () => buildGuideDisplaySections(filteredFiles, guide?.groups ?? null, mode),
+    [filteredFiles, guide, mode]
+  );
 
   const getCommentCount = (filePath: string) => {
     const fileState = files.find(f => f.path === filePath);
@@ -171,20 +181,42 @@ export default function FileTree() {
 
       {/* File List */}
       <div className='flex-1 overflow-y-auto overflow-x-hidden p-1'>
-        {filteredFiles.map(file => {
-          const filePath = file.newPath || file.oldPath;
-          return (
-            <FileTreeEntry
-              key={filePath}
-              file={file}
-              isActive={activeFilePath === filePath}
-              commentCount={getCommentCount(filePath)}
-              viewed={isViewed(filePath)}
-              onScrollToFile={scrollToFile}
-              onToggleViewed={toggleViewed}
-            />
-          );
-        })}
+        {displaySections.map((section, sectionIndex) => (
+          <React.Fragment
+            key={section.header ? `group-${section.header.name}` : `flat-${sectionIndex}`}
+          >
+            {section.header && (
+              <div
+                className='px-2 pt-3 pb-1'
+                data-testid={`guide-group-${section.header.name}`}
+              >
+                <div className='text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'>
+                  {section.header.name}
+                </div>
+                {section.header.rationale && (
+                  <div className='text-[11px] text-muted-foreground/80 leading-snug'>
+                    {section.header.rationale}
+                  </div>
+                )}
+              </div>
+            )}
+            {section.entries.map(({ file, description }) => {
+              const filePath = file.newPath || file.oldPath;
+              return (
+                <FileTreeEntry
+                  key={filePath}
+                  file={file}
+                  isActive={activeFilePath === filePath}
+                  commentCount={getCommentCount(filePath)}
+                  viewed={isViewed(filePath)}
+                  guideDescription={description}
+                  onScrollToFile={scrollToFile}
+                  onToggleViewed={toggleViewed}
+                />
+              );
+            })}
+          </React.Fragment>
+        ))}
 
         {filteredFiles.length === 0 && (
           <div className='text-center text-muted-foreground text-xs py-8'>

@@ -3,7 +3,7 @@
  * This provides the same DiffFile[] that the Electron app would generate
  * from the test repository, but without needing git.
  */
-import type { DiffFile, DiffLoadPayload, DiffSource, AppConfig, CategoryDef } from '../../packages/core/src/types';
+import type { DiffFile, DiffLoadPayload, DiffSource, AppConfig, CategoryDef, GuideLoadPayload } from '../../packages/core/src/types';
 
 // ── src/auth/login.ts — modified ──
 
@@ -461,6 +461,57 @@ export function createRenderedHtmlPayload(): DiffLoadPayload {
   return {
     files: [renderedHtmlFile, markdownNewDocsFile, markdownIndexFile, markdownReadmeFile],
     source: { type: 'git' as const, gitDiffArgs: '', repository: '/mock-test-repo' },
+  };
+}
+
+/**
+ * Walkthrough guide fixture matching `fixtureFiles` (the default diff
+ * fixture). Display-ready payload, exactly what the Electron main process
+ * would send over `guide:load`: reconciled groups with the implicit
+ * "Everything else" group last, containing the unmentioned files in flat
+ * diff order.
+ */
+export function createGuideFixturePayload(): GuideLoadPayload {
+  return {
+    overview: [
+      '## What this change does',
+      '',
+      'Adds the **new feature module** and rewires login to use it.',
+      '',
+      '```mermaid',
+      'graph TD',
+      '  login[src/auth/login.ts] --> feature[src/new-feature.ts]',
+      '  feature --> config[src/config.ts]',
+      '```',
+    ].join('\n'),
+    groups: [
+      {
+        name: 'Core change',
+        rationale: 'The new module and the call site that adopts it',
+        implicit: false,
+        files: [
+          { path: 'src/new-feature.ts', description: 'adds the feature flags everything else reads' },
+          { path: 'src/auth/login.ts', description: 'rewrites login flow with sessions and logging' },
+        ],
+      },
+      {
+        name: 'Configuration',
+        rationale: 'Settings that gate the new behavior',
+        implicit: false,
+        files: [
+          { path: 'src/config.ts', description: 'adds retry and timeout knobs' },
+        ],
+      },
+      {
+        name: 'Everything else',
+        implicit: true,
+        files: [
+          { path: 'README.md' },
+          { path: 'src/legacy.ts' },
+          { path: 'docs/architecture.md' },
+        ],
+      },
+    ],
   };
 }
 

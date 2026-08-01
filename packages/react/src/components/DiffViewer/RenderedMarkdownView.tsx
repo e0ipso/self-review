@@ -4,13 +4,12 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import type { Components, ExtraProps } from 'react-markdown';
 import { MessageSquarePlus } from 'lucide-react';
-import Prism from 'prismjs';
 import type { DiffFile, LineRange } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
-import MermaidBlock from './MermaidBlock';
+import { MarkdownCode } from './MarkdownCode';
 import { remarkEmoji } from '../../utils/remark-emoji';
 import { parseFrontMatter } from '../../utils/front-matter';
 import FrontMatterTable from './FrontMatterTable';
@@ -500,35 +499,6 @@ export default function RenderedMarkdownView({
     [filePath, file, lineRange, lineOffset, onGutterMouseDown, onCancelComment, onCommentSaved]
   );
 
-  // Code renderer with Prism highlighting + Mermaid support
-  const CodeRenderer = useCallback(
-    ({ className, children, node, ...props }: React.HTMLAttributes<HTMLElement> & ExtraProps) => {
-      const match = /language-(\w+)/.exec(className || '');
-      const lang = match ? match[1] : '';
-      const code = String(children).replace(/\n$/, '');
-
-      // Check if this is a block-level code (inside <pre>)
-      const isBlock = node?.position;
-
-      if (lang === 'mermaid' && isBlock) {
-        return <MermaidBlock code={code} />;
-      }
-
-      if (lang && Prism.languages[lang]) {
-        const html = Prism.highlight(code, Prism.languages[lang], lang);
-        return (
-          <code
-            className={className}
-            dangerouslySetInnerHTML={{ __html: html }}
-            {...props}
-          />
-        );
-      }
-      return <code className={className} {...props}>{children}</code>;
-    },
-    []
-  );
-
   const components: Components = useMemo(() => ({
     p: createBlockRenderer('p'),
     h1: createBlockRenderer('h1'),
@@ -545,8 +515,8 @@ export default function RenderedMarkdownView({
     table: createBlockRenderer('table'),
     hr: createBlockRenderer('hr'),
     details: createBlockRenderer('details'),
-    code: CodeRenderer,
-  }), [createBlockRenderer, CodeRenderer]);
+    code: MarkdownCode,
+  }), [createBlockRenderer]);
 
   return (
     <div
