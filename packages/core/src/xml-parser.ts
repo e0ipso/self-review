@@ -44,6 +44,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     allowBooleanAttributes: true,
+    trimValues: false,
   });
 
   try {

@@ -1200,6 +1200,59 @@ describe('parseReviewXmlString', () => {
         'Use <Component> when a && b'
       );
     });
+
+    it('preserves leading and trailing whitespace in a reply body', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3" timestamp="2026-01-01T00:00:00Z" git-diff-args="--staged" repository="/repo">
+  <file path="src/main.ts" change-type="modified" viewed="true">
+    <comment new-line-start="10" new-line-end="10">
+      <body>Root comment</body>
+      <category>note</category>
+      <reply><body>  padded reply  </body></reply>
+    </comment>
+  </file>
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.comments[0].replies![0].body).toBe('  padded reply  ');
+    });
+
+    it('round-trips multiline reply body whitespace byte-identically', async () => {
+      const replyBody = '  first line\n    fenced body  \nlast line\n';
+      const original: ReviewState = {
+        timestamp: '2026-01-01T00:00:00Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        files: [
+          {
+            path: 'src/main.ts',
+            changeType: 'modified',
+            viewed: true,
+            comments: [
+              {
+                id: 'comment-1',
+                filePath: 'src/main.ts',
+                lineRange: { side: 'new', start: 10, end: 10 },
+                body: 'Root comment',
+                category: 'note',
+                suggestion: null,
+                replies: [
+                  {
+                    id: 'reply-1',
+                    body: replyBody,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const result = parseReviewXmlString(xml);
+
+      expect(result.comments[0].replies![0].body).toBe(replyBody);
+    });
   });
 
   describe('author attribute', () => {

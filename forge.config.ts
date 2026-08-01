@@ -39,6 +39,7 @@ function getAvailablePort(preferred = 3000): number {
 }
 
 const devPort = getAvailablePort(3000);
+const devLoggerPort = getAvailablePort(9000);
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -84,6 +85,7 @@ const config: ForgeConfig = {
     new WebpackPlugin({
       devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' data: blob:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data:",
       port: devPort,
+      loggerPort: devLoggerPort,
       mainConfig,
       renderer: {
         config: rendererConfig,

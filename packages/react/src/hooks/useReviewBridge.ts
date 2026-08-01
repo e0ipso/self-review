@@ -38,18 +38,21 @@ export function useReviewBridge(
   const onReviewChangeRef = useRef(onReviewChange);
   onReviewChangeRef.current = onReviewChange;
 
-  // Track previous comment IDs to avoid firing on unrelated state changes.
-  // Use a sentinel initial value so the first call always fires.
-  const prevCommentsKeyRef = useRef<string | null>(null);
+  // Track previous comment objects to avoid firing on unrelated state changes.
+  // Review mutations replace the affected comment immutably, including nested
+  // reply changes, while viewed-only file updates preserve comment references.
+  const prevCommentsRef = useRef<ReviewComment[] | null>(null);
 
   useEffect(() => {
     const comments = files.flatMap((f) => f.comments);
-    // Serialize comment ids as a stable comparison key — avoids firing
-    // when `files` gets a new reference but comments haven't changed
-    // (e.g., a viewed flag toggle).
-    const key = comments.map((c) => c.id).join(',');
-    if (key !== prevCommentsKeyRef.current) {
-      prevCommentsKeyRef.current = key;
+    const previousComments = prevCommentsRef.current;
+    const commentsChanged =
+      previousComments === null ||
+      previousComments.length !== comments.length ||
+      comments.some((comment, index) => comment !== previousComments[index]);
+
+    if (commentsChanged) {
+      prevCommentsRef.current = comments;
       onReviewChangeRef.current?.(comments);
     }
   }, [files]);

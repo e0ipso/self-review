@@ -43,7 +43,7 @@ export default function ReplyInput({
     if (existingReply) {
       updateReply(commentId, existingReply.id, {
         body,
-        ...(attachments.length ? { attachments } : {}),
+        attachments: attachments.length ? attachments : undefined,
       });
     } else {
       // `author` stays undefined: a reply composed in the UI is the human's.
