@@ -104,6 +104,53 @@ export interface ReviewState {
   files: FileReviewState[];
 }
 
+// ===== Walkthrough Guide Types =====
+// The guide is a read-only sidecar (self-review-guide-v1.xsd) generated
+// before the review starts. It labels and orders files for orientation; it
+// can never hide them. See docs/intent/llm-review-guide.md.
+
+/**
+ * One file inside a guide group. The path must match a diff file
+ * (repository-relative, same convention as review.xml); entries whose path
+ * matches nothing in the diff are silently dropped by the consumer.
+ */
+export interface GuideFileEntry {
+  /** File path relative to the repository root. For renames, the new path. */
+  path: string;
+  /** One-line description of the role this file plays in the change. */
+  description: string;
+}
+
+/**
+ * A named set of related files in the walkthrough. Groups are labels for
+ * orientation, never suppressions: every group and every file in it is
+ * shown. Array position is reading order.
+ */
+export interface GuideGroup {
+  /** Short display name shown as the group heading, e.g. "Core change". */
+  name: string;
+  /** One line explaining why these files form a group and what to look for. */
+  rationale: string;
+  /** The files in this group, in reading order. At least one entry. */
+  files: GuideFileEntry[];
+}
+
+/**
+ * A parsed walkthrough guide. Files in the diff that no group mentions are
+ * presented by the consumer in an implicit trailing "Everything else"
+ * group; that group is derived at render time and never part of this state.
+ */
+export interface ReviewGuide {
+  /**
+   * Review-level orientation prose shown before the first file. Markdown;
+   * may include a fenced code block labelled "mermaid" for a diagram.
+   * Absent when the guide has no overview.
+   */
+  overview?: string;
+  /** Ordered reading groups. Array position is reading order. */
+  groups: GuideGroup[];
+}
+
 // ===== Configuration Types =====
 
 export interface CategoryDef {

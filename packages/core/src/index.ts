@@ -37,6 +37,9 @@ export { parseDiff } from './diff-parser';
 export { serializeReview } from './xml-serializer';
 export { parseReviewXml, parseReviewXmlString } from './xml-parser';
 
+// Walkthrough guide schema
+export { GUIDE_XSD_SCHEMA } from './guide-schema';
+
 // Git operations
 export {
   runGitDiff,
