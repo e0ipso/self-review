@@ -2,7 +2,7 @@
  * Step definitions for Feature 07: XML Output.
  */
 import { expect } from '@playwright/test';
-import { createBdd } from 'playwright-bdd';
+import { createBdd, DataTable } from 'playwright-bdd';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { XMLParser } from 'fast-xml-parser';
@@ -141,6 +141,20 @@ When(
   }
 );
 
+When('I reply {string} to that comment', async ({}, body: string) => {
+  const page = getPage();
+  // Every rendered comment exposes `reply-btn-<id>`; the ids are generated, so
+  // the scenarios address the most recently added comment positionally.
+  const replyBtn = page.locator('[data-testid^="reply-btn-"]').last();
+  await replyBtn.click();
+  const composer = page.locator('[data-testid="reply-input"]');
+  await composer.waitFor({ state: 'visible', timeout: 5000 });
+  await composer.locator('textarea').fill(body);
+  await page.locator('[data-testid="add-reply-btn"]').click();
+  // The composer unmounts on submit, which is the signal the reply landed.
+  await composer.waitFor({ state: 'detached', timeout: 5000 });
+});
+
 // ── XML parsing helper ──
 
 function parseXmlOutput(): any {
@@ -166,6 +180,29 @@ function getLastComment(filePath: string): any {
   const comments = Array.isArray(fileEl.comment)
     ? fileEl.comment
     : [fileEl.comment];
+  return comments[comments.length - 1];
+}
+
+function toArray(value: any): any[] {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+/**
+ * Every `<comment>` in the written document, in document order.
+ */
+function getAllComments(): any[] {
+  const parsed = parseXmlOutput();
+  return toArray(parsed.review.file).flatMap((f: any) => toArray(f.comment));
+}
+
+/**
+ * The comment the "that comment ..." steps refer to: the last one in document
+ * order, matching the convention the older assertions in this file already use.
+ */
+function getThatComment(): any {
+  const comments = getAllComments();
+  expect(comments.length).toBeGreaterThan(0);
   return comments[comments.length - 1];
 }
 
@@ -341,6 +378,35 @@ Then(
         break;
       }
     }
+  }
+);
+
+Then(
+  'that comment should contain {int} reply element(s)',
+  async ({}, count: number) => {
+    const comment = getThatComment();
+    expect(toArray(comment.reply).length).toBe(count);
+  }
+);
+
+Then(
+  'the replies for that comment should read, in order:',
+  async ({}, table: DataTable) => {
+    const comment = getThatComment();
+    const replies = toArray(comment.reply);
+    const expected = table.hashes();
+    expect(replies.length).toBe(expected.length);
+    // Read positionally: document order is the only ordering signal a reply
+    // has, so asserting presence would not test the thing under test.
+    expected.forEach((row, index) => {
+      expect(String(replies[index].body)).toBe(row.body);
+      const author = replies[index]['@_author'];
+      if (row.author) {
+        expect(String(author)).toBe(row.author);
+      } else {
+        expect(author).toBeUndefined();
+      }
+    });
   }
 );
 

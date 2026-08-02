@@ -79,3 +79,40 @@ Feature: Webapp Commenting System
     When I type "Why was this removed?" in the comment input
     And I click "Comment"
     Then a comment should be displayed below old line 8 of "src/auth/login.ts"
+
+  # --- Replies ---
+
+  Scenario: Reply to a comment
+    Given I have added a comment "Original finding" on new line 5 of "src/auth/login.ts"
+    When I click "Reply" on that comment
+    Then a reply input box should appear beneath that comment
+    When I type "I disagree, the caller guards this" in the reply input
+    And I click "Reply" in the reply input
+    Then the comment should have 1 reply
+    And reply 1 should show "I disagree, the caller guards this"
+    And reply 1 should be attributed to "You"
+
+  Scenario: Replies are appended in order
+    Given I have added a comment "Original finding" on new line 5 of "src/auth/login.ts"
+    And I have replied "first" to that comment
+    When I click "Reply" on that comment
+    And I type "second" in the reply input
+    And I click "Reply" in the reply input
+    Then the comment replies should read "first", "second" in that order
+
+  Scenario: Edit a reply
+    Given I have added a comment "Original finding" on new line 5 of "src/auth/login.ts"
+    And I have replied "typo here" to that comment
+    When I click "Edit" on reply 1
+    Then the reply should become an editable input pre-filled with "typo here"
+    When I replace the reply text with "corrected"
+    And I click "Update" in the reply input
+    Then the comment should have 1 reply
+    And reply 1 should show "corrected"
+
+  Scenario: Delete a reply
+    Given I have added a comment "Original finding" on new line 5 of "src/auth/login.ts"
+    And I have replied "delete me" to that comment
+    When I click "Delete" on reply 1
+    Then the comment should have 0 replies
+    And the comment should show "Original finding"

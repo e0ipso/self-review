@@ -1,20 +1,10 @@
 # POST_TASK_GENERATION_ALL Hook
 
-After all tasks have been generated, perform these two steps:
+After all tasks have been generated, update the plan with the execution blueprint.
 
-## 1. Review Task Complexity
+## 1. Update Plan with Blueprint
 
-For each generated task, do a quick sanity check:
-
-- **Too complex?** If a task spans 3+ technologies or requires 3+ skills, split it.
-- **Too vague?** If acceptance criteria are unclear, sharpen them.
-- **Too trivial?** If two tasks could be one without adding complexity, merge them.
-
-Target: every task should be completable with 1-2 skills and have clear acceptance criteria.
-
-## 2. Update Plan with Blueprint
-
-After finalizing tasks, append to the plan document:
+Append to the plan document:
 
 ### Dependency Diagram
 
@@ -33,7 +23,7 @@ Group tasks into phases:
 - **Phase 1**: Tasks with no dependencies (run in parallel)
 - **Phase N**: Tasks whose dependencies are all in earlier phases
 
-Use the template in `.ai/task-manager/config/templates/BLUEPRINT_TEMPLATE.md` for structure.
+Use the template in `.ai/strikethroo/config/templates/BLUEPRINT_TEMPLATE.md` for structure.
 
 Before finalizing, verify:
 - Every task is in exactly one phase

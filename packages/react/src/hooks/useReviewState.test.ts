@@ -1069,4 +1069,469 @@ describe('useReviewState', () => {
       expect(result.current.files[0]).not.toBe(filesBefore[0]);
     });
   });
+
+  describe('reply operations', () => {
+    /** Two files, two comments each, so cross-target leakage is detectable. */
+    function seedThreads(result: {
+      current: ReturnType<typeof useReviewState>;
+    }) {
+      act(() => {
+        result.current.setFiles([
+          {
+            path: 'src/a.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [
+              {
+                id: 'comment-1',
+                filePath: 'src/a.ts',
+                lineRange: null,
+                body: 'Root one',
+                category: 'note',
+                suggestion: null,
+                replies: [
+                  { id: 'reply-1', body: 'Reply one' },
+                  { id: 'reply-2', body: 'Reply two' },
+                ],
+              },
+              {
+                id: 'comment-2',
+                filePath: 'src/a.ts',
+                lineRange: null,
+                body: 'Root two',
+                category: 'note',
+                suggestion: null,
+                replies: [{ id: 'reply-3', body: 'Sibling comment reply' }],
+              },
+            ],
+          },
+          {
+            path: 'src/b.ts',
+            changeType: 'modified',
+            viewed: false,
+            comments: [
+              {
+                id: 'comment-3',
+                filePath: 'src/b.ts',
+                lineRange: null,
+                body: 'Other file root',
+                category: 'note',
+                suggestion: null,
+                replies: [{ id: 'reply-4', body: 'Other file reply' }],
+              },
+            ],
+          },
+        ]);
+      });
+    }
+
+    describe('addReply', () => {
+      it('appends successive replies in conversation order', () => {
+        const { result } = renderHook(() => useReviewState());
+
+        act(() => {
+          result.current.setFiles([
+            {
+              path: 'src/test.ts',
+              changeType: 'modified',
+              viewed: false,
+              comments: [
+                {
+                  id: 'c1',
+                  filePath: 'src/test.ts',
+                  lineRange: null,
+                  body: 'Root',
+                  category: 'note',
+                  suggestion: null,
+                },
+              ],
+            },
+          ]);
+        });
+
+        act(() => {
+          result.current.addReply('c1', 'first');
+        });
+        act(() => {
+          result.current.addReply('c1', 'second');
+        });
+
+        expect(
+          result.current.files[0].comments[0].replies!.map(r => r.body)
+        ).toEqual(['first', 'second']);
+      });
+
+      it('appends after pre-existing replies rather than prepending', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.addReply('comment-1', 'Reply three');
+        });
+
+        expect(
+          result.current.files[0].comments[0].replies!.map(r => r.body)
+        ).toEqual(['Reply one', 'Reply two', 'Reply three']);
+      });
+
+      it('creates a one-element array when replies is undefined', () => {
+        const { result } = renderHook(() => useReviewState());
+
+        act(() => {
+          result.current.setFiles([
+            {
+              path: 'src/test.ts',
+              changeType: 'modified',
+              viewed: false,
+              comments: [
+                {
+                  id: 'c1',
+                  filePath: 'src/test.ts',
+                  lineRange: null,
+                  body: 'Root',
+                  category: 'note',
+                  suggestion: null,
+                },
+              ],
+            },
+          ]);
+        });
+
+        expect(result.current.files[0].comments[0].replies).toBeUndefined();
+
+        act(() => {
+          result.current.addReply('c1', 'Only reply');
+        });
+
+        const replies = result.current.files[0].comments[0].replies;
+        expect(replies).toHaveLength(1);
+        expect(replies![0].body).toBe('Only reply');
+        expect(replies![0].id).toBeTruthy();
+      });
+
+      it('stores author and attachments only when provided', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        const attachments = [
+          {
+            id: 'att-1',
+            fileName: 'shot.png',
+            mediaType: 'image/png',
+          },
+        ];
+
+        act(() => {
+          result.current.addReply('comment-1', 'Bot reply', 'claude-opus-5');
+        });
+        act(() => {
+          result.current.addReply(
+            'comment-1',
+            'Human reply',
+            undefined,
+            attachments
+          );
+        });
+
+        const replies = result.current.files[0].comments[0].replies!;
+        expect(replies.map(r => r.body)).toEqual([
+          'Reply one',
+          'Reply two',
+          'Bot reply',
+          'Human reply',
+        ]);
+        expect(replies[2].author).toBe('claude-opus-5');
+        expect(replies[2].attachments).toBeUndefined();
+        expect(replies[3].author).toBeUndefined();
+        expect(replies[3].attachments).toEqual(attachments);
+      });
+
+      it('generates a unique id per reply', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.addReply('comment-1', 'a');
+        });
+        act(() => {
+          result.current.addReply('comment-1', 'b');
+        });
+
+        const replies = result.current.files[0].comments[0].replies!;
+        expect(new Set(replies.map(r => r.id)).size).toBe(replies.length);
+      });
+
+      it('only touches the target comment', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.addReply('comment-1', 'New');
+        });
+
+        expect(
+          result.current.files[0].comments[1].replies!.map(r => r.body)
+        ).toEqual(['Sibling comment reply']);
+        expect(
+          result.current.files[1].comments[0].replies!.map(r => r.body)
+        ).toEqual(['Other file reply']);
+      });
+
+      it('no-op for non-existent comment ID', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.addReply('non-existent-id', 'Orphan');
+        });
+
+        expect(result.current.files[0].comments[0].replies).toHaveLength(2);
+        expect(result.current.files[0].comments[1].replies).toHaveLength(1);
+        expect(result.current.files[1].comments[0].replies).toHaveLength(1);
+      });
+    });
+
+    describe('updateReply', () => {
+      it('updates one reply and leaves siblings and comment body unchanged', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.updateReply('comment-1', 'reply-1', {
+            body: 'Edited reply one',
+          });
+        });
+
+        const comment = result.current.files[0].comments[0];
+        expect(comment.body).toBe('Root one');
+        expect(comment.replies!.map(r => r.body)).toEqual([
+          'Edited reply one',
+          'Reply two',
+        ]);
+        expect(comment.replies![0].id).toBe('reply-1');
+      });
+
+      it('requires the comment id to match, not just the reply id', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        // reply-1 lives on comment-1, not comment-2.
+        act(() => {
+          result.current.updateReply('comment-2', 'reply-1', {
+            body: 'Should not apply',
+          });
+        });
+
+        expect(result.current.files[0].comments[0].replies![0].body).toBe(
+          'Reply one'
+        );
+        expect(result.current.files[0].comments[1].replies![0].body).toBe(
+          'Sibling comment reply'
+        );
+      });
+
+      it('leaves replies on other comments and files untouched', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.updateReply('comment-1', 'reply-2', {
+            author: 'claude-opus-5',
+          });
+        });
+
+        expect(result.current.files[0].comments[0].replies![1]).toEqual({
+          id: 'reply-2',
+          body: 'Reply two',
+          author: 'claude-opus-5',
+        });
+        expect(result.current.files[0].comments[1].replies).toEqual([
+          { id: 'reply-3', body: 'Sibling comment reply' },
+        ]);
+        expect(result.current.files[1].comments[0].replies).toEqual([
+          { id: 'reply-4', body: 'Other file reply' },
+        ]);
+      });
+
+      it('no-op for non-existent reply ID', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.updateReply('comment-1', 'no-such-reply', {
+            body: 'Nope',
+          });
+        });
+
+        expect(
+          result.current.files[0].comments[0].replies!.map(r => r.body)
+        ).toEqual(['Reply one', 'Reply two']);
+      });
+
+      it('does not create a replies array on a comment that has none', () => {
+        const { result } = renderHook(() => useReviewState());
+
+        act(() => {
+          result.current.setFiles([
+            {
+              path: 'src/test.ts',
+              changeType: 'modified',
+              viewed: false,
+              comments: [
+                {
+                  id: 'c1',
+                  filePath: 'src/test.ts',
+                  lineRange: null,
+                  body: 'Root',
+                  category: 'note',
+                  suggestion: null,
+                },
+              ],
+            },
+          ]);
+        });
+
+        act(() => {
+          result.current.updateReply('c1', 'reply-x', { body: 'Nope' });
+        });
+
+        expect(result.current.files[0].comments[0].replies).toBeUndefined();
+      });
+    });
+
+    describe('deleteReply', () => {
+      it('removes exactly one reply', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.deleteReply('comment-1', 'reply-1');
+        });
+
+        expect(
+          result.current.files[0].comments[0].replies!.map(r => r.body)
+        ).toEqual(['Reply two']);
+      });
+
+      it('preserves order of the remaining replies', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.addReply('comment-1', 'Reply three');
+        });
+        act(() => {
+          result.current.deleteReply('comment-1', 'reply-2');
+        });
+
+        expect(
+          result.current.files[0].comments[0].replies!.map(r => r.body)
+        ).toEqual(['Reply one', 'Reply three']);
+      });
+
+      it('requires the comment id to match, not just the reply id', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.deleteReply('comment-2', 'reply-1');
+        });
+
+        expect(result.current.files[0].comments[0].replies).toHaveLength(2);
+        expect(result.current.files[0].comments[1].replies).toHaveLength(1);
+      });
+
+      it('leaves an empty array when the last reply is removed', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.deleteReply('comment-2', 'reply-3');
+        });
+
+        expect(result.current.files[0].comments[1].replies).toEqual([]);
+      });
+
+      it('leaves other comments and files untouched', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.deleteReply('comment-1', 'reply-2');
+        });
+
+        expect(result.current.files[0].comments[1].replies).toEqual([
+          { id: 'reply-3', body: 'Sibling comment reply' },
+        ]);
+        expect(result.current.files[1].comments[0].replies).toEqual([
+          { id: 'reply-4', body: 'Other file reply' },
+        ]);
+      });
+
+      it('no-op for non-existent reply ID', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        act(() => {
+          result.current.deleteReply('comment-1', 'no-such-reply');
+        });
+
+        expect(result.current.files[0].comments[0].replies).toHaveLength(2);
+      });
+    });
+
+    describe('immutability', () => {
+      it('addReply does not mutate the previous replies array', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        const filesBefore = result.current.files;
+        const repliesBefore = filesBefore[0].comments[0].replies;
+
+        act(() => {
+          result.current.addReply('comment-1', 'New');
+        });
+
+        expect(result.current.files).not.toBe(filesBefore);
+        expect(result.current.files[0].comments[0].replies).not.toBe(
+          repliesBefore
+        );
+        expect(repliesBefore).toHaveLength(2);
+      });
+
+      it('updateReply does not mutate the previous reply object', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        const replyBefore = result.current.files[0].comments[0].replies![0];
+
+        act(() => {
+          result.current.updateReply('comment-1', 'reply-1', {
+            body: 'Edited',
+          });
+        });
+
+        expect(result.current.files[0].comments[0].replies![0]).not.toBe(
+          replyBefore
+        );
+        expect(replyBefore.body).toBe('Reply one');
+      });
+
+      it('deleteReply does not mutate the previous replies array', () => {
+        const { result } = renderHook(() => useReviewState());
+        seedThreads(result);
+
+        const repliesBefore = result.current.files[0].comments[0].replies;
+
+        act(() => {
+          result.current.deleteReply('comment-1', 'reply-1');
+        });
+
+        expect(result.current.files[0].comments[0].replies).not.toBe(
+          repliesBefore
+        );
+        expect(repliesBefore).toHaveLength(2);
+      });
+    });
+  });
 });

@@ -68,3 +68,37 @@ Feature: Resume from Prior Review
     And I click "Finish Review"
     Then the output file should contain 2 comments for "src/auth/login.ts"
 
+  Scenario: A v2 prior review is loaded and saved as v3
+    Given a prior review XML file "review.xml" with these comments:
+      | file              | new_line_start | new_line_end | body          | category |
+      | src/auth/login.ts | 5              | 5            | Fix this typo | nit      |
+    And the prior review XML file "review.xml" should declare namespace "urn:self-review:v2"
+    When I launch self-review with "--resume-from review.xml"
+    Then the comment "Fix this typo" should be displayed at new line 5 of "src/auth/login.ts"
+    When I click "Finish Review"
+    Then the output file should contain valid XML
+    And the XML should have a root element "review" with namespace "urn:self-review:v3"
+    And the output file should validate against ".agents/skills/self-review-apply/assets/self-review-v3.xsd"
+
+  Scenario: Resumed threads render and round-trip in document order
+    Given a prior review XML file "review.xml" with a comment "Original finding" on new line 5 of "src/auth/login.ts" carrying these replies:
+      | body                   | author        |
+      | The caller guards it   |               |
+      | Confirmed, withdrawing | Claude Opus 5 |
+      | Noted                  |               |
+    When I launch self-review with "--resume-from review.xml"
+    Then the rendered replies for the comment "Original finding" should read, in order:
+      | body                   | author        |
+      | The caller guards it   | You           |
+      | Confirmed, withdrawing | Claude Opus 5 |
+      | Noted                  | You           |
+    When I click "Finish Review"
+    Then the output file should contain valid XML
+    And that comment should contain 3 reply elements
+    And the replies for that comment should read, in order:
+      | body                   | author        |
+      | The caller guards it   |               |
+      | Confirmed, withdrawing | Claude Opus 5 |
+      | Noted                  |               |
+    And the output file should validate against ".agents/skills/self-review-apply/assets/self-review-v3.xsd"
+

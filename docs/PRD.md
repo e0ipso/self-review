@@ -407,9 +407,9 @@ The following is the target structure. The exact XSD will be generated as part o
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <review
-  xmlns="urn:self-review:v2"
+  xmlns="urn:self-review:v3"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="urn:self-review:v2 self-review-v2.xsd"
+  xsi:schemaLocation="urn:self-review:v3 self-review-v3.xsd"
   timestamp="2026-02-10T14:30:00Z"
   git-diff-args="--staged"
   repository="/path/to/repo"
@@ -424,10 +424,16 @@ The following is the target structure. The exact XSD will be generated as part o
       <category>style</category>
     </comment>
 
-    <!-- Single-line comment on a new/added line -->
+    <!-- Single-line comment on a new/added line, with a reply thread -->
     <comment new-line-start="15" new-line-end="15">
       <body>This variable name is misleading. Consider renaming to `isAuthenticated`.</body>
       <category>nit</category>
+      <reply author="Claude Opus 5">
+        <body>Agreed, renamed in the latest commit.</body>
+      </reply>
+      <reply>
+        <body>Thanks — looks good now.</body>
+      </reply>
     </comment>
 
     <!-- Comment on a deleted line -->
@@ -462,6 +468,19 @@ return user;</original-code>
 </review>
 ```
 
+#### Threaded Replies
+
+A review comment can be answered. Replies nest inside the comment they answer, forming a single
+thread: the comment states a finding, and each reply is a later turn in the conversation about it.
+Both the human reviewer in the UI and an LLM writing the XML directly can add replies, so a
+disagreement can be recorded as a conversation instead of by overwriting the original finding or
+adding a disconnected comment on the same line.
+
+A reply carries a body, an optional author, and optional image attachments. It deliberately carries
+no category, severity, confidence or code suggestion: those describe the finding, and the finding is
+the root comment. Replies are flat rather than nested, and their order in the document *is* the
+conversation order — there is no timestamp and no identifier to sort by.
+
 ### 6.3 Schema Design Principles
 
 - **All files from the diff are listed**, even those with no comments, to provide a complete picture.
@@ -476,9 +495,9 @@ return user;</original-code>
 
 ### 6.4 XSD Schema File
 
-The XSD schema file (`self-review-v2.xsd`) is bundled with the application and also written alongside the XML output (or referenced by path). The schema is versioned in both its namespace URI and its filename to allow future evolution without breaking existing consumers.
+The XSD schema file (`self-review-v3.xsd`) is bundled with the application and also written alongside the XML output (or referenced by path). The schema is versioned in both its namespace URI and its filename to allow future evolution without breaking existing consumers.
 
-`v2` added the optional `severity` and `confidence` attributes on `<comment>`. The previous schema is kept on disk as `self-review-v1.xsd` so consumers holding v1 documents retain a validator. The application emits v2 and validates against v2; the `--resume-from` parser is namespace-agnostic and still reads v1 documents, but re-saving one writes it back as v2.
+`v3` added the optional, ordered `<reply>` list on `<comment>` (see Threaded Replies above). `v2` added the optional `severity` and `confidence` attributes on `<comment>`. Both previous schemas are kept on disk, as `self-review-v1.xsd` and `self-review-v2.xsd`, so consumers holding older documents retain a validator. The application emits v3 and validates against v3; the `--resume-from` parser is namespace-agnostic and still reads v1 and v2 documents, but re-saving one writes it back as v3.
 
 ---
 
