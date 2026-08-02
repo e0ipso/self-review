@@ -184,6 +184,14 @@
   margin-bottom: 0.75em;
 }
 
+/* Mermaid diagrams: the surrounding prose <pre> slab (dark background,
+ * code padding) belongs to code blocks, not diagrams — the mermaid block
+ * styles its own surface. */
+.self-review pre:has(> .mermaid-block) {
+  background: transparent;
+  padding: 0;
+}
+
 /* Guided walkthrough: soft radial washes behind the overview hero header */
 .self-review .guide-overview-hero {
   background:

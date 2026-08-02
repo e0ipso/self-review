@@ -8,7 +8,10 @@ export default function Layout() {
   return (
     <Group orientation='horizontal' style={{ flex: 1 }}>
       <Panel id='fileTree' defaultSize='25%' minSize='10%' maxSize='60%'>
-        <div className='h-full overflow-hidden bg-muted/30'>
+        {/* Opaque sidebar token, not a translucent wash: the .self-review
+            wrapper is display:contents, so anything translucent here blends
+            with the host page behind the panel. */}
+        <div className='h-full overflow-hidden bg-sidebar text-sidebar-foreground'>
           <FileTree />
         </div>
       </Panel>
