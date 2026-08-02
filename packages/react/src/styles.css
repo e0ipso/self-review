@@ -192,6 +192,13 @@
   padding: 0;
 }
 
+/* Guided walkthrough: chapter numerals — outlined, not filled, so they
+ * read as wayfinding structure behind the content rather than content. */
+.self-review .guide-chapter-numeral {
+  -webkit-text-stroke: 1.5px hsl(var(--foreground) / 0.16);
+  color: transparent;
+}
+
 /* Guided walkthrough: dashed route segments. The implicit "Everything
  * else" group joins the route by a dashed line — it is an appendix, not a
  * stop the guide authored. */

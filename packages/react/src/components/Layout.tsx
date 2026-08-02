@@ -3,6 +3,7 @@ import { Group, Panel, Separator } from 'react-resizable-panels';
 import { GripVertical } from 'lucide-react';
 import FileTree from './FileTree';
 import DiffViewer from './DiffViewer/DiffViewer';
+import GuideRouteHud from './GuideRouteHud';
 
 export default function Layout() {
   return (
@@ -23,8 +24,11 @@ export default function Layout() {
       </Separator>
 
       <Panel id='diffViewer' defaultSize='75%'>
-        <div className='h-full overflow-y-auto bg-background' data-scroll-container="diff">
-          <DiffViewer />
+        <div className='relative h-full'>
+          <div className='h-full overflow-y-auto bg-background' data-scroll-container="diff">
+            <DiffViewer />
+          </div>
+          <GuideRouteHud />
         </div>
       </Panel>
     </Group>

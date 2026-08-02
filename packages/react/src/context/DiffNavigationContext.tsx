@@ -91,17 +91,20 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
     // Initial observation
     observeElements();
 
-    // Re-observe when DOM changes (files are rendered)
+    // Re-observe when the DOM changes. The diff loads asynchronously, so
+    // neither the file sections nor the diff viewer container exist when
+    // this provider mounts — watch the document and re-observe (idempotent
+    // per element) whenever sections appear or change, debounced to one
+    // sweep per frame.
+    let rafId = 0;
     const mutationObserver = new MutationObserver(() => {
-      observeElements();
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(observeElements);
     });
-
-    const diffViewer = document.querySelector('[data-diff-viewer]');
-    if (diffViewer) {
-      mutationObserver.observe(diffViewer, { childList: true, subtree: true });
-    }
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
 
     return () => {
+      cancelAnimationFrame(rafId);
       observer.disconnect();
       mutationObserver.disconnect();
     };
