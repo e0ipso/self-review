@@ -203,13 +203,6 @@
   );
 }
 
-.self-review .guide-route-dashed-h {
-  background-image: repeating-linear-gradient(
-    to right,
-    hsl(var(--muted-foreground) / 0.4) 0 3px,
-    transparent 3px 7px
-  );
-}
 
 /* Guided walkthrough: overview prose rhythm — a slightly larger lead
  * paragraph, and breathing room around block elements. */

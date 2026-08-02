@@ -77,6 +77,7 @@ describe('buildGuideDisplaySections', () => {
       name: 'Core change',
       rationale: 'The retry wrapper everything else calls',
       implicit: false,
+      groupIndex: 0,
     });
     expect(sections[1].entries.map(e => e.file)).toEqual([config]);
   });
@@ -88,6 +89,7 @@ describe('buildGuideDisplaySections', () => {
       name: 'Everything else',
       rationale: undefined,
       implicit: true,
+      groupIndex: 2,
     });
     expect(last.entries.map(e => e.file)).toEqual([readme, legacy]);
     expect(last.entries.every(e => e.description === undefined)).toBe(true);
@@ -132,7 +134,7 @@ describe('buildGuideDisplaySections', () => {
     expect(last.entries.map(e => e.file)).toEqual([readme, legacy, stray]);
   });
 
-  it('keeps unmentioned files reachable in a trailing headerless section when no implicit group exists', () => {
+  it('synthesizes an implicit trailing group for unmentioned files when the payload has none', () => {
     const stray = makeFile('src/stray.ts');
     const explicitOnly = groups.slice(0, 2);
     const sections = buildGuideDisplaySections(
@@ -141,8 +143,21 @@ describe('buildGuideDisplaySections', () => {
       'guided'
     );
     const last = sections[sections.length - 1];
-    expect(last.header).toBeUndefined();
+    // Labeled and implicit so the files render under a group instead of
+    // visually merging into the preceding section; no groupIndex because
+    // the payload has no such group.
+    expect(last.header).toEqual({ name: 'Everything else', implicit: true });
     expect(last.entries.map(e => e.file)).toEqual([stray]);
+  });
+
+  it('keeps groupIndex stable when search filtering omits earlier groups', () => {
+    // Search matches only the second group's file: the surviving section
+    // sits at position 0 but must still identify as payload group 1, so
+    // station numbering and accents stay in sync with the other surfaces.
+    const sections = buildGuideDisplaySections([config], groups, 'guided');
+    expect(sections).toHaveLength(1);
+    expect(sections[0].header?.name).toBe('Config');
+    expect(sections[0].header?.groupIndex).toBe(1);
   });
 
   it('returns a single empty section when no files survive filtering', () => {

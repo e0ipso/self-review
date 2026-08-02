@@ -184,10 +184,21 @@ export default function FileTree() {
       {/* File List */}
       <div className='flex-1 overflow-y-auto overflow-x-hidden p-1'>
         {displaySections.map((section, sectionIndex) => {
+          // Station number, accent, and progress key off the group's payload
+          // index and full file list, not the section's filtered position —
+          // search filtering omits emptied sections and hides files, and the
+          // station must stay in sync with the chapter dividers, route map,
+          // and HUD (which all use payload indices).
+          const stationIndex = section.header?.groupIndex ?? sectionIndex;
+          const fullGroupPaths =
+            section.header?.groupIndex !== undefined
+              ? guide?.groups[section.header.groupIndex]?.files.map(f => f.path)
+              : undefined;
+          const progressPaths =
+            fullGroupPaths ??
+            section.entries.map(({ file }) => file.newPath || file.oldPath);
           const viewedCount = section.header
-            ? section.entries.filter(({ file }) =>
-                isViewed(file.newPath || file.oldPath)
-              ).length
+            ? progressPaths.filter(path => isViewed(path)).length
             : 0;
           const entryNodes = section.entries.map(({ file, description }) => {
             const filePath = file.newPath || file.oldPath;
@@ -228,7 +239,7 @@ export default function FileTree() {
                 } ${isLast ? 'bottom-2' : 'bottom-0'} ${
                   section.header.implicit
                     ? 'guide-route-dashed-v'
-                    : getGuideAccent(sectionIndex).segment
+                    : getGuideAccent(stationIndex).segment
                 }`}
                 aria-hidden='true'
               />
@@ -238,9 +249,12 @@ export default function FileTree() {
               >
                 <div className='flex items-center gap-2'>
                   <GuideStation
-                    index={sectionIndex}
+                    index={stationIndex}
                     implicit={section.header.implicit}
-                    complete={viewedCount === section.entries.length}
+                    complete={
+                      progressPaths.length > 0 &&
+                      viewedCount === progressPaths.length
+                    }
                     surfaceClassName='bg-sidebar'
                     className='relative z-10'
                   />
@@ -248,7 +262,7 @@ export default function FileTree() {
                     {section.header.name}
                   </span>
                   <span className='shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground'>
-                    {viewedCount}/{section.entries.length}
+                    {viewedCount}/{progressPaths.length}
                   </span>
                 </div>
                 {section.header.rationale && (

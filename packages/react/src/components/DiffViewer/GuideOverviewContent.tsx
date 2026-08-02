@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Map as MapIcon } from 'lucide-react';
@@ -31,6 +31,24 @@ export default function GuideOverviewContent({
   const { diffFiles, files } = useReview();
   const navigation = useOptionalDiffNavigation();
 
+  // In large-payload mode files arrive with empty hunks until they are
+  // lazily loaded, so these totals come out 0/0 and the masthead simply
+  // omits the +/− spans there; DiffLoadPayload carries no precomputed
+  // totals to fall back on.
+  const { additions, deletions } = useMemo(() => {
+    let additions = 0;
+    let deletions = 0;
+    for (const file of diffFiles) {
+      for (const hunk of file.hunks) {
+        for (const line of hunk.lines) {
+          if (line.type === 'addition') additions++;
+          else if (line.type === 'deletion') deletions++;
+        }
+      }
+    }
+    return { additions, deletions };
+  }, [diffFiles]);
+
   if (!guide?.overview) return null;
 
   const groups = guide.groups;
@@ -42,17 +60,6 @@ export default function GuideOverviewContent({
   const isGroupComplete = (group: (typeof groups)[number]) =>
     group.files.length > 0 &&
     group.files.every(file => viewedPaths.has(file.path));
-
-  let additions = 0;
-  let deletions = 0;
-  for (const file of diffFiles) {
-    for (const hunk of file.hunks) {
-      for (const line of hunk.lines) {
-        if (line.type === 'addition') additions++;
-        else if (line.type === 'deletion') deletions++;
-      }
-    }
-  }
 
   return (
     <div>

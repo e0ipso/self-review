@@ -90,8 +90,21 @@ export function GuideRouteMap({
         const station = (
           <g
             key={`station-${i}-${group.name}`}
+            role={onJump && firstFilePath ? 'button' : undefined}
+            tabIndex={onJump && firstFilePath ? 0 : undefined}
+            aria-label={`Go to stop ${i + 1}: ${group.name}`}
             onClick={
               onJump && firstFilePath ? () => onJump(firstFilePath) : undefined
+            }
+            onKeyDown={
+              onJump && firstFilePath
+                ? e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onJump(firstFilePath);
+                    }
+                  }
+                : undefined
             }
             className={onJump && firstFilePath ? 'cursor-pointer' : undefined}
           >
