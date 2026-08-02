@@ -153,7 +153,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                   <ToggleGroupItem
                     value='guided'
                     data-testid='guide-mode-guided'
-                    className='h-8 px-2.5 gap-1.5 data-[pressed]:bg-violet-500/15 data-[pressed]:text-violet-700 dark:data-[pressed]:text-violet-300'
+                    className='h-8 px-2.5 gap-1.5'
                   >
                     <Route className='h-3.5 w-3.5' />
                     <span className='text-xs'>Guided</span>

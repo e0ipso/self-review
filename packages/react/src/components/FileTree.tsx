@@ -11,10 +11,10 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle, Columns2, AlignJustify, Layers } from 'lucide-react';
+import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle, Columns2, AlignJustify } from 'lucide-react';
 import TruncatedPath from './TruncatedPath';
 import { FileTreeEntry } from './FileTreeEntry';
-import { getGuideAccent } from '../utils/guide-accents';
+import { GuideStation } from './GuideStation';
 
 export default function FileTree() {
   const { diffFiles, files, toggleViewed } = useReview();
@@ -183,9 +183,6 @@ export default function FileTree() {
       {/* File List */}
       <div className='flex-1 overflow-y-auto overflow-x-hidden p-1'>
         {displaySections.map((section, sectionIndex) => {
-          const accent = section.header
-            ? getGuideAccent(sectionIndex, section.header.implicit)
-            : null;
           const viewedCount = section.header
             ? section.entries.filter(({ file }) =>
                 isViewed(file.newPath || file.oldPath)
@@ -206,62 +203,61 @@ export default function FileTree() {
               />
             );
           });
+          if (!section.header) return (
+            <React.Fragment key={`section-${sectionIndex}-flat`}>
+              {entryNodes}
+            </React.Fragment>
+          );
+          const isFirst = sectionIndex === 0;
+          const isLast = sectionIndex === displaySections.length - 1;
           return (
-            <React.Fragment
+            <div
+              className='relative'
               // Keyed by position, not name alone: nothing forbids a guide
               // from repeating a group name (or naming one "Everything else",
               // colliding with the implicit group).
-              key={`section-${sectionIndex}-${section.header?.name ?? 'flat'}`}
+              key={`section-${sectionIndex}-${section.header.name}`}
             >
-              {section.header && accent && (
-                <div
-                  className='px-2 pt-4 pb-2'
-                  data-testid={`guide-group-${section.header.name}`}
-                >
-                  <div className='flex items-center gap-2'>
-                    <span
-                      className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-[10px] font-bold leading-none ${accent.chip}`}
-                    >
-                      {section.header.implicit ? (
-                        <Layers className='h-3 w-3' aria-hidden='true' />
-                      ) : (
-                        sectionIndex + 1
-                      )}
-                    </span>
-                    <span className='min-w-0 flex-1 truncate text-xs font-semibold text-foreground'>
-                      {section.header.name}
-                    </span>
-                    <span className='shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground'>
-                      {viewedCount}/{section.entries.length}
-                    </span>
-                  </div>
-                  {section.header.rationale && (
-                    <div className='mt-1 pl-[30px] text-[11px] leading-snug text-muted-foreground'>
-                      {section.header.rationale}
-                    </div>
-                  )}
-                  <div className='ml-[30px] mt-2 h-[3px] overflow-hidden rounded-full bg-border/50'>
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${accent.fill}`}
-                      style={{
-                        width: `${(viewedCount / section.entries.length) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-              {section.header && accent ? (
-                <div className='relative'>
-                  <div
-                    className={`pointer-events-none absolute bottom-1 left-[18px] top-0 w-px ${accent.rail}`}
-                    aria-hidden='true'
+              {/* Route line: one continuous segment per section; adjacent
+                  sections butt together so the line reads as a single
+                  route. The implicit group joins by a dashed segment. */}
+              <div
+                className={`pointer-events-none absolute left-[18px] w-[2px] ${
+                  isFirst ? 'top-[27px]' : 'top-0'
+                } ${isLast ? 'bottom-2' : 'bottom-0'} ${
+                  section.header.implicit
+                    ? 'guide-route-dashed-v'
+                    : 'bg-indigo-500/30 dark:bg-indigo-400/30'
+                }`}
+                aria-hidden='true'
+              />
+              <div
+                className='px-2 pt-4 pb-1.5'
+                data-testid={`guide-group-${section.header.name}`}
+              >
+                <div className='flex items-center gap-2'>
+                  <GuideStation
+                    index={sectionIndex}
+                    implicit={section.header.implicit}
+                    complete={viewedCount === section.entries.length}
+                    surfaceClassName='bg-sidebar'
+                    className='relative z-10'
                   />
-                  <div className='pl-6'>{entryNodes}</div>
+                  <span className='min-w-0 flex-1 truncate text-xs font-semibold text-foreground'>
+                    {section.header.name}
+                  </span>
+                  <span className='shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground'>
+                    {viewedCount}/{section.entries.length}
+                  </span>
                 </div>
-              ) : (
-                entryNodes
-              )}
-            </React.Fragment>
+                {section.header.rationale && (
+                  <div className='mt-1 pl-[30px] text-[11px] leading-snug text-muted-foreground'>
+                    {section.header.rationale}
+                  </div>
+                )}
+              </div>
+              <div className='pl-6'>{entryNodes}</div>
+            </div>
           );
         })}
 
