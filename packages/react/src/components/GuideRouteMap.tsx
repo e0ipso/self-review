@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ResolvedGuideGroup } from '@self-review/types';
+import { getGuideAccent } from '../utils/guide-accents';
 
 export interface GuideRouteMapProps {
   groups: ResolvedGuideGroup[];
@@ -52,7 +53,9 @@ export function GuideRouteMap({
       className='h-auto w-full select-none'
       style={{ maxHeight: 220 }}
     >
-      {/* Route segments, drawn beneath the stations. */}
+      {/* Route legs, drawn beneath the stations. Each leg takes the color
+          of the stop it arrives at — one line color per chapter, like a
+          metro network map. */}
       {points.map((p, i) => {
         if (i === 0) return null;
         const prev = points[i - 1];
@@ -69,7 +72,7 @@ export function GuideRouteMap({
             className={
               dashed
                 ? 'stroke-muted-foreground/50'
-                : 'stroke-indigo-500/45 dark:stroke-indigo-400/45'
+                : getGuideAccent(i).strokeSoft
             }
           />
         );
@@ -77,6 +80,7 @@ export function GuideRouteMap({
 
       {groups.map((group, i) => {
         const p = points[i];
+        const accent = getGuideAccent(i, group.implicit);
         const complete = isGroupComplete(group);
         const firstFilePath = group.files[0]?.path;
         const labelAbove = p.y === Y_LOW && n > 1;
@@ -98,15 +102,7 @@ export function GuideRouteMap({
               r={p.r}
               strokeWidth={2.5}
               strokeDasharray={group.implicit ? '3 3' : undefined}
-              className={
-                group.implicit
-                  ? `stroke-muted-foreground/60 ${complete ? 'fill-muted-foreground/60' : 'fill-background'}`
-                  : `stroke-indigo-500 dark:stroke-indigo-400 ${
-                      complete
-                        ? 'fill-indigo-500 dark:fill-indigo-400'
-                        : 'fill-background'
-                    }`
-              }
+              className={`${accent.stroke} ${complete ? accent.fill : 'fill-background'}`}
             />
             {!group.implicit && (
               <text
@@ -115,11 +111,7 @@ export function GuideRouteMap({
                 textAnchor='middle'
                 fontSize={11}
                 fontWeight={600}
-                className={
-                  complete
-                    ? 'fill-white'
-                    : 'fill-indigo-600 dark:fill-indigo-400'
-                }
+                className={complete ? 'fill-white' : accent.fillText}
               >
                 {complete ? '✓' : i + 1}
               </text>

@@ -15,6 +15,7 @@ import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCi
 import TruncatedPath from './TruncatedPath';
 import { FileTreeEntry } from './FileTreeEntry';
 import { GuideStation } from './GuideStation';
+import { getGuideAccent } from '../utils/guide-accents';
 
 export default function FileTree() {
   const { diffFiles, files, toggleViewed } = useReview();
@@ -227,7 +228,7 @@ export default function FileTree() {
                 } ${isLast ? 'bottom-2' : 'bottom-0'} ${
                   section.header.implicit
                     ? 'guide-route-dashed-v'
-                    : 'bg-indigo-500/30 dark:bg-indigo-400/30'
+                    : getGuideAccent(sectionIndex).segment
                 }`}
                 aria-hidden='true'
               />

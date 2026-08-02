@@ -25,6 +25,9 @@ export default function DiffViewer() {
     [diffFiles, guide, guideMode]
   );
   const totalStops = displaySections.filter(section => section.header).length;
+  const implicitLast = Boolean(
+    displaySections[displaySections.length - 1]?.header?.implicit
+  );
 
   // Initialize files as expanded (small sets) or collapsed (large sets)
   const [expandedState, setExpandedState] = useState<Record<string, boolean>>(
@@ -145,6 +148,7 @@ export default function DiffViewer() {
               header={section.header}
               index={sectionIndex}
               totalStops={totalStops}
+              implicitLast={implicitLast}
               entries={section.entries}
             />
           )}

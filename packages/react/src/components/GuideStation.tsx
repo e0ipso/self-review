@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, Layers } from 'lucide-react';
+import { getGuideAccent } from '../utils/guide-accents';
 
 export interface GuideStationProps {
   /** Zero-based position of the group in display order. */
@@ -35,16 +36,13 @@ export function GuideStation({
   surfaceClassName = 'bg-background',
   className = '',
 }: GuideStationProps) {
-  const ring = implicit
-    ? 'ring-muted-foreground/40'
-    : 'ring-indigo-500 dark:ring-indigo-400';
+  const accent = getGuideAccent(index, implicit);
+  const ring = accent.ring;
   const fill = complete
     ? implicit
       ? 'bg-muted-foreground/60 text-background'
-      : 'bg-indigo-600 text-white dark:bg-indigo-500'
-    : implicit
-      ? `${surfaceClassName} text-muted-foreground`
-      : `${surfaceClassName} text-indigo-600 dark:text-indigo-400`;
+      : `${accent.dot} text-white`
+    : `${surfaceClassName} ${accent.text}`;
 
   return (
     <span

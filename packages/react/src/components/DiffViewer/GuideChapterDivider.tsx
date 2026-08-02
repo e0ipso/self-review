@@ -1,5 +1,6 @@
 import React from 'react';
 import { useReview } from '../../context/ReviewContext';
+import { getGuideAccent } from '../../utils/guide-accents';
 import type {
   GuideDisplayEntry,
   GuideDisplayHeader,
@@ -11,6 +12,8 @@ export interface GuideChapterDividerProps {
   index: number;
   /** Number of chapters in the walkthrough (implicit group included). */
   totalStops: number;
+  /** True when the walkthrough's final stop is the implicit group. */
+  implicitLast: boolean;
   entries: GuideDisplayEntry[];
 }
 
@@ -25,6 +28,7 @@ export default function GuideChapterDivider({
   header,
   index,
   totalStops,
+  implicitLast,
   entries,
 }: GuideChapterDividerProps) {
   const { files } = useReview();
@@ -41,7 +45,11 @@ export default function GuideChapterDivider({
     >
       {!header.implicit && (
         <span
-          className='guide-chapter-numeral pointer-events-none absolute -top-4 right-2 select-none font-mono text-[104px] font-bold leading-none'
+          className='pointer-events-none absolute -top-4 right-2 select-none font-mono text-[104px] font-bold leading-none'
+          style={{
+            WebkitTextStroke: `1.5px ${getGuideAccent(index).numeralStroke}`,
+            color: 'transparent',
+          }}
           aria-hidden='true'
         >
           {String(index + 1).padStart(2, '0')}
@@ -63,19 +71,25 @@ export default function GuideChapterDivider({
           </p>
         )}
 
+        {/* Route strip: every stop in its own line color; this stop at
+            full size and strength, the rest faded. */}
         <div className='mt-3 flex items-center gap-1.5' aria-hidden='true'>
-          {Array.from({ length: totalStops }, (_, stop) => (
-            <span
-              key={stop}
-              className={
-                stop === index
-                  ? 'h-2 w-2 rounded-full bg-indigo-500 dark:bg-indigo-400'
-                  : stop < index
-                    ? 'h-1.5 w-1.5 rounded-full bg-indigo-500/50 dark:bg-indigo-400/50'
-                    : 'h-1.5 w-1.5 rounded-full bg-muted-foreground/25'
-              }
-            />
-          ))}
+          {Array.from({ length: totalStops }, (_, stop) => {
+            const stopAccent = getGuideAccent(
+              stop,
+              implicitLast && stop === totalStops - 1
+            );
+            return (
+              <span
+                key={stop}
+                className={
+                  stop === index
+                    ? `h-2 w-2 rounded-full ${stopAccent.dot}`
+                    : `h-1.5 w-1.5 rounded-full ${stop < index ? stopAccent.dotSoft : stopAccent.dotFaint}`
+                }
+              />
+            );
+          })}
         </div>
       </div>
     </section>
