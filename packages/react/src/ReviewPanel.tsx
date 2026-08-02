@@ -3,6 +3,7 @@ import type { AppConfig, ReviewComment } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
 import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
 import { ConfigProvider } from './context/ConfigContext';
+import { GuideProvider } from './context/GuideContext';
 import { ReviewProvider } from './context/ReviewContext';
 import { DiffNavigationProvider } from './context/DiffNavigationContext';
 import { TooltipProvider } from './components/ui/tooltip';
@@ -90,15 +91,17 @@ export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(
           prismLightCss={prismLightCss}
           prismDarkCss={prismDarkCss}
         >
-          <ReviewProvider>
-            <DiffNavigationProvider>
-              <TooltipProvider>
-                <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
-                  {children}
-                </ReviewPanelInner>
-              </TooltipProvider>
-            </DiffNavigationProvider>
-          </ReviewProvider>
+          <GuideProvider>
+            <ReviewProvider>
+              <DiffNavigationProvider>
+                <TooltipProvider>
+                  <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
+                    {children}
+                  </ReviewPanelInner>
+                </TooltipProvider>
+              </DiffNavigationProvider>
+            </ReviewProvider>
+          </GuideProvider>
         </ConfigProvider>
       </ReviewAdapterProvider>
     );

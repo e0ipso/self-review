@@ -4,6 +4,7 @@ import { useExpandContext } from './useExpandContext';
 import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
+import { useGuide } from '../../context/GuideContext';
 import { getRenderedTextMode, isPreviewableImage, isPreviewableSvg } from '../../utils/file-type-utils';
 import { FileSectionHeader } from './FileSectionHeader';
 import { FileSectionBody } from './FileSectionBody';
@@ -23,6 +24,7 @@ export default function FileSection({
 }: FileSectionProps) {
   const { toggleViewed, getCommentsForFile, files, diffSource, updateFileHunks } = useReview();
   const adapter = useAdapter();
+  const { mode: guideMode, getFileDescription } = useGuide();
   const [internalExpanded, setInternalExpanded] = useState(true);
   const expanded =
     controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
@@ -46,6 +48,8 @@ export default function FileSection({
   const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
 
   const filePath = file.newPath || file.oldPath;
+  const guideDescription =
+    guideMode === 'guided' ? getFileDescription(filePath) : undefined;
   const comments = getCommentsForFile(filePath);
   const fileComments = comments.filter(c => c.lineRange === null);
   const fileState = files.find(f => f.path === filePath);
@@ -149,6 +153,15 @@ export default function FileSection({
         onAddFileComment={() => setShowingFileComment(true)}
         onRenderViewModeChange={setRenderViewMode}
       />
+
+      {guideDescription && (
+        <div
+          className='px-3 py-1.5 text-xs text-muted-foreground bg-muted/40 border-b border-border'
+          data-testid={`file-guide-description-${filePath}`}
+        >
+          {guideDescription}
+        </div>
+      )}
 
       {expanded && (
         <FileSectionBody

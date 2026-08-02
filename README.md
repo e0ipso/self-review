@@ -111,6 +111,8 @@ Have an AI assistant **pre-generate a review**, then open it in self-review to *
 
 Instead of starting your review from scratch, you can ask a second AI assistant to critique the changes first. Using the `/self-review-critique` skill included in this repo, the assistant generates an XML review file compatible with self-review. You then open self-review with `--resume-from` to load those comments.
 
+The critique run also produces a **walkthrough guide** sidecar (`review.guide.xml`) via the `/self-review-guide` skill, which critique invokes as its first step (the guide skill also runs standalone). When self-review finds the guide next to its output file, the file tree reorganizes into named, ordered reading groups with rationales, each file gets a one-line description of its role in the change, and an overview appears before the first file. A Guided/Flat toggle always restores the plain alphabetical view, every file stays reachable, and a missing or invalid guide simply falls back to the flat view.
+
 From there, you **curate the review**: discard comments that are wrong, keep the ones that are useful, and add your own feedback on top. The final XML contains exactly the comments you approved, AI-suggested minus what you removed, plus what you added, ready to feed back to the coding assistant.
 
 ```bash
@@ -245,6 +247,11 @@ self-review ships with an AI assistant skill that closes the feedback loop: it r
 prioritizes the feedback, and executes the changes. It works with any assistant that supports
 skill directories, such as **Claude Code**, **Codex**, **OpenCode**, and others.
 
+The repo also ships two companion skills under `.agents/skills/`: `self-review-critique`
+(pre-generates a review for you to curate) and `self-review-guide` (generates the walkthrough
+guide sidecar that powers guided mode; critique runs it as its first step). Install them the
+same way as `self-review-apply` below.
+
 ### Install
 
 Copy the skill directory into your project:
@@ -301,6 +308,7 @@ Project config overrides user config, which overrides built-in defaults.
 - `diff-view`: split or unified (default: split)
 - `font-size`: editor font size in pixels (default: 14)
 - `output-file`: path for the review XML output (default: `./review.xml`)
+- `guide-file`: path to the walkthrough guide sidecar (default: derived from `output-file` as `<output-basename>.guide.xml`, e.g. `review.guide.xml`)
 - `ignore`: file patterns to exclude from diff (gitignore-compatible syntax; defaults cover common vendor/build dirs and lock files)
 - `categories`: custom comment tags (see example above)
 - `default-diff-args`: default arguments passed to `git diff`

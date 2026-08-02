@@ -22,7 +22,13 @@ export const mainConfig: Configuration = {
       patterns: [
         {
           from: 'node_modules/xmllint-wasm/xmllint.wasm',
-          to: 'xmllint.wasm',
+          // Must match the path the asset relocator rewrites xmllint-node.js's
+          // wasm reference to. webpack.rules.ts runs
+          // @vercel/webpack-asset-relocator-loader with
+          // outputAssetBase: 'native_modules', so the bundled loader requests
+          // native_modules/xmllint.wasm. Emitting to the output root instead
+          // leaves validation permanently unavailable in packaged builds.
+          to: 'native_modules/xmllint.wasm',
         },
       ],
     }),

@@ -7,7 +7,7 @@ import {
 import type { ReviewPanelHandle } from '../../packages/react/src/index';
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, DiffLoadPayload, CategoryDef } from '../../packages/core/src/types';
-import { createFixturePayload, createEmptyPayload, createMarkdownPayload, createRenderedHtmlPayload, defaultCategories, commentingCategories } from './fixture-data';
+import { createFixturePayload, createEmptyPayload, createMarkdownPayload, createRenderedHtmlPayload, createGuideFixturePayload, defaultCategories, commentingCategories } from './fixture-data';
 import './styles.css';
 
 /**
@@ -23,6 +23,9 @@ import './styles.css';
  * - ?categories=commenting    — Use commenting test categories (bug, nit, question)
  * - ?theme=dark|light         — Set initial theme
  * - ?view=split|unified       — Set initial view mode
+ * - ?guide=walkthrough        — Inject the walkthrough guide fixture (pushed
+ *                               through adapter.onGuideLoad, same seam the
+ *                               Electron app uses for guide:load)
  */
 
 function getUrlParam(name: string): string | null {
@@ -64,6 +67,12 @@ function getFixturePayload(): DiffLoadPayload {
 const adapter: ReviewAdapter = {
   loadDiff: async (): Promise<DiffLoadPayload> => {
     return getFixturePayload();
+  },
+  onGuideLoad: callback => {
+    if (getUrlParam('guide') === 'walkthrough') {
+      callback(createGuideFixturePayload());
+    }
+    return () => {};
   },
 };
 

@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { validateXML } from 'xmllint-wasm';
 import { XSD_SCHEMA, serializeReview } from './xml-serializer';
+import { GUIDE_XSD_SCHEMA } from './guide-schema';
 import type { ReviewState } from './types';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
@@ -18,11 +19,18 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 const CANONICAL_SCHEMA =
   '.agents/skills/self-review-apply/assets/self-review-v3.xsd';
 
+const CANONICAL_GUIDE_SCHEMA =
+  '.agents/skills/self-review-guide/assets/self-review-guide-v1.xsd';
+
 // opencode discovers skills under .opencode/skills, so those entries are
 // symlinks to the .agents originals rather than copies. Byte-comparing them
 // would be tautological, so guard the link itself: that is what stops a real
 // copy, and the drift it invites, from creeping back in.
-const SYMLINKED_SKILLS = ['self-review-apply', 'self-review-critique'];
+const SYMLINKED_SKILLS = [
+  'self-review-apply',
+  'self-review-critique',
+  'self-review-guide',
+];
 
 const SCHEMA_FILE_NAME = 'self-review-v3.xsd';
 
@@ -34,6 +42,15 @@ async function validate(xml: string) {
   return validateXML({
     xml: [{ fileName: 'review.xml', contents: xml }],
     schema: [{ fileName: SCHEMA_FILE_NAME, contents: XSD_SCHEMA }],
+  });
+}
+
+async function validateGuide(xml: string) {
+  return validateXML({
+    xml: [{ fileName: 'review.guide.xml', contents: xml }],
+    schema: [
+      { fileName: 'self-review-guide-v1.xsd', contents: GUIDE_XSD_SCHEMA },
+    ],
   });
 }
 
@@ -53,6 +70,13 @@ describe('XSD schema copies', () => {
     // Exact equality, not normalized: the embedded copy is generated from the
     // on-disk file verbatim, so any drift is a mistake rather than formatting.
     expect(readCopy(CANONICAL_SCHEMA)).toBe(`${XSD_SCHEMA}\n`);
+  });
+
+  it('matches the guide schema embedded in guide-schema.ts', () => {
+    // Same contract as the review schema pair: the embedded copy is the
+    // on-disk file verbatim (minus the trailing newline), so any drift is a
+    // mistake rather than formatting.
+    expect(readCopy(CANONICAL_GUIDE_SCHEMA)).toBe(`${GUIDE_XSD_SCHEMA}\n`);
   });
 
   it.each(SYMLINKED_SKILLS)(
@@ -191,6 +215,93 @@ describe('XSD conformance', () => {
         'urn:self-review:v3',
         'urn:self-review:v2'
       )
+    );
+
+    expect(result.valid).toBe(false);
+  });
+});
+
+describe('guide XSD conformance', () => {
+  // The sync test alone would not catch a schema that is itself malformed
+  // or wrongly permissive, so exercise the real validator against it.
+  it('accepts a full guide with overview, groups, and provenance', async () => {
+    const result = await validateGuide(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<guide xmlns="urn:self-review-guide:v1" timestamp="2026-08-01T10:30:00Z" git-diff-args="--staged" repository="/repo">',
+        '  <overview>Adds retry logic.\n\n```mermaid\ngraph TD; A-->B;\n```</overview>',
+        '  <group name="Core change">',
+        '    <rationale>The retry wrapper everything else calls.</rationale>',
+        '    <file path="src/retry.ts"><description>Adds the retry wrapper.</description></file>',
+        '    <file path="src/client.ts"><description>Switches the client onto the wrapper.</description></file>',
+        '  </group>',
+        '  <group name="Tests">',
+        '    <rationale>Coverage for the new wrapper.</rationale>',
+        '    <file path="src/retry.test.ts"><description>Unit tests for backoff timing.</description></file>',
+        '  </group>',
+        '</guide>',
+      ].join('\n')
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a minimal guide with no overview and no groups', async () => {
+    const result = await validateGuide(
+      '<?xml version="1.0" encoding="UTF-8"?>\n<guide xmlns="urn:self-review-guide:v1" />'
+    );
+
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a group without a rationale', async () => {
+    const result = await validateGuide(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<guide xmlns="urn:self-review-guide:v1">',
+        '  <group name="Core change">',
+        '    <file path="src/retry.ts"><description>d</description></file>',
+        '  </group>',
+        '</guide>',
+      ].join('\n')
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects an empty group, since a group exists to hold files', async () => {
+    const result = await validateGuide(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<guide xmlns="urn:self-review-guide:v1">',
+        '  <group name="Core change"><rationale>r</rationale></group>',
+        '</guide>',
+      ].join('\n')
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a file entry without a description', async () => {
+    const result = await validateGuide(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<guide xmlns="urn:self-review-guide:v1">',
+        '  <group name="Core change">',
+        '    <rationale>r</rationale>',
+        '    <file path="src/retry.ts" />',
+        '  </group>',
+        '</guide>',
+      ].join('\n')
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a review-namespaced document, so the vocabularies stay distinct', async () => {
+    const result = await validateGuide(
+      '<?xml version="1.0" encoding="UTF-8"?>\n<guide xmlns="urn:self-review:v2" />'
     );
 
     expect(result.valid).toBe(false);

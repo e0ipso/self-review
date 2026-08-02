@@ -20,6 +20,7 @@ export type {
   AppConfig,
   DiffLoadPayload,
   ResumeLoadPayload,
+  GuideLoadPayload,
   OutputPathInfo,
   ExpandContextRequest,
   ExpandContextResponse,
@@ -28,6 +29,11 @@ export type {
   VersionUpdateInfo,
   PayloadStats,
   ImageLoadResult,
+  ReviewGuide,
+  GuideGroup,
+  GuideFileEntry,
+  ResolvedGuideGroup,
+  ResolvedGuideFile,
 } from '../../packages/types/src/index';
 
 // ===== Electron API (preload bridge) =====
@@ -46,6 +52,7 @@ import type {
   AppConfig,
   OutputPathInfo,
   ResumeLoadPayload,
+  GuideLoadPayload,
   ReviewState,
   ExpandContextRequest,
   ExpandContextResponse,
@@ -63,6 +70,7 @@ export interface ElectronAPI {
   onConfigLoad: (callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void) => void;
   requestResumeData: () => void;
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
+  onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => () => void;
   submitReview: (state: ReviewState) => void;
   onRequestReview: (callback: () => void) => void;
   onCloseRequested: (callback: () => void) => () => void;
