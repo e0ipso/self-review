@@ -10,6 +10,8 @@ export interface FileTreeEntryProps {
   isActive: boolean;
   commentCount: number;
   viewed: boolean;
+  /** Guide-authored one-liner shown as a secondary line (Guided mode only). */
+  guideDescription?: string;
   onScrollToFile: (filePath: string) => void;
   onToggleViewed: (filePath: string) => void;
 }
@@ -19,6 +21,7 @@ export function FileTreeEntry({
   isActive,
   commentCount,
   viewed,
+  guideDescription,
   onScrollToFile,
   onToggleViewed,
 }: FileTreeEntryProps) {
@@ -102,6 +105,14 @@ export function FileTreeEntry({
               </Tooltip>
             </div>
           </div>
+          {guideDescription && (
+            <div
+              className='pl-6 pr-1 mt-0.5 text-[11px] text-muted-foreground truncate'
+              data-testid={`guide-file-description-${filePath}`}
+            >
+              {guideDescription}
+            </div>
+          )}
         </button>
       </TooltipTrigger>
       <TooltipContent side='right' className='max-w-sm'>

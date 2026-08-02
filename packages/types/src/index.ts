@@ -130,6 +130,83 @@ export interface ReviewState {
   files: FileReviewState[];
 }
 
+// ===== Walkthrough Guide Types =====
+// The guide is a read-only sidecar (self-review-guide-v1.xsd) generated
+// before the review starts. It labels and orders files for orientation; it
+// can never hide them. See docs/intent/llm-review-guide.md.
+
+/**
+ * One file inside a guide group. The path must match a diff file
+ * (repository-relative, same convention as review.xml); entries whose path
+ * matches nothing in the diff are silently dropped by the consumer.
+ */
+export interface GuideFileEntry {
+  /** File path relative to the repository root. For renames, the new path. */
+  path: string;
+  /** One-line description of the role this file plays in the change. */
+  description: string;
+}
+
+/**
+ * A named set of related files in the walkthrough. Groups are labels for
+ * orientation, never suppressions: every group and every file in it is
+ * shown. Array position is reading order.
+ */
+export interface GuideGroup {
+  /** Short display name shown as the group heading, e.g. "Core change". */
+  name: string;
+  /** One line explaining why these files form a group and what to look for. */
+  rationale: string;
+  /** The files in this group, in reading order. At least one entry. */
+  files: GuideFileEntry[];
+}
+
+/**
+ * A parsed walkthrough guide. Files in the diff that no group mentions are
+ * presented by the consumer in an implicit trailing "Everything else"
+ * group; that group is derived at render time and never part of this state.
+ */
+export interface ReviewGuide {
+  /**
+   * Review-level orientation prose shown before the first file. Markdown;
+   * may include a fenced code block labelled "mermaid" for a diagram.
+   * Absent when the guide has no overview.
+   */
+  overview?: string;
+  /** Ordered reading groups. Array position is reading order. */
+  groups: GuideGroup[];
+}
+
+/**
+ * One file inside a resolved display group. Unlike {@link GuideFileEntry},
+ * the description is optional: files swept into the implicit
+ * "Everything else" group have no guide-authored one-liner.
+ */
+export interface ResolvedGuideFile {
+  /** File path relative to the repository root. For renames, the new path. */
+  path: string;
+  /** One-line description from the guide; absent for implicit-group files. */
+  description?: string;
+}
+
+/**
+ * A display group produced by reconciling a {@link ReviewGuide} with the
+ * actual diff file list. Guide entries missing from the diff are dropped,
+ * duplicate references keep only their first group, and diff files the
+ * guide never mentions land in a terminal implicit group (in diff order)
+ * marked with `implicit: true` so the UI can label it.
+ */
+export interface ResolvedGuideGroup {
+  /** Display name for the group heading. */
+  name: string;
+  /** One-line rationale from the guide; absent for the implicit group. */
+  rationale?: string;
+  /** True only for the derived trailing "Everything else" group. */
+  implicit: boolean;
+  /** The files shown under this group, in display order. Never empty. */
+  files: ResolvedGuideFile[];
+}
+
 // ===== Configuration Types =====
 
 export interface CategoryDef {
@@ -152,6 +229,12 @@ export interface AppConfig {
   wordWrap: boolean;
   maxFiles: number;
   maxTotalLines: number;
+  /**
+   * Path to the walkthrough guide sidecar (`guide-file` YAML key). When
+   * unset, the guide path is derived from the resolved output path as
+   * `<output-basename>.guide.xml`.
+   */
+  guideFile?: string;
 }
 
 // ===== IPC Payload Types =====
@@ -166,6 +249,20 @@ export interface ResumeLoadPayload {
   comments: ReviewComment[];
   /** Paths the prior review marked as done. Absent when nothing was marked. */
   viewedFiles?: string[];
+}
+
+/**
+ * Payload for the `guide:load` channel (Main → Renderer). Sent only when a
+ * valid walkthrough guide sidecar was discovered; carries display-ready
+ * data — the overview plus groups already reconciled against the parsed
+ * diff — so the renderer stays free of tolerance logic. Metadata only
+ * (paths, names, descriptions): safe to send in large-payload mode.
+ */
+export interface GuideLoadPayload {
+  /** Review-level orientation prose (Markdown, optionally Mermaid). */
+  overview?: string;
+  /** Resolved display groups, in reading order. */
+  groups: ResolvedGuideGroup[];
 }
 
 // ===== Output Path Types =====

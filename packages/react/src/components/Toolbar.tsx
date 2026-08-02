@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useConfig } from '../context/ConfigContext';
 import { useReview } from '../context/ReviewContext';
+import { useGuide } from '../context/GuideContext';
 import { Button } from './ui/button';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Separator } from './ui/separator';
@@ -19,6 +20,8 @@ import {
   FolderOpen,
   FileText,
   CheckCircle2,
+  ListTree,
+  List,
 } from 'lucide-react';
 import ReviewProgress from './ReviewProgress';
 
@@ -30,6 +33,7 @@ export interface ToolbarProps {
 export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
   const { config, updateConfig, outputPathInfo } = useConfig();
   const { diffFiles, diffSource } = useReview();
+  const { guide, mode: guideMode, setMode: setGuideMode } = useGuide();
   const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
 
   const stats = useMemo(() => {
@@ -128,6 +132,53 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
               : 'Collapse all comments'}
           </TooltipContent>
         </Tooltip>
+
+        {guide && (
+          <>
+            <Separator orientation='vertical' className='h-5' />
+
+            <ToggleGroup
+              type='single'
+              variant='outline'
+              size='sm'
+              value={guideMode}
+              onValueChange={value => {
+                if (value === 'guided' || value === 'flat') {
+                  setGuideMode(value);
+                }
+              }}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value='guided'
+                    data-testid='guide-mode-guided'
+                    className='h-8 px-2.5 gap-1.5'
+                  >
+                    <ListTree className='h-3.5 w-3.5' />
+                    <span className='text-xs'>Guided</span>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Group files by the review walkthrough
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value='flat'
+                    data-testid='guide-mode-flat'
+                    className='h-8 px-2.5 gap-1.5'
+                  >
+                    <List className='h-3.5 w-3.5' />
+                    <span className='text-xs'>Flat</span>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>Flat file list (diff order)</TooltipContent>
+              </Tooltip>
+            </ToggleGroup>
+          </>
+        )}
 
       </div>
 
