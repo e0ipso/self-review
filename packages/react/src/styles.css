@@ -184,6 +184,43 @@
   margin-bottom: 0.75em;
 }
 
+/* Mermaid diagrams: the surrounding prose <pre> slab (dark background,
+ * code padding) belongs to code blocks, not diagrams — the mermaid block
+ * styles its own surface. */
+.self-review pre:has(> .mermaid-block) {
+  background: transparent;
+  padding: 0;
+}
+
+/* Guided walkthrough: dashed route segments. The implicit "Everything
+ * else" group joins the route by a dashed line — it is an appendix, not a
+ * stop the guide authored. */
+.self-review .guide-route-dashed-v {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    hsl(var(--muted-foreground) / 0.4) 0 3px,
+    transparent 3px 7px
+  );
+}
+
+
+/* Guided walkthrough: overview prose rhythm — a slightly larger lead
+ * paragraph, and breathing room around block elements. */
+.self-review .guide-overview-prose > p:first-of-type {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: hsl(var(--foreground));
+}
+
+.self-review .guide-overview-prose p {
+  line-height: 1.65;
+}
+
+.self-review .guide-overview-prose pre {
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
 /* Rendered markdown code theming aligned with Prism light/dark */
 .self-review .rendered-markdown-view {
   --tw-prose-pre-bg: #f5f2f0;

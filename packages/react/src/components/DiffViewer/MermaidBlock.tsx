@@ -55,7 +55,7 @@ export default function MermaidBlock({ code }: { code: string }) {
   if (!svg) return <div className='animate-pulse bg-muted h-32 rounded' />;
   return (
     <div
-      className="overflow-hidden max-w-full rounded bg-white dark:bg-transparent p-4 [&>svg]:max-w-full [&>svg]:h-auto"
+      className="mermaid-block flex justify-center overflow-x-auto max-w-full rounded-lg border border-border bg-white dark:bg-muted/20 p-4 [&_svg]:max-w-full [&_svg]:h-auto"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

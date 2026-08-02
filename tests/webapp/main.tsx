@@ -97,7 +97,7 @@ function App() {
         ref={reviewRef}
         adapter={adapter}
         config={getConfig()}
-        className="flex-1 flex flex-col overflow-hidden"
+        className="flex-1 flex flex-col overflow-hidden bg-background text-foreground"
       >
         <Toolbar onFinishReview={handleFinishReview} />
       </ReviewPanel>

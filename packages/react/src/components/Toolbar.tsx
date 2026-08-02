@@ -20,7 +20,7 @@ import {
   FolderOpen,
   FileText,
   CheckCircle2,
-  ListTree,
+  Route,
   List,
 } from 'lucide-react';
 import ReviewProgress from './ReviewProgress';
@@ -155,7 +155,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                     data-testid='guide-mode-guided'
                     className='h-8 px-2.5 gap-1.5'
                   >
-                    <ListTree className='h-3.5 w-3.5' />
+                    <Route className='h-3.5 w-3.5' />
                     <span className='text-xs'>Guided</span>
                   </ToggleGroupItem>
                 </TooltipTrigger>

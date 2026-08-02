@@ -128,6 +128,7 @@ export async function launchWebapp(
   await startViteServer();
 
   browser = await chromium.launch({
+    executablePath: process.env.PW_CHROMIUM_PATH || undefined,
     args: [
       '--no-sandbox',
       '--disable-dev-shm-usage',

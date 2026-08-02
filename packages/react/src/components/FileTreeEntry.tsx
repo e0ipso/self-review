@@ -107,7 +107,7 @@ export function FileTreeEntry({
           </div>
           {guideDescription && (
             <div
-              className='pl-6 pr-1 mt-0.5 text-[11px] text-muted-foreground truncate'
+              className='pl-6 pr-1 mt-1 text-[11px] leading-snug text-muted-foreground/90 line-clamp-2'
               data-testid={`guide-file-description-${filePath}`}
             >
               {guideDescription}

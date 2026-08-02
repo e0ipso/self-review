@@ -136,6 +136,7 @@ test-results/
 .features-gen/
 /core
 review.xml
+review.guide.xml
 /.self-review-assets
 
 .claude/worktrees

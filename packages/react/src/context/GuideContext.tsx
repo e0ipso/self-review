@@ -21,6 +21,12 @@ export interface GuideContextValue {
   setGuide: (guide: GuideLoadPayload) => void;
   /** Guide-authored one-liner for a file; undefined for implicit-group files. */
   getFileDescription: (filePath: string) => string | undefined;
+  /**
+   * Display-order index of the group a file belongs to; undefined when no
+   * guide is loaded or the guide never mentions the file. Drives the
+   * per-group accent on surfaces that show a single file.
+   */
+  getFileGroupIndex: (filePath: string) => number | undefined;
 }
 
 /**
@@ -34,6 +40,7 @@ const NO_GUIDE: GuideContextValue = {
   setMode: () => {},
   setGuide: () => {},
   getFileDescription: () => undefined,
+  getFileGroupIndex: () => undefined,
 };
 
 const GuideContext = createContext<GuideContextValue>(NO_GUIDE);
@@ -74,14 +81,36 @@ export function GuideProvider({ children, initialGuide }: GuideProviderProps) {
     return map;
   }, [guide]);
 
+  const groupIndexByPath = useMemo(() => {
+    const map = new Map<string, number>();
+    guide?.groups.forEach((group, index) => {
+      group.files.forEach(file => {
+        if (!map.has(file.path)) map.set(file.path, index);
+      });
+    });
+    return map;
+  }, [guide]);
+
   const getFileDescription = useCallback(
     (filePath: string) => descriptionsByPath.get(filePath),
     [descriptionsByPath]
   );
 
+  const getFileGroupIndex = useCallback(
+    (filePath: string) => groupIndexByPath.get(filePath),
+    [groupIndexByPath]
+  );
+
   return (
     <GuideContext.Provider
-      value={{ guide, mode, setMode, setGuide, getFileDescription }}
+      value={{
+        guide,
+        mode,
+        setMode,
+        setGuide,
+        getFileDescription,
+        getFileGroupIndex,
+      }}
     >
       {children}
     </GuideContext.Provider>

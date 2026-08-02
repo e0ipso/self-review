@@ -6,6 +6,7 @@ import { useReview } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import { useGuide } from '../../context/GuideContext';
 import { getRenderedTextMode, isPreviewableImage, isPreviewableSvg } from '../../utils/file-type-utils';
+import { getGuideAccent } from '../../utils/guide-accents';
 import { FileSectionHeader } from './FileSectionHeader';
 import { FileSectionBody } from './FileSectionBody';
 
@@ -24,7 +25,7 @@ export default function FileSection({
 }: FileSectionProps) {
   const { toggleViewed, getCommentsForFile, files, diffSource, updateFileHunks } = useReview();
   const adapter = useAdapter();
-  const { mode: guideMode, getFileDescription } = useGuide();
+  const { mode: guideMode, getFileDescription, getFileGroupIndex } = useGuide();
   const [internalExpanded, setInternalExpanded] = useState(true);
   const expanded =
     controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
@@ -155,11 +156,19 @@ export default function FileSection({
       />
 
       {guideDescription && (
-        <div
-          className='px-3 py-1.5 text-xs text-muted-foreground bg-muted/40 border-b border-border'
-          data-testid={`file-guide-description-${filePath}`}
-        >
-          {guideDescription}
+        <div className='flex items-start gap-2.5 border-b border-border bg-muted/30 px-3 py-2'>
+          {/* Waypoint dot in the file's group color, tying the file to its
+              chapter's leg of the route. */}
+          <span
+            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full bg-background ring-2 ${getGuideAccent(getFileGroupIndex(filePath) ?? 0).ring}`}
+            aria-hidden='true'
+          />
+          <span
+            className='text-xs leading-relaxed text-muted-foreground'
+            data-testid={`file-guide-description-${filePath}`}
+          >
+            {guideDescription}
+          </span>
         </div>
       )}
 

@@ -12,6 +12,13 @@ export interface GuideDisplayHeader {
   name: string;
   rationale?: string;
   implicit: boolean;
+  /**
+   * Index of the group in the guide payload. Stable under search
+   * filtering (which omits emptied sections and shifts section positions),
+   * so numbering and per-group accents key off it, not the section's
+   * position. Absent only for the synthesized leftover header.
+   */
+  groupIndex?: number;
 }
 
 /** One file tree entry, optionally annotated with the guide's one-liner. */
@@ -41,7 +48,8 @@ function displayPath(file: DiffFile): string {
  *   group in payload order, sections whose files were all filtered out are
  *   omitted. Files the guide never mentions stay reachable: they are
  *   appended to the implicit section when the payload has one, otherwise to
- *   a trailing headerless section.
+ *   a synthesized trailing "Everything else" section (implicit, no
+ *   groupIndex) so they still render under a labeled group.
  *
  * Pure: no tolerance logic, no lookups outside its arguments.
  */
@@ -64,7 +72,7 @@ export function buildGuideDisplaySections(
   const consumed = new Set<string>();
   const sections: GuideDisplaySection[] = [];
 
-  for (const group of groups) {
+  groups.forEach((group, groupIndex) => {
     const entries: GuideDisplayEntry[] = [];
     for (const guideFile of group.files) {
       const file = byPath.get(guideFile.path);
@@ -72,16 +80,17 @@ export function buildGuideDisplaySections(
       consumed.add(guideFile.path);
       entries.push({ file, description: guideFile.description });
     }
-    if (entries.length === 0) continue;
+    if (entries.length === 0) return;
     sections.push({
       header: {
         name: group.name,
         rationale: group.rationale,
         implicit: group.implicit,
+        groupIndex,
       },
       entries,
     });
-  }
+  });
 
   // Defensive: any surviving file the guide never mentioned stays reachable.
   const leftovers: GuideDisplayEntry[] = files
@@ -93,7 +102,13 @@ export function buildGuideDisplaySections(
     if (last?.header?.implicit) {
       last.entries.push(...leftovers);
     } else {
-      sections.push({ entries: leftovers });
+      // The payload had no implicit group: synthesize one so leftovers
+      // still render under a labeled group instead of visually merging
+      // into the preceding section.
+      sections.push({
+        header: { name: 'Everything else', implicit: true },
+        entries: leftovers,
+      });
     }
   }
 
