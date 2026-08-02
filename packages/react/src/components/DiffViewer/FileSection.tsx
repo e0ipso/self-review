@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Compass } from 'lucide-react';
 import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
 import type { DiffFile } from '@self-review/types';
@@ -155,11 +156,17 @@ export default function FileSection({
       />
 
       {guideDescription && (
-        <div
-          className='px-3 py-1.5 text-xs text-muted-foreground bg-muted/40 border-b border-border'
-          data-testid={`file-guide-description-${filePath}`}
-        >
-          {guideDescription}
+        <div className='flex items-start gap-2 border-b border-border bg-gradient-to-r from-violet-500/10 via-violet-500/5 to-transparent px-3 py-2'>
+          <Compass
+            className='mt-px h-3.5 w-3.5 shrink-0 text-violet-500 dark:text-violet-400'
+            aria-hidden='true'
+          />
+          <span
+            className='text-xs leading-relaxed text-foreground/80'
+            data-testid={`file-guide-description-${filePath}`}
+          >
+            {guideDescription}
+          </span>
         </div>
       )}
 

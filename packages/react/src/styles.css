@@ -184,6 +184,36 @@
   margin-bottom: 0.75em;
 }
 
+/* Guided walkthrough: soft radial washes behind the overview hero header */
+.self-review .guide-overview-hero {
+  background:
+    radial-gradient(120% 160% at 0% 0%, hsl(263 70% 58% / 0.09), transparent 55%),
+    radial-gradient(90% 140% at 100% 0%, hsl(199 89% 48% / 0.07), transparent 55%);
+}
+
+.self-review.dark .guide-overview-hero {
+  background:
+    radial-gradient(120% 160% at 0% 0%, hsl(263 70% 58% / 0.16), transparent 55%),
+    radial-gradient(90% 140% at 100% 0%, hsl(199 89% 48% / 0.12), transparent 55%);
+}
+
+/* Guided walkthrough: overview prose rhythm — a slightly larger lead
+ * paragraph, and breathing room around block elements. */
+.self-review .guide-overview-prose > p:first-of-type {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: hsl(var(--foreground));
+}
+
+.self-review .guide-overview-prose p {
+  line-height: 1.65;
+}
+
+.self-review .guide-overview-prose pre {
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
 /* Rendered markdown code theming aligned with Prism light/dark */
 .self-review .rendered-markdown-view {
   --tw-prose-pre-bg: #f5f2f0;

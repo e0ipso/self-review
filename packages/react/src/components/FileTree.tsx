@@ -11,9 +11,10 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle, Columns2, AlignJustify } from 'lucide-react';
+import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle, Columns2, AlignJustify, Layers } from 'lucide-react';
 import TruncatedPath from './TruncatedPath';
 import { FileTreeEntry } from './FileTreeEntry';
+import { getGuideAccent } from '../utils/guide-accents';
 
 export default function FileTree() {
   const { diffFiles, files, toggleViewed } = useReview();
@@ -181,45 +182,88 @@ export default function FileTree() {
 
       {/* File List */}
       <div className='flex-1 overflow-y-auto overflow-x-hidden p-1'>
-        {displaySections.map((section, sectionIndex) => (
-          <React.Fragment
-            // Keyed by position, not name alone: nothing forbids a guide
-            // from repeating a group name (or naming one "Everything else",
-            // colliding with the implicit group).
-            key={`section-${sectionIndex}-${section.header?.name ?? 'flat'}`}
-          >
-            {section.header && (
-              <div
-                className='px-2 pt-3 pb-1'
-                data-testid={`guide-group-${section.header.name}`}
-              >
-                <div className='text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'>
-                  {section.header.name}
-                </div>
-                {section.header.rationale && (
-                  <div className='text-[11px] text-muted-foreground/80 leading-snug'>
-                    {section.header.rationale}
+        {displaySections.map((section, sectionIndex) => {
+          const accent = section.header
+            ? getGuideAccent(sectionIndex, section.header.implicit)
+            : null;
+          const viewedCount = section.header
+            ? section.entries.filter(({ file }) =>
+                isViewed(file.newPath || file.oldPath)
+              ).length
+            : 0;
+          const entryNodes = section.entries.map(({ file, description }) => {
+            const filePath = file.newPath || file.oldPath;
+            return (
+              <FileTreeEntry
+                key={filePath}
+                file={file}
+                isActive={activeFilePath === filePath}
+                commentCount={getCommentCount(filePath)}
+                viewed={isViewed(filePath)}
+                guideDescription={description}
+                onScrollToFile={scrollToFile}
+                onToggleViewed={toggleViewed}
+              />
+            );
+          });
+          return (
+            <React.Fragment
+              // Keyed by position, not name alone: nothing forbids a guide
+              // from repeating a group name (or naming one "Everything else",
+              // colliding with the implicit group).
+              key={`section-${sectionIndex}-${section.header?.name ?? 'flat'}`}
+            >
+              {section.header && accent && (
+                <div
+                  className='px-2 pt-4 pb-2'
+                  data-testid={`guide-group-${section.header.name}`}
+                >
+                  <div className='flex items-center gap-2'>
+                    <span
+                      className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-[10px] font-bold leading-none ${accent.chip}`}
+                    >
+                      {section.header.implicit ? (
+                        <Layers className='h-3 w-3' aria-hidden='true' />
+                      ) : (
+                        sectionIndex + 1
+                      )}
+                    </span>
+                    <span className='min-w-0 flex-1 truncate text-xs font-semibold text-foreground'>
+                      {section.header.name}
+                    </span>
+                    <span className='shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground'>
+                      {viewedCount}/{section.entries.length}
+                    </span>
                   </div>
-                )}
-              </div>
-            )}
-            {section.entries.map(({ file, description }) => {
-              const filePath = file.newPath || file.oldPath;
-              return (
-                <FileTreeEntry
-                  key={filePath}
-                  file={file}
-                  isActive={activeFilePath === filePath}
-                  commentCount={getCommentCount(filePath)}
-                  viewed={isViewed(filePath)}
-                  guideDescription={description}
-                  onScrollToFile={scrollToFile}
-                  onToggleViewed={toggleViewed}
-                />
-              );
-            })}
-          </React.Fragment>
-        ))}
+                  {section.header.rationale && (
+                    <div className='mt-1 pl-[30px] text-[11px] leading-snug text-muted-foreground'>
+                      {section.header.rationale}
+                    </div>
+                  )}
+                  <div className='ml-[30px] mt-2 h-[3px] overflow-hidden rounded-full bg-border/50'>
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${accent.fill}`}
+                      style={{
+                        width: `${(viewedCount / section.entries.length) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              {section.header && accent ? (
+                <div className='relative'>
+                  <div
+                    className={`pointer-events-none absolute bottom-1 left-[18px] top-0 w-px ${accent.rail}`}
+                    aria-hidden='true'
+                  />
+                  <div className='pl-6'>{entryNodes}</div>
+                </div>
+              ) : (
+                entryNodes
+              )}
+            </React.Fragment>
+          );
+        })}
 
         {filteredFiles.length === 0 && (
           <div className='text-center text-muted-foreground text-xs py-8'>

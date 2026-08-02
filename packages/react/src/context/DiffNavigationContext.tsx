@@ -26,6 +26,15 @@ export function useDiffNavigationContext(): DiffNavigationContextValue {
   return context;
 }
 
+/**
+ * Nullable variant for components that merely enhance with navigation when a
+ * provider is present (e.g. the guide overview's clickable itinerary) and
+ * must still render without one.
+ */
+export function useOptionalDiffNavigation(): DiffNavigationContextValue | null {
+  return useContext(DiffNavigationContext);
+}
+
 export function DiffNavigationProvider({ children }: { children: ReactNode }) {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
