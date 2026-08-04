@@ -143,7 +143,7 @@ export function buildRemoteReviewState(
   const files: FileReviewState[] = [];
   const diffPaths = new Set<string>();
   for (const diffFile of args.diffFiles) {
-    const path = diffFile.newPath || diffFile.oldPath;
+    const path = diffFile.changeType === 'deleted' ? diffFile.oldPath : diffFile.newPath;
     diffPaths.add(path);
     files.push({
       path,

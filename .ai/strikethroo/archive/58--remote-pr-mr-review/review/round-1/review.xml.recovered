@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v2" timestamp="2026-08-04T12:00:00Z" git-diff-args="e8410cf06104a0b65d446c5868e44079f1a1498e" repository="/workspace">
+  <file path=".agents/skills/self-review-apply/SKILL.md" change-type="modified" viewed="true" />
+  <file path=".agents/skills/self-review-apply/assets/self-review-v3.xsd" change-type="modified" viewed="true" />
+  <file path=".agents/skills/self-review-critique/SKILL.md" change-type="modified" viewed="true" />
+  <file path=".agents/skills/self-review-guide/SKILL.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/app/practice-keep-self-review-local-only-with-no-network-access.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/app/practice-limit-file-writes-to-the-review-xml-and-assets-directory.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/app/practice-make-no-network-connections-at-runtime.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/app/practice-make-zero-network-requests-except-the-startup-version-check.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/review-xml/schema/map-review-xml-format-and-xsd.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/review-xml/schema/map-self-review-v1-xsd-output-format.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/review-xml/schema/map-self-review-xml-schema-self-review-v1-xsd.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/review-xml/schema/map-self-review-xml-v1-schema.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/review-xml/schema/map-xsd-schema-location.md" change-type="modified" viewed="true" />
+  <file path=".ai/kenkeep/nodes/review-xml/schema/practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/plan-58--remote-pr-mr-review.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/review/base-commit.json" change-type="added" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/01--amend-v3-schema-remote-attributes.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/02--forgeprovider-interface-url-parsing.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/03--github-provider.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/04--gitlab-provider.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/05--diff-materializer.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/06--deterministic-thread-mapper.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/07--fetch-comments-subcommand.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/08--app-remote-mode-main-process.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/09--renderer-url-entry-drift-warning.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/plans/58--remote-pr-mr-review/tasks/10--documentation-and-skill-updates.md" change-type="modified" viewed="true" />
+  <file path=".ai/strikethroo/runtime/harness-availability.json" change-type="added" viewed="true" />
+  <file path="AGENTS.md" change-type="modified" viewed="true" />
+  <file path="README.md" change-type="modified" viewed="true" />
+  <file path="docs/PRD.md" change-type="modified" viewed="true" />
+  <file path="packages/core/src/browser.ts" change-type="modified" viewed="true" />
+  <file path="packages/core/src/forge-provider.test.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/forge-provider.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/github-provider.test.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/github-provider.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/gitlab-provider.test.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/gitlab-provider.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/index.ts" change-type="modified" viewed="true" />
+  <file path="packages/core/src/materializer.test.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/materializer.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/thread-mapper.test.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/thread-mapper.ts" change-type="added" viewed="true" />
+  <file path="packages/core/src/xml-parser.test.ts" change-type="modified" viewed="true" />
+  <file path="packages/core/src/xml-parser.ts" change-type="modified" viewed="true" />
+  <file path="packages/core/src/xml-serializer.test.ts" change-type="modified" viewed="true" />
+  <file path="packages/core/src/xml-serializer.ts" change-type="modified" viewed="true" />
+  <file path="packages/core/src/xsd-schema.test.ts" change-type="modified" viewed="true" />
+  <file path="packages/react/src/components/Comments/SuggestionBlock.test.tsx" change-type="renamed" viewed="true" />
+  <file path="packages/react/src/components/RemoteDriftBanner.test.tsx" change-type="added" viewed="true" />
+  <file path="packages/react/src/components/RemoteDriftBanner.tsx" change-type="added" viewed="true" />
+  <file path="packages/react/src/context/ReviewContext.tsx" change-type="modified" viewed="true" />
+  <file path="packages/types/src/index.ts" change-type="modified" viewed="true" />
+  <file path="src/main/cli.test.ts" change-type="modified" viewed="true" />
+  <file path="src/main/cli.ts" change-type="modified" viewed="true" />
+  <file path="src/main/fetch-comments.test.ts" change-type="added" viewed="true" />
+  <file path="src/main/fetch-comments.ts" change-type="added" viewed="true">
+    <comment new-line-start="130" new-line-end="130" severity="major" confidence="high">
+      <body>Deleted files are assigned the sentinel path `/dev/null`: `DiffFile.newPath` is `/dev/null` for deletions and is truthy, so `diffFile.newPath || diffFile.oldPath` selects it. For a remote diff deleting `src/old.ts`, `fetch-comments` therefore writes a deleted file entry at `/dev/null`; any fetched comment anchored to `src/old.ts` is then placed in a separate synthetic `modified` entry. This produces incorrect review XML and violates the headless subcommand requirement to serialize the materialized diff and its threads.</body>
+      <category>defect</category>
+      <suggestion>
+        <original-code>    const path = diffFile.newPath || diffFile.oldPath;</original-code>
+        <proposed-code>    const path = diffFile.changeType === 'deleted' ? diffFile.oldPath : diffFile.newPath;</proposed-code>
+      </suggestion>
+    </comment>
+  </file>
+  <file path="src/main/git-diff-loader.ts" change-type="modified" viewed="true" />
+  <file path="src/main/ipc-handlers.test.ts" change-type="modified" viewed="true" />
+  <file path="src/main/ipc-handlers.ts" change-type="modified" viewed="true" />
+  <file path="src/main/main.ts" change-type="modified" viewed="true" />
+  <file path="src/main/remote-mode.test.ts" change-type="added" viewed="true" />
+  <file path="src/main/remote-mode.ts" change-type="added" viewed="true">
+    <comment new-line-start="215" new-line-end="218" severity="major" confidence="high">
+      <body>A temporary clone is not cleaned up when diff loading fails after materialization. `startRemoteSession` returns the cleanup callback, but `bootstrapRemoteDiff` calls `d.loadDiff` without a `try`/`catch` or `finally`; if git diff/repository loading rejects, bootstrap never returns the session. On CLI startup, `main.ts` assigns `remoteCleanup` only after `bootstrapRemoteDiff` succeeds, so the process exit handler also has no callback to invoke. A concrete git-diff failure after a successful temp clone leaves that clone on disk, violating the explicit requirement that temporary clones be removed on every exit path.</body>
+      <category>requirement-conformance</category>
+    </comment>
+  </file>
+  <file path="src/preload/preload.ts" change-type="modified" viewed="true" />
+  <file path="src/renderer/App.tsx" change-type="modified" viewed="true" />
+  <file path="src/renderer/components/WelcomeScreen.test.tsx" change-type="added" viewed="true" />
+  <file path="src/renderer/components/WelcomeScreen.tsx" change-type="modified" viewed="true" />
+  <file path="src/shared/ipc-channels.ts" change-type="modified" viewed="true" />
+  <file path="src/shared/types.ts" change-type="modified" viewed="true" />
+  <file path="vitest.config.renderer.ts" change-type="modified" viewed="true" />
+</review>

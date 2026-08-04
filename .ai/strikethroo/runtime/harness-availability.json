@@ -1,35 +1,35 @@
 {
   "version": 1,
   "harnesses": {
-    "codex": {
-      "available": true,
-      "observedAt": 1785838070067,
-      "expiresAt": 1785839870067,
-      "reason": "Harness probe succeeded."
-    },
     "cursor": {
       "available": false,
-      "observedAt": 1785838070071,
-      "expiresAt": 1785838370071,
+      "observedAt": 1785861098062,
+      "expiresAt": 1785861398062,
       "reason": "⚠ Workspace Trust Required   Cursor Agent can execute code and access files in this directory.   Do you trust the contents of this directory?     /workspace   To proceed, you can either:     • Run 'ag"
     },
     "gemini": {
       "available": false,
-      "observedAt": 1785838070074,
-      "expiresAt": 1785838370074,
+      "observedAt": 1785861098064,
+      "expiresAt": 1785861398064,
       "reason": "spawn gemini ENOENT"
     },
     "copilot": {
       "available": false,
-      "observedAt": 1785838070076,
-      "expiresAt": 1785838370076,
+      "observedAt": 1785861098066,
+      "expiresAt": 1785861398066,
       "reason": "spawn copilot ENOENT"
     },
     "opencode": {
       "available": false,
-      "observedAt": 1785838070077,
-      "expiresAt": 1785838370077,
-      "reason": "📖 kenkeep Index: Loading knowledge base… 🔄 kenkeep Proposals: Draining queue… kenkeep: workspace on self-review-dev. Action needed: Run npx kenkeep index rebuild. 🧠 kenkeep Index: Knowledge base lo"
+      "observedAt": 1785861098068,
+      "expiresAt": 1785861398068,
+      "reason": "📖 kenkeep Index: Loading knowledge base… 🔄 kenkeep Proposals: Draining queue… 📬 kenkeep Proposals: Queue drained. kenkeep: workspace on self-review-dev. Action needed: Run npx kenkeep index rebuild"
+    },
+    "codex": {
+      "available": true,
+      "observedAt": 1785861098057,
+      "expiresAt": 1785862898057,
+      "reason": "Harness probe succeeded."
     }
   }
 }
