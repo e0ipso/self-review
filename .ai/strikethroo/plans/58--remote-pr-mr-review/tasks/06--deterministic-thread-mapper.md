@@ -2,7 +2,7 @@
 id: 6
 group: "forge-core"
 dependencies: [1, 2]
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - typescript
@@ -22,26 +22,28 @@ heuristics, fetch direction only.
 TypeScript pure-function design; Vitest fixture-based testing.
 
 ## Acceptance Criteria
-- [ ] `packages/core/src/thread-mapper.ts` exports a pure function mapping
+- [x] `packages/core/src/thread-mapper.ts` exports a pure function mapping
       `ForgeThread[]` → `ReviewComment[]` (with replies), with no I/O, no randomness, no
       timestamps — same input always yields identical output.
-- [ ] Anchor mapping honors the exactly-one-pair rule: new-side anchors set
+- [x] Anchor mapping honors the exactly-one-pair rule: new-side anchors set
       `newLineStart`/`newLineEnd` only; old-side anchors set `oldLineStart`/`oldLineEnd`
       only; single-line anchors set start = end; a comment never carries both pairs.
-- [ ] Threads flagged `outdated` (and threads with no line anchor but a file path) map to
+- [x] Threads flagged `outdated` (and threads with no line anchor but a file path) map to
       file-level comments (neither pair set); threads with no file path at all map to a
       documented review-level representation consistent with the existing model.
-- [ ] Root turn becomes the root comment (owning the anchor); subsequent turns become
+- [x] Root turn becomes the root comment (owning the anchor); subsequent turns become
       ordered flat replies in document order; forge usernames land in `author`; forge
       thread/comment IDs land in `remoteId` on root and replies respectively.
-- [ ] Mapped comments carry no category, severity, or confidence (forge threads have
+- [x] Mapped comments carry no category, severity, or confidence (forge threads have
       none; absent means below every threshold).
-- [ ] Fixture-based unit tests cover, for both forges' normalized shapes: added-line,
+- [x] Fixture-based unit tests cover, for both forges' normalized shapes: added-line,
       deleted-line (old side), context-line, multi-line range, outdated → file-level,
       positionless thread, reply chain order, author and remote-id propagation, and a
       determinism check (map twice, deep-equal).
-- [ ] Verification: `npx vitest run packages/core/src/thread-mapper.test.ts` passes;
-      `npm run test:unit` stays green.
+- [x] Verification: `npx vitest run packages/core/src/thread-mapper.test.ts` passes;
+      `npm run test:unit` full-suite check deferred to the phase gate per orchestrator
+      instruction (siblings are mutating the tree); `tsc --noEmit` on the core package
+      is clean.
 
 Use your internal Todo tool to track these and keep on track.
 

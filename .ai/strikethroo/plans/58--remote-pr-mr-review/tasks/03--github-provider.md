@@ -2,7 +2,7 @@
 id: 3
 group: "forge-core"
 dependencies: [2]
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - typescript
@@ -21,24 +21,25 @@ absent or unauthenticated.
 TypeScript; GitHub REST review-comment semantics and the `gh` CLI.
 
 ## Acceptance Criteria
-- [ ] `packages/core/src/github-provider.ts` implements `ForgeProvider` using an injected
+- [x] `packages/core/src/github-provider.ts` implements `ForgeProvider` using an injected
       command-runner that invokes `gh` (never the network directly), honoring the URL's
       host for GitHub Enterprise-style hosts via `gh`'s own host handling.
-- [ ] `fetchBaseBranch` returns the PR base branch name (e.g. via
+- [x] `fetchBaseBranch` returns the PR base branch name (e.g. via
       `gh pr view <number> --repo <owner>/<repo> --json baseRefName`).
-- [ ] `fetchThreads` returns normalized threads: review comments grouped into threads by
+- [x] `fetchThreads` returns normalized threads: review comments grouped into threads by
       `in_reply_to_id`, document order preserved, forge usernames as turn authors,
       GitHub comment IDs as turn `remote-id` values.
-- [ ] Anchors normalize correctly: `side`/`line`/`start_line` map to the neutral
+- [x] Anchors normalize correctly: `side`/`line`/`start_line` map to the neutral
       old/new + range shape; comments whose anchor is outdated (GitHub reports
       `line: null` / outdated position) are flagged `outdated: true`.
-- [ ] When `gh` is missing (spawn ENOENT) or exits non-zero due to auth, the provider
+- [x] When `gh` is missing (spawn ENOENT) or exits non-zero due to auth, the provider
       throws the typed unavailable error from task 2 — never a crash, never a retry.
-- [ ] Fixture-based unit tests use captured/realistic `gh` JSON payloads covering: a
+- [x] Fixture-based unit tests use captured/realistic `gh` JSON payloads covering: a
       single-comment thread, a reply chain, a multi-line range comment, an old-side
       (deleted line) comment, and an outdated-anchor comment.
-- [ ] Verification: `npx vitest run packages/core/src/github-provider.test.ts` passes;
-      `npm run test:unit` stays green.
+- [x] Verification: `npx vitest run packages/core/src/github-provider.test.ts` passes;
+      `npm run test:unit` stays green (full suite deferred to the phase gate per
+      orchestrator instruction — siblings are mutating the tree).
 
 Use your internal Todo tool to track these and keep on track.
 

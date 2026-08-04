@@ -2,7 +2,7 @@
 id: 5
 group: "materialization"
 dependencies: [2]
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - typescript
@@ -24,32 +24,32 @@ TypeScript; git plumbing (clone filters, well-known PR/MR refs, remote matching,
 merge-base-safe fetching).
 
 ## Acceptance Criteria
-- [ ] `packages/core/src/materializer.ts` exports a `materialize` function taking a
+- [x] `packages/core/src/materializer.ts` exports a `materialize` function taking a
       `ForgeUrl`, a base branch name, and a working directory, returning
       `{ repoPath, baseSha, headSha, mode: 'existing-clone' | 'temp-clone', cleanup }`.
-- [ ] Existing-clone path: when the given directory is inside a git repository with a
+- [x] Existing-clone path: when the given directory is inside a git repository with a
       remote whose host and owner/repo match the `ForgeUrl` (SSH and HTTPS remote formats
       both recognized, `.git` suffix tolerated), base and head refs are fetched into it
       with no checkout and no working-tree change, and that repo path is returned.
-- [ ] Temp-clone path: otherwise, a blobless clone (`--filter=blob:none`, never
+- [x] Temp-clone path: otherwise, a blobless clone (`--filter=blob:none`, never
       `--depth`) of the URL's repository is created in a uniquely named directory under
       the OS temp root, the PR/MR head ref is fetched, and `cleanup()` removes exactly
       that directory.
-- [ ] Head refs come from the forges' well-known git refs — `refs/pull/N/head` (GitHub),
+- [x] Head refs come from the forges' well-known git refs — `refs/pull/N/head` (GitHub),
       `refs/merge-requests/N/head` (GitLab) — via plain git; no forge API use anywhere in
       this module.
-- [ ] The chosen path is reported on stderr (`console.error`), including the temp
+- [x] The chosen path is reported on stderr (`console.error`), including the temp
       directory when one is created.
-- [ ] Git failures (unreachable/private repo) propagate git's own stderr verbatim in the
+- [x] Git failures (unreachable/private repo) propagate git's own stderr verbatim in the
       thrown error, augmented with a hint that `gh auth setup-git` /
       `glab auth git-credential` wires CLI credentials into git; no alternative ingestion
       path exists.
-- [ ] Unit tests with an injected command-runner cover: remote-match detection (SSH form,
+- [x] Unit tests with an injected command-runner cover: remote-match detection (SSH form,
       HTTPS form, `.git` suffix, non-matching remote, not a repo), correct git invocations
       for both paths (blobless flag present, depth flag absent, correct refspecs), SHA
       resolution, cleanup removing only the created directory, and error propagation with
       the auth hint.
-- [ ] Verification: `npx vitest run packages/core/src/materializer.test.ts` passes;
+- [x] Verification: `npx vitest run packages/core/src/materializer.test.ts` passes;
       `npm run test:unit` stays green.
 
 Use your internal Todo tool to track these and keep on track.

@@ -2,7 +2,7 @@
 id: 4
 group: "forge-core"
 dependencies: [2]
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - typescript
@@ -22,26 +22,28 @@ unauthenticated.
 TypeScript; GitLab discussions API semantics and the `glab` CLI.
 
 ## Acceptance Criteria
-- [ ] `packages/core/src/gitlab-provider.ts` implements `ForgeProvider` using an injected
+- [x] `packages/core/src/gitlab-provider.ts` implements `ForgeProvider` using an injected
       command-runner that invokes `glab`, passing the URL's host so self-hosted instances
       work with zero configuration beyond `glab` auth.
-- [ ] `fetchBaseBranch` returns the MR target branch name.
-- [ ] `fetchThreads` returns normalized threads from MR discussions: the first note roots
+- [x] `fetchBaseBranch` returns the MR target branch name.
+- [x] `fetchThreads` returns normalized threads from MR discussions: the first note roots
       the thread, subsequent notes are ordered replies, GitLab usernames as authors,
       discussion/note IDs as `remote-id` values; system notes and non-diff discussions
       without positions map to file-level/review-level appropriately per the neutral shape.
-- [ ] Default fetch excludes resolved discussions; `includeResolved: true` includes them —
+- [x] Default fetch excludes resolved discussions; `includeResolved: true` includes them —
       both proven by unit tests.
-- [ ] Position objects (`position.old_line`/`new_line`, `old_path`/`new_path`) normalize
+- [x] Position objects (`position.old_line`/`new_line`, `old_path`/`new_path`) normalize
       to the neutral old/new anchor shape; multi-line positions (`line_range`) map to
       start/end.
-- [ ] When `glab` is missing or unauthenticated, the provider throws the typed unavailable
+- [x] When `glab` is missing or unauthenticated, the provider throws the typed unavailable
       error from task 2.
-- [ ] Fixture-based unit tests cover: unresolved single-note discussion, reply chain,
+- [x] Fixture-based unit tests cover: unresolved single-note discussion, reply chain,
       resolved discussion (excluded by default, included with the option), old-side
       position, multi-line `line_range`, and a positionless (non-diff) discussion.
-- [ ] Verification: `npx vitest run packages/core/src/gitlab-provider.test.ts` passes;
-      `npm run test:unit` stays green.
+- [x] Verification: `npx vitest run packages/core/src/gitlab-provider.test.ts` passes;
+      `npm run test:unit` deferred to the phase gate per orchestrator instruction
+      (siblings mutating the tree); `npx tsc --noEmit -p packages/core/tsconfig.json`
+      passes.
 
 Use your internal Todo tool to track these and keep on track.
 

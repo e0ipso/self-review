@@ -573,12 +573,12 @@ graph TD
 - ✔️ Task 001: Amend v3 schema additively and round-trip remote attributes
 - ✔️ Task 002: ForgeProvider interface, URL parsing, and normalized thread types
 
-### Phase 2: Core machinery (providers, materializer, mapper)
+### ✅ Phase 2: Core machinery (providers, materializer, mapper)
 **Parallel Tasks:**
-- Task 003: GitHub provider backed by the gh CLI (depends on: 002)
-- Task 004: GitLab provider backed by the glab CLI (depends on: 002)
-- Task 005: Clone-aware diff materializer (depends on: 002)
-- Task 006: Deterministic thread-to-ReviewState mapper (depends on: 001, 002)
+- ✔️ Task 003: GitHub provider backed by the gh CLI (depends on: 002)
+- ✔️ Task 004: GitLab provider backed by the glab CLI (depends on: 002)
+- ✔️ Task 005: Clone-aware diff materializer (depends on: 002)
+- ✔️ Task 006: Deterministic thread-to-ReviewState mapper (depends on: 001, 002)
 
 ### Phase 3: Entry points (headless subcommand and app remote mode)
 **Parallel Tasks:**
