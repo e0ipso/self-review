@@ -251,6 +251,20 @@ describe('bootstrapRemoteDiff', () => {
     const { payload } = await bootstrapRemoteDiff(PR_URL, '/cwd', ['dist/**'], deps);
     expect(payload.files.map(f => f.newPath)).toEqual(['src/a.ts']);
   });
+
+  it('cleans up the materialized clone when diff loading fails', async () => {
+    const cleanup = vi.fn();
+    const deps = makeDeps({
+      materialize: vi.fn(async () => makeMaterializeResult({ cleanup })),
+      loadDiff: vi.fn(async () => {
+        throw new Error('fatal: bad revision');
+      }),
+    });
+    await expect(bootstrapRemoteDiff(PR_URL, '/cwd', [], deps)).rejects.toThrow(
+      'fatal: bad revision'
+    );
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('mergeRemoteThreads', () => {

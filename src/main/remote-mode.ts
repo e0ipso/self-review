@@ -203,10 +203,19 @@ export async function bootstrapRemoteDiff(
   const d: RemoteSessionDeps = { ...defaultDeps, ...deps };
   const session = await startRemoteSession(url, cwd, d);
 
-  const { files, repository } = await d.loadDiff(
-    session.gitDiffArgs,
-    session.repoPath
-  );
+  // From here on the session may own a temporary clone; if anything below
+  // fails the caller never receives the cleanup handle, so release it here.
+  let files: DiffFile[];
+  let repository: string;
+  try {
+    ({ files, repository } = await d.loadDiff(
+      session.gitDiffArgs,
+      session.repoPath
+    ));
+  } catch (error) {
+    session.cleanup();
+    throw error;
+  }
   const shouldKeep = createIgnoreFilter(ignorePatterns);
   const filteredFiles = files.filter(f => shouldKeep(f.newPath || f.oldPath));
 
