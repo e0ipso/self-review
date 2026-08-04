@@ -2,7 +2,7 @@
 id: 8
 group: "app"
 dependencies: [1, 3, 4, 5, 6]
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - electron
@@ -23,34 +23,36 @@ exit.
 Electron main-process architecture; TypeScript.
 
 ## Acceptance Criteria
-- [ ] When `CliArgs.remoteUrl` is set (from task 7's parsing), the main process:
+- [x] When `CliArgs.remoteUrl` is set (from task 7's parsing), the main process:
       resolves the provider, materializes via task 5, then feeds the existing git-mode
       pipeline with the clone's repo path and the `baseSha...headSha` range — reusing
       `git-diff-loader.ts` / `git.ts` machinery, not duplicating it.
-- [ ] Forge threads (providers + mapper) load into the renderer through the existing
+- [x] Forge threads (providers + mapper) load into the renderer through the existing
       `resume:load` path, merged correctly when `--resume-from` is also given (resumed
       document wins; fetched threads already present in it — matched by `remote-id` —
       are not duplicated).
-- [ ] Provider/CLI unavailability degrades cleanly: review opens fully, stderr notes
+- [x] Provider/CLI unavailability degrades cleanly: review opens fully, stderr notes
       thread sync unavailable, no dialog, no crash.
-- [ ] Expand-context and image/SVG rendered previews work unchanged in remote mode
+- [x] Expand-context and image/SVG rendered previews work unchanged in remote mode
       because their git operations run against the materialized clone path — verified by
       unit tests asserting the expand-context and image-load IPC handlers receive the
       clone's repo path in remote mode.
-- [ ] Drift: when opening with `--resume-from` a document carrying `remote-head-sha`, the
+- [x] Drift: when opening with `--resume-from` a document carrying `remote-head-sha`, the
       recorded SHA is compared with the live head SHA from materialization; the
       comparison result reaches the renderer (new field on an existing payload or a
       dedicated IPC message — pick one, define it in `src/shared/types.ts` +
       `src/shared/ipc-channels.ts`); on a fresh open the recorded provenance is put into
       the review state so "Finish Review" writes `remote-*` attributes.
-- [ ] Temporary clones are removed on every exit path (Finish Review, Save & Quit,
+- [x] Temporary clones are removed on every exit path (Finish Review, Save & Quit,
       Discard) via the existing exit-handler path in `src/main/main.ts`.
-- [ ] The output `review.xml` from a remote session validates and carries
+- [x] The output `review.xml` from a remote session validates and carries
       `remote-url`/`remote-base-sha`/`remote-head-sha`/`remote-forge`; fetched threads
       keep `remote-id` and `author`; new material carries neither — proven by a unit test
       on the state assembly (serializer behavior itself is task 1's).
-- [ ] Verification: `npm run test:unit` passes including new tests for the remote-mode
-      orchestration seam (mocked materializer/providers).
+- [x] Verification: `npm run test:unit` passes including new tests for the remote-mode
+      orchestration seam (mocked materializer/providers). (Verified via the full
+      main-process vitest config — 102 tests — plus `npx tsc --noEmit`; the phase gate
+      runs the root suite because a sibling task was mutating the tree concurrently.)
 
 Use your internal Todo tool to track these and keep on track.
 

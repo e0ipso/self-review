@@ -128,6 +128,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadImage: (filePath: string) =>
     ipcRenderer.invoke(IPC.DIFF_LOAD_IMAGE, filePath),
 
+  openRemoteUrl: (url: string) => ipcRenderer.invoke(IPC.REMOTE_OPEN_URL, url),
+
   onShowAbout: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on(IPC.APP_SHOW_ABOUT, handler);

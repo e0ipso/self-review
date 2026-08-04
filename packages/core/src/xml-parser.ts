@@ -73,8 +73,11 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     const files = toChildArray(review.file);
 
     for (const file of files) {
+      // Skip only when the attribute is genuinely absent: the empty string
+      // is the review-level sentinel path (REVIEW_LEVEL_FILE_PATH) used by
+      // fetch-comments for threads with no file anchor, and must round-trip.
       const rawPath = file['@_path'];
-      if (!rawPath) continue;
+      if (rawPath === undefined || rawPath === null) continue;
       const filePath = String(rawPath);
 
       if (parseViewed(file['@_viewed'])) {

@@ -2,7 +2,7 @@
 id: 7
 group: "cli"
 dependencies: [1, 3, 4, 5, 6]
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - typescript
@@ -21,29 +21,29 @@ without ever creating a window.
 TypeScript in the Electron main process; CLI design within Electron's argv quirks.
 
 ## Acceptance Criteria
-- [ ] `src/main/cli.ts` grows explicit subcommand routing decided at the top of parsing:
+- [x] `src/main/cli.ts` grows explicit subcommand routing decided at the top of parsing:
       `fetch-comments <URL>` is recognized before any window creation; unknown
       subcommand-like tokens keep today's pass-through-to-git behavior for local mode.
-- [ ] `parseCliArgs` unit tests cover: `fetch-comments` with a URL, `fetch-comments`
+- [x] `parseCliArgs` unit tests cover: `fetch-comments` with a URL, `fetch-comments`
       missing its URL (error to stderr, exit 1), a bare forge URL argument (recognized as
       remote GUI mode for task 8, exposed on `CliArgs`), and unchanged behavior for
       existing local invocations (`--staged`, `--resume-from`, ranges).
-- [ ] The subcommand runs fully headless: no `BrowserWindow`, quitting cleanly after the
+- [x] The subcommand runs fully headless: no `BrowserWindow`, quitting cleanly after the
       write; on any failure it prints the error to stderr and exits 1, cleaning up any
       temporary clone it created.
-- [ ] Orchestration: parse URL (task 2) → provider base-branch lookup (tasks 3/4, falling
+- [x] Orchestration: parse URL (task 2) → provider base-branch lookup (tasks 3/4, falling
       back to the git-only base-branch helper from task 5 when the CLI is unavailable,
       with a stderr notice) → materialize (task 5) → fetch + map threads (tasks 3/4 + 6;
       when the forge CLI is unavailable, exit with a clear stderr error since fetching
       comments is this subcommand's entire purpose) → serialize (task 1).
-- [ ] The output document carries `remote-url`, `remote-base-sha`, `remote-head-sha`,
+- [x] The output document carries `remote-url`, `remote-base-sha`, `remote-head-sha`,
       `remote-forge`, per-thread `remote-id`s, and validates against the amended XSD via
       the serializer's existing validation path; it honors the `output-file` config and
       the existing config discovery; all logging goes to stderr, nothing to stdout.
-- [ ] The written document round-trips: loading it with the existing parser
+- [x] The written document round-trips: loading it with the existing parser
       (`--resume-from` path) preserves `remote-id`s and remote root attributes — proven
       by a unit test exercising serialize→parse on the orchestrator's output state.
-- [ ] Verification: `npx vitest run src/main/cli.test.ts` and the new orchestrator test
+- [x] Verification: `npx vitest run src/main/cli.test.ts` and the new orchestrator test
       pass; `npm run test:unit` stays green.
 
 Use your internal Todo tool to track these and keep on track.

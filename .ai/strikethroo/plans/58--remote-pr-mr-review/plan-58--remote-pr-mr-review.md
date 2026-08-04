@@ -580,10 +580,10 @@ graph TD
 - ✔️ Task 005: Clone-aware diff materializer (depends on: 002)
 - ✔️ Task 006: Deterministic thread-to-ReviewState mapper (depends on: 001, 002)
 
-### Phase 3: Entry points (headless subcommand and app remote mode)
+### ✅ Phase 3: Entry points (headless subcommand and app remote mode)
 **Parallel Tasks:**
-- Task 007: Headless fetch-comments subcommand (depends on: 001, 003, 004, 005, 006)
-- Task 008: App remote mode in the main process (depends on: 001, 003, 004, 005, 006)
+- ✔️ Task 007: Headless fetch-comments subcommand (depends on: 001, 003, 004, 005, 006)
+- ✔️ Task 008: App remote mode in the main process (depends on: 001, 003, 004, 005, 006)
 
 ### Phase 4: Surface (renderer UI and documentation)
 **Parallel Tasks:**

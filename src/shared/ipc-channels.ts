@@ -30,4 +30,5 @@ export const IPC = {
   DIFF_LOAD_IMAGE: 'diff:load-image',
   APP_SHOW_ABOUT: 'app:show-about',
   APP_GET_INFO: 'app:get-info',
+  REMOTE_OPEN_URL: 'remote:open-url',
 } as const;

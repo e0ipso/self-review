@@ -149,10 +149,10 @@ export class ForgeCliUnavailableError extends Error {
 // Path-shape matchers. The number must terminate its path segment so
 // `/pull/12x` does not parse as PR 12; anything after the number segment
 // (trailing slash, sub-pages like /files) still identifies the same PR/MR.
-const GITHUB_PR_PATH =
-  /^\/(?<owner>[^/]+)\/(?<repo>[^/]+)\/pull\/(?<number>\d+)(?=\/|$)/;
-const GITLAB_MR_PATH =
-  /^\/(?<owner>.+)\/(?<repo>[^/]+)\/-\/merge_requests\/(?<number>\d+)(?=\/|$)/;
+// Numbered groups (owner, repo, number in order): the app tsconfig targets
+// ES6, which predates named capture groups.
+const GITHUB_PR_PATH = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?=\/|$)/;
+const GITLAB_MR_PATH = /^\/(.+)\/([^/]+)\/-\/merge_requests\/(\d+)(?=\/|$)/;
 
 /**
  * Parse a forge web URL into a {@link ForgeUrl}, or return `null` for
@@ -172,24 +172,24 @@ export function parseForgeUrl(url: string): ForgeUrl | null {
 
   // GitLab first: `/-/merge_requests/` is the more specific marker.
   const gitlab = GITLAB_MR_PATH.exec(parsed.pathname);
-  if (gitlab?.groups) {
+  if (gitlab) {
     return {
       forge: 'gitlab',
       host: parsed.host,
-      owner: gitlab.groups.owner,
-      repo: gitlab.groups.repo,
-      number: Number.parseInt(gitlab.groups.number, 10),
+      owner: gitlab[1],
+      repo: gitlab[2],
+      number: Number.parseInt(gitlab[3], 10),
     };
   }
 
   const github = GITHUB_PR_PATH.exec(parsed.pathname);
-  if (github?.groups) {
+  if (github) {
     return {
       forge: 'github',
       host: parsed.host,
-      owner: github.groups.owner,
-      repo: github.groups.repo,
-      number: Number.parseInt(github.groups.number, 10),
+      owner: github[1],
+      repo: github[2],
+      number: Number.parseInt(github[3], 10),
     };
   }
 

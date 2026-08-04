@@ -161,6 +161,54 @@ export interface ReviewState {
   remoteForge?: RemoteForge;
 }
 
+// ===== Remote PR/MR Session Types =====
+
+/**
+ * Provenance and status of a remote PR/MR session, recorded at
+ * materialization time. Rides on `DiffLoadPayload.remote` so the renderer
+ * can display remote context; the main process injects the same provenance
+ * into the submitted `ReviewState` before serialization, so the renderer
+ * never needs to copy these fields back.
+ */
+export interface RemoteSessionInfo {
+  /** URL of the remote pull/merge request under review. */
+  remoteUrl: string;
+  /** Resolved SHA of the PR/MR base branch tip. */
+  remoteBaseSha: string;
+  /** Live SHA of the PR/MR head at materialization time. */
+  remoteHeadSha: string;
+  /** Which forge hosts the PR/MR. */
+  remoteForge: RemoteForge;
+  /**
+   * False when the forge CLI was unavailable and discussion threads could
+   * not be fetched; the review still opens fully (diff only).
+   */
+  threadSyncAvailable: boolean;
+}
+
+/**
+ * Drift comparison between a resumed document's recorded remote head SHA
+ * and the live head SHA observed at materialization. Sent only when a
+ * `--resume-from` document carries `remote-head-sha` in a remote session.
+ */
+export interface RemoteDriftInfo {
+  /** `remote-head-sha` recorded in the resumed document. */
+  recordedHeadSha: string;
+  /** Live head SHA from this session's materialization. */
+  liveHeadSha: string;
+  /** True when the two SHAs differ (the PR/MR moved since the review). */
+  drifted: boolean;
+}
+
+/**
+ * Result of the `remote:open-url` channel (Renderer → Main, invoke).
+ * On success the main process pushes `diff:load` (and `resume:load` when
+ * threads were fetched) to the requesting window before resolving.
+ */
+export type RemoteOpenUrlResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
 // ===== Walkthrough Guide Types =====
 // The guide is a read-only sidecar (self-review-guide-v1.xsd) generated
 // before the review starts. It labels and orders files for orientation; it
@@ -274,12 +322,32 @@ export interface DiffLoadPayload {
   files: DiffFile[];
   source: DiffSource;
   isLargePayload?: boolean;
+  /**
+   * Present only for a remote PR/MR session. After materialization, remote
+   * mode is git mode: `source` stays `type: 'git'` with `repository` set to
+   * the materialized clone's root, and this field carries the remote
+   * provenance and thread-sync status alongside it.
+   */
+  remote?: RemoteSessionInfo;
 }
 
 export interface ResumeLoadPayload {
+  /**
+   * Comments to restore. In a remote session this includes fetched forge
+   * threads mapped to `ReviewComment`s; review-level threads (no file
+   * anchor) keep the mapper's sentinel `filePath: ''`
+   * (REVIEW_LEVEL_FILE_PATH). The renderer surfaces those under a synthetic
+   * review-level entry and, on submit, keeps them in a `FileReviewState`
+   * with `path: ''` so the serializer emits a legal `<file path="">`.
+   */
   comments: ReviewComment[];
   /** Paths the prior review marked as done. Absent when nothing was marked. */
   viewedFiles?: string[];
+  /**
+   * Remote head drift, present only when a resumed document recorded a
+   * `remote-head-sha` in a remote session. See {@link RemoteDriftInfo}.
+   */
+  remoteDrift?: RemoteDriftInfo;
 }
 
 /**

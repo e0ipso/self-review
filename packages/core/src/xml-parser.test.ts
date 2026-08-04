@@ -169,6 +169,45 @@ describe('parseReviewXmlString', () => {
     });
   });
 
+  describe('review-level sentinel file path', () => {
+    it('preserves comments in a file with an empty path (review-level sentinel)', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3"
+        timestamp="2024-01-15T10:30:00Z"
+        remote-url="https://github.com/owner/repo/pull/42"
+        remote-forge="github">
+  <file path="" change-type="modified" viewed="false">
+    <comment author="octocat" remote-id="rt-1">
+      <body>Review-level thread with no anchor</body>
+      <category></category>
+    </comment>
+  </file>
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.comments).toHaveLength(1);
+      expect(result.comments[0].filePath).toBe('');
+      expect(result.comments[0].remoteId).toBe('rt-1');
+    });
+
+    it('still skips file elements without a path attribute', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z">
+  <file change-type="modified" viewed="false">
+    <comment>
+      <body>Comment on a malformed file element</body>
+      <category></category>
+    </comment>
+  </file>
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.comments).toEqual([]);
+    });
+  });
+
   describe('line ranges', () => {
     it('parses new line range for added lines', () => {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>

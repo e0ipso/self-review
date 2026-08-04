@@ -18,6 +18,7 @@ import {
   FindInPageRequest,
   ImageLoadResult,
   AppInfo,
+  RemoteDriftInfo,
 } from '../shared/types';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { getVersionUpdate } from './version-checker';
@@ -31,6 +32,7 @@ let configCache: AppConfig | null = null;
 let outputPathInfoCache: OutputPathInfo | null = null;
 let resumeCommentsCache: ReviewComment[] = [];
 let resumeViewedFilesCache: string[] = [];
+let resumeRemoteDriftCache: RemoteDriftInfo | null = null;
 
 export function setDiffData(data: DiffLoadPayload): void {
   diffDataCache = data;
@@ -50,10 +52,12 @@ export function setOutputPathInfo(info: OutputPathInfo): void {
 
 export function setResumeData(
   comments: ReviewComment[],
-  viewedFiles: string[] = []
+  viewedFiles: string[] = [],
+  remoteDrift: RemoteDriftInfo | null = null
 ): void {
   resumeCommentsCache = comments;
   resumeViewedFilesCache = viewedFiles;
+  resumeRemoteDriftCache = remoteDrift;
 }
 
 export function registerIpcHandlers(): void {
@@ -83,7 +87,14 @@ export function registerIpcHandlers(): void {
       '.svg': 'image/svg+xml',
     };
     const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
-    const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+    // Diff paths are repository-relative in git mode; resolve them against
+    // the diff's repository root (in remote mode, the materialized clone),
+    // never the process cwd.
+    const baseDir =
+      diffDataCache?.source.type === 'git'
+        ? diffDataCache.source.repository
+        : process.cwd();
+    const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
     const ext = path.extname(filePath).toLowerCase();
     const mimeType = MIME_MAP[ext] ?? 'application/octet-stream';
 
@@ -149,11 +160,19 @@ export function registerIpcHandlers(): void {
   // Send resumed comments and viewed files when the renderer is ready
   // (after diff data is loaded)
   ipcMain.on(IPC.RESUME_REQUEST, event => {
-    if (resumeCommentsCache.length > 0 || resumeViewedFilesCache.length > 0) {
-      event.sender.send(IPC.RESUME_LOAD, {
+    if (
+      resumeCommentsCache.length > 0 ||
+      resumeViewedFilesCache.length > 0 ||
+      resumeRemoteDriftCache !== null
+    ) {
+      const payload: ResumeLoadPayload = {
         comments: resumeCommentsCache,
         viewedFiles: resumeViewedFilesCache,
-      });
+      };
+      if (resumeRemoteDriftCache !== null) {
+        payload.remoteDrift = resumeRemoteDriftCache;
+      }
+      event.sender.send(IPC.RESUME_LOAD, payload);
     }
   });
 
@@ -212,7 +231,9 @@ export function registerIpcHandlers(): void {
           request.filePath,
         ];
 
-        const rawDiff = await runGitDiffAsync(expandArgs);
+        // Run in the diff's repository root — in remote mode this is the
+        // materialized clone, not the process cwd.
+        const rawDiff = await runGitDiffAsync(expandArgs, source.repository);
         const parsedFiles = parseDiff(rawDiff);
 
         if (parsedFiles.length === 0) {
@@ -221,10 +242,14 @@ export function registerIpcHandlers(): void {
 
         const expandedFile = parsedFiles[0];
 
-        // Count total lines in the working tree file for gap detection
+        // Count total lines in the working tree file for gap detection.
+        // Diff paths are repository-relative — resolve accordingly.
         let totalLines = 0;
         try {
-          const content = await fs.promises.readFile(request.filePath, 'utf-8');
+          const content = await fs.promises.readFile(
+            path.resolve(source.repository, request.filePath),
+            'utf-8'
+          );
           totalLines = content.split('\n').length;
           // If file ends with newline, last split element is empty — don't count it
           if (content.endsWith('\n')) totalLines--;
