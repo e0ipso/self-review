@@ -2,7 +2,7 @@
 id: 9
 group: "app"
 dependencies: [8]
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - react
@@ -21,22 +21,22 @@ recorded.
 React with shadcn/ui components; TypeScript against the preload bridge.
 
 ## Acceptance Criteria
-- [ ] `WelcomeScreen.tsx` gains a URL input + submit affordance using shadcn/ui
+- [x] `WelcomeScreen.tsx` gains a URL input + submit affordance using shadcn/ui
       components (Input/Button, matching the established welcome-screen pattern); a
       syntactically valid forge URL (validated with the same path-shape rules as
       `parseForgeUrl`) is sent to the main process over the URL-open IPC channel from
       task 8; invalid input shows inline feedback and sends nothing.
-- [ ] The preload bridge (`src/preload/preload.ts`) exposes the new channel(s) following
+- [x] The preload bridge (`src/preload/preload.ts`) exposes the new channel(s) following
       the existing typed `electronAPI` pattern; the renderer never imports `electron`.
-- [ ] When drift information (task 8's payload/channel) indicates
+- [x] When drift information (task 8's payload/channel) indicates
       `recordedHeadSha !== liveHeadSha`, a non-blocking warning renders (banner pattern
       consistent with `UpdateBanner.tsx`): the PR/MR has moved and line anchors may be
       stale. It is dismissible and never blocks any review interaction.
-- [ ] No drift info or equal SHAs → no banner; purely local reviews render exactly as
+- [x] No drift info or equal SHAs → no banner; purely local reviews render exactly as
       today (no new UI when not in remote mode) — asserted in tests.
-- [ ] Unit tests (jsdom) cover: URL validation feedback, IPC call on valid submit,
+- [x] Unit tests (jsdom) cover: URL validation feedback, IPC call on valid submit,
       banner shown on mismatch, banner absent on match/absence, banner dismissal.
-- [ ] Verification: `npm run test:unit:renderer` passes; `npm run test:unit` stays green.
+- [x] Verification: `npm run test:unit:renderer` passes; `npm run test:unit` stays green.
 
 Use your internal Todo tool to track these and keep on track.
 

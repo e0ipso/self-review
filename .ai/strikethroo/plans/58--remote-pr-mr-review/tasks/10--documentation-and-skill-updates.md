@@ -2,7 +2,7 @@
 id: 10
 group: "docs"
 dependencies: [7, 8]
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - documentation
@@ -21,7 +21,7 @@ critique inheriting via guide), and the kenkeep nodes staled by the schema chang
 Technical writing consistent with the repository's existing documentation voice.
 
 ## Acceptance Criteria
-- [ ] `AGENTS.md`: the "No network access" convention gains the documented remote-mode
+- [x] `AGENTS.md`: the "No network access" convention gains the documented remote-mode
       exception (network only on a user-supplied forge URL: git clone/fetch via git's own
       credentials, `gh`/`glab` for base-branch lookup and thread fetch only); the "File
       writes" convention gains the temporary clone directory (OS temp, removed on exit);
@@ -31,13 +31,13 @@ Technical writing consistent with the repository's existing documentation voice.
       yet), materialization model, ForgeProvider location, and splash-screen URL entry
       are documented in the relevant sections (architecture, IPC table for new channels,
       shared types).
-- [ ] `docs/PRD.md`: remote PR/MR review capability added to product requirements,
+- [x] `docs/PRD.md`: remote PR/MR review capability added to product requirements,
       scoped exactly as the plan (read-only toward the forge; posting explicitly out of
       scope).
-- [ ] `README.md`: user-facing usage for URL launch and `fetch-comments`, the
+- [x] `README.md`: user-facing usage for URL launch and `fetch-comments`, the
       materialization model (existing clone reuse, else temporary blobless clone; git's
       own credentials for private repos; `gh`/`glab` needed only for thread sync).
-- [ ] `.agents/skills/self-review-guide/SKILL.md`: accepts a PR/MR URL as diff source,
+- [x] `.agents/skills/self-review-guide/SKILL.md`: accepts a PR/MR URL as diff source,
       materializing through the same clone-aware model (existing matching clone, else
       temporary blobless clone) so the skill reads surrounding code from a real checkout;
       `.agents/skills/self-review-apply/SKILL.md`: third source branch — when
@@ -45,11 +45,11 @@ Technical writing consistent with the repository's existing documentation voice.
       `.agents/skills/self-review-critique/SKILL.md`: URL support noted as inherited
       through its guide-first step. The `.opencode/skills/*` symlinks are not replaced
       by copies (edit the real files under `.agents/skills/`).
-- [ ] Kenkeep nodes staled by this change are updated: at minimum the XSD freeze wording
+- [x] Kenkeep nodes staled by this change are updated: at minimum the XSD freeze wording
       and v3 schema nodes (search `.ai/kenkeep/nodes/review-xml/` for freeze/v3 nodes)
       reflect "v1/v2 frozen, current version additively amendable" and the new optional
       attributes.
-- [ ] Verification: `npm run test:unit` stays green (the symlink and XSD sync assertions
+- [x] Verification: `npm run test:unit` stays green (the symlink and XSD sync assertions
       in `packages/core/src/xsd-schema.test.ts` still pass), and
       `npx kenkeep lint --verbose` reports no new findings for the touched nodes.
 

@@ -38,6 +38,11 @@ Non-obvious semantics (keep in sync with `assets/self-review-v3.xsd`):
 - **A reply carries `<body>`, an optional `author`, and optional `<attachment>` children.** It
   carries no category, no severity, no confidence and no `<suggestion>`, all four are properties of
   the finding, and the finding is the root comment.
+- **Remote provenance:** The `<review>` root may carry `remote-url`, `remote-base-sha`,
+  `remote-head-sha`, and `remote-forge` — a third source shape for reviews taken against a
+  remote PR/MR (see step 3). `<comment>` and `<reply>` may carry `remote-id`, the forge's
+  thread/comment id. `remote-id` is provenance only: never treat it as ordering, and never act
+  on it — apply the comment exactly as any other.
 
 ## 1. Read the Review XML
 
@@ -89,6 +94,23 @@ Check the `<review>` root element attributes to determine the review mode and lo
 - **Directory mode** (`source-path` attribute present): Read each file listed in the review from the
   `source-path` directory (file `path` attributes are relative to it). Skip deleted files. If a file
   is too large, read only the line ranges referenced by comments (with surrounding context).
+- **Remote mode** (`remote-url` attribute present): Re-materialize the reviewed diff through the
+  same clone-aware model self-review uses:
+  1. From `remote-url` and `remote-forge`, derive the head ref: `refs/pull/N/head` (github) or
+     `refs/merge-requests/N/head` (gitlab).
+  2. If the current directory is inside a clone whose remote matches the URL's host and
+     owner/repo (`git remote -v`), fetch into it — read-only for the working tree:
+     `git fetch <remote> "+<head-ref>:refs/self-review/head"`. Otherwise create a temporary
+     blobless clone: `git clone --filter=blob:none https://<host>/<owner>/<repo>.git <tmpdir>`
+     followed by `git -C <tmpdir> fetch origin "+<head-ref>:refs/self-review/head"` (git's own
+     credentials handle private repos), and remove it when done.
+  3. The reviewed diff is pinned by the recorded SHAs — no base-branch lookup is needed:
+     `git -C <repo> diff <remote-base-sha>...<remote-head-sha>`. Read file content with
+     `git -C <repo> show <remote-head-sha>:<path>` (in a temporary clone the working tree is
+     not the PR head).
+  4. If the live head (`git -C <repo> rev-parse refs/self-review/head`) differs from
+     `remote-head-sha`, the PR/MR has moved since the review: note the drift in your summary
+     and treat line anchors as potentially stale (match on text, not just line numbers).
 
 This context is essential, without it you're working blind.
 

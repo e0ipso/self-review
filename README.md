@@ -239,6 +239,36 @@ self-review HEAD^
 
 # Review the current changes
 self-review
+
+# Review a remote pull/merge request by URL
+self-review https://github.com/owner/repo/pull/42
+self-review https://gitlab.com/group/project/-/merge_requests/7
+```
+
+### Reviewing a remote PR/MR
+
+Hand self-review a GitHub pull request or GitLab merge request URL (self-hosted GitLab works
+too — the forge is detected from the URL shape) and review it in the same UI, existing
+discussion threads included. The review is still written to a local `review.xml`; nothing is
+ever sent back to the forge.
+
+Under the hood the diff is materialized through local git: if you run the command from inside a
+clone of that repository, self-review reuses it (it only fetches refs — your working tree is
+untouched); otherwise it creates a temporary blobless clone under your system temp directory
+and removes it when you close the app. Private repositories work through git's own credentials
+(SSH keys or credential helpers — `gh auth setup-git` / `glab auth git-credential` wire your
+forge CLI login into git). The `gh` / `glab` CLIs are only needed to sync the PR/MR discussion
+threads; without them the review itself still works at full fidelity, just without the threads.
+
+There is also a headless subcommand that fetches the discussion threads into a review file
+without opening a window:
+
+```bash
+# Write the PR's discussion threads to ./review.xml (no window)
+self-review fetch-comments https://github.com/owner/repo/pull/42
+
+# Include threads GitLab marks resolved (default is unresolved only)
+self-review fetch-comments https://gitlab.com/group/project/-/merge_requests/7 --all-threads
 ```
 
 ## Assistant Skill
@@ -348,5 +378,7 @@ See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 - **CLI-first.** Launched from the terminal, writes review output to a file. Behaves like a Unix tool.
 - **One-shot.** Open → review → close → done. No servers, no persistent state.
 - **Local-only.** No network access, no accounts, no telemetry. Your code stays on your machine.
+  The one opt-in exception: reviewing a remote PR/MR by URL fetches that repository through git
+  and reads its discussion threads — and even then, nothing is ever sent to the forge.
 - **AI-native output.** The XML format is designed to be parsed by LLMs, with an XSD schema they can
   reference for structure.

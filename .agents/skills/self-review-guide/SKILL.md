@@ -2,7 +2,7 @@
 name: self-review-guide
 description: Analyze a git diff and generate a walkthrough guide sidecar (review.guide.xml) that orders the files into named reading groups with rationales, one-liners, and an overview for self-review's guided mode
 metadata:
-  argument-hint: "[git-diff-args...]"
+  argument-hint: "[git-diff-args... | pr-or-mr-url]"
 ---
 
 # Generate a Review Walkthrough Guide
@@ -59,6 +59,11 @@ Read `$ARGUMENTS` for git diff args. If empty, default to unstaged changes (plai
 The arguments support the same format as self-review CLI: `--staged`, `HEAD~3`,
 `main..feature-branch`, `-- path/to/file`, etc.
 
+If the argument is a GitHub PR URL (`https://<host>/<owner>/<repo>/pull/<N>`) or a GitLab MR
+URL (`https://<host>/<namespace>/<repo>/-/merge_requests/<N>`, any host — self-hosted GitLab
+included), this is a **URL source**: follow the "URL source" recipe in step 3 to materialize
+the diff, then continue with the remaining steps unchanged.
+
 ## 2. Load Configuration
 
 Check if `.self-review.yaml` exists in the current directory. If it does, read it to extract:
@@ -90,6 +95,37 @@ Also capture the repository root for the XML provenance attributes:
 ```bash
 git rev-parse --show-toplevel
 ```
+
+### URL source: materialize the PR/MR first
+
+For a PR/MR URL, materialize the diff through the same clone-aware model the self-review app
+uses, so steps 4–5 can read surrounding code from a real checkout instead of the bare diff:
+
+1. **Head ref.** From the URL: `refs/pull/N/head` (GitHub) or `refs/merge-requests/N/head`
+   (GitLab).
+2. **Base branch.** Ask the forge CLI:
+   `gh pr view N --repo <host>/<owner>/<repo> --json baseRefName -q .baseRefName` (GitHub) or
+   `glab mr view N --repo <host>/<namespace>/<repo> --output json` and read `target_branch`
+   (GitLab). If the CLI is unavailable, fall back to the remote default branch:
+   `git ls-remote --symref https://<host>/<owner>/<repo>.git HEAD` (the `ref:` line names it).
+3. **Materialize.** If the current directory is inside a clone whose remote matches the URL's
+   host and owner/repo (check `git remote -v`), fetch into it — read-only for the working tree:
+   `git fetch <remote> "+refs/heads/<base>:refs/self-review/base" "+<head-ref>:refs/self-review/head"`.
+   Otherwise create a temporary blobless clone (never `--depth`, which breaks merge-base
+   computation): `git clone --filter=blob:none https://<host>/<owner>/<repo>.git <tmpdir>`,
+   then `git -C <tmpdir> fetch origin "+<head-ref>:refs/self-review/head"`; the base is
+   `origin/<base>`. Private repositories rely on git's own credentials (`gh auth setup-git` /
+   `glab auth git-credential` wire the forge CLI login into git).
+4. **Diff.** Run the three-dot diff (from the merge base, matching how the forge presents the
+   PR/MR) inside the checkout: `git -C <repo> diff <base-ref>...refs/self-review/head`.
+5. **Read file content** with `git -C <repo> show refs/self-review/head:<path>` — in a
+   temporary clone the working tree is the default branch, not the PR head, and blobs fetch
+   lazily on demand.
+
+Set the guide's `repository` provenance attribute to the checkout path and `git-diff-args` to
+the `<base-ref>...refs/self-review/head` range you diffed. Remove a temporary clone when the
+whole run is finished — when invoked from `self-review-critique`, leave it in place so the
+critique steps can reuse the same checkout, and let the outer run clean it up.
 
 ## 4. Understand the Change
 

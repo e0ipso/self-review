@@ -18,6 +18,7 @@ import type {
   Reply,
   ReviewComment,
   ResumeLoadPayload,
+  RemoteDriftInfo,
   LineRange,
   Suggestion,
 } from '@self-review/types';
@@ -61,6 +62,11 @@ export interface ReviewContextValue {
   ) => ReviewComment[];
   expandFileContext: (filePath: string, contextLines: number) => Promise<{ hunks: DiffHunk[]; totalLines: number } | null>;
   updateFileHunks: (filePath: string, hunks: DiffHunk[]) => void;
+  /**
+   * Remote head drift from the resumed document, when the session is a
+   * resumed remote review. `null` for local reviews and drift-free resumes.
+   */
+  remoteDrift: RemoteDriftInfo | null;
 }
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
@@ -262,6 +268,7 @@ export function ReviewProvider({
         getCommentsForLine: reviewState.getCommentsForLine,
         expandFileContext,
         updateFileHunks,
+        remoteDrift: resumedReview?.remoteDrift ?? null,
       }}
     >
       {children}

@@ -585,10 +585,10 @@ graph TD
 - ✔️ Task 007: Headless fetch-comments subcommand (depends on: 001, 003, 004, 005, 006)
 - ✔️ Task 008: App remote mode in the main process (depends on: 001, 003, 004, 005, 006)
 
-### Phase 4: Surface (renderer UI and documentation)
+### ✅ Phase 4: Surface (renderer UI and documentation)
 **Parallel Tasks:**
-- Task 009: Renderer splash-screen URL entry and drift warning (depends on: 008)
-- Task 010: Documentation, conventions, and skill updates (depends on: 007, 008)
+- ✔️ Task 009: Renderer splash-screen URL entry and drift warning (depends on: 008)
+- ✔️ Task 010: Documentation, conventions, and skill updates (depends on: 007, 008)
 
 ### Post-phase Actions
 

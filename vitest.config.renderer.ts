@@ -3,7 +3,10 @@ import path from 'path';
 export default {
   test: {
     environment: 'jsdom',
-    include: ['packages/react/src/**/*.test.{ts,tsx}'],
+    include: [
+      'packages/react/src/**/*.test.{ts,tsx}',
+      'src/renderer/**/*.test.{ts,tsx}',
+    ],
     exclude: [
       'node_modules/**',
       '.webpack/**',

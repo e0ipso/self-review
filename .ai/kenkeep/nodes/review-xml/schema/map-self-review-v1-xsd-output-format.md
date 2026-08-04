@@ -2,8 +2,8 @@
 type: map
 title: self-review-v3 XSD output format
 description: >-
-  Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2
-  schemas remain frozen for older consumers.
+  Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 stay
+  frozen, while the current version may gain optional attributes additively.
 tags:
   - xml
   - schema
@@ -18,7 +18,7 @@ kk_confidence: high
 ---
 Review output conforms to `self-review-v3.xsd` in namespace `urn:self-review:v3`. The schema is bundled with the application and supplied to AI consumers so they can understand the document's structure, semantics, and constraints.
 
-The application reads v1, v2, and v3 documents but always writes v3. The older v1 and v2 schemas remain frozen so consumers holding older documents retain compatible validators.
+The application reads v1, v2, and v3 documents but always writes v3. The older v1 and v2 schemas remain frozen so consumers holding older documents retain compatible validators. The current version (v3) may gain optional attributes additively — every previously valid v3 document must stay valid against the amended XSD. The remote PR/MR feature used this: the review root gained optional `remote-url`, `remote-base-sha`, `remote-head-sha`, and `remote-forge` attributes, and comments/replies gained an optional `remote-id`, while purely local output stays byte-identical.
 
 <!-- kk:citations:start -->
 # Citations

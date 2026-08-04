@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { parseForgeUrl } from '@self-review/core';
 import { Button } from '../../../packages/react/src/components/ui/button';
+import { Input } from '../../../packages/react/src/components/ui/input';
 import {
   Card,
   CardContent,
@@ -53,6 +55,8 @@ export default function WelcomeScreen() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [remoteUrl, setRemoteUrl] = useState('');
+  const [remoteError, setRemoteError] = useState<string | null>(null);
 
   useEffect(() => {
     return window.electronAPI.onCloseRequested(() => {
@@ -64,6 +68,32 @@ export default function WelcomeScreen() {
     const path = await window.electronAPI.pickDirectory();
     if (path) {
       setSelectedPath(path);
+    }
+  };
+
+  const handleOpenRemoteUrl = async () => {
+    const url = remoteUrl.trim();
+    if (!parseForgeUrl(url)) {
+      setRemoteError(
+        'Not a recognized PR/MR URL. Expected a GitHub pull request ' +
+          '(…/pull/N) or GitLab merge request (…/-/merge_requests/N) URL.'
+      );
+      return;
+    }
+    setRemoteError(null);
+    setLoading(true);
+    try {
+      const result = await window.electronAPI.openRemoteUrl(url);
+      if (result.ok === false) {
+        setRemoteError(result.error);
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error('[WelcomeScreen] Failed to open remote URL:', err);
+      setRemoteError(
+        err instanceof Error ? err.message : 'Failed to open remote PR/MR'
+      );
+      setLoading(false);
     }
   };
 
@@ -107,6 +137,46 @@ export default function WelcomeScreen() {
             <p className="text-sm text-muted-foreground">
               Launch from the CLI with diff arguments to use this mode.
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Remote Mode</CardTitle>
+            <CardDescription>
+              Review a GitHub pull request or GitLab merge request by URL
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Input
+                data-testid="remote-url-input"
+                type="url"
+                placeholder="https://github.com/owner/repo/pull/42"
+                value={remoteUrl}
+                onChange={e => setRemoteUrl(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleOpenRemoteUrl();
+                }}
+                disabled={loading}
+              />
+              <Button
+                data-testid="remote-url-submit"
+                variant="outline"
+                onClick={handleOpenRemoteUrl}
+                disabled={loading}
+              >
+                {loading ? 'Loading...' : 'Open'}
+              </Button>
+            </div>
+            {remoteError && (
+              <p
+                data-testid="remote-url-error"
+                className="text-sm text-destructive"
+              >
+                {remoteError}
+              </p>
+            )}
           </CardContent>
         </Card>
 
