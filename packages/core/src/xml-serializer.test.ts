@@ -930,6 +930,140 @@ describe('severity and confidence attributes', () => {
   });
 });
 
+describe('remote provenance attributes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function localReview(): ReviewState {
+    return {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [
+        { path: 'src/clean.ts', changeType: 'added', viewed: false, comments: [] },
+        {
+          path: 'src/main.ts',
+          changeType: 'modified',
+          viewed: true,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/main.ts',
+              lineRange: { side: 'new', start: 5, end: 7 },
+              body: 'Traced defect',
+              category: 'bug',
+              suggestion: { originalCode: 'a', proposedCode: 'b' },
+              author: 'Claude Opus 5',
+              severity: 'major',
+              confidence: 'high',
+              replies: [{ id: 'r1', body: 'turn' }],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  // The full document, byte for byte, exactly as the serializer emitted it
+  // before the remote attributes existed. A purely local review must keep
+  // producing this string unchanged: absent remote fields leave no trace.
+  it('serializes a review without remote fields byte-identically to the pre-remote output', async () => {
+    const xml = await serializeReview(localReview(), TEST_OUTPUT_PATH);
+
+    expect(xml).toBe(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z" git-diff-args="--staged" repository="/repo">',
+        '  <file path="src/clean.ts" change-type="added" viewed="false" />',
+        '  <file path="src/main.ts" change-type="modified" viewed="true">',
+        '    <comment new-line-start="5" new-line-end="7" author="Claude Opus 5" severity="major" confidence="high">',
+        '      <body>Traced defect</body>',
+        '      <category>bug</category>',
+        '      <suggestion>',
+        '        <original-code>a</original-code>',
+        '        <proposed-code>b</proposed-code>',
+        '      </suggestion>',
+        '      <reply>',
+        '        <body>turn</body>',
+        '      </reply>',
+        '    </comment>',
+        '  </file>',
+        '</review>',
+      ].join('\n')
+    );
+  });
+
+  it('emits the remote root attributes after the source attributes when set', async () => {
+    const state: ReviewState = {
+      ...localReview(),
+      remoteUrl: 'https://github.com/owner/repo/pull/42',
+      remoteBaseSha: 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3',
+      remoteHeadSha: 'de9f2c7fd25e1b3afad3e85a0bd17d9b100db4b3',
+      remoteForge: 'github',
+    };
+
+    const xml = await serializeReview(state, TEST_OUTPUT_PATH);
+
+    expect(xml).toContain(
+      '<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z"' +
+        ' git-diff-args="--staged" repository="/repo"' +
+        ' remote-url="https://github.com/owner/repo/pull/42"' +
+        ' remote-base-sha="a94a8fe5ccb19ba61c4c0873d391e987982fbbd3"' +
+        ' remote-head-sha="de9f2c7fd25e1b3afad3e85a0bd17d9b100db4b3"' +
+        ' remote-forge="github">'
+    );
+  });
+
+  it('emits each remote root attribute independently, only when set', async () => {
+    const xml = await serializeReview(
+      { ...localReview(), remoteForge: 'gitlab' },
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain('remote-forge="gitlab"');
+    expect(xml).not.toContain('remote-url=');
+    expect(xml).not.toContain('remote-base-sha=');
+    expect(xml).not.toContain('remote-head-sha=');
+  });
+
+  it('escapes special characters in remote-url', async () => {
+    const xml = await serializeReview(
+      { ...localReview(), remoteUrl: 'https://gitlab.example.com/g/p/-/merge_requests/7?a=1&b=2' },
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain(
+      'remote-url="https://gitlab.example.com/g/p/-/merge_requests/7?a=1&amp;b=2"'
+    );
+  });
+
+  it('emits remote-id on a comment, after the thresholding signals', async () => {
+    const state = localReview();
+    state.files[1].comments[0].remoteId = 'PRRT_kwDOAbc123';
+
+    const xml = await serializeReview(state, TEST_OUTPUT_PATH);
+
+    expect(xml).toContain(
+      '<comment new-line-start="5" new-line-end="7" author="Claude Opus 5" severity="major" confidence="high" remote-id="PRRT_kwDOAbc123">'
+    );
+  });
+
+  it('emits remote-id on a reply, after its author', async () => {
+    const state = localReview();
+    state.files[1].comments[0].replies = [
+      { id: 'r1', body: 'turn', author: 'Claude Opus 5', remoteId: 'PRRC_kwDOAbc456' },
+      { id: 'r2', body: 'local turn' },
+    ];
+
+    const xml = await serializeReview(state, TEST_OUTPUT_PATH);
+
+    expect(xml).toContain('<reply author="Claude Opus 5" remote-id="PRRC_kwDOAbc456">');
+    expect(xml).toContain(
+      ['      <reply>', '        <body>local turn</body>', '      </reply>'].join('\n')
+    );
+  });
+});
+
 describe('replies', () => {
   let outputDir: string;
   let outputPath: string;

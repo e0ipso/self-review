@@ -2,7 +2,7 @@
 id: 1
 group: "schema"
 dependencies: []
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - xsd
@@ -23,25 +23,25 @@ XSD authoring under the project's schema-sync discipline; TypeScript across
 `@self-review/types` and `@self-review/core`.
 
 ## Acceptance Criteria
-- [ ] `.agents/skills/self-review-apply/assets/self-review-v3.xsd` and the embedded
+- [x] `.agents/skills/self-review-apply/assets/self-review-v3.xsd` and the embedded
       `XSD_SCHEMA` string in `packages/core/src/xml-serializer.ts` both gain, byte-identically:
       optional root attributes `remote-url`, `remote-base-sha`, `remote-head-sha`,
       `remote-forge` (enumeration `github` | `gitlab`), and an optional `remote-id`
       attribute on `CommentType` and the reply type, each with inline XSD documentation.
-- [ ] The namespace stays `urn:self-review:v3` (no v4); `self-review-v1.xsd` and
+- [x] The namespace stays `urn:self-review:v3` (no v4); `self-review-v1.xsd` and
       `self-review-v2.xsd` are not touched.
-- [ ] `ReviewState` (in `packages/types/src/index.ts`) gains optional remote provenance
+- [x] `ReviewState` (in `packages/types/src/index.ts`) gains optional remote provenance
       fields (`remoteUrl`, `remoteBaseSha`, `remoteHeadSha`, `remoteForge: 'github' | 'gitlab'`),
       and `ReviewComment` plus the reply type gain optional `remoteId: string`.
-- [ ] The serializer emits the new attributes only when set (mirroring the
+- [x] The serializer emits the new attributes only when set (mirroring the
       severity/confidence pattern); a review with none of them set serializes byte-identically
       to the current output — proven by an explicit unit test.
-- [ ] The parser reads the new attributes tolerantly and leaves them `undefined` when
+- [x] The parser reads the new attributes tolerantly and leaves them `undefined` when
       absent; a round-trip (serialize → parse → serialize) preserves all remote attributes,
       including `remote-id` on comments and replies — proven by unit tests.
-- [ ] A backwards-compatibility test validates a fixture `review.xml` from the previous
+- [x] A backwards-compatibility test validates a fixture `review.xml` from the previous
       release (no remote attributes) against the amended embedded XSD and it passes.
-- [ ] Verification: `npm run test:unit` passes, including `packages/core/src/xsd-schema.test.ts`
+- [x] Verification: `npm run test:unit` passes, including `packages/core/src/xsd-schema.test.ts`
       (byte-identity sync) with zero failures.
 
 Use your internal Todo tool to track these and keep on track.

@@ -2,7 +2,7 @@
 id: 2
 group: "forge-core"
 dependencies: []
-status: "pending"
+status: "completed"
 created: 2026-08-04
 skills:
   - typescript
@@ -19,24 +19,24 @@ thread fetch), and the normalized discussion-thread types both providers must pr
 TypeScript library design in `@self-review/core` (pure code, no I/O in this task).
 
 ## Acceptance Criteria
-- [ ] A new module `packages/core/src/forge-provider.ts` exports a `parseForgeUrl(url)`
+- [x] A new module `packages/core/src/forge-provider.ts` exports a `parseForgeUrl(url)`
       function returning `{ forge: 'github' | 'gitlab', host, owner, repo, number }` or
       `null` for non-forge URLs. Detection is by URL path shape only: `/pull/N` → GitHub,
       `/-/merge_requests/N` → GitLab (any host, covering self-hosted GitLab such as
       git.drupalcode.org, with zero configuration).
-- [ ] GitLab subgroup paths (e.g. `https://gitlab.com/group/subgroup/project/-/merge_requests/5`)
+- [x] GitLab subgroup paths (e.g. `https://gitlab.com/group/subgroup/project/-/merge_requests/5`)
       parse correctly (`owner` holds the full namespace path).
-- [ ] The `ForgeProvider` interface covers exactly the conversation plane:
+- [x] The `ForgeProvider` interface covers exactly the conversation plane:
       base-branch lookup and `fetchThreads` returning normalized threads. No diff fetching,
       no blob fetching, no posting.
-- [ ] Normalized thread types are defined: a thread has an ordered root + replies, each
+- [x] Normalized thread types are defined: a thread has an ordered root + replies, each
       turn carrying body, forge author username, and forge-assigned ID; the root also
       carries the anchor data needed by the mapper (file path, old/new line, line range,
       side/position info, outdated flag) in a forge-neutral shape.
-- [ ] Unit tests cover: GitHub PR URL, gitlab.com MR URL, self-hosted GitLab MR URL
+- [x] Unit tests cover: GitHub PR URL, gitlab.com MR URL, self-hosted GitLab MR URL
       (git.drupalcode.org), subgroup MR URL, trailing-slash and query-string variants,
       and rejection of non-forge URLs (plain repo URL, issue URL, arbitrary string).
-- [ ] Verification: `npx vitest run packages/core/src/forge-provider.test.ts` passes;
+- [x] Verification: `npx vitest run packages/core/src/forge-provider.test.ts` passes;
       `npm run test:unit` stays green.
 
 Use your internal Todo tool to track these and keep on track.

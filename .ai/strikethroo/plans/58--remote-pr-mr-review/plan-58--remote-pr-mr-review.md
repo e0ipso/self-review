@@ -568,10 +568,10 @@ graph TD
     008 --> 010
 ```
 
-### Phase 1: Contracts (schema and provider abstraction)
+### ✅ Phase 1: Contracts (schema and provider abstraction)
 **Parallel Tasks:**
-- Task 001: Amend v3 schema additively and round-trip remote attributes
-- Task 002: ForgeProvider interface, URL parsing, and normalized thread types
+- ✔️ Task 001: Amend v3 schema additively and round-trip remote attributes
+- ✔️ Task 002: ForgeProvider interface, URL parsing, and normalized thread types
 
 ### Phase 2: Core machinery (providers, materializer, mapper)
 **Parallel Tasks:**

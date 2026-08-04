@@ -76,6 +76,12 @@ export type CommentSeverity = 'critical' | 'major' | 'minor' | 'info';
 export type CommentConfidence = 'high' | 'medium' | 'low';
 
 /**
+ * The forge hosting a remote pull/merge request.
+ * See RemoteForgeEnum in self-review-v3.xsd.
+ */
+export type RemoteForge = 'github' | 'gitlab';
+
+/**
  * One turn in the conversation about a comment.
  *
  * A reply is deliberately thin. It carries no category, no severity, no
@@ -97,6 +103,13 @@ export interface Reply {
   /** Absent means the human reviewer, present means a bot or LLM. */
   author?: string;
   attachments?: Attachment[];
+  /**
+   * Identifier of the remote comment this reply was fetched from, in the
+   * forge's own id space (see `ReviewState.remoteForge`). Undefined for
+   * replies authored locally. Never an ordering signal: array order stays
+   * conversation order.
+   */
+  remoteId?: string;
 }
 
 export interface ReviewComment {
@@ -115,6 +128,12 @@ export interface ReviewComment {
   attachments?: Attachment[];
   /** Ordered conversation turns on this comment. Undefined when there are none. */
   replies?: Reply[];
+  /**
+   * Identifier of the remote discussion thread or comment this comment was
+   * fetched from, in the forge's own id space (see `ReviewState.remoteForge`).
+   * Undefined for comments authored locally.
+   */
+  remoteId?: string;
 }
 
 export interface FileReviewState {
@@ -128,6 +147,18 @@ export interface ReviewState {
   timestamp: string;
   source: DiffSource;
   files: FileReviewState[];
+  // Remote provenance. Set only for a review taken against a remote PR/MR;
+  // a purely local review carries none of these, and absent behaves like
+  // absent severity/confidence: the serializer omits the attribute and the
+  // parser leaves the field undefined.
+  /** URL of the remote pull/merge request under review. */
+  remoteUrl?: string;
+  /** Commit SHA the remote diff was computed from, for drift detection. */
+  remoteBaseSha?: string;
+  /** Commit SHA of the remote PR/MR head at fetch time, for drift detection. */
+  remoteHeadSha?: string;
+  /** Which forge hosts the remote PR/MR. Names the id space of remoteId values. */
+  remoteForge?: RemoteForge;
 }
 
 // ===== Walkthrough Guide Types =====

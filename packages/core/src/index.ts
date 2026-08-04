@@ -64,6 +64,21 @@ export {
   generateUntrackedDiffs,
 } from './git';
 
+// Forge providers (remote PR/MR conversation plane)
+export { parseForgeUrl, ForgeCliUnavailableError } from './forge-provider';
+export type {
+  ForgeName,
+  ForgeUrl,
+  ForgeAnchorSide,
+  ForgeThreadAnchor,
+  ForgeThreadTurn,
+  ForgeThread,
+  FetchThreadsOptions,
+  ForgeCommandResult,
+  ForgeCommandRunner,
+  ForgeProvider,
+} from './forge-provider';
+
 // Synthetic diffs (for non-git files/directories)
 export { generateSyntheticDiffs } from './synthetic-diff';
 
