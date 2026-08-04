@@ -1,0 +1,11 @@
+{
+  "round": 1,
+  "reviewFile": "/workspace/.ai/strikethroo/plans/58--remote-pr-mr-review/review/round-1/review.xml",
+  "xsdFile": "/workspace/.ai/strikethroo/config/schemas/self-review-v2.xsd",
+  "severityFloor": "major",
+  "confidenceFloor": "high",
+  "status": "findings-absent",
+  "detail": "The reviewer did not write /workspace/.ai/strikethroo/plans/58--remote-pr-mr-review/review/round-1/review.xml. A round with no findings document cannot be read as a round with no findings.",
+  "actionable": [],
+  "recorded": []
+}

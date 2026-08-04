@@ -595,3 +595,77 @@ graph TD
 ### Execution Summary
 - Total Phases: 4
 - Total Tasks: 10
+
+## Execution Summary
+
+**Status**: ✅ Completed Successfully
+**Completed Date**: 2026-08-04
+
+### Results
+
+All 10 tasks across 4 phases completed and verified. Deliverables:
+
+- **Schema**: `self-review-v3.xsd` amended additively in place (both byte-identical copies)
+  with `remote-url`/`remote-base-sha`/`remote-head-sha`/`remote-forge` root attributes and
+  `remote-id` on comments and replies; serializer emits when set, parser reads tolerantly;
+  local output proven byte-identical by a characterization test; backwards compatibility
+  additionally proven by independent `xmllint` validation of a pre-amendment document.
+- **Core** (`@self-review/core`): `forge-provider.ts` (parseForgeUrl with URL-path-shape
+  detection, conversation-plane `ForgeProvider` interface, forge-neutral thread types),
+  `github-provider.ts` (gh), `gitlab-provider.ts` (glab, unresolved-only default),
+  `materializer.ts` (existing-clone reuse via namespaced `refs/self-review/*` refs, else
+  temp blobless clone under the OS temp root removed on exit; git-only default-branch
+  fallback), `thread-mapper.ts` (deterministic, exactly-one-pair anchors, outdated →
+  file-level, `REVIEW_LEVEL_FILE_PATH` sentinel).
+- **App**: `self-review fetch-comments <URL>` headless subcommand (`--all-threads` for
+  resolved GitLab threads); GUI remote mode running the existing git-mode pipeline against
+  the materialized clone at full fidelity; drift info on `resume:load`; `remote:open-url`
+  IPC; splash-screen Remote Mode URL card; dismissible drift banner.
+- **Docs/skills**: AGENTS.md conventions (network exception, temp-clone file writes,
+  reworded XSD freeze), PRD 4.7, README usage, guide/apply/critique SKILL.md URL sources,
+  stale kenkeep nodes updated in place.
+
+Final verification: lint 0 errors; unit suite green (7 main + 27 renderer + 16 core test
+files, 679 tests); `tsc --noEmit` clean; XSD sync and `.opencode` symlink assertions green.
+
+### Noteworthy Events
+
+- **Code review gate: round not certified; user directed proceeding without certification.**
+  Round 1 dispatched to the `codex` harness returned `kind: "reviewed"`,
+  `decision.kind: "round-failed"` with detail (verbatim): "The reviewer did not write
+  /workspace/.ai/strikethroo/plans/58--remote-pr-mr-review/review/round-1/review.xml. A
+  round with no findings document cannot be read as a round with no findings." The
+  reviewer's own stdout claimed "2 total, 2 above the `major`/`high` floors, 0 below", but
+  no findings document exists on disk, so those findings are unseen and unapplied.
+  Execution halted per the gate contract; the user explicitly chose to proceed without
+  certification. Rounds run: 1; findings recorded: 0; findings applied: 0.
+- Both Phase 1 agents were interrupted mid-exploration by a session limit and resumed
+  from transcripts with no partial writes lost.
+- `create-feature-branch.cjs` blocked on the plan's own uncommitted intent document
+  (`docs/intent/remote-pr-review.md`, outside the `.ai/strikethroo` subtree); resolved by
+  creating the script's exact branch name manually and committing the intent + plan
+  baseline as the first commit.
+- During Phase 3, the task 7 agent ran `git stash` in the shared worktree, colliding with
+  task 8's in-flight edits; it restored all files, re-applied the sibling's newer edits,
+  and the phase gate (full suite + tsc, green) confirmed no damage.
+- Task 9 discovered the renderer vitest config had drifted and `src/renderer` tests were
+  silently never running; fixed the include globs and rehomed an orphaned
+  `SuggestionBlock` test. Renderer suite went from 197 to 211 tests.
+- Task 7 made two justified out-of-scope core fixes: an ES6-compatible rewrite of named
+  capture groups in `forge-provider.ts` (app tsconfig targets ES6; webpack transpileOnly
+  had masked it) and a parser guard so `<file path="">` (review-level sentinel) round-trips.
+- GitHub provider pagination uses `gh api --paginate --slurp`, requiring gh ≥ 2.32.
+
+### Necessary follow-ups
+
+- **Re-run the code review gate** (or review the branch by other means) — the uncertified
+  round claims 2 above-floor findings that were never materialized.
+- **Host-machine Self Validation**: steps 3–10 of the plan's Self Validation (scratch
+  GitHub/GitLab PR/MR, GUI launches, temp-clone lifecycle observation, gh-absent
+  degradation, git.drupalcode.org MR, guide-skill URL run) are environment-blocked in the
+  dev container (no display, no `glab`, e2e prohibited). Run them on a host with display,
+  `gh`+`glab`, and network before release.
+- Electron e2e coverage for the subcommand paths (named in the plan's risk mitigations)
+  was not added — e2e cannot run in the container; add scenarios on a host machine.
+- `packages/types/dist` is gitignored and was stale during execution; environments that
+  build the app (not unit tests) need `npm run build --workspace @self-review/types`.

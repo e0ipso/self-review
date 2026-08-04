@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "harnesses": {
+    "codex": {
+      "available": true,
+      "observedAt": 1785838070067,
+      "expiresAt": 1785839870067,
+      "reason": "Harness probe succeeded."
+    },
+    "cursor": {
+      "available": false,
+      "observedAt": 1785838070071,
+      "expiresAt": 1785838370071,
+      "reason": "⚠ Workspace Trust Required   Cursor Agent can execute code and access files in this directory.   Do you trust the contents of this directory?     /workspace   To proceed, you can either:     • Run 'ag"
+    },
+    "gemini": {
+      "available": false,
+      "observedAt": 1785838070074,
+      "expiresAt": 1785838370074,
+      "reason": "spawn gemini ENOENT"
+    },
+    "copilot": {
+      "available": false,
+      "observedAt": 1785838070076,
+      "expiresAt": 1785838370076,
+      "reason": "spawn copilot ENOENT"
+    },
+    "opencode": {
+      "available": false,
+      "observedAt": 1785838070077,
+      "expiresAt": 1785838370077,
+      "reason": "📖 kenkeep Index: Loading knowledge base… 🔄 kenkeep Proposals: Draining queue… kenkeep: workspace on self-review-dev. Action needed: Run npx kenkeep index rebuild. 🧠 kenkeep Index: Knowledge base lo"
+    }
+  }
+}
