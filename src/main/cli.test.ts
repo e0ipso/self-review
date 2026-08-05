@@ -151,6 +151,154 @@ describe('cli', () => {
     });
   });
 
+  describe('parseCliArgs subcommand routing', () => {
+    it('recognizes fetch-comments with a URL', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        'fetch-comments',
+        'https://github.com/owner/repo/pull/42',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBe('fetch-comments');
+      expect(args.remoteUrl).toBe('https://github.com/owner/repo/pull/42');
+      expect(args.allThreads).toBe(false);
+      expect(args.gitDiffArgs).toEqual([]);
+      expect(args.resumeFrom).toBeNull();
+    });
+
+    it('exits with error when fetch-comments has no URL', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', 'fetch-comments'];
+
+      parseCliArgs();
+
+      expect(console.error).toHaveBeenCalledWith(
+        'Error: fetch-comments requires a pull/merge request URL argument'
+      );
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    it('parses --all-threads for fetch-comments', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        'fetch-comments',
+        '--all-threads',
+        'https://gitlab.com/group/project/-/merge_requests/7',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBe('fetch-comments');
+      expect(args.remoteUrl).toBe(
+        'https://gitlab.com/group/project/-/merge_requests/7'
+      );
+      expect(args.allThreads).toBe(true);
+    });
+
+    it('recognizes a bare GitHub PR URL as remote GUI mode', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', 'https://github.com/owner/repo/pull/42'];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBeNull();
+      expect(args.remoteUrl).toBe('https://github.com/owner/repo/pull/42');
+      expect(args.gitDiffArgs).toEqual([]);
+    });
+
+    it('recognizes a self-hosted GitLab MR URL as remote GUI mode', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        'https://git.drupalcode.org/project/drupal/-/merge_requests/123',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBeNull();
+      expect(args.remoteUrl).toBe(
+        'https://git.drupalcode.org/project/drupal/-/merge_requests/123'
+      );
+      expect(args.gitDiffArgs).toEqual([]);
+    });
+
+    it('combines a bare forge URL with --resume-from', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        '--resume-from',
+        'review.xml',
+        'https://github.com/owner/repo/pull/42',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.resumeFrom).toBe('review.xml');
+      expect(args.remoteUrl).toBe('https://github.com/owner/repo/pull/42');
+      expect(args.gitDiffArgs).toEqual([]);
+    });
+
+    it('keeps non-URL positionals as git pass-through with null remote fields', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', 'main..feature'];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBeNull();
+      expect(args.remoteUrl).toBeNull();
+      expect(args.gitDiffArgs).toEqual(['main..feature']);
+    });
+
+    it('does not treat a URL after a non-URL first positional as remote', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        'main..feature',
+        'https://github.com/owner/repo/pull/42',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.remoteUrl).toBeNull();
+      expect(args.gitDiffArgs).toEqual([
+        'main..feature',
+        'https://github.com/owner/repo/pull/42',
+      ]);
+    });
+
+    it('does not detect URLs after the -- separator', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        '--',
+        'https://github.com/owner/repo/pull/42',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.remoteUrl).toBeNull();
+      expect(args.gitDiffArgs).toEqual([
+        '--',
+        'https://github.com/owner/repo/pull/42',
+      ]);
+    });
+
+    it('keeps subcommand-like unknown tokens as git pass-through', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', 'fetch-commentz'];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBeNull();
+      expect(args.remoteUrl).toBeNull();
+      expect(args.gitDiffArgs).toEqual(['fetch-commentz']);
+    });
+  });
+
   describe('normalizeGitDiffArgs', () => {
     it('returns unchanged when no positional path args', () => {
       const args = ['--staged', '--ignore-space-change'];

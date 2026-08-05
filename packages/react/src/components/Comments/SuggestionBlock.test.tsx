@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import SuggestionBlock from './SuggestionBlock';
-import type { Suggestion } from '../../../shared/types';
+import type { Suggestion } from '@self-review/types';
 
 describe('SuggestionBlock', () => {
   it('preserves leading whitespace in original and proposed code', () => {

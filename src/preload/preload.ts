@@ -22,9 +22,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => {
-    ipcRenderer.on(IPC.DIFF_LOAD, (_event, payload: DiffLoadPayload) =>
-      callback(payload)
-    );
+    const handler = (_event: Electron.IpcRendererEvent, payload: DiffLoadPayload) =>
+      callback(payload);
+    ipcRenderer.on(IPC.DIFF_LOAD, handler);
+    return () => ipcRenderer.removeListener(IPC.DIFF_LOAD, handler);
   },
 
   requestConfig: () => {
@@ -127,6 +128,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   loadImage: (filePath: string) =>
     ipcRenderer.invoke(IPC.DIFF_LOAD_IMAGE, filePath),
+
+  openRemoteUrl: (url: string) => ipcRenderer.invoke(IPC.REMOTE_OPEN_URL, url),
 
   onShowAbout: (callback: () => void) => {
     const handler = () => callback();

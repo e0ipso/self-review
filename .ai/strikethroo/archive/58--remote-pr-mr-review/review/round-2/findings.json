@@ -1,0 +1,31 @@
+{
+  "round": 2,
+  "reviewFile": "/workspace/.ai/strikethroo/archive/58--remote-pr-mr-review/review/round-2/review.xml",
+  "xsdFile": "/workspace/.ai/strikethroo/config/schemas/self-review-v2.xsd",
+  "severityFloor": "major",
+  "confidenceFloor": "high",
+  "status": "evaluated",
+  "counts": {
+    "total": 1,
+    "aboveFloor": 1,
+    "belowFloor": 0,
+    "actionable": 0,
+    "recorded": 1,
+    "aboveFloorWithoutSuggestion": 1
+  },
+  "actionable": [],
+  "recorded": [
+    {
+      "file": "src/main/main.ts",
+      "location": "new:570-584",
+      "severity": "major",
+      "confidence": "high",
+      "category": "requirement-conformance",
+      "hasSuggestion": false,
+      "summary": "The welcome-screen URL path never discovers or sends a walkthrough guide. Startup guide discovery runs only once before the window is created and explicitly skips the welcome payload; this handler later caches and sends the remote diff and fetched comments but never calls loadGuide or setGuideData. Therefore submitting any valid PR/MR URL from the documented splash-screen field opens without guide",
+      "reasons": [
+        "no-suggestion"
+      ]
+    }
+  ]
+}

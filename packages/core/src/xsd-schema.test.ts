@@ -209,6 +209,99 @@ describe('XSD conformance', () => {
     expect(result.valid).toBe(false);
   });
 
+  it('accepts the remote provenance attributes on the review root', async () => {
+    const result = await validate(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z"',
+        '  remote-url="https://github.com/owner/repo/pull/42"',
+        '  remote-base-sha="a94a8fe5ccb19ba61c4c0873d391e987982fbbd3"',
+        '  remote-head-sha="de9f2c7fd25e1b3afad3e85a0bd17d9b100db4b3"',
+        '  remote-forge="github">',
+        '  <file path="src/main.ts" change-type="modified" viewed="true" />',
+        '</review>',
+      ].join('\n')
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts both remote-forge enumeration values', async () => {
+    for (const forge of ['github', 'gitlab']) {
+      const result = await validate(
+        [
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          `<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z" remote-forge="${forge}" />`,
+        ].join('\n')
+      );
+
+      expect(result.valid).toBe(true);
+    }
+  });
+
+  it('rejects a remote-forge value outside the enumeration', async () => {
+    const result = await validate(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z" remote-forge="bitbucket" />',
+      ].join('\n')
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('accepts remote-id on a comment and on a reply', async () => {
+    const result = await validate(
+      reviewXml(
+        [
+          '    <comment new-line-start="1" new-line-end="1" remote-id="PRRT_kwDOAbc123">',
+          '      <body>b</body>',
+          '      <category>bug</category>',
+          '      <reply remote-id="PRRC_kwDOAbc456"><body>turn</body></reply>',
+          '    </comment>',
+        ].join('\n')
+      )
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  // The amendment is additive on v3: a document written by the previous
+  // release, carrying none of the remote attributes, must keep validating
+  // against the amended schema without any change.
+  it('accepts a pre-amendment v3 document from the previous release', async () => {
+    const previousReleaseFixture = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<review xmlns="urn:self-review:v3" timestamp="2026-07-01T09:00:00Z" git-diff-args="main..feature" repository="/home/user/project">',
+      '  <file path="src/untouched.ts" change-type="added" viewed="false" />',
+      '  <file path="src/main.ts" change-type="modified" viewed="true">',
+      '    <comment new-line-start="5" new-line-end="7" author="Claude Opus 5" severity="major" confidence="medium">',
+      '      <body>Traced defect</body>',
+      '      <category>bug</category>',
+      '      <suggestion>',
+      '        <original-code>const x = foo();</original-code>',
+      '        <proposed-code>const x = bar();</proposed-code>',
+      '      </suggestion>',
+      '      <attachment path=".self-review-assets/c1-0.png" media-type="image/png" />',
+      '      <reply><body>Fixed in the follow-up.</body></reply>',
+      '      <reply author="Claude Opus 5"><body>Confirmed.</body></reply>',
+      '    </comment>',
+      '    <comment>',
+      '      <body>Human note with no signals</body>',
+      '      <category>note</category>',
+      '    </comment>',
+      '  </file>',
+      '</review>',
+    ].join('\n');
+
+    const result = await validate(previousReleaseFixture);
+
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
   it('rejects a v2-namespaced document, so the version bump is observable', async () => {
     const result = await validate(
       reviewXml('    <comment><body>b</body><category>bug</category></comment>').replace(

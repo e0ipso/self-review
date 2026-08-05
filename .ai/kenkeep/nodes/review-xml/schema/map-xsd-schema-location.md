@@ -20,7 +20,7 @@ kk_confidence: high
 ---
 The live schema is `.agents/skills/self-review-apply/assets/self-review-v3.xsd`. The `XSD_SCHEMA` string embedded in `packages/core/src/xml-serializer.ts` is the second byte-identical copy used at runtime.
 
-`.opencode/skills/self-review-apply` is a symlink to the real skill directory, not another copy. `packages/core/src/xsd-schema.test.ts` enforces the byte equality and the skill symlinks. `self-review-v1.xsd` and `self-review-v2.xsd` remain frozen for consumers of older documents.
+`.opencode/skills/self-review-apply` is a symlink to the real skill directory, not another copy. `packages/core/src/xsd-schema.test.ts` enforces the byte equality and the skill symlinks. `self-review-v1.xsd` and `self-review-v2.xsd` remain frozen for consumers of older documents; the current version (v3) may gain optional attributes additively, keeping every existing v3 document valid.
 
 <!-- kk:related:start -->
 # Related

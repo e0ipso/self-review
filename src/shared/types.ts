@@ -14,6 +14,10 @@ export type {
   ReviewComment,
   CommentSeverity,
   CommentConfidence,
+  RemoteForge,
+  RemoteSessionInfo,
+  RemoteDriftInfo,
+  RemoteOpenUrlResult,
   FileReviewState,
   ReviewState,
   CategoryDef,
@@ -61,11 +65,12 @@ import type {
   VersionUpdateInfo,
   DiffHunk,
   ImageLoadResult,
+  RemoteOpenUrlResult,
 } from '../../packages/types/src/index';
 
 export interface ElectronAPI {
   requestDiffData: () => void;
-  onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => void;
+  onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => () => void;
   requestConfig: () => void;
   onConfigLoad: (callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void) => void;
   requestResumeData: () => void;
@@ -92,6 +97,7 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   loadFileContent: (filePath: string) => Promise<DiffHunk[]>;
   loadImage: (filePath: string) => Promise<ImageLoadResult>;
+  openRemoteUrl: (url: string) => Promise<RemoteOpenUrlResult>;
 }
 
 declare global {

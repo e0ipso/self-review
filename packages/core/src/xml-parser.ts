@@ -10,12 +10,14 @@ import {
   DiffSource,
   CommentSeverity,
   CommentConfidence,
+  RemoteForge,
   Attachment,
   Reply,
 } from './types';
 
 const SEVERITY_VALUES: readonly CommentSeverity[] = ['critical', 'major', 'minor', 'info'];
 const CONFIDENCE_VALUES: readonly CommentConfidence[] = ['high', 'medium', 'low'];
+const REMOTE_FORGE_VALUES: readonly RemoteForge[] = ['github', 'gitlab'];
 
 export interface ParsedReview {
   comments: ReviewComment[];
@@ -23,6 +25,13 @@ export interface ParsedReview {
   viewedFiles: string[];
   gitDiffArgs: string;
   source: DiffSource;
+  // Remote provenance, read tolerantly off the review root. Undefined when
+  // the document carries no remote attributes, i.e. every pre-remote and
+  // purely local review.
+  remoteUrl?: string;
+  remoteBaseSha?: string;
+  remoteHeadSha?: string;
+  remoteForge?: RemoteForge;
 }
 
 export function parseReviewXml(xmlPath: string): ParsedReview {
@@ -64,8 +73,11 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     const files = toChildArray(review.file);
 
     for (const file of files) {
+      // Skip only when the attribute is genuinely absent: the empty string
+      // is the review-level sentinel path (REVIEW_LEVEL_FILE_PATH) used by
+      // fetch-comments for threads with no file anchor, and must round-trip.
       const rawPath = file['@_path'];
-      if (!rawPath) continue;
+      if (rawPath === undefined || rawPath === null) continue;
       const filePath = String(rawPath);
 
       if (parseViewed(file['@_viewed'])) {
@@ -86,6 +98,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
           author: comment['@_author'] ? String(comment['@_author']) : undefined,
           severity: parseEnumAttribute(comment['@_severity'], SEVERITY_VALUES),
           confidence: parseEnumAttribute(comment['@_confidence'], CONFIDENCE_VALUES),
+          remoteId: parseStringAttribute(comment['@_remote-id']),
         };
 
         const attachments = parseAttachments(comment, reviewComment.id);
@@ -98,7 +111,16 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
       }
     }
 
-    return { comments, viewedFiles, gitDiffArgs, source };
+    return {
+      comments,
+      viewedFiles,
+      gitDiffArgs,
+      source,
+      remoteUrl: parseStringAttribute(review['@_remote-url']),
+      remoteBaseSha: parseStringAttribute(review['@_remote-base-sha']),
+      remoteHeadSha: parseStringAttribute(review['@_remote-head-sha']),
+      remoteForge: parseEnumAttribute(review['@_remote-forge'], REMOTE_FORGE_VALUES),
+    };
   } catch (error) {
     if (error instanceof Error) {
       console.error(`Error parsing XML: ${error.message}`);
@@ -124,6 +146,15 @@ function parseEnumAttribute<T extends string>(
   if (raw === undefined || raw === null) return undefined;
   const value = String(raw);
   return allowed.includes(value as T) ? (value as T) : undefined;
+}
+
+/**
+ * Read an optional free-form string attribute, leaving absent as undefined.
+ * Values are taken as-is: the remote attributes are provenance the app never
+ * interprets, so there is nothing to validate on read.
+ */
+function parseStringAttribute(raw: unknown): string | undefined {
+  return raw === undefined || raw === null ? undefined : String(raw);
 }
 
 /**
@@ -249,6 +280,7 @@ function parseReplies(comment: Record<string, unknown>): Reply[] | undefined {
       id,
       body: node.body !== undefined ? String(node.body) : '',
       author: node['@_author'] ? String(node['@_author']) : undefined,
+      remoteId: parseStringAttribute(node['@_remote-id']),
     };
 
     const attachments = parseAttachments(node, id);

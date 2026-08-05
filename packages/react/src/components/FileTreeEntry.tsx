@@ -51,7 +51,7 @@ export function FileTreeEntry({
             </span>
 
             {/* File path */}
-            <TruncatedPath path={filePath} />
+            <TruncatedPath path={filePath || 'Review-level comments'} />
 
             {/* Indicators */}
             <div className='flex items-center gap-1 flex-shrink-0'>

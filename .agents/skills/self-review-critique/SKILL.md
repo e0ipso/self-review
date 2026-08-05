@@ -57,6 +57,12 @@ Read `$ARGUMENTS` for git diff args. If empty, default to unstaged changes (plai
 The arguments support the same format as self-review CLI: `--staged`, `HEAD~3`,
 `main..feature-branch`, `-- path/to/file`, etc.
 
+A GitHub PR / GitLab MR URL is also accepted, inherited through the guide-first step: the guide
+skill's "URL source" recipe (`../self-review-guide/SKILL.md`, step 3) materializes the URL into
+a local checkout. Reuse that same checkout here — run the diff (step 4) and read file context
+(step 5) inside it, using `git show refs/self-review/head:<path>` for file content — and remove
+a temporary clone when the whole critique run is finished.
+
 ## 3. Load Configuration
 
 Check if `.self-review.yaml` exists in the current directory. If it does, read it to extract:

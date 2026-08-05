@@ -20,7 +20,7 @@ A core design principle: "Local-only. No network access, no accounts, no telemet
 
 **Why:** The tool exists specifically to avoid pushing unfinished AI-generated code to remote servers. Adding network features would defeat the purpose.
 
-**How to apply:** Reject features that require network calls, account systems, or telemetry. (Note: AGENTS.md documents one exception — a non-blocking GitHub Releases version check on startup.)
+**How to apply:** Reject features that require network calls, account systems, or telemetry. (Note: AGENTS.md documents two exceptions — a non-blocking GitHub Releases version check on startup, and remote PR/MR review, where the network is touched only for a user-supplied forge URL and nothing is ever sent to the forge.)
 
 <!-- kk:citations:start -->
 # Citations

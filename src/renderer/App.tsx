@@ -13,6 +13,7 @@ import { KeyboardNavigationManager } from '../../packages/react/src/components/K
 import { FindBar } from './components/FindBar';
 import WelcomeScreen from './components/WelcomeScreen';
 import UpdateBanner from './components/UpdateBanner';
+import RemoteDriftBanner from '../../packages/react/src/components/RemoteDriftBanner';
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
 import lightThemeCss from 'prismjs/themes/prism.css?raw';
@@ -39,6 +40,7 @@ const electronAdapter: ReviewAdapter = {
   changeOutputPath: () => window.electronAPI.changeOutputPath(),
   loadImage: filePath => window.electronAPI.loadImage(filePath),
   onGuideLoad: callback => window.electronAPI.onGuideLoad(callback),
+  onDiffLoad: callback => window.electronAPI.onDiffLoad(callback),
 };
 
 function AppContent() {
@@ -134,6 +136,7 @@ function AppContent() {
         <KeyboardNavigationManager />
         <div className='flex flex-col h-screen overflow-hidden bg-background text-foreground antialiased'>
           <UpdateBanner />
+          <RemoteDriftBanner />
           <Toolbar onFinishReview={handleFinishReview} />
           <div className='flex-1 min-h-0'>
             <Layout />

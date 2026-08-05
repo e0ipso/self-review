@@ -18,6 +18,7 @@ import type {
   Reply,
   ReviewComment,
   ResumeLoadPayload,
+  RemoteDriftInfo,
   LineRange,
   Suggestion,
 } from '@self-review/types';
@@ -61,6 +62,11 @@ export interface ReviewContextValue {
   ) => ReviewComment[];
   expandFileContext: (filePath: string, contextLines: number) => Promise<{ hunks: DiffHunk[]; totalLines: number } | null>;
   updateFileHunks: (filePath: string, hunks: DiffHunk[]) => void;
+  /**
+   * Remote head drift from the resumed document, when the session is a
+   * resumed remote review. `null` for local reviews and drift-free resumes.
+   */
+  remoteDrift: RemoteDriftInfo | null;
 }
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
@@ -168,13 +174,44 @@ export function ReviewProvider({
     const commentsByFile = groupCommentsByFile(resumedReview.comments);
     const viewedPaths = new Set(resumedReview.viewedFiles ?? []);
 
-    reviewState.setFiles(prev =>
-      prev.map(file => ({
+    reviewState.setFiles(prev => {
+      const known = new Set(prev.map(f => f.path));
+      const merged = prev.map(file => ({
         ...file,
         comments: commentsByFile.get(file.path) || file.comments,
         viewed: viewedPaths.has(file.path) || file.viewed,
-      }))
-    );
+      }));
+      // Comments whose path is not in the diff — the review-level sentinel
+      // ('') and threads with outdated anchors on removed files — must
+      // still render and survive save, so they get synthetic entries.
+      const extras: FileReviewState[] = [];
+      commentsByFile.forEach((comments, path) => {
+        if (!known.has(path)) {
+          extras.push({ path, changeType: 'modified', viewed: false, comments });
+        }
+      });
+      return extras.length > 0 ? [...merged, ...extras] : merged;
+    });
+
+    // Matching synthetic diff entries (empty hunks): the file tree and the
+    // diff viewer render from diffFiles, and the seeding effect drops any
+    // file state without a diff entry on its next run.
+    setAllDiffFiles(prev => {
+      const known = new Set(prev.map(f => f.newPath || f.oldPath));
+      const extras: DiffFile[] = [];
+      commentsByFile.forEach((_comments, path) => {
+        if (!known.has(path)) {
+          extras.push({
+            oldPath: path,
+            newPath: path,
+            changeType: 'modified',
+            isBinary: false,
+            hunks: [],
+          });
+        }
+      });
+      return extras.length > 0 ? [...prev, ...extras] : prev;
+    });
   }, [resumedReview, allDiffFiles]);
 
   // Load data from adapter (if provided and no initialFiles)
@@ -204,6 +241,20 @@ export function ReviewProvider({
     })();
 
     return () => { cancelled = true; };
+  }, []);
+
+  // Later pushed diff payloads replace the session wholesale — the host may
+  // start a review after the initial load resolved (e.g. a remote PR/MR URL
+  // submitted on the welcome screen). loadDiff's promise has settled by
+  // then, so pushes arrive only through this subscription.
+  useEffect(() => {
+    if (initialFiles || !adapter?.onDiffLoad) return;
+    return adapter.onDiffLoad(payload => {
+      resumeAppliedRef.current = false;
+      setResumedReview(null);
+      setAllDiffFiles(payload.files);
+      setDiffSource(payload.source);
+    });
   }, []);
 
   // Apply initial comments
@@ -262,6 +313,7 @@ export function ReviewProvider({
         getCommentsForLine: reviewState.getCommentsForLine,
         expandFileContext,
         updateFileHunks,
+        remoteDrift: resumedReview?.remoteDrift ?? null,
       }}
     >
       {children}

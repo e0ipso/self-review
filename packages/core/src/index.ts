@@ -64,6 +64,21 @@ export {
   generateUntrackedDiffs,
 } from './git';
 
+// Forge providers (remote PR/MR conversation plane)
+export { parseForgeUrl, ForgeCliUnavailableError } from './forge-provider';
+export type {
+  ForgeName,
+  ForgeUrl,
+  ForgeAnchorSide,
+  ForgeThreadAnchor,
+  ForgeThreadTurn,
+  ForgeThread,
+  FetchThreadsOptions,
+  ForgeCommandResult,
+  ForgeCommandRunner,
+  ForgeProvider,
+} from './forge-provider';
+
 // Synthetic diffs (for non-git files/directories)
 export { generateSyntheticDiffs } from './synthetic-diff';
 
@@ -93,3 +108,23 @@ export {
   isPreviewableSvg,
 } from './file-type-utils';
 export type { RenderedTextMode } from './file-type-utils';
+
+// GitHub forge provider (gh CLI backed)
+export { createGitHubProvider } from './github-provider';
+
+// Forge thread → ReviewComment mapper (remote PR/MR fetch direction)
+export {
+  mapThreadsToReviewComments,
+  REVIEW_LEVEL_FILE_PATH,
+} from './thread-mapper';
+
+// GitLab forge provider (glab CLI backed)
+export { createGitLabProvider } from './gitlab-provider';
+
+// Clone-aware diff materializer (remote PR/MR git plane)
+export {
+  materialize,
+  resolveRemoteDefaultBranch,
+  defaultGitRunner,
+} from './materializer';
+export type { MaterializeMode, MaterializeResult } from './materializer';

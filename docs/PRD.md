@@ -129,9 +129,11 @@ The main process and renderer process communicate via Electron's `ipcMain` / `ip
 
 ```
 self-review [options] [<git-diff-args>...]
+self-review <pr-or-mr-url>
+self-review fetch-comments <pr-or-mr-url> [--all-threads]
 ```
 
-The CLI accepts any arguments that `git diff` accepts. These are passed through directly to `git diff` as a child process. Alternatively, a positional argument can be a path to a non-git directory, in which case the app enters **directory mode** (see Section 4.6).
+The CLI accepts any arguments that `git diff` accepts. These are passed through directly to `git diff` as a child process. Alternatively, a positional argument can be a path to a non-git directory, in which case the app enters **directory mode** (see Section 4.6), or a GitHub pull request / GitLab merge request URL, in which case the app enters **remote mode** (see Section 4.7). The `fetch-comments` subcommand runs headlessly, without opening a window (see Section 4.7).
 
 ### 4.2 Options
 
@@ -161,6 +163,13 @@ self-review --staged --resume-from review.xml
 
 # Review a non-git directory (all files shown as new additions)
 self-review /path/to/generated-code
+
+# Review a remote pull/merge request by URL
+self-review https://github.com/owner/repo/pull/42
+self-review https://gitlab.com/group/project/-/merge_requests/7
+
+# Headless: fetch PR/MR discussion threads into a review XML file
+self-review fetch-comments https://github.com/owner/repo/pull/42
 ```
 
 ### 4.4 Output and Logging
@@ -199,9 +208,24 @@ When launched from macOS Finder, a Linux desktop app launcher, or any other meth
 
 **Mode determination logic:** On startup, the app determines which mode to use:
 
-1. If the current working directory is inside a git repository, the app enters **git mode** (normal diff review).
-2. If not in a git repo but the first positional argument is an existing directory path, the app enters **directory mode** (all files treated as new additions).
-3. Otherwise, the app enters **welcome mode** and displays the welcome screen.
+1. If the first positional argument is a recognized PR/MR URL, the app enters **remote mode** (see Section 4.7).
+2. If the current working directory is inside a git repository, the app enters **git mode** (normal diff review).
+3. If not in a git repo but the first positional argument is an existing directory path, the app enters **directory mode** (all files treated as new additions).
+4. Otherwise, the app enters **welcome mode** and displays the welcome screen.
+
+### 4.7 Remote PR/MR Review
+
+The app reviews GitHub pull requests and GitLab merge requests directly from their URLs, wrapping the guided walkthrough — the product's differentiator — around remote diffs. The flow is CWD-independent: entry is a URL as the first CLI argument or a URL field on the welcome screen. Forge detection is by URL path shape only (`/pull/N` → GitHub, `/-/merge_requests/N` → GitLab), so self-hosted GitLab instances (e.g. git.drupalcode.org) are recognized with zero configuration.
+
+**Materialization (always clone-backed):** The reviewed diff is materialized through local git, so everything downstream — diff parsing, expand-context, blob previews, guide discovery — is the existing local machinery at full fidelity; there is no degraded mode. If the working directory is inside a clone whose remote matches the URL, the base branch and the PR/MR head ref (`refs/pull/N/head` / `refs/merge-requests/N/head`) are fetched into namespaced local refs with no working-tree changes. Otherwise a temporary blobless clone (`--filter=blob:none`) is created under the OS temp directory and removed on exit. Git's own credential machinery handles all transport and auth for cloning and fetching.
+
+**Discussion threads:** Existing forge discussion threads are fetched through the `gh`/`glab` CLIs (base-branch lookup and thread fetch only) and mapped deterministically to comment threads, with forge usernames as `author` and forge ids as `remote-id`. GitLab fetches unresolved threads by default; `--all-threads` includes resolved ones. When the forge CLI is absent or unauthenticated, the review itself is unaffected (the base branch falls back to `git ls-remote`) and thread sync reports as unavailable on stderr.
+
+**`fetch-comments` subcommand:** `self-review fetch-comments <URL> [--all-threads]` runs the same fetch-and-map flow headlessly and writes a v3 `review.xml` with remote provenance (`remote-url`, `remote-base-sha`, `remote-head-sha`, `remote-forge`) and per-thread `remote-id`s, suitable for `--resume-from` or unattended consumers. It honors the `output-file` config and logs to stderr only.
+
+**Drift detection:** On open and on resume, the head SHA fetched during materialization is compared with the recorded `remote-head-sha`; the UI shows a non-blocking warning when the PR/MR has moved since the review was taken.
+
+**Scope:** Remote mode is strictly **read-only toward the forge**: materialize the diff, show existing threads, produce `review.xml` locally. Posting comments, verdicts, or any other write to the forge is explicitly out of scope (see Section 11).
 
 ---
 
@@ -386,6 +410,7 @@ The welcome screen is displayed when the app is launched outside a git repositor
   - A **Browse...** button that opens a native directory picker dialog.
   - The selected directory path displayed next to the button.
   - A **Start Review** button (appears after selecting a directory) that initiates a directory review, scanning all files recursively and treating them as new additions.
+- **Remote PR/MR URL field**, a text input accepting a GitHub PR or GitLab MR URL. Submitting it starts a remote review session (see Section 4.7) in the same window.
 
 Selecting a directory and clicking "Start Review" transitions the app from the welcome screen to the standard review UI with all files shown as additions.
 
@@ -742,9 +767,9 @@ The app supports keyboard-driven code review via Vimium-style hint labels (`f` f
 
 ### 10.4 Security
 
-- The application does not open any network connections. All operations are local.
+- The application does not open any network connections, with two documented exceptions: a non-blocking startup version check against the GitHub Releases API, and remote PR/MR review (Section 4.7), where the network is touched only for a user-supplied forge URL — git clone/fetch through git's own credentials, and the `gh`/`glab` CLIs for base-branch lookup and thread fetch. All other operations are local, and nothing is ever sent to the forge.
 - The application does not execute arbitrary code from the diff content. Syntax highlighting is purely visual.
-- The application writes the review XML output at the configured `output-file` path (default `./review.xml`). When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced image files. No hidden files, no temp files, no analytics.
+- The application writes the review XML output at the configured `output-file` path (default `./review.xml`). When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced image files. In remote mode without a matching local clone, it creates a temporary blobless clone under the OS temp directory, removed on exit. No hidden files, no analytics.
 
 ---
 
@@ -754,7 +779,7 @@ The following are explicitly not part of the v1 release:
 
 - Multi-user collaboration or team features
 - Approval/request-changes workflow
-- Integration with GitHub, GitLab, or any remote platform
+- Writing to GitHub, GitLab, or any remote platform. Remote PR/MR review (Section 4.7) is strictly read-only toward the forge: posting comments or reviews back to the forge is explicitly out of scope (a possible future feature; the `remote-id` attribute exists as forward machinery for it)
 - Markdown or JSON output formats (future, but not v1)
 - Windows support
 - Auto-update mechanism

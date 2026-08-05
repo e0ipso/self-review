@@ -49,6 +49,14 @@ export interface ReviewAdapter {
    * effect re-runs whenever the adapter identity changes.
    */
   onGuideLoad?: (callback: (payload: GuideLoadPayload) => void) => () => void;
+
+  /**
+   * Subscribe to diff payloads pushed after the initial load — the host may
+   * replace the session wholesale (e.g. a remote PR/MR opened from the
+   * welcome screen). `loadDiff` covers only the initial request/response;
+   * this covers every later push. Returns an unsubscribe function.
+   */
+  onDiffLoad?: (callback: (payload: DiffLoadPayload) => void) => () => void;
 }
 
 /**

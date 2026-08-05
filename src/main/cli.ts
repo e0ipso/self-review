@@ -3,10 +3,29 @@
 
 import { existsSync } from 'fs';
 import { resolve } from 'path';
+import { parseForgeUrl } from '../../packages/core/src/forge-provider';
 
 export interface CliArgs {
   resumeFrom: string | null;
   gitDiffArgs: string[];
+  /**
+   * Explicit subcommand routing, decided at the top of parsing. `null` means
+   * the classic GUI modes (local git / directory / file / welcome, or remote
+   * GUI mode when `remoteUrl` is set). Unknown subcommand-like tokens keep
+   * the pass-through-to-git behavior.
+   */
+  subcommand: 'fetch-comments' | null;
+  /**
+   * Forge PR/MR URL. Set when the first positional argument is either the
+   * URL operand of `fetch-comments` or a bare URL that parses via
+   * `parseForgeUrl` (remote GUI mode). Never forwarded to git diff.
+   */
+  remoteUrl: string | null;
+  /**
+   * `--all-threads` (fetch-comments only): include threads the forge marks
+   * resolved. Defaults to false — GitLab fetches unresolved threads only.
+   */
+  allThreads: boolean;
 }
 
 /**
@@ -37,8 +56,43 @@ function getAppArgs(): string[] {
 
 export function parseCliArgs(): CliArgs {
   const args = getAppArgs();
+
+  // Subcommand mode: `self-review fetch-comments <URL> [--all-threads]`.
+  // Recognized only as the very first argument, before any window creation.
+  if (args[0] === 'fetch-comments') {
+    let remoteUrl: string | null = null;
+    let allThreads = false;
+
+    for (const arg of args.slice(1)) {
+      if (arg === '--all-threads') {
+        allThreads = true;
+        continue;
+      }
+      if (remoteUrl === null && !arg.startsWith('-')) {
+        remoteUrl = arg;
+      }
+    }
+
+    if (remoteUrl === null) {
+      console.error(
+        'Error: fetch-comments requires a pull/merge request URL argument'
+      );
+      process.exit(1);
+    }
+
+    return {
+      resumeFrom: null,
+      gitDiffArgs: [],
+      subcommand: 'fetch-comments',
+      remoteUrl,
+      allThreads,
+    };
+  }
+
   let resumeFrom: string | null = null;
+  let remoteUrl: string | null = null;
   const gitDiffArgs: string[] = [];
+  let firstPositionalSeen = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -53,11 +107,24 @@ export function parseCliArgs(): CliArgs {
       continue;
     }
 
+    // Remote GUI mode: only the FIRST positional argument may be a forge
+    // URL, and never after the `--` separator (everything after `--` is a
+    // pathspec by git convention). Non-URL positionals keep pass-through.
+    if (arg === '--') {
+      firstPositionalSeen = true; // no URL detection past the separator
+    } else if (!arg.startsWith('-') && !firstPositionalSeen) {
+      firstPositionalSeen = true;
+      if (parseForgeUrl(arg) !== null) {
+        remoteUrl = arg;
+        continue; // never forwarded to git diff
+      }
+    }
+
     // All other args are passed through to git diff
     gitDiffArgs.push(arg);
   }
 
-  return { resumeFrom, gitDiffArgs };
+  return { resumeFrom, gitDiffArgs, subcommand: null, remoteUrl, allThreads: false };
 }
 
 function printHelp(): void {
@@ -65,11 +132,19 @@ function printHelp(): void {
 self-review - Local git diff review UI
 
 Usage: self-review [options] [<git-diff-args>...]
+       self-review <pr-or-mr-url>
+       self-review fetch-comments <pr-or-mr-url> [--all-threads]
 
 Options:
   --resume-from <file>    Load a previous review XML file
   --help, -h              Show this help message
   --version, -v           Show version number
+
+Subcommands:
+  fetch-comments <url>    Headless: fetch PR/MR discussion threads and write
+                          them as a review XML file (no window).
+    --all-threads         Include threads the forge marks resolved
+                          (GitLab; default is unresolved only).
 
 Examples:
   self-review                                   # unstaged changes (git diff default)
@@ -78,6 +153,8 @@ Examples:
   self-review HEAD~3
   self-review -- src/auth.ts
   self-review --resume-from review.xml          # resume a previous review
+  self-review https://github.com/o/r/pull/42    # review a remote PR
+  self-review fetch-comments https://github.com/o/r/pull/42
 
 All arguments except --resume-from and --help are passed to git diff.
 If no arguments are provided, shows unstaged working tree changes.

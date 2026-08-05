@@ -7,6 +7,7 @@ import { execSync } from 'child_process';
 import { resolve } from 'path';
 import { checkWritability } from './fs-utils';
 import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
+import { runFetchComments } from './fetch-comments';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
@@ -23,14 +24,31 @@ import {
   setOutputPathInfo,
   setResumeData,
   requestReviewFromRenderer,
+  sendDiffLoad,
+  sendResumeLoad,
+  sendGuideLoad,
 } from './ipc-handlers';
+import {
+  bootstrapRemoteDiff,
+  mergeRemoteThreads,
+  applyRemoteProvenance,
+  computeRemoteDrift,
+} from './remote-mode';
 import { loadGuide } from './guide-loader';
 import { checkForUpdate } from './version-checker';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { setupMenu } from './menu';
 import { getAppIconPath } from './app-assets';
 import { IPC } from '../shared/ipc-channels';
-import { AppConfig, DiffLoadPayload, OutputPathInfo, ReviewComment } from '../shared/types';
+import {
+  AppConfig,
+  DiffLoadPayload,
+  OutputPathInfo,
+  RemoteDriftInfo,
+  RemoteOpenUrlResult,
+  RemoteSessionInfo,
+  ReviewComment,
+} from '../shared/types';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -98,11 +116,27 @@ let appConfig: AppConfig | null = null;
 let currentOutputPath: string = '';
 let outputPathWritable: boolean = false;
 let isQuitting = false;
+// Remote PR/MR session state. remoteSessionInfo is injected into the
+// submitted ReviewState on save so the serializer writes the remote-*
+// attributes; remoteCleanup removes a temporary clone when one was created.
+let remoteSessionInfo: RemoteSessionInfo | null = null;
+let remoteCleanup: (() => void) | null = null;
 
 // When the app is quitting (SIGTERM, app.quit(), etc.), allow windows to close
 // without showing the confirmation dialog.
 app.on('before-quit', () => {
   isQuitting = true;
+});
+
+// Temporary remote clones are removed on every exit path. The materializer's
+// cleanup is idempotent: process 'exit' covers the direct process.exit()
+// paths (Finish Review, Save & Quit, Discard, fatal errors) and 'will-quit'
+// covers app.quit() flows.
+process.on('exit', () => {
+  remoteCleanup?.();
+});
+app.on('will-quit', () => {
+  remoteCleanup?.();
 });
 
 /**
@@ -217,11 +251,34 @@ async function initializeApp() {
     // to the renderer via setConfigData.
     appConfig = applyStagedUntrackedDefault(appConfig, gitDiffArgs);
 
-    // Phase 4: Determine startup mode
-    const mode = determineMode(gitDiffArgs);
+    // Phase 4: Determine startup mode. A forge PR/MR URL bypasses local
+    // mode detection: after materialization, remote mode is git mode
+    // against the materialized clone.
+    const mode = cliArgs.remoteUrl ? 'remote' : determineMode(gitDiffArgs);
     console.error('[main] Startup mode:', mode);
 
-    if (mode === 'git') {
+    let fetchedRemoteComments: ReviewComment[] = [];
+    if (mode === 'remote') {
+      // Remote mode: materialize the PR/MR, then feed the git-mode
+      // pipeline with the clone's repo path and the base...head range.
+      // Materialization failures throw and are handled like any other
+      // fatal startup git error by the catch below.
+      const { session, payload } = await bootstrapRemoteDiff(
+        cliArgs.remoteUrl!,
+        process.cwd(),
+        appConfig.ignore
+      );
+      remoteCleanup = session.cleanup;
+      remoteSessionInfo = session.remote;
+      fetchedRemoteComments = session.fetchedComments;
+      diffData = payload;
+      console.error(
+        '[main] Remote diff loaded:',
+        payload.files.length,
+        'files at',
+        session.repoPath
+      );
+    } else if (mode === 'git') {
       // Git mode: existing flow
       console.error('[main] Git diff args:', gitDiffArgs.join(' '));
 
@@ -302,12 +359,14 @@ async function initializeApp() {
     }
 
     // Phase 5: Handle --resume-from if specified
+    let resumeRemoteHeadSha: string | undefined;
     if (cliArgs.resumeFrom) {
       try {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
         const parsed = parseReviewXml(cliArgs.resumeFrom);
         resumeComments = parsed.comments;
         resumeViewedFiles = parsed.viewedFiles;
+        resumeRemoteHeadSha = parsed.remoteHeadSha;
         console.error(
           '[main] Loaded',
           resumeComments.length,
@@ -319,6 +378,24 @@ async function initializeApp() {
         console.error('[main] Error loading resume file');
         clearTimeout(initTimeout);
         process.exit(1);
+      }
+    }
+
+    // Phase 5a: Remote thread merge + drift. The resumed document wins:
+    // fetched threads already present in it (matched by remote-id) are not
+    // duplicated. Drift is only computable when the resumed document
+    // recorded a remote-head-sha.
+    let remoteDrift: RemoteDriftInfo | null = null;
+    if (remoteSessionInfo) {
+      resumeComments = mergeRemoteThreads(resumeComments, fetchedRemoteComments);
+      remoteDrift = computeRemoteDrift(
+        resumeRemoteHeadSha,
+        remoteSessionInfo.remoteHeadSha
+      );
+      if (remoteDrift?.drifted) {
+        console.error(
+          `[main] Remote head drift detected: reviewed ${remoteDrift.recordedHeadSha}, live ${remoteDrift.liveHeadSha}`
+        );
       }
     }
 
@@ -341,8 +418,12 @@ async function initializeApp() {
     setDiffData(diffData);
     setConfigData(appConfig);
     setOutputPathInfo({ resolvedOutputPath: currentOutputPath, outputPathWritable });
-    if (resumeComments.length > 0 || resumeViewedFiles.length > 0) {
-      setResumeData(resumeComments, resumeViewedFiles);
+    if (
+      resumeComments.length > 0 ||
+      resumeViewedFiles.length > 0 ||
+      remoteDrift !== null
+    ) {
+      setResumeData(resumeComments, resumeViewedFiles, remoteDrift);
     }
 
     // Phase 7: Register IPC handlers
@@ -418,7 +499,12 @@ function createWindow(): void {
     try {
       console.error('[main] Save and quit requested');
       const reviewState = await requestReviewFromRenderer(mainWindow);
-      const xml = await serializeReview(reviewState, currentOutputPath);
+      // Remote provenance is injected main-side so "Finish Review" writes
+      // the remote-* attributes without renderer involvement.
+      const finalState = remoteSessionInfo
+        ? applyRemoteProvenance(reviewState, remoteSessionInfo)
+        : reviewState;
+      const xml = await serializeReview(finalState, currentOutputPath);
 
       writeFileSync(currentOutputPath, xml + '\n', 'utf-8');
       console.error(`[main] Review written to ${currentOutputPath}`);
@@ -443,6 +529,90 @@ function createWindow(): void {
     }
     process.exit(0);
   });
+
+  // Start a remote PR/MR session from a renderer-supplied URL (the welcome
+  // screen's URL field). Shares the bootstrap with the CLI URL path.
+  ipcMain.handle(
+    IPC.REMOTE_OPEN_URL,
+    async (event, url: string): Promise<RemoteOpenUrlResult> => {
+      try {
+        console.error('[main] Remote URL open requested:', url);
+        const { session, payload } = await bootstrapRemoteDiff(
+          url,
+          process.cwd(),
+          appConfig?.ignore ?? []
+        );
+
+        // Large payload guard, matching the startup path.
+        if (appConfig) {
+          const stats = computePayloadStats(
+            payload.files.length,
+            countTotalLines(payload.files),
+            appConfig
+          );
+          if (stats.exceedsAny) {
+            const result = dialog.showMessageBoxSync({
+              type: 'warning',
+              buttons: ['Continue', 'Cancel'],
+              defaultId: 1,
+              title: 'Large Review Detected',
+              message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
+              detail: `Thresholds: ${appConfig.maxFiles} files, ${appConfig.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
+            });
+            if (result === 1) {
+              console.error('[main] User cancelled large remote review');
+              session.cleanup();
+              return { ok: false, error: 'Review cancelled.' };
+            }
+            payload.isLargePayload = true;
+          }
+        }
+
+        remoteCleanup = session.cleanup;
+        remoteSessionInfo = session.remote;
+        setDiffData(payload);
+        setResumeData(session.fetchedComments, [], null);
+
+        // Guide sidecar discovery for the welcome→remote path: startup
+        // discovery ran against the welcome payload and skipped, so run it
+        // now against the remote diff (same tolerant, never-fatal contract).
+        const guidePayload = appConfig
+          ? await loadGuide(
+              currentOutputPath,
+              appConfig,
+              payload.files.map(f => f.newPath || f.oldPath)
+            )
+          : null;
+        setGuideData(guidePayload);
+        if (guidePayload) {
+          console.error(
+            '[main] Walkthrough guide loaded:',
+            guidePayload.groups.length,
+            'groups'
+          );
+        }
+
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+          sendDiffLoad(win, payload);
+          if (guidePayload) {
+            sendGuideLoad(win, guidePayload);
+          }
+          if (session.fetchedComments.length > 0) {
+            sendResumeLoad(win, {
+              comments: session.fetchedComments,
+              viewedFiles: [],
+            });
+          }
+        }
+        return { ok: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[main] Failed to open remote URL:', message);
+        return { ok: false, error: message };
+      }
+    }
+  );
 
   // Handle output path change via native save dialog
   ipcMain.handle(IPC.OUTPUT_PATH_CHANGE, async (): Promise<OutputPathInfo | null> => {
@@ -486,19 +656,38 @@ if (earlyExit.shouldExit) {
   process.exit(earlyExit.exitCode);
 }
 
-// Call app.whenReady() IMMEDIATELY - do NOT run any other code before this
-// This allows Electron to initialize its event loop without blockage
-console.error('[main] Calling app.whenReady()...');
-app
-  .whenReady()
-  .then(() => {
-    console.error(
-      '[main] App is ready! Starting initialization...'
-    );
-
-    return initializeApp();
+// Headless subcommand routing: fetch-comments runs fully outside the UI
+// path — no app.whenReady(), no window, nothing UI-bound — and exits when
+// the review file is written. parseCliArgs exits itself on a missing URL.
+const routedArgs = parseCliArgs();
+if (routedArgs.subcommand === 'fetch-comments') {
+  runFetchComments(routedArgs.remoteUrl as string, {
+    includeResolved: routedArgs.allThreads,
   })
-  .catch(error => {
-    console.error('[main] Fatal error during app initialization:', error);
-    process.exit(1);
-  });
+    .then(() => {
+      process.exit(0);
+    })
+    .catch(error => {
+      console.error(
+        `[fetch-comments] ${error instanceof Error ? error.message : String(error)}`
+      );
+      process.exit(1);
+    });
+} else {
+  // Call app.whenReady() IMMEDIATELY - do NOT run any other code before this
+  // This allows Electron to initialize its event loop without blockage
+  console.error('[main] Calling app.whenReady()...');
+  app
+    .whenReady()
+    .then(() => {
+      console.error(
+        '[main] App is ready! Starting initialization...'
+      );
+
+      return initializeApp();
+    })
+    .catch(error => {
+      console.error('[main] Fatal error during app initialization:', error);
+      process.exit(1);
+    });
+}

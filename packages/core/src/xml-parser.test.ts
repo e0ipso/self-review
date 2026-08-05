@@ -169,6 +169,45 @@ describe('parseReviewXmlString', () => {
     });
   });
 
+  describe('review-level sentinel file path', () => {
+    it('preserves comments in a file with an empty path (review-level sentinel)', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3"
+        timestamp="2024-01-15T10:30:00Z"
+        remote-url="https://github.com/owner/repo/pull/42"
+        remote-forge="github">
+  <file path="" change-type="modified" viewed="false">
+    <comment author="octocat" remote-id="rt-1">
+      <body>Review-level thread with no anchor</body>
+      <category></category>
+    </comment>
+  </file>
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.comments).toHaveLength(1);
+      expect(result.comments[0].filePath).toBe('');
+      expect(result.comments[0].remoteId).toBe('rt-1');
+    });
+
+    it('still skips file elements without a path attribute', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z">
+  <file change-type="modified" viewed="false">
+    <comment>
+      <body>Comment on a malformed file element</body>
+      <category></category>
+    </comment>
+  </file>
+</review>`;
+
+      const result = parseReviewXmlString(xml);
+
+      expect(result.comments).toEqual([]);
+    });
+  });
+
   describe('line ranges', () => {
     it('parses new line range for added lines', () => {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -1422,6 +1461,133 @@ ${files}
       expect(result.comments[0].body).toBe('Legacy comment');
       expect(result.comments[0].severity).toBeUndefined();
       expect(result.comments[0].confidence).toBeUndefined();
+    });
+  });
+
+  describe('remote provenance attributes', () => {
+    function remoteReviewXml(rootAttrs: string, commentAttrs = '', replyAttrs = ''): string {
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3" timestamp="2026-08-01T10:30:00Z" git-diff-args="--staged" repository="/repo"${rootAttrs}>
+  <file path="src/main.ts" change-type="modified" viewed="true">
+    <comment new-line-start="10" new-line-end="10"${commentAttrs}>
+      <body>Body</body>
+      <category>bug</category>
+      <reply${replyAttrs}><body>turn</body></reply>
+    </comment>
+  </file>
+</review>`;
+    }
+
+    it('parses the remote root attributes', () => {
+      const result = parseReviewXmlString(
+        remoteReviewXml(
+          ' remote-url="https://github.com/owner/repo/pull/42"' +
+            ' remote-base-sha="a94a8fe5ccb19ba61c4c0873d391e987982fbbd3"' +
+            ' remote-head-sha="de9f2c7fd25e1b3afad3e85a0bd17d9b100db4b3"' +
+            ' remote-forge="github"'
+        )
+      );
+
+      expect(result.remoteUrl).toBe('https://github.com/owner/repo/pull/42');
+      expect(result.remoteBaseSha).toBe('a94a8fe5ccb19ba61c4c0873d391e987982fbbd3');
+      expect(result.remoteHeadSha).toBe('de9f2c7fd25e1b3afad3e85a0bd17d9b100db4b3');
+      expect(result.remoteForge).toBe('github');
+    });
+
+    it('leaves the remote root attributes undefined when absent', () => {
+      const result = parseReviewXmlString(remoteReviewXml(''));
+
+      expect(result.remoteUrl).toBeUndefined();
+      expect(result.remoteBaseSha).toBeUndefined();
+      expect(result.remoteHeadSha).toBeUndefined();
+      expect(result.remoteForge).toBeUndefined();
+    });
+
+    // Same handling as an out-of-enum severity: undefined is the fail-safe
+    // reading, and it keeps the resumed review serializable.
+    it('drops a remote-forge value outside the enumeration', () => {
+      const result = parseReviewXmlString(remoteReviewXml(' remote-forge="bitbucket"'));
+
+      expect(result.remoteForge).toBeUndefined();
+    });
+
+    it('parses remote-id on a comment and on a reply', () => {
+      const result = parseReviewXmlString(
+        remoteReviewXml(
+          ' remote-forge="github"',
+          ' remote-id="PRRT_kwDOAbc123"',
+          ' remote-id="PRRC_kwDOAbc456"'
+        )
+      );
+
+      expect(result.comments[0].remoteId).toBe('PRRT_kwDOAbc123');
+      expect(result.comments[0].replies![0].remoteId).toBe('PRRC_kwDOAbc456');
+    });
+
+    it('leaves remote-id undefined on a comment and a reply that carry none', () => {
+      const result = parseReviewXmlString(remoteReviewXml(''));
+
+      expect(result.comments[0].remoteId).toBeUndefined();
+      expect(result.comments[0].replies![0].remoteId).toBeUndefined();
+    });
+
+    it('round-trip preserves every remote attribute byte-identically', async () => {
+      const original: ReviewState = {
+        timestamp: '2026-08-01T10:30:00Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        remoteUrl: 'https://gitlab.example.com/group/project/-/merge_requests/7',
+        remoteBaseSha: 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3',
+        remoteHeadSha: 'de9f2c7fd25e1b3afad3e85a0bd17d9b100db4b3',
+        remoteForge: 'gitlab',
+        files: [
+          {
+            path: 'src/main.ts',
+            changeType: 'modified',
+            viewed: true,
+            comments: [
+              {
+                id: 'c1',
+                filePath: 'src/main.ts',
+                lineRange: { side: 'new', start: 5, end: 7 },
+                body: 'Fetched finding',
+                category: 'bug',
+                suggestion: null,
+                author: 'reviewer-bot',
+                remoteId: 'note_1001',
+                replies: [
+                  { id: 'r1', body: 'fetched turn', author: 'author-bot', remoteId: 'note_1002' },
+                  { id: 'r2', body: 'local turn' },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const parsed = parseReviewXmlString(xml);
+
+      expect(parsed.remoteUrl).toBe(original.remoteUrl);
+      expect(parsed.remoteBaseSha).toBe(original.remoteBaseSha);
+      expect(parsed.remoteHeadSha).toBe(original.remoteHeadSha);
+      expect(parsed.remoteForge).toBe(original.remoteForge);
+      expect(parsed.comments[0].remoteId).toBe('note_1001');
+      expect(parsed.comments[0].replies![0].remoteId).toBe('note_1002');
+      expect(parsed.comments[0].replies![1].remoteId).toBeUndefined();
+
+      // Rebuild a state from what the parser returned and serialize again:
+      // the second document must equal the first, byte for byte, or the
+      // parse lost something the serializer needed.
+      const rebuilt: ReviewState = {
+        ...original,
+        remoteUrl: parsed.remoteUrl,
+        remoteBaseSha: parsed.remoteBaseSha,
+        remoteHeadSha: parsed.remoteHeadSha,
+        remoteForge: parsed.remoteForge,
+        files: [{ ...original.files[0], comments: parsed.comments }],
+      };
+
+      expect(await serializeReview(rebuilt, '/tmp/test-review.xml')).toBe(xml);
     });
   });
 

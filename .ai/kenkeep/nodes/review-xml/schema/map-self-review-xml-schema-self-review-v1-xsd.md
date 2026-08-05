@@ -17,7 +17,7 @@ kk_relates_to: []
 kk_depends_on: []
 kk_confidence: high
 ---
-The live self-review XML format is defined by `assets/self-review-v3.xsd` beside the `self-review-apply` skill. It covers git and directory source metadata, file change types and viewed state, comment line-number pairing, suggestions, attachments, and ordered flat replies.
+The live self-review XML format is defined by `assets/self-review-v3.xsd` beside the `self-review-apply` skill. It covers git, directory, and remote source metadata (the optional `remote-url`/`remote-base-sha`/`remote-head-sha`/`remote-forge` root attributes), file change types and viewed state, comment line-number pairing, suggestions, attachments, ordered flat replies, and the optional `remote-id` on comments and replies.
 
 For renamed files, `path` holds the new path. Replies contain a body, optional author, and optional attachments; they do not carry category, severity, confidence, or suggestions.
 
