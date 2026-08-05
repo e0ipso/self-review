@@ -70,7 +70,7 @@ import type {
 
 export interface ElectronAPI {
   requestDiffData: () => void;
-  onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => void;
+  onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => () => void;
   requestConfig: () => void;
   onConfigLoad: (callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void) => void;
   requestResumeData: () => void;

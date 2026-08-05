@@ -50,6 +50,7 @@ vi.mock('./payload-sizing', () => ({
 
 vi.mock('./git', () => ({
   runGitDiffAsync: vi.fn(),
+  readGitBlobAsync: vi.fn(),
 }));
 
 import { IPC } from '../shared/ipc-channels';
@@ -309,6 +310,48 @@ describe('ipc-handlers', () => {
       } finally {
         fsMod.rmSync(repoDir, { recursive: true, force: true });
       }
+    });
+
+    it('reads the blob at the reviewed head SHA in remote mode, not the working tree', async () => {
+      const { readGitBlobAsync } = await import('./git');
+      const png = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+        'base64'
+      );
+      vi.mocked(readGitBlobAsync).mockResolvedValueOnce(png);
+
+      const payload: DiffLoadPayload = {
+        files: [makeFile('assets/pic.png')],
+        source: {
+          type: 'git',
+          gitDiffArgs: 'aaa111...bbb222',
+          repository: '/tmp/self-review-clone-does-not-exist',
+        },
+        remote: {
+          remoteUrl: 'https://github.com/owner/repo/pull/42',
+          remoteBaseSha: 'aaa111',
+          remoteHeadSha: 'bbb222',
+          remoteForge: 'github',
+          threadSyncAvailable: true,
+        },
+      };
+      setDiffData(payload);
+
+      const handler = handlers[IPC.DIFF_LOAD_IMAGE];
+      const result = (await handler({}, 'assets/pic.png')) as {
+        dataUri?: string;
+        error?: string;
+      };
+
+      // A temp clone's working tree sits on the default branch, so the
+      // blob must come from git at the fetched head SHA. The repository
+      // path does not exist on disk, so success proves the git read.
+      expect(readGitBlobAsync).toHaveBeenCalledWith(
+        '/tmp/self-review-clone-does-not-exist',
+        'bbb222:assets/pic.png'
+      );
+      expect(result.error).toBeUndefined();
+      expect(result.dataUri).toMatch(/^data:image\/png;base64,/);
     });
   });
 });

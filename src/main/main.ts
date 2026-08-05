@@ -26,6 +26,7 @@ import {
   requestReviewFromRenderer,
   sendDiffLoad,
   sendResumeLoad,
+  sendGuideLoad,
 } from './ipc-handlers';
 import {
   bootstrapRemoteDiff,
@@ -572,9 +573,31 @@ function createWindow(): void {
         setDiffData(payload);
         setResumeData(session.fetchedComments, [], null);
 
+        // Guide sidecar discovery for the welcome→remote path: startup
+        // discovery ran against the welcome payload and skipped, so run it
+        // now against the remote diff (same tolerant, never-fatal contract).
+        const guidePayload = appConfig
+          ? await loadGuide(
+              currentOutputPath,
+              appConfig,
+              payload.files.map(f => f.newPath || f.oldPath)
+            )
+          : null;
+        setGuideData(guidePayload);
+        if (guidePayload) {
+          console.error(
+            '[main] Walkthrough guide loaded:',
+            guidePayload.groups.length,
+            'groups'
+          );
+        }
+
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win) {
           sendDiffLoad(win, payload);
+          if (guidePayload) {
+            sendGuideLoad(win, guidePayload);
+          }
           if (session.fetchedComments.length > 0) {
             sendResumeLoad(win, {
               comments: session.fetchedComments,

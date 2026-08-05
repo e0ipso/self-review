@@ -267,6 +267,11 @@ export function applyRemoteProvenance(
 ): ReviewState {
   return {
     ...state,
+    // The three source shapes are mutually exclusive in the document: the
+    // remote-* attributes ARE the source, so the in-session git source
+    // (the materialized clone) must not leak into the saved review. The
+    // welcome source emits no source attributes, mirroring fetch-comments.
+    source: { type: 'welcome' },
     remoteUrl: remote.remoteUrl,
     remoteBaseSha: remote.remoteBaseSha,
     remoteHeadSha: remote.remoteHeadSha,

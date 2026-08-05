@@ -98,6 +98,28 @@ export function registerIpcHandlers(): void {
     const ext = path.extname(filePath).toLowerCase();
     const mimeType = MIME_MAP[ext] ?? 'application/octet-stream';
 
+    // In a remote session the reviewed content lives at the fetched head
+    // SHA, not in the clone's working tree (a temporary clone stays on the
+    // default branch), so read the blob through git instead of the fs.
+    const remote = diffDataCache?.remote;
+    if (remote && diffDataCache?.source.type === 'git') {
+      try {
+        const { readGitBlobAsync } = await import('./git');
+        const data = await readGitBlobAsync(
+          diffDataCache.source.repository,
+          `${remote.remoteHeadSha}:${filePath}`
+        );
+        if (data.length > MAX_SIZE) {
+          return { error: 'File too large to preview (>10 MB)' };
+        }
+        return { dataUri: `data:${mimeType};base64,${data.toString('base64')}` };
+      } catch {
+        return {
+          error: 'Image preview unavailable — blob not found at the reviewed commit.',
+        };
+      }
+    }
+
     try {
       const stat = await fs.promises.stat(resolved);
       if (stat.size > MAX_SIZE) {
@@ -474,6 +496,13 @@ export function sendResumeLoad(
   payload: ResumeLoadPayload
 ): void {
   window.webContents.send(IPC.RESUME_LOAD, payload);
+}
+
+export function sendGuideLoad(
+  window: BrowserWindow,
+  payload: GuideLoadPayload
+): void {
+  window.webContents.send(IPC.GUIDE_LOAD, payload);
 }
 
 export function registerFindInPageForWindow(window: BrowserWindow): void {

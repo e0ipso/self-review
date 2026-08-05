@@ -1,7 +1,7 @@
 // src/main/git.ts
 // Git command execution
 
-import { execSync, exec } from 'child_process';
+import { execSync, exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { generateSyntheticDiffs } from './synthetic-diff';
 
@@ -122,6 +122,32 @@ export async function runGitDiffAsync(args: string[], cwd?: string): Promise<str
     }
     throw error;
   }
+}
+
+/**
+ * Read a blob from a git object spec (`<sha>:<path>`) as raw bytes.
+ * Remote mode reads reviewed content at the fetched head SHA — a temporary
+ * clone's working tree stays on the default branch and never reflects the
+ * PR/MR head.
+ */
+export async function readGitBlobAsync(
+  repoPath: string,
+  spec: string
+): Promise<Buffer> {
+  return await new Promise<Buffer>((resolve, reject) => {
+    execFile(
+      'git',
+      ['-C', repoPath, 'show', spec],
+      { encoding: 'buffer', maxBuffer: 50 * 1024 * 1024, timeout: 30000 },
+      (error, stdout) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(stdout);
+        }
+      }
+    );
+  });
 }
 
 /**

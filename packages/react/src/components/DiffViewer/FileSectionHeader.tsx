@@ -47,7 +47,9 @@ export function FileSectionHeader({
   const displayPath =
     file.changeType === 'renamed'
       ? `${file.oldPath} → ${file.newPath}`
-      : filePath;
+      : // The empty path is the review-level sentinel: comments with no
+        // file association (fetched forge threads without an anchor).
+        filePath || 'Review-level comments';
   const changeLabel =
     file.changeType.charAt(0).toUpperCase() + file.changeType.slice(1);
 

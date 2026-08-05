@@ -418,6 +418,10 @@ describe('remote state assembly serializes to valid XML', () => {
       const xml = await serializeReview(state, path.join(outDir, 'review.xml'));
 
       expect(xml).toContain(`remote-url="${PR_URL}"`);
+      // The three source shapes are mutually exclusive: a remote save must
+      // not also carry the local-git source attributes.
+      expect(xml).not.toContain('git-diff-args=');
+      expect(xml).not.toContain('repository=');
       expect(xml).toContain('remote-base-sha="aaa111"');
       expect(xml).toContain('remote-head-sha="bbb222"');
       expect(xml).toContain('remote-forge="github"');

@@ -40,6 +40,7 @@ const electronAdapter: ReviewAdapter = {
   changeOutputPath: () => window.electronAPI.changeOutputPath(),
   loadImage: filePath => window.electronAPI.loadImage(filePath),
   onGuideLoad: callback => window.electronAPI.onGuideLoad(callback),
+  onDiffLoad: callback => window.electronAPI.onDiffLoad(callback),
 };
 
 function AppContent() {
