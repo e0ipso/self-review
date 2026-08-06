@@ -167,6 +167,7 @@ describe('runFetchComments', () => {
     deps = {
       runner: vi.fn(),
       createProvider: vi.fn().mockImplementation(() => provider),
+      detectExistingClone: vi.fn().mockResolvedValue(null),
       materialize: vi.fn().mockResolvedValue(materializeResult()),
       resolveRemoteDefaultBranch: vi.fn().mockResolvedValue('trunk'),
       loadDiffFiles: vi.fn().mockResolvedValue([makeDiffFile('src/a.ts')]),
@@ -202,6 +203,7 @@ describe('runFetchComments', () => {
     const materializeMock = deps.materialize as ReturnType<typeof vi.fn>;
     expect(materializeMock.mock.calls[0][1]).toBe('main');
     expect(materializeMock.mock.calls[0][2]).toBe('/work');
+    expect(materializeMock.mock.calls[0][4]).toBeUndefined();
   });
 
   it('falls back to the git-only default branch with a stderr notice when the CLI is unavailable', async () => {
@@ -211,9 +213,19 @@ describe('runFetchComments', () => {
 
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 
-    expect(deps.resolveRemoteDefaultBranch).toHaveBeenCalled();
+    expect(deps.detectExistingClone).toHaveBeenCalledWith(
+      expect.anything(),
+      '/work',
+      deps.runner
+    );
+    expect(deps.resolveRemoteDefaultBranch).toHaveBeenCalledWith(
+      expect.anything(),
+      deps.runner,
+      null
+    );
     const materializeMock = deps.materialize as ReturnType<typeof vi.fn>;
     expect(materializeMock.mock.calls[0][1]).toBe('trunk');
+    expect(materializeMock.mock.calls[0][4]).toBeNull();
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('falling back')
     );

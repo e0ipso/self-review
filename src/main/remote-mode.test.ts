@@ -61,6 +61,7 @@ function makeDeps(overrides: Partial<RemoteSessionDeps> = {}): RemoteSessionDeps
   };
   return {
     createProvider: vi.fn(() => provider),
+    detectExistingClone: vi.fn(async () => null),
     materialize: vi.fn(async () => makeMaterializeResult()),
     resolveRemoteDefaultBranch: vi.fn(async () => 'trunk'),
     runner: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 })),
@@ -116,7 +117,8 @@ describe('startRemoteSession', () => {
       expect.objectContaining({ forge: 'github', owner: 'octo', repo: 'repo', number: 42 }),
       'main',
       '/cwd',
-      deps.runner
+      deps.runner,
+      undefined
     );
     expect(session.repoPath).toBe('/tmp/self-review-clone');
     expect(session.gitDiffArgs).toEqual(['aaa111...bbb222']);
@@ -156,12 +158,22 @@ describe('startRemoteSession', () => {
     const deps = makeDeps({ createProvider: vi.fn(() => provider) });
     const session = await startRemoteSession(PR_URL, '/cwd', deps);
 
-    expect(deps.resolveRemoteDefaultBranch).toHaveBeenCalled();
+    expect(deps.detectExistingClone).toHaveBeenCalledWith(
+      expect.anything(),
+      '/cwd',
+      deps.runner
+    );
+    expect(deps.resolveRemoteDefaultBranch).toHaveBeenCalledWith(
+      expect.anything(),
+      deps.runner,
+      null
+    );
     expect(deps.materialize).toHaveBeenCalledWith(
       expect.anything(),
       'trunk',
       '/cwd',
-      deps.runner
+      deps.runner,
+      null
     );
     // Thread fetch is skipped entirely — the CLI is known unavailable.
     expect(provider.fetchThreads).not.toHaveBeenCalled();

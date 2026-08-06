@@ -16,6 +16,7 @@ import {
   ForgeCliUnavailableError,
   createGitHubProvider,
   createGitLabProvider,
+  detectExistingClone,
   materialize,
   resolveRemoteDefaultBranch,
   defaultGitRunner,
@@ -27,6 +28,7 @@ import type {
   ForgeName,
   ForgeProvider,
   ForgeUrl,
+  ExistingClone,
   MaterializeMode,
   MaterializeResult,
 } from '../../packages/core/src/index';
@@ -67,11 +69,18 @@ export interface RemoteSessionDeps {
     url: ForgeUrl,
     baseBranch: string,
     cwd: string,
-    runner: ForgeCommandRunner
+    runner: ForgeCommandRunner,
+    existingClone?: ExistingClone | null
   ) => Promise<MaterializeResult>;
+  detectExistingClone: (
+    url: ForgeUrl,
+    cwd: string,
+    runner: ForgeCommandRunner
+  ) => Promise<ExistingClone | null>;
   resolveRemoteDefaultBranch: (
     url: ForgeUrl,
-    runner: ForgeCommandRunner
+    runner: ForgeCommandRunner,
+    existing?: ExistingClone | null
   ) => Promise<string>;
   runner: ForgeCommandRunner;
   /** Loads the diff from the clone. Untracked files are never included. */
@@ -92,6 +101,7 @@ function defaultCreateProvider(
 
 const defaultDeps: RemoteSessionDeps = {
   createProvider: defaultCreateProvider,
+  detectExistingClone,
   materialize,
   resolveRemoteDefaultBranch,
   runner: defaultGitRunner,
@@ -129,6 +139,7 @@ export async function startRemoteSession(
 
   let cliAvailable = true;
   let baseBranch: string;
+  let existingClone: ExistingClone | null | undefined;
   try {
     baseBranch = await provider.fetchBaseBranch(forgeUrl);
   } catch (error) {
@@ -140,10 +151,21 @@ export async function startRemoteSession(
       `[remote] Forge CLI unavailable (${error.cli}): ${error.message} — ` +
         'falling back to the remote default branch via git.'
     );
-    baseBranch = await d.resolveRemoteDefaultBranch(forgeUrl, d.runner);
+    existingClone = await d.detectExistingClone(forgeUrl, cwd, d.runner);
+    baseBranch = await d.resolveRemoteDefaultBranch(
+      forgeUrl,
+      d.runner,
+      existingClone
+    );
   }
 
-  const materialized = await d.materialize(forgeUrl, baseBranch, cwd, d.runner);
+  const materialized = await d.materialize(
+    forgeUrl,
+    baseBranch,
+    cwd,
+    d.runner,
+    existingClone
+  );
 
   let fetchedComments: ReviewComment[] = [];
   let threadSyncAvailable = false;

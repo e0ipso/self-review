@@ -63,7 +63,7 @@ _None._
 - Open [**Three startup modes: git, directory, welcome**](map-three-startup-modes-git-directory-welcome.md) — git mode reviews a git diff; directory mode treats all files as new additions; welcome mode shows a picker when launched without context.
 ### #output
 - Open [**Design XML output to be parsed by LLMs**](../../review-xml/schema/practice-design-xml-output-to-be-parsed-by-llms.md) — Review output is structured XML with an XSD schema so LLMs can reliably parse and act on feedback.
-- Open [**self-review-v3 XSD output format**](../../review-xml/schema/map-self-review-v1-xsd-output-format.md) — Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 schemas remain frozen for older consumers.
+- Open [**self-review-v3 XSD output format**](../../review-xml/schema/map-self-review-v1-xsd-output-format.md) — Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 stay frozen, while the current version may gain optional attributes additively.
 - Open [**Treat self-review as a CLI-first, one-shot tool**](practice-treat-self-review-as-a-cli-first-one-shot-tool.md) — self-review launches from the terminal, writes review output to a file, then exits. No servers or persistent state.
 ### #staged
 - Open [**Hide untracked files by default for --staged/--cached reviews**](practice-hide-untracked-files-by-default-for-staged-cached-reviews.md) — Index-vs-HEAD reviews hide untracked files by default since they aren't part of the index; users can reveal them via toolbar toggle.

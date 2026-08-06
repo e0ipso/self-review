@@ -20,7 +20,7 @@ _None._
 - Open [**XSD schema location**](map-xsd-schema-location.md) to learn about: The canonical v3 XSD is under the apply skill and must remain byte-identical to the serializer's embedded XSD; the OpenCode path is a symlink. #self-review #xsd #schema
 - Open [**self-review XML schema (self-review-v3.xsd)**](map-self-review-xml-schema-self-review-v1-xsd.md) to learn about: The v3 XSD beside self-review-apply defines review metadata, files, comments, suggestions, attachments, and ordered replies. #self-review #xsd #schema
 - Open [**self-review XML v3 schema**](map-self-review-xml-v1-schema.md) to learn about: The canonical v3 XSD defines files, comments, suggestions, attachments, and ordered reply threads. #self-review #xml #schema
-- Open [**self-review-v3 XSD output format**](map-self-review-v1-xsd-output-format.md) to learn about: Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 schemas remain frozen for older consumers. #xml #schema #output
+- Open [**self-review-v3 XSD output format**](map-self-review-v1-xsd-output-format.md) to learn about: Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 stay frozen, while the current version may gain optional attributes additively. #xml #schema #output
 
 ## By topic
 
@@ -42,7 +42,7 @@ _None._
 - Open [**Keep the v3 XSD schema in sync across its two locations**](practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md) — Keep the canonical v3 XSD and the serializer's embedded XSD byte-identical, and preserve the OpenCode skill symlinks.
 ### #output
 - Open [**Design XML output to be parsed by LLMs**](practice-design-xml-output-to-be-parsed-by-llms.md) — Review output is structured XML with an XSD schema so LLMs can reliably parse and act on feedback.
-- Open [**self-review-v3 XSD output format**](map-self-review-v1-xsd-output-format.md) — Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 schemas remain frozen for older consumers.
+- Open [**self-review-v3 XSD output format**](map-self-review-v1-xsd-output-format.md) — Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 stay frozen, while the current version may gain optional attributes additively.
 - Open [**Treat self-review as a CLI-first, one-shot tool**](../../app/cli/practice-treat-self-review-as-a-cli-first-one-shot-tool.md) — self-review launches from the terminal, writes review output to a file, then exits. No servers or persistent state.
 ### #ai
 - Open [**Design XML output to be parsed by LLMs**](practice-design-xml-output-to-be-parsed-by-llms.md) — Review output is structured XML with an XSD schema so LLMs can reliably parse and act on feedback.

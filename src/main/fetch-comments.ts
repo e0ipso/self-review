@@ -21,10 +21,14 @@ import { createGitHubProvider } from '../../packages/core/src/github-provider';
 import { createGitLabProvider } from '../../packages/core/src/gitlab-provider';
 import {
   defaultGitRunner,
+  detectExistingClone,
   materialize,
   resolveRemoteDefaultBranch,
 } from '../../packages/core/src/materializer';
-import type { MaterializeResult } from '../../packages/core/src/materializer';
+import type {
+  ExistingClone,
+  MaterializeResult,
+} from '../../packages/core/src/materializer';
 import {
   mapThreadsToReviewComments,
   REVIEW_LEVEL_FILE_PATH,
@@ -54,11 +58,18 @@ export interface FetchCommentsDeps {
     url: ForgeUrl,
     baseBranch: string,
     cwd: string,
-    runner: ForgeCommandRunner
+    runner: ForgeCommandRunner,
+    existingClone?: ExistingClone | null
   ) => Promise<MaterializeResult>;
+  detectExistingClone: (
+    url: ForgeUrl,
+    cwd: string,
+    runner: ForgeCommandRunner
+  ) => Promise<ExistingClone | null>;
   resolveRemoteDefaultBranch: (
     url: ForgeUrl,
-    runner: ForgeCommandRunner
+    runner: ForgeCommandRunner,
+    existing?: ExistingClone | null
   ) => Promise<string>;
   loadDiffFiles: (
     repoPath: string,
@@ -78,10 +89,9 @@ function defaultDeps(): FetchCommentsDeps {
       forge === 'github'
         ? createGitHubProvider(runner)
         : createGitLabProvider(runner),
-    materialize: (url, baseBranch, cwd, runner) =>
-      materialize(url, baseBranch, cwd, runner),
-    resolveRemoteDefaultBranch: (url, runner) =>
-      resolveRemoteDefaultBranch(url, runner),
+    detectExistingClone,
+    materialize,
+    resolveRemoteDefaultBranch,
     loadDiffFiles: async (repoPath, baseSha, headSha) =>
       // Triple-dot: diff from the merge base, matching how forges present a
       // PR/MR diff. Runs inside the materialized clone.
@@ -214,6 +224,7 @@ export async function runFetchComments(
   const provider = deps.createProvider(forgeUrl.forge, deps.runner);
 
   let baseBranch: string;
+  let existingClone: ExistingClone | null | undefined;
   try {
     baseBranch = await provider.fetchBaseBranch(forgeUrl);
   } catch (error) {
@@ -223,7 +234,16 @@ export async function runFetchComments(
       `[fetch-comments] ${error.cli} unavailable for the base-branch lookup — ` +
         'falling back to the remote default branch via git ls-remote.'
     );
-    baseBranch = await deps.resolveRemoteDefaultBranch(forgeUrl, deps.runner);
+    existingClone = await deps.detectExistingClone(
+      forgeUrl,
+      cwd,
+      deps.runner
+    );
+    baseBranch = await deps.resolveRemoteDefaultBranch(
+      forgeUrl,
+      deps.runner,
+      existingClone
+    );
   }
   console.error(`[fetch-comments] Base branch: ${baseBranch}`);
 
@@ -231,7 +251,8 @@ export async function runFetchComments(
     forgeUrl,
     baseBranch,
     cwd,
-    deps.runner
+    deps.runner,
+    existingClone
   );
   try {
     let threads;

@@ -7,7 +7,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { ForgeCommandResult, ForgeCommandRunner, ForgeUrl } from './forge-provider';
-import { materialize, resolveRemoteDefaultBranch } from './materializer';
+import {
+  detectExistingClone,
+  materialize,
+  resolveRemoteDefaultBranch,
+} from './materializer';
 
 const BASE_SHA = 'a'.repeat(40);
 const HEAD_SHA = 'b'.repeat(40);
@@ -343,6 +347,35 @@ describe('materialize', () => {
 });
 
 describe('resolveRemoteDefaultBranch', () => {
+  it('reuses a detected clone so SSH transport is preserved', async () => {
+    const handlers = existingCloneHandlers(
+      'origin\tgit@github.com:e0ipso/self-review.git (fetch)\n'
+    );
+    handlers['ls-remote'] = ok(
+      'ref: refs/heads/main\tHEAD\n' + `${HEAD_SHA}\tHEAD\n`
+    );
+    const { runner, calls } = createRunner(handlers);
+
+    const existing = await detectExistingClone(
+      githubUrl,
+      '/home/user/project/sub',
+      runner
+    );
+    const branch = await resolveRemoteDefaultBranch(githubUrl, runner, existing);
+
+    expect(branch).toBe('main');
+    const call = findCall(calls, 'ls-remote');
+    expect(call).toEqual([
+      'git',
+      '-C',
+      '/home/user/project',
+      'ls-remote',
+      '--symref',
+      'origin',
+      'HEAD',
+    ]);
+  });
+
   it('resolves the remote HEAD symref via git ls-remote', async () => {
     const { runner, calls } = createRunner({
       'ls-remote': ok('ref: refs/heads/main\tHEAD\n' + `${HEAD_SHA}\tHEAD\n`),
@@ -366,6 +399,21 @@ describe('resolveRemoteDefaultBranch', () => {
     );
     await expect(resolveRemoteDefaultBranch(githubUrl, runner)).rejects.toThrow(
       /gh auth setup-git/
+    );
+  });
+
+  it('identifies the repository when a matching remote lookup fails', async () => {
+    const { runner } = createRunner({
+      'ls-remote': fail('fatal: unable to access repository'),
+    });
+
+    await expect(
+      resolveRemoteDefaultBranch(githubUrl, runner, {
+        repoPath: '/home/user/project',
+        remoteName: 'origin',
+      })
+    ).rejects.toThrow(
+      'ls-remote of origin (https://github.com/e0ipso/self-review.git)'
     );
   });
 
