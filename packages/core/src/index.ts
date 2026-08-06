@@ -123,8 +123,13 @@ export { createGitLabProvider } from './gitlab-provider';
 
 // Clone-aware diff materializer (remote PR/MR git plane)
 export {
+  detectExistingClone,
   materialize,
   resolveRemoteDefaultBranch,
   defaultGitRunner,
 } from './materializer';
-export type { MaterializeMode, MaterializeResult } from './materializer';
+export type {
+  ExistingClone,
+  MaterializeMode,
+  MaterializeResult,
+} from './materializer';

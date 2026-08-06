@@ -40,6 +40,12 @@ export interface MaterializeResult {
   cleanup: () => void;
 }
 
+/** A local clone whose fetch remote matches the requested forge repository. */
+export interface ExistingClone {
+  repoPath: string;
+  remoteName: string;
+}
+
 /** Local namespaced refs the materializer fetches into (never branches). */
 const LOCAL_BASE_REF = 'refs/self-review/base';
 const LOCAL_HEAD_REF = 'refs/self-review/head';
@@ -174,11 +180,11 @@ async function revParse(
  * Detect an existing clone: when `cwd` is inside a git repository with a
  * remote matching the forge URL, return `{ repoPath, remoteName }`.
  */
-async function detectExistingClone(
-  runner: ForgeCommandRunner,
+export async function detectExistingClone(
+  url: ForgeUrl,
   cwd: string,
-  url: ForgeUrl
-): Promise<{ repoPath: string; remoteName: string } | null> {
+  runner: ForgeCommandRunner = defaultGitRunner
+): Promise<ExistingClone | null> {
   const toplevel = await runner('git', ['-C', cwd, 'rev-parse', '--show-toplevel']);
   if (toplevel.exitCode !== 0) {
     return null;
@@ -284,7 +290,8 @@ async function materializeIntoTempClone(
  * branch and PR/MR head refs are fetched into that clone under
  * `refs/self-review/*` — read-only for the working tree. Otherwise a
  * blobless clone is created in a unique directory under the OS temp root
- * and `cleanup()` removes exactly that directory.
+ * and `cleanup()` removes exactly that directory. Callers that already
+ * detected a clone may pass it to avoid repeating the git probes.
  *
  * The returned `headSha` is the live remote head, so callers can compare it
  * against a recorded `remote-head-sha` for drift detection.
@@ -293,9 +300,13 @@ export async function materialize(
   url: ForgeUrl,
   baseBranch: string,
   cwd: string,
-  runner: ForgeCommandRunner = defaultGitRunner
+  runner: ForgeCommandRunner = defaultGitRunner,
+  existingClone?: ExistingClone | null
 ): Promise<MaterializeResult> {
-  const existing = await detectExistingClone(runner, cwd, url);
+  const existing =
+    existingClone === undefined
+      ? await detectExistingClone(url, cwd, runner)
+      : existingClone;
   if (existing) {
     return materializeIntoExistingClone(
       runner,
@@ -311,21 +322,32 @@ export async function materialize(
 /**
  * Git-only fallback for the base branch when no forge CLI is available:
  * resolves the remote's default branch from its HEAD symref via
- * `git ls-remote --symref <url> HEAD`. No forge API involved.
+ * `git ls-remote --symref <remote> HEAD`. When an existing matching clone
+ * is supplied, the configured remote is used so its SSH/HTTPS transport
+ * and credentials are preserved. Otherwise the forge HTTPS URL is used.
+ * No forge API involved.
  */
 export async function resolveRemoteDefaultBranch(
   url: ForgeUrl,
-  runner: ForgeCommandRunner = defaultGitRunner
+  runner: ForgeCommandRunner = defaultGitRunner,
+  existing: ExistingClone | null = null
 ): Promise<string> {
   const cloneUrl = cloneUrlFor(url);
-  const result = await runner('git', ['ls-remote', '--symref', cloneUrl, 'HEAD']);
+  const remote = existing?.remoteName ?? cloneUrl;
+  // Errors must identify the repository; a bare alias such as "origin"
+  // does not say which repository the lookup was made against.
+  const label = existing ? `${remote} (${cloneUrl})` : cloneUrl;
+  const args = existing
+    ? ['-C', existing.repoPath, 'ls-remote', '--symref', remote, 'HEAD']
+    : ['ls-remote', '--symref', remote, 'HEAD'];
+  const result = await runner('git', args);
   if (result.exitCode !== 0) {
-    throw gitFailure(`ls-remote of ${cloneUrl}`, result, true);
+    throw gitFailure(`ls-remote of ${label}`, result, true);
   }
   const match = /^ref:\s+refs\/heads\/(\S+)\s+HEAD$/m.exec(result.stdout);
   if (!match) {
     throw new Error(
-      `Failed to resolve the default branch of ${cloneUrl}: ` +
+      `Failed to resolve the default branch of ${label}: ` +
         'git ls-remote returned no HEAD symref.'
     );
   }
