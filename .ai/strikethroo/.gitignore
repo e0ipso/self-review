@@ -1,0 +1,30 @@
+# Code review gate artifacts.
+#
+# The review gate writes a recorded base commit and one directory per round
+# (review.xml plus the recorded-versus-actionable findings partition) into the
+# plan it is reviewing. All of it is machine-generated output scoped to a single
+# execution: the base commit is live only from capture through the final round,
+# and each round supersedes the last.
+#
+# Ignoring it also keeps the gate from reviewing itself. The reviewed diff runs
+# from the recorded base against the working tree, and untracked files are in
+# scope — the gate synthesizes an add-diff for each one. What keeps review
+# output out of the next round is these ignore rules: the gate enumerates
+# untracked paths with `git ls-files --others --exclude-standard`, which applies
+# them, so a round-1 review.xml is invisible to round 2 whether or not anything
+# committed it.
+#
+# Both locations are listed because a completed plan directory is moved from
+# plans/ to archive/ wholesale, carrying its review/ directory with it.
+plans/*/review/
+archive/*/review/
+
+# Dispatch-availability cache.
+#
+# The dispatch target selector probes external harnesses and caches each
+# outcome here, with a lifetime measured in minutes. It is machine-generated,
+# host-specific, and never meaningful to another checkout. The directory is
+# created on demand by the first probe, so it can appear in a workspace long
+# after init ran — which is why it is covered from here rather than by an
+# ignore file shipped inside it.
+runtime/

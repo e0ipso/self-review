@@ -35,7 +35,7 @@
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "templates/harness/skills/st-code-review/SKILL.md",
-      "computedHash": "756b7914e30a551639afd7e893814fd74777483b3679daf37af06b3a16cf7f94"
+      "computedHash": "58be2e636d5d80b4149f85a2498e788bf160e1bdade09cb609ef74e530f73b3c"
     },
     "st-create-plan": {
       "source": "e0ipso/strikethroo",
@@ -47,19 +47,19 @@
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "templates/harness/skills/st-execute-blueprint/SKILL.md",
-      "computedHash": "1be1800cb5cb2b1b88f8643e520dddc33bd2ff1748e66892ac0bc72f94fb0322"
+      "computedHash": "1eb20a0f0ca4b67c6f30282c96b472bcd6337cd8a195b91999a33face406dc15"
     },
     "st-execute-task": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "templates/harness/skills/st-execute-task/SKILL.md",
-      "computedHash": "66a2e5f6ca454594e902cc2bd8d050e0041b2f3698be2f70fdb7ac54b841e08c"
+      "computedHash": "7cff2b94adaf9bbb783e7c7a8b5d253fa0b5c0104d5f9d7751c75c2fb9c903c9"
     },
     "st-full-workflow": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "templates/harness/skills/st-full-workflow/SKILL.md",
-      "computedHash": "78fa85858f952380ecb4af745eecc6c137d304cf437539bb3097b9dfa1a2fd40"
+      "computedHash": "2d45a009fa3baf61702e14016b5703474a36832d52b46726576f9f5d0a41e456"
     },
     "st-generate-tasks": {
       "source": "e0ipso/strikethroo",
