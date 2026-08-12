@@ -24,6 +24,7 @@ import {
   requestReviewFromRenderer,
 } from './ipc-handlers';
 import { checkForUpdate } from './version-checker';
+import { reexecFromRealPathIfNeeded } from './relaunch-guard';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { IPC } from '../shared/ipc-channels';
 import { AppConfig, DiffLoadPayload, OutputPathInfo, ReviewComment } from '../shared/types';
@@ -461,6 +462,12 @@ const earlyExit = checkEarlyExit();
 if (earlyExit.shouldExit) {
   process.exit(earlyExit.exitCode);
 }
+
+// macOS: if launched through a symlink to the in-bundle binary (e.g. the
+// Homebrew cask's /opt/homebrew/bin/self-review), re-exec from the real bundle
+// path before Electron spawns any helper, otherwise child processes crash with
+// "Unable to find helper app". No-op on direct launches. See relaunch-guard.ts.
+reexecFromRealPathIfNeeded(app.isPackaged);
 
 // Call app.whenReady() IMMEDIATELY - do NOT run any other code before this
 // This allows Electron to initialize its event loop without blockage
