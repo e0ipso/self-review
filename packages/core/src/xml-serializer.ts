@@ -3,17 +3,62 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { ReviewState, FileReviewState, ReviewComment } from './types';
+import { ReviewState, FileReviewState, ReviewComment, Reply, Attachment } from './types';
 import { validateXML } from 'xmllint-wasm';
 
-// Embed the XSD schema for validation
-const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
+// Embed the XSD schema for validation.
+// This MUST stay byte-identical to the on-disk canonical copy
+// (.agents/skills/self-review-apply/assets/self-review-v3.xsd);
+// the sync test in xsd-schema.test.ts enforces it.
+export const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
 <xs:schema
   xmlns:xs="http://www.w3.org/2001/XMLSchema"
-  xmlns:sr="urn:self-review:v1"
-  targetNamespace="urn:self-review:v1"
+  xmlns:sr="urn:self-review:v3"
+  targetNamespace="urn:self-review:v3"
   elementFormDefault="qualified"
 >
+
+  <!--
+    self-review XML Schema v3
+    =========================
+    Defines the output format for the self-review application.
+    This schema is designed to be both machine-validated and
+    fed to an LLM so it can understand the structure of review feedback.
+
+    Key concepts:
+    - A <review> contains one <file> per file in the diff.
+    - A <file> contains zero or more <comment> elements.
+    - A <comment> with no line attributes is a file-level comment.
+    - A <comment> with old-line-start/old-line-end refers to lines
+      in the pre-change version of the file (typically deleted lines).
+    - A <comment> with new-line-start/new-line-end refers to lines
+      in the post-change version of the file (added or context lines).
+    - Exactly one pair (old-line-* or new-line-*) should be present
+      for line-level comments. This constraint cannot be expressed in
+      XSD 1.0 and is enforced by the application.
+    - A <comment> may carry an ordered list of <reply> children, which
+      are turns in a conversation about that comment.
+
+    Changes from v1:
+    - <comment> gained two optional attributes, severity and confidence,
+      so an automated consumer can threshold on findings instead of
+      applying all of them or none of them. See CommentType.
+
+    Changes from v2:
+    - <comment> gained an optional, unbounded <reply> child, so a finding
+      and the responses to it form a single legible thread instead of a
+      set of disconnected assertions. See ReplyType.
+
+    Amended in place (still v3):
+    - The review root gained optional remote-url, remote-base-sha,
+      remote-head-sha and remote-forge attributes, and <comment> and
+      <reply> gained an optional remote-id attribute, so a review taken
+      against a remote pull/merge request records its provenance. Purely
+      additive: a document carrying none of them is unchanged. See
+      ReviewType.
+  -->
+
+  <!-- ===== Root element ===== -->
 
   <xs:element name="review" type="sr:ReviewType">
     <xs:annotation>
@@ -23,6 +68,8 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
       </xs:documentation>
     </xs:annotation>
   </xs:element>
+
+  <!-- ===== Complex types ===== -->
 
   <xs:complexType name="ReviewType">
     <xs:sequence>
@@ -57,6 +104,51 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
         <xs:documentation>
           Absolute path to the directory being reviewed.
           Present only when reviewing a directory (non-git mode).
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="remote-url" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          URL of the remote pull/merge request this review was taken
+          against. Example: "https://github.com/owner/repo/pull/42".
+          Present only when reviewing a remote PR/MR.
+
+          The remote-* attributes form a third source shape alongside
+          git-diff-args/repository (local git diff) and source-path
+          (directory review). The three shapes are mutually exclusive;
+          XSD 1.0 cannot express that constraint, so it is enforced by
+          the application.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="remote-base-sha" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          Commit SHA the remote diff was computed from (the base of the
+          PR/MR at fetch time). Together with remote-head-sha it pins the
+          review to the exact diff it was written against, so a consumer
+          can detect drift when the remote branch moves.
+          Present only when reviewing a remote PR/MR.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="remote-head-sha" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          Commit SHA of the head of the remote PR/MR branch at fetch time.
+          See remote-base-sha for how the pair supports drift detection.
+          Present only when reviewing a remote PR/MR.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="remote-forge" type="sr:RemoteForgeEnum" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          Which forge hosts the remote PR/MR. Names the id space of the
+          remote-id attributes on comments and replies, and selects the
+          API machinery a future posting feature would use.
+          Present only when reviewing a remote PR/MR.
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
@@ -119,6 +211,12 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
         For single-line comments, start and end are equal.
         Exactly one pair (old or new) should be present for line-level
         comments. Both pairs absent = file-level comment.
+
+        The category child says what kind of finding this is. The severity
+        and confidence attributes say how much weight to put on it: severity
+        is how consequential the finding is if it is real, confidence is how
+        sure the author is that it is real. They are independent, and an
+        automated consumer is expected to threshold on both.
       </xs:documentation>
     </xs:annotation>
     <xs:sequence>
@@ -154,6 +252,15 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
           <xs:documentation>
             Optional image attachment. The path attribute references an image file
             stored in the .self-review-assets/ directory alongside the XML output.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="reply" type="sr:ReplyType" minOccurs="0" maxOccurs="unbounded">
+        <xs:annotation>
+          <xs:documentation>
+            Optional ordered list of replies to this comment. The comment
+            itself is the root of the thread; each reply is a later turn in
+            the conversation about it.
           </xs:documentation>
         </xs:annotation>
       </xs:element>
@@ -197,6 +304,138 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
           was generated by a bot or LLM (e.g., "Claude Sonnet 4.6").
           When absent, the comment is assumed to be authored by the human
           reviewer.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="severity" type="sr:SeverityEnum" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          How consequential this finding is if it turns out to be real.
+          Judge the impact of the problem, not how confident you are that
+          the problem exists, and not how much work the fix is.
+
+          This attribute has no schema default on purpose. When it is
+          absent, a consumer must treat the comment as falling below any
+          severity floor it applies, i.e. absent never satisfies a
+          threshold. Comments written by a human in the self-review UI
+          normally carry no severity.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="confidence" type="sr:ConfidenceEnum" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          How sure the author is that this finding is real, i.e. that it
+          describes an actual defect in the code as written rather than a
+          hypothetical one.
+
+          Confidence is about the evidence, not about how strongly the
+          comment is worded. A finding whose argument depends on a
+          constraint that is not visible in the diff, on a caller that was
+          not read, or on a failure scenario that was imagined rather than
+          traced, is low confidence however plausible its prose sounds.
+          LLM reviewers systematically overstate certainty here; a
+          consumer thresholding on this attribute is relying on it being
+          lowered honestly.
+
+          This attribute has no schema default on purpose. When it is
+          absent, a consumer must treat the comment as falling below any
+          confidence floor it applies, i.e. absent never satisfies a
+          threshold.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="remote-id" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          Identifier of the remote discussion thread or comment this
+          comment was fetched from, in the id space of the forge named by
+          remote-forge on the review root. Provenance and forward
+          machinery: it lets a consumer trace the finding back to its
+          origin, and a future posting feature reply to the existing
+          thread instead of opening a new one. Absent on comments
+          authored locally.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="ReplyType">
+    <xs:annotation>
+      <xs:documentation>
+        A reply to a review comment. Replies turn a finding into a
+        conversation: the comment asserts something, a reply answers it, a
+        later reply answers that.
+
+        Four rules govern replies. Only the first is beyond what XSD 1.0
+        can express, and it is enforced by the application and by the
+        skills that author these documents. Rules 2 to 4 are enforced by
+        the content model below; they are spelled out anyway, because the
+        reason for a constraint is what an author needs in order to write
+        a good reply, and a validator only ever reports the constraint:
+
+        1. Replies are ordered. Document order is conversation order, and
+           it is the only ordering signal. There are no timestamps and no
+           identifiers: the earlier reply is the earlier turn.
+
+        2. Replies are flat. A reply is never nested inside another reply.
+           A reply that addresses an earlier reply says so in its body.
+
+        3. A reply carries no thresholding metadata. There is no category,
+           no severity and no confidence on a reply. Those are properties
+           of the finding, and the finding is the root comment, whose
+           severity and confidence govern the whole thread.
+
+        4. A reply carries no suggestion. A concrete counter-proposal goes
+           in the reply body as a fenced code block. Allowing a suggestion
+           on both the root and a reply would force every consumer to
+           invent its own precedence rule.
+
+        When a machine consumes a thread, the last human turn is the
+        tie-breaker over any earlier machine assertion.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="body" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>
+            The reply text. May contain markdown formatting, including
+            fenced code blocks, which is where a counter-proposal goes
+            since replies carry no suggestion element.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="attachment" type="sr:AttachmentType" minOccurs="0" maxOccurs="unbounded">
+        <xs:annotation>
+          <xs:documentation>
+            Optional image attachment, identical in form and semantics to
+            a comment attachment. The path attribute references an image
+            file stored in the .self-review-assets/ directory alongside
+            the XML output.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="author" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          The author of this reply, with the same semantics as
+          CommentType/@author. When present, the reply was generated by a
+          bot or LLM (e.g., "Claude Opus 5"). When absent, the reply is
+          the human reviewer's.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="remote-id" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          Identifier of the remote comment this reply was fetched from,
+          with the same semantics as CommentType/@remote-id: an id in the
+          forge's own id space, kept for provenance and for a future
+          posting feature. Absent on replies authored locally.
+
+          A remote-id is not an ordering signal. Document order remains
+          conversation order, exactly as rule 1 above states.
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
@@ -251,6 +490,8 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
     </xs:attribute>
   </xs:complexType>
 
+  <!-- ===== Simple types ===== -->
+
   <xs:simpleType name="ChangeTypeEnum">
     <xs:annotation>
       <xs:documentation>
@@ -281,6 +522,113 @@ const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="SeverityEnum">
+    <xs:annotation>
+      <xs:documentation>
+        How consequential a finding is if it is real. Ordered from most to
+        least consequential: critical, major, minor, info.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="critical">
+        <xs:annotation>
+          <xs:documentation>
+            Causes data loss, a security hole, or a crash or corruption on a
+            path that real usage reaches. Shipping this is not acceptable.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+      <xs:enumeration value="major">
+        <xs:annotation>
+          <xs:documentation>
+            Produces wrong behaviour, or breaks a documented contract, on a
+            path that real usage reaches. The code does not do what it is
+            supposed to do, but nothing is destroyed and there is no security
+            impact.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+      <xs:enumeration value="minor">
+        <xs:annotation>
+          <xs:documentation>
+            Real but bounded: a mishandled edge case that is unlikely to be
+            hit, a missing test, a leak of something cheap, or a maintenance
+            hazard that will cost time later. Behaviour is correct today.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+      <xs:enumeration value="info">
+        <xs:annotation>
+          <xs:documentation>
+            No defect. Style, naming, phrasing, a question for the author, or
+            a note recorded for context. Nothing is wrong if this is never
+            acted on.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ConfidenceEnum">
+    <xs:annotation>
+      <xs:documentation>
+        How sure the author is that a finding is real. Ordered from most to
+        least sure: high, medium, low.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="high">
+        <xs:annotation>
+          <xs:documentation>
+            The evidence is in the code that was read. The failure can be
+            traced from the diff itself, and no assumption about unseen code,
+            unseen callers, or unstated requirements is needed to reach it.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+      <xs:enumeration value="medium">
+        <xs:annotation>
+          <xs:documentation>
+            Likely real, but it rests on one assumption that was not verified,
+            such as how a caller behaves, what a dependency guarantees, or
+            what the intended requirement was. Stating that assumption in the
+            body is expected at this level.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+      <xs:enumeration value="low">
+        <xs:annotation>
+          <xs:documentation>
+            Speculative. The failure scenario was imagined rather than traced,
+            or the finding depends on a constraint the author invented, or the
+            author could not tell intent from the code. Worth a human's eyes,
+            not worth acting on unattended.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="RemoteForgeEnum">
+    <xs:annotation>
+      <xs:documentation>
+        The forge hosting a remote pull/merge request.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="github">
+        <xs:annotation>
+          <xs:documentation>A GitHub pull request.</xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+      <xs:enumeration value="gitlab">
+        <xs:annotation>
+          <xs:documentation>A GitLab merge request.</xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+    </xs:restriction>
+  </xs:simpleType>
+
 </xs:schema>`;
 
 function extFromMediaType(mediaType: string): string {
@@ -293,33 +641,75 @@ function extFromMediaType(mediaType: string): string {
   return map[mediaType] || 'png';
 }
 
+/**
+ * Copies one attachment list's in-memory blobs into the asset directory and
+ * returns the list with each fileName rewritten to its on-disk location and the
+ * data buffer stripped.
+ *
+ * Shared by the comment walk and the reply walk. Serialization emits the
+ * fileName it is given without checking that anything was written, so an
+ * attachment list that misses this function produces a document that validates
+ * against the schema while pointing at a file that does not exist. That failure
+ * has no error surface, which is why both walks go through here.
+ *
+ * The idPrefix names the resulting files. Comments pass their own id, so
+ * existing asset names are unchanged; replies pass a prefix that cannot collide
+ * with a comment's.
+ */
+function persistAttachments(
+  attachments: Attachment[] | undefined,
+  idPrefix: string,
+  assetDir: string,
+  onWrite: () => void
+): Attachment[] | undefined {
+  if (!attachments?.length) return attachments;
+
+  return attachments.map((att, index) => {
+    if (!att.data) return att;
+    onWrite();
+
+    const ext = extFromMediaType(att.mediaType);
+    const fileName = `${idPrefix}-${index}.${ext}`;
+    const relativePath = `.self-review-assets/${fileName}`;
+
+    if (!fs.existsSync(assetDir)) {
+      fs.mkdirSync(assetDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(assetDir, fileName), Buffer.from(att.data));
+
+    return { ...att, fileName: relativePath, data: undefined };
+  });
+}
+
 function writeAttachments(state: ReviewState, outputFilePath: string): ReviewState {
   const assetDir = path.join(path.dirname(outputFilePath), '.self-review-assets');
   let hasAttachments = false;
+  const markWritten = () => {
+    hasAttachments = true;
+  };
 
   const updatedFiles = state.files.map(file => ({
     ...file,
-    comments: file.comments.map(comment => {
-      if (!comment.attachments?.length) return comment;
-
-      const updatedAttachments = comment.attachments.map((att, index) => {
-        if (!att.data) return att;
-        hasAttachments = true;
-
-        const ext = extFromMediaType(att.mediaType);
-        const fileName = `${comment.id}-${index}.${ext}`;
-        const relativePath = `.self-review-assets/${fileName}`;
-
-        if (!fs.existsSync(assetDir)) {
-          fs.mkdirSync(assetDir, { recursive: true });
-        }
-        fs.writeFileSync(path.join(assetDir, fileName), Buffer.from(att.data));
-
-        return { ...att, fileName: relativePath, data: undefined };
-      });
-
-      return { ...comment, attachments: updatedAttachments };
-    }),
+    // Every comment is walked, including one with no attachments of its own:
+    // its replies may carry attachments, and short-circuiting on the comment's
+    // own list would drop those blobs without a word.
+    comments: file.comments.map(comment => ({
+      ...comment,
+      attachments: persistAttachments(comment.attachments, comment.id, assetDir, markWritten),
+      ...(comment.replies
+        ? {
+            replies: comment.replies.map(reply => ({
+              ...reply,
+              attachments: persistAttachments(
+                reply.attachments,
+                `${comment.id}-r-${reply.id}`,
+                assetDir,
+                markWritten
+              ),
+            })),
+          }
+        : {}),
+    })),
   }));
 
   if (hasAttachments) {
@@ -337,7 +727,7 @@ export async function serializeReview(state: ReviewState, outputFilePath: string
   try {
     const validationResult = await validateXML({
       xml: [{ fileName: 'review.xml', contents: xml }],
-      schema: [{ fileName: 'self-review-v1.xsd', contents: XSD_SCHEMA }],
+      schema: [{ fileName: 'self-review-v3.xsd', contents: XSD_SCHEMA }],
     });
 
     if (!validationResult.valid) {
@@ -375,6 +765,31 @@ function buildSourceAttributes(state: ReviewState): string {
   return '';
 }
 
+/**
+ * Remote provenance attributes on the review root. Like severity and
+ * confidence on a comment, absent means "not a remote review", so each
+ * attribute is emitted only when its field is set: a purely local review
+ * serializes byte-identically to a document written before these existed.
+ */
+function buildRemoteAttributes(state: ReviewState): string {
+  const attrs: string[] = [];
+
+  if (state.remoteUrl) {
+    attrs.push(`remote-url="${escapeXml(state.remoteUrl)}"`);
+  }
+  if (state.remoteBaseSha) {
+    attrs.push(`remote-base-sha="${escapeXml(state.remoteBaseSha)}"`);
+  }
+  if (state.remoteHeadSha) {
+    attrs.push(`remote-head-sha="${escapeXml(state.remoteHeadSha)}"`);
+  }
+  if (state.remoteForge) {
+    attrs.push(`remote-forge="${state.remoteForge}"`);
+  }
+
+  return attrs.length > 0 ? ' ' + attrs.join(' ') : '';
+}
+
 function buildXml(state: ReviewState): string {
   const lines: string[] = [];
 
@@ -383,8 +798,9 @@ function buildXml(state: ReviewState): string {
 
   // Root element with namespace
   const sourceAttrs = buildSourceAttributes(state);
+  const remoteAttrs = buildRemoteAttributes(state);
   lines.push(
-    `<review xmlns="urn:self-review:v1" timestamp="${escapeXml(state.timestamp)}"${sourceAttrs}>`
+    `<review xmlns="urn:self-review:v3" timestamp="${escapeXml(state.timestamp)}"${sourceAttrs}${remoteAttrs}>`
   );
 
   // Files
@@ -443,6 +859,22 @@ function buildCommentXml(comment: ReviewComment): string[] {
     attrs.push(`author="${escapeXml(comment.author)}"`);
   }
 
+  // Thresholding signals. Absent means "below any floor", so they are omitted
+  // rather than defaulted when the author did not take a position.
+  if (comment.severity) {
+    attrs.push(`severity="${comment.severity}"`);
+  }
+
+  if (comment.confidence) {
+    attrs.push(`confidence="${comment.confidence}"`);
+  }
+
+  // Remote provenance. Absent means locally authored, so it is omitted
+  // rather than defaulted, exactly like the signals above.
+  if (comment.remoteId) {
+    attrs.push(`remote-id="${escapeXml(comment.remoteId)}"`);
+  }
+
   const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
 
   // Opening tag
@@ -467,16 +899,57 @@ function buildCommentXml(comment: ReviewComment): string[] {
   }
 
   // Attachments
-  if (comment.attachments?.length) {
-    for (const att of comment.attachments) {
-      lines.push(`      <attachment path="${escapeXml(att.fileName)}" media-type="${escapeXml(att.mediaType)}" />`);
-    }
+  lines.push(...buildAttachmentXml(comment.attachments, '      '));
+
+  // Replies, in array order: document order is conversation order, and it is
+  // the only ordering signal a reply has.
+  for (const reply of comment.replies ?? []) {
+    lines.push(...buildReplyXml(reply));
   }
 
   // Closing tag
   lines.push('    </comment>');
 
   return lines;
+}
+
+/**
+ * Attachment elements are identical in form and meaning under a comment and
+ * under a reply, so both call sites emit them from here.
+ */
+function buildAttachmentXml(attachments: Attachment[] | undefined, indent: string): string[] {
+  if (!attachments?.length) return [];
+
+  return attachments.map(
+    att =>
+      `${indent}<attachment path="${escapeXml(att.fileName)}" media-type="${escapeXml(att.mediaType)}" />`
+  );
+}
+
+/**
+ * A reply is a flat turn in the thread: a body, optional attachments and an
+ * optional author. It carries no category, severity, confidence, suggestion or
+ * nested replies — those belong to the root comment, which owns the finding.
+ * See ReplyType in the XSD for the reasoning.
+ */
+function buildReplyXml(reply: Reply): string[] {
+  const attrs: string[] = [];
+
+  if (reply.author) {
+    attrs.push(`author="${escapeXml(reply.author)}"`);
+  }
+  if (reply.remoteId) {
+    attrs.push(`remote-id="${escapeXml(reply.remoteId)}"`);
+  }
+
+  const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
+
+  return [
+    `      <reply${attrStr}>`,
+    `        <body>${escapeXml(reply.body)}</body>`,
+    ...buildAttachmentXml(reply.attachments, '        '),
+    '      </reply>',
+  ];
 }
 
 function escapeXml(str: string): string {

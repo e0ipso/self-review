@@ -198,7 +198,17 @@ export function createPriorReviewXml(
     oldLineEnd?: number;
     body: string;
     category?: string;
-  }>
+    severity?: string;
+    confidence?: string;
+    /**
+     * Ordered conversation turns under this comment. Document order is
+     * conversation order — there are no timestamps and no ids — so the
+     * generator emits these exactly as given.
+     */
+    replies?: Array<{ body: string; author?: string }>;
+  }>,
+  /** Viewed state per file. Files carrying comments default to not viewed. */
+  fileStates: Array<{ path: string; viewed: boolean }> = []
 ): string {
   const commentXml = (c: (typeof comments)[0]) => {
     const lineAttrs = [
@@ -210,12 +220,24 @@ export function createPriorReviewXml(
       .filter(Boolean)
       .join(' ');
 
-    const attrs = lineAttrs ? ` ${lineAttrs}` : '';
+    const signalAttrs = [
+      c.severity ? `severity="${c.severity}"` : '',
+      c.confidence ? `confidence="${c.confidence}"` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const allAttrs = [lineAttrs, signalAttrs].filter(Boolean).join(' ');
+    const attrs = allAttrs ? ` ${allAttrs}` : '';
     const categoryEl = c.category
       ? `\n      <category>${c.category}</category>`
       : '';
 
-    return `    <comment${attrs}>\n      <body>${escapeXml(c.body)}</body>${categoryEl}\n    </comment>`;
+    // `<reply>` follows `<category>` because CommentType is an xs:sequence of
+    // body, category, suggestion, attachment, reply.
+    const replyEls = (c.replies ?? []).map(replyXml).join('');
+
+    return `    <comment${attrs}>\n      <body>${escapeXml(c.body)}</body>${categoryEl}${replyEls}\n    </comment>`;
   };
 
   // Group comments by file
@@ -225,25 +247,50 @@ export function createPriorReviewXml(
     arr.push(c);
     byFile.set(c.filePath, arr);
   }
+  // A file can be marked done without carrying any comment.
+  for (const { path } of fileStates) {
+    if (!byFile.has(path)) byFile.set(path, []);
+  }
+  const viewedByPath = new Map(fileStates.map(f => [f.path, f.viewed]));
 
   const fileElements = Array.from(byFile.entries())
-    .map(
-      ([path, fileComments]) =>
-        `  <file path="${path}" change-type="modified" viewed="false">\n${fileComments.map(commentXml).join('\n')}\n  </file>`
-    )
+    .map(([path, fileComments]) => {
+      const viewed = viewedByPath.get(path) ?? false;
+      const openTag = `  <file path="${path}" change-type="modified" viewed="${viewed}"`;
+      if (fileComments.length === 0) return `${openTag} />`;
+      return `${openTag}>\n${fileComments.map(commentXml).join('\n')}\n  </file>`;
+    })
     .join('\n');
 
+  // The root element stays on `urn:self-review:v2` on purpose. These fixtures
+  // exist to prove the app still reads documents written before v3, and the
+  // resume scenarios assert that such a document is re-saved as v3. Do not
+  // bump this namespace.
+  //
+  // Note a fixture carrying <reply> children declares v2 while <reply> was
+  // only added in v3, so it does not validate against the frozen v2 schema.
+  // That is deliberate and harmless: nothing validates the fixture, and the
+  // parser matches elements by local name regardless of namespace.
   return `<?xml version="1.0" encoding="UTF-8"?>
 <review
-  xmlns="urn:self-review:v1"
+  xmlns="urn:self-review:v2"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="urn:self-review:v1 self-review-v1.xsd"
+  xsi:schemaLocation="urn:self-review:v2 self-review-v2.xsd"
   timestamp="2026-02-10T12:00:00Z"
   git-diff-args=""
   repository="${repoDir}"
 >
 ${fileElements}
 </review>`;
+}
+
+/**
+ * One `<reply>` child of a prior-review `<comment>`. An absent author means the
+ * turn is the human reviewer's, which the UI renders as "You".
+ */
+function replyXml(reply: { body: string; author?: string }): string {
+  const authorAttr = reply.author ? ` author="${escapeXml(reply.author)}"` : '';
+  return `\n      <reply${authorAttr}>\n        <body>${escapeXml(reply.body)}</body>\n      </reply>`;
 }
 
 function escapeXml(s: string): string {

@@ -14,7 +14,7 @@ custom composition.
 - **Browser-only.** No Node.js APIs (`fs`, `child_process`, `path`). This package runs in
   renderer processes and browser environments.
 - **No imports from `@self-review/core`.** Core has Node-only dependencies. Importing from
-  it — even a single function — risks pulling Node code into the browser bundle. Use
+  it, even a single function, risks pulling Node code into the browser bundle. Use
   `@self-review/types` for shared type definitions.
 - **`file-type-utils.ts` is duplicated from `@self-review/core`.** The file at
   `src/utils/file-type-utils.ts` is an intentional copy of `packages/core/src/file-type-utils.ts`.
@@ -49,7 +49,7 @@ src/
 ### Compiled CSS output
 
 `npm run build` runs `tsup && npm run build:css`. The `build:css` script uses `@tailwindcss/cli`
-to compile `src/build-styles.css` into `dist/styles.css` — a self-contained CSS file that includes
+to compile `src/build-styles.css` into `dist/styles.css`, a self-contained CSS file that includes
 all Tailwind utility classes used by the library. Host apps import it as:
 
 ```js
@@ -60,10 +60,10 @@ No Tailwind dependency is needed in the consuming application.
 
 ### Build entrypoints
 
-- `src/styles.css` — **build input only**. Contains Tailwind `@custom-variant`/`@theme inline`
+- `src/styles.css`, **build input only**. Contains Tailwind `@custom-variant`/`@theme inline`
   directives, CSS custom property definitions (`:root`, `.dark`), and component-level overrides.
   Do not import this file directly from a host app.
-- `src/build-styles.css` — **Tailwind CLI entrypoint**. Imports `tailwindcss`, the typography
+- `src/build-styles.css`, **Tailwind CLI entrypoint**. Imports `tailwindcss`, the typography
   plugin, `styles.css`, and adds `@source "../dist"` to scan compiled JS for class names. Not
   shipped in the package.
 
@@ -77,10 +77,10 @@ Host apps do not need Tailwind in their project.
 `ConfigProvider` renders a `<div className="self-review">` around its children with
 `style={{ display: 'contents' }}`. This div serves two purposes:
 
-1. **Theme scoping** — the `dark` class is toggled on this wrapper instead of
+1. **Theme scoping**, the `dark` class is toggled on this wrapper instead of
    `document.documentElement`. Dark mode utility classes activate via
    `@custom-variant dark (&:is(.dark *))` in `styles.css`.
-2. **CSS containment** — all `*` selectors and component-specific overrides in `styles.css` are
+2. **CSS containment**, all `*` selectors and component-specific overrides in `styles.css` are
    prefixed with `.self-review`, preventing style leakage into host applications.
 
 ### Radix/Base UI portal containers
@@ -89,7 +89,7 @@ All shadcn/ui portal-based components (`alert-dialog`, `dropdown-menu`, `select`
 receive the `.self-review` wrapper div as their `container` prop via `useConfig().portalContainer`.
 This ensures portals render inside the scoped subtree and inherit dark-mode CSS variables.
 
-`portalContainer` is set synchronously via a callback ref during React's commit phase — before
+`portalContainer` is set synchronously via a callback ref during React's commit phase, before
 effects and before the browser paints. Portals always render inside the scoped subtree from the
 first render onwards; there is no null-on-first-render window.
 

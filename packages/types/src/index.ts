@@ -63,6 +63,55 @@ export interface LineRange {
   end: number;
 }
 
+/**
+ * How consequential a finding is if it is real, most to least.
+ * See SeverityEnum in self-review-v3.xsd for the semantics of each value.
+ */
+export type CommentSeverity = 'critical' | 'major' | 'minor' | 'info';
+
+/**
+ * How sure the author is that a finding is real, most to least.
+ * See ConfidenceEnum in self-review-v3.xsd for the semantics of each value.
+ */
+export type CommentConfidence = 'high' | 'medium' | 'low';
+
+/**
+ * The forge hosting a remote pull/merge request.
+ * See RemoteForgeEnum in self-review-v3.xsd.
+ */
+export type RemoteForge = 'github' | 'gitlab';
+
+/**
+ * One turn in the conversation about a comment.
+ *
+ * A reply is deliberately thin. It carries no category, no severity, no
+ * confidence and no suggestion: all four are properties of the finding, and
+ * the finding is the root comment. A counter-proposal goes in `body` as a
+ * fenced code block.
+ *
+ * Ordering is positional. The array order is the document order is the
+ * conversation order, in all three directions. Nothing sorts replies.
+ */
+export interface Reply {
+  /**
+   * In-memory render key only. Like `ReviewComment.id`, this is regenerated
+   * on every parse and is never written to XML — the tree supplies parent
+   * linkage and document order supplies ordering, so nothing needs naming.
+   */
+  id: string;
+  body: string;
+  /** Absent means the human reviewer, present means a bot or LLM. */
+  author?: string;
+  attachments?: Attachment[];
+  /**
+   * Identifier of the remote comment this reply was fetched from, in the
+   * forge's own id space (see `ReviewState.remoteForge`). Undefined for
+   * replies authored locally. Never an ordering signal: array order stays
+   * conversation order.
+   */
+  remoteId?: string;
+}
+
 export interface ReviewComment {
   id: string;
   filePath: string;
@@ -71,8 +120,20 @@ export interface ReviewComment {
   category: string;
   suggestion: Suggestion | null;
   author?: string;
+  // Thresholding signals. Undefined means the author took no position, and a
+  // consumer must treat that as below any floor it applies.
+  severity?: CommentSeverity;
+  confidence?: CommentConfidence;
   orphaned?: boolean; // for --resume-from conflict handling
   attachments?: Attachment[];
+  /** Ordered conversation turns on this comment. Undefined when there are none. */
+  replies?: Reply[];
+  /**
+   * Identifier of the remote discussion thread or comment this comment was
+   * fetched from, in the forge's own id space (see `ReviewState.remoteForge`).
+   * Undefined for comments authored locally.
+   */
+  remoteId?: string;
 }
 
 export interface FileReviewState {
@@ -86,6 +147,143 @@ export interface ReviewState {
   timestamp: string;
   source: DiffSource;
   files: FileReviewState[];
+  // Remote provenance. Set only for a review taken against a remote PR/MR;
+  // a purely local review carries none of these, and absent behaves like
+  // absent severity/confidence: the serializer omits the attribute and the
+  // parser leaves the field undefined.
+  /** URL of the remote pull/merge request under review. */
+  remoteUrl?: string;
+  /** Commit SHA the remote diff was computed from, for drift detection. */
+  remoteBaseSha?: string;
+  /** Commit SHA of the remote PR/MR head at fetch time, for drift detection. */
+  remoteHeadSha?: string;
+  /** Which forge hosts the remote PR/MR. Names the id space of remoteId values. */
+  remoteForge?: RemoteForge;
+}
+
+// ===== Remote PR/MR Session Types =====
+
+/**
+ * Provenance and status of a remote PR/MR session, recorded at
+ * materialization time. Rides on `DiffLoadPayload.remote` so the renderer
+ * can display remote context; the main process injects the same provenance
+ * into the submitted `ReviewState` before serialization, so the renderer
+ * never needs to copy these fields back.
+ */
+export interface RemoteSessionInfo {
+  /** URL of the remote pull/merge request under review. */
+  remoteUrl: string;
+  /** Resolved SHA of the PR/MR base branch tip. */
+  remoteBaseSha: string;
+  /** Live SHA of the PR/MR head at materialization time. */
+  remoteHeadSha: string;
+  /** Which forge hosts the PR/MR. */
+  remoteForge: RemoteForge;
+  /**
+   * False when the forge CLI was unavailable and discussion threads could
+   * not be fetched; the review still opens fully (diff only).
+   */
+  threadSyncAvailable: boolean;
+}
+
+/**
+ * Drift comparison between a resumed document's recorded remote head SHA
+ * and the live head SHA observed at materialization. Sent only when a
+ * `--resume-from` document carries `remote-head-sha` in a remote session.
+ */
+export interface RemoteDriftInfo {
+  /** `remote-head-sha` recorded in the resumed document. */
+  recordedHeadSha: string;
+  /** Live head SHA from this session's materialization. */
+  liveHeadSha: string;
+  /** True when the two SHAs differ (the PR/MR moved since the review). */
+  drifted: boolean;
+}
+
+/**
+ * Result of the `remote:open-url` channel (Renderer → Main, invoke).
+ * On success the main process pushes `diff:load` (and `resume:load` when
+ * threads were fetched) to the requesting window before resolving.
+ */
+export type RemoteOpenUrlResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+// ===== Walkthrough Guide Types =====
+// The guide is a read-only sidecar (self-review-guide-v1.xsd) generated
+// before the review starts. It labels and orders files for orientation; it
+// can never hide them. See docs/intent/llm-review-guide.md.
+
+/**
+ * One file inside a guide group. The path must match a diff file
+ * (repository-relative, same convention as review.xml); entries whose path
+ * matches nothing in the diff are silently dropped by the consumer.
+ */
+export interface GuideFileEntry {
+  /** File path relative to the repository root. For renames, the new path. */
+  path: string;
+  /** One-line description of the role this file plays in the change. */
+  description: string;
+}
+
+/**
+ * A named set of related files in the walkthrough. Groups are labels for
+ * orientation, never suppressions: every group and every file in it is
+ * shown. Array position is reading order.
+ */
+export interface GuideGroup {
+  /** Short display name shown as the group heading, e.g. "Core change". */
+  name: string;
+  /** One line explaining why these files form a group and what to look for. */
+  rationale: string;
+  /** The files in this group, in reading order. At least one entry. */
+  files: GuideFileEntry[];
+}
+
+/**
+ * A parsed walkthrough guide. Files in the diff that no group mentions are
+ * presented by the consumer in an implicit trailing "Everything else"
+ * group; that group is derived at render time and never part of this state.
+ */
+export interface ReviewGuide {
+  /**
+   * Review-level orientation prose shown before the first file. Markdown;
+   * may include a fenced code block labelled "mermaid" for a diagram.
+   * Absent when the guide has no overview.
+   */
+  overview?: string;
+  /** Ordered reading groups. Array position is reading order. */
+  groups: GuideGroup[];
+}
+
+/**
+ * One file inside a resolved display group. Unlike {@link GuideFileEntry},
+ * the description is optional: files swept into the implicit
+ * "Everything else" group have no guide-authored one-liner.
+ */
+export interface ResolvedGuideFile {
+  /** File path relative to the repository root. For renames, the new path. */
+  path: string;
+  /** One-line description from the guide; absent for implicit-group files. */
+  description?: string;
+}
+
+/**
+ * A display group produced by reconciling a {@link ReviewGuide} with the
+ * actual diff file list. Guide entries missing from the diff are dropped,
+ * duplicate references keep only their first group, and diff files the
+ * guide never mentions land in a terminal implicit group (in diff order)
+ * marked with `implicit: true` so the UI can label it.
+ */
+export interface ResolvedGuideGroup {
+  /** Display name for the group heading. */
+  name: string;
+  /** One-line rationale from the guide; absent for the implicit group. */
+  rationale?: string;
+  /** True only for the derived trailing "Everything else" group. */
+  implicit: boolean;
+  /** The files shown under this group, in display order. Never empty. */
+  files: ResolvedGuideFile[];
 }
 
 // ===== Configuration Types =====
@@ -110,6 +308,12 @@ export interface AppConfig {
   wordWrap: boolean;
   maxFiles: number;
   maxTotalLines: number;
+  /**
+   * Path to the walkthrough guide sidecar (`guide-file` YAML key). When
+   * unset, the guide path is derived from the resolved output path as
+   * `<output-basename>.guide.xml`.
+   */
+  guideFile?: string;
 }
 
 // ===== IPC Payload Types =====
@@ -118,10 +322,46 @@ export interface DiffLoadPayload {
   files: DiffFile[];
   source: DiffSource;
   isLargePayload?: boolean;
+  /**
+   * Present only for a remote PR/MR session. After materialization, remote
+   * mode is git mode: `source` stays `type: 'git'` with `repository` set to
+   * the materialized clone's root, and this field carries the remote
+   * provenance and thread-sync status alongside it.
+   */
+  remote?: RemoteSessionInfo;
 }
 
 export interface ResumeLoadPayload {
+  /**
+   * Comments to restore. In a remote session this includes fetched forge
+   * threads mapped to `ReviewComment`s; review-level threads (no file
+   * anchor) keep the mapper's sentinel `filePath: ''`
+   * (REVIEW_LEVEL_FILE_PATH). The renderer surfaces those under a synthetic
+   * review-level entry and, on submit, keeps them in a `FileReviewState`
+   * with `path: ''` so the serializer emits a legal `<file path="">`.
+   */
   comments: ReviewComment[];
+  /** Paths the prior review marked as done. Absent when nothing was marked. */
+  viewedFiles?: string[];
+  /**
+   * Remote head drift, present only when a resumed document recorded a
+   * `remote-head-sha` in a remote session. See {@link RemoteDriftInfo}.
+   */
+  remoteDrift?: RemoteDriftInfo;
+}
+
+/**
+ * Payload for the `guide:load` channel (Main → Renderer). Sent only when a
+ * valid walkthrough guide sidecar was discovered; carries display-ready
+ * data — the overview plus groups already reconciled against the parsed
+ * diff — so the renderer stays free of tolerance logic. Metadata only
+ * (paths, names, descriptions): safe to send in large-payload mode.
+ */
+export interface GuideLoadPayload {
+  /** Review-level orientation prose (Markdown, optionally Mermaid). */
+  overview?: string;
+  /** Resolved display groups, in reading order. */
+  groups: ResolvedGuideGroup[];
 }
 
 // ===== Output Path Types =====

@@ -1,7 +1,6 @@
-import { defineConfig } from 'vitest/config';
 import path from 'path';
 
-export default defineConfig({
+export default {
   test: {
     // By default, exclude e2e tests and generated files
     include: ['src/**/*.test.{ts,tsx}'],
@@ -37,4 +36,4 @@ export default defineConfig({
       'src/renderer/components/**/*',
     ],
   },
-});
+};

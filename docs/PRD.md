@@ -1,4 +1,4 @@
-# self-review — Product Requirements Document
+# self-review, Product Requirements Document
 
 **Version:** 1.0
 **Date:** 2026-02-10
@@ -43,9 +43,9 @@ A single developer working locally with AI coding agents. They are comfortable w
 | UI components | shadcn/ui | Accessible, composable components built on Radix primitives |
 | Syntax highlighting | Prism.js | Broad language coverage, themeable, lightweight |
 | Backend | Node.js | Electron's main process, handles CLI, git, IPC, file I/O |
-| Markdown rendering | react-markdown + remark-gfm | Rendered markdown view with AST position data for line mapping |
+| Rendered text review | react-markdown + remark-gfm, browser HTML parsing | Rendered Markdown and added HTML views with source-line data for line mapping |
 | Diagram rendering | mermaid | Renders Mermaid code blocks as inline SVG diagrams |
-| Prose styling | @tailwindcss/typography | Typography classes for rendered markdown content |
+| Prose styling | @tailwindcss/typography | Typography classes for rendered text content |
 | Build system | Electron Forge or electron-builder | Packaging for macOS and Linux |
 
 ### 2.1 Platform Support
@@ -129,17 +129,19 @@ The main process and renderer process communicate via Electron's `ipcMain` / `ip
 
 ```
 self-review [options] [<git-diff-args>...]
+self-review <pr-or-mr-url>
+self-review fetch-comments <pr-or-mr-url> [--all-threads]
 ```
 
-The CLI accepts any arguments that `git diff` accepts. These are passed through directly to `git diff` as a child process. Alternatively, a positional argument can be a path to a non-git directory, in which case the app enters **directory mode** (see Section 4.6).
+The CLI accepts any arguments that `git diff` accepts. These are passed through directly to `git diff` as a child process. Alternatively, a positional argument can be a path to a non-git directory, in which case the app enters **directory mode** (see Section 4.6), or a GitHub pull request / GitLab merge request URL, in which case the app enters **remote mode** (see Section 4.7). The `fetch-comments` subcommand runs headlessly, without opening a window (see Section 4.7).
 
 ### 4.2 Options
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--resume-from <file>` | string | — | Path to a previously exported XML file. Loads prior comments back into the UI overlaid on the same diff. |
-| `--help` | boolean | — | Print usage information and exit. |
-| `--version` | boolean | — | Print version and exit. |
+| `--resume-from <file>` | string |, | Path to a previously exported XML file. Loads prior comments and files marked as done back into the UI overlaid on the same diff. |
+| `--help` | boolean |, | Print usage information and exit. |
+| `--version` | boolean |, | Print version and exit. |
 
 ### 4.3 Usage Examples
 
@@ -161,6 +163,13 @@ self-review --staged --resume-from review.xml
 
 # Review a non-git directory (all files shown as new additions)
 self-review /path/to/generated-code
+
+# Review a remote pull/merge request by URL
+self-review https://github.com/owner/repo/pull/42
+self-review https://gitlab.com/group/project/-/merge_requests/7
+
+# Headless: fetch PR/MR discussion threads into a review XML file
+self-review fetch-comments https://github.com/owner/repo/pull/42
 ```
 
 ### 4.4 Output and Logging
@@ -177,9 +186,9 @@ There are two exit paths:
 
 **Window close (X / Cmd+Q / Alt+F4):** Closing the window by any OS-level method shows a three-way confirmation dialog (skipped automatically if no comments have been added):
 
-1. **Save & Quit** — collects the review state, serializes to XML, writes to the output file, exits with code 0.
-2. **Discard** — exits immediately with code 0, without writing any output.
-3. **Cancel** — dismisses the dialog and returns to the review.
+1. **Save & Quit**, collects the review state, serializes to XML, writes to the output file, exits with code 0.
+2. **Discard**, exits immediately with code 0, without writing any output.
+3. **Cancel**, dismisses the dialog and returns to the review.
 
 In both save paths, the application:
 
@@ -199,9 +208,24 @@ When launched from macOS Finder, a Linux desktop app launcher, or any other meth
 
 **Mode determination logic:** On startup, the app determines which mode to use:
 
-1. If the current working directory is inside a git repository, the app enters **git mode** (normal diff review).
-2. If not in a git repo but the first positional argument is an existing directory path, the app enters **directory mode** (all files treated as new additions).
-3. Otherwise, the app enters **welcome mode** and displays the welcome screen.
+1. If the first positional argument is a recognized PR/MR URL, the app enters **remote mode** (see Section 4.7).
+2. If the current working directory is inside a git repository, the app enters **git mode** (normal diff review).
+3. If not in a git repo but the first positional argument is an existing directory path, the app enters **directory mode** (all files treated as new additions).
+4. Otherwise, the app enters **welcome mode** and displays the welcome screen.
+
+### 4.7 Remote PR/MR Review
+
+The app reviews GitHub pull requests and GitLab merge requests directly from their URLs, wrapping the guided walkthrough — the product's differentiator — around remote diffs. The flow is CWD-independent: entry is a URL as the first CLI argument or a URL field on the welcome screen. Forge detection is by URL path shape only (`/pull/N` → GitHub, `/-/merge_requests/N` → GitLab), so self-hosted GitLab instances (e.g. git.drupalcode.org) are recognized with zero configuration.
+
+**Materialization (always clone-backed):** The reviewed diff is materialized through local git, so everything downstream — diff parsing, expand-context, blob previews, guide discovery — is the existing local machinery at full fidelity; there is no degraded mode. If the working directory is inside a clone whose remote matches the URL, the base branch and the PR/MR head ref (`refs/pull/N/head` / `refs/merge-requests/N/head`) are fetched into namespaced local refs with no working-tree changes. Otherwise a temporary blobless clone (`--filter=blob:none`) is created under the OS temp directory and removed on exit. Git's own credential machinery handles all transport and auth for cloning and fetching.
+
+**Discussion threads:** Existing forge discussion threads are fetched through the `gh`/`glab` CLIs (base-branch lookup and thread fetch only) and mapped deterministically to comment threads, with forge usernames as `author` and forge ids as `remote-id`. GitLab fetches unresolved threads by default; `--all-threads` includes resolved ones. When the forge CLI is absent or unauthenticated, the review itself is unaffected (the base branch falls back to `git ls-remote`) and thread sync reports as unavailable on stderr.
+
+**`fetch-comments` subcommand:** `self-review fetch-comments <URL> [--all-threads]` runs the same fetch-and-map flow headlessly and writes a v3 `review.xml` with remote provenance (`remote-url`, `remote-base-sha`, `remote-head-sha`, `remote-forge`) and per-thread `remote-id`s, suitable for `--resume-from` or unattended consumers. It honors the `output-file` config and logs to stderr only.
+
+**Drift detection:** On open and on resume, the head SHA fetched during materialization is compared with the recorded `remote-head-sha`; the UI shows a non-blocking warning when the PR/MR has moved since the review was taken.
+
+**Scope:** Remote mode is strictly **read-only toward the forge**: materialize the diff, show existing threads, produce `review.xml` locally. Posting comments, verdicts, or any other write to the forge is explicitly out of scope (see Section 11).
 
 ---
 
@@ -213,8 +237,8 @@ The UI is modeled after GitHub's pull request "Files changed" review interface. 
 
 The application window consists of two main panels:
 
-- **Left panel — File tree navigator** (collapsible, resizable)
-- **Right panel — Diff viewer** (main content area)
+- **Left panel, File tree navigator** (collapsible, resizable)
+- **Right panel, Diff viewer** (main content area)
 
 The layout is a horizontal split. The file tree takes approximately 20-25% of the window width by default and can be resized by dragging the divider.
 
@@ -227,13 +251,14 @@ A vertical list of all files in the diff, displayed as a flat list with file pat
 - **File path** relative to the repository root (e.g., `src/auth/login.ts`)
 - **Change type badge**: Added (green), Modified (yellow), Deleted (red), Renamed (blue)
 - **Additions / deletions count** (e.g., `+42 -17`)
-- **Comment count indicator** — shows the number of comments on this file (if any)
+- **Comment count indicator**, shows the number of comments on this file (if any)
 
 **Behaviors:**
 
 - Clicking a file scrolls the diff viewer to that file.
 - The currently visible file in the diff viewer is highlighted in the file tree.
 - File order matches the order returned by `git diff` (alphabetical by default).
+- The header includes a Split/Unified diff-view toggle that controls the diff viewer's render mode.
 
 **File search/filter:**
 
@@ -249,9 +274,9 @@ The main content area displays diffs for all files in a single scrollable view (
 
 When `git diff` returns no changes (zero files), the diff viewer area displays a help message instead of file sections. This message explains:
 
-1. **Why the diff is empty** — the arguments passed to `self-review` produced no changes.
-2. **How arguments work** — all arguments (except `--resume-from`, `--help`, `--version`) are passed directly to `git diff`.
-3. **Common examples** — a table of example commands with brief explanations to help the user select the right diff scope.
+1. **Why the diff is empty**, the arguments passed to `self-review` produced no changes.
+2. **How arguments work**, all arguments (except `--resume-from`, `--help`, `--version`) are passed directly to `git diff`.
+3. **Common examples**, a table of example commands with brief explanations to help the user select the right diff scope.
 
 The examples shown:
 
@@ -280,16 +305,16 @@ Each file in the diff is rendered as a collapsible section:
 
 #### 5.3.2 Diff View Modes
 
-Two view modes, togglable via a control in the toolbar:
+Two view modes, togglable via a control in the file tree header:
 
 - **Split view (side-by-side):** Old file on the left, new file on the right. Lines are aligned. This is the default.
 - **Unified view:** Single column showing both old and new lines interleaved, with `-` and `+` prefixes. Traditional unified diff format.
 
 The selected view mode persists for the session and can be set as a default in configuration.
 
-**Added/deleted file override:** Files with change type `added` or `deleted` always render in unified view, regardless of the selected view mode. In split view, these files would waste half the screen — an added file shows content only on the right pane with the left pane empty, and a deleted file shows content only on the left pane with the right pane empty. Forcing unified view for these files uses the full width for the content that matters.
+**Added/deleted file override:** Files with change type `added` or `deleted` always render in unified view, regardless of the selected view mode. In split view, these files would waste half the screen, an added file shows content only on the right pane with the left pane empty, and a deleted file shows content only on the left pane with the right pane empty. Forcing unified view for these files uses the full width for the content that matters.
 
-**Rendered markdown view:** New markdown files (`.md`/`.markdown` with change type `added`) show a per-file "Raw / Rendered" toggle in the file header. When toggled to "Rendered", the file content is displayed as formatted HTML using `react-markdown` with a source-line-mapped gutter. Each rendered block (paragraph, heading, list, code block, table, etc.) is annotated with its source line range from the markdown AST, enabling click-to-comment on rendered content. Mermaid code blocks render as inline SVG diagrams. Comments placed in the rendered view use the same `LineRange` contract as the raw diff view, so switching between views preserves comment placement.
+**Rendered text view:** New Markdown files (`.md`/`.markdown` with change type `added`) and new HTML files (`.html`/`.htm` with change type `added`) show a per-file "Raw / Rendered" toggle in the file header. Raw diff mode remains available for these files. In rendered mode, Markdown content is displayed as formatted HTML using `react-markdown`, while HTML content is rendered directly through the same source-line-mapped gutter path. Each rendered block is annotated with its source line range, enabling gutter-based line-range comments mapped to the new-file line numbers. Mermaid code blocks in Markdown render as inline SVG diagrams. Comments placed in the rendered text view use the same `LineRange` contract as the raw diff view, so switching between raw and rendered views preserves comment placement. Modified, deleted, or otherwise non-added HTML files do not use rendered HTML mode and remain in the raw diff flow.
 
 #### 5.3.3 Syntax Highlighting
 
@@ -339,11 +364,12 @@ GitHub-style suggestions allow the reviewer to propose literal code replacements
 - **Activation:** Within any comment (line, multi-line, or file-level), the user can insert a suggestion block.
 - **Format:** A code block prefixed with `suggestion` (mimicking GitHub's triple-backtick suggestion syntax).
 - **Semantics:** The suggestion represents "replace the selected line(s) with this code." The original lines and the proposed replacement are both preserved in the output XML.
+- **Prefill:** When the user activates a suggestion, the proposed-code editor is prefilled with the original code so the user can edit in place rather than retyping (matching GitHub/GitLab behavior).
 - **Display:** Suggestions are rendered as a diff-within-a-diff: the original lines shown as removed (red), the suggestion shown as added (green), within the comment body.
 
 #### 5.4.5 Comment Categories / Tags
 
-Every comment must be assigned a category (e.g., `bug`, `style`, `question`, `nit`, `security`). Categories are defined in the project-level configuration (see Section 7) and the first category is selected by default when creating a new comment. The category selector uses radio-button semantics — exactly one category is always selected and cannot be deselected. Categories are included in the XML output to help AI agents prioritize and categorize feedback.
+Every comment must be assigned a category (e.g., `bug`, `style`, `question`, `nit`, `security`). Categories are defined in the project-level configuration (see Section 7) and the first category is selected by default when creating a new comment. The category selector uses radio-button semantics, exactly one category is always selected and cannot be deselected. Categories are included in the XML output to help AI agents prioritize and categorize feedback.
 
 #### 5.4.6 Editing and Deleting Comments
 
@@ -356,7 +382,6 @@ A top toolbar provides global controls:
 
 | Control | Type | Description |
 |---------|------|-------------|
-| View mode toggle | Segmented button | Switch between Split and Unified diff views |
 | Expand/Collapse all | Button | Expand or collapse all file sections at once |
 | Show/hide untracked | Toggle button | Show or hide untracked files (new files not yet added to git). Default: on, except for `--staged` / `--cached` reviews where untracked files are hidden by default. |
 | Line wrap toggle | Toggle button | Wrap or unwrap long lines in the code content area. When off, long lines scroll horizontally. Default: on. |
@@ -367,9 +392,9 @@ A top toolbar provides global controls:
 
 The application supports three theme modes:
 
-- **Light** — light background, dark text
-- **Dark** — dark background, light text
-- **System** — follows the operating system's appearance preference (via `prefers-color-scheme`)
+- **Light**, light background, dark text
+- **Dark**, dark background, light text
+- **System**, follows the operating system's appearance preference (via `prefers-color-scheme`)
 
 The theme affects all UI elements including the Prism syntax highlighting theme. shadcn/ui provides built-in light/dark support. The Prism theme should be swapped to match (e.g., `prism-one-light` / `prism-one-dark` or similar).
 
@@ -379,12 +404,13 @@ The default is **System**.
 
 The welcome screen is displayed when the app is launched outside a git repository with no directory argument (e.g., from macOS Finder or a Linux app launcher). It provides a centered, single-column layout with:
 
-- **App title and tagline** — "self-review" heading with a short description.
-- **Git Mode card** — an informational card explaining that git mode requires launching from the CLI with diff arguments. This card is not interactive; it serves as a hint to use the CLI.
-- **Directory Mode card** — an interactive card with:
+- **App title and tagline**, "self-review" heading with a short description.
+- **Git Mode card**, an informational card explaining that git mode requires launching from the CLI with diff arguments. This card is not interactive; it serves as a hint to use the CLI.
+- **Directory Mode card**, an interactive card with:
   - A **Browse...** button that opens a native directory picker dialog.
   - The selected directory path displayed next to the button.
   - A **Start Review** button (appears after selecting a directory) that initiates a directory review, scanning all files recursively and treating them as new additions.
+- **Remote PR/MR URL field**, a text input accepting a GitHub PR or GitLab MR URL. Submitting it starts a remote review session (see Section 4.7) in the same window.
 
 Selecting a directory and clicking "Start Review" transitions the app from the welcome screen to the standard review UI with all files shown as additions.
 
@@ -406,9 +432,9 @@ The following is the target structure. The exact XSD will be generated as part o
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <review
-  xmlns="urn:self-review:v1"
+  xmlns="urn:self-review:v3"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="urn:self-review:v1 self-review-v1.xsd"
+  xsi:schemaLocation="urn:self-review:v3 self-review-v3.xsd"
   timestamp="2026-02-10T14:30:00Z"
   git-diff-args="--staged"
   repository="/path/to/repo"
@@ -423,10 +449,16 @@ The following is the target structure. The exact XSD will be generated as part o
       <category>style</category>
     </comment>
 
-    <!-- Single-line comment on a new/added line -->
+    <!-- Single-line comment on a new/added line, with a reply thread -->
     <comment new-line-start="15" new-line-end="15">
       <body>This variable name is misleading. Consider renaming to `isAuthenticated`.</body>
       <category>nit</category>
+      <reply author="Claude Opus 5">
+        <body>Agreed, renamed in the latest commit.</body>
+      </reply>
+      <reply>
+        <body>Thanks — looks good now.</body>
+      </reply>
     </comment>
 
     <!-- Comment on a deleted line -->
@@ -461,6 +493,19 @@ return user;</original-code>
 </review>
 ```
 
+#### Threaded Replies
+
+A review comment can be answered. Replies nest inside the comment they answer, forming a single
+thread: the comment states a finding, and each reply is a later turn in the conversation about it.
+Both the human reviewer in the UI and an LLM writing the XML directly can add replies, so a
+disagreement can be recorded as a conversation instead of by overwriting the original finding or
+adding a disconnected comment on the same line.
+
+A reply carries a body, an optional author, and optional image attachments. It deliberately carries
+no category, severity, confidence or code suggestion: those describe the finding, and the finding is
+the root comment. Replies are flat rather than nested, and their order in the document *is* the
+conversation order — there is no timestamp and no identifier to sort by.
+
 ### 6.3 Schema Design Principles
 
 - **All files from the diff are listed**, even those with no comments, to provide a complete picture.
@@ -469,12 +514,15 @@ return user;</original-code>
 - **Line comments reference either old or new line numbers.** Comments on added or context lines use `new-line-start` / `new-line-end` (line numbers from the post-change version). Comments on deleted lines use `old-line-start` / `old-line-end` (line numbers from the pre-change version). Exactly one pair should be present for line-level comments; this constraint is enforced by the application (not expressible in XSD 1.0). For single-line comments, start equals end.
 - **Suggestions** include both the original code (from the diff) and the proposed replacement, as literal text. The AI agent can apply the suggestion by performing a text replacement.
 - **Categories** are required on every comment. The first configured category is selected by default.
+- **Severity and confidence are optional and independent.** `severity` says how consequential a finding is if real (`critical`, `major`, `minor`, `info`); `confidence` says how sure the author is that it is real (`high`, `medium`, `low`). They exist so an unattended consumer can threshold on findings instead of applying all or none. Neither carries a schema default: an absent attribute means the author took no position and must be read as below every threshold floor. Comments authored by a human in the UI normally carry neither.
 - **No wrapper elements.** `<file>` elements are direct children of `<review>`. No `<files>` or `<summary>` wrappers.
 - **Source attributes are mode-dependent.** In git mode, the `<review>` element carries `git-diff-args` and `repository` attributes. In directory mode, it carries a `source-path` attribute (the absolute path to the scanned directory) and omits `git-diff-args` and `repository`. All three attributes are optional in the XSD.
 
 ### 6.4 XSD Schema File
 
-The XSD schema file (`self-review-v1.xsd`) is bundled with the application and also written alongside the XML output (or referenced by path). The schema is versioned (`v1`) to allow future evolution without breaking existing consumers.
+The XSD schema file (`self-review-v3.xsd`) is bundled with the application and also written alongside the XML output (or referenced by path). The schema is versioned in both its namespace URI and its filename to allow future evolution without breaking existing consumers.
+
+`v3` added the optional, ordered `<reply>` list on `<comment>` (see Threaded Replies above). `v2` added the optional `severity` and `confidence` attributes on `<comment>`. Both previous schemas are kept on disk, as `self-review-v1.xsd` and `self-review-v2.xsd`, so consumers holding older documents retain a validator. The application emits v3 and validates against v3; the `--resume-from` parser is namespace-agnostic and still reads v1 and v2 documents, but re-saving one writes it back as v3.
 
 ---
 
@@ -558,7 +606,7 @@ categories:
     description: "Code style, naming, or formatting issue"
     color: "#3182ce"
   - name: question
-    description: "Clarification needed — not necessarily a problem"
+    description: "Clarification needed, not necessarily a problem"
     color: "#805ad5"
   - name: nit
     description: "Minor nitpick, low priority"
@@ -591,7 +639,8 @@ The application must not crash due to malformed configuration.
 
 The `--resume-from` flag accepts a path to a previously exported XML file. The application:
 
-1. Parses the XML file and extracts all comments, suggestions, and categories.
+1. Parses the XML file and extracts all comments, suggestions, categories, and the
+   per-file `viewed` flags.
 2. Runs `git diff` with the provided arguments to generate the current diff.
 3. Launches the Electron window with the diff data and the prior review state overlaid.
 4. The user can edit, delete, or add new comments.
@@ -680,8 +729,8 @@ max-total-lines: 100000
 
 When either threshold is exceeded, a confirmation dialog appears showing the payload stats (file count and total lines). The user can:
 
-- **Cancel** — exit the application without loading the diff.
-- **Continue** — enter large-payload mode, where file content is loaded lazily. The initial `diff:load` payload includes file metadata (paths, change types, stats) but omits hunks. Hunks are fetched on demand via the `diff:load-file` IPC channel as the user navigates to each file.
+- **Cancel**, exit the application without loading the diff.
+- **Continue**, enter large-payload mode, where file content is loaded lazily. The initial `diff:load` payload includes file metadata (paths, change types, stats) but omits hunks. Hunks are fetched on demand via the `diff:load-file` IPC channel as the user navigates to each file.
 
 This prevents the renderer from being overwhelmed by very large diffs while still allowing full review capability.
 
@@ -706,7 +755,7 @@ This prevents the renderer from being overwhelmed by very large diffs while stil
 
 The app supports keyboard-driven code review via Vimium-style hint labels (`f` for line comments, `g` for file jumps) and smooth scrolling (`j`/`k`). All shortcuts are suppressed when text inputs have focus.
 
-- `Ctrl/Cmd+F` — Open native find-in-page search bar with match counter, prev/next navigation (Enter/Shift+Enter), and search highlighting
+- `Ctrl/Cmd+F`, Open native find-in-page search bar with match counter, prev/next navigation (Enter/Shift+Enter), and search highlighting
 
 ### 10.3 Error Handling
 
@@ -718,9 +767,9 @@ The app supports keyboard-driven code review via Vimium-style hint labels (`f` f
 
 ### 10.4 Security
 
-- The application does not open any network connections. All operations are local.
+- The application does not open any network connections, with two documented exceptions: a non-blocking startup version check against the GitHub Releases API, and remote PR/MR review (Section 4.7), where the network is touched only for a user-supplied forge URL — git clone/fetch through git's own credentials, and the `gh`/`glab` CLIs for base-branch lookup and thread fetch. All other operations are local, and nothing is ever sent to the forge.
 - The application does not execute arbitrary code from the diff content. Syntax highlighting is purely visual.
-- The application writes the review XML output at the configured `output-file` path (default `./review.xml`). When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced image files. No hidden files, no temp files, no analytics.
+- The application writes the review XML output at the configured `output-file` path (default `./review.xml`). When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced image files. In remote mode without a matching local clone, it creates a temporary blobless clone under the OS temp directory, removed on exit. No hidden files, no analytics.
 
 ---
 
@@ -730,7 +779,7 @@ The following are explicitly not part of the v1 release:
 
 - Multi-user collaboration or team features
 - Approval/request-changes workflow
-- Integration with GitHub, GitLab, or any remote platform
+- Writing to GitHub, GitLab, or any remote platform. Remote PR/MR review (Section 4.7) is strictly read-only toward the forge: posting comments or reviews back to the forge is explicitly out of scope (a possible future feature; the `remote-id` attribute exists as forward machinery for it)
 - Markdown or JSON output formats (future, but not v1)
 - Windows support
 - Auto-update mechanism
@@ -754,7 +803,7 @@ The following are explicitly not part of the v1 release:
 | **Suggestion** | A proposed code replacement within a comment, specifying both the original code and the replacement code |
 | **Category** | A required tag on every comment (e.g., "bug", "nit") used to help AI agents prioritize feedback |
 | **Resume** | Loading a prior XML review output back into the UI to continue reviewing |
-| **XSD** | XML Schema Definition — a formal description of the structure of the XML output |
+| **XSD** | XML Schema Definition, a formal description of the structure of the XML output |
 
 ---
 
@@ -763,5 +812,5 @@ The following are explicitly not part of the v1 release:
 | # | Question | Status |
 |---|----------|--------|
 | 1 | Should the XSD schema file be written alongside the XML output, or only bundled within the app? | Open |
-| 2 | For `--resume-from`, how aggressive should the line-matching heuristic be? Simple line-number-based or context-aware? | Open — start with line-number-based, iterate |
+| 2 | For `--resume-from`, how aggressive should the line-matching heuristic be? Simple line-number-based or context-aware? | Open, start with line-number-based, iterate |
 | 3 | Should the app support reviewing diffs from sources other than `git diff` (e.g., piped unified diff from any tool)? | Deferred to v2 |

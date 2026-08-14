@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import MDEditor, { commands } from '@uiw/react-md-editor';
+import React, { useState, useEffect, useRef } from 'react';
 import type {
   Attachment,
   LineRange,
@@ -10,13 +9,9 @@ import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Code2, Paperclip } from 'lucide-react';
+import { Code2 } from 'lucide-react';
 import CategorySelector from './CategorySelector';
-import EmojiAutocomplete from './EmojiAutocomplete';
-import AttachmentThumbnail from './AttachmentThumbnail';
-import { useEmojiAutocomplete } from '../../hooks/useEmojiAutocomplete';
-import { processImageFile } from '../../utils/image-utils';
-import { AttachmentDropZone } from './AttachmentDropZone';
+import { ComposerCore, AttachButton } from './ComposerCore';
 import { SuggestionPanel } from './SuggestionPanel';
 
 export interface CommentInputProps {
@@ -44,21 +39,7 @@ export default function CommentInput({
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [proposedCode, setProposedCode] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  const emoji = useEmojiAutocomplete(body, setBody, editorContainerRef);
-
-  const handleAttach = useCallback((newAttachments: Attachment[]) => {
-    setAttachments(prev => [...prev, ...newAttachments]);
-  }, []);
-
-  useEffect(() => {
-    // Auto-focus the editor textarea when the comment input mounts
-    const textarea = editorContainerRef.current?.querySelector<HTMLTextAreaElement>('.w-md-editor-text-input');
-    textarea?.focus();
-  }, []);
+  const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (existingComment) {
@@ -116,98 +97,24 @@ export default function CommentInput({
     onCancel();
   };
 
-  const resolveIsDark = () => {
-    if (config.theme === 'system') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return config.theme === 'dark';
-  };
-
   return (
-    <div
-      className={`rounded-lg border bg-card shadow-sm overflow-hidden relative ${isDragging ? 'border-primary border-2' : 'border-foreground/15'}`}
-      data-testid='comment-input'
+    <ComposerCore
+      body={body}
+      onBodyChange={setBody}
+      attachments={attachments}
+      setAttachments={setAttachments}
+      placeholder='Add your review comment... (paste or drop images here)'
+      headerLabel={lineRange ? (
+        <span className='text-xs font-medium text-muted-foreground whitespace-nowrap'>
+          {lineRange.start === lineRange.end
+            ? `Comment on line ${lineRange.start}`
+            : `Comment on lines ${lineRange.start} to ${lineRange.end}`}
+        </span>
+      ) : undefined}
+      onSubmit={handleSubmit}
+      testId='comment-input'
+      actionsRef={actionsRef}
     >
-      <AttachmentDropZone
-        onAttach={handleAttach}
-        isDragging={isDragging}
-        onDragChange={setIsDragging}
-      >
-      <div className='p-1 relative' data-color-mode={resolveIsDark() ? 'dark' : 'light'} ref={editorContainerRef}>
-        <MDEditor
-          value={body}
-          onChange={(val) => setBody(val || '')}
-          preview='edit'
-          highlightEnable={false}
-          commands={[
-            commands.bold, commands.italic,
-            commands.divider,
-            commands.quote, commands.code, commands.link,
-            commands.divider,
-            commands.unorderedListCommand, commands.orderedListCommand, commands.checkedListCommand,
-          ]}
-          extraCommands={lineRange ? [{
-            name: 'line-range',
-            keyCommand: 'line-range',
-            render: () => (
-              <span className='text-xs font-medium text-muted-foreground whitespace-nowrap'>
-                {lineRange.start === lineRange.end
-                  ? `Comment on line ${lineRange.start}`
-                  : `Comment on lines ${lineRange.start} to ${lineRange.end}`}
-              </span>
-            ),
-          }] : []}
-          textareaProps={{
-            placeholder: 'Add your review comment... (paste or drop images here)',
-            onKeyDown: (e) => {
-              // Let emoji autocomplete handle keys first when dropdown is open
-              if (emoji.onKeyDown(e)) return;
-
-              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                e.preventDefault();
-                handleSubmit();
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                const actions = (e.target as HTMLElement).closest('[data-testid="comment-input"]')?.querySelector('[data-testid="comment-actions"]') as HTMLElement | null;
-                if (actions) {
-                  actions.focus();
-                } else {
-                  (e.target as HTMLElement).blur();
-                }
-              }
-            },
-            onPaste: undefined,
-          }}
-          height={240}
-          className='md-editor-comment'
-        />
-        <EmojiAutocomplete
-          isOpen={emoji.isOpen}
-          results={emoji.results}
-          selectedIndex={emoji.selectedIndex}
-          position={emoji.position}
-          onSelect={emoji.selectEmoji}
-          onHover={emoji.setSelectedIndex}
-        />
-      </div>
-      </AttachmentDropZone>
-
-      {attachments.length > 0 && (
-        <div className='flex gap-2 flex-wrap px-3 py-2 border-t border-border/50'>
-          {attachments.map((att) => (
-            <AttachmentThumbnail
-              key={att.id}
-              attachment={att}
-              onRemove={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
-            />
-          ))}
-          <span className='self-center text-[11px] text-muted-foreground'>
-            {attachments.length} {attachments.length === 1 ? 'image' : 'images'}
-          </span>
-        </div>
-      )}
-
       {showSuggestion && originalCode && (
         <SuggestionPanel
           originalCode={originalCode}
@@ -220,7 +127,7 @@ export default function CommentInput({
       <Separator />
 
       {/* Actions bar */}
-      <div className='flex items-center justify-between px-3 py-2 bg-muted/10 outline-none' data-testid='comment-actions' tabIndex={-1}>
+      <div className='flex items-center justify-between px-3 py-2 bg-muted/10 outline-none' data-testid='comment-actions' tabIndex={-1} ref={actionsRef}>
         <div className='flex items-center gap-2'>
           <CategorySelector value={category} onChange={setCategory} />
           {originalCode && (
@@ -229,39 +136,19 @@ export default function CommentInput({
               variant={showSuggestion ? 'secondary' : 'ghost'}
               size='sm'
               data-testid='add-suggestion-btn'
-              onClick={() => setShowSuggestion(!showSuggestion)}
+              onClick={() => {
+                if (!showSuggestion && proposedCode.length === 0) {
+                  setProposedCode(originalCode);
+                }
+                setShowSuggestion(!showSuggestion);
+              }}
               className='h-7 gap-1.5 text-xs'
             >
               <Code2 className='h-3.5 w-3.5' />
               {showSuggestion ? 'Remove suggestion' : 'Suggest'}
             </Button>
           )}
-          <Button
-            type='button'
-            variant='ghost'
-            size='sm'
-            onClick={() => fileInputRef.current?.click()}
-            className='h-7 gap-1.5 text-xs'
-          >
-            <Paperclip className='h-3.5 w-3.5' />
-            Attach
-          </Button>
-          <input
-            ref={fileInputRef}
-            type='file'
-            accept='image/*'
-            multiple
-            className='hidden'
-            onChange={(e) => {
-              const files = Array.from(e.target.files || []);
-              if (files.length > 0) {
-                Promise.all(files.map(processImageFile))
-                  .then(newAttachments => setAttachments(prev => [...prev, ...newAttachments]))
-                  .catch(err => console.error('Failed to attach image:', err));
-              }
-              e.target.value = '';
-            }}
-          />
+          <AttachButton setAttachments={setAttachments} />
         </div>
 
         <div className='flex items-center gap-1.5'>
@@ -292,6 +179,6 @@ export default function CommentInput({
           </Button>
         </div>
       </div>
-    </div>
+    </ComposerCore>
   );
 }

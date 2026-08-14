@@ -1,13 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useConfig } from '../context/ConfigContext';
 import { useReview } from '../context/ReviewContext';
+import { useGuide } from '../context/GuideContext';
 import { Button } from './ui/button';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import {
-  Columns2,
-  AlignJustify,
   Sun,
   Moon,
   Monitor,
@@ -21,6 +20,8 @@ import {
   FolderOpen,
   FileText,
   CheckCircle2,
+  Route,
+  List,
 } from 'lucide-react';
 import ReviewProgress from './ReviewProgress';
 
@@ -32,6 +33,7 @@ export interface ToolbarProps {
 export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
   const { config, updateConfig, outputPathInfo } = useConfig();
   const { diffFiles, diffSource } = useReview();
+  const { guide, mode: guideMode, setMode: setGuideMode } = useGuide();
   const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
 
   const stats = useMemo(() => {
@@ -57,19 +59,13 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
     document.dispatchEvent(event);
   };
 
-  const handleViewModeChange = (value: string) => {
-    if (value === 'split' || value === 'unified') {
-      updateConfig({ diffView: value });
-    }
-  };
-
   const handleThemeChange = (theme: 'light' | 'dark' | 'system') => {
     updateConfig({ theme });
   };
 
   return (
     <div
-      className='flex items-center justify-between h-11 px-3 border-b border-border bg-background'
+      className='flex shrink-0 z-20 items-center justify-between h-11 px-3 border-b border-border bg-background'
       data-testid='toolbar'
     >
       <div className='flex items-center gap-2'>
@@ -107,43 +103,6 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
           </>
         )}
 
-        <ToggleGroup
-          type='single'
-          variant='outline'
-          size='sm'
-          value={config.diffView}
-          onValueChange={handleViewModeChange}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value='split'
-                data-testid='view-mode-split'
-                className='gap-1.5 px-2.5'
-              >
-                <Columns2 className='h-3.5 w-3.5' />
-                <span className='text-xs'>Split</span>
-              </ToggleGroupItem>
-            </TooltipTrigger>
-            <TooltipContent>Side-by-side view</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value='unified'
-                data-testid='view-mode-unified'
-                className='gap-1.5 px-2.5'
-              >
-                <AlignJustify className='h-3.5 w-3.5' />
-                <span className='text-xs'>Unified</span>
-              </ToggleGroupItem>
-            </TooltipTrigger>
-            <TooltipContent>Unified view</TooltipContent>
-          </Tooltip>
-        </ToggleGroup>
-
-        <Separator orientation='vertical' className='h-5' />
-
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -173,6 +132,53 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
               : 'Collapse all comments'}
           </TooltipContent>
         </Tooltip>
+
+        {guide && (
+          <>
+            <Separator orientation='vertical' className='h-5' />
+
+            <ToggleGroup
+              type='single'
+              variant='outline'
+              size='sm'
+              value={guideMode}
+              onValueChange={value => {
+                if (value === 'guided' || value === 'flat') {
+                  setGuideMode(value);
+                }
+              }}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value='guided'
+                    data-testid='guide-mode-guided'
+                    className='h-8 px-2.5 gap-1.5'
+                  >
+                    <Route className='h-3.5 w-3.5' />
+                    <span className='text-xs'>Guided</span>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Group files by the review walkthrough
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value='flat'
+                    data-testid='guide-mode-flat'
+                    className='h-8 px-2.5 gap-1.5'
+                  >
+                    <List className='h-3.5 w-3.5' />
+                    <span className='text-xs'>Flat</span>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>Flat file list (diff order)</TooltipContent>
+              </Tooltip>
+            </ToggleGroup>
+          </>
+        )}
 
       </div>
 

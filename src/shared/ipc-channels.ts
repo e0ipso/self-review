@@ -8,6 +8,7 @@ export const IPC = {
   RESUME_LOAD: 'resume:load',
   RESUME_REQUEST: 'resume:request',
   CONFIG_LOAD: 'config:load',
+  GUIDE_LOAD: 'guide:load',
   CONFIG_REQUEST: 'config:request',
   APP_CLOSE_REQUESTED: 'app:close-requested',
   APP_SAVE_AND_QUIT: 'app:save-and-quit',
@@ -27,4 +28,7 @@ export const IPC = {
   DIFF_LOAD_FILE: 'diff:load-file',
   PAYLOAD_GUARD_SHOW: 'payload-guard:show',
   DIFF_LOAD_IMAGE: 'diff:load-image',
+  APP_SHOW_ABOUT: 'app:show-about',
+  APP_GET_INFO: 'app:get-info',
+  REMOTE_OPEN_URL: 'remote:open-url',
 } as const;

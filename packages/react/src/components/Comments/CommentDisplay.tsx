@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { ReviewComment } from '@self-review/types';
+import type {
+  ReviewComment,
+  CommentSeverity,
+  CommentConfidence,
+} from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { Pencil, Trash2, ChevronDown, ChevronUp, Bot, User } from 'lucide-react';
+// `Reply` is aliased because the identifier is also the reply *type* exported
+// by @self-review/types, which this file's thread markup talks about.
+import { Pencil, Trash2, ChevronDown, ChevronUp, Bot, User, Reply as ReplyIcon } from 'lucide-react';
 import CommentInput from './CommentInput';
+import ReplyInput from './ReplyInput';
+import ReplyDisplay, { PROSE_CLASSES } from './ReplyDisplay';
 import SuggestionBlock from './SuggestionBlock';
 import { remarkEmoji } from '../../utils/remark-emoji';
 import { AttachmentImage } from './AttachmentImage';
@@ -18,11 +26,78 @@ export interface CommentDisplayProps {
   originalCode?: string;
 }
 
+/**
+ * Presentation for the thresholding signals carried by a comment. The values
+ * are fixed by the XSD rather than configured, so unlike categories they use
+ * fixed classes instead of a colour from config. Descriptions restate the
+ * schema documentation, because these are exactly the values the human is
+ * being asked to sanity-check.
+ */
+const SEVERITY_STYLES: Record<CommentSeverity, { className: string; description: string }> = {
+  critical: {
+    className: 'bg-red-500/15 text-red-600 dark:text-red-400',
+    description: 'Critical: data loss, a security hole, or a crash on a path real usage reaches.',
+  },
+  major: {
+    className: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+    description: 'Major: wrong behaviour or a broken contract on a path real usage reaches.',
+  },
+  minor: {
+    className: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
+    description: 'Minor: real but bounded. Behaviour is correct today.',
+  },
+  info: {
+    className: 'bg-muted text-muted-foreground',
+    description: 'Info: no defect. Style, naming, a question, or a note.',
+  },
+};
+
+const CONFIDENCE_STYLES: Record<CommentConfidence, { className: string; description: string }> = {
+  high: {
+    className: 'bg-muted text-muted-foreground',
+    description: 'High confidence: traceable from the diff, no unverified assumption needed.',
+  },
+  medium: {
+    className: 'bg-muted text-muted-foreground',
+    description: 'Medium confidence: rests on one assumption the author did not verify.',
+  },
+  low: {
+    className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    description: 'Low confidence: speculative. Worth your eyes, not worth acting on unattended.',
+  },
+};
+
+function SignalBadge({
+  label,
+  styles,
+  testId,
+}: {
+  label: string;
+  styles: { className: string; description: string };
+  testId: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge
+          variant='secondary'
+          className={`h-5 px-1.5 text-[10px] font-medium ${styles.className}`}
+          data-testid={testId}
+        >
+          {label}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent side='bottom'>{styles.description}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function CommentDisplay({ comment, originalCode: originalCodeProp }: CommentDisplayProps) {
   const { deleteComment } = useReview();
   const { config } = useConfig();
   const [isEditing, setIsEditing] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isReplying, setIsReplying] = useState(false);
 
   const categoryDef = config.categories?.find(
     cat => cat.name === comment.category
@@ -144,6 +219,20 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
                 {comment.category}
               </Badge>
             ))}
+          {comment.severity && (
+            <SignalBadge
+              label={comment.severity}
+              styles={SEVERITY_STYLES[comment.severity]}
+              testId={`comment-severity-${comment.severity}`}
+            />
+          )}
+          {comment.confidence && (
+            <SignalBadge
+              label={`${comment.confidence} confidence`}
+              styles={CONFIDENCE_STYLES[comment.confidence]}
+              testId={`comment-confidence-${comment.confidence}`}
+            />
+          )}
           {comment.orphaned && (
             <Badge
               variant='secondary'
@@ -182,7 +271,7 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
 
       {!isCollapsed && (
         <>
-          <div className='px-3 pb-3 text-sm text-foreground leading-relaxed [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_pre]:my-2 [&_pre]:p-3 [&_pre]:bg-muted [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_code]:text-[0.85em] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-muted [&_h1]:text-base [&_h1]:font-bold [&_h1]:my-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:my-2 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:my-2 [&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400 [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_hr]:my-2 [&_hr]:border-border [&_pre_code]:bg-transparent [&_pre_code]:p-0'>
+          <div className={`px-3 pb-3 text-sm text-foreground leading-relaxed ${PROSE_CLASSES}`}>
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkEmoji]}>
               {comment.body}
             </ReactMarkdown>
@@ -202,6 +291,49 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
               {comment.attachments.map((att) => (
                 <AttachmentImage key={att.id} attachment={att} />
               ))}
+            </div>
+          )}
+
+          {/*
+            The thread lives inside the `!isCollapsed` fragment on purpose: the
+            chevron toggle and the global `toggle-all-comments` event then hide
+            replies with the rest of the comment body, with no extra wiring.
+          */}
+          {comment.replies && comment.replies.length > 0 && (
+            <div
+              className='ml-4 border-l-2 border-border/60'
+              data-testid={`thread-${comment.id}`}
+            >
+              {comment.replies.map((reply) => (
+                <ReplyDisplay
+                  key={reply.id}
+                  commentId={comment.id}
+                  reply={reply}
+                />
+              ))}
+            </div>
+          )}
+
+          {isReplying ? (
+            <div className='ml-4 px-3 pb-3 pt-2'>
+              <ReplyInput
+                commentId={comment.id}
+                onCancel={() => setIsReplying(false)}
+                onSubmit={() => setIsReplying(false)}
+              />
+            </div>
+          ) : (
+            <div className='px-3 pb-3'>
+              <Button
+                variant='ghost'
+                size='sm'
+                onClick={() => setIsReplying(true)}
+                data-testid={`reply-btn-${comment.id}`}
+                className='h-7 gap-1.5 text-xs text-muted-foreground'
+              >
+                <ReplyIcon className='h-3.5 w-3.5' />
+                Reply
+              </Button>
             </div>
           )}
         </>

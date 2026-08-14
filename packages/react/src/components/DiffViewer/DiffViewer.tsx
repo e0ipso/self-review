@@ -1,8 +1,12 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
+import { useGuide } from '../../context/GuideContext';
+import { buildGuideDisplaySections } from '../../utils/guide-display';
 import FileSection from './FileSection';
 import { EmptyDiffMessage } from './EmptyDiffMessage';
+import GuideOverviewPanel from './GuideOverviewPanel';
+import GuideChapterDivider from './GuideChapterDivider';
 
 /** When the file count exceeds this threshold, all sections start collapsed. */
 export const COLLAPSE_THRESHOLD = 50;
@@ -10,7 +14,20 @@ export const COLLAPSE_THRESHOLD = 50;
 export default function DiffViewer() {
   const { diffFiles, diffSource } = useReview();
   const { config } = useConfig();
+  const { guide, mode: guideMode } = useGuide();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // In guided mode the diff stream follows the walkthrough: file sections
+  // render in guide order, grouped into chapters. Flat mode (or no guide)
+  // yields a single headerless section in diff order — today's stream.
+  const displaySections = useMemo(
+    () => buildGuideDisplaySections(diffFiles, guide?.groups ?? null, guideMode),
+    [diffFiles, guide, guideMode]
+  );
+  const totalStops = displaySections.filter(section => section.header).length;
+  const implicitLast = Boolean(
+    displaySections[displaySections.length - 1]?.header?.implicit
+  );
 
   // Initialize files as expanded (small sets) or collapsed (large sets)
   const [expandedState, setExpandedState] = useState<Record<string, boolean>>(
@@ -116,22 +133,39 @@ export default function DiffViewer() {
   return (
     <div
       ref={containerRef}
-      className='flex-1'
+      // Bottom padding keeps the last file clear of the floating route HUD.
+      className={`flex-1${totalStops > 0 ? ' pb-16' : ''}`}
       data-testid='diff-viewer'
       data-diff-viewer
     >
-      {diffFiles.map(file => {
-        const filePath = file.newPath || file.oldPath;
-        return (
-          <FileSection
-            key={filePath}
-            file={file}
-            viewMode={config.diffView}
-            expanded={expandedState[filePath]}
-            onToggleExpanded={handleToggleExpanded}
-          />
-        );
-      })}
+      <GuideOverviewPanel />
+      {displaySections.map((section, sectionIndex) => (
+        <React.Fragment
+          key={`chapter-${sectionIndex}-${section.header?.name ?? 'flat'}`}
+        >
+          {section.header && (
+            <GuideChapterDivider
+              header={section.header}
+              index={sectionIndex}
+              totalStops={totalStops}
+              implicitLast={implicitLast}
+              entries={section.entries}
+            />
+          )}
+          {section.entries.map(({ file }) => {
+            const filePath = file.newPath || file.oldPath;
+            return (
+              <FileSection
+                key={filePath}
+                file={file}
+                viewMode={config.diffView}
+                expanded={expandedState[filePath]}
+                onToggleExpanded={handleToggleExpanded}
+              />
+            );
+          })}
+        </React.Fragment>
+      ))}
     </div>
   );
 }

@@ -3,14 +3,17 @@ import { ConfigProvider, useConfig } from '../../packages/react/src/context/Conf
 import { ReviewProvider, useReview } from '../../packages/react/src/context/ReviewContext';
 import { DiffNavigationProvider } from '../../packages/react/src/context/DiffNavigationContext';
 import { ReviewAdapterProvider } from '../../packages/react/src/context/ReviewAdapterContext';
+import { GuideProvider } from '../../packages/react/src/context/GuideContext';
 import { TooltipProvider } from '../../packages/react/src/components/ui/tooltip';
 import Toolbar from '../../packages/react/src/components/Toolbar';
 import Layout from '../../packages/react/src/components/Layout';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
+import AboutDialog from './components/AboutDialog';
 import { KeyboardNavigationManager } from '../../packages/react/src/components/KeyboardNavigationManager';
 import { FindBar } from './components/FindBar';
 import WelcomeScreen from './components/WelcomeScreen';
 import UpdateBanner from './components/UpdateBanner';
+import RemoteDriftBanner from '../../packages/react/src/components/RemoteDriftBanner';
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
 import lightThemeCss from 'prismjs/themes/prism.css?raw';
@@ -23,9 +26,9 @@ const electronAdapter: ReviewAdapter = {
       window.electronAPI.onDiffLoad(resolve);
       window.electronAPI.requestDiffData();
     }),
-  loadResumedComments: () =>
+  loadResumedReview: () =>
     new Promise(resolve => {
-      window.electronAPI.onResumeLoad(payload => resolve(payload.comments));
+      window.electronAPI.onResumeLoad(resolve);
       window.electronAPI.requestResumeData();
     }),
   submitReview: state => {
@@ -36,6 +39,8 @@ const electronAdapter: ReviewAdapter = {
   readAttachment: filePath => window.electronAPI.readAttachment(filePath),
   changeOutputPath: () => window.electronAPI.changeOutputPath(),
   loadImage: filePath => window.electronAPI.loadImage(filePath),
+  onGuideLoad: callback => window.electronAPI.onGuideLoad(callback),
+  onDiffLoad: callback => window.electronAPI.onDiffLoad(callback),
 };
 
 function AppContent() {
@@ -129,13 +134,17 @@ function AppContent() {
     <DiffNavigationProvider>
       <TooltipProvider>
         <KeyboardNavigationManager />
-        <div className='flex flex-col h-screen bg-background text-foreground antialiased'>
+        <div className='flex flex-col h-screen overflow-hidden bg-background text-foreground antialiased'>
           <UpdateBanner />
+          <RemoteDriftBanner />
           <Toolbar onFinishReview={handleFinishReview} />
-          <Layout />
+          <div className='flex-1 min-h-0'>
+            <Layout />
+          </div>
         </div>
         <FindBar isOpen={isFindBarOpen} onClose={() => setIsFindBarOpen(false)} />
         <CloseConfirmDialog />
+        <AboutDialog />
       </TooltipProvider>
     </DiffNavigationProvider>
   );
@@ -164,9 +173,11 @@ export default function App() {
         prismLightCss={lightThemeCss}
         prismDarkCss={darkThemeCss}
       >
-        <ReviewProvider>
-          <AppContent />
-        </ReviewProvider>
+        <GuideProvider>
+          <ReviewProvider>
+            <AppContent />
+          </ReviewProvider>
+        </GuideProvider>
       </ConfigProvider>
     </ReviewAdapterProvider>
   );

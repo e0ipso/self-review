@@ -1,7 +1,7 @@
 {
   "name": "@e0ipso/self-review",
   "productName": "Self Review",
-  "version": "1.33.0",
+  "version": "1.43.1",
   "description": "GitHub-style PR review UI for local git diffs",
   "workspaces": [
     "packages/*"
@@ -15,7 +15,7 @@
     "publish": "electron-forge publish",
     "lint": "eslint .",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "vitest run --config vitest.config.main.ts && vitest run --config vitest.config.renderer.ts",
+    "test:unit": "vitest run --config vitest.config.main.ts && vitest run --config vitest.config.renderer.ts && npm run test:unit --workspace @self-review/core",
     "test:e2e": "npx bddgen && npx playwright test --project e2e",
     "test:e2e:headed": "npx bddgen && npx playwright test --project e2e --headed",
     "test:e2e:electron": "npm run package && npx bddgen && xvfb-run --auto-servernum npx playwright test --project electron",
@@ -79,7 +79,7 @@
     "fork-ts-checker-webpack-plugin": "^9.1.0",
     "globals": "^15.15.0",
     "husky": "^9.1.7",
-    "jsdom": "^28.0.0",
+    "jsdom": "^26.1.0",
     "node-loader": "^2.1.0",
     "playwright-bdd": "^8.4.2",
     "postcss-loader": "^8.2.0",

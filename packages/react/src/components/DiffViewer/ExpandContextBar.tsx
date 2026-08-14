@@ -31,7 +31,7 @@ export default function ExpandContextBar({
     <Tooltip>
       <TooltipTrigger asChild>
         <button
-          className='flex items-center justify-center w-5 h-5 rounded-sm text-muted-foreground/60 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-600/10 transition-colors cursor-pointer'
+          className='flex items-center justify-center w-5 h-5 rounded-sm text-blue-700/70 dark:text-blue-300/70 hover:text-blue-700 dark:hover:text-blue-200 hover:bg-blue-500/20 dark:hover:bg-blue-400/20 transition-colors cursor-pointer'
           onClick={e => {
             e.stopPropagation();
             onExpand(direction, hunkIndex, position);
@@ -46,7 +46,7 @@ export default function ExpandContextBar({
   );
 
   return (
-    <div className='expand-context-bar flex items-center h-[26px] bg-accent/30 border-y border-border/30 text-muted-foreground select-none'>
+    <div className='expand-context-bar flex items-center h-[26px] bg-blue-500/10 dark:bg-blue-400/15 text-blue-700 dark:text-blue-300 select-none'>
       {/* Gutter area — matches line number column width */}
       <div className='w-10 flex-shrink-0 flex items-center justify-center gap-0.5'>
         {loading ? (
@@ -66,7 +66,7 @@ export default function ExpandContextBar({
       <div className='flex-1 px-2'>
         {showSingleButton ? (
           <button
-            className='text-[11px] text-muted-foreground/60 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer'
+            className='text-[11px] text-blue-700/70 dark:text-blue-300/70 hover:text-blue-700 dark:hover:text-blue-200 transition-colors cursor-pointer'
             onClick={() => onExpand('all', hunkIndex, position)}
             disabled={loading}
           >
@@ -74,7 +74,7 @@ export default function ExpandContextBar({
           </button>
         ) : (
           <button
-            className='text-[11px] text-muted-foreground/60 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer'
+            className='text-[11px] text-blue-700/70 dark:text-blue-300/70 hover:text-blue-700 dark:hover:text-blue-200 transition-colors cursor-pointer'
             onClick={() => onExpand('all', hunkIndex, position)}
             disabled={loading}
           >

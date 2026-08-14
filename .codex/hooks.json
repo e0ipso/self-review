@@ -1,0 +1,66 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./.ai/kenkeep/hooks/codex/kk-capture.cjs",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./.ai/kenkeep/hooks/codex/kk-lint-tick.cjs",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./.ai/kenkeep/hooks/codex/kk-capture.cjs",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./.ai/kenkeep/hooks/codex/kk-session-start.cjs",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./.ai/kenkeep/hooks/codex/kk-proposal-drain.cjs",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./.ai/kenkeep/hooks/codex/kk-prompt-context.cjs",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -10,6 +10,8 @@ export interface FileTreeEntryProps {
   isActive: boolean;
   commentCount: number;
   viewed: boolean;
+  /** Guide-authored one-liner shown as a secondary line (Guided mode only). */
+  guideDescription?: string;
   onScrollToFile: (filePath: string) => void;
   onToggleViewed: (filePath: string) => void;
 }
@@ -19,6 +21,7 @@ export function FileTreeEntry({
   isActive,
   commentCount,
   viewed,
+  guideDescription,
   onScrollToFile,
   onToggleViewed,
 }: FileTreeEntryProps) {
@@ -48,7 +51,7 @@ export function FileTreeEntry({
             </span>
 
             {/* File path */}
-            <TruncatedPath path={filePath} />
+            <TruncatedPath path={filePath || 'Review-level comments'} />
 
             {/* Indicators */}
             <div className='flex items-center gap-1 flex-shrink-0'>
@@ -72,11 +75,20 @@ export function FileTreeEntry({
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
+                  <span
                     data-testid={`viewed-toggle-${filePath}`}
+                    role='button'
+                    tabIndex={0}
                     onClick={e => {
                       e.stopPropagation();
                       onToggleViewed(filePath);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onToggleViewed(filePath);
+                      }
                     }}
                     className='inline-flex items-center justify-center h-5 w-5 rounded-sm hover:bg-accent/80 transition-colors cursor-pointer'
                   >
@@ -85,7 +97,7 @@ export function FileTreeEntry({
                     ) : (
                       <CircleDashed className='h-3.5 w-3.5 text-muted-foreground/60' />
                     )}
-                  </button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent side='right'>
                   {viewed ? 'Mark as needs review' : 'Mark as done reviewing'}
@@ -93,6 +105,14 @@ export function FileTreeEntry({
               </Tooltip>
             </div>
           </div>
+          {guideDescription && (
+            <div
+              className='pl-6 pr-1 mt-1 text-[11px] leading-snug text-muted-foreground/90 line-clamp-2'
+              data-testid={`guide-file-description-${filePath}`}
+            >
+              {guideDescription}
+            </div>
+          )}
         </button>
       </TooltipTrigger>
       <TooltipContent side='right' className='max-w-sm'>

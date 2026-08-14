@@ -3,20 +3,26 @@ import { useReview } from '../context/ReviewContext';
 import { useConfig } from '../context/ConfigContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 import { useAdapter } from '../context/ReviewAdapterContext';
+import { useGuide } from '../context/GuideContext';
+import { buildGuideDisplaySections } from '../utils/guide-display';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle, Columns2, AlignJustify } from 'lucide-react';
 import TruncatedPath from './TruncatedPath';
 import { FileTreeEntry } from './FileTreeEntry';
+import { GuideStation } from './GuideStation';
+import { getGuideAccent } from '../utils/guide-accents';
 
 export default function FileTree() {
   const { diffFiles, files, toggleViewed } = useReview();
-  const { outputPathInfo, setOutputPathInfo } = useConfig();
+  const { config, updateConfig, outputPathInfo, setOutputPathInfo } = useConfig();
   const { activeFilePath, scrollToFile } = useDiffNavigationContext();
   const adapter = useAdapter();
+  const { guide, mode } = useGuide();
   const [searchQuery, setSearchQuery] = useState('');
   const [allExpanded, setAllExpanded] = useState(true);
 
@@ -26,6 +32,12 @@ export default function FileTree() {
     const result = await adapter.changeOutputPath();
     if (result) {
       setOutputPathInfo(result);
+    }
+  };
+
+  const handleViewModeChange = (value: string) => {
+    if (value === 'split' || value === 'unified') {
+      updateConfig({ diffView: value });
     }
   };
 
@@ -43,6 +55,13 @@ export default function FileTree() {
     const query = searchQuery.toLowerCase();
     return diffFiles.filter(file => file.newPath.toLowerCase().includes(query));
   }, [diffFiles, searchQuery]);
+
+  // Ordering/annotation layer: flat mode (or no guide) yields a single
+  // headerless section with the files untouched — today's tree by construction.
+  const displaySections = useMemo(
+    () => buildGuideDisplaySections(filteredFiles, guide?.groups ?? null, mode),
+    [filteredFiles, guide, mode]
+  );
 
   const getCommentCount = (filePath: string) => {
     const fileState = files.find(f => f.path === filePath);
@@ -64,6 +83,41 @@ export default function FileTree() {
             Changed files
           </span>
           <div className='flex items-center gap-1'>
+            <ToggleGroup
+              type='single'
+              variant='outline'
+              size='sm'
+              value={config.diffView}
+              onValueChange={handleViewModeChange}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value='split'
+                    data-testid='view-mode-split'
+                    className='h-5 w-5 p-0'
+                  >
+                    <Columns2 className='h-3.5 w-3.5' />
+                    <span className='sr-only'>Split view</span>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>Side-by-side view</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value='unified'
+                    data-testid='view-mode-unified'
+                    className='h-5 w-5 p-0'
+                  >
+                    <AlignJustify className='h-3.5 w-3.5' />
+                    <span className='sr-only'>Unified view</span>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>Unified view</TooltipContent>
+              </Tooltip>
+            </ToggleGroup>
+            <Separator orientation='vertical' className='h-4' />
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -129,18 +183,96 @@ export default function FileTree() {
 
       {/* File List */}
       <div className='flex-1 overflow-y-auto overflow-x-hidden p-1'>
-        {filteredFiles.map(file => {
-          const filePath = file.newPath || file.oldPath;
+        {displaySections.map((section, sectionIndex) => {
+          // Station number, accent, and progress key off the group's payload
+          // index and full file list, not the section's filtered position —
+          // search filtering omits emptied sections and hides files, and the
+          // station must stay in sync with the chapter dividers, route map,
+          // and HUD (which all use payload indices).
+          const stationIndex = section.header?.groupIndex ?? sectionIndex;
+          const fullGroupPaths =
+            section.header?.groupIndex !== undefined
+              ? guide?.groups[section.header.groupIndex]?.files.map(f => f.path)
+              : undefined;
+          const progressPaths =
+            fullGroupPaths ??
+            section.entries.map(({ file }) => file.newPath || file.oldPath);
+          const viewedCount = section.header
+            ? progressPaths.filter(path => isViewed(path)).length
+            : 0;
+          const entryNodes = section.entries.map(({ file, description }) => {
+            const filePath = file.newPath || file.oldPath;
+            return (
+              <FileTreeEntry
+                key={filePath}
+                file={file}
+                isActive={activeFilePath === filePath}
+                commentCount={getCommentCount(filePath)}
+                viewed={isViewed(filePath)}
+                guideDescription={description}
+                onScrollToFile={scrollToFile}
+                onToggleViewed={toggleViewed}
+              />
+            );
+          });
+          if (!section.header) return (
+            <React.Fragment key={`section-${sectionIndex}-flat`}>
+              {entryNodes}
+            </React.Fragment>
+          );
+          const isFirst = sectionIndex === 0;
+          const isLast = sectionIndex === displaySections.length - 1;
           return (
-            <FileTreeEntry
-              key={filePath}
-              file={file}
-              isActive={activeFilePath === filePath}
-              commentCount={getCommentCount(filePath)}
-              viewed={isViewed(filePath)}
-              onScrollToFile={scrollToFile}
-              onToggleViewed={toggleViewed}
-            />
+            <div
+              className='relative'
+              // Keyed by position, not name alone: nothing forbids a guide
+              // from repeating a group name (or naming one "Everything else",
+              // colliding with the implicit group).
+              key={`section-${sectionIndex}-${section.header.name}`}
+            >
+              {/* Route line: one continuous segment per section; adjacent
+                  sections butt together so the line reads as a single
+                  route. The implicit group joins by a dashed segment. */}
+              <div
+                className={`pointer-events-none absolute left-[18px] w-[2px] ${
+                  isFirst ? 'top-[27px]' : 'top-0'
+                } ${isLast ? 'bottom-2' : 'bottom-0'} ${
+                  section.header.implicit
+                    ? 'guide-route-dashed-v'
+                    : getGuideAccent(stationIndex).segment
+                }`}
+                aria-hidden='true'
+              />
+              <div
+                className='px-2 pt-4 pb-1.5'
+                data-testid={`guide-group-${section.header.name}`}
+              >
+                <div className='flex items-center gap-2'>
+                  <GuideStation
+                    index={stationIndex}
+                    implicit={section.header.implicit}
+                    complete={
+                      progressPaths.length > 0 &&
+                      viewedCount === progressPaths.length
+                    }
+                    surfaceClassName='bg-sidebar'
+                    className='relative z-10'
+                  />
+                  <span className='min-w-0 flex-1 truncate text-xs font-semibold text-foreground'>
+                    {section.header.name}
+                  </span>
+                  <span className='shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground'>
+                    {viewedCount}/{progressPaths.length}
+                  </span>
+                </div>
+                {section.header.rationale && (
+                  <div className='mt-1 pl-[30px] text-[11px] leading-snug text-muted-foreground'>
+                    {section.header.rationale}
+                  </div>
+                )}
+              </div>
+              <div className='pl-6'>{entryNodes}</div>
+            </div>
           );
         })}
 

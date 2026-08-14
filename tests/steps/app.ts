@@ -71,6 +71,32 @@ let processExitCode: number | null = null;
 let processExitPromise: Promise<number> | null = null;
 let testRepoDir: string | null = null;
 
+async function waitForProcessExit(
+  proc: ChildProcess,
+  exitPromise: Promise<number>,
+  timeoutMs: number
+): Promise<number> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      exitPromise,
+      new Promise<number>(resolve => {
+        timeout = setTimeout(() => {
+          try {
+            proc.kill();
+          } catch {
+            // Process may already be dead
+          }
+          resolve(-1);
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 /**
  * Launch the Electron app with the given CLI args and working directory.
  * Returns the first window's Page for UI interaction.
@@ -191,8 +217,11 @@ export async function launchAppExpectExit(
 export async function saveAndCloseApp(): Promise<void> {
   if (!electronApp) return;
 
+  const app = electronApp;
+  const proc = app.process();
+
   try {
-    const page = await electronApp.firstWindow();
+    const page = await app.firstWindow();
     // saveAndQuit triggers process.exit(0) in main after writing the XML.
     // The page connection may close before evaluate returns.
     await page.evaluate(() => {
@@ -204,20 +233,7 @@ export async function saveAndCloseApp(): Promise<void> {
   }
 
   if (processExitPromise) {
-    await Promise.race([
-      processExitPromise,
-      new Promise<number>(resolve =>
-        setTimeout(() => {
-          // Process didn't exit after IPC — force kill as last resort.
-          try {
-            electronApp?.process().kill();
-          } catch {
-            // Already dead
-          }
-          resolve(-1);
-        }, 15000)
-      ),
-    ]);
+    await waitForProcessExit(proc, processExitPromise, 15000);
   }
 }
 
@@ -228,8 +244,11 @@ export async function saveAndCloseApp(): Promise<void> {
 export async function closeAppWindow(): Promise<void> {
   if (!electronApp) return;
 
+  const app = electronApp;
+  const proc = app.process();
+
   try {
-    const page = await electronApp.firstWindow();
+    const page = await app.firstWindow();
     // discardAndQuit triggers process.exit(0) in main, which destroys the
     // page connection.  evaluate() may throw because the connection closes
     // before the result is returned — this is expected, not an error.
@@ -244,20 +263,7 @@ export async function closeAppWindow(): Promise<void> {
   }
 
   if (processExitPromise) {
-    await Promise.race([
-      processExitPromise,
-      new Promise<number>(resolve =>
-        setTimeout(() => {
-          // Process didn't exit after IPC — force kill as last resort.
-          try {
-            electronApp?.process().kill();
-          } catch {
-            // Already dead
-          }
-          resolve(-1);
-        }, 15000)
-      ),
-    ]);
+    await waitForProcessExit(proc, processExitPromise, 15000);
   }
 }
 
@@ -268,6 +274,11 @@ export async function cleanup(): Promise<void> {
   if (electronApp) {
     try {
       const proc = electronApp.process();
+      const exitPromise =
+        processExitPromise ??
+        new Promise<number>(resolve => {
+          proc.once('close', code => resolve(code ?? -1));
+        });
       try {
         proc.kill();
       } catch {
@@ -275,14 +286,9 @@ export async function cleanup(): Promise<void> {
       }
       // Wait for the process to fully exit before continuing, so the next
       // test doesn't race against a dying Electron instance.
-      await new Promise<void>(resolve => {
-        if (proc.exitCode !== null || proc.killed) {
-          resolve();
-          return;
-        }
-        const timer = setTimeout(resolve, 5000);
-        proc.on('close', () => { clearTimeout(timer); resolve(); });
-      });
+      if (proc.exitCode === null && proc.signalCode === null) {
+        await waitForProcessExit(proc, exitPromise, 5000);
+      }
       // Brief settle delay to let the OS fully release process resources
       await new Promise(resolve => setTimeout(resolve, 200));
     } catch {

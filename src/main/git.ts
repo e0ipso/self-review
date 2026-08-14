@@ -5,6 +5,7 @@ export {
   validateGitAvailable,
   getRepoRootAsync,
   runGitDiffAsync,
+  readGitBlobAsync,
   getUntrackedFilesAsync,
   generateUntrackedDiffs,
 } from '../../packages/core/src/git';

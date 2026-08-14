@@ -1,13 +1,14 @@
 import type {
   DiffHunk,
   DiffLoadPayload,
-  ReviewComment,
+  ResumeLoadPayload,
   ReviewState,
   ExpandContextRequest,
   ExpandContextResponse,
   OutputPathInfo,
   AppConfig,
   ImageLoadResult,
+  GuideLoadPayload,
 } from '@self-review/types';
 
 /**
@@ -19,8 +20,8 @@ export interface ReviewAdapter {
   /** Load diff data. Called once on mount. */
   loadDiff: () => Promise<DiffLoadPayload>;
 
-  /** Load previously saved comments (resume flow). */
-  loadResumedComments?: () => Promise<ReviewComment[]>;
+  /** Load a previously saved review — comments and viewed files (resume flow). */
+  loadResumedReview?: () => Promise<ResumeLoadPayload>;
 
   /** Submit/save a completed review. */
   submitReview?: (state: ReviewState) => Promise<void> | void;
@@ -39,6 +40,23 @@ export interface ReviewAdapter {
 
   /** Load a binary image as a base64 data URI for rendered preview. */
   loadImage?: (filePath: string) => Promise<ImageLoadResult>;
+
+  /**
+   * Subscribe to walkthrough guide payloads. Push-style: the host calls the
+   * callback if/when a guide sidecar is discovered; it may never fire.
+   * The payload is display-ready (already reconciled against the diff).
+   * Returns an unsubscribe function — required, because the subscribing
+   * effect re-runs whenever the adapter identity changes.
+   */
+  onGuideLoad?: (callback: (payload: GuideLoadPayload) => void) => () => void;
+
+  /**
+   * Subscribe to diff payloads pushed after the initial load — the host may
+   * replace the session wholesale (e.g. a remote PR/MR opened from the
+   * welcome screen). `loadDiff` covers only the initial request/response;
+   * this covers every later push. Returns an unsubscribe function.
+   */
+  onDiffLoad?: (callback: (payload: DiffLoadPayload) => void) => () => void;
 }
 
 /**

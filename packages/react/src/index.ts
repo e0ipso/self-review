@@ -20,6 +20,7 @@ export type {
   DiffSource,
   DiffLoadPayload,
   ReviewComment,
+  Reply,
   ReviewState,
   FileReviewState,
   Suggestion,
@@ -32,6 +33,12 @@ export type {
   ExpandContextResponse,
   ResumeLoadPayload,
   PayloadStats,
+  GuideLoadPayload,
+  ResolvedGuideGroup,
+  ResolvedGuideFile,
+  ReviewGuide,
+  GuideGroup,
+  GuideFileEntry,
 } from '@self-review/types';
 
 // Context providers (for advanced/custom composition)
@@ -41,6 +48,17 @@ export { ConfigProvider, useConfig, defaultConfig } from './context/ConfigContex
 export type { ConfigContextValue, ConfigProviderProps } from './context/ConfigContext';
 export { DiffNavigationProvider, useDiffNavigationContext } from './context/DiffNavigationContext';
 export { ReviewAdapterProvider, useAdapter } from './context/ReviewAdapterContext';
+export { GuideProvider, useGuide } from './context/GuideContext';
+export type { GuideContextValue, GuideProviderProps } from './context/GuideContext';
+
+// Guided display helpers
+export { buildGuideDisplaySections } from './utils/guide-display';
+export type {
+  GuideMode,
+  GuideDisplayHeader,
+  GuideDisplayEntry,
+  GuideDisplaySection,
+} from './utils/guide-display';
 
 // Individual components (for advanced/custom composition)
 export { default as DiffViewer } from './components/DiffViewer/DiffViewer';

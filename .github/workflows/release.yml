@@ -30,7 +30,7 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -40,7 +40,7 @@ jobs:
       - name: Restore branch ref for semantic-release
         run: git checkout -B ${{ github.event.workflow_run.head_branch }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: 'npm'
@@ -89,7 +89,13 @@ jobs:
 
       - name: Upload release assets
         if: steps.tag.outputs.tag != ''
-        run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm --clobber
+        run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm out/make/zip/linux/x64/*.zip --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger flake hash update
+        if: steps.tag.outputs.tag != ''
+        run: gh workflow run update-flake-hash.yml -f tag="${{ steps.tag.outputs.tag }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

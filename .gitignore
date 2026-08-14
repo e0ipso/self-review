@@ -119,7 +119,13 @@ dist/
 
 # Claude Code (user-specific)
 .claude/*
-!.claude/skills/
+
+# OpenCode (user-specific)
+.opencode/*
+
+# OpenCode (user-specific)
+.opencode/*
+!.opencode/skills/
 
 # AI task manager (plans and archive)
 .ai/task-manager/plans/
@@ -130,6 +136,16 @@ test-results/
 .features-gen/
 /core
 review.xml
+review.guide.xml
 /.self-review-assets
 
 .claude/worktrees
+# >>> @e0ipso/ai-knowledge-base >>>
+.ai/knowledge-base/_sessions/
+.ai/knowledge-base/_logs/
+.ai/knowledge-base/.state/
+!.ai/knowledge-base/.state/installed-version
+# <<< @e0ipso/ai-knowledge-base <<<
+
+
+.devcontainer/devcontainer-lock.json

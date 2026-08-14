@@ -13,7 +13,11 @@ interface HintOverlayProps {
 }
 
 export function HintOverlay({ hints, inputBuffer }: HintOverlayProps) {
-  if (hints.length === 0) return null;
+  const visibleHints = inputBuffer
+    ? hints.filter((h) => h.label.startsWith(inputBuffer))
+    : hints;
+
+  if (visibleHints.length === 0) return null;
 
   return createPortal(
     <div
@@ -24,7 +28,7 @@ export function HintOverlay({ hints, inputBuffer }: HintOverlayProps) {
         zIndex: 9999,
       }}
     >
-      {hints.map((hint) => (
+      {visibleHints.map((hint) => (
         <span
           key={hint.label}
           style={{

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": "node .cursor/hooks/kb-capture.cjs",
+        "timeout": 30
+      },
+      {
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-capture.cjs",
+        "timeout": 30
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "node .cursor/hooks/kb-capture.cjs",
+        "timeout": 30
+      },
+      {
+        "command": "node .cursor/hooks/kb-lint-tick.cjs",
+        "timeout": 30
+      },
+      {
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-capture.cjs",
+        "timeout": 30
+      },
+      {
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-lint-tick.cjs",
+        "timeout": 30
+      }
+    ],
+    "preCompact": [
+      {
+        "command": "node .cursor/hooks/kb-capture.cjs",
+        "timeout": 30
+      },
+      {
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-capture.cjs",
+        "timeout": 30
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "node .cursor/hooks/kb-session-start.cjs",
+        "timeout": 30
+      },
+      {
+        "command": "node .cursor/hooks/kb-proposal-drain.cjs",
+        "timeout": 30
+      },
+      {
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-session-start.cjs",
+        "timeout": 30
+      },
+      {
+        "command": "node ./.ai/kenkeep/hooks/cursor/kk-proposal-drain.cjs",
+        "timeout": 30
+      }
+    ]
+  }
+}

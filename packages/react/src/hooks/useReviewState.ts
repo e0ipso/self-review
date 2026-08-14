@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type {
   Attachment,
   FileReviewState,
+  Reply,
   ReviewComment,
   LineRange,
   Suggestion,
@@ -20,6 +21,18 @@ export interface UseReviewStateReturn {
   ) => void;
   updateComment: (id: string, updates: Partial<ReviewComment>) => void;
   deleteComment: (id: string) => void;
+  addReply: (
+    commentId: string,
+    body: string,
+    author?: string,
+    attachments?: Attachment[]
+  ) => void;
+  updateReply: (
+    commentId: string,
+    replyId: string,
+    updates: Partial<Reply>
+  ) => void;
+  deleteReply: (commentId: string, replyId: string) => void;
   toggleViewed: (filePath: string) => void;
   getCommentsForFile: (filePath: string) => ReviewComment[];
   getCommentsForLine: (
@@ -79,6 +92,73 @@ export function useReviewState(): UseReviewStateReturn {
     );
   };
 
+  /**
+   * Appends a reply to a comment's thread, creating the array when absent.
+   * Order is conversation order: replies are always appended, never prepended.
+   */
+  const addReply = (
+    commentId: string,
+    body: string,
+    author?: string,
+    attachments?: Attachment[]
+  ) => {
+    const newReply: Reply = {
+      id: crypto.randomUUID(),
+      body,
+      ...(author ? { author } : {}),
+      ...(attachments?.length ? { attachments } : {}),
+    };
+
+    setFiles(prevFiles =>
+      prevFiles.map(file => ({
+        ...file,
+        comments: file.comments.map(comment =>
+          comment.id === commentId
+            ? { ...comment, replies: [...(comment.replies ?? []), newReply] }
+            : comment
+        ),
+      }))
+    );
+  };
+
+  const updateReply = (
+    commentId: string,
+    replyId: string,
+    updates: Partial<Reply>
+  ) => {
+    setFiles(prevFiles =>
+      prevFiles.map(file => ({
+        ...file,
+        comments: file.comments.map(comment =>
+          comment.id === commentId
+            ? {
+                ...comment,
+                replies: comment.replies?.map(reply =>
+                  reply.id === replyId ? { ...reply, ...updates } : reply
+                ),
+              }
+            : comment
+        ),
+      }))
+    );
+  };
+
+  const deleteReply = (commentId: string, replyId: string) => {
+    setFiles(prevFiles =>
+      prevFiles.map(file => ({
+        ...file,
+        comments: file.comments.map(comment =>
+          comment.id === commentId
+            ? {
+                ...comment,
+                replies: comment.replies?.filter(reply => reply.id !== replyId),
+              }
+            : comment
+        ),
+      }))
+    );
+  };
+
   const toggleViewed = (filePath: string) => {
     setFiles(prevFiles =>
       prevFiles.map(file =>
@@ -116,6 +196,9 @@ export function useReviewState(): UseReviewStateReturn {
     addComment,
     updateComment,
     deleteComment,
+    addReply,
+    updateReply,
+    deleteReply,
     toggleViewed,
     getCommentsForFile,
     getCommentsForLine,

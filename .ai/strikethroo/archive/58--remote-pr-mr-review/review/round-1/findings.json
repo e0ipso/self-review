@@ -1,0 +1,77 @@
+{
+  "round": 1,
+  "reviewFile": "/workspace/.ai/strikethroo/archive/58--remote-pr-mr-review/review/round-1/review.xml",
+  "xsdFile": "/workspace/.ai/strikethroo/config/schemas/self-review-v2.xsd",
+  "severityFloor": "major",
+  "confidenceFloor": "high",
+  "status": "evaluated",
+  "counts": {
+    "total": 5,
+    "aboveFloor": 5,
+    "belowFloor": 0,
+    "actionable": 1,
+    "recorded": 4,
+    "aboveFloorWithoutSuggestion": 4
+  },
+  "actionable": [
+    {
+      "file": "src/main/fetch-comments.ts",
+      "location": "new:146-146",
+      "severity": "major",
+      "confidence": "high",
+      "category": "defect",
+      "hasSuggestion": true,
+      "summary": "Deleted files are assigned the path /dev/null. DiffFile.newPath is /dev/null for a deletion and is truthy, so a remote diff deleting src/old.ts produces a deleted file entry at /dev/null while its fetched src/old.ts comment is placed in a separate synthetic modified entry. The fetch-comments output therefore misrepresents both the materialized diff and its thread placement."
+    }
+  ],
+  "recorded": [
+    {
+      "file": "packages/react/src/context/ReviewContext.tsx",
+      "location": "new:174-185",
+      "severity": "major",
+      "confidence": "high",
+      "category": "requirement-conformance",
+      "hasSuggestion": false,
+      "summary": "Fetched review-level and missing-file threads are never added to renderer state. The resume merge only maps over files seeded from the diff and therefore drops every comment whose filePath is the documented empty-string review sentinel, as well as outdated comments for paths no longer in the diff. A GitLab positionless discussion is consequently fetched and sent but cannot appear in the UI or surv",
+      "reasons": [
+        "no-suggestion"
+      ]
+    },
+    {
+      "file": "src/main/ipc-handlers.ts",
+      "location": "new:88-95",
+      "severity": "major",
+      "confidence": "high",
+      "category": "requirement-conformance",
+      "hasSuggestion": false,
+      "summary": "Remote raster previews read the materialized clone's checked-out working tree, but a temporary clone remains on its default branch and only the PR head ref is fetched. For an image added or changed by the PR, this handler reads the base-branch file (or ENOENT) instead of remoteHeadSha:path. This breaks the explicit full-fidelity image-preview requirement for the standard temporary-clone remote pat",
+      "reasons": [
+        "no-suggestion"
+      ]
+    },
+    {
+      "file": "src/main/remote-mode.ts",
+      "location": "new:274-284",
+      "severity": "major",
+      "confidence": "high",
+      "category": "requirement-conformance",
+      "hasSuggestion": false,
+      "summary": "Saving a GUI remote review retains state.source as local git metadata and merely adds remote provenance, so the serializer emits git-diff-args/repository together with remote-url/remote SHAs/remote-forge. The plan defines remote provenance as a third source shape mutually exclusive with local git and directory shapes; every remote GUI save violates that declared document contract.",
+      "reasons": [
+        "no-suggestion"
+      ]
+    },
+    {
+      "file": "src/renderer/App.tsx",
+      "location": "new:24-33",
+      "severity": "major",
+      "confidence": "high",
+      "category": "requirement-conformance",
+      "hasSuggestion": false,
+      "summary": "The welcome-screen remote URL cannot transition the renderer into the returned review. ReviewProvider calls loadDiff only once; its Promise resolves with the startup welcome payload, and the retained onDiffLoad callback can only attempt to resolve that already-settled Promise when main later sends the remote payload. The context never subscribes to subsequent diff payloads, so a successful Remote ",
+      "reasons": [
+        "no-suggestion"
+      ]
+    }
+  ]
+}

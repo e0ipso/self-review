@@ -11,13 +11,13 @@ Feature: Webapp View Modes and Toolbar
     And the split view should show two columns
 
   Scenario: Switch to unified view mode
-    When I click the "Unified" view mode toggle in the toolbar
+    When I click the "Unified" view mode toggle in the file tree
     Then the diff viewer should be in "unified" view mode
     And the unified view should show a single column layout
 
   Scenario: Switch back to split view mode
-    When I click the "Unified" view mode toggle in the toolbar
-    And I click the "Split" view mode toggle in the toolbar
+    When I click the "Unified" view mode toggle in the file tree
+    And I click the "Split" view mode toggle in the file tree
     Then the diff viewer should be in "split" view mode
 
   Scenario: Collapse all file sections
@@ -57,3 +57,8 @@ Feature: Webapp View Modes and Toolbar
     Then the diff viewer should be in "split" view mode
     And the "src/auth/login.ts" file section should use "split" view
     And the "src/legacy.ts" file section should use "unified" view
+
+  Scenario: Toolbar stays pinned when the diff pane scrolls
+    When I scroll the diff pane to the bottom
+    Then the toolbar should remain anchored at the top of the viewport
+    And the document itself should not have scrolled

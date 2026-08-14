@@ -215,6 +215,39 @@ diff-view: invalid-view
       );
     });
 
+    it('treats an empty config file as "use defaults" without warning', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('');
+
+      const config = loadConfig();
+
+      expect(config.theme).toBe('system');
+      expect(config.diffView).toBe('split');
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it('treats a config file containing only `null` as "use defaults" without warning', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('null\n');
+
+      const config = loadConfig();
+
+      expect(config.theme).toBe('system');
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it('warns when YAML parses to a non-object (e.g. an array at the top level)', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('- one\n- two\n');
+
+      const config = loadConfig();
+
+      expect(config.theme).toBe('system');
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid YAML format')
+      );
+    });
+
     it('loads ignore patterns from config', () => {
       const mockYaml = `
 ignore:
@@ -333,6 +366,50 @@ categories:
       const config = loadConfig();
 
       expect(config.outputFile).toBe('./review.xml');
+    });
+
+    it('leaves guide-file unset by default (derived at discovery time)', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const config = loadConfig();
+
+      expect(config.guideFile).toBeUndefined();
+    });
+
+    it('loads guide-file from config', () => {
+      const mockYaml = `guide-file: './walkthrough.guide.xml'`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.guideFile).toBe('./walkthrough.guide.xml');
+    });
+
+    it('project config guide-file takes precedence over user config', () => {
+      const userYaml = `guide-file: './user.guide.xml'`;
+      const projectYaml = `guide-file: './project.guide.xml'`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockImplementation(filepath => {
+        if (filepath.includes('.config/self-review')) {
+          return userYaml;
+        }
+        return projectYaml;
+      });
+
+      const config = loadConfig();
+
+      expect(config.guideFile).toBe('./project.guide.xml');
+    });
+
+    it('ignores empty guide-file and leaves it unset', () => {
+      const mockYaml = `guide-file: ''`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.guideFile).toBeUndefined();
     });
   });
 });

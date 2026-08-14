@@ -120,7 +120,12 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
   const content = readFileSync(path, 'utf-8');
   const raw = parseYaml(content);
 
-  if (!raw || typeof raw !== 'object') {
+  // An empty file (or one containing only `null`) is a valid "use defaults" state.
+  if (raw === null || raw === undefined) {
+    return {};
+  }
+
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('Invalid YAML format');
   }
 
@@ -202,6 +207,14 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     raw['output-file'].length > 0
   ) {
     config.outputFile = raw['output-file'];
+  }
+
+  if (
+    'guide-file' in raw &&
+    typeof raw['guide-file'] === 'string' &&
+    raw['guide-file'].length > 0
+  ) {
+    config.guideFile = raw['guide-file'];
   }
 
   return config;

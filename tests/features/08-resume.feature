@@ -18,6 +18,28 @@ Feature: Resume from Prior Review
     Then the comment "Fix this typo" should be displayed at new line 5 of "src/auth/login.ts"
     And the file-level comment "Needs refactor" should be displayed on "src/auth/login.ts"
 
+  Scenario: Resume restores files previously marked as done
+    Given a prior review XML file "review.xml" with these viewed files:
+      | file              | viewed |
+      | src/auth/login.ts | true   |
+      | src/config.ts     | false  |
+    When I launch self-review with "--resume-from review.xml"
+    Then the file "src/auth/login.ts" should be marked as done reviewing
+    And the file "src/config.ts" should not be marked as done reviewing
+    When I click "Finish Review"
+    Then the output file should mark "src/auth/login.ts" as viewed
+
+  Scenario: Resumed comments display and preserve severity and confidence
+    Given a prior review XML file "review.xml" with these comments:
+      | file              | new_line_start | new_line_end | body            | category | severity | confidence |
+      | src/auth/login.ts | 5              | 5            | Traced defect   | bug      | critical | high       |
+      | src/auth/login.ts | 6              | 6            | Might be an issue | bug    | minor    | low        |
+    When I launch self-review with "--resume-from review.xml"
+    Then the comment "Traced defect" should show a "critical" severity badge and "high" confidence badge
+    And the comment "Might be an issue" should show a "minor" severity badge and "low" confidence badge
+    When I click "Finish Review"
+    Then the output file should preserve severity "critical" and confidence "high" for the comment "Traced defect"
+
   Scenario: Resumed comments can be edited
     Given a prior review XML file "review.xml" with these comments:
       | file              | new_line_start | new_line_end | body          |
@@ -45,4 +67,38 @@ Feature: Resume from Prior Review
     And I add a comment "New comment" on new line 10 of "src/auth/login.ts"
     And I click "Finish Review"
     Then the output file should contain 2 comments for "src/auth/login.ts"
+
+  Scenario: A v2 prior review is loaded and saved as v3
+    Given a prior review XML file "review.xml" with these comments:
+      | file              | new_line_start | new_line_end | body          | category |
+      | src/auth/login.ts | 5              | 5            | Fix this typo | nit      |
+    And the prior review XML file "review.xml" should declare namespace "urn:self-review:v2"
+    When I launch self-review with "--resume-from review.xml"
+    Then the comment "Fix this typo" should be displayed at new line 5 of "src/auth/login.ts"
+    When I click "Finish Review"
+    Then the output file should contain valid XML
+    And the XML should have a root element "review" with namespace "urn:self-review:v3"
+    And the output file should validate against ".agents/skills/self-review-apply/assets/self-review-v3.xsd"
+
+  Scenario: Resumed threads render and round-trip in document order
+    Given a prior review XML file "review.xml" with a comment "Original finding" on new line 5 of "src/auth/login.ts" carrying these replies:
+      | body                   | author        |
+      | The caller guards it   |               |
+      | Confirmed, withdrawing | Claude Opus 5 |
+      | Noted                  |               |
+    When I launch self-review with "--resume-from review.xml"
+    Then the rendered replies for the comment "Original finding" should read, in order:
+      | body                   | author        |
+      | The caller guards it   | You           |
+      | Confirmed, withdrawing | Claude Opus 5 |
+      | Noted                  | You           |
+    When I click "Finish Review"
+    Then the output file should contain valid XML
+    And that comment should contain 3 reply elements
+    And the replies for that comment should read, in order:
+      | body                   | author        |
+      | The caller guards it   |               |
+      | Confirmed, withdrawing | Claude Opus 5 |
+      | Noted                  |               |
+    And the output file should validate against ".agents/skills/self-review-apply/assets/self-review-v3.xsd"
 

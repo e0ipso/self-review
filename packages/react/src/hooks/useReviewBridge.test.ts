@@ -96,6 +96,45 @@ describe('useReviewBridge', () => {
     expect(onReviewChange).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['added', [], [{ id: 'reply-1', body: 'new reply' }]],
+    [
+      'edited',
+      [{ id: 'reply-1', body: 'original reply' }],
+      [{ id: 'reply-1', body: 'edited reply' }],
+    ],
+    ['deleted', [{ id: 'reply-1', body: 'reply to remove' }], []],
+  ])(
+    're-fires onReviewChange when a reply is %s',
+    (_change, initialReplies, nextReplies) => {
+      const initialComment = {
+        id: '1',
+        body: 'hi',
+        replies: initialReplies,
+      } as any;
+      vi.mocked(useReview).mockReturnValue({
+        files: [makeFile([initialComment])],
+        diffSource: mockDiffSource,
+      } as any);
+
+      const onReviewChange = vi.fn();
+      const ref = React.createRef<ReviewHandle>();
+      const { rerender } = renderHook(() =>
+        useReviewBridge(ref, onReviewChange)
+      );
+
+      const changedComment = { ...initialComment, replies: nextReplies };
+      vi.mocked(useReview).mockReturnValue({
+        files: [makeFile([changedComment])],
+        diffSource: mockDiffSource,
+      } as any);
+      rerender();
+
+      expect(onReviewChange).toHaveBeenCalledTimes(2);
+      expect(onReviewChange).toHaveBeenLastCalledWith([changedComment]);
+    }
+  );
+
   it('flattens comments from multiple files', () => {
     const comment1 = { id: '1', body: 'first' } as any;
     const comment2 = { id: '2', body: 'second' } as any;

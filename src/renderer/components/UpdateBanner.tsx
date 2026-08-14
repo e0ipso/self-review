@@ -18,7 +18,7 @@ export default function UpdateBanner() {
 
   return (
     <div
-      className="flex items-center justify-between h-8 px-3 border-b border-border bg-blue-50 dark:bg-blue-950 text-xs"
+      className="flex shrink-0 items-center justify-between h-8 px-3 border-b border-border bg-blue-50 dark:bg-blue-950 text-xs"
       data-testid="update-banner"
     >
       <div className="flex items-center gap-2">

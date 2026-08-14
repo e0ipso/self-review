@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { serializeReview } from './xml-serializer';
 import type {
   ReviewState,
@@ -24,6 +26,12 @@ vi.mock('fs', async (importOriginal) => {
   };
 });
 
+// The fs mock above wraps the real implementations, but individual tests
+// replace them with stubs, and vi.clearAllMocks() clears recorded calls without
+// restoring implementations. Suites that assert against a real directory
+// reinstate the pass-throughs from this untouched copy.
+const actualFs = await vi.importActual<typeof import('fs')>('fs');
+
 const TEST_OUTPUT_PATH = '/tmp/test-review.xml';
 
 describe('serializeReview', () => {
@@ -42,7 +50,7 @@ describe('serializeReview', () => {
       const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(xml).toContain('xmlns="urn:self-review:v1"');
+      expect(xml).toContain('xmlns="urn:self-review:v3"');
       expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
       expect(xml).toContain('git-diff-args="--staged"');
       expect(xml).toContain('repository="/path/to/repo"');
@@ -490,7 +498,7 @@ describe('serializeReview', () => {
       expect(callArgs.xml).toHaveLength(1);
       expect(callArgs.xml[0].fileName).toBe('review.xml');
       expect(callArgs.schema).toHaveLength(1);
-      expect(callArgs.schema[0].fileName).toBe('self-review-v1.xsd');
+      expect(callArgs.schema[0].fileName).toBe('self-review-v3.xsd');
     });
 
     it('throws error if validation fails', async () => {
@@ -525,7 +533,7 @@ describe('serializeReview', () => {
 
       // Should return XML without throwing (graceful fallback)
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(xml).toContain('xmlns="urn:self-review:v1"');
+      expect(xml).toContain('xmlns="urn:self-review:v3"');
       expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
       expect(xml).toContain('</review>');
     });
@@ -845,5 +853,419 @@ describe('serializeReview', () => {
 
       expect(xml).toContain('<body>First line\nSecond line\nThird line</body>');
     });
+  });
+});
+
+describe('severity and confidence attributes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function reviewWith(overrides: Partial<ReviewComment>): ReviewState {
+    const comment: ReviewComment = {
+      id: 'signal-test',
+      filePath: 'src/main.ts',
+      lineRange: { side: 'new', start: 5, end: 5 },
+      body: 'Body',
+      category: 'bug',
+      suggestion: null,
+      ...overrides,
+    };
+
+    const file: FileReviewState = {
+      path: 'src/main.ts',
+      changeType: 'modified',
+      viewed: true,
+      comments: [comment],
+    };
+
+    return {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [file],
+    };
+  }
+
+  it('serializes severity when set', async () => {
+    const xml = await serializeReview(reviewWith({ severity: 'critical' }), TEST_OUTPUT_PATH);
+
+    expect(xml).toContain('severity="critical"');
+    expect(xml).not.toContain('confidence=');
+  });
+
+  it('serializes confidence when set', async () => {
+    const xml = await serializeReview(reviewWith({ confidence: 'low' }), TEST_OUTPUT_PATH);
+
+    expect(xml).toContain('confidence="low"');
+    expect(xml).not.toContain('severity=');
+  });
+
+  it('omits both attributes when neither is set', async () => {
+    const xml = await serializeReview(reviewWith({}), TEST_OUTPUT_PATH);
+
+    expect(xml).not.toContain('severity=');
+    expect(xml).not.toContain('confidence=');
+  });
+
+  // Attribute order is asserted deliberately: the signals are appended after
+  // author so existing exact-string expectations keep holding.
+  it('emits the signals after the line attributes and author', async () => {
+    const xml = await serializeReview(
+      reviewWith({ author: 'Claude Opus 5', severity: 'major', confidence: 'high' }),
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain(
+      '<comment new-line-start="5" new-line-end="5" author="Claude Opus 5" severity="major" confidence="high">'
+    );
+  });
+
+  it('emits the signals on a file-level comment', async () => {
+    const xml = await serializeReview(
+      reviewWith({ lineRange: null, severity: 'info', confidence: 'medium' }),
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain('<comment severity="info" confidence="medium">');
+  });
+});
+
+describe('remote provenance attributes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function localReview(): ReviewState {
+    return {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [
+        { path: 'src/clean.ts', changeType: 'added', viewed: false, comments: [] },
+        {
+          path: 'src/main.ts',
+          changeType: 'modified',
+          viewed: true,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/main.ts',
+              lineRange: { side: 'new', start: 5, end: 7 },
+              body: 'Traced defect',
+              category: 'bug',
+              suggestion: { originalCode: 'a', proposedCode: 'b' },
+              author: 'Claude Opus 5',
+              severity: 'major',
+              confidence: 'high',
+              replies: [{ id: 'r1', body: 'turn' }],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  // The full document, byte for byte, exactly as the serializer emitted it
+  // before the remote attributes existed. A purely local review must keep
+  // producing this string unchanged: absent remote fields leave no trace.
+  it('serializes a review without remote fields byte-identically to the pre-remote output', async () => {
+    const xml = await serializeReview(localReview(), TEST_OUTPUT_PATH);
+
+    expect(xml).toBe(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z" git-diff-args="--staged" repository="/repo">',
+        '  <file path="src/clean.ts" change-type="added" viewed="false" />',
+        '  <file path="src/main.ts" change-type="modified" viewed="true">',
+        '    <comment new-line-start="5" new-line-end="7" author="Claude Opus 5" severity="major" confidence="high">',
+        '      <body>Traced defect</body>',
+        '      <category>bug</category>',
+        '      <suggestion>',
+        '        <original-code>a</original-code>',
+        '        <proposed-code>b</proposed-code>',
+        '      </suggestion>',
+        '      <reply>',
+        '        <body>turn</body>',
+        '      </reply>',
+        '    </comment>',
+        '  </file>',
+        '</review>',
+      ].join('\n')
+    );
+  });
+
+  it('emits the remote root attributes after the source attributes when set', async () => {
+    const state: ReviewState = {
+      ...localReview(),
+      remoteUrl: 'https://github.com/owner/repo/pull/42',
+      remoteBaseSha: 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3',
+      remoteHeadSha: 'de9f2c7fd25e1b3afad3e85a0bd17d9b100db4b3',
+      remoteForge: 'github',
+    };
+
+    const xml = await serializeReview(state, TEST_OUTPUT_PATH);
+
+    expect(xml).toContain(
+      '<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z"' +
+        ' git-diff-args="--staged" repository="/repo"' +
+        ' remote-url="https://github.com/owner/repo/pull/42"' +
+        ' remote-base-sha="a94a8fe5ccb19ba61c4c0873d391e987982fbbd3"' +
+        ' remote-head-sha="de9f2c7fd25e1b3afad3e85a0bd17d9b100db4b3"' +
+        ' remote-forge="github">'
+    );
+  });
+
+  it('emits each remote root attribute independently, only when set', async () => {
+    const xml = await serializeReview(
+      { ...localReview(), remoteForge: 'gitlab' },
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain('remote-forge="gitlab"');
+    expect(xml).not.toContain('remote-url=');
+    expect(xml).not.toContain('remote-base-sha=');
+    expect(xml).not.toContain('remote-head-sha=');
+  });
+
+  it('escapes special characters in remote-url', async () => {
+    const xml = await serializeReview(
+      { ...localReview(), remoteUrl: 'https://gitlab.example.com/g/p/-/merge_requests/7?a=1&b=2' },
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain(
+      'remote-url="https://gitlab.example.com/g/p/-/merge_requests/7?a=1&amp;b=2"'
+    );
+  });
+
+  it('emits remote-id on a comment, after the thresholding signals', async () => {
+    const state = localReview();
+    state.files[1].comments[0].remoteId = 'PRRT_kwDOAbc123';
+
+    const xml = await serializeReview(state, TEST_OUTPUT_PATH);
+
+    expect(xml).toContain(
+      '<comment new-line-start="5" new-line-end="7" author="Claude Opus 5" severity="major" confidence="high" remote-id="PRRT_kwDOAbc123">'
+    );
+  });
+
+  it('emits remote-id on a reply, after its author', async () => {
+    const state = localReview();
+    state.files[1].comments[0].replies = [
+      { id: 'r1', body: 'turn', author: 'Claude Opus 5', remoteId: 'PRRC_kwDOAbc456' },
+      { id: 'r2', body: 'local turn' },
+    ];
+
+    const xml = await serializeReview(state, TEST_OUTPUT_PATH);
+
+    expect(xml).toContain('<reply author="Claude Opus 5" remote-id="PRRC_kwDOAbc456">');
+    expect(xml).toContain(
+      ['      <reply>', '        <body>local turn</body>', '      </reply>'].join('\n')
+    );
+  });
+});
+
+describe('replies', () => {
+  let outputDir: string;
+  let outputPath: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Earlier suites stub these three; put the real implementations back so the
+    // attachment assertions below observe an actual directory.
+    vi.mocked(fs.existsSync).mockImplementation(actualFs.existsSync);
+    vi.mocked(fs.mkdirSync).mockImplementation(actualFs.mkdirSync);
+    vi.mocked(fs.writeFileSync).mockImplementation(actualFs.writeFileSync);
+
+    outputDir = actualFs.mkdtempSync(path.join(os.tmpdir(), 'sr-replies-'));
+    outputPath = path.join(outputDir, 'review.xml');
+  });
+
+  afterEach(() => {
+    actualFs.rmSync(outputDir, { recursive: true, force: true });
+  });
+
+  function reviewWithThread(overrides: Partial<ReviewComment>): ReviewState {
+    const comment: ReviewComment = {
+      id: 'c1',
+      filePath: 'src/main.ts',
+      lineRange: { side: 'new', start: 5, end: 5 },
+      body: 'Root finding',
+      category: 'bug',
+      suggestion: null,
+      ...overrides,
+    };
+
+    const file: FileReviewState = {
+      path: 'src/main.ts',
+      changeType: 'modified',
+      viewed: true,
+      comments: [comment],
+    };
+
+    return {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [file],
+    };
+  }
+
+  function assetsIn(dir: string): string[] {
+    return actualFs.readdirSync(path.join(dir, '.self-review-assets')).sort();
+  }
+
+  it('emits replies in array order, after the comment attachments', async () => {
+    const xml = await serializeReview(
+      reviewWithThread({
+        // No data buffer, so this attachment keeps its fileName and nothing is
+        // written: the assertion here is purely about element order.
+        attachments: [{ id: 'a1', fileName: 'shot.png', mediaType: 'image/png' }],
+        replies: [
+          { id: 'r1', body: 'first turn' },
+          { id: 'r2', body: 'second turn', author: 'Claude Opus 5' },
+          { id: 'r3', body: 'third turn' },
+        ],
+      }),
+      outputPath
+    );
+
+    expect(xml).toContain(
+      [
+        '      <attachment path="shot.png" media-type="image/png" />',
+        '      <reply>',
+        '        <body>first turn</body>',
+        '      </reply>',
+        '      <reply author="Claude Opus 5">',
+        '        <body>second turn</body>',
+        '      </reply>',
+        '      <reply>',
+        '        <body>third turn</body>',
+        '      </reply>',
+        '    </comment>',
+      ].join('\n')
+    );
+  });
+
+  it('emits a reply attachment nested inside the reply element', async () => {
+    const xml = await serializeReview(
+      reviewWithThread({
+        replies: [
+          {
+            id: 'r1',
+            body: 'see this',
+            attachments: [{ id: 'a1', fileName: 'shot.png', mediaType: 'image/webp' }],
+          },
+        ],
+      }),
+      outputPath
+    );
+
+    expect(xml).toContain(
+      [
+        '      <reply>',
+        '        <body>see this</body>',
+        '        <attachment path="shot.png" media-type="image/webp" />',
+        '      </reply>',
+      ].join('\n')
+    );
+  });
+
+  it('emits no reply element for a comment without replies', async () => {
+    const withoutKey = await serializeReview(reviewWithThread({}), outputPath);
+    const withEmptyList = await serializeReview(reviewWithThread({ replies: [] }), outputPath);
+
+    expect(withoutKey).not.toContain('<reply');
+    expect(withEmptyList).not.toContain('<reply');
+  });
+
+  it('escapes markup in a reply body, where a pasted code fence is likeliest', async () => {
+    const body = ['```ts', 'if (a < b && c > d) emit("<x>");', '```'].join('\n');
+
+    const xml = await serializeReview(
+      reviewWithThread({ replies: [{ id: 'r1', body }] }),
+      outputPath
+    );
+
+    const replyBody = xml.match(/<reply>\n\s*<body>([\s\S]*?)<\/body>/)?.[1];
+
+    expect(replyBody).toBeDefined();
+    expect(replyBody).toContain('&lt;');
+    expect(replyBody).toContain('&gt;');
+    expect(replyBody).toContain('&amp;&amp;');
+    // Nothing raw survives inside the body, or the document stops being XML.
+    expect(replyBody).not.toMatch(/[<>]/);
+    expect(replyBody).not.toMatch(/&(?!(amp|lt|gt|quot|apos);)/);
+  });
+
+  // The regression this file exists to prevent: writeAttachments used to
+  // short-circuit on a comment whose own attachment list was empty, which
+  // skipped its replies. The XML still validated and still named an asset file,
+  // but the blob was never written and nothing reported it.
+  it('writes a reply attachment to disk even when its comment has none', async () => {
+    const state = reviewWithThread({
+      replies: [
+        {
+          id: 'r1',
+          body: 'screenshot attached',
+          attachments: [
+            {
+              id: 'a1',
+              fileName: 'shot.png',
+              mediaType: 'image/png',
+              data: new Uint8Array([1, 2, 3]).buffer,
+            },
+          ],
+        },
+      ],
+    });
+
+    const xml = await serializeReview(state, outputPath);
+
+    expect(assetsIn(outputDir)).toEqual(['c1-r-r1-0.png']);
+    expect(
+      actualFs.readFileSync(path.join(outputDir, '.self-review-assets', 'c1-r-r1-0.png'))
+    ).toEqual(Buffer.from([1, 2, 3]));
+    // The emitted path names the file that now exists on disk.
+    expect(xml).toContain(
+      '<attachment path=".self-review-assets/c1-r-r1-0.png" media-type="image/png" />'
+    );
+    // The caller's state is untouched: the buffer is stripped from a copy.
+    expect(state.files[0].comments[0].replies?.[0].attachments?.[0].data).toBeDefined();
+  });
+
+  it('names reply assets so they cannot collide with the comment attachments', async () => {
+    const png = (byte: number) => ({
+      id: `a${byte}`,
+      fileName: 'shot.png',
+      mediaType: 'image/png',
+      data: new Uint8Array([byte]).buffer,
+    });
+
+    const xml = await serializeReview(
+      reviewWithThread({
+        attachments: [png(1)],
+        replies: [
+          { id: 'r1', body: 'first', attachments: [png(2)] },
+          { id: 'r2', body: 'second', attachments: [png(3)] },
+        ],
+      }),
+      outputPath
+    );
+
+    // The comment prefix is still bare comment.id, so existing asset names are
+    // unchanged; the reply prefix cannot produce the same name.
+    expect(assetsIn(outputDir)).toEqual(['c1-0.png', 'c1-r-r1-0.png', 'c1-r-r2-0.png']);
+    expect(xml).toContain('<attachment path=".self-review-assets/c1-0.png"');
+    expect(xml).toContain('<attachment path=".self-review-assets/c1-r-r1-0.png"');
+    expect(xml).toContain('<attachment path=".self-review-assets/c1-r-r2-0.png"');
+  });
+
+  it('leaves the asset directory alone when a thread carries no blobs', async () => {
+    await serializeReview(
+      reviewWithThread({ replies: [{ id: 'r1', body: 'text only' }] }),
+      outputPath
+    );
+
+    expect(actualFs.existsSync(path.join(outputDir, '.self-review-assets'))).toBe(false);
   });
 });

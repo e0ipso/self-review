@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "skills": {
+    "kk-add": {
+      "source": "e0ipso/kenkeep",
+      "sourceType": "github",
+      "skillPath": ".cursor/skills/kk-add/SKILL.md",
+      "computedHash": "1935e140b06b36c070b93488899fe0f95ba77b062c012a4b4c1c6e06d4c0d1ba"
+    },
+    "kk-bootstrap": {
+      "source": "e0ipso/kenkeep",
+      "sourceType": "github",
+      "skillPath": ".cursor/skills/kk-bootstrap/SKILL.md",
+      "computedHash": "7fffbd99225cb65d222b0d6a1f50bed9dac8301a3c73fc25500cb4537b98d6a8"
+    },
+    "kk-curate": {
+      "source": "e0ipso/kenkeep",
+      "sourceType": "github",
+      "skillPath": ".cursor/skills/kk-curate/SKILL.md",
+      "computedHash": "53c3218d31a6b5e148d40674f8f4c2ea070848d1bb4af22a3df51f3bba83306b"
+    },
+    "kk-migrate": {
+      "source": "e0ipso/kenkeep",
+      "sourceType": "github",
+      "skillPath": ".cursor/skills/kk-migrate/SKILL.md",
+      "computedHash": "31a6f0c2c373565cb63381f6d106d270dd415d2bad8058c7e85863aef7a6727e"
+    },
+    "kk-session-extract": {
+      "source": "e0ipso/kenkeep",
+      "sourceType": "github",
+      "skillPath": ".cursor/skills/kk-session-extract/SKILL.md",
+      "computedHash": "eec0266ba6d78c60b4f066f2198d657b16aad8bdc54cd3662f89f1ebf84e0d01"
+    },
+    "st-code-review": {
+      "source": "e0ipso/strikethroo",
+      "sourceType": "github",
+      "skillPath": "templates/harness/skills/st-code-review/SKILL.md",
+      "computedHash": "58be2e636d5d80b4149f85a2498e788bf160e1bdade09cb609ef74e530f73b3c"
+    },
+    "st-create-plan": {
+      "source": "e0ipso/strikethroo",
+      "sourceType": "github",
+      "skillPath": "templates/harness/skills/st-create-plan/SKILL.md",
+      "computedHash": "5015188eac2571d248760c669032942b181f4af3f9b65f271c0223763ad0f4a9"
+    },
+    "st-execute-blueprint": {
+      "source": "e0ipso/strikethroo",
+      "sourceType": "github",
+      "skillPath": "templates/harness/skills/st-execute-blueprint/SKILL.md",
+      "computedHash": "1eb20a0f0ca4b67c6f30282c96b472bcd6337cd8a195b91999a33face406dc15"
+    },
+    "st-execute-task": {
+      "source": "e0ipso/strikethroo",
+      "sourceType": "github",
+      "skillPath": "templates/harness/skills/st-execute-task/SKILL.md",
+      "computedHash": "7cff2b94adaf9bbb783e7c7a8b5d253fa0b5c0104d5f9d7751c75c2fb9c903c9"
+    },
+    "st-full-workflow": {
+      "source": "e0ipso/strikethroo",
+      "sourceType": "github",
+      "skillPath": "templates/harness/skills/st-full-workflow/SKILL.md",
+      "computedHash": "2d45a009fa3baf61702e14016b5703474a36832d52b46726576f9f5d0a41e456"
+    },
+    "st-generate-tasks": {
+      "source": "e0ipso/strikethroo",
+      "sourceType": "github",
+      "skillPath": "templates/harness/skills/st-generate-tasks/SKILL.md",
+      "computedHash": "090539bc26572190391ab06ce9853894c9870579e78762ce929263828ad22596"
+    },
+    "st-refine-plan": {
+      "source": "e0ipso/strikethroo",
+      "sourceType": "github",
+      "skillPath": "templates/harness/skills/st-refine-plan/SKILL.md",
+      "computedHash": "e881da8184d3665ba4cf3a186b98c555c82cf9079030819d2cdd0e35e743c3c6"
+    }
+  }
+}

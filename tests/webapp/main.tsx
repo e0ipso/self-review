@@ -7,7 +7,7 @@ import {
 import type { ReviewPanelHandle } from '../../packages/react/src/index';
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, DiffLoadPayload, CategoryDef } from '../../packages/core/src/types';
-import { createFixturePayload, createEmptyPayload, createMarkdownPayload, defaultCategories, commentingCategories } from './fixture-data';
+import { createFixturePayload, createEmptyPayload, createMarkdownPayload, createRenderedHtmlPayload, createGuideFixturePayload, defaultCategories, commentingCategories } from './fixture-data';
 import './styles.css';
 
 /**
@@ -18,11 +18,14 @@ import './styles.css';
  * read the review state when ready.
  *
  * URL parameters control behavior:
- * - ?fixture=empty|markdown   — Select fixture dataset (default: full fixture)
+ * - ?fixture=empty|markdown|rendered-html   — Select fixture dataset (default: full fixture)
  * - ?gitDiffArgs=...          — Pass gitDiffArgs to empty fixture
  * - ?categories=commenting    — Use commenting test categories (bug, nit, question)
  * - ?theme=dark|light         — Set initial theme
  * - ?view=split|unified       — Set initial view mode
+ * - ?guide=walkthrough        — Inject the walkthrough guide fixture (pushed
+ *                               through adapter.onGuideLoad, same seam the
+ *                               Electron app uses for guide:load)
  */
 
 function getUrlParam(name: string): string | null {
@@ -57,12 +60,19 @@ function getFixturePayload(): DiffLoadPayload {
   const gitDiffArgs = getUrlParam('gitDiffArgs') ?? undefined;
   if (fixture === 'empty') return createEmptyPayload(gitDiffArgs);
   if (fixture === 'markdown') return createMarkdownPayload();
+  if (fixture === 'rendered-html') return createRenderedHtmlPayload();
   return createFixturePayload();
 }
 
 const adapter: ReviewAdapter = {
   loadDiff: async (): Promise<DiffLoadPayload> => {
     return getFixturePayload();
+  },
+  onGuideLoad: callback => {
+    if (getUrlParam('guide') === 'walkthrough') {
+      callback(createGuideFixturePayload());
+    }
+    return () => {};
   },
 };
 
@@ -87,7 +97,7 @@ function App() {
         ref={reviewRef}
         adapter={adapter}
         config={getConfig()}
-        className="flex-1 flex flex-col overflow-hidden"
+        className="flex-1 flex flex-col overflow-hidden bg-background text-foreground"
       >
         <Toolbar onFinishReview={handleFinishReview} />
       </ReviewPanel>

@@ -9,6 +9,7 @@ import {
   DiffLoadPayload,
   DiffHunk,
   ResumeLoadPayload,
+  GuideLoadPayload,
   AppConfig,
   OutputPathInfo,
   ReviewState,
@@ -16,19 +17,29 @@ import {
   ExpandContextRequest,
   FindInPageRequest,
   ImageLoadResult,
+  AppInfo,
+  RemoteDriftInfo,
 } from '../shared/types';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { getVersionUpdate } from './version-checker';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
+import { getAppIconDataUri } from './app-assets';
 
 let reviewStateCache: ReviewState | null = null;
 let diffDataCache: DiffLoadPayload | null = null;
+let guideDataCache: GuideLoadPayload | null = null;
 let configCache: AppConfig | null = null;
 let outputPathInfoCache: OutputPathInfo | null = null;
 let resumeCommentsCache: ReviewComment[] = [];
+let resumeViewedFilesCache: string[] = [];
+let resumeRemoteDriftCache: RemoteDriftInfo | null = null;
 
 export function setDiffData(data: DiffLoadPayload): void {
   diffDataCache = data;
+}
+
+export function setGuideData(data: GuideLoadPayload | null): void {
+  guideDataCache = data;
 }
 
 export function setConfigData(data: AppConfig): void {
@@ -39,8 +50,14 @@ export function setOutputPathInfo(info: OutputPathInfo): void {
   outputPathInfoCache = info;
 }
 
-export function setResumeComments(comments: ReviewComment[]): void {
+export function setResumeData(
+  comments: ReviewComment[],
+  viewedFiles: string[] = [],
+  remoteDrift: RemoteDriftInfo | null = null
+): void {
   resumeCommentsCache = comments;
+  resumeViewedFilesCache = viewedFiles;
+  resumeRemoteDriftCache = remoteDrift;
 }
 
 export function registerIpcHandlers(): void {
@@ -48,6 +65,12 @@ export function registerIpcHandlers(): void {
   ipcMain.on(IPC.DIFF_REQUEST, event => {
     if (diffDataCache) {
       event.sender.send(IPC.DIFF_LOAD, preparePayload(diffDataCache));
+      // The guide rides after the diff payload in both normal and
+      // large-payload modes — it is metadata-only (paths, names,
+      // descriptions) and never triggers eager hunk loading.
+      if (guideDataCache) {
+        event.sender.send(IPC.GUIDE_LOAD, guideDataCache);
+      }
     }
   });
 
@@ -64,9 +87,38 @@ export function registerIpcHandlers(): void {
       '.svg': 'image/svg+xml',
     };
     const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
-    const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+    // Diff paths are repository-relative in git mode; resolve them against
+    // the diff's repository root (in remote mode, the materialized clone),
+    // never the process cwd.
+    const baseDir =
+      diffDataCache?.source.type === 'git'
+        ? diffDataCache.source.repository
+        : process.cwd();
+    const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
     const ext = path.extname(filePath).toLowerCase();
     const mimeType = MIME_MAP[ext] ?? 'application/octet-stream';
+
+    // In a remote session the reviewed content lives at the fetched head
+    // SHA, not in the clone's working tree (a temporary clone stays on the
+    // default branch), so read the blob through git instead of the fs.
+    const remote = diffDataCache?.remote;
+    if (remote && diffDataCache?.source.type === 'git') {
+      try {
+        const { readGitBlobAsync } = await import('./git');
+        const data = await readGitBlobAsync(
+          diffDataCache.source.repository,
+          `${remote.remoteHeadSha}:${filePath}`
+        );
+        if (data.length > MAX_SIZE) {
+          return { error: 'File too large to preview (>10 MB)' };
+        }
+        return { dataUri: `data:${mimeType};base64,${data.toString('base64')}` };
+      } catch {
+        return {
+          error: 'Image preview unavailable — blob not found at the reviewed commit.',
+        };
+      }
+    }
 
     try {
       const stat = await fs.promises.stat(resolved);
@@ -95,6 +147,14 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  // Handle app info request from renderer (version + icon for the About dialog)
+  ipcMain.handle(IPC.APP_GET_INFO, async (): Promise<AppInfo> => {
+    return {
+      version: app.getVersion(),
+      iconDataUri: await getAppIconDataUri(),
+    };
+  });
+
   // Handle review submission from renderer
   ipcMain.on(IPC.REVIEW_SUBMIT, (_event, state: ReviewState) => {
     console.error(
@@ -119,10 +179,22 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // Send resume comments when renderer is ready (after diff data is loaded)
+  // Send resumed comments and viewed files when the renderer is ready
+  // (after diff data is loaded)
   ipcMain.on(IPC.RESUME_REQUEST, event => {
-    if (resumeCommentsCache.length > 0) {
-      event.sender.send(IPC.RESUME_LOAD, { comments: resumeCommentsCache });
+    if (
+      resumeCommentsCache.length > 0 ||
+      resumeViewedFilesCache.length > 0 ||
+      resumeRemoteDriftCache !== null
+    ) {
+      const payload: ResumeLoadPayload = {
+        comments: resumeCommentsCache,
+        viewedFiles: resumeViewedFilesCache,
+      };
+      if (resumeRemoteDriftCache !== null) {
+        payload.remoteDrift = resumeRemoteDriftCache;
+      }
+      event.sender.send(IPC.RESUME_LOAD, payload);
     }
   });
 
@@ -181,7 +253,9 @@ export function registerIpcHandlers(): void {
           request.filePath,
         ];
 
-        const rawDiff = await runGitDiffAsync(expandArgs);
+        // Run in the diff's repository root — in remote mode this is the
+        // materialized clone, not the process cwd.
+        const rawDiff = await runGitDiffAsync(expandArgs, source.repository);
         const parsedFiles = parseDiff(rawDiff);
 
         if (parsedFiles.length === 0) {
@@ -190,10 +264,14 @@ export function registerIpcHandlers(): void {
 
         const expandedFile = parsedFiles[0];
 
-        // Count total lines in the working tree file for gap detection
+        // Count total lines in the working tree file for gap detection.
+        // Diff paths are repository-relative — resolve accordingly.
         let totalLines = 0;
         try {
-          const content = await fs.promises.readFile(request.filePath, 'utf-8');
+          const content = await fs.promises.readFile(
+            path.resolve(source.repository, request.filePath),
+            'utf-8'
+          );
           totalLines = content.split('\n').length;
           // If file ends with newline, last split element is empty — don't count it
           if (content.endsWith('\n')) totalLines--;
@@ -418,6 +496,13 @@ export function sendResumeLoad(
   payload: ResumeLoadPayload
 ): void {
   window.webContents.send(IPC.RESUME_LOAD, payload);
+}
+
+export function sendGuideLoad(
+  window: BrowserWindow,
+  payload: GuideLoadPayload
+): void {
+  window.webContents.send(IPC.GUIDE_LOAD, payload);
 }
 
 export function registerFindInPageForWindow(window: BrowserWindow): void {

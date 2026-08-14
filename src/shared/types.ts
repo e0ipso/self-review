@@ -10,13 +10,21 @@ export type {
   Suggestion,
   Attachment,
   LineRange,
+  Reply,
   ReviewComment,
+  CommentSeverity,
+  CommentConfidence,
+  RemoteForge,
+  RemoteSessionInfo,
+  RemoteDriftInfo,
+  RemoteOpenUrlResult,
   FileReviewState,
   ReviewState,
   CategoryDef,
   AppConfig,
   DiffLoadPayload,
   ResumeLoadPayload,
+  GuideLoadPayload,
   OutputPathInfo,
   ExpandContextRequest,
   ExpandContextResponse,
@@ -25,16 +33,30 @@ export type {
   VersionUpdateInfo,
   PayloadStats,
   ImageLoadResult,
+  ReviewGuide,
+  GuideGroup,
+  GuideFileEntry,
+  ResolvedGuideGroup,
+  ResolvedGuideFile,
 } from '../../packages/types/src/index';
 
 // ===== Electron API (preload bridge) =====
 // Electron-specific — not part of @self-review/types.
+
+/** Application metadata shown in the About dialog. */
+export interface AppInfo {
+  /** App version, from package.json via app.getVersion(). */
+  version: string;
+  /** App icon as a base64 data URI, or null if it could not be loaded. */
+  iconDataUri: string | null;
+}
 
 import type {
   DiffLoadPayload,
   AppConfig,
   OutputPathInfo,
   ResumeLoadPayload,
+  GuideLoadPayload,
   ReviewState,
   ExpandContextRequest,
   ExpandContextResponse,
@@ -43,15 +65,17 @@ import type {
   VersionUpdateInfo,
   DiffHunk,
   ImageLoadResult,
+  RemoteOpenUrlResult,
 } from '../../packages/types/src/index';
 
 export interface ElectronAPI {
   requestDiffData: () => void;
-  onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => void;
+  onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => () => void;
   requestConfig: () => void;
   onConfigLoad: (callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void) => void;
   requestResumeData: () => void;
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
+  onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => () => void;
   submitReview: (state: ReviewState) => void;
   onRequestReview: (callback: () => void) => void;
   onCloseRequested: (callback: () => void) => () => void;
@@ -68,9 +92,12 @@ export interface ElectronAPI {
   onFindResult: (callback: (result: FindInPageResult) => void) => () => void;
   requestVersionUpdate: () => void;
   onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => void;
+  onShowAbout: (callback: () => void) => () => void;
+  getAppInfo: () => Promise<AppInfo>;
   openExternal: (url: string) => Promise<void>;
   loadFileContent: (filePath: string) => Promise<DiffHunk[]>;
   loadImage: (filePath: string) => Promise<ImageLoadResult>;
+  openRemoteUrl: (url: string) => Promise<RemoteOpenUrlResult>;
 }
 
 declare global {

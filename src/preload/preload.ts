@@ -6,6 +6,7 @@ import { IPC } from '../shared/ipc-channels';
 import {
   DiffLoadPayload,
   ResumeLoadPayload,
+  GuideLoadPayload,
   AppConfig,
   OutputPathInfo,
   ReviewState,
@@ -21,9 +22,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => {
-    ipcRenderer.on(IPC.DIFF_LOAD, (_event, payload: DiffLoadPayload) =>
-      callback(payload)
-    );
+    const handler = (_event: Electron.IpcRendererEvent, payload: DiffLoadPayload) =>
+      callback(payload);
+    ipcRenderer.on(IPC.DIFF_LOAD, handler);
+    return () => ipcRenderer.removeListener(IPC.DIFF_LOAD, handler);
   },
 
   requestConfig: () => {
@@ -44,6 +46,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(IPC.RESUME_LOAD, (_event, payload: ResumeLoadPayload) =>
       callback(payload)
     );
+  },
+
+  onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: GuideLoadPayload) =>
+      callback(payload);
+    ipcRenderer.on(IPC.GUIDE_LOAD, handler);
+    return () => ipcRenderer.removeListener(IPC.GUIDE_LOAD, handler);
   },
 
   submitReview: (state: ReviewState) => {
@@ -119,4 +128,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   loadImage: (filePath: string) =>
     ipcRenderer.invoke(IPC.DIFF_LOAD_IMAGE, filePath),
+
+  openRemoteUrl: (url: string) => ipcRenderer.invoke(IPC.REMOTE_OPEN_URL, url),
+
+  onShowAbout: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC.APP_SHOW_ABOUT, handler);
+    return () => ipcRenderer.removeListener(IPC.APP_SHOW_ABOUT, handler);
+  },
+
+  getAppInfo: () => ipcRenderer.invoke(IPC.APP_GET_INFO),
 });
