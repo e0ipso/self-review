@@ -201,7 +201,7 @@ export async function handleLoadFile(
 /** Record the review state the UI pushed, for the save path to consume. */
 export function handleReviewSubmit(session: ReviewSession, state: ReviewState): void {
   console.error(
-    '[ipc] Received REVIEW_SUBMIT from renderer:',
+    '[review] Received a submitted review:',
     JSON.stringify({
       timestamp: state.timestamp,
       source: state.source,
@@ -331,7 +331,7 @@ export async function handleExpandContext(
     return { hunks: expandedFile.hunks, totalLines };
   } catch (error) {
     console.error(
-      `[ipc] Failed to expand context for ${request.filePath}:`,
+      `[review] Failed to expand context for ${request.filePath}:`,
       error
     );
     return null;

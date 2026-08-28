@@ -17,8 +17,6 @@ import type { AppConfig, OutputPathInfo } from '../shared/types';
 interface ConfigResponse {
   config: AppConfig;
   outputPathInfo?: OutputPathInfo;
-  /** Always true in serve mode; the client offers no control that would change it. */
-  outputPathReadOnly?: boolean;
 }
 
 /** What the client needs before it can mount the panel. */

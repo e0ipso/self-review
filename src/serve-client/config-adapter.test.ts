@@ -25,7 +25,9 @@ describe('loadServeConfig', () => {
         Promise.resolve({
           config: { theme: 'dark' },
           outputPathInfo: { resolvedOutputPath: '/repo/review.xml', outputPathWritable: true },
-          outputPathReadOnly: true,
+          // An unmodelled extra key, kept deliberately: the client must ignore
+          // fields it does not know about rather than choke on them.
+          someFutureField: true,
         }),
     });
 

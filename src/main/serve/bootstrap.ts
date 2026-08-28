@@ -34,6 +34,7 @@ import { createReviewSession, type ReviewSession } from '../review-handlers';
 import type { AppConfig, DiffLoadPayload } from '../../shared/types';
 import { resolveClientAssetsDir } from './client-assets';
 import { createServeServer, listen, stopServer } from './server';
+import { guardAgainstOrphaning } from './orphan-guard';
 
 export interface OutputPathValidation {
   ok: boolean;
@@ -301,6 +302,21 @@ export async function runServeMode(cli: CliArgs, address: ServeAddress): Promise
     process.exit(1);
     return;
   }
+
+  // Ctrl-C already works: the launcher keeps this child in its process group,
+  // so a group signal reaches us. This covers the case that group signalling
+  // cannot — the launcher dying without passing anything on (SIGKILL, OOM),
+  // which would otherwise leave this process holding the port under init.
+  guardAgainstOrphaning(() => {
+    console.error(
+      '[serve] The process that started serve mode is gone — shutting down'
+    );
+    if (server) {
+      void stopServer(server).finally(() => process.exit(1));
+    } else {
+      process.exit(1);
+    }
+  });
 
   console.error(`[serve] Output path: ${running.outputPath} (fixed for this session)`);
   // The URL is the command's product, so it goes to stdout; everything else is

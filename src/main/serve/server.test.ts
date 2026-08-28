@@ -133,7 +133,6 @@ describe('serve server', () => {
         resolvedOutputPath: outputPath,
         outputPathWritable: true,
       });
-      expect(body.outputPathReadOnly).toBe(true);
     });
 
     it('rejects a non-GET method', async () => {

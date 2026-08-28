@@ -73,12 +73,6 @@ export interface ServeServerDeps {
 export interface ServeConfigResponse {
   config: unknown;
   outputPathInfo: unknown;
-  /**
-   * Always true. Serve mode fixes the output path at launch: there is no
-   * browser equivalent of the native save dialog, and the UI must offer no
-   * control for changing it.
-   */
-  outputPathReadOnly: true;
 }
 
 async function defaultWriteReview(state: ReviewState, outputPath: string): Promise<void> {
@@ -210,7 +204,6 @@ async function handleApi(
     const body: ServeConfigResponse = {
       config: deps.session.config,
       outputPathInfo: deps.session.outputPathInfo,
-      outputPathReadOnly: true,
     };
     sendJson(res, 200, body);
     return;
