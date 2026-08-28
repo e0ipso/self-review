@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
+import {
+  parseCliArgs,
+  checkEarlyExit,
+  normalizeGitDiffArgs,
+  parseServeTarget,
+  DEFAULT_SERVE_HOST,
+  DEFAULT_SERVE_PORT,
+} from './cli';
 
 describe('cli', () => {
   const originalArgv = process.argv;
@@ -399,6 +406,130 @@ describe('cli', () => {
 
       expect(result.shouldExit).toBe(true);
       expect(result.exitCode).toBe(0);
+    });
+  });
+});
+
+describe('cli serve mode', () => {
+  const originalArgv = process.argv;
+  const originalDefaultApp = (process as any).defaultApp;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    (process as any).defaultApp = false;
+  });
+
+  afterEach(() => {
+    process.argv = originalArgv;
+    (process as any).defaultApp = originalDefaultApp;
+    vi.clearAllMocks();
+  });
+
+  describe('parseServeTarget', () => {
+    it('defaults to loopback on the default port for an empty value', () => {
+      expect(parseServeTarget('')).toEqual({
+        address: { host: DEFAULT_SERVE_HOST, port: DEFAULT_SERVE_PORT },
+      });
+    });
+
+    it('accepts a bare port', () => {
+      expect(parseServeTarget('8080')).toEqual({
+        address: { host: DEFAULT_SERVE_HOST, port: 8080 },
+      });
+    });
+
+    it('accepts :PORT', () => {
+      expect(parseServeTarget(':8080')).toEqual({
+        address: { host: DEFAULT_SERVE_HOST, port: 8080 },
+      });
+    });
+
+    it('accepts HOST:PORT for a loopback host', () => {
+      expect(parseServeTarget('localhost:8080')).toEqual({
+        address: { host: 'localhost', port: 8080 },
+      });
+      expect(parseServeTarget('127.0.0.5:9')).toEqual({
+        address: { host: '127.0.0.5', port: 9 },
+      });
+    });
+
+    it('accepts a bracketed IPv6 loopback host', () => {
+      expect(parseServeTarget('[::1]:8080')).toEqual({
+        address: { host: '::1', port: 8080 },
+      });
+    });
+
+    it('refuses a routable host, because serve mode has no authentication', () => {
+      const result = parseServeTarget('0.0.0.0:8080');
+      expect('error' in result && result.error).toContain('loopback');
+    });
+
+    it('refuses a port that is not a number in range', () => {
+      expect('error' in parseServeTarget('localhost:70000')).toBe(true);
+      expect('error' in parseServeTarget('localhost:abc')).toBe(true);
+    });
+  });
+
+  describe('parseCliArgs', () => {
+    it('leaves serve and outputPath null when the flags are absent', () => {
+      process.argv = ['/path/to/app', '--staged'];
+      const args = parseCliArgs();
+
+      expect(args.serve).toBeNull();
+      expect(args.outputPath).toBeNull();
+      expect(args.gitDiffArgs).toEqual(['--staged']);
+    });
+
+    it('parses a bare --serve to the loopback default', () => {
+      process.argv = ['/path/to/app', '--serve'];
+      const args = parseCliArgs();
+
+      expect(args.serve).toEqual({ host: DEFAULT_SERVE_HOST, port: DEFAULT_SERVE_PORT });
+      expect(args.gitDiffArgs).toEqual([]);
+    });
+
+    it('parses --serve=HOST:PORT', () => {
+      process.argv = ['/path/to/app', '--serve=127.0.0.1:8080'];
+      const args = parseCliArgs();
+
+      expect(args.serve).toEqual({ host: '127.0.0.1', port: 8080 });
+    });
+
+    it('parses --output=<path> and --output <path>', () => {
+      process.argv = ['/path/to/app', '--serve', '--output=my-review.xml'];
+      expect(parseCliArgs().outputPath).toBe('my-review.xml');
+
+      process.argv = ['/path/to/app', '--serve', '--output', 'other.xml'];
+      expect(parseCliArgs().outputPath).toBe('other.xml');
+    });
+
+    it('never forwards the serve flags to git diff', () => {
+      process.argv = [
+        '/path/to/app',
+        '--serve=:8080',
+        '--output=r.xml',
+        'main..feature',
+      ];
+      const args = parseCliArgs();
+
+      expect(args.gitDiffArgs).toEqual(['main..feature']);
+      expect(args.serve).toEqual({ host: DEFAULT_SERVE_HOST, port: 8080 });
+      expect(args.outputPath).toBe('r.xml');
+    });
+
+    it('exits on an invalid serve target', () => {
+      process.argv = ['/path/to/app', '--serve=0.0.0.0:8080'];
+      parseCliArgs();
+
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    it('exits when --output has no argument', () => {
+      process.argv = ['/path/to/app', '--serve', '--output'];
+      parseCliArgs();
+
+      expect(process.exit).toHaveBeenCalledWith(1);
     });
   });
 });

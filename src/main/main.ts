@@ -2,12 +2,13 @@
 // Electron main process entry point
 
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
-import { writeFileSync, existsSync, statSync } from 'fs';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
+import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { checkWritability } from './fs-utils';
 import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
 import { runFetchComments } from './fetch-comments';
+import { runServeMode } from './serve/bootstrap';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
@@ -39,6 +40,7 @@ import { checkForUpdate } from './version-checker';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { setupMenu } from './menu';
 import { getAppIconPath } from './app-assets';
+import { determineMode } from './startup-mode';
 import { IPC } from '../shared/ipc-channels';
 import {
   AppConfig,
@@ -138,76 +140,6 @@ process.on('exit', () => {
 app.on('will-quit', () => {
   remoteCleanup?.();
 });
-
-/**
- * Check if the current working directory is inside a git repository.
- */
-function isInGitRepo(): boolean {
-  try {
-    execSync('git rev-parse --git-dir', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if a file is tracked by git (known to the index).
- */
-function isGitTracked(filePath: string): boolean {
-  try {
-    execSync(`git ls-files --error-unmatch ${JSON.stringify(filePath)}`, {
-      stdio: 'ignore',
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Determine the startup mode based on git availability and CLI arguments.
- * Returns the DiffSource type to use.
- */
-function determineMode(gitDiffArgs: string[]): 'git' | 'directory' | 'file' | 'welcome' {
-  // Find the first positional arg, skipping flags and the '--' separator
-  // (normalizeGitDiffArgs may have inserted '--' before path args)
-  const firstPositional = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'));
-
-  // Check if first positional arg is an existing file
-  if (firstPositional) {
-    const candidate = resolve(process.cwd(), firstPositional);
-    try {
-      if (existsSync(candidate) && statSync(candidate).isFile()) {
-        if (isInGitRepo()) {
-          // In git repo: tracked files go through git diff, untracked use file mode
-          return isGitTracked(firstPositional) ? 'git' : 'file';
-        }
-        return 'file';
-      }
-    } catch {
-      // Failed to stat — fall through
-    }
-  }
-
-  if (isInGitRepo()) {
-    return 'git';
-  }
-
-  // Not in a git repo — check if first positional arg is an existing directory
-  if (firstPositional) {
-    const candidate = resolve(process.cwd(), firstPositional);
-    try {
-      if (existsSync(candidate) && statSync(candidate).isDirectory()) {
-        return 'directory';
-      }
-    } catch {
-      // Failed to stat — fall through to welcome
-    }
-  }
-
-  return 'welcome';
-}
 
 /**
  * Initialize the application AFTER Electron is ready.
@@ -650,6 +582,65 @@ app.on('activate', () => {
   }
 });
 
+/**
+ * Serve mode has no window, but Electron's browser process still initializes
+ * a UI platform — and on Linux that is X11, so it exits with "Missing X server
+ * or $DISPLAY" on exactly the headless VM serve mode exists for.
+ *
+ * `--ozone-platform=headless` fixes it, but only from the command line:
+ * Electron selects the Ozone platform before it runs this script, so
+ * `app.commandLine.appendSwitch()` here is too late and is silently ignored.
+ * The only way to set it is to be launched with it, so serve mode re-launches
+ * itself once with the switch and waits for that child.
+ *
+ * Linux only — no other platform selects Ozone. Guarded by an environment
+ * variable as well as the switch so a relaunch can never recurse.
+ */
+const OZONE_HEADLESS_SWITCH = '--ozone-platform=headless';
+const HEADLESS_RELAUNCH_ENV = 'SELF_REVIEW_SERVE_HEADLESS';
+
+function needsHeadlessRelaunch(): boolean {
+  return (
+    process.platform === 'linux' &&
+    !process.env[HEADLESS_RELAUNCH_ENV] &&
+    !process.argv.includes(OZONE_HEADLESS_SWITCH)
+  );
+}
+
+/**
+ * Re-launch this binary with the headless switch, and wait for it.
+ *
+ * `spawnSync`, not `spawn`, and that is the load-bearing detail: a synchronous
+ * wait never returns to Electron's message loop, so this process never reaches
+ * the UI initialization that would kill it on a headless machine — the very
+ * environment serve mode exists for. An asynchronous spawn leaves the launcher
+ * to die of "Missing X server" milliseconds later, taking the exit status and
+ * the signal handling with it while the child runs on, orphaned.
+ *
+ * Blocking here also preserves the ordinary CLI contract: stdio is inherited
+ * so the URL and the logs reach the caller unchanged, the child stays in this
+ * process group so Ctrl-C reaches it, and the child's exit status becomes
+ * ours — `self-review --serve` returns when, and only when, the review is over.
+ */
+function relaunchHeadless(): void {
+  const result = spawnSync(
+    process.execPath,
+    [OZONE_HEADLESS_SWITCH, ...process.argv.slice(1)],
+    {
+      stdio: 'inherit',
+      env: { ...process.env, [HEADLESS_RELAUNCH_ENV]: '1' },
+    }
+  );
+
+  if (result.error) {
+    console.error(
+      `[serve] Could not start the serve-mode process: ${result.error.message}`
+    );
+    process.exit(1);
+  }
+  process.exit(result.signal ? 1 : (result.status ?? 0));
+}
+
 // Check for --help/--version ONLY (these must exit before Electron initializes)
 const earlyExit = checkEarlyExit();
 if (earlyExit.shouldExit) {
@@ -673,6 +664,20 @@ if (routedArgs.subcommand === 'fetch-comments') {
       );
       process.exit(1);
     });
+} else if (routedArgs.serve) {
+  // Serve mode runs fully outside the UI path — no app.whenReady(), no
+  // window, nothing Electron-bound — and exits when the reviewer finishes the
+  // review. The HTTP server keeps the process alive in the meantime.
+  if (needsHeadlessRelaunch()) {
+    relaunchHeadless();
+  } else {
+    runServeMode(routedArgs, routedArgs.serve).catch(error => {
+      console.error(
+        `[serve] ${error instanceof Error ? error.message : String(error)}`
+      );
+      process.exit(1);
+    });
+  }
 } else {
   // Call app.whenReady() IMMEDIATELY - do NOT run any other code before this
   // This allows Electron to initialize its event loop without blockage

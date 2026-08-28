@@ -359,9 +359,9 @@ graph TD
 The only phase that edits existing desktop code. Nothing downstream may begin until
 `test:e2e:electron` confirms the desktop application is behaviourally unchanged.
 
-### Phase 2: Stand up the server process
+### ✅ Phase 2: Stand up the server process
 **Parallel Tasks:**
-- Task 002: Serve-mode HTTP server bootstrap, CLI flags, and session lifecycle (depends on: 001)
+- ✔️ Task 002: Serve-mode HTTP server bootstrap, CLI flags, and session lifecycle (depends on: 001) (completed)
 
 ### Phase 3: Complete the API surface
 **Parallel Tasks:**
