@@ -392,3 +392,100 @@ which is the one part of the client work with no existing precedent in the repos
 ### Execution Summary
 - Total Phases: 6
 - Total Tasks: 8
+
+## Execution Summary
+
+**Status**: ✅ Completed Successfully
+**Completed Date**: 2026-08-28
+
+### Results
+
+Serve mode works end to end. `self-review --serve --output=<path>` starts a loopback HTTP server,
+the existing review UI loads in a browser, a comment made there is written to the review file, and
+finishing the review stops the server.
+
+Delivered across six phases and eight tasks, all verified independently of the implementing agents
+rather than on their reports:
+
+- `src/main/review-handlers.ts` — transport-agnostic handlers with an explicit `ReviewSession`,
+  called by both the Electron IPC registrations and the HTTP routes.
+- `src/main/serve/` — `node:http` bootstrap, CLI flags, static client serving, session lifecycle,
+  and the data routes.
+- `src/serve-client/` — the browser client and its `ReviewAdapter` over `fetch`.
+- A Playwright `serve` project asserting the artifact on disk, plus unit coverage of the routes
+  and the adapter.
+- README and AGENTS.md.
+
+No new runtime dependency. The Electron desktop app is behaviourally unchanged: `test:e2e:electron`
+passed after every phase, including the one change under `packages/`.
+
+### Noteworthy Events
+
+**Code review gate did not run.** Round 1 returned `skipped`, `reason: "no-reviewer-candidate"`,
+`detail: "No harness other than `claude` is installed and responsive, so the review gate was
+skipped."` An earlier attempt returned `skipped`, `reason: "validator-absent"`, `detail: "No
+`xmllint` on PATH, so emitted findings could not be validated against the vendored schema and the
+review gate was skipped. Install libxml2-utils (Debian/Ubuntu), libxml2 (Homebrew), or your
+platform equivalent to enable the gate."` — `libxml2-utils` was installed, which resolved that
+reason and exposed the second. Rounds run: 0. Findings recorded: 0. Findings applied: 0. **No
+independent second-model review of this work has taken place.**
+
+**A plan assumption was false, and a `packages/` change was authorised to fix it.** The plan and
+task 4 both asserted that omitting `changeOutputPath` removes the Change… control, because
+`FileTree.tsx:31` guards the handler. Only the handler is guarded; the `<Button>` rendered
+unconditionally, so task 5's criterion "no output-path control is rendered" failed. The agent
+reported it rather than editing `packages/`, which the plan forbade. With explicit authorisation
+the button was made conditional, the false comment in `adapter.ts` was corrected, and the fix was
+verified in a real browser (1 button before, 0 after, output path still displayed, no page errors).
+This also removes the same dead button for `SingleFileReview`, which already ships a reduced adapter.
+
+**Electron will not run headless, which serve mode had to solve.** Electron initialises Ozone/X11
+even with no window and exits with "Missing X server or $DISPLAY" — on exactly the VM this feature
+exists for. `app.commandLine.appendSwitch` is silently ignored because the platform is selected
+before the app script runs, so `main.ts` re-launches itself once with `--ozone-platform=headless`
+via `spawnSync`. `spawnSync` is load-bearing: with async `spawn` the launcher reached UI init and
+segfaulted, orphaning the server.
+
+**Signals are not forwarded to the relaunched child.** Found by task 7 while writing the e2e test:
+`SIGTERM` to the launcher kills only the launcher, and the headless child keeps the port,
+reparented to init. The test works around it by spawning detached and signalling the process group.
+A reviewer who Ctrl-Cs `self-review --serve` still leaves an orphaned listener. Reported, not fixed.
+
+**No push transport was needed, contrary to the initial design.** `guide-loader.ts` resolves the
+guide one-shot at startup and the `DIFF_REQUEST` handler sends it immediately after the diff, so it
+is data available at response time rather than an event. With `--output` removing
+`OUTPUT_PATH_CHANGED` and the welcome screen omitted, every interaction is request/response. The
+SSE layer in the original sketch was dropped.
+
+**`docs/intent/` does not exist.** This plan's Documentation section suggested following plan 58's
+intent-document convention, but `docs/intent/remote-pr-review.md`, which plan 58 cites as its
+authoritative scope, was never created. Task 8 checked instead of assuming and declined to invent a
+lone instance of a convention the repository does not have.
+
+**Test suites were briefly red across a parallel phase.** In phase 5 the shared suite failed while
+one agent's files were half-written. Attribution was confirmed by running each agent's files in
+isolation. Not a defect; a property of running two agents against one suite.
+
+**Pre-existing conditions, unchanged by this work.** One flaky Electron test
+(`11-welcome-screen › Finish Review produces valid XML with source-path and no git-diff-args`)
+fails then passes on retry; the same flake was observed on an unmodified `main` baseline. Three
+lint warnings in `.agents/skills/*/scripts/dispatch-task-execution.cjs` are vendored and
+pre-existing.
+
+**Strikethroo was upgraded 3.17.1 → 3.19.1** by `npx strikethroo init --harnesses claude` and
+`npx skills add`, committed separately as a `chore:` so it stays out of the feature diff.
+
+### Necessary follow-ups
+
+1. **Get an independent review.** The gate never ran, so nothing has reviewed this work except the
+   agents that wrote it and the orchestrator that verified it. This is the largest outstanding gap.
+2. **Forward signals in `relaunchHeadless()`** (`src/main/main.ts`) so Ctrl-C or `SIGTERM` reaches
+   the headless child instead of orphaning a listener holding the port.
+3. **Decide whether `docs/intent/` is a real convention** and, if so, whether plan 58's document and
+   one for serve mode should both land.
+4. **Consider wiring `test:e2e:serve` into CI.** It is deliberately excluded, matching the
+   `electron` project and the workflow's stated scope, and costs one Electron package per run.
+5. **Rename the `[ipc]` log prefixes** in `review-handlers.ts`, which is no longer IPC-specific.
+   Left alone deliberately: changing them inside a pure-move refactor would have been an observable
+   stderr change.
+6. **Nothing consumes `outputPathReadOnly`**, which `/api/config` sends. Either use it or drop it.
