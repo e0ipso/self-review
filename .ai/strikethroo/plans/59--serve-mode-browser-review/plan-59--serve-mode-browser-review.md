@@ -363,9 +363,9 @@ The only phase that edits existing desktop code. Nothing downstream may begin un
 **Parallel Tasks:**
 - ✔️ Task 002: Serve-mode HTTP server bootstrap, CLI flags, and session lifecycle (depends on: 001) (completed)
 
-### Phase 3: Complete the API surface
+### ✅ Phase 3: Complete the API surface
 **Parallel Tasks:**
-- Task 003: Expose the shared handlers as serve-mode data routes (depends on: 001, 002)
+- ✔️ Task 003: Expose the shared handlers as serve-mode data routes (depends on: 001, 002) (completed)
 
 ### Phase 4: Bind the UI to the API
 **Parallel Tasks:**

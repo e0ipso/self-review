@@ -111,6 +111,24 @@ export function handleDiffRequest(session: ReviewSession): DiffRequestResult | n
   };
 }
 
+/**
+ * The directory a repository-relative path in this session resolves against.
+ *
+ * Diff paths are repository-relative in git mode, so they resolve against the
+ * diff's own repository root — in remote mode, the materialized clone — and
+ * never against the process cwd. Other modes have no such root and fall back
+ * to the cwd, which is what they were scanned relative to.
+ *
+ * Exported because serve mode has to answer the same question one step earlier
+ * than the handlers do: an HTTP path parameter is refused before it reaches a
+ * handler if it does not sit under this directory.
+ */
+export function sessionBaseDir(session: ReviewSession): string {
+  return session.diffData?.source.type === 'git'
+    ? session.diffData.source.repository
+    : process.cwd();
+}
+
 /** Load a binary image as a base64 data URI for the rendered preview. */
 export async function handleLoadImage(
   session: ReviewSession,
@@ -130,10 +148,7 @@ export async function handleLoadImage(
   // Diff paths are repository-relative in git mode; resolve them against
   // the diff's repository root (in remote mode, the materialized clone),
   // never the process cwd.
-  const baseDir =
-    session.diffData?.source.type === 'git'
-      ? session.diffData.source.repository
-      : process.cwd();
+  const baseDir = sessionBaseDir(session);
   const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
   const ext = path.extname(filePath).toLowerCase();
   const mimeType = MIME_MAP[ext] ?? 'application/octet-stream';

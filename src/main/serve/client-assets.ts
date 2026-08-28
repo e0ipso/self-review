@@ -10,6 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { containWithin } from './request-paths';
 
 /** Environment override for the client directory. Set by tests and dev runs. */
 export const CLIENT_DIR_ENV = 'SELF_REVIEW_CLIENT_DIR';
@@ -116,11 +117,8 @@ export type StaticLookup =
  * rejected by the containment check, so nothing outside the bundle is read.
  */
 export function resolveStaticFile(clientDir: string, pathname: string): StaticLookup {
-  const root = path.resolve(clientDir);
-  const relative = pathname.replace(/^\/+/, '');
-  const resolved = path.resolve(root, relative);
-
-  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+  const resolved = containWithin(clientDir, pathname);
+  if (resolved === null) {
     return { kind: 'escape' };
   }
 

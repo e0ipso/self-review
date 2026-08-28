@@ -16,9 +16,28 @@ import * as http from 'http';
 import * as path from 'path';
 import type { AddressInfo } from 'net';
 import { serializeReview } from '../xml-serializer';
-import { handleReviewSubmit, type ReviewSession } from '../review-handlers';
-import type { ReviewState } from '../../shared/types';
+import {
+  handleDiffRequest,
+  handleExpandContext,
+  handleLoadFile,
+  handleLoadImage,
+  handleReadAttachment,
+  handleResumeRequest,
+  handleReviewSubmit,
+  sessionBaseDir,
+  type ReviewSession,
+} from '../review-handlers';
+import type { ExpandContextRequest, ReviewState } from '../../shared/types';
 import { contentTypeFor, resolveStaticFile } from './client-assets';
+import { containWithin, routeParam } from './request-paths';
+
+/** Route prefixes whose remainder is a filesystem path. */
+const FILE_PREFIX = '/api/file/';
+const IMAGE_PREFIX = '/api/image/';
+const ATTACHMENT_PREFIX = '/api/attachment/';
+
+/** Methods a read-only route answers. */
+const GET_METHODS = ['GET', 'HEAD'] as const;
 
 /** Refuse a review body larger than this rather than buffering it forever. */
 const MAX_BODY_BYTES = 64 * 1024 * 1024;
@@ -84,6 +103,40 @@ function sendText(res: http.ServerResponse, status: number, body: string): void 
     'Cache-Control': 'no-store',
   });
   res.end(body);
+}
+
+/** Send an opaque byte payload — the attachment route's whole reason to exist. */
+function sendBytes(
+  res: http.ServerResponse,
+  body: Buffer,
+  contentType: string,
+  headOnly: boolean
+): void {
+  res.writeHead(200, {
+    'Content-Type': contentType,
+    'Content-Length': body.length,
+    'Cache-Control': 'no-store',
+  });
+  if (headOnly) {
+    res.end();
+    return;
+  }
+  res.end(body);
+}
+
+/**
+ * Guard a route's method, answering 405 itself when it does not match.
+ * Returns whether the caller should continue.
+ */
+function methodIs(
+  res: http.ServerResponse,
+  method: string,
+  allowed: readonly string[],
+  pathname: string
+): boolean {
+  if (allowed.includes(method)) return true;
+  sendJson(res, 405, { error: `${method} not allowed on ${pathname}` });
+  return false;
 }
 
 /** Read a request body with a hard size cap. */
@@ -163,6 +216,82 @@ async function handleApi(
     return;
   }
 
+  // The diff and the guide travel together. The IPC layer sends them as two
+  // messages because it has a channel to push down; HTTP has a response body,
+  // and the guide was resolved at startup, so there is nothing to wait for and
+  // no reason for a second request — or for a push transport to carry it.
+  if (pathname === '/api/diff') {
+    if (!methodIs(res, method, GET_METHODS, pathname)) return;
+    const result = handleDiffRequest(deps.session);
+    if (!result) {
+      // Unreachable via the bootstrap, which refuses to listen without a diff.
+      sendJson(res, 500, { error: 'No diff was resolved at startup' });
+      return;
+    }
+    // `preparePayload` has already run inside the handler: in large-payload
+    // mode the files arrive without hunks and `/api/file/:path` fills them in
+    // one at a time, exactly as the desktop's lazy path does.
+    sendJson(res, 200, { ...result.diff, guide: result.guide });
+    return;
+  }
+
+  if (pathname === '/api/resume') {
+    if (!methodIs(res, method, GET_METHODS, pathname)) return;
+    // Null when there is nothing to restore, mirroring the handler. The IPC
+    // side expresses that by sending no message at all.
+    sendJson(res, 200, handleResumeRequest(deps.session));
+    return;
+  }
+
+  if (pathname === '/api/expand-context') {
+    if (!methodIs(res, method, ['POST'], pathname)) return;
+    await handleExpandContextPost(req, res, deps);
+    return;
+  }
+
+  if (pathname.startsWith(FILE_PREFIX)) {
+    if (!methodIs(res, method, GET_METHODS, pathname)) return;
+    const requested = routeParam(pathname, FILE_PREFIX);
+    if (!requested) {
+      sendJson(res, 400, { error: 'A file path is required' });
+      return;
+    }
+    // This route reads no filesystem — it answers out of the diff already in
+    // the session — but a path that escapes the review root cannot name a file
+    // in that diff either, so refusing it here keeps one rule for all three
+    // path routes. The unmodified path goes to the handler, which matches it
+    // against `newPath || oldPath` verbatim.
+    if (containWithin(sessionBaseDir(deps.session), requested) === null) {
+      sendJson(res, 400, { error: 'Path escapes the review root' });
+      return;
+    }
+    sendJson(res, 200, await handleLoadFile(deps.session, requested));
+    return;
+  }
+
+  if (pathname.startsWith(IMAGE_PREFIX)) {
+    if (!methodIs(res, method, GET_METHODS, pathname)) return;
+    const requested = routeParam(pathname, IMAGE_PREFIX);
+    // Refusals use the handler's own `{ error }` result shape, so a client
+    // that renders an ImageLoadResult has something to render either way.
+    if (!requested) {
+      sendJson(res, 400, { error: 'An image path is required' });
+      return;
+    }
+    if (containWithin(sessionBaseDir(deps.session), requested) === null) {
+      sendJson(res, 400, { error: 'Path escapes the review root' });
+      return;
+    }
+    sendJson(res, 200, await handleLoadImage(deps.session, requested));
+    return;
+  }
+
+  if (pathname.startsWith(ATTACHMENT_PREFIX)) {
+    if (!methodIs(res, method, GET_METHODS, pathname)) return;
+    await handleAttachmentGet(res, deps, routeParam(pathname, ATTACHMENT_PREFIX), method === 'HEAD');
+    return;
+  }
+
   if (pathname === '/api/review') {
     if (method !== 'POST') {
       sendJson(res, 405, { error: `${method} not allowed on /api/review` });
@@ -173,6 +302,96 @@ async function handleApi(
   }
 
   sendJson(res, 404, { error: `No such endpoint: ${pathname}` });
+}
+
+/**
+ * Expand context for one file.
+ *
+ * Validation is the only thing this adds: the expansion itself, including
+ * updating the session so later reads see the wider hunks, is the shared
+ * handler's, and is what the desktop runs.
+ */
+async function handleExpandContextPost(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  deps: ServeServerDeps
+): Promise<void> {
+  let request: ExpandContextRequest;
+  try {
+    const parsed: unknown = JSON.parse(await readBody(req));
+    const candidate = parsed as Partial<ExpandContextRequest> | null;
+    if (
+      !candidate ||
+      typeof candidate !== 'object' ||
+      typeof candidate.filePath !== 'string' ||
+      !Number.isInteger(candidate.contextLines) ||
+      (candidate.contextLines as number) < 0
+    ) {
+      sendJson(res, 400, {
+        error: 'Body must be { filePath: string, contextLines: non-negative integer }',
+      });
+      return;
+    }
+    request = { filePath: candidate.filePath, contextLines: candidate.contextLines as number };
+  } catch (error) {
+    sendJson(res, 400, {
+      error: `Could not read the expand-context body: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return;
+  }
+
+  if (containWithin(sessionBaseDir(deps.session), request.filePath) === null) {
+    sendJson(res, 400, { error: 'Path escapes the review root' });
+    return;
+  }
+
+  sendJson(res, 200, await handleExpandContext(deps.session, request));
+}
+
+/**
+ * Serve an attachment as raw bytes.
+ *
+ * Two roots are tried, because an attachment path is written by the serializer
+ * as `.self-review-assets/…` relative to the *review document*, while every
+ * other path in a session is relative to the diff. Whichever root the file
+ * actually sits under answers; a path under neither is refused before anything
+ * is read.
+ *
+ * The body is the file itself — no base64, no JSON envelope — because the
+ * adapter's `readAttachment` is declared to return an `ArrayBuffer` and the
+ * browser gets there through `Response.arrayBuffer()`.
+ */
+async function handleAttachmentGet(
+  res: http.ServerResponse,
+  deps: ServeServerDeps,
+  requested: string,
+  headOnly: boolean
+): Promise<void> {
+  if (!requested) {
+    sendJson(res, 400, { error: 'An attachment path is required' });
+    return;
+  }
+
+  const roots = [path.dirname(deps.outputPath), sessionBaseDir(deps.session)];
+  let resolved: string | null = null;
+  for (const root of roots) {
+    const candidate = containWithin(root, requested);
+    if (candidate === null) continue;
+    resolved = candidate;
+    if (fs.existsSync(candidate)) break;
+  }
+  if (resolved === null) {
+    sendJson(res, 400, { error: 'Path escapes the review roots' });
+    return;
+  }
+
+  const data = await handleReadAttachment(resolved);
+  if (data === null) {
+    sendJson(res, 404, { error: `No attachment at ${requested}` });
+    return;
+  }
+
+  sendBytes(res, Buffer.from(data), contentTypeFor(resolved), headOnly);
 }
 
 /**
