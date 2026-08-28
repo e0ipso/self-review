@@ -2,7 +2,7 @@
 id: 8
 group: "serve-mode"
 dependencies: [5]
-status: "pending"
+status: "completed"
 created: 2026-08-28
 skills:
   - markdown

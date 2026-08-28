@@ -20,6 +20,7 @@
     "test:e2e": "npx bddgen && npx playwright test --project e2e",
     "test:e2e:headed": "npx bddgen && npx playwright test --project e2e --headed",
     "test:e2e:electron": "npm run package && npx bddgen && xvfb-run --auto-servernum npx playwright test --project electron",
+    "test:e2e:serve": "npm run package && npx playwright test --project serve",
     "test:e2e:electron:headed": "npm run package && npx bddgen && npx playwright test --project electron --headed",
     "record:demo": "npm run package && npx playwright test --project recording",
     "screenshots": "npm run package && npx playwright test --project screenshots",

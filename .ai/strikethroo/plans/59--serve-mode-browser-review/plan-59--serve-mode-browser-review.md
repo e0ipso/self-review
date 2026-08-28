@@ -376,10 +376,10 @@ The only phase that edits existing desktop code. Nothing downstream may begin un
 - ✔️ Task 005: Build the serve-mode browser client and its static assets (depends on: 004) (completed)
 - ✔️ Task 006: Unit test the serve-mode routes and the HTTP adapter (depends on: 003, 004) (completed)
 
-### Phase 6: Prove and document
+### ✅ Phase 6: Prove and document
 **Parallel Tasks:**
-- Task 007: Add a Playwright project covering the full served review loop (depends on: 005)
-- Task 008: Document serve mode and the shared handler module (depends on: 005)
+- ✔️ Task 007: Add a Playwright project covering the full served review loop (depends on: 005) (completed)
+- ✔️ Task 008: Document serve mode and the shared handler module (depends on: 005) (completed)
 
 ### Post-phase Actions
 
