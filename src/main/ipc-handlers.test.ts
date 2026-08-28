@@ -54,7 +54,7 @@ vi.mock('./git', () => ({
 }));
 
 import { IPC } from '../shared/ipc-channels';
-import { registerIpcHandlers, setDiffData } from './ipc-handlers';
+import { registerIpcHandlers, setDiffData, setGuideData } from './ipc-handlers';
 
 function makeLine(type: DiffLine['type'] = 'addition'): DiffLine {
   return { type, oldLineNumber: null, newLineNumber: 1, content: '+ hello' };
@@ -229,6 +229,53 @@ describe('ipc-handlers', () => {
           ],
         })
       );
+    });
+  });
+
+  describe('DIFF_REQUEST handler (guide delivery)', () => {
+    it('sends the guide right after the diff when one was discovered', () => {
+      setDiffData({
+        files: [makeFile('src/app.ts')],
+        source: { type: 'directory', sourcePath: '/tmp' },
+      });
+      const guide = {
+        overview: 'Read the entry point first.',
+        groups: [
+          {
+            name: 'Entry points',
+            rationale: 'Where the change starts.',
+            implicit: false,
+            files: [{ path: 'src/app.ts', description: 'The entry point.' }],
+          },
+        ],
+      };
+      setGuideData(guide);
+
+      try {
+        const mockSend = vi.fn();
+        onHandlers[IPC.DIFF_REQUEST]({ sender: { send: mockSend } });
+
+        expect(mockSend.mock.calls.map(c => c[0])).toEqual([
+          IPC.DIFF_LOAD,
+          IPC.GUIDE_LOAD,
+        ]);
+        expect(mockSend.mock.calls[1][1]).toBe(guide);
+      } finally {
+        setGuideData(null);
+      }
+    });
+
+    it('sends nothing but the diff when no guide was discovered', () => {
+      setDiffData({
+        files: [makeFile('src/app.ts')],
+        source: { type: 'directory', sourcePath: '/tmp' },
+      });
+      setGuideData(null);
+
+      const mockSend = vi.fn();
+      onHandlers[IPC.DIFF_REQUEST]({ sender: { send: mockSend } });
+
+      expect(mockSend.mock.calls.map(c => c[0])).toEqual([IPC.DIFF_LOAD]);
     });
   });
 

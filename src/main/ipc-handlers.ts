@@ -1,13 +1,22 @@
 // src/main/ipc-handlers.ts
 // IPC handler registration
+//
+// This module is the Electron transport adapter. The transport-agnostic
+// handler bodies live in ./review-handlers and hold no state of their own —
+// they read the ReviewSession they are handed. The Electron session is created
+// here and populated during main-process startup through the setters below, so
+// another front end can populate its own session during its own startup
+// instead of inheriting this one.
+//
+// Electron-only handlers (dialogs, window lifecycle, find-in-page, external
+// links, version updates) are implemented here in full: they have no
+// transport-agnostic equivalent.
 
 import * as fs from 'fs';
 import { ipcMain, BrowserWindow, dialog, app, shell } from 'electron';
 import { IPC } from '../shared/ipc-channels';
-import path from 'path';
 import {
   DiffLoadPayload,
-  DiffHunk,
   ResumeLoadPayload,
   GuideLoadPayload,
   AppConfig,
@@ -24,30 +33,37 @@ import { scanDirectory, scanFile } from './directory-scanner';
 import { getVersionUpdate } from './version-checker';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { getAppIconDataUri } from './app-assets';
+import {
+  ReviewSession,
+  createReviewSession,
+  handleDiffRequest,
+  handleExpandContext,
+  handleLoadFile,
+  handleLoadImage,
+  handleReadAttachment,
+  handleResumeRequest,
+  handleReviewSubmit,
+  preparePayload,
+} from './review-handlers';
 
-let reviewStateCache: ReviewState | null = null;
-let diffDataCache: DiffLoadPayload | null = null;
-let guideDataCache: GuideLoadPayload | null = null;
-let configCache: AppConfig | null = null;
-let outputPathInfoCache: OutputPathInfo | null = null;
-let resumeCommentsCache: ReviewComment[] = [];
-let resumeViewedFilesCache: string[] = [];
-let resumeRemoteDriftCache: RemoteDriftInfo | null = null;
+// The desktop app's session. Populated by the setters below during
+// main-process startup, before the window is created.
+const session: ReviewSession = createReviewSession();
 
 export function setDiffData(data: DiffLoadPayload): void {
-  diffDataCache = data;
+  session.diffData = data;
 }
 
 export function setGuideData(data: GuideLoadPayload | null): void {
-  guideDataCache = data;
+  session.guideData = data;
 }
 
 export function setConfigData(data: AppConfig): void {
-  configCache = data;
+  session.config = data;
 }
 
 export function setOutputPathInfo(info: OutputPathInfo): void {
-  outputPathInfoCache = info;
+  session.outputPathInfo = info;
 }
 
 export function setResumeData(
@@ -55,95 +71,42 @@ export function setResumeData(
   viewedFiles: string[] = [],
   remoteDrift: RemoteDriftInfo | null = null
 ): void {
-  resumeCommentsCache = comments;
-  resumeViewedFilesCache = viewedFiles;
-  resumeRemoteDriftCache = remoteDrift;
+  session.resumeComments = comments;
+  session.resumeViewedFiles = viewedFiles;
+  session.resumeRemoteDrift = remoteDrift;
 }
 
 export function registerIpcHandlers(): void {
   // Handle diff data request from renderer
   ipcMain.on(IPC.DIFF_REQUEST, event => {
-    if (diffDataCache) {
-      event.sender.send(IPC.DIFF_LOAD, preparePayload(diffDataCache));
+    const result = handleDiffRequest(session);
+    if (result) {
+      event.sender.send(IPC.DIFF_LOAD, result.diff);
       // The guide rides after the diff payload in both normal and
       // large-payload modes — it is metadata-only (paths, names,
       // descriptions) and never triggers eager hunk loading.
-      if (guideDataCache) {
-        event.sender.send(IPC.GUIDE_LOAD, guideDataCache);
+      if (result.guide) {
+        event.sender.send(IPC.GUIDE_LOAD, result.guide);
       }
     }
   });
 
   // Handle image loading for rendered preview
-  ipcMain.handle(IPC.DIFF_LOAD_IMAGE, async (_event, filePath: string): Promise<ImageLoadResult> => {
-    const MIME_MAP: Record<string, string> = {
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp',
-      '.ico': 'image/x-icon',
-      '.bmp': 'image/bmp',
-      '.svg': 'image/svg+xml',
-    };
-    const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
-    // Diff paths are repository-relative in git mode; resolve them against
-    // the diff's repository root (in remote mode, the materialized clone),
-    // never the process cwd.
-    const baseDir =
-      diffDataCache?.source.type === 'git'
-        ? diffDataCache.source.repository
-        : process.cwd();
-    const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
-    const ext = path.extname(filePath).toLowerCase();
-    const mimeType = MIME_MAP[ext] ?? 'application/octet-stream';
-
-    // In a remote session the reviewed content lives at the fetched head
-    // SHA, not in the clone's working tree (a temporary clone stays on the
-    // default branch), so read the blob through git instead of the fs.
-    const remote = diffDataCache?.remote;
-    if (remote && diffDataCache?.source.type === 'git') {
-      try {
-        const { readGitBlobAsync } = await import('./git');
-        const data = await readGitBlobAsync(
-          diffDataCache.source.repository,
-          `${remote.remoteHeadSha}:${filePath}`
-        );
-        if (data.length > MAX_SIZE) {
-          return { error: 'File too large to preview (>10 MB)' };
-        }
-        return { dataUri: `data:${mimeType};base64,${data.toString('base64')}` };
-      } catch {
-        return {
-          error: 'Image preview unavailable — blob not found at the reviewed commit.',
-        };
-      }
-    }
-
-    try {
-      const stat = await fs.promises.stat(resolved);
-      if (stat.size > MAX_SIZE) {
-        return { error: 'File too large to preview (>10 MB)' };
-      }
-      const data = await fs.promises.readFile(resolved);
-      return { dataUri: `data:${mimeType};base64,${data.toString('base64')}` };
-    } catch {
-      return { error: 'Image preview unavailable — file not found on disk.' };
-    }
-  });
+  ipcMain.handle(
+    IPC.DIFF_LOAD_IMAGE,
+    async (_event, filePath: string): Promise<ImageLoadResult> =>
+      handleLoadImage(session, filePath)
+  );
 
   // Handle single-file content loading for lazy (large-payload) mode
-  ipcMain.handle(IPC.DIFF_LOAD_FILE, async (_event, filePath: string) => {
-    if (!diffDataCache) return null;
-    const file = diffDataCache.files.find(f => (f.newPath || f.oldPath) === filePath);
-    if (!file) return null;
-    return file.hunks;
-  });
+  ipcMain.handle(IPC.DIFF_LOAD_FILE, async (_event, filePath: string) =>
+    handleLoadFile(session, filePath)
+  );
 
   // Handle config request from renderer
   ipcMain.on(IPC.CONFIG_REQUEST, event => {
-    if (configCache) {
-      event.sender.send(IPC.CONFIG_LOAD, configCache, outputPathInfoCache);
+    if (session.config) {
+      event.sender.send(IPC.CONFIG_LOAD, session.config, session.outputPathInfo);
     }
   });
 
@@ -157,43 +120,19 @@ export function registerIpcHandlers(): void {
 
   // Handle review submission from renderer
   ipcMain.on(IPC.REVIEW_SUBMIT, (_event, state: ReviewState) => {
-    console.error(
-      '[ipc] Received REVIEW_SUBMIT from renderer:',
-      JSON.stringify({
-        timestamp: state.timestamp,
-        source: state.source,
-        fileCount: state.files.length,
-      })
-    );
-    reviewStateCache = state;
+    handleReviewSubmit(session, state);
   });
 
   // Handle attachment file read from renderer
-  ipcMain.handle(IPC.ATTACHMENT_READ, async (_event, filePath: string) => {
-    try {
-      const buffer = await fs.promises.readFile(filePath);
-      return buffer.buffer; // Convert Node.js Buffer to ArrayBuffer
-    } catch {
-      console.error(`[attachment:read] Failed to read file: ${filePath}`);
-      return null;
-    }
-  });
+  ipcMain.handle(IPC.ATTACHMENT_READ, async (_event, filePath: string) =>
+    handleReadAttachment(filePath)
+  );
 
   // Send resumed comments and viewed files when the renderer is ready
   // (after diff data is loaded)
   ipcMain.on(IPC.RESUME_REQUEST, event => {
-    if (
-      resumeCommentsCache.length > 0 ||
-      resumeViewedFilesCache.length > 0 ||
-      resumeRemoteDriftCache !== null
-    ) {
-      const payload: ResumeLoadPayload = {
-        comments: resumeCommentsCache,
-        viewedFiles: resumeViewedFilesCache,
-      };
-      if (resumeRemoteDriftCache !== null) {
-        payload.remoteDrift = resumeRemoteDriftCache;
-      }
+    const payload = handleResumeRequest(session);
+    if (payload) {
       event.sender.send(IPC.RESUME_LOAD, payload);
     }
   });
@@ -214,92 +153,8 @@ export function registerIpcHandlers(): void {
   // Expand context for a single file by re-running git diff with more context lines
   ipcMain.handle(
     IPC.DIFF_EXPAND_CONTEXT,
-    async (_event, request: ExpandContextRequest) => {
-      if (!diffDataCache || diffDataCache.source.type !== 'git') {
-        return null;
-      }
-
-      try {
-        const { runGitDiffAsync } = await import('./git');
-        const { parseDiff } = await import('./diff-parser');
-
-        const source = diffDataCache.source as { type: 'git'; gitDiffArgs: string; repository: string };
-        const originalArgs = source.gitDiffArgs
-          .split(/\s+/)
-          .filter(a => a.length > 0);
-
-        // Strip -U/--unified flags. Stop at `--` — paths after it were the
-        // original path restriction; the specific file is supplied below.
-        const filteredArgs: string[] = [];
-        for (let i = 0; i < originalArgs.length; i++) {
-          const arg = originalArgs[i];
-          if (arg.match(/^-U\d+$/) || arg.match(/^--unified=\d+$/)) {
-            continue;
-          }
-          if (arg === '-U' || arg === '--unified') {
-            i++; // skip next arg (the number)
-            continue;
-          }
-          if (arg === '--') {
-            break;
-          }
-          filteredArgs.push(arg);
-        }
-
-        const expandArgs = [
-          ...filteredArgs,
-          `-U${request.contextLines}`,
-          '--',
-          request.filePath,
-        ];
-
-        // Run in the diff's repository root — in remote mode this is the
-        // materialized clone, not the process cwd.
-        const rawDiff = await runGitDiffAsync(expandArgs, source.repository);
-        const parsedFiles = parseDiff(rawDiff);
-
-        if (parsedFiles.length === 0) {
-          return null;
-        }
-
-        const expandedFile = parsedFiles[0];
-
-        // Count total lines in the working tree file for gap detection.
-        // Diff paths are repository-relative — resolve accordingly.
-        let totalLines = 0;
-        try {
-          const content = await fs.promises.readFile(
-            path.resolve(source.repository, request.filePath),
-            'utf-8'
-          );
-          totalLines = content.split('\n').length;
-          // If file ends with newline, last split element is empty — don't count it
-          if (content.endsWith('\n')) totalLines--;
-        } catch {
-          // Can't determine line count — leave as 0 (bars will stay visible)
-        }
-
-        // Update the cache
-        diffDataCache = {
-          ...diffDataCache,
-          files: diffDataCache.files.map(f => {
-            const fPath = f.newPath || f.oldPath;
-            if (fPath === request.filePath) {
-              return { ...f, hunks: expandedFile.hunks };
-            }
-            return f;
-          }),
-        };
-
-        return { hunks: expandedFile.hunks, totalLines };
-      } catch (error) {
-        console.error(
-          `[ipc] Failed to expand context for ${request.filePath}:`,
-          error
-        );
-        return null;
-      }
-    }
+    async (_event, request: ExpandContextRequest) =>
+      handleExpandContext(session, request)
   );
 
   // Find in page: forward search request to Chromium
@@ -369,11 +224,11 @@ export function registerIpcHandlers(): void {
         };
 
         // Large payload guard
-        if (configCache) {
+        if (session.config) {
           const stats = computePayloadStats(
             payload.files.length,
             countTotalLines(payload.files),
-            configCache
+            session.config
           );
           if (stats.exceedsAny) {
             const win = BrowserWindow.fromWebContents(event.sender);
@@ -384,7 +239,7 @@ export function registerIpcHandlers(): void {
                 defaultId: 1,
                 title: 'Large Review Detected',
                 message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
-                detail: `Thresholds: ${configCache.maxFiles} files, ${configCache.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
+                detail: `Thresholds: ${session.config.maxFiles} files, ${session.config.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
               });
               if (result === 1) {
                 console.error('[ipc] User cancelled large file review');
@@ -395,7 +250,7 @@ export function registerIpcHandlers(): void {
           }
         }
 
-        diffDataCache = payload;
+        session.diffData = payload;
         const window = BrowserWindow.fromWebContents(event.sender);
         if (window) {
           window.webContents.send(IPC.DIFF_LOAD, preparePayload(payload));
@@ -410,7 +265,7 @@ export function registerIpcHandlers(): void {
       }
 
       // Directory mode: scan all files as new additions
-      const ignorePatterns = configCache?.ignore ?? [];
+      const ignorePatterns = session.config?.ignore ?? [];
       const files = await scanDirectory(directoryPath, ignorePatterns);
       const payload: DiffLoadPayload = {
         files,
@@ -418,11 +273,11 @@ export function registerIpcHandlers(): void {
       };
 
       // Large payload guard
-      if (configCache) {
+      if (session.config) {
         const stats = computePayloadStats(
           payload.files.length,
           countTotalLines(payload.files),
-          configCache
+          session.config
         );
         if (stats.exceedsAny) {
           const win = BrowserWindow.fromWebContents(event.sender);
@@ -433,7 +288,7 @@ export function registerIpcHandlers(): void {
               defaultId: 1,
               title: 'Large Review Detected',
               message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
-              detail: `Thresholds: ${configCache.maxFiles} files, ${configCache.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
+              detail: `Thresholds: ${session.config.maxFiles} files, ${session.config.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
             });
             if (result === 1) {
               console.error('[ipc] User cancelled large directory review');
@@ -445,7 +300,7 @@ export function registerIpcHandlers(): void {
       }
 
       // Update the cache and send to renderer
-      diffDataCache = payload;
+      session.diffData = payload;
       const window = BrowserWindow.fromWebContents(event.sender);
       if (window) {
         window.webContents.send(IPC.DIFF_LOAD, preparePayload(payload));
@@ -460,24 +315,6 @@ export function registerIpcHandlers(): void {
       );
     }
   );
-}
-
-/**
- * Prepare a DiffLoadPayload for IPC transmission.
- * In large-payload mode, strips hunks from files to reduce initial transfer size.
- * The full data stays in diffDataCache for on-demand loading via DIFF_LOAD_FILE.
- */
-function preparePayload(payload: DiffLoadPayload): DiffLoadPayload {
-  if (payload.isLargePayload) {
-    return {
-      ...payload,
-      files: payload.files.map(f => ({ ...f, hunks: [] as DiffHunk[], contentLoaded: false })),
-    };
-  }
-  return {
-    ...payload,
-    files: payload.files.map(f => ({ ...f, contentLoaded: true })),
-  };
 }
 
 export function sendDiffLoad(
@@ -521,10 +358,10 @@ export function requestReviewFromRenderer(
   return new Promise(resolve => {
     // Host-driven flow: renderer pushes state before triggering save.
     // If the cache is already populated, use it directly.
-    if (reviewStateCache) {
+    if (session.reviewState) {
       console.error('[ipc] Using pre-submitted review state (host-driven)');
-      const state = reviewStateCache;
-      reviewStateCache = null;
+      const state = session.reviewState;
+      session.reviewState = null;
       resolve(state);
       return;
     }
@@ -548,12 +385,12 @@ export function requestReviewFromRenderer(
 
     // Poll for the cached state
     const interval = setInterval(() => {
-      if (reviewStateCache) {
+      if (session.reviewState) {
         console.error('[ipc] Review state received from renderer');
         clearTimeout(timeout);
         clearInterval(interval);
-        const state = reviewStateCache;
-        reviewStateCache = null;
+        const state = session.reviewState;
+        session.reviewState = null;
         resolve(state);
       }
     }, 100);
