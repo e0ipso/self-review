@@ -6,6 +6,7 @@ export default {
     include: [
       'packages/react/src/**/*.test.{ts,tsx}',
       'src/renderer/**/*.test.{ts,tsx}',
+      'src/serve-client/**/*.test.{ts,tsx}',
     ],
     exclude: [
       'node_modules/**',
