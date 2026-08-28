@@ -1,5 +1,6 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { spawnSync } from 'child_process';
+import * as path from 'path';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
@@ -41,6 +42,43 @@ function getAvailablePort(preferred = 3000): number {
 const devPort = getAvailablePort(3000);
 const devLoggerPort = getAvailablePort(9000);
 
+/**
+ * Build the serve-mode browser client into `dist/serve-client`.
+ *
+ * Invoked from `prePackage` rather than `generateAssets` on purpose:
+ * `generateAssets` also runs on `electron-forge start`, which would add this
+ * build to every desktop development launch, and the desktop app does not use
+ * these assets at all. `prePackage` runs for `package` and `make` only, and it
+ * runs before the packager copies `extraResource` — which is what lets the
+ * bundle be listed there unconditionally and still package from a clean tree
+ * with no prior client build.
+ *
+ * The Vite binary is invoked directly, the way `tests/webapp-steps/app.ts`
+ * already does, because `spawnSync('npm', ...)` needs a shell on Windows and
+ * this config produces Windows artifacts. `npm run client:build` runs the same
+ * command for anyone building the client by hand.
+ */
+function buildServeClient(): void {
+  const viteBin = path.resolve(
+    __dirname,
+    'node_modules/.bin',
+    process.platform === 'win32' ? 'vite.cmd' : 'vite'
+  );
+  const result = spawnSync(viteBin, ['build', '--config', 'src/serve-client/vite.config.ts'], {
+    cwd: __dirname,
+    stdio: 'inherit',
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `Building the serve-mode client failed (exit ${result.status}). ` +
+        'Packaging cannot continue: dist/serve-client is an extraResource.'
+    );
+  }
+}
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
@@ -50,7 +88,11 @@ const config: ForgeConfig = {
     // Linux where it controls the CLI command name.
     ...(process.platform !== 'darwin' && { executableName: 'self-review' }),
     icon: './assets/icon',
-    extraResource: ['./assets/icon.png'],
+    // `serve-client` lands at `<resources>/serve-client`, which is the
+    // packaged-build candidate `src/main/serve/client-assets.ts` resolves. The
+    // `prePackage` hook below guarantees the directory exists — a missing
+    // `extraResource` path fails the packager outright.
+    extraResource: ['./assets/icon.png', './dist/serve-client'],
   },
   rebuildConfig: {},
   makers: [
@@ -114,6 +156,11 @@ const config: ForgeConfig = {
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
   ],
+  hooks: {
+    prePackage: async () => {
+      buildServeClient();
+    },
+  },
 };
 
 export default config;

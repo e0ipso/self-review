@@ -2,7 +2,7 @@
 id: 6
 group: "serve-mode"
 dependencies: [3, 4]
-status: "pending"
+status: "completed"
 created: 2026-08-28
 skills:
   - vitest

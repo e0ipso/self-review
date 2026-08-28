@@ -11,7 +11,7 @@
 // that shared it would pass or fail on their ordering.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { GuideLoadPayload } from '../shared/types';
+import type { GuideLoadPayload, ReviewState } from '../shared/types';
 import { createHttpAdapter, httpAdapter } from './adapter';
 
 type FetchArgs = [input: string, init?: RequestInit];
@@ -78,6 +78,32 @@ describe('httpAdapter', () => {
     expect(calls[0][0]).toBe('/api/attachment/.self-review-assets%2Fshot.png');
 
     expect(await httpAdapter.readAttachment!('../outside.png')).toBeNull();
+  });
+
+  // Which refusals throw and which degrade to a renderable "nothing" is a
+  // per-method policy decision, not a uniform one, and getting it backwards
+  // fails silently in both directions: a swallowed submit reports a review
+  // that was never written, and a thrown file load leaves a spinner running.
+  it('throws where success must not be assumed, and answers null where it may', async () => {
+    const refusal = (): Response =>
+      json({ error: 'the server said no' }, { ok: false, status: 500 });
+    mockFetch([refusal(), refusal(), refusal(), refusal()]);
+
+    const state = { timestamp: '', source: { type: 'git' }, files: [] } as unknown as ReviewState;
+    await expect(httpAdapter.submitReview!(state)).rejects.toThrow(
+      'Failed to save the review: the server said no'
+    );
+    expect(calls[0][0]).toBe('/api/review');
+    expect(calls[0][1]?.method).toBe('POST');
+
+    await expect(httpAdapter.loadDiff()).rejects.toThrow(
+      'Failed to load the diff: the server said no'
+    );
+
+    expect(
+      await httpAdapter.expandContext!({ filePath: 'src/app.ts', contextLines: 20 })
+    ).toBeNull();
+    expect(await httpAdapter.loadFileContent!('src/app.ts')).toBeNull();
   });
 
   it('returns a refused image path as an ImageLoadResult rather than throwing', async () => {

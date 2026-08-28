@@ -564,4 +564,58 @@ describe('serve server', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  // The three path routes are reached by the browser client, which builds
+  // every one of them as `prefix + encodeURIComponent(filePath)` — so the
+  // separators arrive as `%2F` and never as `/`. Every other test above spells
+  // the path out unencoded, which is the one form the real client never sends.
+  describe('paths encoded the way the browser client encodes them', () => {
+    /** `src/serve-client/adapter.ts`'s `pathRoute`, verbatim. */
+    const clientRoute = (prefix: string, filePath: string): string =>
+      prefix + encodeURIComponent(filePath);
+
+    it('accepts a whole-path-encoded segment on file, image and attachment', async () => {
+      fs.mkdirSync(path.join(repoDir, 'assets'), { recursive: true });
+      fs.writeFileSync(path.join(repoDir, 'assets', 'pic.png'), PNG);
+      const assetDir = path.join(tmp, '.self-review-assets');
+      fs.mkdirSync(assetDir, { recursive: true });
+      fs.writeFileSync(path.join(assetDir, 'c1-0.png'), PNG);
+      gitSession([makeFile('src/deeply/nested/app.ts')]);
+      await start();
+
+      const hunks = await fetch(
+        base + clientRoute('/api/file/', 'src/deeply/nested/app.ts')
+      );
+      expect(hunks.status).toBe(200);
+      expect(await hunks.json()).toHaveLength(1);
+
+      const image = await fetch(base + clientRoute('/api/image/', 'assets/pic.png'));
+      expect(image.status).toBe(200);
+      expect((await image.json()).dataUri).toContain('base64');
+
+      const attachment = await fetch(
+        base + clientRoute('/api/attachment/', '.self-review-assets/c1-0.png')
+      );
+      expect(attachment.status).toBe(200);
+      expect(Buffer.from(await attachment.arrayBuffer()).equals(PNG)).toBe(true);
+    });
+
+    it('decodes the request path exactly once, so a literal escape stays a filename', async () => {
+      // A file whose *name* contains the characters a traversal is spelled
+      // with. Decoding the route remainder a second time would turn this into
+      // `../outside.png` and refuse a file that is plainly inside the root.
+      const onDiskName = '%2e%2e%2foutside.png';
+      const assetDir = path.join(tmp, '.self-review-assets');
+      fs.mkdirSync(assetDir, { recursive: true });
+      fs.writeFileSync(path.join(assetDir, onDiskName), PNG);
+      gitSession([makeFile('src/app.ts')]);
+      await start();
+
+      const res = await fetch(
+        base + clientRoute('/api/attachment/', `.self-review-assets/${onDiskName}`)
+      );
+      expect(res.status).toBe(200);
+      expect(Buffer.from(await res.arrayBuffer()).equals(PNG)).toBe(true);
+    });
+  });
 });

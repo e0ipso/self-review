@@ -371,10 +371,10 @@ The only phase that edits existing desktop code. Nothing downstream may begin un
 **Parallel Tasks:**
 - ✔️ Task 004: Implement the HTTP ReviewAdapter (depends on: 003) (completed)
 
-### Phase 5: Ship the client, cover the logic
+### ✅ Phase 5: Ship the client, cover the logic
 **Parallel Tasks:**
-- Task 005: Build the serve-mode browser client and its static assets (depends on: 004)
-- Task 006: Unit test the serve-mode routes and the HTTP adapter (depends on: 003, 004)
+- ✔️ Task 005: Build the serve-mode browser client and its static assets (depends on: 004) (completed)
+- ✔️ Task 006: Unit test the serve-mode routes and the HTTP adapter (depends on: 003, 004) (completed)
 
 ### Phase 6: Prove and document
 **Parallel Tasks:**

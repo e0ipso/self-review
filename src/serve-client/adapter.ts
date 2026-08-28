@@ -151,8 +151,9 @@ export function createHttpAdapter(): ReviewAdapter {
 
     // `changeOutputPath` is absent on purpose: serve mode fixes the output
     // path at launch and there is no browser equivalent of the native save
-    // dialog. FileTree guards on the method's absence, so omitting the key
-    // removes the control; a stub that threw would offer one that fails.
+    // dialog. A stub that threw would offer a control that fails. FileTree
+    // renders the Change... button only when this method is present, so
+    // omitting the key removes the control as well as its behaviour.
   };
 }
 

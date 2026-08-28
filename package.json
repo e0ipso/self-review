@@ -10,6 +10,7 @@
   "scripts": {
     "start": "electron-forge start",
     "clean": "rm -rf .webpack out",
+    "client:build": "vite build --config src/serve-client/vite.config.ts",
     "package": "npm run clean && electron-forge package",
     "make": "npm run clean && electron-forge make",
     "publish": "electron-forge publish",
