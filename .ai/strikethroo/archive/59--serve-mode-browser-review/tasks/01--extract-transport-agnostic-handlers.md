@@ -23,14 +23,14 @@ adapters over it, so the HTTP routes added later call the same implementation ra
 understand what the `ipcMain` registrations and the main-process startup sequence guarantee.
 
 ## Acceptance Criteria
-- [ ] A new module exports handler functions for diff loading, resume loading, review submission, context expansion, per-file content loading, image loading, and attachment reading.
-- [ ] The extracted functions take their inputs as explicit arguments and return values; none of them import `electron` or read module-level Electron state.
-- [ ] Startup-populated state (diff payload, guide payload, resume data) is supplied to the module explicitly rather than read from ambient module-level caches.
-- [ ] `src/main/ipc-handlers.ts` registrations delegate to the extracted module and contain no duplicated logic.
-- [ ] Electron-only handlers (dialogs, window lifecycle, find-in-page, external links, version updates) are NOT extracted and remain in place.
-- [ ] Runnable: `npm run test:unit` passes.
-- [ ] Runnable: `npm run test:e2e:electron` passes, proving the desktop app is behaviourally unchanged.
-- [ ] Runnable: `git diff --stat packages/` is empty — no package under `packages/` is modified by this task.
+- [x] A new module exports handler functions for diff loading, resume loading, review submission, context expansion, per-file content loading, image loading, and attachment reading.
+- [x] The extracted functions take their inputs as explicit arguments and return values; none of them import `electron` or read module-level Electron state.
+- [x] Startup-populated state (diff payload, guide payload, resume data) is supplied to the module explicitly rather than read from ambient module-level caches.
+- [x] `src/main/ipc-handlers.ts` registrations delegate to the extracted module and contain no duplicated logic.
+- [x] Electron-only handlers (dialogs, window lifecycle, find-in-page, external links, version updates) are NOT extracted and remain in place.
+- [x] Runnable: `npm run test:unit` passes.
+- [x] Runnable: `npm run test:e2e:electron` passes, proving the desktop app is behaviourally unchanged.
+- [x] Runnable: `git diff --stat packages/` is empty — no package under `packages/` is modified by this task.
 
 Use your internal Todo tool to track these and keep on track.
 

@@ -19,13 +19,13 @@ driven by the serve-mode API instead of Electron IPC.
 `typescript`, implementing an existing documented interface against an HTTP API.
 
 ## Acceptance Criteria
-- [ ] A module exports an object satisfying `ReviewAdapter` from `packages/react/src/adapter.ts`.
-- [ ] `loadDiff`, `loadResumedReview`, `submitReview`, `expandContext`, `loadFileContent`, `loadImage` and `readAttachment` are implemented as requests against the task 3 routes.
-- [ ] `readAttachment` returns an `ArrayBuffer` (or null), not JSON or a base64 string.
-- [ ] `onGuideLoad` invokes its callback with the guide carried in the diff response and returns a working unsubscribe function.
-- [ ] `changeOutputPath` is absent from the object.
-- [ ] No `EventSource`, WebSocket or polling is used anywhere in the module.
-- [ ] Runnable: `npx tsc --noEmit` reports no type error for the module against the real `ReviewAdapter` type.
+- [x] A module exports an object satisfying `ReviewAdapter` from `packages/react/src/adapter.ts`.
+- [x] `loadDiff`, `loadResumedReview`, `submitReview`, `expandContext`, `loadFileContent`, `loadImage` and `readAttachment` are implemented as requests against the task 3 routes.
+- [x] `readAttachment` returns an `ArrayBuffer` (or null), not JSON or a base64 string.
+- [x] `onGuideLoad` invokes its callback with the guide carried in the diff response and returns a working unsubscribe function.
+- [x] `changeOutputPath` is absent from the object.
+- [x] No `EventSource`, WebSocket or polling is used anywhere in the module.
+- [x] Runnable: `npx tsc --noEmit` reports no type error for the module against the real `ReviewAdapter` type.
 
 Use your internal Todo tool to track these and keep on track.
 

@@ -14,7 +14,7 @@ execution_profile: "complex-architecture"
 # Add the serve-mode HTTP server bootstrap, CLI flags, and session lifecycle
 
 ## Objective
-Stand up the serve-mode process: parse `--serve` and `--output`, resolve the diff,
+Stand up the serve-mode process: parse the serve flags and `--output`, resolve the diff,
 guide and configuration at startup exactly as the Electron main process does, serve the built client
 assets as static files, bind loopback, and own session end.
 
@@ -23,16 +23,16 @@ assets as static files, bind loopback, and own session end.
 library, and `typescript` for the CLI wiring in the existing argument parser.
 
 ## Acceptance Criteria
-- [ ] `self-review --serve --output=<path> <base>` starts a listener and prints the URL it is reachable at.
-- [ ] The server binds `127.0.0.1` by default; an optional host and port may be supplied with the flag.
-- [ ] Diff, guide and configuration are resolved during startup using the module from task 1, before the listener accepts requests.
-- [ ] Built client assets are served as static files, with an unknown path falling back to the client entry document.
-- [ ] `GET /api/config` returns the resolved configuration including the output path, marked read-only.
-- [ ] `POST /api/review` writes the XML via the same `@self-review/core` serializer the desktop app uses, responds, and then stops the server so the process exits.
-- [ ] Nothing is written to the output path before a review is submitted.
-- [ ] An unwritable `--output` path fails at startup with a clear message, not after a completed review.
-- [ ] Runnable: `self-review --serve --output=/tmp/t.xml` then `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:<port>/api/config` prints `200`.
-- [ ] Runnable: `git diff package.json` shows no addition to `dependencies`.
+- [x] `self-review serve --output=<path> <base>` starts a listener and prints the URL it is reachable at.
+- [x] The server binds `127.0.0.1` by default; an optional host and port may be supplied with the flag.
+- [x] Diff, guide and configuration are resolved during startup using the module from task 1, before the listener accepts requests.
+- [x] Built client assets are served as static files, with an unknown path falling back to the client entry document.
+- [x] `GET /api/config` returns the resolved configuration including the output path, marked read-only.
+- [x] `POST /api/review` writes the XML via the same `@self-review/core` serializer the desktop app uses, responds, and then stops the server so the process exits.
+- [x] Nothing is written to the output path before a review is submitted.
+- [x] An unwritable `--output` path fails at startup with a clear message, not after a completed review.
+- [x] Runnable: `self-review serve --output=/tmp/t.xml` then `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:<port>/api/config` prints `200`.
+- [x] Runnable: `git diff package.json` shows no addition to `dependencies`.
 
 Use your internal Todo tool to track these and keep on track.
 
@@ -81,3 +81,9 @@ places that out of scope precisely because it would require an authentication de
 not attempt.
 
 </details>
+
+---
+
+**Shipped as `serve`, not `--serve`.** This task was executed against the flag form. Review
+feedback afterwards moved it to a subcommand with `--address`, matching `fetch-comments`, so the
+criteria above read against the shape as built at the time. See the plan's follow-ups.

@@ -23,15 +23,15 @@ attachments.
 `typescript` for typing the route contract against the existing payload types.
 
 ## Acceptance Criteria
-- [ ] `GET /api/diff` returns the diff payload AND the guide in the same response body; no separate guide route exists.
-- [ ] `GET /api/resume` returns previously saved comments and viewed files when a resumable review exists.
-- [ ] `POST /api/expand-context` accepts an expand-context request and returns the response shape the adapter interface declares, or a null-equivalent.
-- [ ] `GET /api/file/:path` returns hunks for a single file, supporting the existing large-payload lazy-loading path.
-- [ ] `GET /api/image/:path` returns an image result usable directly by the UI.
-- [ ] `GET /api/attachment/:path` returns raw bytes with a correct content type, byte-identical to the file on disk.
-- [ ] Routes reuse the task 1 module and the existing `preparePayload` path; no payload-preparation logic is reimplemented.
-- [ ] Runnable: `curl -s http://127.0.0.1:<port>/api/diff | python3 -c \"import json,sys; d=json.load(sys.stdin); print(len(d['files']))\"` prints a non-zero file count.
-- [ ] Runnable: `curl -s http://127.0.0.1:<port>/api/attachment/<path> | cmp - <path>` reports no difference.
+- [x] `GET /api/diff` returns the diff payload AND the guide in the same response body; no separate guide route exists.
+- [x] `GET /api/resume` returns previously saved comments and viewed files when a resumable review exists.
+- [x] `POST /api/expand-context` accepts an expand-context request and returns the response shape the adapter interface declares, or a null-equivalent.
+- [x] `GET /api/file/:path` returns hunks for a single file, supporting the existing large-payload lazy-loading path.
+- [x] `GET /api/image/:path` returns an image result usable directly by the UI.
+- [x] `GET /api/attachment/:path` returns raw bytes with a correct content type, byte-identical to the file on disk.
+- [x] Routes reuse the task 1 module and the existing `preparePayload` path; no payload-preparation logic is reimplemented.
+- [x] Runnable: `curl -s http://127.0.0.1:<port>/api/diff | python3 -c \"import json,sys; d=json.load(sys.stdin); print(len(d['files']))\"` prints a non-zero file count.
+- [x] Runnable: `curl -s http://127.0.0.1:<port>/api/attachment/<path> | cmp - <path>` reports no difference.
 
 Use your internal Todo tool to track these and keep on track.
 

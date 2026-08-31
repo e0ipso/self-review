@@ -21,13 +21,13 @@ diff, add a comment, finish the review, and assert the resulting XML on disk.
 choose assertions that would actually fail if the loop broke.
 
 ## Acceptance Criteria
-- [ ] A new Playwright project sits alongside the existing `e2e` and `electron` projects in `playwright.config.ts`.
-- [ ] The test boots the serve-mode server against a fixture repository state and navigates a browser to it.
-- [ ] The test adds a comment to a specific line through the UI.
-- [ ] The test finishes the review through the UI.
-- [ ] The test asserts the XML file exists on disk and contains the comment body and its line attribute — not merely that the HTTP response was 200.
-- [ ] The test asserts the server process exited after the review was finished.
-- [ ] Runnable: the new project passes, and `npm run test:e2e` and `npm run test:e2e:electron` still pass.
+- [x] A new Playwright project sits alongside the existing `e2e` and `electron` projects in `playwright.config.ts`.
+- [x] The test boots the serve-mode server against a fixture repository state and navigates a browser to it.
+- [x] The test adds a comment to a specific line through the UI.
+- [x] The test finishes the review through the UI.
+- [x] The test asserts the XML file exists on disk and contains the comment body and its line attribute — not merely that the HTTP response was 200.
+- [x] The test asserts the server process exited after the review was finished.
+- [x] Runnable: the new project passes, and `npm run test:e2e` and `npm run test:e2e:electron` still pass.
 
 Use your internal Todo tool to track these and keep on track.
 

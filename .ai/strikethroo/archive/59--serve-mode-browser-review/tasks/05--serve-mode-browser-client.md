@@ -23,14 +23,14 @@ static assets the server can serve from both a source checkout and a packaged bu
 `ReviewPanel` and `Toolbar` and wire the finish control through the panel's ref handle.
 
 ## Acceptance Criteria
-- [ ] A Vite application exists with an entry document, an entry module and a build configuration, modelled on `tests/webapp/`.
-- [ ] `@self-review/core` is aliased to `packages/core/src/browser.ts`, as both existing build configurations do.
-- [ ] The application mounts `ReviewPanel` and `Toolbar` from `@self-review/react` and provides the task 4 adapter.
-- [ ] A finish control reads review state via the panel's ref handle and submits it, matching the embedding pattern `tests/webapp/main.tsx` documents.
-- [ ] No control for changing the output path is rendered, and its absence produces no console error.
-- [ ] The build emits static assets, and the server locates them both when run from a source checkout and from a packaged build.
-- [ ] Runnable: build the client, start serve mode, and `curl -s http://127.0.0.1:<port>/ | grep -c '<div id=' ` returns non-zero — the entry document is served.
-- [ ] Runnable: `npm run package`, then start serve mode from the packaged output and confirm the same request succeeds.
+- [x] A Vite application exists with an entry document, an entry module and a build configuration, modelled on `tests/webapp/`.
+- [x] `@self-review/core` is aliased to `packages/core/src/browser.ts`, as both existing build configurations do.
+- [x] The application mounts `ReviewPanel` and `Toolbar` from `@self-review/react` and provides the task 4 adapter.
+- [x] A finish control reads review state via the panel's ref handle and submits it, matching the embedding pattern `tests/webapp/main.tsx` documents.
+- [x] No control for changing the output path is rendered, and its absence produces no console error.
+- [x] The build emits static assets, and the server locates them both when run from a source checkout and from a packaged build.
+- [x] Runnable: build the client, start serve mode, and `curl -s http://127.0.0.1:<port>/ | grep -c '<div id=' ` returns non-zero — the entry document is served.
+- [x] Runnable: `npm run package`, then start serve mode from the packaged output and confirm the same request succeeds.
 
 Use your internal Todo tool to track these and keep on track.
 
@@ -73,3 +73,11 @@ and should be kept. The server resolved the path at startup, so the UI is report
 than offering a control.
 
 </details>
+
+---
+
+**One criterion here failed as written and was fixed under `packages/`.** "No control for changing
+the output path is rendered" was believed to follow from omitting `changeOutputPath`, because
+`FileTree.tsx` guards the handler. It guards only the handler; the button rendered regardless.
+Meeting the criterion required a change under `packages/`, which this plan otherwise forbade, and
+it was authorised explicitly. See the plan's Noteworthy Events.

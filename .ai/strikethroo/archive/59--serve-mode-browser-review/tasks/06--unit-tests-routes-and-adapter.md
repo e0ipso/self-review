@@ -20,11 +20,11 @@ a thin pass-through, and the adapter's contract with the `ReviewAdapter` interfa
 `vitest`, already the project's unit runner, and `typescript`.
 
 ## Acceptance Criteria
-- [ ] Route tests cover the diff response carrying the guide in one body, the binary attachment response, and the review-submission path writing the file.
-- [ ] Adapter tests cover `readAttachment` returning an `ArrayBuffer`, `onGuideLoad` invoking its callback and returning a working unsubscribe, and `changeOutputPath` being absent.
-- [ ] Tests assert observable behaviour, not internal call counts of the standard library.
-- [ ] No test exercises `node:http` itself, React rendering, or other framework behaviour.
-- [ ] Runnable: `npm run test:unit` passes and includes the new files.
+- [x] Route tests cover the diff response carrying the guide in one body, the binary attachment response, and the review-submission path writing the file.
+- [x] Adapter tests cover `readAttachment` returning an `ArrayBuffer`, `onGuideLoad` invoking its callback and returning a working unsubscribe, and `changeOutputPath` being absent.
+- [x] Tests assert observable behaviour, not internal call counts of the standard library.
+- [x] No test exercises `node:http` itself, React rendering, or other framework behaviour.
+- [x] Runnable: `npm run test:unit` passes and includes the new files.
 
 Use your internal Todo tool to track these and keep on track.
 

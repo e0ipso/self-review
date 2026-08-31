@@ -20,11 +20,11 @@ that handler logic now has two callers.
 `markdown` and `technical-writing`.
 
 ## Acceptance Criteria
-- [ ] `README.md` gains a serve-mode section covering the `--serve` and `--output` flags, the loopback default, the fixed output path, and the explicit finish.
-- [ ] The README states plainly that serve mode has no authentication and is intended to be reached over a forwarded loopback port.
-- [ ] `AGENTS.md` and `CLAUDE.md` note the second front end and the shared handler module, so future work knows both callers exist.
-- [ ] Documentation describes only what was built; no aspirational features appear.
-- [ ] Runnable: `grep -c 'serve' README.md` returns non-zero, and the flags shown in the README match the parser's actual accepted forms.
+- [x] `README.md` gains a serve-mode section covering the `serve` subcommand and its flags, the loopback default, the fixed output path, and the explicit finish.
+- [x] The README states plainly that serve mode has no authentication and is intended to be reached over a forwarded loopback port.
+- [x] `AGENTS.md` and `CLAUDE.md` note the second front end and the shared handler module, so future work knows both callers exist.
+- [x] Documentation describes only what was built; no aspirational features appear.
+- [x] Runnable: `grep -c 'serve' README.md` returns non-zero, and the flags shown in the README match the parser's actual accepted forms.
 
 Use your internal Todo tool to track these and keep on track.
 
@@ -64,3 +64,9 @@ of this size, an intent document capturing the lifecycle and output-path reasoni
 too — check whether the maintainer expects one before adding it, rather than assuming.
 
 </details>
+
+---
+
+**The README section was rewritten twice after this task.** Once when `serve` became a subcommand,
+and once on review feedback to explain use rather than argue design. The criteria above describe
+what the task delivered, not the section as it now stands.

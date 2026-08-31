@@ -1,6 +1,6 @@
 ---
 id: 59
-summary: "Add a --serve mode that runs the review session headless over HTTP so the UI can be used from a browser on another machine"
+summary: "Add a `serve` subcommand that runs the review session headless over HTTP so the UI can be used from a browser on another machine"
 created: 2026-08-28
 ---
 
@@ -107,10 +107,14 @@ fifteen fall away in a browser: the `APP_*` lifecycle trio, `DIALOG_PICK_DIRECTO
 find natively), the `VERSION_UPDATE_*` pair, `APP_SHOW_ABOUT`, `OPEN_EXTERNAL`, and
 `REMOTE_OPEN_URL`. Roughly ten routes remain.
 
-Two facts about the existing code make the `--output` decision cheaper than it appears.
-`packages/react/src/components/FileTree.tsx` already guards on the method's absence before offering
-the control, and `SingleFileReview` already ships a reduced adapter whose tests assert
-`changeOutputPath` is undefined. An adapter that omits it is a supported state today, not a new one.
+Two facts about the existing code were thought to make the `--output` decision cheaper than it
+appears: that `packages/react/src/components/FileTree.tsx` already guards on the method's absence
+before offering the control, and that `SingleFileReview` already ships a reduced adapter whose tests
+assert `changeOutputPath` is undefined.
+
+**The first was wrong, and execution proved it.** Only the *handler* was guarded; the button
+rendered unconditionally. See Noteworthy Events. The second holds, and omitting the key is now
+genuinely a supported state because a one-line change under `packages/` made it one.
 
 ## Architectural Approach
 
@@ -119,7 +123,7 @@ Five components. The first is a refactor of existing code; the rest are new and 
 ```mermaid
 flowchart LR
   subgraph guest["machine holding the code"]
-    CLI["self-review --serve --output=…"]
+    CLI["self-review serve --output=…"]
     SRV["HTTP server<br/>node:http"]
     SH["shared handlers<br/>(extracted)"]
     CORE["@self-review/core<br/>git · fs · XML"]
@@ -217,7 +221,8 @@ interface, which means the UI degrades correctly if any of them is later dropped
 
 **Objective**: Launch the server, and define unambiguously when a review ends.
 
-`--serve` accepts an optional host and port and defaults to `127.0.0.1` on a fixed port. `--output`
+`serve` is a subcommand, matching `fetch-comments`, and takes `--address` for the host and port,
+defaulting to `127.0.0.1` on a fixed port. `--output`
 sets the review file path; `output-file` already exists as a configuration key resolved against the
 working directory in `src/main/main.ts`, so this surfaces an existing value rather than introducing
 one.
@@ -263,7 +268,7 @@ means nothing.
 
 ### Primary Success Criteria
 
-1. `self-review --serve --output=<path> <base>` starts a server bound to loopback, and the review UI loads in a browser pointed at it, rendering the same diff the desktop application renders for the same arguments.
+1. `self-review serve --output=<path> <base>` starts a server bound to loopback, and the review UI loads in a browser pointed at it, rendering the same diff the desktop application renders for the same arguments.
 2. A comment added in the browser and finished through the UI produces an XML file at `<path>` that validates against the v3 schema and is equivalent to what the desktop application writes for the same review.
 3. Finishing the review stops the server and the process exits.
 4. The served UI presents no control for changing the output path, and the absence causes no error.
@@ -275,7 +280,7 @@ means nothing.
 
 These steps are to be executed after implementation, against the real system.
 
-1. In a git repository with at least one uncommitted change, run `self-review --serve --output=/tmp/sv-check.xml` and confirm the process reports a loopback URL and does not open a window.
+1. In a git repository with at least one uncommitted change, run `self-review serve --output=/tmp/sv-check.xml` and confirm the process reports a loopback URL and does not open a window.
 2. `curl -s http://127.0.0.1:<port>/api/diff | head -c 400` and confirm a JSON payload naming the changed files. Confirm the guide field is present in the same response body rather than requiring a second request.
 3. Open the URL in a browser with Playwright CLI, screenshot the page, and confirm the file tree and diff render.
 4. In that browser session, add a comment to a specific line, then activate the finish control.
@@ -290,7 +295,7 @@ These steps are to be executed after implementation, against the real system.
 
 - `README.md`: a serve-mode section covering the flag, the loopback default, the fixed output path, and the explicit finish. It should state plainly that serve mode has no authentication and is intended to be reached over a forwarded loopback port.
 - `AGENTS.md` / `CLAUDE.md`: note the new front end and the extracted handler module, so future work knows there are two callers of that logic.
-- `docs/`: if the intent-document convention established by plan 58 (`docs/intent/remote-pr-review.md`) is to be followed, the motivating environment and the reasoning behind the lifecycle and output-path decisions belong in a corresponding intent document.
+- `docs/`: this suggested following plan 58's intent-document convention. That convention turned out not to exist — see Noteworthy Events — so no intent document was written, and whether one should be is an open question for the maintainer.
 
 ## Resource Requirements
 
@@ -400,7 +405,7 @@ which is the one part of the client work with no existing precedent in the repos
 
 ### Results
 
-Serve mode works end to end. `self-review --serve --output=<path>` starts a loopback HTTP server,
+Serve mode works end to end. `self-review serve --output=<path>` starts a loopback HTTP server,
 the existing review UI loads in a browser, a comment made there is written to the review file, and
 finishing the review stops the server.
 
@@ -446,10 +451,16 @@ before the app script runs, so `main.ts` re-launches itself once with `--ozone-p
 via `spawnSync`. `spawnSync` is load-bearing: with async `spawn` the launcher reached UI init and
 segfaulted, orphaning the server.
 
-**Signals are not forwarded to the relaunched child.** Found by task 7 while writing the e2e test:
-`SIGTERM` to the launcher kills only the launcher, and the headless child keeps the port,
-reparented to init. The test works around it by spawning detached and signalling the process group.
-A reviewer who Ctrl-Cs `self-review --serve` still leaves an orphaned listener. Reported, not fixed.
+**A launcher that is killed outright orphans the listener.** Found by task 7 while writing the e2e
+test, reported rather than fixed at the time, and **fixed afterwards** in
+`src/main/serve/orphan-guard.ts`.
+
+Task 7's report said a reviewer who Ctrl-Cs `self-review --serve` is also affected. That was wrong,
+and measuring each signal separately showed why: SIGINT to the process group, which is what Ctrl-C
+sends, always killed the child and released the port. SIGTERM to the launcher's pid alone did
+nothing at all, because the launcher is blocked in `spawnSync` and never processes it. Only
+SIGKILL genuinely orphaned the child, which is also the one case no launcher-side handler could
+catch. The child now watches its parent pid and exits when it changes.
 
 **No push transport was needed, contrary to the initial design.** `guide-loader.ts` resolves the
 guide one-shot at startup and the `DIFF_REQUEST` handler sends it immediately after the diff, so it
@@ -477,15 +488,30 @@ pre-existing.
 
 ### Necessary follow-ups
 
+Still open:
+
 1. **Get an independent review.** The gate never ran, so nothing has reviewed this work except the
    agents that wrote it and the orchestrator that verified it. This is the largest outstanding gap.
-2. **Forward signals in `relaunchHeadless()`** (`src/main/main.ts`) so Ctrl-C or `SIGTERM` reaches
-   the headless child instead of orphaning a listener holding the port.
-3. **Decide whether `docs/intent/` is a real convention** and, if so, whether plan 58's document and
+   Two review passes by the author have since landed, covering the README and part of the CLI, but
+   most of the server and the client remain unread by a second party.
+2. **Decide whether `docs/intent/` is a real convention** and, if so, whether plan 58's document and
    one for serve mode should both land.
-4. **Consider wiring `test:e2e:serve` into CI.** It is deliberately excluded, matching the
+3. **Consider wiring `test:e2e:serve` into CI.** It is deliberately excluded, matching the
    `electron` project and the workflow's stated scope, and costs one Electron package per run.
-5. **Rename the `[ipc]` log prefixes** in `review-handlers.ts`, which is no longer IPC-specific.
-   Left alone deliberately: changing them inside a pure-move refactor would have been an observable
-   stderr change.
-6. **Nothing consumes `outputPathReadOnly`**, which `/api/config` sends. Either use it or drop it.
+
+Done after the plan was archived:
+
+4. ~~Forward signals in `relaunchHeadless()`.~~ Fixed differently, because the diagnosis was wrong:
+   Ctrl-C was never affected and SIGKILL cannot be caught on the launcher side, so the child now
+   watches its parent instead. `src/main/serve/orphan-guard.ts`.
+5. ~~Rename the `[ipc]` log prefixes~~ in `review-handlers.ts`. Now `[review]`.
+6. ~~Nothing consumes `outputPathReadOnly`.~~ Removed from `/api/config` and from the client's
+   mirrored type; it was dead once the Change… button became adapter-driven.
+
+Also landed after archival, from review feedback rather than the plan:
+
+7. `serve` became a subcommand with `--address`, replacing the `--serve[=HOST:PORT]` flag this plan
+   was written against. The plan text above has been updated to match; the Original Work Order and
+   Plan Clarifications are left as they were written.
+8. Comment density in the new files was brought closer to the rest of the codebase, and the README
+   section was rewritten to explain use rather than argue design.
