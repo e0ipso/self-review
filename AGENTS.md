@@ -202,13 +202,13 @@ intentionally duplicated in both `@self-review/core`
 (`packages/core/src/file-type-utils.ts`) and `@self-review/react`
 (`packages/react/src/utils/file-type-utils.ts`). See the package AGENTS.md files for rationale.
 
-**Serve mode:** `self-review serve [--address=HOST:PORT] --output=<path>` runs a second front end — an
-HTTP server (`src/main/serve/`) and a browser client (`src/serve-client/`) implementing the same
-`ReviewAdapter` interface the Electron renderer does — instead of opening a window. Loopback-only,
-no authentication; see the README's "Serve mode" section for the flags and the security posture.
-The point for anyone touching request handling: `src/main/review-handlers.ts` holds the
-transport-agnostic handler bodies (diff load, resume, review submit, expand-context, file/image/
-attachment loads), and it now has **two callers** — the `ipcMain` registrations in
+**Serve mode:** `self-review serve [--address=HOST:PORT] --output=<path>` runs a second front end
+instead of opening a window: an HTTP server (`src/main/serve/`) and a browser client
+(`src/serve-client/`) implementing the same `ReviewAdapter` interface the Electron renderer does.
+Loopback-only, no authentication; see the README's "Serve mode" section for the flags and the
+security posture. The point for anyone touching request handling: `src/main/review-handlers.ts`
+holds the transport-agnostic handler bodies (diff load, resume, review submit, expand-context,
+file/image/attachment loads), and it now has **two callers** — the `ipcMain` registrations in
 `src/main/ipc-handlers.ts` and the HTTP routes in `src/main/serve/server.ts`. Changing a handler's
 behavior there changes it for both front ends; there is no separate copy to keep in sync.
 

@@ -273,53 +273,46 @@ self-review fetch-comments https://gitlab.com/group/project/-/merge_requests/7 -
 
 ## Serve mode
 
-Run the review UI as an HTTP server instead of opening a window, so it can be reviewed from a
-browser that isn't on the machine holding the code:
+Run the review UI as an HTTP server instead of opening a window, so you can review from a browser
+that isn't on the machine holding the code:
 
 ```bash
 self-review serve --output=review.xml
 ```
 
-This exists for the case where the diff lives somewhere your desktop can't reach directly — the
-motivating one is code inside an isolated VM (e.g. Lullabot's
-[sandbar](https://github.com/Lullabot/sandbar)), whose security model is that nothing is mounted
-onto the host and nothing needs to be pushed to be reviewed. Forward the bound port to wherever
-your browser is and open it there; no branch push, no guest filesystem mount.
+This is useful when the diff lives somewhere your desktop can't reach directly. For example, code
+inside an isolated VM such as Lullabot's [sandbar](https://github.com/Lullabot/sandbar), which
+doesn't mount anything onto the host. Forward the bound port to wherever your browser is and open
+it there. No branch push, no guest filesystem mount.
 
 ### Flags
 
-- **`--address=HOST:PORT`** — where to bind. Defaults to `127.0.0.1:7738`. Accepts `PORT`,
-  `:PORT`, `HOST:PORT`, or `[IPv6]:PORT` — for example `--address=:8080`, `--address=9000`,
+- `--address=HOST:PORT` sets where to bind. Defaults to `127.0.0.1:7738`. Accepts `PORT`, `:PORT`,
+  `HOST:PORT`, or `[IPv6]:PORT`, for example `--address=:8080`, `--address=9000`,
   `--address=[::1]:9000`. The space form `--address :8080` works too.
-- **`--output <file>`** / **`--output=<file>`** — where the review XML is written. Same flag the
-  desktop app accepts, but in serve mode the path is **fixed for the life of the process**: there
-  is no browser equivalent of the native save dialog, so the served UI offers no control for
-  changing it. Choose the path before starting the server.
+- `--output <file>` or `--output=<file>` sets where the review XML is written. In serve mode the
+  path is fixed for the life of the process and the served UI offers no control for changing it, so
+  choose it before starting the server.
 
-Everything else — git diff arguments, `--resume-from` — works exactly as it does for the desktop
-app.
+Git diff arguments and `--resume-from` work the same as they do for the desktop app.
 
-### No authentication — loopback binding is the entire protection
+### No authentication
 
-Serve mode has **no authentication**. `serve` refuses to bind anything but a loopback address
-(`127.0.0.1`, `::1`, `localhost`); that refusal is the whole of v1's security posture, not an
-omission pending a future release. Binding the port publicly would expose an unauthenticated
-review session with filesystem read access scoped to the served repository to anyone who can
-reach it — there is no login, no token, nothing standing between a request and the diff. Reach a
-remote serve-mode instance by forwarding the loopback port (SSH, your VM tooling's port
-forwarding, and so on), never by binding a routable interface.
+Serve mode has no authentication. `serve` refuses to bind anything but a loopback address
+(`127.0.0.1`, `::1`, `localhost`). Binding the port publicly would expose an unauthenticated review
+session with filesystem read access to anyone who can reach it. You can reach a remote serve-mode
+instance by forwarding the loopback port (SSH, your VM tooling's port forwarding, and so on), never
+by binding a routable interface.
 
 ### Finishing the review stops the server
 
-Submitting the review writes the XML and then **stops the server** — the process exits once the
-response has been sent. This is intentional: process lifetime is review lifetime, so there is
-nothing left to serve once the review is written and nothing keeps listening on a port after
-you're done.
+Submitting the review writes the XML and then stops the server, so the process exits once you're
+done.
 
-The corollary is that **nothing is written before you finish**. Closing the browser tab, dropping
-the SSH tunnel, or killing the terminal saves nothing, the same as quitting the desktop app
-without choosing Save & Quit. If writing the file fails (for example the output directory stopped
-being writable), the server stays up so you can fix the problem and submit again.
+Nothing is written before you finish. Closing the browser tab, dropping the SSH tunnel, or killing
+the terminal saves nothing, the same as quitting the desktop app without choosing Save & Quit. If
+writing the file fails, for example because the output directory stopped being writable, the server
+stays up so you can fix the problem and submit again.
 
 ## Assistant Skill
 
