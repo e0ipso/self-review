@@ -267,11 +267,11 @@ export async function startServeMode(
 }
 
 /**
- * CLI entry point for `self-review --serve`.
+ * CLI entry point for `self-review serve`.
  *
  * Ends the process itself: the review is the session. A submitted review is
  * written, answered, and then the listener is stopped, which is what makes
- * `--serve` a foreground command that finishes rather than a daemon.
+ * `serve` a foreground command that finishes rather than a daemon.
  */
 export async function runServeMode(cli: CliArgs, address: ServeAddress): Promise<void> {
   // Declared before the listener exists so the end-of-session callback can

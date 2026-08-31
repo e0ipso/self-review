@@ -1,5 +1,5 @@
 /**
- * Booting and observing a real `self-review --serve` session.
+ * Booting and observing a real `self-review serve` session.
  *
  * Serve mode is a foreground CLI command, not a library: it resolves the diff,
  * prints one URL on stdout, and exits when the review is written. So this
@@ -96,7 +96,7 @@ export function packagedBinaryPath(): string {
   return binary;
 }
 
-/** A running `--serve` process, with everything the test needs to observe it. */
+/** A running `serve` process, with everything the test needs to observe it. */
 export interface ServeSession {
   /** Base URL the server printed on stdout, e.g. `http://127.0.0.1:41787/`. */
   url: string;
@@ -143,7 +143,7 @@ export async function startServeSession(
   // its own once the review is written.
   const child = spawn(
     packagedBinaryPath(),
-    ['--serve=127.0.0.1:0', `--output=${outputPath}`],
+    ['serve', '--address=127.0.0.1:0', `--output=${outputPath}`],
     { cwd: repoDir, stdio: ['ignore', 'pipe', 'pipe'], env, detached: true }
   );
 

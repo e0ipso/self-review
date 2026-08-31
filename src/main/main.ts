@@ -620,7 +620,7 @@ function needsHeadlessRelaunch(): boolean {
  * Blocking here also preserves the ordinary CLI contract: stdio is inherited
  * so the URL and the logs reach the caller unchanged, the child stays in this
  * process group so Ctrl-C reaches it, and the child's exit status becomes
- * ours — `self-review --serve` returns when, and only when, the review is over.
+ * ours — `self-review serve` returns when, and only when, the review is over.
  */
 function relaunchHeadless(): void {
   const result = spawnSync(
@@ -664,7 +664,7 @@ if (routedArgs.subcommand === 'fetch-comments') {
       );
       process.exit(1);
     });
-} else if (routedArgs.serve) {
+} else if (routedArgs.subcommand === 'serve' && routedArgs.serve) {
   // Serve mode runs fully outside the UI path — no app.whenReady(), no
   // window, nothing Electron-bound — and exits when the reviewer finishes the
   // review. The HTTP server keeps the process alive in the meantime.

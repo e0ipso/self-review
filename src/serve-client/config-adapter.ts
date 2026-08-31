@@ -1,14 +1,8 @@
 // src/serve-client/config-adapter.ts
-// The serve-mode `ConfigAdapter`: `GET /api/config` in the shape the React
-// package's configuration seam declares.
+// The serve-mode `ConfigAdapter`: `GET /api/config`.
 //
-// Configuration is a separate interface from `ReviewAdapter` — see
-// `packages/react/src/adapter.ts` — and no component consumes a `ConfigAdapter`
-// today, so the browser client calls this itself before it mounts. That is
-// exactly what the Electron renderer does with `requestConfig()` in
-// `src/renderer/App.tsx`: resolve the configuration first, mount the providers
-// second. Typing the export against `ConfigAdapter` keeps the two in step if a
-// component ever grows the prop.
+// No component consumes a `ConfigAdapter` today, so the client calls this
+// itself before mounting — as the Electron renderer does with requestConfig().
 
 import type { ConfigAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, OutputPathInfo } from '../shared/types';
@@ -26,12 +20,8 @@ export interface ServeConfig {
 }
 
 /**
- * Fetch the session's configuration.
- *
- * Throws on a refusal rather than falling back to defaults: the categories, the
- * theme and the resolved output path all come from here, and a UI silently
- * mounted on library defaults would misreport where the review is going to be
- * written.
+ * Fetch the session's configuration. Throws rather than falling back to
+ * defaults: a UI mounted on library defaults would misreport the output path.
  */
 export async function loadServeConfig(): Promise<ServeConfig> {
   const res = await fetch('/api/config');

@@ -277,7 +277,7 @@ Run the review UI as an HTTP server instead of opening a window, so it can be re
 browser that isn't on the machine holding the code:
 
 ```bash
-self-review --serve --output=review.xml
+self-review serve --output=review.xml
 ```
 
 This exists for the case where the diff lives somewhere your desktop can't reach directly — the
@@ -288,9 +288,9 @@ your browser is and open it there; no branch push, no guest filesystem mount.
 
 ### Flags
 
-- **`--serve[=HOST:PORT]`** — start the server instead of opening a window. Bare `--serve` binds
-  `127.0.0.1:7738`. The value accepts `PORT`, `:PORT`, `HOST:PORT`, or `[IPv6]:PORT` — for example
-  `--serve=:8080`, `--serve=9000`, `--serve=[::1]:9000`.
+- **`--address=HOST:PORT`** — where to bind. Defaults to `127.0.0.1:7738`. Accepts `PORT`,
+  `:PORT`, `HOST:PORT`, or `[IPv6]:PORT` — for example `--address=:8080`, `--address=9000`,
+  `--address=[::1]:9000`. The space form `--address :8080` works too.
 - **`--output <file>`** / **`--output=<file>`** — where the review XML is written. Same flag the
   desktop app accepts, but in serve mode the path is **fixed for the life of the process**: there
   is no browser equivalent of the native save dialog, so the served UI offers no control for
@@ -301,7 +301,7 @@ app.
 
 ### No authentication — loopback binding is the entire protection
 
-Serve mode has **no authentication**. `--serve` refuses to bind anything but a loopback address
+Serve mode has **no authentication**. `serve` refuses to bind anything but a loopback address
 (`127.0.0.1`, `::1`, `localhost`); that refusal is the whole of v1's security posture, not an
 omission pending a future release. Binding the port publicly would expose an unauthenticated
 review session with filesystem read access scoped to the served repository to anyone who can

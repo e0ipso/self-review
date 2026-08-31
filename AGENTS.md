@@ -202,7 +202,7 @@ intentionally duplicated in both `@self-review/core`
 (`packages/core/src/file-type-utils.ts`) and `@self-review/react`
 (`packages/react/src/utils/file-type-utils.ts`). See the package AGENTS.md files for rationale.
 
-**Serve mode:** `self-review --serve[=HOST:PORT] --output=<path>` runs a second front end — an
+**Serve mode:** `self-review serve [--address=HOST:PORT] --output=<path>` runs a second front end — an
 HTTP server (`src/main/serve/`) and a browser client (`src/serve-client/`) implementing the same
 `ReviewAdapter` interface the Electron renderer does — instead of opening a window. Loopback-only,
 no authentication; see the README's "Serve mode" section for the flags and the security posture.

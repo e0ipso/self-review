@@ -25,7 +25,7 @@ export interface CliArgs {
    * GUI mode when `remoteUrl` is set). Unknown subcommand-like tokens keep
    * the pass-through-to-git behavior.
    */
-  subcommand: 'fetch-comments' | null;
+  subcommand: 'fetch-comments' | 'serve' | null;
   /**
    * Forge PR/MR URL. Set when the first positional argument is either the
    * URL operand of `fetch-comments` or a bare URL that parses via
@@ -37,14 +37,11 @@ export interface CliArgs {
    * resolved. Defaults to false — GitLab fetches unresolved threads only.
    */
   allThreads: boolean;
-  /**
-   * Serve mode: `--serve`, or `--serve=<PORT|:PORT|HOST:PORT>`. Null when the
-   * flag is absent, which is every desktop mode.
-   */
+  /** Where `serve` binds. Null unless the `serve` subcommand was used. */
   serve: ServeAddress | null;
   /**
    * `--output=<path>` / `--output <path>`. Overrides the `output-file`
-   * configuration key; null when absent, leaving configuration in charge.
+   * configuration key.
    */
   outputPath: string | null;
 }
@@ -61,15 +58,11 @@ function isLoopbackHost(host: string): boolean {
 }
 
 /**
- * Parse the optional value of `--serve`.
+ * Parse the value of `serve --address`.
  *
  * Accepted: `` (defaults), `PORT`, `:PORT`, `HOST:PORT`, `[IPv6]:PORT`.
  *
- * The host is restricted to loopback on purpose. Serve mode has no
- * authentication whatsoever — loopback binding is the whole of its security
- * posture, and the connection is expected to arrive over a forwarded port.
- * Binding a routable interface is out of scope precisely because it would
- * require an authentication design this does not attempt.
+ * Loopback-only is intentional: serve mode has no authentication.
  */
 export function parseServeTarget(
   value: string
@@ -97,16 +90,16 @@ export function parseServeTarget(
 
   if (!isLoopbackHost(host)) {
     return {
-      error: `--serve only binds a loopback host (got "${host}"). Serve mode has no authentication; reach it over a forwarded port instead.`,
+      error: `--address only binds a loopback host (got "${host}"). Serve mode has no authentication; reach it over a forwarded port instead.`,
     };
   }
 
   if (!/^\d+$/.test(portPart)) {
-    return { error: `--serve port must be a number (got "${portPart}")` };
+    return { error: `--address port must be a number (got "${portPart}")` };
   }
   const port = Number(portPart);
   if (port > 65535) {
-    return { error: `--serve port must be between 0 and 65535 (got ${port})` };
+    return { error: `--address port must be between 0 and 65535 (got ${port})` };
   }
 
   return { address: { host: host.replace(/^\[|\]$/g, ''), port } };
@@ -181,9 +174,87 @@ export function parseCliArgs(): CliArgs {
     };
   }
 
+  // Subcommand mode: `self-review serve [--address=HOST:PORT] [--output <file>]
+  // [<git-diff-args>...]`. Recognized only as the very first argument, matching
+  // fetch-comments.
+  if (args[0] === 'serve') {
+    let address: ServeAddress = {
+      host: DEFAULT_SERVE_HOST,
+      port: DEFAULT_SERVE_PORT,
+    };
+    let outputPath: string | null = null;
+    let resumeFrom: string | null = null;
+    const gitDiffArgs: string[] = [];
+    const rest = args.slice(1);
+
+    for (let i = 0; i < rest.length; i++) {
+      const arg = rest[i];
+
+      if (arg === '--address' || arg.startsWith('--address=')) {
+        let value: string;
+        if (arg === '--address') {
+          if (i + 1 >= rest.length) {
+            console.error('Error: --address requires a HOST:PORT argument');
+            process.exit(1);
+            continue;
+          }
+          value = rest[i + 1];
+          i++;
+        } else {
+          value = arg.slice('--address='.length);
+        }
+        const parsed = parseServeTarget(value);
+        if ('error' in parsed) {
+          console.error(`Error: ${parsed.error}`);
+          process.exit(1);
+          continue;
+        }
+        address = parsed.address;
+        continue;
+      }
+
+      if (arg === '--output' || arg.startsWith('--output=')) {
+        if (arg === '--output') {
+          if (i + 1 >= rest.length) {
+            console.error('Error: --output requires a file path argument');
+            process.exit(1);
+            continue;
+          }
+          outputPath = rest[i + 1];
+          i++;
+        } else {
+          outputPath = arg.slice('--output='.length);
+        }
+        continue;
+      }
+
+      if (arg === '--resume-from') {
+        if (i + 1 >= rest.length) {
+          console.error('Error: --resume-from requires a file path argument');
+          process.exit(1);
+          continue;
+        }
+        resumeFrom = rest[i + 1];
+        i++;
+        continue;
+      }
+
+      gitDiffArgs.push(arg);
+    }
+
+    return {
+      resumeFrom,
+      gitDiffArgs,
+      subcommand: 'serve',
+      remoteUrl: null,
+      allThreads: false,
+      serve: address,
+      outputPath,
+    };
+  }
+
   let resumeFrom: string | null = null;
   let remoteUrl: string | null = null;
-  let serve: ServeAddress | null = null;
   let outputPath: string | null = null;
   const gitDiffArgs: string[] = [];
   let firstPositionalSeen = false;
@@ -198,20 +269,6 @@ export function parseCliArgs(): CliArgs {
       }
       resumeFrom = args[i + 1];
       i++; // Skip the next arg
-      continue;
-    }
-
-    // Serve mode. The value is attached with `=` so a bare `--serve` can
-    // never swallow the following git diff argument.
-    if (arg === '--serve' || arg.startsWith('--serve=')) {
-      const value = arg === '--serve' ? '' : arg.slice('--serve='.length);
-      const parsed = parseServeTarget(value);
-      if ('error' in parsed) {
-        console.error(`Error: ${parsed.error}`);
-        process.exit(1);
-        continue;
-      }
-      serve = parsed.address;
       continue;
     }
 
@@ -254,7 +311,7 @@ export function parseCliArgs(): CliArgs {
     subcommand: null,
     remoteUrl,
     allThreads: false,
-    serve,
+    serve: null,
     outputPath,
   };
 }
@@ -266,15 +323,10 @@ self-review - Local git diff review UI
 Usage: self-review [options] [<git-diff-args>...]
        self-review <pr-or-mr-url>
        self-review fetch-comments <pr-or-mr-url> [--all-threads]
-       self-review --serve[=HOST:PORT] [--output <file>] [<git-diff-args>...]
+       self-review serve [--address=HOST:PORT] [--output <file>] [<git-diff-args>...]
 
 Options:
   --resume-from <file>    Load a previous review XML file
-  --serve[=HOST:PORT]     Serve the review UI over HTTP instead of opening a
-                          window. Binds 127.0.0.1:7738 by default; the host
-                          must be a loopback address (serve mode has no
-                          authentication — reach it over a forwarded port).
-                          Accepts PORT, :PORT, HOST:PORT and [IPv6]:PORT.
   --output <file>         Path the review XML is written to. Overrides the
                           output-file configuration key. In serve mode it is
                           fixed at launch and the UI offers no control for it.
@@ -287,6 +339,14 @@ Subcommands:
     --all-threads         Include threads the forge marks resolved
                           (GitLab; default is unresolved only).
 
+  serve                   Serve the review UI over HTTP instead of opening a
+                          window, for reviewing from a browser elsewhere.
+                          Finishing the review stops the server.
+    --address=HOST:PORT   Where to bind. Defaults to 127.0.0.1:7738. Loopback
+                          only: serve mode has no authentication. Accepts
+                          PORT, :PORT, HOST:PORT and [IPv6]:PORT.
+    --output <file>       Fixed for the session; the UI offers no control.
+
 Examples:
   self-review                                   # unstaged changes (git diff default)
   self-review --staged                          # staged changes
@@ -296,10 +356,10 @@ Examples:
   self-review --resume-from review.xml          # resume a previous review
   self-review https://github.com/o/r/pull/42    # review a remote PR
   self-review fetch-comments https://github.com/o/r/pull/42
-  self-review --serve --output=my-review.xml     # review from a browser
-  self-review --serve=:8080 main..feature        # on an explicit port
+  self-review serve --output=my-review.xml       # review from a browser
+  self-review serve --address=:8080 main..feature # on an explicit port
 
-All arguments except --resume-from, --serve, --output and --help are passed
+All arguments except --resume-from, --output and --help are passed
 to git diff.
 If no arguments are provided, shows unstaged working tree changes.
 

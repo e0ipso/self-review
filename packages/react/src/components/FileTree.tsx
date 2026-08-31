@@ -303,10 +303,7 @@ export default function FileTree() {
               ) : (
                 <AlertCircle className='h-3.5 w-3.5 text-red-500 shrink-0' />
               )}
-              {/* Only offered when the host can actually change the path.
-                  A reduced adapter (serve mode, SingleFileReview) omits
-                  changeOutputPath, and rendering an inert control there is
-                  worse than rendering none. */}
+              {/* Only offered when the host can actually change the path. */}
               {adapter?.changeOutputPath && (
                 <Button
                   variant='ghost'

@@ -481,33 +481,34 @@ describe('cli serve mode', () => {
       expect(args.gitDiffArgs).toEqual(['--staged']);
     });
 
-    it('parses a bare --serve to the loopback default', () => {
-      process.argv = ['/path/to/app', '--serve'];
+    it('parses a bare serve to the loopback default', () => {
+      process.argv = ['/path/to/app', 'serve'];
       const args = parseCliArgs();
 
       expect(args.serve).toEqual({ host: DEFAULT_SERVE_HOST, port: DEFAULT_SERVE_PORT });
       expect(args.gitDiffArgs).toEqual([]);
     });
 
-    it('parses --serve=HOST:PORT', () => {
-      process.argv = ['/path/to/app', '--serve=127.0.0.1:8080'];
+    it('parses --address=HOST:PORT', () => {
+      process.argv = ['/path/to/app', 'serve', '--address=127.0.0.1:8080'];
       const args = parseCliArgs();
 
       expect(args.serve).toEqual({ host: '127.0.0.1', port: 8080 });
     });
 
     it('parses --output=<path> and --output <path>', () => {
-      process.argv = ['/path/to/app', '--serve', '--output=my-review.xml'];
+      process.argv = ['/path/to/app', 'serve', '--output=my-review.xml'];
       expect(parseCliArgs().outputPath).toBe('my-review.xml');
 
-      process.argv = ['/path/to/app', '--serve', '--output', 'other.xml'];
+      process.argv = ['/path/to/app', 'serve', '--output', 'other.xml'];
       expect(parseCliArgs().outputPath).toBe('other.xml');
     });
 
     it('never forwards the serve flags to git diff', () => {
       process.argv = [
         '/path/to/app',
-        '--serve=:8080',
+        'serve',
+        '--address=:8080',
         '--output=r.xml',
         'main..feature',
       ];
@@ -519,14 +520,14 @@ describe('cli serve mode', () => {
     });
 
     it('exits on an invalid serve target', () => {
-      process.argv = ['/path/to/app', '--serve=0.0.0.0:8080'];
+      process.argv = ['/path/to/app', 'serve', '--address=0.0.0.0:8080'];
       parseCliArgs();
 
       expect(process.exit).toHaveBeenCalledWith(1);
     });
 
     it('exits when --output has no argument', () => {
-      process.argv = ['/path/to/app', '--serve', '--output'];
+      process.argv = ['/path/to/app', 'serve', '--output'];
       parseCliArgs();
 
       expect(process.exit).toHaveBeenCalledWith(1);
