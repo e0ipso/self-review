@@ -36,6 +36,7 @@ import {
 } from './remote-mode';
 import { loadGuide } from './guide-loader';
 import { checkForUpdate } from './version-checker';
+import { reexecFromRealPathIfNeeded } from './relaunch-guard';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { setupMenu } from './menu';
 import { getAppIconPath } from './app-assets';
@@ -655,6 +656,14 @@ const earlyExit = checkEarlyExit();
 if (earlyExit.shouldExit) {
   process.exit(earlyExit.exitCode);
 }
+
+// macOS: if launched through a symlink to the in-bundle binary (e.g. the
+// Homebrew cask's /opt/homebrew/bin/self-review), re-exec from the real bundle
+// path before Electron spawns any helper, otherwise child processes crash with
+// "Unable to find helper app". Runs before subcommand routing so the re-exec
+// preserves argv (including any subcommand). No-op on direct launches. See
+// relaunch-guard.ts.
+reexecFromRealPathIfNeeded(app.isPackaged);
 
 // Headless subcommand routing: fetch-comments runs fully outside the UI
 // path — no app.whenReady(), no window, nothing UI-bound — and exits when
