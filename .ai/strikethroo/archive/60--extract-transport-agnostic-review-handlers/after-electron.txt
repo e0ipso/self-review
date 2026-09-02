@@ -1,0 +1,40 @@
+# Packaged-application suite after the change (task 7)
+
+Commit:  79edf4c9eb7df542adac463c80e47883edefb01b
+Branch:  feature/60--extract-transport-agnostic-review-handlers
+Command: npm run test:e2e:electron
+Exit:    0
+Summary: 37 passed, 1 flaky (passed on retry), 0 failed — 40.6s
+
+## Comparison against baseline-electron.txt
+
+Baseline: 37 passed, 1 flaky, 0 failed at da5edc3 (unmodified).
+After:    37 passed, 1 flaky, 0 failed.
+
+The two per-scenario result lists were normalised (status + scenario name,
+timings stripped) and diffed. The diff is EMPTY: all 39 result entries across
+38 scenarios carry the same status, including the same single retry on the same
+scenario.
+
+- Scenarios that passed before and pass now: 37
+- Scenarios that failed before and fail now: 0
+- Scenarios that changed state: 0
+- REGRESSIONS (passed before, fail now): 0
+
+## The flaky scenario
+
+  11-welcome-screen.feature: Finish Review produces valid XML with source-path
+  and no git-diff-args
+
+Failed first attempt and passed on retry in BOTH runs, at the same step
+(tests/steps/11-welcome-screen.steps.ts:121, an empty <review> element written
+before the assertion). Same behaviour before and after, so it is a match, not a
+change. It is pre-existing flake in the test's timing, unrelated to this plan.
+
+## Note
+
+The 'Error running git diff: Command failed: git diff main..nonexistent-branch'
+line in the raw output belongs to the 'Invalid git ref' error-handling scenario,
+which asserts that failure. It appears identically in the baseline.
+
+(Raw Playwright output omitted; the per-scenario list above is the evidence.)

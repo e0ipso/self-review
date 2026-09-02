@@ -36,11 +36,13 @@ self-review/
 │   ├── main/                     # Electron main process
 │   │   ├── main.ts              # App entry point, window creation, exit handler
 │   │   ├── cli.ts               # Argument parsing (pass-through to git diff, forge URL & subcommand routing)
+│   │   ├── startup-mode.ts      # Startup mode detection (git, directory, file, welcome)
 │   │   ├── fetch-comments.ts    # Headless `fetch-comments` subcommand orchestrator
 │   │   ├── remote-mode.ts       # Remote PR/MR session bootstrap (URL → git-mode inputs)
 │   │   ├── git.ts               # Executes git diff as child process
 │   │   ├── diff-parser.ts       # Parses unified diff output → DiffFile[]
-│   │   ├── ipc-handlers.ts      # ipcMain handlers (diff:load, review:submit, etc.)
+│   │   ├── ipc-handlers.ts      # ipcMain registrations & Electron specifics (dialogs, windows)
+│   │   ├── review-handlers.ts   # Transport-agnostic handler bodies over an explicit ReviewSession
 │   │   ├── xml-serializer.ts    # ReviewState → XML string (validates against XSD)
 │   │   ├── xml-parser.ts        # XML string → ReviewState (for --resume-from)
 │   │   ├── version-checker.ts   # Checks GitHub Releases API for updates (startup only)
@@ -131,6 +133,11 @@ Two-process model:
 
 The preload script uses `contextBridge.exposeInMainWorld` to expose a typed `electronAPI` object.
 The renderer NEVER imports from `electron` directly.
+
+Review handler logic lives in `src/main/review-handlers.ts`: each handler takes the
+`ReviewSession` it acts on as a parameter, returns a value, and reads no module-scope state.
+`src/main/ipc-handlers.ts` owns the transport, so a new handler's body belongs in
+`review-handlers.ts` and only its `ipcMain` registration belongs in `ipc-handlers.ts`.
 
 **Large-payload mode:** When the diff exceeds configurable thresholds (`max-files` or
 `max-total-lines`), the main process sends file metadata without hunks in the initial `diff:load`
