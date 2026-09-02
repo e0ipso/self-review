@@ -1,60 +1,53 @@
 # Strikethroo workspace configuration.
 #
-# This is the single structured configuration file for the workspace: every
-# configurable feature claims one top-level section here rather than adding
-# its own YAML file. Edit it directly or through the Config tab of the
-# Customize section in the web app (`npx strikethroo serve`) — note that
-# saving from the web UI rewrites this file and does not preserve comments.
+# This file is local to this workspace and ignored by the workspace .gitignore.
+# Harness permissions, installed models, and routing preferences can differ by
+# developer and machine. Edit it directly or through the Config tab of the
+# Customize section in the web app (`npx strikethroo serve`). Saving from the
+# web UI rewrites this file and does not preserve comments.
 #
 # Sections:
-#   execution_routing — automatic task execution routing during task
-#     generation. Profiles are arbitrary, project-defined routing categories;
+#   harnesses — exact ordered argv elements added when Strikethroo invokes the
+#     named external CLI. The local user owns the resulting permissions. Values
+#     are never split or shell-expanded. Keep secrets and machine paths out of
+#     argv; use each harness's authentication and user configuration instead.
+#   execution_routing — automatic per-task execution routing. Profiles are
+#     arbitrary, project-defined routing categories;
 #     each `description` tells the task-generation LLM when the profile
 #     applies, and `models` is a list of exact execution targets (`model`
 #     required; `harness` and `reasoning_effort` optional; values are copied
-#     verbatim — no aliases, defaults, or translation). By default one target
-#     is chosen at random from those whose harness is available on this machine
-#     (a target with no `harness` is native and always available); one optional
-#     global `resolver.script` (repository-relative) can override that choice.
-#     Routing is disabled while `profiles` is empty.
-#
-# The profiles below were derived by mining this repo's archived tasks
-# (.ai/strikethroo/archive). Each profile maps a complexity / nature tier onto
-# equivalent execution targets across harnesses:
-#   claude   — forward-compatible aliases (haiku / sonnet / opus)
-#   codex    — OpenAI GPT-5.6 series (laddered by reasoning_effort)
-#   opencode — MiniMax-M3 / Kimi K2.7 Code / GLM-5.2
-#   cursor   — Composer 2.5
-#
-# Model identifiers were verified against each installed CLI:
-#   claude   — `haiku`/`sonnet`/`opus` are the CLI's forward-compatible aliases
-#              (`claude --model`, always resolve to the latest of that family).
-#   opencode — exact IDs and metadata from `opencode models opencode-go
-#              --verbose` (provider prefix `opencode-go/`).
-#   cursor   — `composer-2.5` verified exact via `cursor-agent models`.
-#   codex    — `gpt-5.6-codex` follows codex's `<series>-codex` naming; the CLI
-#              exposes no model-list command, so confirm against your account's
-#              available models if routing to codex.
-#
-# reasoning_effort is set only where the target model actually exposes the
-# knob: codex (low/medium/high) and GLM-5.2 (high/max only). MiniMax-M3, Kimi
-# K2.7 Code, and Composer 2.5 report no discrete effort levels, so they carry
-# no reasoning_effort.
-#
-# Tiering was validated against the Artificial Analysis Coding Agents
-# leaderboard (Coding Agent Index + Cost per Task, scraped from the rendered
-# charts at https://artificialanalysis.ai/agents/coding-agents). Verified
-# figures (harness-specific index / $ per benchmark task):
-#   Codex GPT-5.6 (max)  75-80 / $1.57-$7.08
-#   Opus 4.8             73 (max) / 67 (medium) / $3.26-$7.70
-#   GLM-5.2              58 / $6.47   (highest coding index of the opencode trio)
-#   Composer 2.5 Fast    52 / $0.55   (best value on the entire board)
-# opencode tiering: MiniMax-M3 ($0.30/$1.20 per 1M tok, cheapest) -> docs;
-# Kimi K2.7 Code ($0.95/$4, coding-specialized) -> standard; GLM-5.2 -> complex
-# because it posts the highest opencode coding index (58) AND is the only
-# opencode model with a `max` reasoning mode for the hardest tasks.
-# CAVEAT: AA has not published a Coding Agent Index for Kimi K2.7 Code or
-# MiniMax-M3, so their placement rests on per-token cost + specialization only.
+#     verbatim — no aliases, defaults, or translation). Task generation saves
+#     only the selected profile. Immediately before each task delegation, the
+#     first non-avoided target in configured order is selected by default. One
+#     optional global `resolver.script` (repository-relative) can instead
+#     receive that task's complete configured targets and accumulated avoid set
+#     and return one non-avoided target identifier. Routing is disabled while
+#     `profiles` is empty. See the customization
+#     guide for the full
+#     contract and an illustrative example:
+#     https://strikethroo.canpicasoft.com/customization.html
+
+harnesses:
+  claude:
+    cli_args:
+      - --dangerously-skip-permissions
+  codex:
+    cli_args:
+      - --sandbox
+      - workspace-write
+  cursor:
+    cli_args:
+      - --force
+  gemini:
+    cli_args:
+      - --approval-mode
+      - yolo
+  copilot:
+    cli_args:
+      - --allow-all
+  opencode:
+    cli_args:
+      - --auto
 
 execution_routing:
   profiles:
@@ -102,13 +95,13 @@ execution_routing:
       description: >-
         High-difficulty, cross-cutting, or design-heavy work: data-model and
         type-system design, non-trivial refactors, build-tooling and bundler
-        changes (esbuild, Vite), server/HTTP/SSE and API design, runtime
-        prompt composition, MCP/protocol work, and any task whose blast radius
-        spans multiple subsystems or carries subtle correctness constraints.
-        Typical skills: data-modeling, typescript-refactoring, refactoring,
+        changes (esbuild, Vite), server/HTTP/SSE and API design, runtime prompt
+        composition, MCP/protocol work, and any task whose blast radius spans
+        multiple subsystems or carries subtle correctness constraints. Typical
+        skills: data-modeling, typescript-refactoring, refactoring,
         build-tooling, esbuild, vite, node-http, server-sent-events,
-        mcp-protocol, secure-coding, html-sanitization. Complexity score
-        roughly 6-7, or any task with wide blast radius regardless of score.
+        mcp-protocol, secure-coding, html-sanitization. Complexity score roughly
+        6-7, or any task with wide blast radius regardless of score.
       models:
         - model: opus
           harness: claude
