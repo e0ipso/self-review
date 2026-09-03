@@ -303,14 +303,17 @@ export default function FileTree() {
               ) : (
                 <AlertCircle className='h-3.5 w-3.5 text-red-500 shrink-0' />
               )}
-              <Button
-                variant='ghost'
-                size='sm'
-                className='h-6 px-2 text-xs ml-auto'
-                onClick={handleChangeOutputPath}
-              >
-                Change...
-              </Button>
+              {/* Only offered when the host can actually change the path. */}
+              {adapter?.changeOutputPath && (
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  className='h-6 px-2 text-xs ml-auto'
+                  onClick={handleChangeOutputPath}
+                >
+                  Change...
+                </Button>
+              )}
             </div>
             {!outputPathInfo.outputPathWritable && (
               <p className='text-xs text-red-500'>Path not writable</p>
