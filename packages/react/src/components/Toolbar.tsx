@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useConfig } from '../context/ConfigContext';
 import { useReview } from '../context/ReviewContext';
 import { useGuide } from '../context/GuideContext';
+import { useAdapter } from '../context/ReviewAdapterContext';
 import { Button } from './ui/button';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Separator } from './ui/separator';
@@ -34,6 +35,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
   const { config, updateConfig, outputPathInfo } = useConfig();
   const { diffFiles, diffSource } = useReview();
   const { guide, mode: guideMode, setMode: setGuideMode } = useGuide();
+  const adapter = useAdapter();
   const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
 
   const stats = useMemo(() => {
@@ -324,7 +326,10 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
               </TooltipTrigger>
               {!outputPathInfo.outputPathWritable && (
                 <TooltipContent>
-                  Output path is not writable. Click &apos;Change...&apos; in the file tree to pick a save location.
+                  {/* The file tree only shows "Change..." when the host can change the path. */}
+                  {adapter?.changeOutputPath
+                    ? "Output path is not writable. Click 'Change...' in the file tree to pick a save location."
+                    : 'Output path is not writable.'}
                 </TooltipContent>
               )}
             </Tooltip>
