@@ -34,6 +34,7 @@ Feature: Welcome Screen and Directory Mode
       | file         | content             |
       | src/index.ts | console.log("hi");  |
     When I launch self-review with the directory path
+    And the file tree should list 1 file
     And I click "Finish Review"
     Then the output file should contain valid XML
     And the XML should contain a "source-path" attribute
