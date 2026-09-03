@@ -1,4 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as nodePath from 'path';
 import type {
   AppConfig,
   DiffFile,
@@ -19,11 +22,14 @@ vi.mock('./git', () => ({
 
 import { runGitDiffAsync } from './git';
 import {
+  commitReviewStart,
   createReviewSession,
   expandContext,
   getConfigLoad,
   getDiffLoad,
   getFileHunks,
+  getResumeLoad,
+  prepareDirectoryReview,
   submitReviewState,
   takeReviewState,
 } from './review-handlers';
@@ -268,6 +274,98 @@ describe('review-handlers', () => {
         config: session.config,
         outputPathInfo: { resolvedOutputPath: '/work/review.xml', outputPathWritable: true },
       });
+    });
+  });
+
+  describe('resume load', () => {
+    it('returns nothing for a session with nothing to resume', () => {
+      expect(getResumeLoad(createReviewSession())).toBeNull();
+    });
+
+    it('returns comments and viewed files, adding drift only when recorded', () => {
+      const session = createReviewSession();
+      session.resumeViewedFiles = ['src/app.ts'];
+
+      expect(getResumeLoad(session)).toEqual({
+        comments: [],
+        viewedFiles: ['src/app.ts'],
+      });
+
+      session.resumeRemoteDrift = {
+        recordedHeadSha: 'aaa',
+        liveHeadSha: 'bbb',
+        drifted: true,
+      };
+      expect(getResumeLoad(session)?.remoteDrift).toEqual({
+        recordedHeadSha: 'aaa',
+        liveHeadSha: 'bbb',
+        drifted: true,
+      });
+    });
+  });
+
+  describe('directory review start', () => {
+    let tmpDir: string;
+
+    afterEach(() => {
+      if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    function makeTree(): string {
+      tmpDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'self-review-handlers-'));
+      fs.writeFileSync(nodePath.join(tmpDir, 'a.ts'), 'const a = 1;\n');
+      fs.writeFileSync(nodePath.join(tmpDir, 'b.ts'), 'const b = 2;\n');
+      return tmpDir;
+    }
+
+    it('scans a directory and skips the threshold check without a config', async () => {
+      const session = createReviewSession();
+      const dir = makeTree();
+
+      const result = await prepareDirectoryReview(session, dir);
+
+      expect(result.payload.source).toEqual({ type: 'directory', sourcePath: dir });
+      expect(result.payload.files.map(f => f.newPath).sort()).toEqual(['a.ts', 'b.ts']);
+      expect(result.stats).toBeNull();
+      expect(result.exceedsThresholds).toBe(false);
+    });
+
+    it('scans a single file as a file review', async () => {
+      const session = createReviewSession();
+      const file = nodePath.join(makeTree(), 'a.ts');
+
+      const result = await prepareDirectoryReview(session, file);
+
+      expect(result.payload.source).toEqual({ type: 'file', sourcePath: file });
+      expect(result.payload.files).toHaveLength(1);
+    });
+
+    it('reports exceeded thresholds without touching the session', async () => {
+      const session = createReviewSession();
+      session.config = { ...makeConfig('review.xml'), maxFiles: 1 };
+      const previous = makeGitPayload();
+      session.diffData = previous;
+
+      const result = await prepareDirectoryReview(session, makeTree());
+
+      expect(result.exceedsThresholds).toBe(true);
+      expect(result.stats).toMatchObject({ fileCount: 2, exceedsFiles: true });
+      // A caller that declines the large review must find the session as it
+      // was: the review already on screen stays there.
+      expect(session.diffData).toBe(previous);
+    });
+
+    it('commits the payload to the session and strips hunks for large mode', async () => {
+      const session = createReviewSession();
+      const { payload } = await prepareDirectoryReview(session, makeTree());
+      payload.isLargePayload = true;
+
+      const outgoing = commitReviewStart(session, payload);
+
+      expect(session.diffData).toBe(payload);
+      expect(outgoing.files.every(f => f.hunks.length === 0 && f.contentLoaded === false)).toBe(true);
+      // The session keeps the full hunks for later per-file loads.
+      expect(getFileHunks(session, 'a.ts')?.length).toBeGreaterThan(0);
     });
   });
 

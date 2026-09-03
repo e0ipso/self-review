@@ -191,7 +191,7 @@ export function submitReviewState(
   state: ReviewState
 ): void {
   console.error(
-    '[ipc] Received REVIEW_SUBMIT from renderer:',
+    '[review] Review state submitted:',
     JSON.stringify({
       timestamp: state.timestamp,
       source: state.source,
@@ -267,7 +267,7 @@ export async function expandContext(
     const { runGitDiffAsync } = await import('./git');
     const { parseDiff } = await import('./diff-parser');
 
-    const source = diffData.source as { type: 'git'; gitDiffArgs: string; repository: string };
+    const source = diffData.source;
     const originalArgs = source.gitDiffArgs
       .split(/\s+/)
       .filter(a => a.length > 0);
@@ -338,7 +338,7 @@ export async function expandContext(
     return { hunks: expandedFile.hunks, totalLines };
   } catch (error) {
     console.error(
-      `[ipc] Failed to expand context for ${request.filePath}:`,
+      `[review] Failed to expand context for ${request.filePath}:`,
       error
     );
     return null;
@@ -369,10 +369,7 @@ export async function prepareDirectoryReview(
   session: ReviewSession,
   directoryPath: string
 ): Promise<ReviewStartResult> {
-  console.error(
-    '[ipc] Starting directory review for:',
-    directoryPath
-  );
+  console.error('[review] Starting directory review for:', directoryPath);
 
   // Check if the path is a file (not a directory)
   let isFile = false;
