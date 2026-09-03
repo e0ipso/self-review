@@ -119,19 +119,10 @@ describe('ipc-handlers', () => {
     });
 
     it('returns null when no cache', async () => {
-      // Reset cache by setting null-ish data — setDiffData always sets,
-      // so we need to call registerIpcHandlers without setting data first.
-      // The default diffDataCache is null.
-      // Re-import to get a fresh module would be complex, so we test by
-      // setting data to a payload, then checking a missing file.
-      // Actually, diffDataCache starts as null before setDiffData is called.
-      // We need a fresh module. Instead, let's just verify the handler exists
-      // and test the flow with a real cache.
-
-      // For this test, we can verify by never calling setDiffData on a fresh
-      // registration. But since beforeEach calls registerIpcHandlers which
-      // doesn't reset the cache, and the module is cached, we need to be creative.
-      // The simplest approach: set data with an empty files array
+      // The desktop session lives at module scope and setDiffData always
+      // assigns, so an earlier test's payload is still there. The empty-session
+      // branch itself is covered in review-handlers.test.ts; here, an empty
+      // file list is the closest this registration can get.
       const payload: DiffLoadPayload = {
         files: [],
         source: { type: 'directory', sourcePath: '/tmp' },

@@ -1,0 +1,68 @@
+# Packaged-application suite baseline (task 1)
+
+Commit:  da5edc3bb30f45ae2af1ddb59c950e80f098d049  (== origin/main da5edc3, unmodified)
+Branch:  feature/60--extract-transport-agnostic-review-handlers
+Command: npm run test:e2e:electron
+Exit:    0
+Summary: 37 passed, 1 flaky (passed on retry), 0 failed  — 38 scenarios in 41.5s
+
+Tree state at start: clean outside .ai/strikethroo (git status --porcelain verified).
+
+## Flaky scenario (passed only on retry)
+
+  11-welcome-screen.feature: Welcome Screen and Directory Mode >
+    Finish Review produces valid XML with source-path and no git-diff-args
+  First attempt failed at tests/steps/11-welcome-screen.steps.ts:121 — the written
+  review.xml was an empty <review> element with no source-path attribute.
+  Passed on retry. Treat a first-attempt pass after the change as a match, and a
+  hard failure as a regression.
+
+## Notes
+
+- The fetch-comments subcommand's known headless failure is out of scope for plan 60
+  and does not appear in this project's scenarios.
+- This suite does not run in CI. This file is the only regression evidence available.
+
+## Per-scenario results
+
+  ✓   1 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:11:7 › XML Output › Empty review produces valid XML with all files (1.3s)
+  ✓   2 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:24:7 › XML Output › XML contains comments with correct line references (1.1s)
+  ✓   3 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:34:7 › XML Output › XML contains file-level comments without line attributes (983ms)
+  ✓   4 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:43:7 › XML Output › XML contains comments with categories (1.3s)
+  ✓   5 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:51:7 › XML Output › XML contains suggestions with original and proposed code (1.2s)
+  ✓   6 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:61:7 › XML Output › XML contains multi-line comment with correct range (1.1s)
+  ✓   7 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:69:7 › XML Output › XML contains comment on deleted line with old line references (1.2s)
+  ✓   8 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:78:7 › XML Output › XML validates against the XSD schema (1.2s)
+  ✓   9 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:85:7 › XML Output › XML nests replies inside their comment in the order they were entered (1.4s)
+  ✓  10 [electron] › .features-gen/electron/tests/features/07-xml-output.feature.spec.js:97:7 › XML Output › Nothing is written to stdout (812ms)
+  ✓  11 [electron] › .features-gen/electron/tests/features/08-resume.feature.spec.js:10:7 › Resume from Prior Review › Resume loads prior comments into the UI (920ms)
+  ✓  12 [electron] › .features-gen/electron/tests/features/08-resume.feature.spec.js:17:7 › Resume from Prior Review › Resume restores files previously marked as done (974ms)
+  ✓  13 [electron] › .features-gen/electron/tests/features/08-resume.feature.spec.js:26:7 › Resume from Prior Review › Resumed comments display and preserve severity and confidence (950ms)
+  ✓  14 [electron] › .features-gen/electron/tests/features/08-resume.feature.spec.js:35:7 › Resume from Prior Review › Resumed comments can be edited (1.1s)
+  ✓  15 [electron] › .features-gen/electron/tests/features/08-resume.feature.spec.js:44:7 › Resume from Prior Review › Resumed comments can be deleted (1.0s)
+  ✓  16 [electron] › .features-gen/electron/tests/features/08-resume.feature.spec.js:52:7 › Resume from Prior Review › New comments can be added alongside resumed comments (1.2s)
+  ✓  17 [electron] › .features-gen/electron/tests/features/08-resume.feature.spec.js:60:7 › Resume from Prior Review › A v2 prior review is loaded and saved as v3 (906ms)
+  ✓  18 [electron] › .features-gen/electron/tests/features/08-resume.feature.spec.js:71:7 › Resume from Prior Review › Resumed threads render and round-trip in document order (911ms)
+  ✓  19 [electron] › .features-gen/electron/tests/features/09-error-handling.feature.spec.js:6:7 › Error Handling › Not a git repository (785ms)
+  ✓  20 [electron] › .features-gen/electron/tests/features/09-error-handling.feature.spec.js:12:7 › Error Handling › Invalid git ref (399ms)
+  ✓  21 [electron] › .features-gen/electron/tests/features/09-error-handling.feature.spec.js:19:7 › Error Handling › Empty diff produces valid output (712ms)
+  ✓  22 [electron] › .features-gen/electron/tests/features/09-error-handling.feature.spec.js:28:7 › Error Handling › --help prints usage and exits (86ms)
+  ✓  23 [electron] › .features-gen/electron/tests/features/09-error-handling.feature.spec.js:34:7 › Error Handling › --version prints version and exits (88ms)
+  ✓  24 [electron] › .features-gen/electron/tests/features/11-welcome-screen.feature.spec.js:6:7 › Welcome Screen and Directory Mode › Welcome screen appears when launched outside git repo (761ms)
+  ✓  25 [electron] › .features-gen/electron/tests/features/11-welcome-screen.feature.spec.js:14:7 › Welcome Screen and Directory Mode › Directory mode loads all files as additions (833ms)
+  ✓  26 [electron] › .features-gen/electron/tests/features/11-welcome-screen.feature.spec.js:23:7 › Welcome Screen and Directory Mode › Toolbar shows directory path in directory mode (906ms)
+  ✘  27 [electron] › .features-gen/electron/tests/features/11-welcome-screen.feature.spec.js:29:7 › Welcome Screen and Directory Mode › Finish Review produces valid XML with source-path and no git-diff-args (697ms)
+  ✓  28 [electron] › .features-gen/electron/tests/features/11-welcome-screen.feature.spec.js:29:7 › Welcome Screen and Directory Mode › Finish Review produces valid XML with source-path and no git-diff-args (retry #1) (761ms)
+  ✓  29 [electron] › .features-gen/electron/tests/features/11-welcome-screen.feature.spec.js:40:7 › Welcome Screen and Directory Mode › Launching with non-git directory path arg skips welcome screen (802ms)
+  ✓  30 [electron] › .features-gen/electron/tests/features/11-welcome-screen.feature.spec.js:47:7 › Welcome Screen and Directory Mode › Binary files in directory mode show indicator (819ms)
+  ✓  31 [electron] › .features-gen/electron/tests/features/12-expand-context.feature.spec.js:10:7 › Expand Context › Expand context bars appear for modified files in git mode (897ms)
+  ✓  32 [electron] › .features-gen/electron/tests/features/12-expand-context.feature.spec.js:15:7 › Expand Context › Expand context bars do not appear for untracked files (937ms)
+  ✓  33 [electron] › .features-gen/electron/tests/features/12-expand-context.feature.spec.js:20:7 › Expand Context › Clicking expand down loads more context lines below a hunk (2.0s)
+  ✓  34 [electron] › .features-gen/electron/tests/features/12-expand-context.feature.spec.js:27:7 › Expand Context › Expand bars disappear when no more lines remain (2.1s)
+  ✓  35 [electron] › .features-gen/electron/tests/features/14-find-in-page.feature.spec.js:12:7 › Find in Page › Opening find bar with Ctrl+F (866ms)
+  ✓  36 [electron] › .features-gen/electron/tests/features/14-find-in-page.feature.spec.js:18:7 › Find in Page › Searching for text highlights matches (1.5s)
+  ✓  37 [electron] › .features-gen/electron/tests/features/14-find-in-page.feature.spec.js:26:7 › Find in Page › Cycling through matches with Enter (1.7s)
+  ✓  38 [electron] › .features-gen/electron/tests/features/14-find-in-page.feature.spec.js:37:7 › Find in Page › Searching for multi-character queries (1.5s)
+  ✓  39 [electron] › .features-gen/electron/tests/features/14-find-in-page.feature.spec.js:44:7 › Find in Page › Closing find bar with Escape (1.4s)
+
+(Raw Playwright output omitted; the per-scenario list above is the evidence.)
