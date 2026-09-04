@@ -38,17 +38,17 @@ vi.mock('./version-checker', () => ({
   getVersionUpdate: vi.fn(),
 }));
 
-vi.mock('./directory-scanner', () => ({
+vi.mock('../../packages/core/src/directory-scanner', () => ({
   scanDirectory: vi.fn(),
   scanFile: vi.fn(),
 }));
 
-vi.mock('./payload-sizing', () => ({
+vi.mock('../../packages/core/src/payload-sizing', () => ({
   computePayloadStats: vi.fn(),
   countTotalLines: vi.fn(),
 }));
 
-vi.mock('./git', () => ({
+vi.mock('../../packages/core/src/git', () => ({
   runGitDiffAsync: vi.fn(),
   readGitBlobAsync: vi.fn(),
 }));
@@ -225,7 +225,7 @@ describe('ipc-handlers', () => {
 
   describe('DIFF_EXPAND_CONTEXT handler (repo path threading)', () => {
     it('runs git diff in the diff source repository, not the process cwd', async () => {
-      const { runGitDiffAsync } = await import('./git');
+      const { runGitDiffAsync } = await import('../../packages/core/src/git');
       const gitMock = vi.mocked(runGitDiffAsync);
       gitMock.mockResolvedValue(
         [
@@ -304,7 +304,7 @@ describe('ipc-handlers', () => {
     });
 
     it('reads the blob at the reviewed head SHA in remote mode, not the working tree', async () => {
-      const { readGitBlobAsync } = await import('./git');
+      const { readGitBlobAsync } = await import('../../packages/core/src/git');
       const png = Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
         'base64'

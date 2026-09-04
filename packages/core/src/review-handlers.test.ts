@@ -11,7 +11,7 @@ import type {
   GuideLoadPayload,
   OutputPathInfo,
   ReviewState,
-} from '../shared/types';
+} from './types';
 
 // The only mock this module needs: `expandContext` shells out to git.
 // Nothing here mocks `electron` — the extracted handlers never touch it.
@@ -312,7 +312,7 @@ describe('review-handlers', () => {
     });
 
     function makeTree(): string {
-      tmpDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'self-review-handlers-'));
+      tmpDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'self-review-test-handlers-'));
       fs.writeFileSync(nodePath.join(tmpDir, 'a.ts'), 'const a = 1;\n');
       fs.writeFileSync(nodePath.join(tmpDir, 'b.ts'), 'const b = 2;\n');
       return tmpDir;

@@ -19,7 +19,7 @@ describe('determineMode', () => {
     let root: string;
 
     beforeAll(() => {
-      root = makeTempDir('self-review-mode-plain-');
+      root = makeTempDir('self-review-test-mode-plain-');
       fs.mkdirSync(path.join(root, 'sub'));
       fs.writeFileSync(path.join(root, 'notes.md'), '# notes\n');
       process.chdir(root);
@@ -53,7 +53,7 @@ describe('determineMode', () => {
     let root: string;
 
     beforeAll(() => {
-      root = makeTempDir('self-review-mode-git-');
+      root = makeTempDir('self-review-test-mode-git-');
       fs.writeFileSync(path.join(root, 'tracked.ts'), 'export {};\n');
       fs.writeFileSync(path.join(root, 'untracked.ts'), 'export {};\n');
       const git = (cmd: string) =>

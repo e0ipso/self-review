@@ -36,13 +36,7 @@ self-review/
 │   ├── main/                     # Electron main process
 │   │   ├── main.ts              # App entry point, window creation, exit handler
 │   │   ├── cli.ts               # Argument parsing (pass-through to git diff, forge URL & subcommand routing)
-│   │   ├── startup-mode.ts      # Startup mode detection (git, directory, file, welcome)
-│   │   ├── fetch-comments.ts    # Headless `fetch-comments` subcommand orchestrator
-│   │   ├── remote-mode.ts       # Remote PR/MR session bootstrap (URL → git-mode inputs)
-│   │   ├── git.ts               # Executes git diff as child process
-│   │   ├── diff-parser.ts       # Parses unified diff output → DiffFile[]
 │   │   ├── ipc-handlers.ts      # ipcMain registrations & Electron specifics (dialogs, windows)
-│   │   ├── review-handlers.ts   # Transport-agnostic handler bodies over an explicit ReviewSession
 │   │   ├── xml-serializer.ts    # ReviewState → XML string (validates against XSD)
 │   │   ├── xml-parser.ts        # XML string → ReviewState (for --resume-from)
 │   │   ├── version-checker.ts   # Checks GitHub Releases API for updates (startup only)
@@ -100,14 +94,17 @@ self-review/
 │   │                            #   interface + parseForgeUrl), github-provider.ts (gh),
 │   │                            #   gitlab-provider.ts (glab), materializer.ts (clone-aware
 │   │                            #   diff materialization), thread-mapper.ts (forge threads →
-│   │                            #   ReviewComments)
+│   │                            #   ReviewComments); and the Node-only review engine:
+│   │                            #   review-handlers.ts, startup-mode.ts, guide-loader.ts,
+│   │                            #   git-diff-loader.ts, staged-untracked.ts, remote-mode.ts,
+│   │                            #   fetch-comments.ts, git-diff-args.ts
 │   ├── react/                   # @self-review/react, React components for review UI
 │   │                            #   incl. guided-mode presentation (grouped tree, overview)
 │   └── types/                   # @self-review/types, shared TypeScript interfaces (zero runtime deps)
 │                                #   incl. ReviewGuide/GuideGroup/ResolvedGuideGroup guide types
 ```
 
-The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace packages `@self-review/core`, `@self-review/react`, and `@self-review/types` expose shared logic, UI components, and shared TypeScript interfaces respectively. The Electron app imports these packages via relative path imports to their source (not through workspace symlinks), so no build step is needed for the packages during development. The Electron app's `src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source.
+The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace packages `@self-review/core`, `@self-review/react`, and `@self-review/types` expose shared logic, UI components, and shared TypeScript interfaces respectively. `@self-review/core` holds everything Node-only: the primitives (diff parsing, git, XML, config, forge providers) and the review engine that orchestrates them (session handlers, startup mode, guide and diff loading, remote PR/MR bootstrap, `fetch-comments`). The Electron app imports the packages via relative path imports to their source (not through workspace symlinks), so no build step is needed for the packages during development. The Electron app's `src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source.
 
 ## Keyboard Shortcuts
 
@@ -134,10 +131,17 @@ Two-process model:
 The preload script uses `contextBridge.exposeInMainWorld` to expose a typed `electronAPI` object.
 The renderer NEVER imports from `electron` directly.
 
-Review handler logic lives in `src/main/review-handlers.ts`: each handler takes the
+Review handler logic lives in `packages/core/src/review-handlers.ts`: each handler takes the
 `ReviewSession` it acts on as a parameter, returns a value, and reads no module-scope state.
 `src/main/ipc-handlers.ts` owns the transport, so a new handler's body belongs in
 `review-handlers.ts` and only its `ipcMain` registration belongs in `ipc-handlers.ts`.
+
+Everything that moved into `@self-review/core` was Node-only, with no Electron dependency;
+`src/main/` now holds Electron-bound code — window/menu/dialog wiring, IPC transport, and XML
+file I/O — plus two deliberate exceptions that stayed put: `cli.ts` (argument parsing; only its
+`normalizeGitDiffArgs` helper moved out, to `packages/core/src/git-diff-args.ts`) and
+`relaunch-guard.ts` (re-execs the app from its real bundle path, which is inherently
+desktop-specific).
 
 **Large-payload mode:** When the diff exceeds configurable thresholds (`max-files` or
 `max-total-lines`), the main process sends file metadata without hunks in the initial `diff:load`
@@ -172,7 +176,7 @@ fetched into namespaced local refs (`refs/self-review/*` — no checkout, no wor
 changes); otherwise a temporary blobless clone (`--filter=blob:none`, never shallow) is created
 under the OS temp directory and removed on exit. After materialization, remote mode *is* git
 mode: the existing pipeline runs against the clone path and the `baseSha...headSha` range
-(`src/main/remote-mode.ts`). Git's own credential machinery handles all clone/fetch transport.
+(`packages/core/src/remote-mode.ts`). Git's own credential machinery handles all clone/fetch transport.
 The **conversation plane** (base-branch lookup, discussion-thread fetch) lives behind the
 `ForgeProvider` interface in `packages/core/src/forge-provider.ts`, implemented by
 `github-provider.ts` (`gh` CLI) and `gitlab-provider.ts` (`glab` CLI; unresolved threads only by
@@ -184,7 +188,7 @@ with no file association land on the sentinel path `''` (`REVIEW_LEVEL_FILE_PATH
 the recorded `remote-head-sha` is compared with the live head fetched during materialization and
 the renderer shows a non-blocking drift warning when the PR/MR has moved. Nothing is ever sent
 to the forge. The headless `self-review fetch-comments <URL> [--all-threads]` subcommand
-(`src/main/fetch-comments.ts`) runs the same flow without a window and writes a v3 `review.xml`
+(`packages/core/src/fetch-comments.ts`) runs the same flow without a window and writes a v3 `review.xml`
 with remote provenance and per-thread `remote-id`s.
 
 **Rendered previews:** Newly added files (`changeType === 'added'`) of certain types support a
@@ -260,13 +264,14 @@ The app has two testing layers:
 
 Unit tests use Vitest with separate configurations for main and renderer processes:
 
-- **Main process tests** (`src/main/**/*.test.ts`): Test Node.js modules (diff parsing, XML
-  serialization, git operations). Run in Node.js environment.
+- **Main process tests** (`src/main/**/*.test.ts`): Test Electron-bound Node.js modules (CLI
+  argument parsing, IPC handler wiring, version-update comparison, relaunch re-exec logic). Run in
+  Node.js environment.
 - **Renderer tests** (`src/renderer/**/*.test.{ts,tsx}`): Test React hooks and utilities. Run in
   jsdom environment.
 
-**Test file location**: Colocate test files with source files (e.g., `diff-parser.test.ts` next to
-`diff-parser.ts`).
+**Test file location**: Colocate test files with source files (e.g., `cli.test.ts` next to
+`cli.ts`).
 
 **Running tests**:
 

@@ -1,4 +1,4 @@
-// src/main/remote-mode.test.ts
+// packages/core/src/remote-mode.test.ts
 // Unit tests for the remote PR/MR session bootstrap. All core APIs
 // (providers, materializer, mapper) are injected mocks — no real git, gh,
 // or glab is ever spawned.
@@ -11,9 +11,9 @@ import type {
   ForgeProvider,
   ForgeThread,
   MaterializeResult,
-} from '../../packages/core/src/index';
-import { REVIEW_LEVEL_FILE_PATH } from '../../packages/core/src/index';
-import type { DiffFile, ReviewComment, ReviewState } from '../shared/types';
+} from './index';
+import { REVIEW_LEVEL_FILE_PATH } from './index';
+import type { DiffFile, ReviewComment, ReviewState } from './types';
 import {
   startRemoteSession,
   bootstrapRemoteDiff,
@@ -86,7 +86,7 @@ function makeDiffFile(newPath: string): DiffFile {
 // A ForgeCliUnavailableError lookalike built from the real class.
 async function cliUnavailable(): Promise<never> {
   const { ForgeCliUnavailableError } = await import(
-    '../../packages/core/src/index'
+    './index'
   );
   throw new ForgeCliUnavailableError('github', 'gh', 'gh not found');
 }
@@ -374,10 +374,10 @@ describe('computeRemoteDrift', () => {
 describe('remote state assembly serializes to valid XML', () => {
   it('carries remote-* root attributes, keeps remote-id/author on fetched threads, and none on new material', async () => {
     const { serializeReview } = await import(
-      '../../packages/core/src/xml-serializer'
+      './xml-serializer'
     );
     const { mapThreadsToReviewComments } = await import(
-      '../../packages/core/src/index'
+      './index'
     );
 
     const fetched = mapThreadsToReviewComments([

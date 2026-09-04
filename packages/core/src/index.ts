@@ -133,3 +133,48 @@ export type {
   MaterializeMode,
   MaterializeResult,
 } from './materializer';
+
+// Review session orchestration (transport agnostic; each handler takes the
+// session it acts on and reads no module-scope state)
+export {
+  createReviewSession,
+  preparePayload,
+  getDiffLoad,
+  loadImage,
+  getFileHunks,
+  getConfigLoad,
+  submitReviewState,
+  takeReviewState,
+  readAttachment,
+  getResumeLoad,
+  expandContext,
+  prepareDirectoryReview,
+  commitReviewStart,
+} from './review-handlers';
+export type { ReviewSession, ReviewStartResult } from './review-handlers';
+
+// Startup mode detection (git, directory, file, welcome)
+export { determineMode } from './startup-mode';
+
+// Walkthrough guide sidecar discovery and tolerant loading
+export { deriveGuidePath, resolveGuidePath, loadGuide } from './guide-loader';
+
+// Git diff loading, staged/untracked defaulting, and argument normalisation
+export { loadGitDiffWithUntracked } from './git-diff-loader';
+export type { LoadGitDiffOptions } from './git-diff-loader';
+export { applyStagedUntrackedDefault } from './staged-untracked';
+export { normalizeGitDiffArgs } from './git-diff-args';
+
+// Remote PR/MR session bootstrap (URL -> materialized git-mode inputs)
+export {
+  startRemoteSession,
+  bootstrapRemoteDiff,
+  mergeRemoteThreads,
+  applyRemoteProvenance,
+  computeRemoteDrift,
+} from './remote-mode';
+export type {
+  RemoteSession,
+  RemoteSessionDeps,
+  RemoteBootstrapResult,
+} from './remote-mode';

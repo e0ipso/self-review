@@ -5,13 +5,14 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { checkWritability } from './fs-utils';
-import { parseCliArgs, checkEarlyExit, normalizeGitDiffArgs } from './cli';
+import { parseCliArgs, checkEarlyExit } from './cli';
 import { runFetchComments } from './fetch-comments';
-import { loadGitDiffWithUntracked } from './git-diff-loader';
+import { normalizeGitDiffArgs } from '../../packages/core/src/git-diff-args';
+import { loadGitDiffWithUntracked } from '../../packages/core/src/git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
-import { applyStagedUntrackedDefault } from './staged-untracked';
-import { determineMode } from './startup-mode';
+import { applyStagedUntrackedDefault } from '../../packages/core/src/staged-untracked';
+import { determineMode } from '../../packages/core/src/startup-mode';
 import { createIgnoreFilter } from './ignore-filter';
 import { parseReviewXml } from './xml-parser';
 import { serializeReview } from './xml-serializer';
@@ -33,8 +34,8 @@ import {
   mergeRemoteThreads,
   applyRemoteProvenance,
   computeRemoteDrift,
-} from './remote-mode';
-import { loadGuide } from './guide-loader';
+} from '../../packages/core/src/remote-mode';
+import { loadGuide } from '../../packages/core/src/guide-loader';
 import { checkForUpdate } from './version-checker';
 import { reexecFromRealPathIfNeeded } from './relaunch-guard';
 import { computePayloadStats, countTotalLines } from './payload-sizing';

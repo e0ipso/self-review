@@ -33,7 +33,7 @@ import {
   readAttachment,
   submitReviewState,
   takeReviewState,
-} from './review-handlers';
+} from '../../packages/core/src/review-handlers';
 
 // The desktop application's own session. A single module-scope `const` holding
 // it is expected: the mutable state lives inside the session value, which is

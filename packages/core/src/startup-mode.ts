@@ -1,4 +1,4 @@
-// src/main/startup-mode.ts
+// packages/core/src/startup-mode.ts
 // Startup mode detection: what the app should review, from the CLI args and the CWD.
 
 import { existsSync, statSync } from 'fs';

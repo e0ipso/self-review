@@ -1,7 +1,7 @@
-// src/main/staged-untracked.ts
+// packages/core/src/staged-untracked.ts
 // Initial-config adjustment for staged-mode reviews.
 
-import type { AppConfig } from '@self-review/types';
+import type { AppConfig } from './types';
 
 /**
  * In staged-mode reviews (--staged / --cached), untracked files are not

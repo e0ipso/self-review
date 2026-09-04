@@ -1,7 +1,7 @@
 {
   "name": "@self-review/core",
   "version": "1.43.3",
-  "description": "Core library for self-review: diff parsing, git operations, XML serialization, and configuration",
+  "description": "Core library for self-review: diff parsing, git operations, review session orchestration, remote PR/MR handling, XML serialization, CLI argument parsing, and configuration",
   "repository": {
     "type": "git",
     "url": "https://github.com/e0ipso/self-review.git",

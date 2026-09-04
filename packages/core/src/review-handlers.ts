@@ -1,4 +1,4 @@
-// src/main/review-handlers.ts
+// packages/core/src/review-handlers.ts
 // Transport-agnostic review handler bodies.
 //
 // Every function here takes the session it operates on as a parameter and
@@ -21,7 +21,7 @@ import {
   ExpandContextRequest,
   ImageLoadResult,
   RemoteDriftInfo,
-} from '../shared/types';
+} from './types';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 
