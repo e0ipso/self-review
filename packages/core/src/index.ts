@@ -178,3 +178,11 @@ export type {
   RemoteSessionDeps,
   RemoteBootstrapResult,
 } from './remote-mode';
+
+// Headless fetch-comments orchestrator
+export { buildRemoteReviewState, runFetchComments } from './fetch-comments';
+export type {
+  FetchCommentsDeps,
+  BuildRemoteReviewStateArgs,
+  FetchCommentsOptions,
+} from './fetch-comments';

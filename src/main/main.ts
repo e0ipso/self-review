@@ -6,7 +6,7 @@ import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { checkWritability } from './fs-utils';
 import { parseCliArgs, checkEarlyExit } from './cli';
-import { runFetchComments } from './fetch-comments';
+import { runFetchComments } from '../../packages/core/src/fetch-comments';
 import { normalizeGitDiffArgs } from '../../packages/core/src/git-diff-args';
 import { loadGitDiffWithUntracked } from '../../packages/core/src/git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';

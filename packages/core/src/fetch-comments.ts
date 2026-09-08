@@ -1,4 +1,4 @@
-// src/main/fetch-comments.ts
+// packages/core/src/fetch-comments.ts
 // Headless orchestrator for `self-review fetch-comments <URL>`: materialize
 // the PR/MR, fetch and map its discussion threads, and write a v3 review.xml
 // with remote provenance — no window, nothing on stdout, all logging on
@@ -10,33 +10,33 @@ import { resolve } from 'path';
 import {
   ForgeCliUnavailableError,
   parseForgeUrl,
-} from '../../packages/core/src/forge-provider';
+} from './forge-provider';
 import type {
   ForgeCommandRunner,
   ForgeName,
   ForgeProvider,
   ForgeUrl,
-} from '../../packages/core/src/forge-provider';
-import { createGitHubProvider } from '../../packages/core/src/github-provider';
-import { createGitLabProvider } from '../../packages/core/src/gitlab-provider';
+} from './forge-provider';
+import { createGitHubProvider } from './github-provider';
+import { createGitLabProvider } from './gitlab-provider';
 import {
   defaultGitRunner,
   detectExistingClone,
   materialize,
   resolveRemoteDefaultBranch,
-} from '../../packages/core/src/materializer';
+} from './materializer';
 import type {
   ExistingClone,
   MaterializeResult,
-} from '../../packages/core/src/materializer';
+} from './materializer';
 import {
   mapThreadsToReviewComments,
   REVIEW_LEVEL_FILE_PATH,
-} from '../../packages/core/src/thread-mapper';
-import { parseDiff } from '../../packages/core/src/diff-parser';
-import { runGitDiffAsync } from '../../packages/core/src/git';
-import { serializeReview } from '../../packages/core/src/xml-serializer';
-import { loadConfig } from '../../packages/core/src/config';
+} from './thread-mapper';
+import { parseDiff } from './diff-parser';
+import { runGitDiffAsync } from './git';
+import { serializeReview } from './xml-serializer';
+import { loadConfig } from './config';
 import type {
   AppConfig,
   DiffFile,
@@ -44,7 +44,7 @@ import type {
   RemoteForge,
   ReviewComment,
   ReviewState,
-} from '../shared/types';
+} from './types';
 
 /**
  * Injectable seams for the orchestration. Defaults spawn real processes and
