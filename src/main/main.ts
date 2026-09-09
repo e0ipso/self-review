@@ -40,6 +40,7 @@ import { checkForUpdate } from './version-checker';
 import { reexecFromRealPathIfNeeded } from './relaunch-guard';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { setupMenu } from './menu';
+import { installRendererContentPolicy } from './renderer-content-policy';
 import { getAppIconPath } from './app-assets';
 import { IPC } from '../shared/ipc-channels';
 import {
@@ -407,11 +408,16 @@ function createWindow(): void {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
+      webviewTag: false,
+      // Keep UI request restrictions separate from the startup version check.
+      partition: 'self-review-renderer',
     },
   });
 
   registerFindInPageForWindow(mainWindow);
 
+  installRendererContentPolicy(mainWindow.webContents, MAIN_WINDOW_WEBPACK_ENTRY);
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
   // Data is sent when renderer requests it via IPC (see ipc-handlers.ts)

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
 import type { Reply } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
@@ -92,7 +93,7 @@ export default function ReplyDisplay({ commentId, reply }: ReplyDisplayProps) {
       </div>
 
       <div className={`px-3 pb-2 text-sm text-foreground leading-relaxed ${PROSE_CLASSES}`}>
-        <ReactMarkdown remarkPlugins={[remarkGfm, remarkEmoji]}>
+        <ReactMarkdown urlTransform={localContentUrlTransform} remarkPlugins={[remarkGfm, remarkEmoji]}>
           {reply.body}
         </ReactMarkdown>
       </div>

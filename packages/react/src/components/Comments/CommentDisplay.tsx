@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
 import type {
   ReviewComment,
@@ -272,7 +273,7 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
       {!isCollapsed && (
         <>
           <div className={`px-3 pb-3 text-sm text-foreground leading-relaxed ${PROSE_CLASSES}`}>
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkEmoji]}>
+            <ReactMarkdown urlTransform={localContentUrlTransform} remarkPlugins={[remarkGfm, remarkEmoji]}>
               {comment.body}
             </ReactMarkdown>
           </div>

@@ -110,13 +110,17 @@ export async function loadImage(
     '.svg': 'image/svg+xml',
   };
   const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
-  // Diff paths are repository-relative in git mode; resolve them against
-  // the diff's repository root (in remote mode, the materialized clone),
-  // never the process cwd.
-  const baseDir =
-    session.diffData?.source.type === 'git'
-      ? session.diffData.source.repository
-      : process.cwd();
+  // Scanner paths are relative to the reviewed directory or file's parent.
+  // Git paths are relative to the repository (the clone in remote mode).
+  const source = session.diffData?.source;
+  let baseDir = process.cwd();
+  if (source?.type === 'git') {
+    baseDir = source.repository;
+  } else if (source?.type === 'directory') {
+    baseDir = source.sourcePath;
+  } else if (source?.type === 'file') {
+    baseDir = path.dirname(source.sourcePath);
+  }
   const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
   const ext = path.extname(filePath).toLowerCase();
   const mimeType = MIME_MAP[ext] ?? 'application/octet-stream';
@@ -218,7 +222,7 @@ export function takeReviewState(session: ReviewSession): ReviewState | null {
 export async function readAttachment(filePath: string) {
   try {
     const buffer = await fs.promises.readFile(filePath);
-    return buffer.buffer; // Convert Node.js Buffer to ArrayBuffer
+    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
   } catch {
     console.error(`[attachment:read] Failed to read file: ${filePath}`);
     return null;

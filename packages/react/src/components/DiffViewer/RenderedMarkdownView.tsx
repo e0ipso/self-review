@@ -1,7 +1,14 @@
 import React, { useMemo, useCallback, createContext, useContext } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import {
+  rehypePassiveContent,
+  localContentUrlTransform,
+  PASSIVE_HTML_TAGS,
+  isPassiveHtmlAttribute,
+  isLocalImageUrl,
+} from '../../utils/passive-content';
 import type { Components, ExtraProps } from 'react-markdown';
 import { MessageSquarePlus } from 'lucide-react';
 import type { DiffFile, LineRange } from '@self-review/types';
@@ -71,14 +78,6 @@ const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
 
 const HTML_CONTAINER_TAGS: ReadonlySet<string> = new Set([
   'article', 'aside', 'div', 'footer', 'header', 'main', 'nav', 'section',
-]);
-
-const HTML_SKIPPED_TAGS: ReadonlySet<string> = new Set([
-  'base', 'embed', 'iframe', 'link', 'meta', 'object', 'script', 'style',
-]);
-
-const HTML_SKIPPED_ATTRIBUTES: ReadonlySet<string> = new Set([
-  'href', 'src', 'srcdoc', 'srcset', 'style',
 ]);
 
 interface HtmlToken {
@@ -350,16 +349,20 @@ interface HtmlRenderedContentProps {
 function getHtmlAttributeProps(element: Element): Record<string, unknown> {
   const props: Record<string, unknown> = {};
 
+  const tagName = element.tagName.toLowerCase();
+  const attributeNames: Record<string, string> = {
+    class: 'className', colspan: 'colSpan', rowspan: 'rowSpan', datetime: 'dateTime',
+  };
   for (const attribute of Array.from(element.attributes)) {
-    const attributeName = attribute.name.toLowerCase();
-    if (attributeName.startsWith('on') || HTML_SKIPPED_ATTRIBUTES.has(attributeName)) continue;
-    if (attributeName === 'class') {
-      props.className = attribute.value;
-    } else if (attributeName === 'for') {
-      props.htmlFor = attribute.value;
-    } else {
-      props[attribute.name] = attribute.value;
-    }
+    const name = attributeNames[attribute.name] ?? attribute.name;
+    if (!isPassiveHtmlAttribute(tagName, name)) continue;
+    if (name === 'src' && !isLocalImageUrl(attribute.value)) continue;
+    props[name] = name === 'href' ? defaultUrlTransform(attribute.value) : attribute.value;
+  }
+  if (tagName === 'input') {
+    props.type = 'checkbox';
+    props.disabled = true;
+    props.checked = element.hasAttribute('checked');
   }
 
   return props;
@@ -389,9 +392,11 @@ function HtmlRenderedContent({
   onCommentSaved,
 }: HtmlRenderedContentProps) {
   const lineResolver = createHtmlLineResolver(content, lines);
-  const document = useMemo(() => {
-    const parser = new DOMParser();
-    return parser.parseFromString(content, 'text/html');
+  const fragment = useMemo(() => {
+    // Template contents remain inert even before resource attributes are filtered.
+    const template = document.createElement('template');
+    template.innerHTML = content;
+    return template.content;
   }, [content]);
 
   const renderNode = useCallback((
@@ -409,7 +414,7 @@ function HtmlRenderedContent({
 
     const element = node as Element;
     const tagName = element.tagName.toLowerCase() as keyof React.JSX.IntrinsicElements;
-    if (HTML_SKIPPED_TAGS.has(tagName)) {
+    if (!PASSIVE_HTML_TAGS.has(tagName)) {
       return null;
     }
 
@@ -447,7 +452,7 @@ function HtmlRenderedContent({
     );
   }, [file, filePath, lineRange, lineResolver, onCancelComment, onCommentSaved, onGutterMouseDown]);
 
-  return <>{Array.from(document.body.childNodes).map((node, index) => renderNode(node, index))}</>;
+  return <>{Array.from(fragment.childNodes).map((node, index) => renderNode(node, index))}</>;
 }
 
 export default function RenderedMarkdownView({
@@ -526,8 +531,9 @@ export default function RenderedMarkdownView({
       {frontMatter && <FrontMatterTable metadata={frontMatter.metadata} />}
       {contentMode === 'markdown' ? (
         <ReactMarkdown
+          urlTransform={localContentUrlTransform}
           remarkPlugins={[remarkGfm, remarkEmoji]}
-          rehypePlugins={[rehypeRaw]}
+          rehypePlugins={[rehypeRaw, rehypePassiveContent]}
           components={components}
         >
           {markdownBody}

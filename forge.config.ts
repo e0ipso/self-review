@@ -83,7 +83,7 @@ const config: ForgeConfig = {
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
-      devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' data: blob:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data:",
+      devContentSecurityPolicy: `default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws://localhost:${devPort} ws://127.0.0.1:${devPort} ws://[::1]:${devPort}; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'`,
       port: devPort,
       loggerPort: devLoggerPort,
       mainConfig,

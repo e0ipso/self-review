@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
 import { Map as MapIcon } from 'lucide-react';
 import { useGuide } from '../../context/GuideContext';
@@ -105,6 +106,7 @@ export default function GuideOverviewContent({
 
       <div className='guide-overview-prose prose prose-sm dark:prose-invert mt-5 max-w-none'>
         <ReactMarkdown
+          urlTransform={localContentUrlTransform}
           remarkPlugins={[remarkGfm, remarkEmoji]}
           components={{ code: MarkdownCode }}
         >
