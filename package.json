@@ -1,7 +1,7 @@
 {
   "name": "@e0ipso/self-review",
   "productName": "Self Review",
-  "version": "1.43.3",
+  "version": "1.43.4",
   "description": "GitHub-style PR review UI for local git diffs",
   "workspaces": [
     "packages/*"
@@ -24,7 +24,7 @@
     "screenshots": "npm run package && npx playwright test --project screenshots",
     "test:unit:main": "vitest --config vitest.config.main.ts",
     "test:unit:renderer": "vitest --config vitest.config.renderer.ts",
-    "test:coverage": "vitest run --config vitest.config.main.ts --coverage && vitest run --config vitest.config.renderer.ts --coverage",
+    "test:coverage": "vitest run --config vitest.config.main.ts --coverage --coverage.reportsDirectory=coverage/main && vitest run --config vitest.config.renderer.ts --coverage --coverage.reportsDirectory=coverage/renderer && npm run test:unit --workspace @self-review/core -- --coverage --coverage.reportsDirectory=../../coverage/core",
     "prepare": "husky"
   },
   "keywords": [

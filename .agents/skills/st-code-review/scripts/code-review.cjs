@@ -34,12 +34,12 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/skill-scripts/code-review.ts
 var code_review_exports = {};
 __export(code_review_exports, {
-  _exitCodeFor: () => _exitCodeFor,
+  _classify: () => _classify,
   _extractReviewDocument: () => _extractReviewDocument,
   _makeDeliveryToken: () => _makeDeliveryToken,
   _readBaseCommit: () => _readBaseCommit,
   _readCumulativeDiff: () => _readCumulativeDiff,
-  _verdictFor: () => _verdictFor,
+  _resultLine: () => _resultLine,
   buildReviewerPrompt: () => buildReviewerPrompt,
   createFindingsGate: () => createFindingsGate,
   main: () => main,
@@ -2877,7 +2877,7 @@ var dispatchReview = async (request, overrides = {}) => {
 };
 
 // src/skill-scripts/shared/harness-availability.ts
-var AVAILABILITY_REGISTRY_VERSION = 3;
+var AVAILABILITY_REGISTRY_VERSION = 4;
 var AVAILABLE_TTL_MS = 30 * 60 * 1e3;
 var UNAVAILABLE_TTL_MS = 5 * 60 * 1e3;
 var PROBE_TIMEOUT_MS = 2e4;
@@ -2914,6 +2914,8 @@ var resolveExecutable = (executable) => {
   return void 0;
 };
 var runProbe = (command2, timeoutMs) => new Promise((resolve4) => {
+  let stdout = "";
+  let stderr = "";
   let settled = false;
   let timedOut = false;
   const finish = (result) => {
@@ -2924,23 +2926,42 @@ var runProbe = (command2, timeoutMs) => new Promise((resolve4) => {
   const child = (0, import_child_process3.spawn)(command2.executable, command2.argv, {
     cwd: command2.cwd,
     shell: false,
-    stdio: ["pipe", "ignore", "ignore"]
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  child.stdout?.setEncoding("utf8");
+  child.stderr?.setEncoding("utf8");
+  child.stdout?.on("data", (chunk) => {
+    stdout = (stdout + chunk).slice(-4096);
+  });
+  child.stderr?.on("data", (chunk) => {
+    stderr = (stderr + chunk).slice(-4096);
   });
   const timer = setTimeout(() => {
     timedOut = true;
     child.kill("SIGKILL");
+    child.stdout?.destroy();
+    child.stderr?.destroy();
+    finish({ exitCode: 1, timedOut, stdout, stderr });
   }, timeoutMs);
-  child.once("error", () => {
+  child.once("error", (error) => {
     clearTimeout(timer);
-    finish({ exitCode: 1, timedOut });
+    finish({ exitCode: 1, timedOut, stdout, stderr, error: error.message });
   });
   child.once("close", (code) => {
     clearTimeout(timer);
-    finish({ exitCode: code ?? 1, timedOut });
+    finish({ exitCode: code ?? 1, timedOut, stdout, stderr });
   });
   child.stdin?.on("error", () => void 0);
   child.stdin?.end(command2.stdin);
 });
+var probeFailureReason = (probe) => {
+  const reason = probe.timedOut ? `Harness readiness check timed out after ${PROBE_TIMEOUT_MS} ms.` : probe.error ? `Harness readiness check could not launch: ${probe.error}` : probe.exitCode !== 0 ? `Harness readiness check exited ${probe.exitCode}.` : "Harness exited 0 but did not create the required readiness file with the expected content.";
+  const diagnostics = [
+    probe.stderr?.trim() ? `stderr: ${probe.stderr.trim().slice(-4096)}` : "",
+    probe.stdout?.trim() ? `stdout: ${probe.stdout.trim().slice(-4096)}` : ""
+  ].filter(Boolean);
+  return [reason, ...diagnostics].join(" ");
+};
 var defaultDependencies = {
   now: Date.now,
   resolveExecutable,
@@ -3056,7 +3077,12 @@ var checkHarnessAvailability = async (request, overrides = {}) => {
   const definition = HARNESS_AVAILABILITY_REGISTRY[harness];
   const executableIdentity = active.resolveExecutable(definition.executable);
   if (!executableIdentity)
-    return outcome(harness, false, now, "Harness executable is unavailable.");
+    return outcome(
+      harness,
+      false,
+      now,
+      `Harness executable '${definition.executable}' was not found on PATH.`
+    );
   const key = cacheKey(harness, executableIdentity, invocation);
   const cachePath = path7.join(request.strikethrooRoot, AVAILABILITY_CACHE_RELATIVE_PATH);
   const cached = readCache(cachePath).entries.find(
@@ -3076,7 +3102,14 @@ var checkHarnessAvailability = async (request, overrides = {}) => {
   };
   const probeWorkspace = initializeProbeWorkspace();
   if (!probeWorkspace) {
-    return complete(outcome(harness, false, now, "Harness readiness check failed."));
+    return complete(
+      outcome(
+        harness,
+        false,
+        now,
+        "Could not initialize the disposable Git workspace for the readiness check."
+      )
+    );
   }
   try {
     const evidence = readinessEvidence();
@@ -3095,7 +3128,7 @@ var checkHarnessAvailability = async (request, overrides = {}) => {
         harness,
         available,
         now,
-        available ? "Harness readiness verified." : "Harness readiness check failed."
+        available ? "Harness readiness verified." : probeFailureReason(probe)
       )
     );
   } finally {
@@ -3406,7 +3439,7 @@ var createFindingsGate = () => async (context) => {
   const base = { reviewFile: context.reviewFile, xsdFile: context.xsdFile };
   const delivered = _extractReviewDocument(context.reviewerStdout, context.deliveryToken);
   if (delivered === null) {
-    const detail = "The reviewer printed no complete findings document between this dispatch's delimiters. A round with no findings document cannot be read as a round with no findings.";
+    const detail = "The reviewer printed no complete findings document between this dispatch's delimiters. A review with no findings document cannot be read as a review with no findings.";
     record({ ...base, status: "findings-absent", detail, findings: [] });
     return { kind: "findings-absent", detail };
   }
@@ -3449,6 +3482,34 @@ var createFindingsGate = () => async (context) => {
   record({ ...base, status: "evaluated", counts, findings });
   return { kind: "evaluated", counts, findingsFile };
 };
+var CONTINUE = { action: "continue", exitCode: 0 };
+var HALT_REVIEW = { action: "halt", exitCode: 1 };
+var HALT_INFRASTRUCTURE = { action: "halt", exitCode: 2 };
+var _classify = (outcome2) => {
+  switch (outcome2.kind) {
+    case "infrastructure-failure":
+      return HALT_INFRASTRUCTURE;
+    case "launched-failure":
+      return HALT_REVIEW;
+    case "reviewed":
+      return outcome2.verdict.kind === "review-recorded" ? CONTINUE : HALT_REVIEW;
+    case "skipped":
+    case "fallback":
+      return CONTINUE;
+  }
+};
+var reviewSummary = (outcome2) => {
+  const reviewer = "harness" in outcome2 ? `Harness: ${outcome2.harness}; model: CLI-selected (exact model unknown).` : "No reviewer performed a certified review.";
+  if (outcome2.kind === "reviewed" && outcome2.verdict.kind === "review-recorded" && "counts" in outcome2) {
+    return `${outcome2.counts.total === 0 ? "Pass" : "Address"}; ${reviewer} Findings: ${outcome2.counts.total}.`;
+  }
+  return `Failed; ${reviewer} ${outcome2.detail}`.replace(/\s+/g, " ").trim();
+};
+var decide = (outcome2) => ({
+  ...outcome2,
+  action: _classify(outcome2).action,
+  codeReview: reviewSummary(outcome2)
+});
 var _readBaseCommit = (filePath) => {
   const raw = readFileOrNull(filePath);
   if (raw === null) return null;
@@ -3562,11 +3623,8 @@ var buildReviewerPrompt = (input) => [
   "exact lines:",
   "",
   beginMarker(input.deliveryToken),
-  // The placeholder deliberately does not begin with `<?xml` or `<review`.
-  // `_extractReviewDocument` rejects a region on exactly that test, which is what
-  // stops a reviewer that echoes these instructions back from being read as a
-  // delivered document. A placeholder shaped like a real document would defeat
-  // it — keep this line prose, here and in any mirror of it.
+  // Must not begin with `<?xml` or `<review`: `_extractReviewDocument` rejects
+  // such a region, which is what stops an echoed prompt from reading as a document.
   "... the complete findings document, beginning with its XML declaration ...",
   endMarker(input.deliveryToken),
   "",
@@ -3597,20 +3655,16 @@ ${input.diff}
 <<<END CUMULATIVE DIFF>>>`,
   ""
 ].join("\n");
-var skip = (reason, detail) => ({
-  kind: "skipped",
-  reason,
-  detail
-});
+var skip = (reason, detail) => decide({ kind: "skipped", reason, detail });
 var resolveReviewContext = (startPath, validatorAvailable = () => executableOnPath("xmllint")) => {
   const strikethrooRoot = findStrikethrooRoot(startPath);
   if (!strikethrooRoot) {
     return {
       kind: "ended",
-      result: {
+      result: decide({
         kind: "infrastructure-failure",
         detail: `No Strikethroo workspace was found from ${startPath}.`
-      }
+      })
     };
   }
   const hookFile = path8.join(strikethrooRoot, HOOK_RELATIVE_PATH);
@@ -3671,10 +3725,10 @@ var runReview = async (request, overrides = {}) => {
   const { strikethrooRoot, workspace, hookFile, hookContent, xsdFile } = resolution.context;
   const resolved = resolvePlan(request.plan, startPath);
   if (!resolved) {
-    return {
+    return decide({
       kind: "infrastructure-failure",
       detail: `Plan "${request.plan}" was not found or is invalid.`
-    };
+    });
   }
   const { planDir, planFile, planId } = resolved;
   const baseCommitFile = path8.join(planDir, REVIEW_DIR_NAME, BASE_COMMIT_FILE_NAME);
@@ -3691,31 +3745,34 @@ var runReview = async (request, overrides = {}) => {
     currentHarness: request.currentHarness
   });
   if (discovery.configurationErrors !== void 0) {
-    return {
+    return decide({
       kind: "infrastructure-failure",
       detail: `Harness invocation configuration is invalid: ${discovery.configurationErrors.join(
         " "
       )}`
-    };
+    });
   }
   const harness = discovery.reviewerCandidates[0];
   if (harness === void 0) {
     return skip(
       "no-reviewer-candidate",
-      `No harness other than \`${request.currentHarness}\` is installed and responsive, so the review gate was skipped.`
+      `No reviewer candidate; review gate skipped. ${request.currentHarness} is excluded as the current harness. ` + SUPPORTED_HARNESSES.filter((candidate) => candidate !== request.currentHarness).map((candidate) => {
+        const outcome2 = discovery.outcomes.find((item) => item.harness === candidate);
+        return `${candidate}: ${outcome2?.reason ?? "No availability outcome was reported."}` + (outcome2?.source === "cache" ? " (cached readiness result)" : "");
+      }).join(" ")
     );
   }
   const diff = dependencies2.readDiff(workspace, baseCommit);
   if (diff === null) {
-    return {
+    return decide({
       kind: "infrastructure-failure",
       detail: `git diff ${baseCommit} failed in ${workspace}. The base commit was recorded, so this is a real failure rather than an absent-scope skip.`
-    };
+    });
   }
   if (diff.trim() === "") {
     return skip(
       "empty-diff",
-      `The diff from ${baseCommit} to the working tree in ${workspace} is empty, so there was nothing to review. No reviewer was dispatched, and no round was certified.`
+      `The diff from ${baseCommit} to the working tree in ${workspace} is empty, so there was nothing to review. No reviewer was dispatched, and nothing was certified.`
     );
   }
   const reviewDir = path8.join(planDir, REVIEW_DIR_NAME);
@@ -3723,20 +3780,20 @@ var runReview = async (request, overrides = {}) => {
   try {
     fs7.mkdirSync(reviewDir, { recursive: true });
   } catch (error) {
-    return {
+    return decide({
       kind: "infrastructure-failure",
       detail: `Could not create the review directory ${reviewDir}: ${errorMessage2(error)}`
-    };
+    });
   }
   const staleArtifacts = [reviewFile, path8.join(reviewDir, TRANSCRIPT_FILE_NAME)];
   for (const stale of staleArtifacts) {
     try {
       fs7.rmSync(stale, { force: true });
     } catch (error) {
-      return {
+      return decide({
         kind: "infrastructure-failure",
         detail: `Could not remove the stale review artifact ${stale}: ${errorMessage2(error)}`
-      };
+      });
     }
   }
   const deliveryToken = _makeDeliveryToken();
@@ -3763,25 +3820,25 @@ var runReview = async (request, overrides = {}) => {
     }
   });
   if (dispatched.kind === "infrastructure-failure") {
-    return { kind: "infrastructure-failure", detail: dispatched.detail };
+    return decide({ kind: "infrastructure-failure", detail: dispatched.detail });
   }
   if (dispatched.kind === "fallback") {
-    return {
+    return decide({
       kind: "fallback",
       harness,
       reason: dispatched.reason,
       detail: dispatched.detail
-    };
+    });
   }
   if (dispatched.kind === "launched-failure") {
     writeTranscript(reviewDir, dispatched.stdout);
-    return {
+    return decide({
       kind: "launched-failure",
       harness,
       reviewFile,
       exitCode: dispatched.exitCode,
       detail: `The ${harness} reviewer exited ${dispatched.exitCode}.`
-    };
+    });
   }
   const evaluate = dependencies2.evaluateFindings ?? createFindingsGate();
   const findingsGate = await evaluate({
@@ -3794,53 +3851,47 @@ var runReview = async (request, overrides = {}) => {
   if (findingsGate.kind !== "evaluated") {
     writeTranscript(reviewDir, dispatched.stdout);
   }
-  return {
+  return decide({
     kind: "reviewed",
     harness,
     baseCommit,
     reviewFile,
-    reviewFilePresent: fs7.existsSync(reviewFile),
-    verdict: _verdictFor(findingsGate),
-    findingsGate
-  };
+    ...reviewedFieldsFor(findingsGate)
+  });
 };
-var _verdictFor = (outcome2) => {
+var reviewedFieldsFor = (outcome2) => {
   if (outcome2.kind !== "evaluated") {
-    return { kind: "review-failed", detail: outcome2.detail };
+    return { verdict: { kind: "review-failed" }, detail: outcome2.detail };
   }
   const { counts, findingsFile } = outcome2;
   if (counts.total === 0) {
     return {
-      kind: "review-recorded",
+      verdict: { kind: "review-recorded" },
+      counts,
       detail: `The reviewer raised no findings. See ${findingsFile}.`
     };
   }
   const byLabel = SEVERITIES.filter((label) => counts[label] > 0).map((label) => `${counts[label]} ${label}`).concat(counts.unlabelled > 0 ? [`${counts.unlabelled} unlabelled`] : []).join(", ");
   return {
-    kind: "review-recorded",
+    verdict: { kind: "review-recorded" },
+    counts,
     detail: `The reviewer raised ${counts.total} finding(s) (${byLabel}). They are recorded, not applied: read them and decide which to act on. See ${findingsFile}.`
   };
 };
-var emit = (result, exitCode) => {
-  process.stdout.write(`${JSON.stringify(result)}
-`);
-  process.exit(exitCode);
-};
-var _exitCodeFor = (result) => {
-  if (result.kind === "infrastructure-failure") return 2;
-  if (result.kind === "launched-failure") return 1;
-  if (result.kind === "reviewed") return result.verdict.kind === "review-failed" ? 1 : 0;
-  return 0;
+var _resultLine = (result) => `${JSON.stringify(result)}
+`;
+var emit = (result) => {
+  process.stdout.write(_resultLine(result));
+  process.exit(_classify(result).exitCode);
 };
 var main = async (startPath = process.cwd()) => {
   const [planArg, harnessArg] = process.argv.slice(2);
   if (!planArg || !harnessArg || !SUPPORTED_HARNESSES.includes(harnessArg)) {
     emit(
-      {
+      decide({
         kind: "infrastructure-failure",
         detail: `Usage: code-review.cjs <plan-id-or-path> <current-harness>. <current-harness> is one of: ${SUPPORTED_HARNESSES.join(", ")}.`
-      },
-      2
+      })
     );
   }
   const result = await runReview({
@@ -3848,27 +3899,26 @@ var main = async (startPath = process.cwd()) => {
     currentHarness: harnessArg,
     startPath
   });
-  emit(result, _exitCodeFor(result));
+  emit(result);
 };
 if (require.main === module) {
   main().catch((error) => {
     emit(
-      {
+      decide({
         kind: "infrastructure-failure",
         detail: `Code review gate infrastructure failed: ${errorMessage2(error)}`
-      },
-      2
+      })
     );
   });
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  _exitCodeFor,
+  _classify,
   _extractReviewDocument,
   _makeDeliveryToken,
   _readBaseCommit,
   _readCumulativeDiff,
-  _verdictFor,
+  _resultLine,
   buildReviewerPrompt,
   createFindingsGate,
   main,

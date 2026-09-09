@@ -280,8 +280,11 @@ npm run test:unit              # Run all unit tests in watch mode
 npm run test:unit          # Run all unit tests once
 npm run test:unit:main         # Run only main process tests
 npm run test:unit:renderer     # Run only renderer tests
-npm run test:coverage          # Run tests with coverage report
+npm run test:coverage          # Run main, renderer, and core tests with coverage
 ```
+
+Coverage reports are retained separately in `coverage/main/`, `coverage/renderer/`, and
+`coverage/core/`.
 
 **Dev Container**: Unit tests work in both the dev container and host machine (unlike e2e tests).
 
