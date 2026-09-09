@@ -1,11 +1,12 @@
 // src/main/git.ts
 // Git command execution
 
-import { execSync, exec, execFile } from 'child_process';
+import { execSync, exec, execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import { generateSyntheticDiffs } from './synthetic-diff';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export function runGitDiff(args: string[]): string {
   try {
@@ -28,7 +29,7 @@ export function runGitDiff(args: string[]): string {
     }
 
     // Run git diff with the provided arguments
-    const result = execSync(`git diff ${args.join(' ')}`, {
+    const result = execFileSync('git', ['diff', ...args], {
       encoding: 'utf-8',
       maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large diffs
     });
@@ -108,7 +109,7 @@ export async function getRepoRootAsync(cwd?: string): Promise<string> {
  */
 export async function runGitDiffAsync(args: string[], cwd?: string): Promise<string> {
   try {
-    const { stdout } = await execAsync(`git diff ${args.join(' ')}`, {
+    const { stdout } = await execFileAsync('git', ['diff', ...args], {
       maxBuffer: 50 * 1024 * 1024, // 50MB buffer
       timeout: 30000, // 30 second timeout
       cwd,
