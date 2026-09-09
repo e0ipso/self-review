@@ -167,14 +167,26 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
   }
 
   if ('categories' in raw && Array.isArray(raw.categories)) {
-    config.categories = raw.categories.filter(
+    const usableCategories = raw.categories.filter(
       (cat: unknown): cat is { name: string; description: string; color: string } =>
         cat !== null &&
         typeof cat === 'object' &&
         typeof (cat as Record<string, unknown>).name === 'string' &&
+        (cat as Record<string, unknown>).name !== '' &&
         typeof (cat as Record<string, unknown>).description === 'string' &&
         typeof (cat as Record<string, unknown>).color === 'string'
     );
+
+    // A `categories` list that leaves no usable entry (empty list, every entry
+    // shaped wrong, or every entry named '') would silently disable commenting,
+    // so it's treated the same as any other invalid value: warn and keep the default.
+    if (usableCategories.length > 0) {
+      config.categories = usableCategories;
+    } else {
+      console.error(
+        'Warning: Category configuration has no usable categories, using default categories'
+      );
+    }
   }
 
   if (

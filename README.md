@@ -271,6 +271,9 @@ self-review fetch-comments https://github.com/owner/repo/pull/42
 self-review fetch-comments https://gitlab.com/group/project/-/merge_requests/7 --all-threads
 ```
 
+It needs no display. On Linux the command picks a headless graphics platform for itself, so it
+runs over SSH, in CI and in a container with `$DISPLAY` unset and no `xvfb-run` wrapper.
+
 ## Assistant Skill
 
 self-review ships with an AI assistant skill that closes the feedback loop: it reads your review XML,

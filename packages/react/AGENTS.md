@@ -58,6 +58,14 @@ import '@self-review/react/styles.css';
 
 No Tailwind dependency is needed in the consuming application.
 
+### Watch mode
+
+`npm run dev` runs `tsup --watch src --onSuccess "npm run build:css"`. `clean` is on, so tsup wipes
+`dist` on every build; without the `onSuccess` hook the exported stylesheet disappears the moment
+watch mode starts. Watch `src` explicitly. A bare `--watch` makes tsup skip changes to files outside
+the entry's import graph, and `src/index.ts` never imports `src/styles.css`, so editing the
+stylesheet source would rebuild nothing.
+
 ### Build entrypoints
 
 - `src/styles.css`, **build input only**. Contains Tailwind `@custom-variant`/`@theme inline`

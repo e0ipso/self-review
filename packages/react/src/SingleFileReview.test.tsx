@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import type { DiffFile } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
 
@@ -27,9 +27,21 @@ vi.mock('./context/ReviewAdapterContext', async (importOriginal) => {
   };
 });
 
-vi.mock('./components/DiffViewer/FileSection', () => ({
-  default: () => null,
-}));
+// Renders the live categories from context instead of null so the
+// SR-0040 fallback test below can observe what ConfigProvider produced.
+vi.mock('./components/DiffViewer/FileSection', async () => {
+  const { useConfig } = await import('./context/ConfigContext');
+  return {
+    default: () => {
+      const { config } = useConfig();
+      return (
+        <div data-testid='category-names'>
+          {config.categories.map(c => c.name).join(',')}
+        </div>
+      );
+    },
+  };
+});
 
 import { SingleFileReview } from './SingleFileReview';
 
@@ -85,5 +97,22 @@ describe('SingleFileReview adapter merge', () => {
     expect(capturedAdapter!.loadResumedReview).toBeUndefined();
     expect(capturedAdapter!.submitReview).toBeUndefined();
     expect(capturedAdapter!.changeOutputPath).toBeUndefined();
+  });
+
+  // SR-0040: SingleFileReview forwards its `config` prop straight into
+  // ConfigProvider (see SingleFileReview.tsx `initialConfig={{ ...config, ... }}`).
+  // An unusable categories list must recover through that same provider rather
+  // than reach the rendered tree empty.
+  it('recovers with default categories when given an unusable config.categories prop', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<SingleFileReview file={file} config={{ categories: [] }} />);
+
+    const names = screen.getByTestId('category-names').textContent;
+    expect(names).not.toBe('');
+    expect(names?.split(',')).toContain('bug');
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('no usable categories'));
+
+    errorSpy.mockRestore();
   });
 });

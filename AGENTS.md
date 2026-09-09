@@ -20,7 +20,7 @@ container before running the e2e tests.
 - **mermaid** (Mermaid diagram rendering)
 - **@tailwindcss/typography** (prose styling for rendered text content)
 - **Node.js** (main process: CLI, git, IPC, file I/O)
-- **Electron Forge** (build/packaging)
+- **Electron Forge** (build/packaging, bundling through its webpack plugin)
 
 ## Project Structure
 
@@ -44,48 +44,17 @@ self-review/
 │   │   └── config.ts            # YAML config loading & merging
 │   ├── preload/
 │   │   └── preload.ts           # contextBridge exposing IPC to renderer
-│   └── renderer/
-│       ├── index.tsx             # React entry point
-│       ├── App.tsx               # Root component, layout shell
-│       ├── context/
-│       │   ├── ReviewContext.tsx  # Review state (comments, suggestions)
-│       │   └── ConfigContext.tsx  # Merged config (theme, categories, etc.)
-│       ├── hooks/
-│       │   ├── useReviewState.ts # Comment CRUD, state management
-│       │   ├── useDiffNavigation.ts # File tree ↔ diff viewer scroll sync
-│       │   └── useEmojiAutocomplete.ts # Emoji shortcode autocomplete in comment editor
-│       └── components/
-│           ├── Layout.tsx        # Two-panel layout (file tree + diff viewer)
-│           ├── FileTree.tsx      # Left panel: file list, search, viewed checkboxes, output path footer
-│           ├── Toolbar.tsx       # Top bar: view mode, expand/collapse, theme
-│           ├── FileTreeEntry.tsx # Per-file row: badge, path, stats, viewed toggle
-│           ├── DiffViewer/
-│           │   ├── DiffViewer.tsx     # Orchestrator: renders file sections
-│           │   ├── EmptyDiffMessage.tsx # Empty-state messaging by diff source type
-│           │   ├── FileSection.tsx    # Orchestrator: hooks + layout composition
-│           │   ├── FileSectionHeader.tsx # Sticky header: path, badges, toggles
-│           │   ├── FileSectionBody.tsx   # File comments + DiffContentArea
-│           │   ├── DiffContentArea.tsx   # Loading/error/binary/view dispatcher
-│           │   ├── useDragSelection.ts   # Hook: drag-to-select comment ranges
-│           │   ├── useExpandContext.ts   # Hook: expand context lines via git
-│           │   ├── InlineCommentSlot.tsx # Shared inline comment row (Split+Unified)
-│           │   ├── SplitView.tsx      # Side-by-side diff rendering
-│           │   ├── UnifiedView.tsx    # Single-column unified diff rendering
-│           │   ├── HunkHeader.tsx     # @@ separator rendering
-│           │   ├── ExpandContextBar.tsx # Expand context buttons between hunks
-│           │   ├── RenderedMarkdownView.tsx # Rendered Markdown/HTML with source-line-mapped gutter
-│           │   ├── RenderedImageView.tsx # Rendered preview for raster images (JPG, PNG, GIF, WebP, ICO, BMP)
-│           │   ├── RenderedSvgView.tsx  # Rendered SVG preview via secure img+data-URI
-│           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
-│           └── Comments/
-│               ├── CommentInput.tsx    # Text area + category selector + add/cancel
-│               ├── AttachmentDropZone.tsx # Drag-and-drop + paste attachment wrapper
-│               ├── SuggestionPanel.tsx    # Original/proposed code textareas
-│               ├── AttachmentImage.tsx    # Blob URL lifecycle + image display
-│               ├── EmojiAutocomplete.tsx # Inline emoji shortcode dropdown
-│               ├── CommentDisplay.tsx  # Rendered comment with edit/delete
-│               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
-│               └── CategorySelector.tsx # Dropdown/chip selector for categories
+│   ├── renderer.ts               # Renderer entry point, mounts src/renderer/App
+│   └── renderer/                 # Electron-only shell around @self-review/react
+│       ├── App.tsx               # Wires the package providers to the Electron adapter
+│       ├── components/
+│       │   ├── WelcomeScreen.tsx # Directory picker + PR/MR URL field when launched bare
+│       │   ├── CloseConfirmDialog.tsx # Save & Quit / Discard / Cancel on window close
+│       │   ├── FindBar.tsx       # Chromium find-in-page bar
+│       │   ├── UpdateBanner.tsx  # Update notice from the startup version check
+│       │   └── AboutDialog.tsx   # Version and about dialog
+│       └── utils/
+│           └── image-utils.ts    # Attachment image helpers
 ├── packages/
 │   ├── core/                    # @self-review/core, headless diff parsing & review logic
 │   │                            #   incl. guide-schema.ts (embedded guide XSD) and the guide
@@ -98,8 +67,56 @@ self-review/
 │   │                            #   review-handlers.ts, startup-mode.ts, guide-loader.ts,
 │   │                            #   git-diff-loader.ts, staged-untracked.ts, remote-mode.ts,
 │   │                            #   fetch-comments.ts, git-diff-args.ts
-│   ├── react/                   # @self-review/react, React components for review UI
-│   │                            #   incl. guided-mode presentation (grouped tree, overview)
+│   ├── react/                   # @self-review/react, the whole review UI, including
+│   │                            #   guided-mode presentation (grouped tree, overview)
+│   │   └── src/
+│   │       ├── ReviewPanel.tsx   # Main entry component: providers + Layout + keyboard nav
+│   │       ├── SingleFileReview.tsx # Same stack scoped to one file
+│   │       ├── adapter.ts        # ReviewAdapter interface (host platform operations)
+│   │       ├── context/
+│   │       │   ├── ReviewContext.tsx  # Review state (comments, suggestions)
+│   │       │   ├── ConfigContext.tsx  # Merged config (theme, categories, etc.)
+│   │       │   ├── GuideContext.tsx   # Loaded guide + Guided/Flat mode
+│   │       │   ├── DiffNavigationContext.tsx # Active file + scroll-to-file
+│   │       │   └── ReviewAdapterContext.tsx  # Injected ReviewAdapter
+│   │       ├── hooks/
+│   │       │   ├── useReviewState.ts # Comment CRUD, state management
+│   │       │   ├── useDiffNavigation.ts # File tree ↔ diff viewer scroll sync
+│   │       │   ├── useEmojiAutocomplete.ts # Emoji shortcode autocomplete in comment editor
+│   │       │   ├── useKeyboardNavigation.ts # Vimium-style shortcuts and hint overlay
+│   │       │   └── useReviewBridge.ts # Hands review state back to the host app
+│   │       └── components/
+│   │           ├── Layout.tsx        # Two-panel layout (file tree + diff viewer)
+│   │           ├── FileTree.tsx      # Left panel: file list, search, viewed checkboxes, output path footer
+│   │           ├── Toolbar.tsx       # Top bar: view mode, expand/collapse, theme
+│   │           ├── FileTreeEntry.tsx # Per-file row: badge, path, stats, viewed toggle
+│   │           ├── DiffViewer/
+│   │           │   ├── DiffViewer.tsx     # Orchestrator: renders file sections
+│   │           │   ├── EmptyDiffMessage.tsx # Empty-state messaging by diff source type
+│   │           │   ├── FileSection.tsx    # Orchestrator: hooks + layout composition
+│   │           │   ├── FileSectionHeader.tsx # Sticky header: path, badges, toggles
+│   │           │   ├── FileSectionBody.tsx   # File comments + DiffContentArea
+│   │           │   ├── DiffContentArea.tsx   # Loading/error/binary/view dispatcher
+│   │           │   ├── useDragSelection.ts   # Hook: drag-to-select comment ranges
+│   │           │   ├── useExpandContext.ts   # Hook: expand context lines via git
+│   │           │   ├── InlineCommentSlot.tsx # Shared inline comment row (Split+Unified)
+│   │           │   ├── SplitView.tsx      # Side-by-side diff rendering
+│   │           │   ├── UnifiedView.tsx    # Single-column unified diff rendering
+│   │           │   ├── HunkHeader.tsx     # @@ separator rendering
+│   │           │   ├── ExpandContextBar.tsx # Expand context buttons between hunks
+│   │           │   ├── RenderedMarkdownView.tsx # Rendered Markdown/HTML with source-line-mapped gutter
+│   │           │   ├── RenderedImageView.tsx # Rendered preview for raster images (JPG, PNG, GIF, WebP, ICO, BMP)
+│   │           │   ├── RenderedSvgView.tsx  # Rendered SVG preview via secure img+data-URI
+│   │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
+│   │           └── Comments/
+│   │               ├── CommentInput.tsx    # Text area + category selector + add/cancel
+│   │               ├── AttachmentDropZone.tsx # Drag-and-drop + paste attachment wrapper
+│   │               ├── SuggestionPanel.tsx    # Original/proposed code textareas
+│   │               ├── AttachmentImage.tsx    # Blob URL lifecycle + image display
+│   │               ├── EmojiAutocomplete.tsx # Inline emoji shortcode dropdown
+│   │               ├── CommentDisplay.tsx  # Rendered comment with edit/delete
+│   │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
+│   │               └── CategorySelector.tsx # Dropdown/chip selector for categories
 │   └── types/                   # @self-review/types, shared TypeScript interfaces (zero runtime deps)
 │                                #   incl. ReviewGuide/GuideGroup/ResolvedGuideGroup guide types
 ```
@@ -267,8 +284,9 @@ Unit tests use Vitest with separate configurations for main and renderer process
 - **Main process tests** (`src/main/**/*.test.ts`): Test Electron-bound Node.js modules (CLI
   argument parsing, IPC handler wiring, version-update comparison, relaunch re-exec logic). Run in
   Node.js environment.
-- **Renderer tests** (`src/renderer/**/*.test.{ts,tsx}`): Test React hooks and utilities. Run in
-  jsdom environment.
+- **Renderer tests** (`packages/react/src/**/*.test.{ts,tsx}` and
+  `src/renderer/**/*.test.{ts,tsx}`): Test the shared React components, hooks and utilities plus
+  the Electron renderer shell. Run in jsdom environment.
 
 **Test file location**: Colocate test files with source files (e.g., `cli.test.ts` next to
 `cli.ts`).
@@ -334,7 +352,7 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   credential helpers, `gh auth setup-git`), and the `gh`/`glab` CLIs for base-branch lookup and
   discussion-thread fetch only. Every remote-mode request is user-triggered; nothing is ever
   sent to the forge. No telemetry, no analytics, no CDN fetches. All assets are bundled.
-- **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. In remote mode, when no matching local clone exists, it additionally creates a temporary blobless clone in a uniquely named directory under the OS temp root, removed on exit (a leftover from a crash sits in the OS temp area, which the OS reclaims); when reusing an existing clone, it only fetches into namespaced refs (`refs/self-review/*`) — the working tree is never touched. No other files are written.
+- **File writes.** The app writes the review XML output file at the configured `output-file` path (default `./review.xml`). The output path can be changed at runtime via the save dialog in the file tree footer. When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced images. In remote mode, when no matching local clone exists, it additionally creates a temporary blobless clone in a uniquely named directory under the OS temp root, removed on exit (a leftover from a crash sits in the OS temp area, which the OS reclaims); when reusing an existing clone, it only fetches into namespaced refs (`refs/self-review/*`) — the working tree is never touched. No other files are written. The app writes no source file, and no reviewed file. Applying a suggestion to a local working file is accepted product scope with boundaries recorded in PRD Section 5.4.8, but nothing implements it. Until those follow-up tickets land, code that writes anywhere except the output path and its `.self-review-assets/` directory is out of policy.
 - **XSD sync.** Each XSD schema exists in two places and both copies must be byte-identical:
   `.agents/skills/self-review-apply/assets/self-review-v3.xsd` pairs with the `XSD_SCHEMA` string
   embedded in `packages/core/src/xml-serializer.ts`, and
@@ -487,7 +505,11 @@ copies that must track them.
 
 ## What NOT To Do
 
-- Do not install or use `webpack`, Electron Forge handles bundling.
+- Do not run webpack outside Electron Forge, and do not swap in another bundler. Forge is the
+  build entry point: `forge.config.ts` imports `WebpackPlugin` from
+  `@electron-forge/plugin-webpack` and registers it in its `plugins` array. Bundling changes
+  belong in the three configs that plugin points at, `webpack.main.config.ts`,
+  `webpack.renderer.config.ts` and `webpack.preload.config.ts`.
 - Do not use `localStorage` or any browser storage APIs.
 - Do not use `require()` in the renderer, use ES module imports.
 - Do not use `nodeIntegration: true`, use the preload script.

@@ -7,6 +7,7 @@ import type {
 } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
+import { isUsableCategory } from '../../utils/category-utils';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { Code2 } from 'lucide-react';
@@ -33,7 +34,7 @@ export default function CommentInput({
 }: CommentInputProps) {
   const { addComment, editComment } = useReview();
   const { config } = useConfig();
-  const defaultCategory = config.categories?.[0]?.name ?? '';
+  const defaultCategory = config.categories?.find(isUsableCategory)?.name ?? '';
   const [body, setBody] = useState('');
   const [category, setCategory] = useState(defaultCategory);
   const [showSuggestion, setShowSuggestion] = useState(false);

@@ -1,12 +1,21 @@
 // src/main/git.ts
 // Git command execution
 
-import { execSync, exec, execFile, execFileSync } from 'child_process';
+import { execSync, execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import { generateSyntheticDiffs } from './synthetic-diff';
 
-const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
+
+/**
+ * Strip only the single trailing newline git appends to command output.
+ * A plain `.trim()` also eats leading/trailing whitespace that is part of
+ * the actual path (e.g. a repository root with a trailing space), reporting
+ * a path that does not exist on disk.
+ */
+export function stripTrailingNewline(text: string): string {
+  return text.replace(/\r?\n$/, '');
+}
 
 export function runGitDiff(args: string[]): string {
   try {
@@ -50,7 +59,7 @@ export function getRepoRoot(): string {
     const result = execSync('git rev-parse --show-toplevel', {
       encoding: 'utf-8',
     });
-    return result.trim();
+    return stripTrailingNewline(result);
   } catch (error) {
     if (error instanceof Error) {
       console.error(`Error getting repository root: ${error.message}`);
@@ -88,11 +97,11 @@ export function validateGitAvailable(): void {
  */
 export async function getRepoRootAsync(cwd?: string): Promise<string> {
   try {
-    const { stdout } = await execAsync('git rev-parse --show-toplevel', {
+    const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], {
       timeout: 10000, // 10 second timeout
       cwd,
     });
-    return stdout.trim();
+    return stripTrailingNewline(stdout);
   } catch (error) {
     if (error instanceof Error) {
       console.error(`Error getting repository root: ${error.message}`);

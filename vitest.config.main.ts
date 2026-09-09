@@ -15,24 +15,24 @@ export default {
     mockReset: true,
     restoreMocks: true,
     timeout: 5000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      include: ['src/main/**/*.ts'],
+      exclude: [
+        'node_modules/',
+        '.webpack/',
+        'out/',
+        '.features-gen/',
+        'tests/',
+        '**/*.test.ts',
+        '**/*.d.ts',
+      ],
+    },
   },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
-  },
-  coverage: {
-    provider: 'v8',
-    reporter: ['text', 'html', 'json-summary'],
-    include: ['src/main/**/*.ts'],
-    exclude: [
-      'node_modules/',
-      '.webpack/',
-      'out/',
-      '.features-gen/',
-      'tests/',
-      '**/*.test.ts',
-      '**/*.d.ts',
-    ],
   },
 };

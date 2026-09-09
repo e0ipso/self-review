@@ -5,8 +5,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { checkWritability } from './fs-utils';
-import { parseCliArgs, checkEarlyExit } from './cli';
-import { runFetchComments } from '../../packages/core/src/fetch-comments';
+import { parseCliArgs } from './cli';
 import {
   formatGitDiffArgs,
   normalizeGitDiffArgs,
@@ -41,7 +40,6 @@ import {
 } from '../../packages/core/src/remote-mode';
 import { loadGuide } from '../../packages/core/src/guide-loader';
 import { checkForUpdate } from './version-checker';
-import { reexecFromRealPathIfNeeded } from './relaunch-guard';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { setupMenu } from './menu';
 import { installRendererContentPolicy } from './renderer-content-policy';
@@ -598,52 +596,22 @@ app.on('activate', () => {
   }
 });
 
-// Check for --help/--version ONLY (these must exit before Electron initializes)
-const earlyExit = checkEarlyExit();
-if (earlyExit.shouldExit) {
-  process.exit(earlyExit.exitCode);
-}
+// This module is loaded only for a desktop launch. --help/--version, the
+// macOS symlink-launch guard and the headless fetch-comments subcommand are
+// all settled in src/main/cli-dispatch.ts before src/index.ts requires this
+// file, so nothing here has to check for them.
+//
+// Call app.whenReady() IMMEDIATELY - do NOT run any other code before this
+// This allows Electron to initialize its event loop without blockage
+console.error('[main] Calling app.whenReady()...');
+app
+  .whenReady()
+  .then(() => {
+    console.error('[main] App is ready! Starting initialization...');
 
-// macOS: if launched through a symlink to the in-bundle binary (e.g. the
-// Homebrew cask's /opt/homebrew/bin/self-review), re-exec from the real bundle
-// path before Electron spawns any helper, otherwise child processes crash with
-// "Unable to find helper app". Runs before subcommand routing so the re-exec
-// preserves argv (including any subcommand). No-op on direct launches. See
-// relaunch-guard.ts.
-reexecFromRealPathIfNeeded(app.isPackaged);
-
-// Headless subcommand routing: fetch-comments runs fully outside the UI
-// path — no app.whenReady(), no window, nothing UI-bound — and exits when
-// the review file is written. parseCliArgs exits itself on a missing URL.
-const routedArgs = parseCliArgs();
-if (routedArgs.subcommand === 'fetch-comments') {
-  runFetchComments(routedArgs.remoteUrl as string, {
-    includeResolved: routedArgs.allThreads,
+    return initializeApp();
   })
-    .then(() => {
-      process.exit(0);
-    })
-    .catch(error => {
-      console.error(
-        `[fetch-comments] ${error instanceof Error ? error.message : String(error)}`
-      );
-      process.exit(1);
-    });
-} else {
-  // Call app.whenReady() IMMEDIATELY - do NOT run any other code before this
-  // This allows Electron to initialize its event loop without blockage
-  console.error('[main] Calling app.whenReady()...');
-  app
-    .whenReady()
-    .then(() => {
-      console.error(
-        '[main] App is ready! Starting initialization...'
-      );
-
-      return initializeApp();
-    })
-    .catch(error => {
-      console.error('[main] Fatal error during app initialization:', error);
-      process.exit(1);
-    });
-}
+  .catch(error => {
+    console.error('[main] Fatal error during app initialization:', error);
+    process.exit(1);
+  });

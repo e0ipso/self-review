@@ -4,6 +4,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { getPage, triggerCommentIcon } from './app';
+import { fixtureLineContent } from './fixture-lines';
 
 const { When, Then } = createBdd();
 
@@ -18,20 +19,22 @@ When(
 );
 
 Then(
-  'a suggestion editor should appear with original code pre-filled from new line {int}',
-  async ({}, _line: number) => {
+  'a suggestion editor should appear with original code pre-filled from new line {int} of {string}',
+  async ({}, line: number, filePath: string) => {
     const page = getPage();
     await expect(
       page.locator('[data-testid="suggestion-original"]')
     ).toBeVisible();
-    const original = await page
-      .locator('[data-testid="suggestion-original"] textarea')
-      .inputValue();
-    expect(original.length).toBeGreaterThan(0);
-    const proposed = await page
-      .locator('[data-testid="suggestion-proposed"] textarea')
-      .inputValue();
-    expect(proposed).toBe(original);
+    const expected = fixtureLineContent(filePath, line, 'new');
+    // A blank source line would let the comparison below pass against an
+    // empty editor, so guard the premise.
+    expect(expected.length).toBeGreaterThan(0);
+    await expect(
+      page.locator('[data-testid="suggestion-original"] textarea')
+    ).toHaveValue(expected);
+    await expect(
+      page.locator('[data-testid="suggestion-proposed"] textarea')
+    ).toHaveValue(expected);
   }
 );
 

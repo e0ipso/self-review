@@ -132,6 +132,14 @@ export function useKeyboardNavigation() {
       selector =
         '[data-line-type="addition"][data-line-number][data-line-side], [data-line-type="deletion"][data-line-number][data-line-side], [data-testid="cancel-comment-btn"], [data-testid="add-comment-btn"], [data-testid^="category-option-"], [data-hint-action="toggle-viewed"], [data-hint-action="add-file-comment"], [data-hint-action="delete-comment"], [data-hint-action="finish-review"]';
     } else {
+      // A collapsed file tree panel renders every entry at zero width, which
+      // the visibility filter below then discards, so hint-file mode would
+      // silently find nothing. Layout owns the collapse state; ask it to
+      // restore the panel before collecting candidates rather than reaching
+      // into its panel handle from here. The panel's imperative expand()
+      // applies its width synchronously, so the query right after this
+      // dispatch already sees the restored layout.
+      document.dispatchEvent(new CustomEvent('expand-file-tree'));
       selector =
         '.file-tree [data-file-path], [data-testid="file-tree"] [data-file-path], button[data-file-path]';
     }

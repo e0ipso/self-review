@@ -14,6 +14,7 @@ import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { stripTrailingNewline } from './git';
 import type {
   ForgeCommandResult,
   ForgeCommandRunner,
@@ -189,7 +190,10 @@ export async function detectExistingClone(
   if (toplevel.exitCode !== 0) {
     return null;
   }
-  const repoPath = toplevel.stdout.trim();
+  // A blanket .trim() would eat whitespace that is part of the actual path
+  // (SR-0047, same defect class as SR-0036's git.ts fix), reporting a root
+  // short of what's on disk and breaking the `remote -v` call right after.
+  const repoPath = stripTrailingNewline(toplevel.stdout);
   const remotes = await runner('git', ['-C', repoPath, 'remote', '-v']);
   if (remotes.exitCode !== 0) {
     return null;

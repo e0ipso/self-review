@@ -8,6 +8,7 @@ import React, {
   ReactNode,
 } from 'react';
 import type { AppConfig, OutputPathInfo } from '@self-review/types';
+import { hasUsableCategory } from '../utils/category-utils';
 
 export const defaultConfig: AppConfig = {
   theme: 'system',
@@ -96,6 +97,23 @@ export interface ConfigProviderProps {
   prismDarkCss?: string;
 }
 
+// A `categories` list that leaves no usable entry (empty list, every entry shaped
+// wrong, or every entry named '') would silently disable commenting the same way
+// an unusable YAML `categories` config does for the Node-only loader (SR-0014).
+// An embedder-supplied `config` prop gets no equivalent check before this point
+// (ReviewPanel and SingleFileReview forward it here unmodified), so this merge
+// applies the same fallback: keep defaults and warn.
+function mergeInitialConfig(initialConfig: Partial<AppConfig> | undefined): AppConfig {
+  const merged: AppConfig = { ...defaultConfig, ...initialConfig };
+  if (!hasUsableCategory(merged.categories)) {
+    console.error(
+      'Warning: Category configuration has no usable categories, using default categories'
+    );
+    return { ...merged, categories: defaultConfig.categories };
+  }
+  return merged;
+}
+
 export function ConfigProvider({
   children,
   initialConfig,
@@ -103,10 +121,9 @@ export function ConfigProvider({
   prismLightCss,
   prismDarkCss,
 }: ConfigProviderProps) {
-  const [config, setConfig] = useState<AppConfig>({
-    ...defaultConfig,
-    ...initialConfig,
-  });
+  // Lazy initializer: runs once on mount, not on every render, so the
+  // fallback's console.error doesn't re-fire on unrelated re-renders.
+  const [config, setConfig] = useState<AppConfig>(() => mergeInitialConfig(initialConfig));
   const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo>(
     initialOutputPath || defaultOutputPathInfo
   );

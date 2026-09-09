@@ -4,8 +4,9 @@
  */
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { Page } from '@playwright/test';
+import { Locator, Page } from '@playwright/test';
 import { getPage, triggerCommentIcon } from './app';
+import { readCommentPlacement } from './comment-placement';
 
 const { Given, When, Then } = createBdd();
 
@@ -217,21 +218,35 @@ Then(
   }
 );
 
+/**
+ * Assert the card hangs off the requested anchor. The placement comes back
+ * from the DOM row the card renders under, so a card sitting elsewhere fails
+ * even though the file still holds a comment.
+ */
+async function expectAnchoredAt(
+  comment: Locator,
+  filePath: string,
+  line: number,
+  side: 'old' | 'new'
+): Promise<void> {
+  await expect(comment).toBeVisible();
+  const placement = await comment.evaluate(readCommentPlacement);
+  expect(placement.section).toBe(`file-section-${filePath}`);
+  expect(placement.orphaned).toBe(false);
+  expect(placement.anchors).toContainEqual({ line, side });
+}
+
 Then(
   'a comment should be displayed below new line {int} of {string}',
-  async ({}, _line: number, _filePath: string) => {
-    const page = getPage();
-    const comments = page.locator(COMMENT_SELECTOR);
-    expect(await comments.count()).toBeGreaterThan(0);
+  async ({}, line: number, filePath: string) => {
+    await expectAnchoredAt(lastComment(getPage()), filePath, line, 'new');
   }
 );
 
 Then(
   'a comment should be displayed below old line {int} of {string}',
-  async ({}, _line: number, _filePath: string) => {
-    const page = getPage();
-    const comments = page.locator(COMMENT_SELECTOR);
-    expect(await comments.count()).toBeGreaterThan(0);
+  async ({}, line: number, filePath: string) => {
+    await expectAnchoredAt(lastComment(getPage()), filePath, line, 'old');
   }
 );
 
@@ -240,8 +255,15 @@ Then(
   async ({}, filePath: string) => {
     const page = getPage();
     const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-    const comments = section.locator('[data-testid^="comment-"]:not([data-testid^="comment-icon"]):not([data-testid^="comment-collapse"])');
-    expect(await comments.count()).toBeGreaterThan(0);
+    const comment = section.locator(COMMENT_SELECTOR).first();
+    await expect(comment).toBeVisible();
+    const placement = await comment.evaluate(readCommentPlacement);
+    expect(placement.section).toBe(`file-section-${filePath}`);
+    expect(placement.orphaned).toBe(false);
+    // A line-anchored card renders inside the diff, so it can never precede
+    // every diff row the way a file-level one does.
+    expect(placement.aboveDiffRows).toBe(true);
+    expect(placement.anchors).toEqual([]);
   }
 );
 

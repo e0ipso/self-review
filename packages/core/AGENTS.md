@@ -44,7 +44,10 @@ src/
 
 ```bash
 npm run test:unit    # from package root, or
-npm run test:unit:main   # from workspace root
+npm run test:unit --workspace @self-review/core   # from workspace root
 ```
 
-Tests are colocated (`*.test.ts` next to source files).
+Tests are colocated (`*.test.ts` next to source files). `npm run test:unit:main` from the
+workspace root does not run these tests despite the similar name — that script targets
+`vitest.config.main.ts`, which is scoped to the desktop main-process suite
+(`src/main/**/*.test.ts`), a separate suite from this package.

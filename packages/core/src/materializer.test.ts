@@ -346,6 +346,33 @@ describe('materialize', () => {
   });
 });
 
+// SR-0047: a clone root with leading/trailing whitespace is real (same
+// defect class as SR-0036's git.ts fix). A blanket .trim() on the
+// `--show-toplevel` output reports a path short of what's on disk, so the
+// following `git -C repoPath remote -v` runs against a directory that
+// doesn't exist and detectExistingClone falls back to null.
+describe('detectExistingClone', () => {
+  it('preserves whitespace in the detected repo root', async () => {
+    const spacedRoot = '/home/user/my project ';
+    const { runner, calls } = createRunner({
+      'rev-parse': (args) => {
+        if (args[1] === '--show-toplevel') return ok(`${spacedRoot}\n`);
+        return fail(`fatal: unknown rev ${args[1]}`);
+      },
+      remote: ok('origin\tgit@github.com:e0ipso/self-review.git (fetch)\n'),
+    });
+
+    const existing = await detectExistingClone(githubUrl, spacedRoot, runner);
+
+    expect(existing).not.toBeNull();
+    expect(existing!.repoPath).toBe(spacedRoot);
+    // The follow-up `remote -v` call must target the exact reported root,
+    // not a trimmed-short path that doesn't exist on disk.
+    const remoteCall = findCall(calls, 'remote');
+    expect(remoteCall).toContain(spacedRoot);
+  });
+});
+
 describe('resolveRemoteDefaultBranch', () => {
   it('reuses a detected clone so SSH transport is preserved', async () => {
     const handlers = existingCloneHandlers(

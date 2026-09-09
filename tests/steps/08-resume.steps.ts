@@ -12,6 +12,9 @@ import {
   getTestRepoDir,
   readOutputFile,
 } from './app';
+// Pure DOM helper shared with the webapp step tree. The Electron app renders
+// the same components, so the placement markup is identical.
+import { readCommentPlacement } from '../webapp-steps/comment-placement';
 
 const { Given, When, Then } = createBdd();
 
@@ -130,19 +133,30 @@ When(
 
 Then(
   'the comment {string} should be displayed at new line {int} of {string}',
-  async ({}, body: string, _line: number, filePath: string) => {
-    const page = getPage();
-    const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-    await expect(section).toContainText(body);
+  async ({}, body: string, line: number, filePath: string) => {
+    const comment = commentCard(body);
+    await comment.waitFor({ state: 'visible', timeout: 15000 });
+    const placement = await comment.evaluate(readCommentPlacement);
+    expect(placement.section).toBe(`file-section-${filePath}`);
+    // A resumed anchor that fell out of the diff renders in the amber
+    // "outside the current diff" box, which is not a line placement.
+    expect(placement.orphaned).toBe(false);
+    expect(placement.anchors).toContainEqual({ line, side: 'new' });
   }
 );
 
 Then(
   'the file-level comment {string} should be displayed on {string}',
   async ({}, body: string, filePath: string) => {
-    const page = getPage();
-    const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-    await expect(section).toContainText(body);
+    const comment = commentCard(body);
+    await comment.waitFor({ state: 'visible', timeout: 15000 });
+    const placement = await comment.evaluate(readCommentPlacement);
+    expect(placement.section).toBe(`file-section-${filePath}`);
+    expect(placement.orphaned).toBe(false);
+    // A line-anchored card renders inside the diff, so only a file-level one
+    // precedes every diff row of its section.
+    expect(placement.aboveDiffRows).toBe(true);
+    expect(placement.anchors).toEqual([]);
   }
 );
 

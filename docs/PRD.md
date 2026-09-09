@@ -366,6 +366,7 @@ GitHub-style suggestions allow the reviewer to propose literal code replacements
 - **Semantics:** The suggestion represents "replace the selected line(s) with this code." The original lines and the proposed replacement are both preserved in the output XML.
 - **Prefill:** When the user activates a suggestion, the proposed-code editor is prefilled with the original code so the user can edit in place rather than retyping (matching GitHub/GitLab behavior).
 - **Display:** Suggestions are rendered as a diff-within-a-diff: the original lines shown as removed (red), the suggestion shown as added (green), within the comment body.
+- **Applying:** the app does not write a suggestion into a file. Section 5.4.8 records the accepted, not-yet-implemented scope for that.
 
 #### 5.4.5 Comment Categories / Tags
 
@@ -375,6 +376,24 @@ Every comment must be assigned a category (e.g., `bug`, `style`, `question`, `ni
 
 - Comments can be edited after submission by clicking an "Edit" control.
 - Comments can be deleted by clicking a "Delete" control, with no confirmation dialog.
+
+#### 5.4.7 Replies
+
+- An expanded comment shows a "Reply" control that opens a short composer under the thread. Collapsing the comment hides its replies and the control along with the body.
+- Replies render in document order beneath their comment, each with its own Edit and Delete controls. A reply written in the UI carries no author, so it reads as the human's turn.
+- A reply takes a body and image attachments. Category, severity, confidence and suggestions stay on the root comment, which owns the finding (Section 6.2, Threaded Replies).
+- Replies are flat. A reply cannot be replied to.
+
+#### 5.4.8 Applying Suggestions to Working Files (accepted, not implemented)
+
+The product owner accepted a bounded suggestion-apply capability. The app may write a suggestion's proposed code into a local working file. Nothing in this section ships yet. Until the follow-up tickets land the app stays read-only for code, and the write policy in Section 10.4 holds as written. The reason for accepting is narrow. The reviewer already has the replacement on screen, and retyping it or handing the whole `review.xml` to an assistant is the slow path for a one-line fix. The boundaries below are the condition of that acceptance.
+
+- **Eligible reviews and destinations.** Applying is offered when the reviewed files sit on disk in a destination the user controls: a git-mode review of a working tree, and a directory-mode review. A remote PR/MR review materialized into a temporary clone must not write into that clone. The user names an explicit destination directory first, and the app refuses to apply until one exists. A remote review that reuses an existing local clone applies into that clone, which materialization otherwise never checks out or touches.
+- **What can be applied.** Only a structured `<suggestion>` carrying a line anchor. Forge threads carry none today. `mapThreadsToReviewComments` sets `suggestion: null` on every mapped thread, so a `suggestion`-tagged code fence inside a forge comment body is plain body text. Parsing those fences into anchored suggestions is a prerequisite for applying them, and a thread with no anchor, or one that degraded to file level, is never applied.
+- **Refusal on changed context.** Before writing, the app reads the target lines from disk and compares them with the suggestion's recorded original code. A mismatch refuses the apply and says so. There is no fuzzy matching and no force flag, and a refused apply leaves the file untouched.
+- **Visible outcome.** Every attempt reports a per-suggestion result, applied or refused with the reason. Nothing is written silently, and a batch never hides a failure.
+- **Still out of scope.** Staging, committing, any write to the forge, and free-form inline editing of the diff.
+- **Unchanged.** File contents never leave the machine, and the v3 XML is untouched. Applying a suggestion records nothing in `review.xml` and needs no schema change.
 
 ### 5.5 Toolbar
 
@@ -770,7 +789,7 @@ The app supports keyboard-driven code review via Vimium-style hint labels (`f` f
 
 - The application does not open any network connections, with two documented exceptions: a non-blocking startup version check against the GitHub Releases API, and remote PR/MR review (Section 4.7), where the network is touched only for a user-supplied forge URL — git clone/fetch through git's own credentials, and the `gh`/`glab` CLIs for base-branch lookup and thread fetch. All other operations are local, and nothing is ever sent to the forge.
 - The application does not execute arbitrary code from the diff content. Syntax highlighting is purely visual.
-- The application writes the review XML output at the configured `output-file` path (default `./review.xml`). When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced image files. In remote mode without a matching local clone, it creates a temporary blobless clone under the OS temp directory, removed on exit. No hidden files, no analytics.
+- The application writes the review XML output at the configured `output-file` path (default `./review.xml`). When comments include image attachments, it also creates a `.self-review-assets/` directory alongside the output file containing the referenced image files. In remote mode without a matching local clone, it creates a temporary blobless clone under the OS temp directory, removed on exit. No hidden files, no analytics. No source file is written; the accepted future exception is scoped in Section 5.4.8 and is not implemented.
 
 ---
 
@@ -785,10 +804,10 @@ The following are explicitly not part of the v1 release:
 - Windows support
 - Auto-update mechanism
 - Plugin system
-- Comment threading or replies (flat comments only)
+- Nested reply threads and thread resolution. A comment owns a flat, ordered list of replies (Sections 5.4.7 and 6.2); replying to a reply is not possible, and no comment carries resolved/unresolved state
 - Side-by-side file comparison (comparing two arbitrary files, not a git diff)
 - Commit or staging from within the app
-- Inline code editing (the app is read-only for code; suggestions are proposed, not applied)
+- Inline code editing of the diff. Applying a suggestion to a local working file is accepted for a later version under the boundaries in Section 5.4.8, but it is not in v1 and no code writes a source file today
 
 ---
 

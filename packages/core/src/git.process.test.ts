@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { getUntrackedFilesAsync, runGitDiff, runGitDiffAsync } from './git';
+import { getRepoRoot, getRepoRootAsync, getUntrackedFilesAsync, runGitDiff, runGitDiffAsync } from './git';
 
 // Exercise real child processes: mocked argv checks cannot detect shell expansion.
 describe.each(['sync', 'async'] as const)('literal git diff arguments (%s)', mode => {
@@ -39,6 +39,36 @@ describe.each(['sync', 'async'] as const)('literal git diff arguments (%s)', mod
     expect(existsSync(join(root, 'SELF_REVIEW_INJECTION_MARKER'))).toBe(false);
     expect(diff).toContain('+selected content');
     expect(diff).not.toContain('+unselected content');
+  });
+});
+
+// SR-0036: a root directory whose name has leading/trailing whitespace is
+// real. `git rev-parse --show-toplevel` prints it followed by one newline;
+// a blanket .trim() ate the whitespace along with that newline and reported
+// a path that doesn't exist on disk.
+describe.each(['sync', 'async'] as const)('repository root with whitespace in its path (%s)', mode => {
+  const originalCwd = process.cwd();
+  let parent: string;
+  let root: string;
+
+  beforeEach(() => {
+    // git reports the resolved top level, and temp dirs can be symlinked.
+    parent = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-root-space-')));
+    root = join(parent, ' trailing and leading space ');
+    mkdirSync(root);
+    execFileSync('git', ['init', '-q', root]);
+    if (mode === 'sync') process.chdir(root);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    rmSync(parent, { recursive: true, force: true });
+  });
+
+  it('reports the exact root path, whitespace included', async () => {
+    const reported = mode === 'sync' ? getRepoRoot() : await getRepoRootAsync(root);
+
+    expect(reported).toBe(root);
   });
 });
 

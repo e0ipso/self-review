@@ -171,6 +171,75 @@ categories:
       expect(config.categories[0].name).toBe('valid');
     });
 
+    it('falls back to default categories when the configured list is empty', () => {
+      const mockYaml = `categories: []`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.categories).toHaveLength(6);
+      expect(config.categories[0].name).toBe('question');
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('no usable categories')
+      );
+    });
+
+    it('falls back to default categories when every entry is shaped wrong', () => {
+      const mockYaml = `
+categories:
+  - invalid: true
+  - also-invalid: 1
+`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.categories).toHaveLength(6);
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('no usable categories')
+      );
+    });
+
+    it('falls back to default categories when every entry has an empty name', () => {
+      const mockYaml = `
+categories:
+  - name: ''
+    description: Nameless
+    color: '#ff0000'
+`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.categories).toHaveLength(6);
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('no usable categories')
+      );
+    });
+
+    it('drops empty-name entries but keeps other valid custom categories, without warning', () => {
+      const mockYaml = `
+categories:
+  - name: ''
+    description: Nameless
+    color: '#ff0000'
+  - name: keep-me
+    description: A real category
+    color: '#00ff00'
+`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+
+      const config = loadConfig();
+
+      expect(config.categories).toHaveLength(1);
+      expect(config.categories[0].name).toBe('keep-me');
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
     it('validates theme values and rejects invalid ones', () => {
       const mockYaml = `
 theme: invalid-theme

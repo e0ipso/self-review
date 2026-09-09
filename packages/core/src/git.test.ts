@@ -136,12 +136,14 @@ describe('git', () => {
       expect(result).toBe('/repo/path');
     });
 
-    it('trims whitespace from git output', () => {
-      vi.mocked(child_process.execSync).mockReturnValue('  /repo/path  \n  ');
+    it('strips only the trailing newline, preserving whitespace in the path', () => {
+      // A root ending in a space is real (SR-0036): a blanket .trim() would
+      // report a path one character short of what's actually on disk.
+      vi.mocked(child_process.execSync).mockReturnValue('/repo/trailing space \n');
 
       const result = getRepoRoot();
 
-      expect(result).toBe('/repo/path');
+      expect(result).toBe('/repo/trailing space ');
     });
 
     it('exits with error when command fails', () => {

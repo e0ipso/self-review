@@ -1,5 +1,6 @@
 import React from 'react';
 import { useConfig } from '../../context/ConfigContext';
+import { getUsableCategories } from '../../utils/category-utils';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 
@@ -13,14 +14,15 @@ export default function CategorySelector({
   onChange,
 }: CategorySelectorProps) {
   const { config } = useConfig();
+  const usableCategories = getUsableCategories(config.categories);
 
-  if (!config.categories || config.categories.length === 0) {
+  if (usableCategories.length === 0) {
     return null;
   }
 
   return (
     <div data-testid='category-selector' className='flex items-center gap-1'>
-      {config.categories.map(cat => {
+      {usableCategories.map(cat => {
         const isActive = value === cat.name;
         return (
           <Tooltip key={cat.name}>

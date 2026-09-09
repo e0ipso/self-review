@@ -69,4 +69,24 @@ describe('loadGitDiffWithUntracked', () => {
 
     expect(files).toEqual([]);
   });
+
+  // SR-0036: a root directory with a trailing space is real. Trimming
+  // git's `--show-toplevel` output reported a path short by that space, so
+  // every consumer resolved against a directory that doesn't exist.
+  it('lists and reads untracked files when the repository root has trailing whitespace', async () => {
+    const parent = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-loader-space-')));
+    const spacedRoot = join(parent, 'trailing space ');
+    mkdirSync(spacedRoot);
+    execFileSync('git', ['init', '-q', spacedRoot]);
+    writeFileSync(join(spacedRoot, 'untracked.txt'), 'content\n');
+
+    try {
+      const { files, repository } = await loadGitDiffWithUntracked([], spacedRoot);
+
+      expect(repository).toBe(spacedRoot);
+      expect(untrackedContent(files)).toEqual({ 'untracked.txt': 'content' });
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
 });
