@@ -11,7 +11,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { ExpandContextRequest } from '@self-review/core';
+import type { ExpandContextRequest, ReviewState } from '@self-review/core';
 
 /**
  * Resolve symlinks in `absolute` even when the final path does not exist
@@ -125,4 +125,46 @@ export function parseExpandContextBody(body: unknown): ParseResult<ExpandContext
   }
 
   return { ok: true, value: { filePath, contextLines } };
+}
+
+const REVIEW_STATE_KEYS: ReadonlySet<string> = new Set(['timestamp', 'source', 'files']);
+
+/**
+ * Validate the JSON body of `POST /api/review`.
+ *
+ * Accepts exactly what the review panel submits — `{ timestamp, source,
+ * files }` (see `useReviewBridge.getReviewState`). Remote provenance
+ * (`remoteUrl`, `remoteHeadSha`, ...) is never accepted from the client: the
+ * desktop injects it main-side after submission, and the serve process does
+ * the same, so an unknown key is rejected rather than forwarded.
+ *
+ * This is a structural check only. The full document is validated against
+ * the XSD when it is serialized, which is where every nested field is
+ * checked; here the aim is that `submitReviewState` never sees a body it
+ * cannot even read.
+ */
+export function parseReviewStateBody(body: unknown): ParseResult<ReviewState> {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return { ok: false, error: 'body must be a JSON object' };
+  }
+  const record = body as Record<string, unknown>;
+
+  for (const key of Object.keys(record)) {
+    if (!REVIEW_STATE_KEYS.has(key)) {
+      return { ok: false, error: `unknown field: ${key}` };
+    }
+  }
+
+  const { timestamp, source, files } = record;
+  if (typeof timestamp !== 'string') {
+    return { ok: false, error: 'timestamp must be a string' };
+  }
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+    return { ok: false, error: 'source must be an object' };
+  }
+  if (!Array.isArray(files)) {
+    return { ok: false, error: 'files must be an array' };
+  }
+
+  return { ok: true, value: { timestamp, source, files } as ReviewState };
 }

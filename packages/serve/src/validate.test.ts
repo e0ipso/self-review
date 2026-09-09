@@ -2,7 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { containPath, parseExpandContextBody, MAX_CONTEXT_LINES } from './validate';
+import {
+  containPath,
+  parseExpandContextBody,
+  parseReviewStateBody,
+  MAX_CONTEXT_LINES,
+} from './validate';
 
 // A real directory layout so containment is checked against real paths, not
 // string arithmetic:
@@ -164,5 +169,52 @@ describe('parseExpandContextBody', () => {
     expect(parseExpandContextBody(undefined).ok).toBe(false);
     expect(parseExpandContextBody('{}').ok).toBe(false);
     expect(parseExpandContextBody(['a', 3]).ok).toBe(false);
+  });
+});
+
+describe('parseReviewStateBody', () => {
+  const valid = {
+    timestamp: '2026-09-09T00:00:00.000Z',
+    source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+    files: [],
+  };
+
+  it('accepts exactly what the review panel submits: timestamp, source and files', () => {
+    const result = parseReviewStateBody(valid);
+    expect(result).toEqual({ ok: true, value: valid });
+  });
+
+  it('rejects a body whose files is not an array', () => {
+    const result = parseReviewStateBody({ ...valid, files: {} });
+    expect(result.ok).toBe(false);
+    expect(result).toHaveProperty('error', expect.stringContaining('files'));
+  });
+
+  it('rejects a body whose timestamp is not a string', () => {
+    expect(parseReviewStateBody({ ...valid, timestamp: 1 }).ok).toBe(false);
+  });
+
+  it('rejects a body whose source is not an object', () => {
+    expect(parseReviewStateBody({ ...valid, source: 'git' }).ok).toBe(false);
+    expect(parseReviewStateBody({ ...valid, source: null }).ok).toBe(false);
+  });
+
+  it('rejects a missing field', () => {
+    const { files: _files, ...noFiles } = valid;
+    expect(parseReviewStateBody(noFiles).ok).toBe(false);
+  });
+
+  it('rejects an unknown extra field rather than forwarding it', () => {
+    // Remote provenance is injected server-side, never accepted from the
+    // client — the same split the desktop keeps between renderer and main.
+    const result = parseReviewStateBody({ ...valid, remoteUrl: 'https://x/pull/1' });
+    expect(result.ok).toBe(false);
+    expect(result).toHaveProperty('error', expect.stringContaining('remoteUrl'));
+  });
+
+  it('rejects bodies that are not plain objects', () => {
+    expect(parseReviewStateBody(null).ok).toBe(false);
+    expect(parseReviewStateBody('{}').ok).toBe(false);
+    expect(parseReviewStateBody([valid]).ok).toBe(false);
   });
 });
