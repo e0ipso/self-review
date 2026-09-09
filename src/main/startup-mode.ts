@@ -2,7 +2,7 @@
 // Startup mode detection: what the app should review, from the CLI args and the CWD.
 
 import { existsSync, statSync } from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { resolve } from 'path';
 
 /**
@@ -22,7 +22,7 @@ function isInGitRepo(): boolean {
  */
 function isGitTracked(filePath: string): boolean {
   try {
-    execSync(`git ls-files --error-unmatch ${JSON.stringify(filePath)}`, {
+    execFileSync('git', ['ls-files', '--error-unmatch', '--', filePath], {
       stdio: 'ignore',
     });
     return true;

@@ -23,12 +23,13 @@ describe('git', () => {
 
   describe('runGitDiff', () => {
     it('executes git diff with provided arguments', () => {
-      vi.mocked(child_process.execSync).mockReturnValue('diff output');
+      vi.mocked(child_process.execFileSync).mockReturnValue('diff output');
 
       const result = runGitDiff(['--staged']);
 
-      expect(child_process.execSync).toHaveBeenCalledWith(
-        'git diff --staged',
+      expect(child_process.execFileSync).toHaveBeenCalledWith(
+        'git',
+        ['diff', '--staged'],
         expect.objectContaining({
           encoding: 'utf-8',
           maxBuffer: 50 * 1024 * 1024,
@@ -40,8 +41,7 @@ describe('git', () => {
     it('checks git availability before running diff', () => {
       vi.mocked(child_process.execSync)
         .mockImplementationOnce(() => '') // git --version
-        .mockImplementationOnce(() => '') // git rev-parse
-        .mockImplementationOnce(() => 'diff output'); // git diff
+        .mockImplementationOnce(() => ''); // git rev-parse
 
       runGitDiff(['--staged']);
 
@@ -55,8 +55,7 @@ describe('git', () => {
     it('checks repository before running diff', () => {
       vi.mocked(child_process.execSync)
         .mockImplementationOnce(() => '') // git --version
-        .mockImplementationOnce(() => '') // git rev-parse
-        .mockImplementationOnce(() => 'diff output'); // git diff
+        .mockImplementationOnce(() => ''); // git rev-parse
 
       runGitDiff(['--staged']);
 
@@ -96,12 +95,13 @@ describe('git', () => {
     });
 
     it('handles multiple git diff arguments', () => {
-      vi.mocked(child_process.execSync).mockReturnValue('diff output');
+      vi.mocked(child_process.execFileSync).mockReturnValue('diff output');
 
       runGitDiff(['--staged', '--ignore-space-change', '--', 'src/']);
 
-      expect(child_process.execSync).toHaveBeenCalledWith(
-        'git diff --staged --ignore-space-change -- src/',
+      expect(child_process.execFileSync).toHaveBeenCalledWith(
+        'git',
+        ['diff', '--staged', '--ignore-space-change', '--', 'src/'],
         expect.any(Object)
       );
     });
@@ -109,10 +109,10 @@ describe('git', () => {
     it('exits with error on git diff failure', () => {
       vi.mocked(child_process.execSync)
         .mockImplementationOnce(() => '') // git --version
-        .mockImplementationOnce(() => '') // git rev-parse
-        .mockImplementationOnce(() => {
-          throw new Error('invalid revision');
-        });
+        .mockImplementationOnce(() => ''); // git rev-parse
+      vi.mocked(child_process.execFileSync).mockImplementationOnce(() => {
+        throw new Error('invalid revision');
+      });
 
       runGitDiff(['invalid..revision']);
 
