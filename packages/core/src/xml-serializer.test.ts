@@ -1298,4 +1298,77 @@ describe('replies', () => {
 
     expect(actualFs.existsSync(path.join(outputDir, '.self-review-assets'))).toBe(false);
   });
+
+  // An id reaches this code from outside the process: the serve front end
+  // accepts a whole ReviewState over HTTP. A traversing id used to name the
+  // attachment file directly, so it wrote wherever it pointed — and because
+  // the write happens before XSD validation, it landed even when the document
+  // that carried it was rejected a few lines later.
+  it('keeps a traversing comment id from escaping the asset directory', async () => {
+    const escapeTarget = path.join(outputDir, 'escaped-0.png');
+
+    await serializeReview(
+      reviewWithThread({
+        id: '../../escaped',
+        attachments: [
+          {
+            id: 'a1',
+            fileName: 'shot.png',
+            mediaType: 'image/png',
+            data: new Uint8Array([9]).buffer,
+          },
+        ],
+      }),
+      outputPath
+    );
+
+    expect(actualFs.existsSync(escapeTarget)).toBe(false);
+    expect(assetsIn(outputDir)).toEqual(['______escaped-0.png']);
+  });
+
+  // The containment fix used to call `.replace` on the id directly, so a
+  // document whose comment carried an attachment but no id crashed the save —
+  // and it crashed after the review had already been taken off the session,
+  // which loses it. Naming a file is not the place to enforce the schema.
+  it('still writes an attachment when the comment carries no id', async () => {
+    const state = reviewWithThread({
+      attachments: [
+        {
+          id: 'a1',
+          fileName: 'shot.png',
+          mediaType: 'image/png',
+          data: new Uint8Array([7]).buffer,
+        },
+      ],
+    });
+    delete (state.files[0].comments[0] as { id?: string }).id;
+
+    await expect(serializeReview(state, outputPath)).resolves.toBeTruthy();
+    expect(assetsIn(outputDir)).toEqual(['-0.png']);
+  });
+
+  it('keeps a traversing reply id from escaping the asset directory', async () => {
+    await serializeReview(
+      reviewWithThread({
+        replies: [
+          {
+            id: '../../../escaped-reply',
+            body: 'blob',
+            attachments: [
+              {
+                id: 'a1',
+                fileName: 'shot.png',
+                mediaType: 'image/png',
+                data: new Uint8Array([9]).buffer,
+              },
+            ],
+          },
+        ],
+      }),
+      outputPath
+    );
+
+    expect(actualFs.existsSync(path.join(outputDir, 'escaped-reply-0.png'))).toBe(false);
+    expect(assetsIn(outputDir)).toEqual(['c1-r-_________escaped-reply-0.png']);
+  });
 });
