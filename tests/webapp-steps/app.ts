@@ -7,6 +7,7 @@ import { chromium, Browser, BrowserContext, Page } from '@playwright/test';
 import { ChildProcess, spawn, execSync } from 'child_process';
 import * as path from 'path';
 import * as http from 'http';
+import { triggerCommentIcon as openCommentComposer } from '../fixtures/comment-actions';
 
 const VITE_PORT = 5199;
 const VITE_URL = `http://localhost:${VITE_PORT}`;
@@ -122,12 +123,19 @@ function stopViteServer(): void {
  * Launch the webapp in a browser. Starts Vite if needed.
  * @param queryParams Optional URL query parameters (e.g., { categories: 'commenting' })
  */
-export async function launchWebapp(queryParams: Record<string, string> = {}): Promise<Page> {
+export async function launchWebapp(
+  queryParams: Record<string, string> = {}
+): Promise<Page> {
   await startViteServer();
 
   browser = await chromium.launch({
     executablePath: process.env.PW_CHROMIUM_PATH || undefined,
-    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-setuid-sandbox', '--disable-gpu'],
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-setuid-sandbox',
+      '--disable-gpu',
+    ],
   });
   context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
@@ -184,22 +192,13 @@ export function getPage(): Page {
 }
 
 /**
- * Trigger the icon-based comment on a specific line.
- * Same logic as the Electron version — pure Playwright interaction.
+ * Trigger the icon-based comment on a specific line of the webapp page.
+ * The gesture itself is shared with the other e2e projects.
  */
 export async function triggerCommentIcon(
   filePath: string,
   line: number,
   side: 'old' | 'new'
 ): Promise<void> {
-  const page = getPage();
-  const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${line}"]`);
-  await gutter.hover();
-  const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
-  await icon.waitFor({ state: 'visible', timeout: 5000 });
-  await icon.dispatchEvent('mousedown');
-  await page.waitForTimeout(150);
-  await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
-  await page.locator('[data-testid="comment-input"]').waitFor({ state: 'visible', timeout: 5000 });
+  await openCommentComposer(getPage(), filePath, line, side);
 }

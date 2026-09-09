@@ -309,6 +309,43 @@ self-review fetch-comments https://gitlab.com/group/project/-/merge_requests/7 -
 It needs no display. On Linux the command picks a headless graphics platform for itself, so it runs
 over SSH, in CI and in a container with `$DISPLAY` unset and no `xvfb-run` wrapper.
 
+### Serve mode
+
+The same review UI is also available as an ordinary HTTP server, `self-review-serve`, for cases
+where opening an Electron window isn't an option — a remote box, a container, or you'd just
+rather use your own browser.
+
+Install and run it as its own package:
+
+```bash
+npm install -g @self-review/serve
+self-review-serve --staged
+```
+
+It accepts the same git diff arguments as `self-review`, plus `-o`/`--output` for the output path
+and `--resume-from` to load a prior review:
+
+```bash
+self-review-serve                             # unstaged changes
+self-review-serve --staged
+self-review-serve main..feature-branch
+self-review-serve --resume-from review.xml    # resume a previous review
+self-review-serve -o my-review.xml --staged   # write somewhere other than ./review.xml
+```
+
+The URL is printed to stderr on start — open it in a browser. The output path is fixed by the
+`--output`/`-o` flag (or `output-file` from `.self-review.yaml`) when the process starts, and
+there is no control in the browser to change it afterward. Completing the review writes that
+file and stops the process. Closing the browser tab does nothing: nothing is auto-saved, and
+nothing is written until the review is completed.
+
+The listener binds to `127.0.0.1` only, and there is no authentication. That is the whole of the
+access control: anything on the same machine that can reach the port can read the diff and
+complete the review. Do not put the port behind a reverse proxy, tunnel, or port-forward that
+makes it reachable from anywhere else without adding your own access control in front of it.
+
+See [`packages/serve/README.md`](packages/serve/README.md) for the package itself.
+
 ## Assistant Skill
 
 self-review ships with an AI assistant skill that closes the feedback loop: it reads your review
@@ -422,7 +459,9 @@ See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 
 - **CLI-first.** Launched from the terminal, writes review output to a file. Behaves like a Unix
   tool.
-- **One-shot.** Open → review → close → done. No servers, no persistent state.
+- **One-shot.** Open → review → close → done. No persistent state. Serve mode does run a listener,
+  but only on loopback and only for the duration of one review: submitting writes the output file
+  and stops the process, so the principle holds even there.
 - **Local-only.** No network access, no accounts, no telemetry. Your code stays on your machine. The
   one opt-in exception: reviewing a remote PR/MR by URL fetches that repository through git and
   reads its discussion threads — and even then, nothing is ever sent to the forge.

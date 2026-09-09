@@ -2,10 +2,15 @@
  * Shared Electron app management for E2E tests.
  * Provides helpers to launch/close the app and capture stdout/stderr.
  */
-import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
+import {
+  _electron as electron,
+  ElectronApplication,
+  Page,
+} from '@playwright/test';
 import { ChildProcess, spawn, execSync } from 'child_process';
 import * as path from 'path';
 import { rmSync, existsSync, readFileSync } from 'fs';
+import { triggerCommentIcon as openCommentComposer } from '../fixtures/comment-actions';
 
 const ELECTRON_BIN: string = require('electron') as unknown as string;
 
@@ -153,7 +158,9 @@ async function launchAppWithRetry(
     }
 
     process.stderr.write(`\n[launchApp failed] ${error}\n`);
-    process.stderr.write(`[stderr from Electron] ${stderrData.slice(0, 1000)}\n`);
+    process.stderr.write(
+      `[stderr from Electron] ${stderrData.slice(0, 1000)}\n`
+    );
     throw error;
   }
 }
@@ -171,11 +178,15 @@ export async function launchAppExpectExit(
   resetState();
 
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn(ELECTRON_BIN, [...CHROMIUM_FLAGS, getMainBundle(), ...cliArgs], {
-      cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, NODE_ENV: 'test' },
-    });
+    const proc = spawn(
+      ELECTRON_BIN,
+      [...CHROMIUM_FLAGS, getMainBundle(), ...cliArgs],
+      {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, NODE_ENV: 'test' },
+      }
+    );
 
     const timer = setTimeout(() => {
       proc.kill();
@@ -328,27 +339,15 @@ export function getTestRepoDir(): string {
 }
 
 /**
- * Trigger the icon-based comment on a specific line.
- * Simulates mousedown on the + icon → wait for React → mouseup.
+ * Trigger the icon-based comment on a specific line of the app's window.
+ * The gesture itself is shared with the other e2e projects.
  */
 export async function triggerCommentIcon(
   filePath: string,
   line: number,
   side: 'old' | 'new'
 ): Promise<void> {
-  const page = getPage();
-  const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${line}"]`);
-  await gutter.hover();
-  const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
-  await icon.waitFor({ state: 'visible', timeout: 5000 });
-  await icon.dispatchEvent('mousedown');
-  // Brief pause for React to register the mousedown before dispatching mouseup.
-  // There's no observable intermediate DOM state between mousedown and mouseup,
-  // so a short fixed delay is appropriate here.
-  await page.waitForTimeout(150);
-  await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
-  await page.locator('[data-testid="comment-input"]').waitFor({ state: 'visible', timeout: 5000 });
+  await openCommentComposer(getPage(), filePath, line, side);
 }
 
 /**
