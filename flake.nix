@@ -44,7 +44,7 @@
           #   nix store prefetch-file --hash-type sha256 --json <url> | jq .hash
           src = pkgs.fetchzip {
             url = "https://github.com/e0ipso/self-review/releases/download/v${packageJson.version}/Self.Review-linux-${arch}-${packageJson.version}.zip";
-            hash = "sha256-Azv2cj4KOqnTpoA7LPMBzVH+bz2PqRuzIr/iETLSbIk=";
+            hash = "sha256-YAFsUarHCfsuOCcuF9gfcjWdbNTA5pzPOV0IGw3MkSI=";
           };
 
           nativeBuildInputs = with pkgs; [
