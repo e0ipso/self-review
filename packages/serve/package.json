@@ -18,6 +18,7 @@
     "dist"
   ],
   "scripts": {
+    "prebuild": "npm run build --workspace @self-review/core",
     "build": "tsup",
     "dev": "tsup --watch",
     "test:unit": "vitest run"
