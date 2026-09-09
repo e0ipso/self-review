@@ -14,6 +14,20 @@ export function parseDiff(rawDiff: string): DiffFile[] {
   let currentHunk: Partial<DiffHunk> | null = null;
   let oldLineNumber = 0;
   let newLineNumber = 0;
+  let hasModeChange = false;
+
+  function flushFile(): void {
+    if (
+      currentFile &&
+      (currentFile.oldPath || currentFile.newPath) &&
+      (currentFile.isBinary ||
+        currentFile.hunks!.length > 0 ||
+        currentFile.changeType !== 'modified' ||
+        hasModeChange)
+    ) {
+      files.push(currentFile as DiffFile);
+    }
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -26,21 +40,7 @@ export function parseDiff(rawDiff: string): DiffFile[] {
         currentHunk = null;
       }
 
-      // Save previous file if exists and has actual changes
-      if (
-        currentFile &&
-        currentFile.oldPath !== undefined &&
-        currentFile.newPath !== undefined
-      ) {
-        // Include files that have hunks, are binary, or are new (empty new files)
-        if (
-          currentFile.isBinary ||
-          (currentFile.hunks && currentFile.hunks.length > 0) ||
-          currentFile.changeType === 'added'
-        ) {
-          files.push(currentFile as DiffFile);
-        }
-      }
+      flushFile();
 
       // Extract paths from "diff --git a/<old> b/<new>" as fallback
       // for binary files that lack --- / +++ lines
@@ -55,6 +55,7 @@ export function parseDiff(rawDiff: string): DiffFile[] {
         hunks: [],
       };
       currentHunk = null;
+      hasModeChange = false;
       continue;
     }
 
@@ -63,29 +64,42 @@ export function parseDiff(rawDiff: string): DiffFile[] {
     // Detect file mode changes
     if (line.startsWith('new file mode')) {
       currentFile.changeType = 'added';
+      currentFile.oldPath = '';
       continue;
     }
 
     if (line.startsWith('deleted file mode')) {
       currentFile.changeType = 'deleted';
+      currentFile.newPath = '';
+      continue;
+    }
+
+    if (line.startsWith('new mode ')) {
+      hasModeChange = true;
       continue;
     }
 
     if (line.startsWith('rename from ')) {
       currentFile.changeType = 'renamed';
+      currentFile.oldPath = decodeGitPath(line.substring('rename from '.length));
+      continue;
+    }
+
+    if (line.startsWith('rename to ')) {
+      currentFile.newPath = decodeGitPath(line.substring('rename to '.length));
       continue;
     }
 
     // Parse old file path
-    if (line.startsWith('--- ')) {
-      const path = line.substring(4);
+    if (!currentHunk && line.startsWith('--- ')) {
+      const path = decodeGitPath(line.substring(4).split('\t')[0]);
       currentFile.oldPath = path === '/dev/null' ? '' : stripPrefix(path);
       continue;
     }
 
     // Parse new file path
-    if (line.startsWith('+++ ')) {
-      const path = line.substring(4);
+    if (!currentHunk && line.startsWith('+++ ')) {
+      const path = decodeGitPath(line.substring(4).split('\t')[0]);
       currentFile.newPath = path === '/dev/null' ? '' : stripPrefix(path);
       continue;
     }
@@ -182,20 +196,7 @@ export function parseDiff(rawDiff: string): DiffFile[] {
   if (currentHunk && currentHunk.header && currentFile) {
     currentFile.hunks!.push(currentHunk as DiffHunk);
   }
-  if (
-    currentFile &&
-    currentFile.oldPath !== undefined &&
-    currentFile.newPath !== undefined
-  ) {
-    // Include files that have hunks, are binary, or are new (empty new files)
-    if (
-      currentFile.isBinary ||
-      (currentFile.hunks && currentFile.hunks.length > 0) ||
-      currentFile.changeType === 'added'
-    ) {
-      files.push(currentFile as DiffFile);
-    }
-  }
+  flushFile();
 
   return files;
 }
@@ -209,29 +210,53 @@ function stripPrefix(path: string): string {
   return path;
 }
 
+function decodeGitPath(path: string): string {
+  if (!path.startsWith('"') || !path.endsWith('"')) return path;
+
+  const escapes: Record<string, string> = {
+    a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v',
+    '"': '"', '\\': '\\',
+  };
+  return path.slice(1, -1).replace(
+    /(?:\\[0-7]{1,3})+|\\[abfnrtv"\\]/g,
+    (escape) => {
+      if (/^\\[0-7]/.test(escape)) {
+        // Git quotes UTF-8 bytes as octal, so decode each run together.
+        const bytes = escape.slice(1).split('\\').map((byte) => parseInt(byte, 8));
+        return Buffer.from(bytes).toString('utf8');
+      }
+      return escapes[escape[1]];
+    }
+  );
+}
+
 function parseGitDiffHeader(line: string): {
   oldPath: string;
   newPath: string;
 } {
-  // Format: "diff --git a/<old> b/<new>"
-  // With diff.mnemonicPrefix, git uses i/ w/ c/ o/ instead of a/ b/.
-  // Paths may contain spaces, so we find the " X/" separator where X is a
-  // single-letter prefix.
-  const withoutPrefix = line.substring('diff --git '.length);
-
-  // Find " X/" — the boundary between old and new paths.
-  // Try common prefixes: b/ (default), w/ i/ c/ o/ (mnemonic)
-  let bIdx = -1;
-  for (const prefix of [' b/', ' w/', ' i/', ' c/', ' o/']) {
-    bIdx = withoutPrefix.indexOf(prefix);
-    if (bIdx !== -1) break;
+  const paths = line.substring('diff --git '.length);
+  // Quoted paths are single C-style tokens, even when they contain spaces.
+  const quotedOld = paths.match(/^("(?:\\.|[^"\\])*") (.+)$/);
+  const quotedNew = paths.match(/^(.+) ("(?:\\.|[^"\\])*")$/);
+  const quoted = quotedOld || quotedNew;
+  if (quoted) {
+    return {
+      oldPath: stripPrefix(decodeGitPath(quoted[1])),
+      newPath: stripPrefix(decodeGitPath(quoted[2])),
+    };
   }
 
-  if (bIdx === -1) {
-    return { oldPath: '', newPath: '' };
-  }
+  // Unquoted names can contain spaces. Prefer a boundary whose two paths
+  // agree; rename headers supply the exact paths when they differ.
+  const separators = [...paths.matchAll(/ [bwico]\//g)];
+  const boundary = separators.find((match) =>
+    stripPrefix(paths.substring(0, match.index)) ===
+    stripPrefix(paths.substring(match.index! + 1))
+  ) || separators[0];
+  if (!boundary) return { oldPath: '', newPath: '' };
 
-  const oldPath = stripPrefix(withoutPrefix.substring(0, bIdx));
-  const newPath = stripPrefix(withoutPrefix.substring(bIdx + 1));
-  return { oldPath, newPath };
+  return {
+    oldPath: stripPrefix(paths.substring(0, boundary.index)),
+    newPath: stripPrefix(paths.substring(boundary.index! + 1)),
+  };
 }

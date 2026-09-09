@@ -4,6 +4,7 @@
 import { existsSync, statSync } from 'fs';
 import { execFileSync, execSync } from 'child_process';
 import { resolve } from 'path';
+import { classifyGitDiffArgs } from './git-diff-args';
 
 /**
  * Check if the current working directory is inside a git repository.
@@ -36,9 +37,8 @@ function isGitTracked(filePath: string): boolean {
  * Returns the DiffSource type to use.
  */
 export function determineMode(gitDiffArgs: string[]): 'git' | 'directory' | 'file' | 'welcome' {
-  // Find the first positional arg, skipping flags and the '--' separator
-  // (normalizeGitDiffArgs may have inserted '--' before path args)
-  const firstPositional = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'));
+  const { positionalIndices } = classifyGitDiffArgs(gitDiffArgs);
+  const firstPositional = gitDiffArgs[positionalIndices[0]];
 
   // Check if first positional arg is an existing file
   if (firstPositional) {

@@ -288,9 +288,11 @@ rename to new-name.ts`;
 
       const result = parseDiff(diff);
 
-      // Rename without hunks won't be included in output (parser excludes files without hunks/changes)
-      // This is expected behavior - git shows rename but parser needs actual content changes
-      expect(result).toHaveLength(0);
+      expect(result).toHaveLength(1);
+      expect(result[0].oldPath).toBe('old-name.ts');
+      expect(result[0].newPath).toBe('new-name.ts');
+      expect(result[0].changeType).toBe('renamed');
+      expect(result[0].hunks).toHaveLength(0);
     });
 
     it('handles rename detection with content changes', () => {
