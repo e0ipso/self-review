@@ -343,9 +343,12 @@ Nothing is auto-saved either way.
 Walkthrough guides work as they do in the desktop application. A `review.guide.xml` sitting next
 to your output path is picked up at startup and the file tree opens in guided mode.
 
-The listener binds to `127.0.0.1` and there is no authentication. Anything on the same machine
-that can reach the port can read your diff and finish the review on your behalf. If you put a
-reverse proxy, tunnel, or port-forward in front of it, access control is yours to add.
+The listener binds to `127.0.0.1` and there is no authentication. Anything that can reach the port
+can read your diff and finish the review on your behalf, and on a shared host that means every
+local user, not only you. It will not answer a request that names anything but itself, so a web
+page you happen to be visiting cannot reach it. Reaching it over an `ssh -L` forward works as you
+would expect; anyone who can reach that forwarded port has the access you do, and securing it is
+yours to add.
 
 See [`packages/serve/README.md`](packages/serve/README.md) for the package itself.
 

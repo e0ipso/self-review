@@ -431,15 +431,20 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
 - **stdout is unused.** Nothing is written to stdout. XML output is written to a file (default
   `./review.xml`, configurable via `output-file` in YAML config). All logging goes to stderr. Use
   `console.error()` for logging in the main process, never `console.log()`.
-- **No network access (except version check and remote mode).** The app makes zero network requests
-  at runtime, with two exceptions. First, on startup it makes a single non-blocking request to the
+- **No network access (except version check and remote mode); one listening socket in serve mode.**
+  The app makes zero *outbound* network requests at runtime, with two exceptions. First, on startup it makes a single non-blocking request to the
   GitHub Releases API (`api.github.com`) to check for updates; this request is fire-and-forget, if
   it fails for any reason (offline, timeout, firewall), it is silently ignored. Second, when the
   user supplies a forge PR/MR URL (remote mode), the network is touched only for that URL: git
   clone/fetch through git's own credential machinery (SSH keys, credential helpers,
   `gh auth setup-git`), and the `gh`/`glab` CLIs for base-branch lookup and discussion-thread fetch
   only. Every remote-mode request is user-triggered; nothing is ever sent to the forge. No
-  telemetry, no analytics, no CDN fetches. All assets are bundled.
+  telemetry, no analytics, no CDN fetches. All assets are bundled. Separately from all of that,
+  `self-review-serve` *listens*: it binds one HTTP socket on `127.0.0.1` for the duration of one
+  review. That is inbound rather than outbound, and it is the transport the browser front end runs
+  over — see `packages/serve/README.md`. It answers only requests whose `Host` and `Origin` name the
+  listener itself, because binding to loopback alone does not keep out a web page the reviewer
+  visits.
 - **File writes.** The app writes the review XML output file at the configured `output-file` path
   (default `./review.xml`). The output path can be changed at runtime via the save dialog in the
   file tree footer. When comments include image attachments, it also creates a

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as http from 'http';
+import * as net from 'net';
 import type { AddressInfo } from 'net';
 import * as core from '@self-review/core';
 import type { DiffFile, ReviewSession, ReviewState, AppConfig } from '@self-review/core';
@@ -109,6 +111,53 @@ async function postJson(route: string, body: unknown, init: RequestInit = {}) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
     ...init,
+  });
+}
+
+/**
+ * Issue a request with headers `fetch` refuses to send.
+ *
+ * `Host` is a forbidden header name: undici drops it silently and sends the
+ * real one, so a test written with `fetch` would assert against a request the
+ * server never saw and pass for the wrong reason. Going through `node:http`
+ * is the only way to put an attacker's `Host` on the wire.
+ */
+function rawGet(
+  routePath: string,
+  headers: Record<string, string>
+): Promise<{ status: number; body: string }> {
+  const { port } = server.address() as AddressInfo;
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { host: '127.0.0.1', port, path: routePath, method: 'GET', headers },
+      res => {
+        let body = '';
+        res.setEncoding('utf-8');
+        res.on('data', chunk => (body += chunk));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body }));
+      }
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/**
+ * Send a handcrafted request over a bare socket.
+ *
+ * A duplicate `Host` cannot be produced by any HTTP client — `node:http`
+ * collapses it and `fetch` refuses the header outright — so the only way to
+ * put two on the wire is to write the request ourselves.
+ */
+function rawGetRaw(request: string): Promise<string> {
+  const { port } = server.address() as AddressInfo;
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(port, '127.0.0.1', () => socket.write(request));
+    let data = '';
+    socket.setEncoding('utf-8');
+    socket.on('data', chunk => (data += chunk));
+    socket.on('end', () => resolve(data));
+    socket.on('error', reject);
   });
 }
 
@@ -391,6 +440,71 @@ describe('POST /api/review', () => {
     expectNoCoreCall();
   });
 
+  // The serializer names each attachment file after the id of the comment
+  // that owns it, and writes it before the document is validated against the
+  // XSD — so an id was a path, and a rejected document still left the file
+  // behind. Core contains that write; this is the half that stops the
+  // document at the door.
+  function stateWithCommentId(id: unknown) {
+    return {
+      ...state,
+      files: [
+        {
+          path: 'src/index.ts',
+          changeType: 'added',
+          viewed: true,
+          comments: [{ id, filePath: 'src/index.ts', body: 'x', category: 'bug' }],
+        },
+      ],
+    };
+  }
+
+  it('rejects a comment id that could name a path', async () => {
+    const res = await postJson('/api/review', stateWithCommentId('../../pwned'));
+    expect(res.status).toBe(400);
+    expectNoCoreCall();
+    expect(session.reviewState).toBeNull();
+  });
+
+  it('rejects a comment id that is not a string', async () => {
+    const res = await postJson('/api/review', stateWithCommentId({ toString: 'x' }));
+    expect(res.status).toBe(400);
+    expectNoCoreCall();
+  });
+
+  it('rejects a traversing reply id', async () => {
+    const res = await postJson('/api/review', {
+      ...state,
+      files: [
+        {
+          path: 'src/index.ts',
+          changeType: 'added',
+          viewed: true,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/index.ts',
+              body: 'x',
+              category: 'bug',
+              replies: [{ id: '../../pwned', body: 'y' }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(res.status).toBe(400);
+    expectNoCoreCall();
+  });
+
+  it('accepts the two id shapes this application produces', async () => {
+    // crypto.randomUUID() from the renderer, and generateId() from core's
+    // xml-parser for every comment read back out of a resumed document.
+    for (const id of ['3f1a7c2e-9b45-4d8a-8e21-5c6f0a9b7d33', '1757400000000-k3f9a2z']) {
+      const res = await postJson('/api/review', stateWithCommentId(id));
+      expect(res.status).toBe(200);
+    }
+  });
+
   // `Attachment.data` is an ArrayBuffer and `JSON.stringify` renders one as
   // `{}`, so an unencoded blob would reach the serializer empty and write a
   // zero-byte image with a 200 and no error. The client base64-encodes it;
@@ -495,5 +609,169 @@ describe('static assets', () => {
     const res = await fetch(`${base}/..%2F..%2Foutside%2Fsecret.txt`);
     expect(res.status).toBe(404);
     expect(await res.text()).not.toContain('secret');
+  });
+});
+
+// Binding to loopback keeps other machines out. It does not keep out a web
+// page: a name the attacker controls, re-resolved to 127.0.0.1 after the page
+// has loaded, is same-origin with this server as far as the browser is
+// concerned, and every route becomes reachable from a site the reviewer
+// merely visited. What distinguishes that request from a real one is the
+// header naming who it thinks it is talking to.
+describe('host and origin', () => {
+  it('rejects a request whose Host names another site', async () => {
+    const res = await rawGet('/api/diff', { host: 'evil.attacker.com' });
+    expect(res.status).toBe(403);
+    expectNoCoreCall();
+    expect(res.body).not.toContain('index.ts');
+  });
+
+  // A forwarded port is the reason this package exists — `ssh -L`, `docker
+  // run -p` — and the forward's port is what lands in `Host`. Comparing that
+  // to the port this process bound would 403 every remote-box review, so the
+  // port is deliberately not checked. It protects nothing: a rebound request
+  // is refused on the attacker's hostname before any port is considered.
+  it('answers through a port forward, where Host names the forward', async () => {
+    const res = await rawGet('/api/diff', { host: '127.0.0.1:9999' });
+    expect(res.status).toBe(200);
+  });
+
+  // What replaces the port check: the Origin has to be the same authority the
+  // request addresses. A page served by some other local process — a dev
+  // server on :3000 — sends its own origin and this listener's host, and
+  // 'localhost' being loopback in both is not enough to let it through.
+  it('rejects a page served from another local port', async () => {
+    const { port } = server.address() as AddressInfo;
+    const res = await rawGet('/api/diff', {
+      host: `127.0.0.1:${port}`,
+      origin: 'http://localhost:3000',
+    });
+    expect(res.status).toBe(403);
+    expectNoCoreCall();
+  });
+
+  it('accepts an Origin that matches a forwarded Host', async () => {
+    const res = await rawGet('/api/diff', {
+      host: 'localhost:9999',
+      origin: 'http://localhost:9999',
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects a duplicate Host header', async () => {
+    // Node resolves duplicates to the first; an intermediary forwarding the
+    // last would then be reading a different request from the approved one.
+    const { port } = server.address() as AddressInfo;
+    const res = await rawGetRaw(
+      `GET /api/diff HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nHost: evil.attacker.com\r\nConnection: close\r\n\r\n`
+    );
+    expect(res).toContain('403');
+  });
+
+  it('rejects an Origin that is not a serialized origin', async () => {
+    // `new URL` parses userinfo away, so this would otherwise compare equal to
+    // the listener's own authority. A browser never sends such a value.
+    const { port } = server.address() as AddressInfo;
+    const res = await rawGet('/api/diff', {
+      host: `127.0.0.1:${port}`,
+      origin: `http://evil.attacker.com@127.0.0.1:${port}`,
+    });
+    expect(res.status).toBe(403);
+    expectNoCoreCall();
+  });
+
+  it('rejects a request the browser marks as cross-site', async () => {
+    // A cross-site GET — an <img> or <script> aimed at this port — carries no
+    // Origin, so this header is the only thing that identifies it.
+    const { port } = server.address() as AddressInfo;
+    const res = await rawGet('/api/diff', {
+      host: `127.0.0.1:${port}`,
+      'sec-fetch-site': 'cross-site',
+    });
+    expect(res.status).toBe(403);
+    expectNoCoreCall();
+  });
+
+  it('accepts the fetch metadata a real page sends', async () => {
+    const { port } = server.address() as AddressInfo;
+    for (const site of ['same-origin', 'none']) {
+      const res = await rawGet('/api/diff', {
+        host: `127.0.0.1:${port}`,
+        'sec-fetch-site': site,
+      });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it('answers a Host that names this listener', async () => {
+    const { port } = server.address() as AddressInfo;
+    const res = await rawGet('/api/diff', { host: `127.0.0.1:${port}` });
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects a cross-origin submission before it reaches core', async () => {
+    const res = await postJson(
+      '/api/review',
+      {
+        timestamp: '2026-09-09T00:00:00.000Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        files: [],
+      },
+      { headers: { 'content-type': 'application/json', origin: 'https://evil.attacker.com' } }
+    );
+    expect(res.status).toBe(403);
+    expectNoCoreCall();
+    expect(session.reviewState).toBeNull();
+  });
+
+  it('rejects an https origin on a matching authority', async () => {
+    const { port } = server.address() as AddressInfo;
+    const res = await rawGet('/api/diff', {
+      host: `127.0.0.1:${port}`,
+      origin: `https://127.0.0.1:${port}`,
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects the opaque origin a sandboxed frame sends', async () => {
+    const res = await fetch(`${base}/api/diff`, { headers: { origin: 'null' } });
+    expect(res.status).toBe(403);
+    expectNoCoreCall();
+  });
+
+  it('accepts localhost and the listener\'s own origin', async () => {
+    const port = (server.address() as AddressInfo).port;
+    const viaLocalhost = await fetch(`http://localhost:${port}/api/diff`);
+    expect(viaLocalhost.status).toBe(200);
+
+    const withOrigin = await fetch(`${base}/api/diff`, { headers: { origin: base } });
+    expect(withOrigin.status).toBe(200);
+  });
+
+  it('accepts a request with no Origin at all, as curl sends', async () => {
+    const res = await fetch(`${base}/api/diff`);
+    expect(res.status).toBe(200);
+  });
+});
+
+// The page renders the diff under review, which is the least trusted input
+// this program handles. These headers are the layer that holds when the
+// renderer's own sanitizing does not.
+describe('security headers', () => {
+  it('sends a CSP that forbids frames, plugins and foreign origins', async () => {
+    const res = await fetch(`${base}/`);
+    const csp = res.headers.get('content-security-policy') ?? '';
+    expect(csp).toContain("frame-src 'none'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("connect-src 'self'");
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('x-frame-options')).toBe('DENY');
+  });
+
+  it('sends them on API responses too', async () => {
+    const res = await fetch(`${base}/api/diff`);
+    expect(res.headers.get('content-security-policy')).toBeTruthy();
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
   });
 });

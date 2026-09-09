@@ -41,8 +41,10 @@ arguments above and cannot be changed from the browser. Completing the review
 writes that file and stops this process. Nothing is saved before then, and
 closing the tab once you have written a comment warns you first.
 
-The listener binds to 127.0.0.1 and there is no authentication: anything that
-can reach the port can read the diff and complete the review.
+The listener binds to 127.0.0.1 and refuses any request that names another
+host or origin, so a web page cannot reach it. There is no authentication:
+anything that can reach the port can read the diff and complete the review,
+which on a shared host means every local user. An ssh -L forward works.
 `.trim();
 
 function printVersion(): void {

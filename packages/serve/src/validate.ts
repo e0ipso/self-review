@@ -138,10 +138,12 @@ const REVIEW_STATE_KEYS: ReadonlySet<string> = new Set(['timestamp', 'source', '
  * desktop injects it main-side after submission, and the serve process does
  * the same, so an unknown key is rejected rather than forwarded.
  *
- * This is a structural check only. The full document is validated against
- * the XSD when it is serialized, which is where every nested field is
- * checked; here the aim is that `submitReviewState` never sees a body it
- * cannot even read.
+ * Mostly a structural check: the full document is validated against the XSD
+ * when it is serialized, which is where every nested field is checked, and
+ * here the aim is that `submitReviewState` never sees a body it cannot even
+ * read. The exception is `id`, which is checked in the walk below because
+ * deferring it to the XSD does not work — an id names a file that the
+ * serializer writes to disk *before* it validates anything.
  */
 export function parseReviewStateBody(body: unknown): ParseResult<ReviewState> {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
@@ -200,6 +202,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Comment and reply ids, as this application produces them: either a
+ * `crypto.randomUUID()` (the renderer) or `${Date.now()}-${base36}`
+ * (`generateId` in core's xml-parser, used for every comment read back from a
+ * resumed document). Both are covered by the URL-safe alphabet. Ids are never
+ * written to the XML, so a resumed document never carries a foreign one in.
+ */
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Reject an id that is not one this application could have produced.
+ *
+ * The serializer names each attachment file after the id of the comment or
+ * reply that owns it, and writes that file before the document is validated
+ * against the XSD — so `../../x` as an id used to place an attacker-chosen
+ * file at an attacker-chosen path, and did it whether or not the document
+ * that carried it was ever valid. Core contains that write on its own now;
+ * this is the boundary half of the same fix, and it is here rather than there
+ * because this is the only entry point where the id arrives off a socket.
+ *
+ * An absent id is left alone. It still reaches the serializer, which coerces
+ * it and contains the name it produces, so the file cannot escape — the point
+ * of rejecting a *present* id here is to fail at the door with a 400 rather
+ * than midway through saving, after the review has left the session.
+ */
+function checkId(entry: Record<string, unknown>, what: string): string | null {
+  if (entry.id === undefined) return null;
+  if (typeof entry.id !== 'string' || !ID_PATTERN.test(entry.id)) {
+    return `${what} id must match ${ID_PATTERN.source}`;
+  }
+  return null;
+}
+
+/**
  * Decode base64 into a standalone `ArrayBuffer`.
  *
  * The slice is load-bearing: for a small payload `Buffer.from` returns a view
@@ -247,7 +282,8 @@ function decodeAttachmentList(list: unknown[]): ParseResult<unknown[]> {
 }
 
 /**
- * Walk the submitted files for attachment blobs and decode them in place.
+ * Walk the submitted files, decoding attachment blobs and checking every id
+ * the serializer will turn into a file name.
  *
  * Deliberately tolerant of everything else: this function only recognizes the
  * `files[].comments[].attachments[]` and `files[].comments[].replies[]
@@ -268,6 +304,8 @@ function decodeFileAttachments(files: unknown[]): ParseResult<unknown[]> {
         decodedComments.push(comment);
         continue;
       }
+      const commentIdError = checkId(comment, 'comment');
+      if (commentIdError) return { ok: false, error: commentIdError };
       const next: Record<string, unknown> = { ...comment };
 
       if (Array.isArray(comment.attachments)) {
@@ -279,7 +317,13 @@ function decodeFileAttachments(files: unknown[]): ParseResult<unknown[]> {
       if (Array.isArray(comment.replies)) {
         const decodedReplies: unknown[] = [];
         for (const reply of comment.replies) {
-          if (!isRecord(reply) || !Array.isArray(reply.attachments)) {
+          if (!isRecord(reply)) {
+            decodedReplies.push(reply);
+            continue;
+          }
+          const replyIdError = checkId(reply, 'reply');
+          if (replyIdError) return { ok: false, error: replyIdError };
+          if (!Array.isArray(reply.attachments)) {
             decodedReplies.push(reply);
             continue;
           }

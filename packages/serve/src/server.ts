@@ -10,8 +10,12 @@
 //    runs. The core handlers were written for an in-process caller the
 //    compiler had already checked; over HTTP the caller is whatever is on the
 //    other end of the socket.
-// 2. The listener binds to 127.0.0.1 only (`listenLoopback`). That is the
-//    whole of the access-control story — there is no authentication.
+// 2. The listener binds to 127.0.0.1 only (`listenLoopback`), and answers only
+//    to requests that name it (`hostIsLoopback`/`originMatchesHost`). Binding
+//    alone would not be enough: it keeps other machines out, but a web page the
+//    reviewer visits can reach a loopback port, and DNS rebinding would make it
+//    same-origin. There is still no authentication — any *process* on this
+//    machine that can reach the port is trusted.
 //
 // This module starts no subprocess. `core` already reaches git safely — argv
 // form, never a shell string, with a `--` separator before any path (the fix
@@ -92,6 +96,158 @@ const CONTENT_TYPES: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+/**
+ * Sent on every response, static and JSON alike.
+ *
+ * The content this server hands the browser includes the diff under review,
+ * and a diff is the least trusted input the program handles — reviewing code
+ * you do not trust yet is the entire point of the application. Rendered
+ * Markdown and HTML are sanitized before they are ever turned into elements
+ * (see `RenderedMarkdownView`), and this is the second line: even if something
+ * unsanitized reaches the page, it cannot open a frame, load a plugin, run an
+ * inline script, or talk to any origin but this one.
+ *
+ * `style-src` allows inline styles because the client's index.html carries an
+ * inline <style> block and several bundled libraries inject styles at runtime.
+ * `img-src` allows blob: because attachments are displayed through
+ * `URL.createObjectURL` (see AttachmentImage).
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "frame-src 'none'",
+  "child-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+const SECURITY_HEADERS: http.OutgoingHttpHeaders = {
+  'content-security-policy': CSP,
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'no-referrer',
+};
+
+/**
+ * Hostnames this server will answer to. `localhost` is included because a
+ * browser opening the printed URL may resolve it either way, and `[::1]` for
+ * a stack that prefers IPv6.
+ */
+const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+/**
+ * Normalize a `host`-shaped value for comparison: lowercased, with an
+ * explicit default HTTP port dropped so `localhost:80` and `localhost` are
+ * the same authority.
+ */
+function normalizeHost(value: string): string {
+  const lowered = value.toLowerCase();
+  return lowered.endsWith(':80') ? lowered.slice(0, -3) : lowered;
+}
+
+/**
+ * Reject a request whose `Host` does not name a loopback address.
+ *
+ * Binding to 127.0.0.1 keeps other machines out; it does not keep out a web
+ * page. DNS rebinding — a name the attacker controls, re-resolved to
+ * 127.0.0.1 after the page loads — makes `evil.example` same-origin with this
+ * server, at which point the browser's own origin checks are satisfied and
+ * every route below is reachable from a page the reviewer merely visited. The
+ * ephemeral port raises the cost of finding this listener; it is not a
+ * control. The `Host` header is what distinguishes the two cases, because a
+ * rebound request still carries the attacker's name in it.
+ *
+ * Only the hostname is checked, never the port against the port this process
+ * bound. A forwarded port — `ssh -L 9999:127.0.0.1:<port>`, which is how this
+ * program is meant to be reached from a remote box — arrives with the
+ * *forward's* port in `Host`, and comparing that to the bound port would 403
+ * the entire use case the package exists for. It would also buy nothing: a
+ * rebound request is rejected on the attacker's hostname before the port is
+ * ever considered.
+ *
+ * A duplicate `Host` is refused rather than resolved. Node hands back the
+ * first one; an intermediary that forwarded the last would then be reading a
+ * different request from the one this gate approved.
+ */
+function hostIsLoopback(req: http.IncomingMessage): boolean {
+  const host = req.headers.host;
+  if (host === undefined) return false;
+
+  let seen = 0;
+  for (let i = 0; i < req.rawHeaders.length; i += 2) {
+    if (req.rawHeaders[i].toLowerCase() === 'host') seen++;
+  }
+  if (seen !== 1) return false;
+
+  // Split the optional port off, keeping an IPv6 literal's brackets intact.
+  const match = /^(\[[^\]]*\]|[^:]*)(?::(\d+))?$/.exec(host);
+  if (match === null) return false;
+  return LOOPBACK_HOSTNAMES.has(match[1].toLowerCase());
+}
+
+/**
+ * Reject a request whose `Origin` is not the authority the request itself
+ * addresses.
+ *
+ * A missing `Origin` is allowed: a same-origin navigation does not send one,
+ * and neither does curl. What is rejected is an `Origin` naming a different
+ * authority from the `Host` — including the literal `null` a sandboxed frame
+ * sends, which does not parse as a URL.
+ *
+ * Comparing against `Host` rather than against the bound port is what makes
+ * this survive a port forward while still refusing another *local* page: a
+ * dev server on `localhost:3000` fetching this listener sends its own origin
+ * and this listener's host, and those differ. Checking only that the origin
+ * looks loopback would let that through, since `localhost` is `localhost`
+ * whatever port serves it.
+ */
+function originMatchesHost(req: http.IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  if (origin === undefined) return true;
+  const host = req.headers.host;
+  if (host === undefined) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:') return false;
+  // A browser's Origin is a *serialized origin* — scheme, host, optional port
+  // and nothing else. `new URL` is far more permissive than that: it parses
+  // away userinfo, a path, a query, a fragment and a leading-zero port, any of
+  // which would otherwise compare equal to this listener's authority. Require
+  // the value to be exactly what a browser would have sent.
+  if (origin !== `${parsed.protocol}//${parsed.host}`) return false;
+  return normalizeHost(parsed.host) === normalizeHost(host);
+}
+
+/**
+ * Reject a request the browser itself says came from elsewhere.
+ *
+ * `Sec-Fetch-Site` is set by the browser and cannot be forged by page script.
+ * `none` is a typed-in navigation, `same-origin` is this page calling its own
+ * API; anything else is another site reaching for this port. That case is
+ * mostly covered already — a cross-origin POST carries an `Origin` and is
+ * refused — but a cross-site *GET*, an <img> or <script> aimed at a loopback
+ * URL, carries no Origin at all, so without this it would be served and only
+ * the absence of CORS headers would stop the page reading it. Refusing it
+ * outright is the stronger answer.
+ *
+ * A non-browser client sends no such header, and is unaffected.
+ */
+function fetchSiteIsSelf(req: http.IncomingMessage): boolean {
+  const site = req.headers['sec-fetch-site'];
+  if (site === undefined) return true;
+  return site === 'same-origin' || site === 'none';
+}
+
 function sendJson(
   res: http.ServerResponse,
   status: number,
@@ -101,6 +257,7 @@ function sendJson(
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
+    ...SECURITY_HEADERS,
     ...headers,
   });
   // `JSON.stringify(undefined)` is undefined; a void core result becomes `null`.
@@ -248,6 +405,7 @@ const routes: Record<string, RouteHandler> = {
     res.writeHead(200, {
       'content-type': 'application/octet-stream',
       'cache-control': 'no-store',
+      ...SECURITY_HEADERS,
     });
     res.end(Buffer.from(data));
   },
@@ -330,6 +488,7 @@ async function serveStatic(
   res.writeHead(200, {
     'content-type': CONTENT_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream',
     'content-length': data.length,
+    ...SECURITY_HEADERS,
   });
   res.end(data);
 }
@@ -351,6 +510,12 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
       url = new URL(req.url ?? '/', 'http://localhost');
     } catch {
       sendError(res, 400, 'malformed request URL');
+      return;
+    }
+
+    // Before anything is routed: this listener answers only to itself.
+    if (!hostIsLoopback(req) || !originMatchesHost(req) || !fetchSiteIsSelf(req)) {
+      sendError(res, 403, 'forbidden');
       return;
     }
 

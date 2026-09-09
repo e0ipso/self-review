@@ -98,8 +98,32 @@ effect until you restart it.
 
 ## Access control
 
-The listener binds to `127.0.0.1` and there is no authentication. Anything on the same machine
-that can reach the port can read your diff and finish the review on your behalf.
+The listener binds to `127.0.0.1` and there is no authentication. Anything that can reach the port
+can read your diff and finish the review on your behalf — and on a shared host that means every
+local user, not only you, because loopback is not scoped to an account.
 
-If you put a reverse proxy, tunnel, or port-forward in front of it, you are responsible for
-access control. The program provides none.
+A *web page* is a different matter, and binding to loopback on its own does not cover it: a page
+you visit can make requests to a loopback port, and DNS rebinding — a hostname the page's author
+controls, re-pointed at `127.0.0.1` after the page loads — would make those requests same-origin
+as far as the browser is concerned. So the server also refuses any request whose `Host` or
+`Origin` names something other than this listener, which is what separates a rebound request
+from a real one.
+
+The page itself is served with a content security policy that forbids frames, plugins, inline
+script and any origin but its own. That matters because the page renders the diff under review,
+and reviewing code you do not trust yet is the whole point of the program: rendered Markdown and
+HTML are sanitized before they become elements, and the policy is the layer that holds if
+something gets past that.
+
+An `ssh -L 9999:127.0.0.1:<port>` forward works and is the expected way to reach this from
+elsewhere. Only the hostname in `Host` is checked, never its port against the port the process
+bound, so the forward's own port is fine. Reach the forward by a name that is not loopback — an
+`ssh -L -g` bound on an interface and browsed as `http://devbox:9999` — and it refuses, as it
+should. So does anything terminating HTTPS in front of it.
+
+`docker run -p` does **not** work, and cannot: the listener binds `127.0.0.1` inside the
+container's network namespace, which a published port has no route to. Reaching a containerised
+review means a forward into the namespace, not a published port.
+
+Anyone who can reach the forwarded port has the same access you do. The program provides no
+authentication, and securing the tunnel is yours to do.
