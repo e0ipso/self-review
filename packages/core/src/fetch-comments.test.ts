@@ -3,14 +3,14 @@ import type {
   ForgeThread,
   ForgeUrl,
   ForgeProvider,
-} from '../../packages/core/src/forge-provider';
-import { ForgeCliUnavailableError } from '../../packages/core/src/forge-provider';
-import type { MaterializeResult } from '../../packages/core/src/materializer';
-import { REVIEW_LEVEL_FILE_PATH } from '../../packages/core/src/thread-mapper';
-import { mapThreadsToReviewComments } from '../../packages/core/src/thread-mapper';
-import { serializeReview } from '../../packages/core/src/xml-serializer';
-import { parseReviewXmlString } from '../../packages/core/src/xml-parser';
-import type { AppConfig, DiffFile } from '../shared/types';
+} from './forge-provider';
+import { ForgeCliUnavailableError } from './forge-provider';
+import type { MaterializeResult } from './materializer';
+import { REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
+import { mapThreadsToReviewComments } from './thread-mapper';
+import { serializeReview } from './xml-serializer';
+import { parseReviewXmlString } from './xml-parser';
+import type { AppConfig, DiffFile } from './types';
 import {
   buildRemoteReviewState,
   runFetchComments,

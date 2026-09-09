@@ -1,4 +1,4 @@
-import type { DiffFile } from '../shared/types';
+import type { DiffFile } from './types';
 import { runGitDiffAsync, getRepoRootAsync, getUntrackedFilesAsync, generateUntrackedDiffs } from './git';
 import { parseDiff } from './diff-parser';
 

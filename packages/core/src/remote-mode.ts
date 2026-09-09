@@ -1,4 +1,4 @@
-// src/main/remote-mode.ts
+// packages/core/src/remote-mode.ts
 // Remote PR/MR session bootstrap for the main process.
 //
 // Binding rule: after materialization, remote mode *is* git mode. This
@@ -22,7 +22,7 @@ import {
   defaultGitRunner,
   mapThreadsToReviewComments,
   createIgnoreFilter,
-} from '../../packages/core/src/index';
+} from './index';
 import type {
   ForgeCommandRunner,
   ForgeName,
@@ -31,7 +31,7 @@ import type {
   ExistingClone,
   MaterializeMode,
   MaterializeResult,
-} from '../../packages/core/src/index';
+} from './index';
 import type {
   DiffFile,
   DiffLoadPayload,
@@ -39,7 +39,7 @@ import type {
   RemoteSessionInfo,
   ReviewComment,
   ReviewState,
-} from '../shared/types';
+} from './types';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 
 /** A materialized remote PR/MR session, ready for the git-mode pipeline. */

@@ -1,4 +1,4 @@
-// src/main/guide-loader.ts
+// packages/core/src/guide-loader.ts
 // Discovery + tolerant loading of the walkthrough guide sidecar.
 //
 // The guide is orientation garnish on a deterministic tool (see
@@ -22,8 +22,8 @@ import { extname, resolve } from 'path';
 import {
   parseGuideXml,
   reconcileGuide,
-} from '../../packages/core/src/guide-parser';
-import { AppConfig, GuideLoadPayload } from '../shared/types';
+} from './guide-parser';
+import { AppConfig, GuideLoadPayload } from './types';
 
 /**
  * Derive the guide sidecar path from the resolved output path: strip the

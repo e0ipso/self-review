@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { AppConfig } from '@self-review/types';
+import type { AppConfig } from './types';
 import { applyStagedUntrackedDefault } from './staged-untracked';
 
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
