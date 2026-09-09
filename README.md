@@ -333,8 +333,12 @@ The URL goes to stderr when the process starts. Open it in a browser.
 
 The output path is set once, at startup, by `--output`/`-o` or by `output-file` in
 `.self-review.yaml`. No control in the browser changes it afterward. Finishing the review writes
-that file and stops the process. Closing the tab does nothing: nothing is auto-saved, and nothing
-is written until you finish.
+that file and stops the process.
+
+Closing the tab warns you first, once you have entered something. Comments live only in the page
+until you finish, so closing without finishing loses them. The desktop application asks the same
+question with more options, since it can offer to save on the way out and a browser cannot.
+Nothing is auto-saved either way.
 
 Walkthrough guides work as they do in the desktop application. A `review.guide.xml` sitting next
 to your output path is picked up at startup and the file tree opens in guided mode.

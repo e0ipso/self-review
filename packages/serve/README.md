@@ -76,8 +76,15 @@ No route and no browser control changes it afterward.
 Finishing the review writes that file and stops the process. The port closes with it, so there is
 no second attempt: if you want to keep reviewing, start it again with `--resume-from`.
 
-Closing the tab does nothing at all. Nothing is auto-saved and nothing is written until you
-finish the review.
+Closing the tab warns you first, once you have entered something. Your comments live only in
+that page until you finish, so closing without finishing loses them.
+
+The desktop application asks the same question with better options, offering to save on the way
+out. A browser will not let a page do that: `beforeunload` is a yes or no prompt whose wording
+belongs to the browser. Nothing is auto-saved in either front end.
+
+The server keeps listening after you close the tab. Nothing tells it you left, so stop it with
+Ctrl-C if you are not coming back.
 
 ## Walkthrough guides
 

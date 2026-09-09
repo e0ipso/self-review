@@ -86,6 +86,7 @@ function App() {
   const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>('reviewing');
+  const [hasUnsavedWork, setHasUnsavedWork] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Config first: the providers below are seeded with it, so mounting before
@@ -131,6 +132,24 @@ function App() {
     );
   }
 
+  // Warn before the tab closes with work that only exists in this page.
+  //
+  // The desktop application intercepts its window close and offers Save & Quit,
+  // Discard or Cancel. A browser gives us less: `beforeunload` is a yes/no
+  // prompt whose wording belongs to the browser, so this warns without being
+  // able to offer the save. It is closer to the desktop than closing silently,
+  // which is what happened before.
+  //
+  // Comments live only in this page until they are submitted, so losing them is
+  // real. The listener stays up either way; nothing tells the process the
+  // reviewer left.
+  useEffect(() => {
+    if (!hasUnsavedWork || status !== 'reviewing') return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasUnsavedWork, status]);
+
   if (status === 'submitted') {
     return <Submitted outputPath={outputPathInfo?.resolvedOutputPath ?? null} />;
   }
@@ -156,6 +175,7 @@ function App() {
         ref={reviewRef}
         adapter={adapter}
         config={config}
+        onReviewChange={(comments) => setHasUnsavedWork(comments.length > 0)}
         className='flex-1 flex flex-col overflow-hidden bg-background text-foreground'
       >
         <OutputPath info={outputPathInfo} />
