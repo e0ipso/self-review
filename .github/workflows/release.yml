@@ -83,7 +83,7 @@ jobs:
       - name: Publish workspace packages to npm
         if: steps.tag.outputs.tag != ''
         run: |
-          for pkg in packages/types packages/core packages/react; do
+          for pkg in packages/types packages/core packages/react packages/serve; do
             name=$(jq -r .name "$pkg/package.json")
             version=$(jq -r .version "$pkg/package.json")
             if npm view "$name@$version" version >/dev/null 2>&1; then

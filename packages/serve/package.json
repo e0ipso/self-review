@@ -1,0 +1,35 @@
+{
+  "name": "@self-review/serve",
+  "version": "1.43.4",
+  "description": "Serve the self-review interface over loopback HTTP as an ordinary Node command",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/e0ipso/self-review.git",
+    "directory": "packages/serve"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "bin": {
+    "self-review-serve": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@self-review/core": "^1.43.4",
+    "@self-review/react": "^1.43.4"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "~5.9.0",
+    "vitest": "^4.0.18"
+  },
+  "license": "MIT"
+}
