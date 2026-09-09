@@ -390,6 +390,69 @@ describe('POST /api/review', () => {
     expect(res.status).toBe(400);
     expectNoCoreCall();
   });
+
+  // `Attachment.data` is an ArrayBuffer and `JSON.stringify` renders one as
+  // `{}`, so an unencoded blob would reach the serializer empty and write a
+  // zero-byte image with a 200 and no error. The client base64-encodes it;
+  // what matters here is that non-empty bytes come out the other end.
+  const BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+  function stateWithAttachment(attachment: unknown) {
+    return {
+      ...state,
+      files: [
+        {
+          path: 'src/index.ts',
+          changeType: 'added',
+          viewed: true,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/index.ts',
+              lineRange: null,
+              body: 'see the screenshot',
+              category: 'bug',
+              suggestion: null,
+              attachments: [attachment],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('delivers non-empty attachment bytes to submitReviewState', async () => {
+    const res = await postJson(
+      '/api/review',
+      stateWithAttachment({
+        id: 'a1',
+        fileName: 'shot.png',
+        mediaType: 'image/png',
+        dataBase64: Buffer.from(BYTES).toString('base64'),
+      })
+    );
+    expect(res.status).toBe(200);
+
+    const submitted = vi.mocked(core.submitReviewState).mock.calls[0][1];
+    const data = submitted.files[0].comments[0].attachments![0].data!;
+    expect(new Uint8Array(data)).toEqual(BYTES);
+    // And the session holds the same bytes, which is what lifecycle writes.
+    expect(
+      new Uint8Array(session.reviewState!.files[0].comments[0].attachments![0].data!)
+    ).toEqual(BYTES);
+  });
+
+  it('refuses a raw ArrayBuffer field instead of writing an empty file', async () => {
+    const res = await postJson('/api/review', stateWithAttachment({
+      id: 'a1',
+      fileName: 'shot.png',
+      mediaType: 'image/png',
+      data: {},
+    }));
+    expect(res.status).toBe(400);
+    expectNoCoreCall();
+    expect(session.reviewState).toBeNull();
+  });
 });
 
 describe('routing', () => {

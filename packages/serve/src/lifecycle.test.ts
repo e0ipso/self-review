@@ -6,6 +6,7 @@ import { createReviewSession } from '@self-review/core';
 import type { ReviewSession, ReviewState } from '@self-review/core';
 import { createReviewServer, listenLoopback } from './server';
 import { completeReviewOnSubmit } from './lifecycle';
+import { encodeReviewStateForWire } from './client/adapter';
 
 let tmp: string;
 let session: ReviewSession;
@@ -98,6 +99,28 @@ describe('completeReviewOnSubmit', () => {
 
     expect(await exited).toBe(1);
     expect(fs.existsSync(outputPath)).toBe(false);
+  });
+
+  it('writes the attachment bytes the browser encoded, not an empty file', async () => {
+    // The whole chain in one test: the client's own encoder, the HTTP body,
+    // the route's decode, the serializer's asset write. `Attachment.data` is
+    // an ArrayBuffer and `JSON.stringify` renders one as `{}`, so without the
+    // base64 encoding this file would be written empty — with a 200, and no
+    // error anywhere to notice it by.
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const state = reviewState();
+    state.files[0].comments[0].attachments = [
+      { id: 'a1', fileName: 'shot.png', mediaType: 'image/png', data: bytes.slice().buffer },
+    ];
+
+    expect((await submit(encodeReviewStateForWire(state))).status).toBe(200);
+    expect(await exited).toBe(0);
+
+    const asset = path.join(path.dirname(outputPath), '.self-review-assets', 'c1-0.png');
+    expect(fs.readFileSync(asset)).toEqual(Buffer.from(bytes));
+    expect(fs.readFileSync(outputPath, 'utf-8')).toContain(
+      '<attachment path=".self-review-assets/c1-0.png" media-type="image/png" />'
+    );
   });
 
   it('does nothing for a rejected submission or any other request', async () => {

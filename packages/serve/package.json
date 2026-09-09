@@ -18,8 +18,9 @@
     "dist"
   ],
   "scripts": {
-    "prebuild": "npm run build --workspace @self-review/core",
-    "build": "tsup",
+    "prebuild": "npm run build --workspace @self-review/core && npm run build --workspace @self-review/react",
+    "build": "tsup && npm run build:client",
+    "build:client": "vite build --config vite.client.config.ts",
     "dev": "tsup --watch",
     "test:unit": "vitest run"
   },
@@ -30,6 +31,7 @@
   "devDependencies": {
     "tsup": "^8.0.0",
     "typescript": "~5.9.0",
+    "vite": "^7.3.1",
     "vitest": "^4.0.18"
   },
   "license": "MIT"

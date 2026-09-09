@@ -218,3 +218,123 @@ describe('parseReviewStateBody', () => {
     expect(parseReviewStateBody([valid]).ok).toBe(false);
   });
 });
+
+describe('parseReviewStateBody attachment blobs', () => {
+  // A PNG signature: eight bytes that are unmistakably not zeros.
+  const BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const BASE64 = Buffer.from(BYTES).toString('base64');
+
+  function bodyWith(attachment: unknown, replyAttachment?: unknown) {
+    return {
+      timestamp: '2026-09-09T00:00:00.000Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [
+        {
+          path: 'src/index.ts',
+          changeType: 'modified',
+          viewed: false,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/index.ts',
+              lineRange: null,
+              body: 'see this',
+              category: 'bug',
+              suggestion: null,
+              attachments: [attachment],
+              ...(replyAttachment
+                ? { replies: [{ id: 'r1', body: 'and this', attachments: [replyAttachment] }] }
+                : {}),
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  function attachmentsOf(result: ReturnType<typeof parseReviewStateBody>) {
+    if (!result.ok) throw new Error(`expected ok, got: ${result.error}`);
+    return result.value.files[0].comments[0];
+  }
+
+  it('decodes dataBase64 into the ArrayBuffer the serializer writes to disk', () => {
+    const comment = attachmentsOf(
+      parseReviewStateBody(
+        bodyWith({ id: 'a1', fileName: 'shot.png', mediaType: 'image/png', dataBase64: BASE64 })
+      )
+    );
+    const attachment = comment.attachments![0];
+    expect(attachment.data).toBeInstanceOf(ArrayBuffer);
+    expect(new Uint8Array(attachment.data!)).toEqual(BYTES);
+    // The wire field never survives into the state core is handed.
+    expect(attachment).not.toHaveProperty('dataBase64');
+    expect(attachment.fileName).toBe('shot.png');
+  });
+
+  it('decodes a reply attachment as well as a comment attachment', () => {
+    const comment = attachmentsOf(
+      parseReviewStateBody(
+        bodyWith(
+          { id: 'a1', fileName: 'shot.png', mediaType: 'image/png', dataBase64: BASE64 },
+          { id: 'a2', fileName: 'reply.png', mediaType: 'image/png', dataBase64: BASE64 }
+        )
+      )
+    );
+    expect(new Uint8Array(comment.replies![0].attachments![0].data!)).toEqual(BYTES);
+  });
+
+  it('hands over only the attachment bytes, not the Buffer pool behind them', () => {
+    // `Buffer.from(x, 'base64')` for a small payload is a view into a shared
+    // 8 KB pool. Passing `.buffer` straight through would write the pool —
+    // the file on disk would be kilobytes of unrelated memory.
+    const comment = attachmentsOf(
+      parseReviewStateBody(
+        bodyWith({ id: 'a1', fileName: 'shot.png', mediaType: 'image/png', dataBase64: BASE64 })
+      )
+    );
+    expect(comment.attachments![0].data!.byteLength).toBe(BYTES.length);
+  });
+
+  it('rejects an attachment carrying data instead of dataBase64', () => {
+    // `JSON.stringify(arrayBuffer)` is `{}`. Accepting that would write an
+    // empty file with a 200 and no error anywhere, so it must be loud.
+    const result = parseReviewStateBody(
+      bodyWith({ id: 'a1', fileName: 'shot.png', mediaType: 'image/png', data: {} })
+    );
+    expect(result.ok).toBe(false);
+    expect(result).toHaveProperty('error', expect.stringContaining('dataBase64'));
+  });
+
+  it('rejects a dataBase64 that is not base64', () => {
+    const result = parseReviewStateBody(
+      bodyWith({ id: 'a1', fileName: 'shot.png', mediaType: 'image/png', dataBase64: 'not base64!' })
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects an empty dataBase64 rather than writing a zero-byte file', () => {
+    const result = parseReviewStateBody(
+      bodyWith({ id: 'a1', fileName: 'shot.png', mediaType: 'image/png', dataBase64: '' })
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects a dataBase64 that is not a string', () => {
+    const result = parseReviewStateBody(
+      bodyWith({ id: 'a1', fileName: 'shot.png', mediaType: 'image/png', dataBase64: 42 })
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it('leaves a resumed attachment — one with no blob — untouched', () => {
+    // Resumed attachments carry only a path; their bytes are read back
+    // through GET /api/attachment, never resubmitted.
+    const attachment = {
+      id: 'a1',
+      fileName: '.self-review-assets/c1-0.png',
+      mediaType: 'image/png',
+    };
+    const comment = attachmentsOf(parseReviewStateBody(bodyWith(attachment)));
+    expect(comment.attachments![0]).toEqual(attachment);
+  });
+});
