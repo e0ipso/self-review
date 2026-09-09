@@ -1,10 +1,8 @@
 // The browser half of serve mode: a `ReviewAdapter` over `fetch`.
 //
-// This is the third implementation of the interface declared in
-// `packages/react/src/adapter.ts`, after the Electron renderer (over IPC,
-// `src/renderer/App.tsx`) and the e2e harness (over fixtures,
-// `tests/webapp/main.tsx`). It supplies transport only: every component the
-// browser renders already exists in `@self-review/react`.
+// It implements the interface declared in `packages/react/src/adapter.ts`,
+// supplying transport only: every component the browser renders already
+// exists in `@self-review/react`.
 //
 // Three properties of this module are deliberate:
 //

@@ -1,11 +1,5 @@
 // The browser mount point for serve mode.
 //
-// Chrome only: the review interface itself is `ReviewPanel` from
-// `@self-review/react`, mounted with the fetch adapter next door. Nothing in
-// this file reimplements any part of the review UI, and the closest model for
-// its shape is `tests/webapp/main.tsx`, which mounts the same component in a
-// real browser against a different transport.
-//
 // The compiled stylesheet is imported explicitly because the package lists it
 // under `sideEffects`; without this import the UI renders unstyled.
 
@@ -94,8 +88,8 @@ function App() {
   const [status, setStatus] = useState<Status>('reviewing');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Config first, like the desktop: the providers below are seeded with it,
-  // so mounting before it lands would render the wrong theme and categories.
+  // Config first: the providers below are seeded with it, so mounting before
+  // it lands would render the wrong theme and categories.
   useEffect(() => {
     let cancelled = false;
     loadServeConfig()

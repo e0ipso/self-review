@@ -311,38 +311,37 @@ over SSH, in CI and in a container with `$DISPLAY` unset and no `xvfb-run` wrapp
 
 ### Serve mode
 
-The same review UI is also available as an ordinary HTTP server, `self-review-serve`, for cases
-where opening an Electron window isn't an option — a remote box, a container, or you'd just
-rather use your own browser.
-
-Install and run it as its own package:
+The same review UI also runs in your browser, through `self-review-serve`, for when opening an
+Electron window is not an option: a remote box, a container, or a machine with no display.
 
 ```bash
-npm install -g @self-review/serve
-self-review-serve --staged
+npx @self-review/serve --staged
 ```
 
-It accepts the same git diff arguments as `self-review`, plus `-o`/`--output` for the output path
-and `--resume-from` to load a prior review:
+It takes the same git diff arguments as `self-review`, plus `-o`/`--output` for where to write
+the review and `--resume-from` to carry a previous one in:
 
 ```bash
-self-review-serve                             # unstaged changes
-self-review-serve --staged
-self-review-serve main..feature-branch
-self-review-serve --resume-from review.xml    # resume a previous review
-self-review-serve -o my-review.xml --staged   # write somewhere other than ./review.xml
+npx @self-review/serve                            # unstaged changes
+npx @self-review/serve --staged
+npx @self-review/serve main..feature-branch
+npx @self-review/serve --resume-from review.xml   # continue a previous review
+npx @self-review/serve -o my-review.xml --staged  # write somewhere other than ./review.xml
 ```
 
-The URL is printed to stderr on start — open it in a browser. The output path is fixed by the
-`--output`/`-o` flag (or `output-file` from `.self-review.yaml`) when the process starts, and
-there is no control in the browser to change it afterward. Completing the review writes that
-file and stops the process. Closing the browser tab does nothing: nothing is auto-saved, and
-nothing is written until the review is completed.
+The URL goes to stderr when the process starts. Open it in a browser.
 
-The listener binds to `127.0.0.1` only, and there is no authentication. That is the whole of the
-access control: anything on the same machine that can reach the port can read the diff and
-complete the review. Do not put the port behind a reverse proxy, tunnel, or port-forward that
-makes it reachable from anywhere else without adding your own access control in front of it.
+The output path is set once, at startup, by `--output`/`-o` or by `output-file` in
+`.self-review.yaml`. No control in the browser changes it afterward. Finishing the review writes
+that file and stops the process. Closing the tab does nothing: nothing is auto-saved, and nothing
+is written until you finish.
+
+Walkthrough guides work as they do in the desktop application. A `review.guide.xml` sitting next
+to your output path is picked up at startup and the file tree opens in guided mode.
+
+The listener binds to `127.0.0.1` and there is no authentication. Anything on the same machine
+that can reach the port can read your diff and finish the review on your behalf. If you put a
+reverse proxy, tunnel, or port-forward in front of it, access control is yours to add.
 
 See [`packages/serve/README.md`](packages/serve/README.md) for the package itself.
 

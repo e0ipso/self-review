@@ -1,10 +1,10 @@
 // Contract test for the browser adapter.
 //
-// The adapter is one of three implementations of `ReviewAdapter` (Electron
-// over IPC, the e2e harness over fixtures, this one over HTTP), so what is
-// asserted here is the contract, not the implementation: for every method,
-// the request it issues and the shape it resolves to. `fetch` is stubbed —
-// the real round trip against a running server is task 6's job.
+// `ReviewAdapter` has several implementations over different transports, so
+// what is asserted here is the contract, not the implementation: for every
+// method, the request it issues and the shape it resolves to. `fetch` is
+// stubbed; the round trip against a running server is covered by the
+// end-to-end project.
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReviewState } from '@self-review/core';

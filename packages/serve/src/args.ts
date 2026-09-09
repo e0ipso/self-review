@@ -2,8 +2,7 @@
 //
 // The shape mirrors the desktop application's own parser (src/main/cli.ts):
 // everything the program does not claim for itself is passed through to
-// `git diff` verbatim. What it claims is small — where to write the review,
-// which review to resume, and the two early-exit flags.
+// `git diff` verbatim.
 //
 // The output path is here, and only here. It is fixed for the lifetime of the
 // process: there is no route and no adapter method that changes it, because a

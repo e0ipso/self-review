@@ -1,7 +1,7 @@
 {
   "name": "@self-review/serve",
   "version": "1.43.4",
-  "description": "Serve the self-review interface over loopback HTTP as an ordinary Node command",
+  "description": "Serve the self-review interface over HTTP",
   "repository": {
     "type": "git",
     "url": "https://github.com/e0ipso/self-review.git",

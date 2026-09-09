@@ -1,16 +1,13 @@
 #!/usr/bin/env node
 
 // The serve-mode entry point: resolve one review session, serve it on a
-// loopback port, and stop when the review is complete.
+// port, and stop when the review is complete.
 //
 // Composition only — argument parsing is ./args, session resolution is
 // ./startup, the routes are ./server and the completion is ./lifecycle. The
 // order below is the load-bearing part: the session is fully resolved, and
 // the completion hook attached, before the listener opens, so no request can
 // reach a half-built session and no submission can arrive unobserved.
-//
-// stdout is unused, here as everywhere in this project. Every line goes to
-// stderr, including the URL.
 
 import { createRequire } from 'node:module';
 import { parseServeArgs } from './args';
@@ -19,7 +16,7 @@ import { completeReviewOnSubmit } from './lifecycle';
 import { createReviewServer, listenLoopback } from './server';
 
 const HELP = `
-self-review-serve - Serve the self-review interface over loopback HTTP
+self-review-serve - Serve the self-review interface over HTTP
 
 Usage: self-review-serve [options] [<git-diff-args>...]
 
@@ -41,8 +38,8 @@ Examples:
 
 The URL is printed to stderr on start. The output path is fixed by the
 arguments above and cannot be changed from the browser. Completing the review
-writes that file and stops this process; closing the tab does nothing, and
-nothing is saved until the review is completed.
+writes that file and stops this process. Nothing is saved before then, and
+closing the tab once you have written a comment warns you first.
 
 The listener binds to 127.0.0.1 and there is no authentication: anything that
 can reach the port can read the diff and complete the review.

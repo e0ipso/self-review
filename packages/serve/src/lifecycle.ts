@@ -4,11 +4,6 @@
 // else does: a closed tab is not an event this program observes, nothing is
 // auto-saved, and there is no session to resume from a second tab. That is the
 // desktop application's behaviour — quitting discards — expressed over HTTP.
-//
-// This module deliberately contains no watchdog, no heartbeat and no parent
-// process check. Those belong to the discarded design where this ran inside
-// the desktop binary; if one ever looks necessary here, the program is running
-// somewhere it should not be.
 
 import * as fs from 'node:fs';
 import type * as http from 'node:http';

@@ -26,6 +26,7 @@
     "test:unit": "vitest run --config vitest.config.main.ts && vitest run --config vitest.config.renderer.ts && npm run test:unit --workspace @self-review/core && npm run test:unit --workspace @self-review/serve",
     "test:e2e": "npx bddgen && npx playwright test --project e2e",
     "test:e2e:headed": "npx bddgen && npx playwright test --project e2e --headed",
+    "start:serve": "npm run build --workspace @self-review/serve && node packages/serve/dist/cli.js",
     "test:e2e:serve": "npm run build --workspace @self-review/serve && npx playwright test --project serve",
     "test:e2e:electron": "npm run package && npx bddgen && xvfb-run --auto-servernum npx playwright test --project electron",
     "test:e2e:electron:headed": "npm run package && npx bddgen && npx playwright test --project electron --headed",
