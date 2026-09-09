@@ -13,7 +13,8 @@ kk_id: map-self-review-xml-schema-self-review-v1-xsd
 kk_derived_from:
   - .opencode/skills/self-review-apply/SKILL.md
   - .agents/skills/self-review-apply/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -24,6 +25,12 @@ For renamed files, `path` holds the new path. Replies contain a body, optional a
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.opencode/skills/self-review-apply/SKILL.md](.opencode/skills/self-review-apply/SKILL.md)
-[2] [.agents/skills/self-review-apply/SKILL.md](.agents/skills/self-review-apply/SKILL.md)
+[1] [.opencode/skills/self-review-apply/SKILL.md](../../../../../.opencode/skills/self-review-apply/SKILL.md)
+[2] [.agents/skills/self-review-apply/SKILL.md](../../../../../.agents/skills/self-review-apply/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

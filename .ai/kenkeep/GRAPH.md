@@ -1,51 +1,56 @@
 ---
 schema_version: 3
-nodes_hash: 'sha256:3b49bca508c6c49b8ee9fd68f18ab17ab5667712e31ac5e0f7f644dbb32cdb01'
-node_count: 175
+nodes_hash: 'sha256:79b83e6be13d1cc2951485e92d781c31644f75574152fe52e814822b641c9ce8'
+node_count: 179
 ---
 # kenkeep Graph
 
-Total nodes: 175
+Total nodes: 179
 
 ## map-ai-knowledge-base-cli
 
 - **kind:** map
-- **title:** ai-knowledge-base CLI
+- **title:** Kenkeep CLI
 - **path:** knowledge-base/tooling/map-ai-knowledge-base-cli.md
 - **tags:** knowledge-base, cli
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-cli-static-skip-list, map-kb-detect-harness-helper-script, map-kb-harness-detection-script-at-tmp-kb-detect-harness-mjs, practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call, map-ai-knowledge-base-directory
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md, .agents/skills/kk-curate/SKILL.md
 
 ## map-ai-knowledge-base-directory
 
 - **kind:** map
-- **title:** .ai/knowledge-base/ directory
+- **title:** .ai/kenkeep directory
 - **path:** knowledge-base/structure/map-ai-knowledge-base-directory.md
 - **tags:** knowledge-base, structure
-- **derived_from:** .ai/knowledge-base/README.md
+- **relates_to:** map-knowledge-base-config-locations, map-knowledge-base-directory-layout-under-ai-knowledge-base, map-knowledge-base-node-kinds-and-frontmatter, map-knowledge-base-node-layout, practice-do-not-hand-edit-index-md-or-graph-md, practice-don-t-hallucinate-rationale-in-node-bodies, practice-refresh-index-md-and-graph-md-after-writing-nodes, practice-review-knowledge-base-changes-via-git-diff-before-committing, practice-sessions-is-gitignored-provenance-does-not-travel-with-the-repo, practice-split-combined-content-across-practice-and-map-nodes, map-ai-knowledge-base-cli
+- **derived_from:** .agents/skills/kk-curate/SKILL.md, .ai/kenkeep/scripts/kk-detect-root.mjs
 
 ## map-cli-static-skip-list
 
 - **kind:** map
-- **title:** CLI static skip list
+- **title:** Bootstrap document exclusions
 - **path:** knowledge-base/tooling/map-cli-static-skip-list.md
 - **tags:** knowledge-base, cli, skip-list
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-ai-knowledge-base-cli
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## map-cli-static-skip-list-for-bootstrap-candidates
 
 - **kind:** map
-- **title:** CLI static skip list for bootstrap candidates
+- **title:** Bootstrap document exclusions
 - **path:** knowledge-base/bootstrap/discovery/map-cli-static-skip-list-for-bootstrap-candidates.md
 - **tags:** knowledge-base, cli, skip-list, bootstrap
-- **derived_from:** .ai/knowledge-base/nodes/map/map-cli-static-skip-list.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## map-comment-author-attribution
 
 - **kind:** map
 - **title:** Comment author attribution
 - **path:** review-xml/comments/map-comment-author-attribution.md
-- **tags:** task-manager, comments, author
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, comments, author
+- **relates_to:** map-review-xml-format-and-xsd
+- **derived_from:** AGENTS.md
 
 ## map-css-build-pipeline-for-self-review-react
 
@@ -53,15 +58,17 @@ Total nodes: 175
 - **title:** CSS build pipeline for @self-review/react
 - **path:** packages/styling/map-css-build-pipeline-for-self-review-react.md
 - **tags:** css, build, tailwind
+- **relates_to:** map-self-review-wrapper-div, practice-import-only-the-compiled-dist-styles-css-from-host-apps
 - **derived_from:** packages/react/AGENTS.md
 
 ## map-curator-failure-modes-add-collision-and-modify-missing-target
 
 - **kind:** map
-- **title:** Curator failure modes: add_collision and modify_missing_target
+- **title:** Curator persistence results
 - **path:** knowledge-base/curate/map-curator-failure-modes-add-collision-and-modify-missing-target.md
-- **tags:** kb-curate, failures, reasons
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **tags:** kk-curate, failures, reasons
+- **relates_to:** map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## map-default-bootstrap-scope
 
@@ -69,7 +76,8 @@ Total nodes: 175
 - **title:** Default bootstrap scope
 - **path:** knowledge-base/bootstrap/discovery/map-default-bootstrap-scope.md
 - **tags:** knowledge-base, scope
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## map-default-critique-categories
 
@@ -77,39 +85,44 @@ Total nodes: 175
 - **title:** Default critique categories
 - **path:** skills/critique/configuration/map-default-critique-categories.md
 - **tags:** self-review, categories, critique
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## map-e0ipso-ai-knowledge-base-cli-commands-used-by-kb-curate
 
 - **kind:** map
-- **title:** @e0ipso/ai-knowledge-base CLI commands used by kb-curate
+- **title:** Kenkeep curation commands
 - **path:** knowledge-base/curate/map-e0ipso-ai-knowledge-base-cli-commands-used-by-kb-curate.md
-- **tags:** kb-curate, cli, subcommands
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **tags:** kk-curate, cli, subcommands
+- **relates_to:** map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## map-emoji-shortcode-support-in-comments
 
 - **kind:** map
 - **title:** Emoji shortcode support in comments
 - **path:** app/ui/interactions/map-emoji-shortcode-support-in-comments.md
-- **tags:** task-manager, emoji, comments
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, emoji, comments
+- **relates_to:** map-self-review-react-package
+- **derived_from:** AGENTS.md
 
 ## map-extract-task-skills-cjs
 
 - **kind:** map
-- **title:** extract-task-skills.cjs
+- **title:** Task skill extraction in PRE_TASK_ASSIGNMENT
 - **path:** planning/assignment/map-extract-task-skills-cjs.md
-- **tags:** scripts, task-manager, skills
-- **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
+- **tags:** scripts, strikethroo, skills
+- **relates_to:** map-pre-task-assignment-hook
+- **derived_from:** .ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md
 
 ## map-finish-review-vs-window-close-behavior
 
 - **kind:** map
 - **title:** Finish Review vs window-close behavior
 - **path:** app/ui/lifecycle/map-finish-review-vs-window-close-behavior.md
-- **tags:** task-manager, close-behavior, save
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, close-behavior, save
+- **relates_to:** practice-differentiate-finish-review-from-window-close
+- **derived_from:** AGENTS.md
 
 ## map-ipc-channel-contract-between-main-and-renderer
 
@@ -117,6 +130,7 @@ Total nodes: 175
 - **title:** IPC channel contract between main and renderer
 - **path:** app/architecture/map-ipc-channel-contract-between-main-and-renderer.md
 - **tags:** ipc, channels
+- **relates_to:** map-two-process-electron-architecture
 - **derived_from:** docs/PRD.md
 
 ## map-ipc-channel-registry
@@ -124,136 +138,153 @@ Total nodes: 175
 - **kind:** map
 - **title:** IPC channel registry
 - **path:** app/architecture/map-ipc-channel-registry.md
-- **tags:** task-manager, ipc, channels
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, ipc, channels
+- **relates_to:** map-two-process-electron-architecture, practice-never-import-electron-directly-in-the-renderer
+- **derived_from:** AGENTS.md
 
 ## map-kb-bootstrap-skill
 
 - **kind:** map
-- **title:** kb-bootstrap skill
+- **title:** kk-bootstrap skill
 - **path:** knowledge-base/bootstrap/workflow/map-kb-bootstrap-skill.md
-- **tags:** knowledge-base, skill
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **tags:** knowledge-base, skills
+- **relates_to:** practice-consolidate-multi-source-candidates-into-a-single-node-with-multiple-derived-from, practice-default-node-confidence-to-medium-during-bootstrap, practice-never-auto-resolve-contradictions-during-bootstrap, practice-never-overwrite-an-existing-node-during-bootstrap, map-cli-static-skip-list-for-bootstrap-candidates, map-default-bootstrap-scope, practice-defer-file-discovery-to-the-cli-s-bootstrap-incremental-dry-run, practice-read-entry-points-first-then-sample-and-follow-cross-references, practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap, practice-conclude-bootstrap-with-a-structured-final-report, practice-honor-bootstrapmodel-name-from-kb-config-when-delegating-to-sub-agents, practice-run-kb-bootstrap-as-a-one-pass-supervised-operation, practice-stop-and-ask-the-user-when-bootstrap-conditions-go-off-track, map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## map-kb-detect-harness-helper-script
 
 - **kind:** map
-- **title:** kb-detect-harness helper script
+- **title:** Kenkeep harness detector
 - **path:** knowledge-base/tooling/map-kb-detect-harness-helper-script.md
 - **tags:** knowledge-base, harness, detection
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-ai-knowledge-base-cli
+- **derived_from:** .ai/kenkeep/scripts/kk-detect-harness.mjs
 
 ## map-kb-harness-detection-script-at-tmp-kb-detect-harness-mjs
 
 - **kind:** map
-- **title:** KB harness detection script at /tmp/kb-detect-harness.mjs
+- **title:** Kenkeep harness detector
 - **path:** knowledge-base/tooling/map-kb-harness-detection-script-at-tmp-kb-detect-harness-mjs.md
 - **tags:** kb, harness, detection
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **relates_to:** map-ai-knowledge-base-cli
+- **derived_from:** .ai/kenkeep/scripts/kk-detect-harness.mjs
 
 ## map-knowledge-base-capture-curate-review-workflow
 
 - **kind:** map
-- **title:** Knowledge-base capture-curate-review workflow
+- **title:** Knowledge-base capture and curation workflow
 - **path:** knowledge-base/curate/map-knowledge-base-capture-curate-review-workflow.md
 - **tags:** knowledge-base, workflow, skills
-- **derived_from:** .ai/knowledge-base/README.md
+- **relates_to:** map-curator-failure-modes-add-collision-and-modify-missing-target, map-e0ipso-ai-knowledge-base-cli-commands-used-by-kb-curate, practice-accept-only-y-n-s-k-tokens-when-resolving-curator-conflicts, practice-apply-curator-conflict-outcomes-via-targeted-git-commands, practice-compute-conflict-resolution-defaults-from-diff-ratio-and-confidence, practice-hand-off-curate-runs-via-git-diff-and-optional-pre-commit-index-rebuild, practice-run-kb-curator-via-npx-with-explicit-harness-id, practice-short-circuit-kb-curate-with-one-line-summary-when-no-conflicts-and-no-failures, practice-sort-and-group-pending-conflicts-before-resolving, map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## map-knowledge-base-config-locations
 
 - **kind:** map
-- **title:** Knowledge base config locations
+- **title:** Knowledge base configuration
 - **path:** knowledge-base/structure/map-knowledge-base-config-locations.md
 - **tags:** knowledge-base, config
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md, .ai/kenkeep/config.yaml
 
 ## map-knowledge-base-directory-layout-under-ai-knowledge-base
 
 - **kind:** map
-- **title:** Knowledge-base directory layout under .ai/knowledge-base/
+- **title:** Kenkeep directory layout
 - **path:** knowledge-base/structure/map-knowledge-base-directory-layout-under-ai-knowledge-base.md
 - **tags:** kb, layout, paths
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .agents/skills/kk-curate/SKILL.md, .ai/kenkeep/scripts/kk-detect-root.mjs
 
 ## map-knowledge-base-node-kinds-and-frontmatter
 
 - **kind:** map
-- **title:** Knowledge-base node kinds and frontmatter
+- **title:** Knowledge node kinds and frontmatter
 - **path:** knowledge-base/structure/map-knowledge-base-node-kinds-and-frontmatter.md
-- **tags:** knowledge-base, node, schema
-- **derived_from:** .ai/knowledge-base/README.md
+- **tags:** knowledge-base, nodes, schema
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## map-knowledge-base-node-layout
 
 - **kind:** map
-- **title:** Knowledge base node layout
+- **title:** Knowledge node placement
 - **path:** knowledge-base/structure/map-knowledge-base-node-layout.md
 - **tags:** knowledge-base, layout, nodes
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## map-large-payload-lazy-loading-mode
 
 - **kind:** map
 - **title:** Large-payload lazy-loading mode
 - **path:** app/architecture/map-large-payload-lazy-loading-mode.md
-- **tags:** task-manager, large-payload, perf
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, large-payload, perf
+- **relates_to:** map-two-process-electron-architecture, practice-lazy-load-file-hunks-in-large-payload-mode
+- **derived_from:** AGENTS.md
 
 ## map-npm-workspaces-packages
 
 - **kind:** map
 - **title:** npm workspaces packages
 - **path:** packages/architecture/map-npm-workspaces-packages.md
-- **tags:** task-manager, packages, workspaces
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, packages, workspace
+- **relates_to:** map-self-review-react-package, map-self-review-types-package, practice-do-not-import-from-self-review-core-in-the-react-package
+- **derived_from:** AGENTS.md
 
 ## map-post-phase-hook
 
 - **kind:** map
 - **title:** POST_PHASE hook
 - **path:** planning/execution/map-post-phase-hook.md
-- **tags:** hook, workflow, task-manager
-- **derived_from:** .ai/task-manager/config/hooks/POST_PHASE.md
+- **tags:** hooks, workflow, strikethroo
+- **relates_to:** practice-follow-the-allowed-task-status-transitions, practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing, practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase
+- **derived_from:** .ai/strikethroo/config/hooks/POST_PHASE.md
 
 ## map-post-plan-hook
 
 - **kind:** map
 - **title:** POST_PLAN hook
 - **path:** planning/authoring/map-post-plan-hook.md
-- **tags:** hooks, task-manager, planning
-- **derived_from:** .ai/task-manager/config/hooks/POST_PLAN.md
+- **tags:** hooks, strikethroo, planning
+- **relates_to:** map-pre-plan-hook
+- **derived_from:** .ai/strikethroo/config/hooks/POST_PLAN.md
 
 ## map-post-task-generation-all-hook
 
 - **kind:** map
 - **title:** POST_TASK_GENERATION_ALL hook
 - **path:** planning/task-generation/map-post-task-generation-all-hook.md
-- **tags:** task-management, hooks, lifecycle
-- **derived_from:** .ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md
+- **tags:** strikethroo, hooks, lifecycle
+- **relates_to:** practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan, practice-review-every-generated-task-for-complexity-vagueness-and-triviality
+- **derived_from:** .ai/strikethroo/config/hooks/POST_TASK_GENERATION_ALL.md
 
 ## map-pre-plan-hook
 
 - **kind:** map
 - **title:** PRE_PLAN hook
 - **path:** planning/authoring/map-pre-plan-hook.md
-- **tags:** task-manager, hook, workflow
-- **derived_from:** .ai/task-manager/config/hooks/PRE_PLAN.md
+- **tags:** strikethroo, hooks, workflow
+- **relates_to:** map-post-plan-hook, practice-check-plans-for-architecture-and-code-reuse-improvements, practice-review-plans-against-prd-and-test-features-updates, practice-write-prds-without-tasks-or-phases-during-plan-creation
+- **derived_from:** .ai/strikethroo/config/hooks/PRE_PLAN.md
 
 ## map-pre-task-assignment-hook
 
 - **kind:** map
 - **title:** PRE_TASK_ASSIGNMENT hook
 - **path:** planning/assignment/map-pre-task-assignment-hook.md
-- **tags:** hooks, task-manager, ai
-- **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
+- **tags:** hooks, strikethroo, ai
+- **relates_to:** map-extract-task-skills-cjs, practice-detect-sub-agents-across-claude-gemini-and-opencode-directories, practice-engage-relevant-assistant-skills-based-on-task-skills, practice-match-task-skills-to-sub-agents-during-pre-task-assignment
+- **derived_from:** .ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md
 
 ## map-rendered-file-previews
 
 - **kind:** map
 - **title:** Rendered file previews
 - **path:** app/ui/previews/map-rendered-file-previews.md
-- **tags:** task-manager, rendered-preview, file-types
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, rendered-preview, file-types
+- **relates_to:** map-rendered-image-and-svg-previews-for-added-files, map-rendered-text-view-for-added-markdown-and-html-files, practice-force-unified-view-for-added-and-deleted-files, practice-use-prism-js-for-syntax-highlighting-with-theme-matching
+- **derived_from:** AGENTS.md
 
 ## map-rendered-image-and-svg-previews-for-added-files
 
@@ -261,6 +292,7 @@ Total nodes: 175
 - **title:** Rendered image and SVG previews for added files
 - **path:** app/ui/previews/map-rendered-image-and-svg-previews-for-added-files.md
 - **tags:** preview, image, svg
+- **relates_to:** map-rendered-file-previews
 - **derived_from:** docs/PRD.md
 
 ## map-rendered-text-view-for-added-markdown-and-html-files
@@ -269,6 +301,7 @@ Total nodes: 175
 - **title:** Rendered text view for added Markdown and HTML files
 - **path:** app/ui/previews/map-rendered-text-view-for-added-markdown-and-html-files.md
 - **tags:** preview, markdown, html, rendered
+- **relates_to:** map-rendered-file-previews
 - **derived_from:** docs/PRD.md
 
 ## map-resume-from-for-continuing-a-prior-review
@@ -277,6 +310,7 @@ Total nodes: 175
 - **title:** --resume-from for continuing a prior review
 - **path:** app/cli/map-resume-from-for-continuing-a-prior-review.md
 - **tags:** resume, cli
+- **relates_to:** map-self-review-cli-invocations
 - **derived_from:** docs/PRD.md
 
 ## map-review-xml-format-and-xsd
@@ -285,6 +319,7 @@ Total nodes: 175
 - **title:** review.xml format and XSD
 - **path:** review-xml/schema/map-review-xml-format-and-xsd.md
 - **tags:** self-review, schema, xml
+- **relates_to:** map-comment-author-attribution, practice-preserve-review-body-whitespace-during-xml-parsing, practice-require-a-category-on-every-comment, practice-use-the-new-path-for-renamed-files-in-review-xml, practice-xml-escape-all-text-content-in-review-xml, practice-line-comments-reference-either-old-or-new-line-numbers-never-both, practice-pair-comment-line-numbers-as-either-new-or-old-never-both, practice-pair-line-number-attributes-correctly-in-review-comments, practice-pair-line-number-attributes-correctly-on-review-comments, practice-use-old-vs-new-line-numbers-based-on-the-commented-line-type, map-self-review-v1-xsd-output-format, map-self-review-xml-schema-self-review-v1-xsd, map-self-review-xml-v1-schema, map-xsd-schema-location, practice-design-xml-output-to-be-parsed-by-llms, practice-emit-no-wrapper-elements-in-the-xml-output, practice-keep-the-xsd-schema-in-sync-across-its-two-locations, practice-validate-xml-output-against-the-xsd-before-writing
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## map-reviewadapter-interface
@@ -293,6 +328,7 @@ Total nodes: 175
 - **title:** ReviewAdapter interface
 - **path:** packages/architecture/map-reviewadapter-interface.md
 - **tags:** interface, adapter, platform
+- **relates_to:** map-self-review-react-package, practice-use-the-reviewadapter-pattern-for-platform-specific-operations
 - **derived_from:** packages/react/AGENTS.md
 
 ## map-reviewpanel-and-singlefilereview-entry-components
@@ -301,6 +337,7 @@ Total nodes: 175
 - **title:** ReviewPanel and SingleFileReview entry components
 - **path:** packages/architecture/map-reviewpanel-and-singlefilereview-entry-components.md
 - **tags:** component, entrypoint
+- **relates_to:** map-self-review-react-package
 - **derived_from:** packages/react/AGENTS.md
 
 ## map-self-review
@@ -308,8 +345,9 @@ Total nodes: 175
 - **kind:** map
 - **title:** self-review
 - **path:** app/map-self-review.md
-- **tags:** task-manager, app, overview
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, app, overview
+- **relates_to:** map-self-review-application, practice-keep-self-review-local-only-with-no-network-access, practice-limit-file-writes-to-the-review-xml-and-assets-directory, practice-make-no-network-connections-at-runtime, practice-make-zero-network-requests-except-the-startup-version-check, map-testing-layers-unit-e2e, practice-do-not-install-or-use-webpack, practice-do-not-run-e2e-tests-inside-the-dev-container, practice-don-t-support-windows, practice-exclude-generated-assistant-tooling-from-eslint, practice-extract-shared-logic-before-duplicating-across-call-sites, practice-favor-simple-maintainable-solutions-over-clever-ones, practice-fix-the-root-cause-in-tests-never-write-test-specific-code-in-production, practice-implement-only-what-the-user-explicitly-requests, practice-lead-each-platform-installation-section-with-homebrew, practice-upload-release-zips-using-the-makerzip-filenames, practice-use-conventional-commit-naming-for-pr-titles
+- **derived_from:** AGENTS.md
 
 ## map-self-review-application
 
@@ -317,6 +355,7 @@ Total nodes: 175
 - **title:** self-review application
 - **path:** app/map-self-review-application.md
 - **tags:** overview, app
+- **relates_to:** map-self-review
 - **derived_from:** docs/PRD.md
 
 ## map-self-review-apply-assistant-skill
@@ -324,7 +363,8 @@ Total nodes: 175
 - **kind:** map
 - **title:** self-review-apply assistant skill
 - **path:** skills/apply/map-self-review-apply-assistant-skill.md
-- **tags:** skill, ai, workflow
+- **tags:** skills, ai, workflow
+- **relates_to:** map-self-review-apply-skill
 - **derived_from:** README.md, .agents/skills/self-review-apply/SKILL.md
 
 ## map-self-review-apply-skill
@@ -333,6 +373,7 @@ Total nodes: 175
 - **title:** self-review-apply skill
 - **path:** skills/apply/map-self-review-apply-skill.md
 - **tags:** self-review, skills, apply
+- **relates_to:** map-self-review-apply-assistant-skill, practice-apply-review-suggestions-bottom-to-top-by-line-number, practice-convert-v2-gate-reviews-to-v3-before-applying, practice-load-the-original-diff-context-before-applying-review-feedback, practice-parallelize-self-review-application-per-file-above-a-3-file-threshold, practice-treat-every-review-comment-as-actionable-including-questions, practice-validate-self-review-xml-against-the-xsd-before-applying, map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md, .agents/skills/self-review-apply/SKILL.md
 
 ## map-self-review-cli-invocations
@@ -341,7 +382,8 @@ Total nodes: 175
 - **title:** self-review CLI invocations
 - **path:** app/cli/map-self-review-cli-invocations.md
 - **tags:** cli, flags
-- **derived_from:** README.md
+- **relates_to:** map-resume-from-for-continuing-a-prior-review, map-three-startup-modes-git-directory-welcome, practice-hide-untracked-files-by-default-for-staged-cached-reviews, practice-never-write-to-stdout-in-the-main-process, practice-never-write-to-stdout-use-stderr-for-all-logging, practice-preserve-orphaned-comments-on-resume-never-silently-drop-them, practice-show-welcome-screen-when-launched-outside-a-git-repo-with-no-directory-arg, practice-treat-self-review-as-a-cli-first-one-shot-tool
+- **derived_from:** README.md, AGENTS.md
 
 ## map-self-review-critique-skill
 
@@ -349,6 +391,7 @@ Total nodes: 175
 - **title:** self-review-critique skill
 - **path:** skills/critique/configuration/map-self-review-critique-skill.md
 - **tags:** self-review, skills, critique
+- **relates_to:** map-default-critique-categories, practice-default-critique-to-unstaged-changes-when-no-diff-args-are-passed, practice-read-categories-from-self-review-yaml-before-generating-critique, practice-use-categories-from-self-review-yaml-when-present, practice-set-author-to-your-model-name-on-every-generated-comment, practice-set-the-comment-author-attribute-to-the-model-name, practice-set-viewed-true-on-every-file-in-ai-generated-review-xml, practice-set-viewed-true-on-every-file-in-critique-output, practice-validate-generated-review-xml-against-the-xsd-before-finishing, practice-validate-generated-review-xml-against-the-xsd-with-xmllint, practice-prioritize-the-largest-diffs-when-reviewing-many-files, practice-read-full-file-contents-for-added-modified-files-when-critiquing, practice-skip-files-that-look-correct-do-not-force-comments-on-every-file, practice-skip-files-that-look-correct-rather-than-forcing-comments, practice-attach-a-suggestion-block-whenever-a-concrete-fix-is-possible, practice-copy-original-code-verbatim-from-the-source-file, practice-use-suggestion-blocks-whenever-a-concrete-fix-can-be-proposed, map-self-review-apply-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## map-self-review-react-package
@@ -356,7 +399,8 @@ Total nodes: 175
 - **kind:** map
 - **title:** @self-review/react package
 - **path:** packages/architecture/map-self-review-react-package.md
-- **tags:** package, react, ui
+- **tags:** packages, react, ui
+- **relates_to:** map-emoji-shortcode-support-in-comments, map-vimium-style-keyboard-navigation, map-vimium-style-keyboard-shortcuts, practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side, practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code, practice-use-shadcn-ui-components-instead-of-raw-html-for-ui, map-npm-workspaces-packages, map-reviewadapter-interface, map-reviewpanel-and-singlefilereview-entry-components, practice-do-not-import-from-self-review-core-in-the-react-package, practice-do-not-use-node-js-apis-in-self-review-react, practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages, practice-keep-file-type-utils-ts-duplicates-in-sync-across-core-and-react, practice-keep-review-comment-mutations-immutable, practice-use-the-reviewadapter-pattern-for-platform-specific-operations
 - **derived_from:** packages/react/AGENTS.md
 
 ## map-self-review-types-package
@@ -364,7 +408,8 @@ Total nodes: 175
 - **kind:** map
 - **title:** @self-review/types package
 - **path:** packages/types/map-self-review-types-package.md
-- **tags:** package, types, workspace
+- **tags:** packages, types, workspace
+- **relates_to:** practice-define-shared-data-structures-only-in-self-review-types, practice-do-not-import-sibling-packages-from-self-review-types, practice-keep-all-self-review-types-definitions-in-src-index-ts, practice-keep-self-review-types-free-of-runtime-dependencies, map-npm-workspaces-packages
 - **derived_from:** packages/types/AGENTS.md
 
 ## map-self-review-v1-xsd-output-format
@@ -373,6 +418,7 @@ Total nodes: 175
 - **title:** self-review-v3 XSD output format
 - **path:** review-xml/schema/map-self-review-v1-xsd-output-format.md
 - **tags:** xml, schema, output
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** docs/PRD.md
 
 ## map-self-review-wrapper-div
@@ -381,6 +427,7 @@ Total nodes: 175
 - **title:** .self-review wrapper div
 - **path:** packages/styling/map-self-review-wrapper-div.md
 - **tags:** dom, scoping, theming
+- **relates_to:** map-css-build-pipeline-for-self-review-react, practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps, practice-import-only-the-compiled-dist-styles-css-from-host-apps, practice-pass-portalcontainer-to-all-radix-shadcn-portal-components, practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div
 - **derived_from:** packages/react/AGENTS.md
 
 ## map-self-review-xml-schema-self-review-v1-xsd
@@ -389,6 +436,7 @@ Total nodes: 175
 - **title:** self-review XML schema (self-review-v3.xsd)
 - **path:** review-xml/schema/map-self-review-xml-schema-self-review-v1-xsd.md
 - **tags:** self-review, xsd, schema
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** .opencode/skills/self-review-apply/SKILL.md, .agents/skills/self-review-apply/SKILL.md
 
 ## map-self-review-xml-v1-schema
@@ -397,6 +445,7 @@ Total nodes: 175
 - **title:** self-review XML v3 schema
 - **path:** review-xml/schema/map-self-review-xml-v1-schema.md
 - **tags:** self-review, xml, schema
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md, .agents/skills/self-review-critique/SKILL.md
 
 ## map-self-review-yaml-configuration-options
@@ -405,6 +454,7 @@ Total nodes: 175
 - **title:** self-review YAML configuration options
 - **path:** app/config/map-self-review-yaml-configuration-options.md
 - **tags:** config, yaml
+- **relates_to:** map-user-and-project-yaml-configuration
 - **derived_from:** README.md
 
 ## map-self-review-yaml-project-config
@@ -413,6 +463,7 @@ Total nodes: 175
 - **title:** .self-review.yaml project config
 - **path:** app/config/map-self-review-yaml-project-config.md
 - **tags:** self-review, config
+- **relates_to:** map-user-and-project-yaml-configuration
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## map-testing-layers-unit-e2e
@@ -420,8 +471,9 @@ Total nodes: 175
 - **kind:** map
 - **title:** Testing layers (unit + e2e)
 - **path:** engineering/map-testing-layers-unit-e2e.md
-- **tags:** task-manager, testing, layers
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, testing, layers
+- **relates_to:** map-self-review
+- **derived_from:** AGENTS.md
 
 ## map-three-startup-modes-git-directory-welcome
 
@@ -429,6 +481,7 @@ Total nodes: 175
 - **title:** Three startup modes: git, directory, welcome
 - **path:** app/cli/map-three-startup-modes-git-directory-welcome.md
 - **tags:** mode, git, directory, welcome
+- **relates_to:** map-self-review-cli-invocations
 - **derived_from:** docs/PRD.md
 
 ## map-two-process-electron-architecture
@@ -436,8 +489,9 @@ Total nodes: 175
 - **kind:** map
 - **title:** Two-process Electron architecture
 - **path:** app/architecture/map-two-process-electron-architecture.md
-- **tags:** task-manager, architecture, electron
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, architecture, electron
+- **relates_to:** map-ipc-channel-contract-between-main-and-renderer, map-ipc-channel-registry, map-large-payload-lazy-loading-mode, practice-do-not-store-renderer-state-outside-react-context, practice-lazy-load-file-hunks-in-large-payload-mode, practice-never-import-electron-directly-in-the-renderer, practice-trigger-large-payload-guard-at-configurable-file-line-thresholds, practice-use-es-module-imports-in-the-renderer-not-require, practice-use-src-shared-types-ts-as-the-single-source-of-truth-for-shared-types
+- **derived_from:** AGENTS.md
 
 ## map-user-and-project-yaml-configuration
 
@@ -445,6 +499,7 @@ Total nodes: 175
 - **title:** User and project YAML configuration
 - **path:** app/config/map-user-and-project-yaml-configuration.md
 - **tags:** config, yaml, files
+- **relates_to:** map-self-review-yaml-configuration-options, map-self-review-yaml-project-config, practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults, practice-apply-config-precedence-project-overrides-user-overrides-defaults
 - **derived_from:** docs/PRD.md
 
 ## map-vimium-style-keyboard-navigation
@@ -453,6 +508,7 @@ Total nodes: 175
 - **title:** Vimium-style keyboard navigation
 - **path:** app/ui/interactions/map-vimium-style-keyboard-navigation.md
 - **tags:** keyboard, navigation, vimium
+- **relates_to:** map-self-review-react-package
 - **derived_from:** docs/PRD.md
 
 ## map-vimium-style-keyboard-shortcuts
@@ -460,8 +516,9 @@ Total nodes: 175
 - **kind:** map
 - **title:** Vimium-style keyboard shortcuts
 - **path:** app/ui/interactions/map-vimium-style-keyboard-shortcuts.md
-- **tags:** task-manager, keyboard, vimium
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, keyboard, vimium
+- **relates_to:** map-self-review-react-package
+- **derived_from:** AGENTS.md
 
 ## map-xsd-schema-location
 
@@ -469,24 +526,26 @@ Total nodes: 175
 - **title:** XSD schema location
 - **path:** review-xml/schema/map-xsd-schema-location.md
 - **tags:** self-review, xsd, schema
-- **relates_to:** practice-keep-the-xsd-schema-in-sync-across-its-two-locations
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md, AGENTS.md
+- **relates_to:** practice-keep-the-xsd-schema-in-sync-across-its-two-locations, map-review-xml-format-and-xsd
+- **derived_from:** AGENTS.md
 
 ## practice-accept-only-y-n-s-k-tokens-when-resolving-curator-conflicts
 
 - **kind:** practice
 - **title:** Accept only y/n/s/k tokens when resolving curator conflicts
 - **path:** knowledge-base/curate/practice-accept-only-y-n-s-k-tokens-when-resolving-curator-conflicts.md
-- **tags:** kb-curate, conflicts, reply-contract
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **tags:** kk-curate, conflicts, reply-contract
+- **relates_to:** map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan
 
 - **kind:** practice
 - **title:** Append a blueprint with dependency diagram and execution phases to the plan
 - **path:** planning/task-generation/practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md
-- **tags:** task-management, blueprint, dependencies
-- **derived_from:** .ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md
+- **tags:** strikethroo, blueprint, dependencies
+- **relates_to:** map-post-task-generation-all-hook
+- **derived_from:** .ai/strikethroo/config/hooks/POST_TASK_GENERATION_ALL.md
 
 ## practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults
 
@@ -494,6 +553,7 @@ Total nodes: 175
 - **title:** Apply config precedence: CLI > project YAML > user YAML > defaults
 - **path:** app/config/practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults.md
 - **tags:** config, precedence
+- **relates_to:** map-user-and-project-yaml-configuration
 - **derived_from:** docs/PRD.md
 
 ## practice-apply-config-precedence-project-overrides-user-overrides-defaults
@@ -502,15 +562,17 @@ Total nodes: 175
 - **title:** Apply config precedence: project overrides user overrides defaults
 - **path:** app/config/practice-apply-config-precedence-project-overrides-user-overrides-defaults.md
 - **tags:** config, precedence
+- **relates_to:** map-user-and-project-yaml-configuration
 - **derived_from:** README.md
 
 ## practice-apply-curator-conflict-outcomes-via-targeted-git-commands
 
 - **kind:** practice
-- **title:** Apply curator conflict outcomes via targeted git commands
+- **title:** Apply curator conflicts using the selected reply
 - **path:** knowledge-base/curate/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md
-- **tags:** kb-curate, outcomes, git
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **tags:** kk-curate, outcomes, git
+- **relates_to:** map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## practice-apply-review-suggestions-bottom-to-top-by-line-number
 
@@ -518,6 +580,7 @@ Total nodes: 175
 - **title:** Apply review suggestions bottom-to-top by line number
 - **path:** skills/apply/practice-apply-review-suggestions-bottom-to-top-by-line-number.md
 - **tags:** self-review, suggestions, ordering
+- **relates_to:** map-self-review-apply-skill
 - **derived_from:** .opencode/skills/self-review-apply/SKILL.md
 
 ## practice-attach-a-suggestion-block-whenever-a-concrete-fix-is-possible
@@ -526,15 +589,17 @@ Total nodes: 175
 - **title:** Attach a suggestion block whenever a concrete fix is possible
 - **path:** skills/critique/suggestions/practice-attach-a-suggestion-block-whenever-a-concrete-fix-is-possible.md
 - **tags:** self-review, critique, suggestions
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
 ## practice-check-plans-for-architecture-and-code-reuse-improvements
 
 - **kind:** practice
-- **title:** Check plans for architecture and code reuse improvements
+- **title:** Keep architecture decisions within the requested plan scope
 - **path:** planning/authoring/practice-check-plans-for-architecture-and-code-reuse-improvements.md
 - **tags:** planning, architecture, code-reuse
-- **derived_from:** .ai/task-manager/config/hooks/POST_PLAN.md
+- **relates_to:** map-pre-plan-hook
+- **derived_from:** .ai/strikethroo/config/hooks/POST_PLAN.md, .ai/strikethroo/config/hooks/PRE_PLAN.md
 
 ## practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side
 
@@ -542,6 +607,7 @@ Total nodes: 175
 - **title:** Clamp multi-line drag-selection to a single hunk and a single side
 - **path:** app/ui/interactions/practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side.md
 - **tags:** drag-select, hunks, split-view
+- **relates_to:** map-self-review-react-package
 - **derived_from:** docs/PRD.md
 
 ## practice-compute-conflict-resolution-defaults-from-diff-ratio-and-confidence
@@ -549,24 +615,27 @@ Total nodes: 175
 - **kind:** practice
 - **title:** Compute conflict-resolution defaults from diff ratio and confidence
 - **path:** knowledge-base/curate/practice-compute-conflict-resolution-defaults-from-diff-ratio-and-confidence.md
-- **tags:** kb-curate, conflicts, defaults
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **tags:** kk-curate, conflicts, defaults
+- **relates_to:** map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## practice-conclude-bootstrap-with-a-structured-final-report
 
 - **kind:** practice
-- **title:** Conclude bootstrap with a structured final report
+- **title:** Report bootstrap writes and omissions
 - **path:** knowledge-base/bootstrap/workflow/practice-conclude-bootstrap-with-a-structured-final-report.md
 - **tags:** knowledge-base, reporting
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-consolidate-multi-source-candidates-into-a-single-node-with-multiple-derived-from
 
 - **kind:** practice
-- **title:** Consolidate multi-source candidates into a single node with multiple `derived_from`
+- **title:** Consolidate overlapping bootstrap candidates
 - **path:** knowledge-base/bootstrap/admission/practice-consolidate-multi-source-candidates-into-a-single-node-with-multiple-derived-from.md
 - **tags:** knowledge-base, deduplication
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-convert-v2-gate-reviews-to-v3-before-applying
 
@@ -575,7 +644,7 @@ Total nodes: 175
 - **path:** skills/apply/practice-convert-v2-gate-reviews-to-v3-before-applying.md
 - **tags:** self-review, xml, compatibility, workflow
 - **relates_to:** map-self-review-apply-skill, map-review-xml-format-and-xsd
-- **derived_from:** 77699372-867d-4d60-9007-5aa0b672863d:practice:0
+- **derived_from:** .ai/kenkeep/_sessions/20260731-2121-77699372-867d-4d60-9007-5aa0b672863d.md
 
 ## practice-copy-original-code-verbatim-from-the-source-file
 
@@ -583,6 +652,7 @@ Total nodes: 175
 - **title:** Copy original-code verbatim from the source file
 - **path:** skills/critique/suggestions/practice-copy-original-code-verbatim-from-the-source-file.md
 - **tags:** self-review, suggestions, xml
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-default-critique-to-unstaged-changes-when-no-diff-args-are-passed
@@ -591,6 +661,7 @@ Total nodes: 175
 - **title:** Default critique to unstaged changes when no diff args are passed
 - **path:** skills/critique/configuration/practice-default-critique-to-unstaged-changes-when-no-diff-args-are-passed.md
 - **tags:** self-review, critique, cli
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-default-node-confidence-to-medium-during-bootstrap
@@ -599,15 +670,17 @@ Total nodes: 175
 - **title:** Default node confidence to medium during bootstrap
 - **path:** knowledge-base/bootstrap/admission/practice-default-node-confidence-to-medium-during-bootstrap.md
 - **tags:** knowledge-base, confidence
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-defer-file-discovery-to-the-cli-s-bootstrap-incremental-dry-run
 
 - **kind:** practice
-- **title:** Defer file discovery to the CLI's bootstrap-incremental dry run
+- **title:** Discover bootstrap documents through finddocs
 - **path:** knowledge-base/bootstrap/discovery/practice-defer-file-discovery-to-the-cli-s-bootstrap-incremental-dry-run.md
 - **tags:** knowledge-base, cli, discovery
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-define-shared-data-structures-only-in-self-review-types
 
@@ -615,6 +688,7 @@ Total nodes: 175
 - **title:** Define shared data structures only in @self-review/types
 - **path:** packages/types/practice-define-shared-data-structures-only-in-self-review-types.md
 - **tags:** types, single-source, shared
+- **relates_to:** map-self-review-types-package
 - **derived_from:** packages/types/AGENTS.md
 
 ## practice-design-xml-output-to-be-parsed-by-llms
@@ -623,15 +697,17 @@ Total nodes: 175
 - **title:** Design XML output to be parsed by LLMs
 - **path:** review-xml/schema/practice-design-xml-output-to-be-parsed-by-llms.md
 - **tags:** output, xml, ai
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** README.md
 
 ## practice-detect-sub-agents-across-claude-gemini-and-opencode-directories
 
 - **kind:** practice
-- **title:** Detect sub-agents across .claude, .gemini, and .opencode directories
+- **title:** Discover agents through the active harness
 - **path:** planning/assignment/practice-detect-sub-agents-across-claude-gemini-and-opencode-directories.md
 - **tags:** agents, discovery, conventions
-- **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
+- **relates_to:** map-pre-task-assignment-hook
+- **derived_from:** .ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md
 
 ## practice-differentiate-finish-review-from-window-close
 
@@ -639,6 +715,7 @@ Total nodes: 175
 - **title:** Differentiate Finish Review from window close
 - **path:** app/ui/lifecycle/practice-differentiate-finish-review-from-window-close.md
 - **tags:** exit, save, ux
+- **relates_to:** map-finish-review-vs-window-close-behavior
 - **derived_from:** docs/PRD.md
 
 ## practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps
@@ -647,15 +724,17 @@ Total nodes: 175
 - **title:** Do not add Tailwind as a peer dependency for host apps
 - **path:** packages/styling/practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps.md
 - **tags:** css, tailwind, dependencies
+- **relates_to:** map-self-review-wrapper-div
 - **derived_from:** packages/react/AGENTS.md
 
 ## practice-do-not-hand-edit-index-md-or-graph-md
 
 - **kind:** practice
-- **title:** Do not hand-edit INDEX.md or GRAPH.md
+- **title:** Regenerate kenkeep navigation after node changes
 - **path:** knowledge-base/structure/practice-do-not-hand-edit-index-md-or-graph-md.md
 - **tags:** knowledge-base, index, hooks
-- **derived_from:** .ai/knowledge-base/README.md
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .agents/skills/kk-curate/SKILL.md, .lintstagedrc
 
 ## practice-do-not-import-from-self-review-core-in-the-react-package
 
@@ -663,6 +742,7 @@ Total nodes: 175
 - **title:** Do not import from @self-review/core in the react package
 - **path:** packages/architecture/practice-do-not-import-from-self-review-core-in-the-react-package.md
 - **tags:** react, imports, bundling
+- **relates_to:** map-self-review-react-package, map-npm-workspaces-packages
 - **derived_from:** packages/react/AGENTS.md
 
 ## practice-do-not-import-sibling-packages-from-self-review-types
@@ -671,31 +751,35 @@ Total nodes: 175
 - **title:** Do not import sibling packages from @self-review/types
 - **path:** packages/types/practice-do-not-import-sibling-packages-from-self-review-types.md
 - **tags:** types, imports, architecture
+- **relates_to:** map-self-review-types-package
 - **derived_from:** packages/types/AGENTS.md
 
 ## practice-do-not-install-or-use-webpack
 
 - **kind:** practice
-- **title:** Do not install or use webpack
+- **title:** Check the existing Forge bundler before changing build tooling
 - **path:** engineering/practice-do-not-install-or-use-webpack.md
-- **tags:** task-manager, build, webpack
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, build, webpack
+- **relates_to:** map-self-review
+- **derived_from:** AGENTS.md, forge.config.ts, webpack.main.config.ts
 
 ## practice-do-not-run-e2e-tests-inside-the-dev-container
 
 - **kind:** practice
 - **title:** Do not run e2e tests inside the dev container
 - **path:** engineering/practice-do-not-run-e2e-tests-inside-the-dev-container.md
-- **tags:** task-manager, testing, devcontainer
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, testing, devcontainer
+- **relates_to:** map-self-review
+- **derived_from:** AGENTS.md
 
 ## practice-do-not-store-renderer-state-outside-react-context
 
 - **kind:** practice
 - **title:** Do not store renderer state outside React context
 - **path:** app/architecture/practice-do-not-store-renderer-state-outside-react-context.md
-- **tags:** task-manager, state, renderer
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, state, renderer
+- **relates_to:** map-two-process-electron-architecture
+- **derived_from:** AGENTS.md
 
 ## practice-do-not-use-node-js-apis-in-self-review-react
 
@@ -703,6 +787,7 @@ Total nodes: 175
 - **title:** Do not use Node.js APIs in @self-review/react
 - **path:** packages/architecture/practice-do-not-use-node-js-apis-in-self-review-react.md
 - **tags:** react, browser, constraints
+- **relates_to:** map-self-review-react-package
 - **derived_from:** packages/react/AGENTS.md
 
 ## practice-don-t-hallucinate-rationale-in-node-bodies
@@ -711,7 +796,8 @@ Total nodes: 175
 - **title:** Don't hallucinate rationale in node bodies
 - **path:** knowledge-base/structure/practice-don-t-hallucinate-rationale-in-node-bodies.md
 - **tags:** knowledge-base, node-authoring, rationale
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-don-t-support-windows
 
@@ -719,6 +805,7 @@ Total nodes: 175
 - **title:** Don't support Windows
 - **path:** engineering/practice-don-t-support-windows.md
 - **tags:** platform, scope
+- **relates_to:** map-self-review
 - **derived_from:** docs/PRD.md
 
 ## practice-emit-no-wrapper-elements-in-the-xml-output
@@ -727,6 +814,7 @@ Total nodes: 175
 - **title:** Emit no wrapper elements in the XML output
 - **path:** review-xml/schema/practice-emit-no-wrapper-elements-in-the-xml-output.md
 - **tags:** xml, schema
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** docs/PRD.md
 
 ## practice-engage-relevant-assistant-skills-based-on-task-skills
@@ -735,15 +823,26 @@ Total nodes: 175
 - **title:** Engage relevant assistant skills based on task skills
 - **path:** planning/assignment/practice-engage-relevant-assistant-skills-based-on-task-skills.md
 - **tags:** task-assignment, skills, assistant-skills
-- **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
+- **relates_to:** map-pre-task-assignment-hook
+- **derived_from:** .ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md
+
+## practice-exclude-generated-assistant-tooling-from-eslint
+
+- **kind:** practice
+- **title:** Exclude generated assistant tooling from ESLint
+- **path:** engineering/practice-exclude-generated-assistant-tooling-from-eslint.md
+- **tags:** lint, tooling
+- **relates_to:** map-self-review
+- **derived_from:** .ai/kenkeep/_sessions/20260605-1109-549df86a-a0e7-445e-b9f7-06a3caf757f4.md
 
 ## practice-extract-shared-logic-before-duplicating-across-call-sites
 
 - **kind:** practice
 - **title:** Extract shared logic before duplicating across call sites
 - **path:** engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md
-- **tags:** task-manager, code-reuse, duplication
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, code-reuse, duplication
+- **relates_to:** map-self-review
+- **derived_from:** AGENTS.md
 
 ## practice-favor-simple-maintainable-solutions-over-clever-ones
 
@@ -751,15 +850,17 @@ Total nodes: 175
 - **title:** Favor simple, maintainable solutions over clever ones
 - **path:** engineering/practice-favor-simple-maintainable-solutions-over-clever-ones.md
 - **tags:** simplicity, code-quality, maintainability
-- **derived_from:** .ai/task-manager/config/hooks/PRE_PLAN.md
+- **relates_to:** map-self-review
+- **derived_from:** .ai/strikethroo/config/hooks/PRE_PLAN.md
 
 ## practice-fix-the-root-cause-in-tests-never-write-test-specific-code-in-production
 
 - **kind:** practice
 - **title:** Fix the root cause in tests, never write test-specific code in production
 - **path:** engineering/practice-fix-the-root-cause-in-tests-never-write-test-specific-code-in-production.md
-- **tags:** task-manager, testing, root-cause
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, testing, root-cause
+- **relates_to:** map-self-review
+- **derived_from:** AGENTS.md
 
 ## practice-follow-the-allowed-task-status-transitions
 
@@ -767,7 +868,8 @@ Total nodes: 175
 - **title:** Follow the allowed task status transitions
 - **path:** planning/execution/practice-follow-the-allowed-task-status-transitions.md
 - **tags:** workflow, task-status
-- **derived_from:** .ai/task-manager/config/hooks/POST_PHASE.md
+- **relates_to:** map-post-phase-hook
+- **derived_from:** .ai/strikethroo/config/hooks/POST_PHASE.md
 
 ## practice-force-unified-view-for-added-and-deleted-files
 
@@ -775,15 +877,17 @@ Total nodes: 175
 - **title:** Force unified view for added and deleted files
 - **path:** app/ui/previews/practice-force-unified-view-for-added-and-deleted-files.md
 - **tags:** ui, diff-view
+- **relates_to:** map-rendered-file-previews
 - **derived_from:** docs/PRD.md
 
 ## practice-hand-off-curate-runs-via-git-diff-and-optional-pre-commit-index-rebuild
 
 - **kind:** practice
-- **title:** Hand off curate runs via git diff and optional pre-commit index rebuild
+- **title:** Report curation results after rebuilding navigation
 - **path:** knowledge-base/curate/practice-hand-off-curate-runs-via-git-diff-and-optional-pre-commit-index-rebuild.md
-- **tags:** kb-curate, handoff, index
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **tags:** kk-curate, handoff, index
+- **relates_to:** map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-curate/SKILL.md, .lintstagedrc
 
 ## practice-hide-untracked-files-by-default-for-staged-cached-reviews
 
@@ -791,15 +895,17 @@ Total nodes: 175
 - **title:** Hide untracked files by default for --staged/--cached reviews
 - **path:** app/cli/practice-hide-untracked-files-by-default-for-staged-cached-reviews.md
 - **tags:** staged, untracked, defaults
+- **relates_to:** map-self-review-cli-invocations
 - **derived_from:** docs/PRD.md
 
 ## practice-honor-bootstrapmodel-name-from-kb-config-when-delegating-to-sub-agents
 
 - **kind:** practice
-- **title:** Honor `bootstrapModel.name` from KB config when delegating to sub-agents
+- **title:** Use documented configuration when drafting bootstrap nodes
 - **path:** knowledge-base/bootstrap/workflow/practice-honor-bootstrapmodel-name-from-kb-config-when-delegating-to-sub-agents.md
-- **tags:** knowledge-base, config, sub-agents
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **tags:** knowledge-base, config, subagents
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md, .ai/kenkeep/.config/prompts/sub-agent-delegation.md
 
 ## practice-implement-only-what-the-user-explicitly-requests
 
@@ -807,7 +913,8 @@ Total nodes: 175
 - **title:** Implement only what the user explicitly requests
 - **path:** engineering/practice-implement-only-what-the-user-explicitly-requests.md
 - **tags:** scope, planning, yagni
-- **derived_from:** .ai/task-manager/config/hooks/PRE_PLAN.md
+- **relates_to:** map-self-review
+- **derived_from:** .ai/strikethroo/config/hooks/PRE_PLAN.md
 
 ## practice-import-only-the-compiled-dist-styles-css-from-host-apps
 
@@ -815,6 +922,7 @@ Total nodes: 175
 - **title:** Import only the compiled dist/styles.css from host apps
 - **path:** packages/styling/practice-import-only-the-compiled-dist-styles-css-from-host-apps.md
 - **tags:** css, build, imports
+- **relates_to:** map-self-review-wrapper-div, map-css-build-pipeline-for-self-review-react
 - **derived_from:** packages/react/AGENTS.md
 
 ## practice-keep-all-self-review-types-definitions-in-src-index-ts
@@ -823,6 +931,7 @@ Total nodes: 175
 - **title:** Keep all @self-review/types definitions in src/index.ts
 - **path:** packages/types/practice-keep-all-self-review-types-definitions-in-src-index-ts.md
 - **tags:** types, structure, layout
+- **relates_to:** map-self-review-types-package
 - **derived_from:** packages/types/AGENTS.md
 
 ## practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages
@@ -830,8 +939,9 @@ Total nodes: 175
 - **kind:** practice
 - **title:** Keep file-type detection utilities duplicated across core and react packages
 - **path:** packages/architecture/practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md
-- **tags:** task-manager, file-type-utils, duplication
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, file-type-utils, duplication
+- **relates_to:** map-self-review-react-package
+- **derived_from:** AGENTS.md
 
 ## practice-keep-file-type-utils-ts-duplicates-in-sync-across-core-and-react
 
@@ -839,6 +949,7 @@ Total nodes: 175
 - **title:** Keep file-type-utils.ts duplicates in sync across core and react
 - **path:** packages/architecture/practice-keep-file-type-utils-ts-duplicates-in-sync-across-core-and-react.md
 - **tags:** duplication, sync, utils
+- **relates_to:** map-self-review-react-package
 - **derived_from:** packages/react/AGENTS.md
 
 ## practice-keep-review-comment-mutations-immutable
@@ -848,7 +959,7 @@ Total nodes: 175
 - **path:** packages/architecture/practice-keep-review-comment-mutations-immutable.md
 - **tags:** react, review-state, callbacks, immutability
 - **relates_to:** map-reviewpanel-and-singlefilereview-entry-components, map-self-review-react-package
-- **derived_from:** 77699372-867d-4d60-9007-5aa0b672863d:practice:2
+- **derived_from:** .ai/kenkeep/_sessions/20260731-2121-77699372-867d-4d60-9007-5aa0b672863d.md
 
 ## practice-keep-self-review-local-only-with-no-network-access
 
@@ -856,6 +967,7 @@ Total nodes: 175
 - **title:** Keep self-review local-only with no network access
 - **path:** app/practice-keep-self-review-local-only-with-no-network-access.md
 - **tags:** privacy, network, local
+- **relates_to:** map-self-review
 - **derived_from:** README.md
 
 ## practice-keep-self-review-types-free-of-runtime-dependencies
@@ -863,7 +975,8 @@ Total nodes: 175
 - **kind:** practice
 - **title:** Keep @self-review/types free of runtime dependencies
 - **path:** packages/types/practice-keep-self-review-types-free-of-runtime-dependencies.md
-- **tags:** types, dependencies, package
+- **tags:** types, dependencies, packages
+- **relates_to:** map-self-review-types-package
 - **derived_from:** packages/types/AGENTS.md
 
 ## practice-keep-the-xsd-schema-in-sync-across-its-two-locations
@@ -872,8 +985,17 @@ Total nodes: 175
 - **title:** Keep the v3 XSD schema in sync across its two locations
 - **path:** review-xml/schema/practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md
 - **tags:** self-review, xsd, sync
-- **relates_to:** map-xsd-schema-location
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md, AGENTS.md
+- **relates_to:** map-xsd-schema-location, map-review-xml-format-and-xsd
+- **derived_from:** AGENTS.md
+
+## practice-keep-walkthrough-guide-paths-portable-across-checkouts
+
+- **kind:** practice
+- **title:** Keep walkthrough guide paths portable across checkouts
+- **path:** skills/practice-keep-walkthrough-guide-paths-portable-across-checkouts.md
+- **tags:** guide, portability
+- **relates_to:** map-self-review-critique-skill
+- **derived_from:** .ai/kenkeep/_sessions/20260802-0720-d5931451-b5f2-4282-9393-74e0b3c56a16.md
 
 ## practice-lazy-load-file-hunks-in-large-payload-mode
 
@@ -881,15 +1003,26 @@ Total nodes: 175
 - **title:** Lazy-load file hunks in large-payload mode
 - **path:** app/architecture/practice-lazy-load-file-hunks-in-large-payload-mode.md
 - **tags:** large-diff, performance, payload
+- **relates_to:** map-two-process-electron-architecture, map-large-payload-lazy-loading-mode
 - **derived_from:** docs/PRD.md
+
+## practice-lead-each-platform-installation-section-with-homebrew
+
+- **kind:** practice
+- **title:** Lead each platform installation section with Homebrew
+- **path:** engineering/practice-lead-each-platform-installation-section-with-homebrew.md
+- **tags:** installation, docs
+- **relates_to:** map-self-review
+- **derived_from:** .ai/kenkeep/_sessions/20260708-1437-9647da26-51b1-4b65-98ac-0909f4a05935.md
 
 ## practice-limit-file-writes-to-the-review-xml-and-assets-directory
 
 - **kind:** practice
 - **title:** Limit file writes to the review XML and assets directory
 - **path:** app/practice-limit-file-writes-to-the-review-xml-and-assets-directory.md
-- **tags:** task-manager, filesystem, scope
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, filesystem, scope
+- **relates_to:** map-self-review
+- **derived_from:** AGENTS.md
 
 ## practice-line-comments-reference-either-old-or-new-line-numbers-never-both
 
@@ -897,15 +1030,17 @@ Total nodes: 175
 - **title:** Line comments reference either old or new line numbers, never both
 - **path:** review-xml/line-anchors/practice-line-comments-reference-either-old-or-new-line-numbers-never-both.md
 - **tags:** xml, comments, line-numbers
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** docs/PRD.md
 
 ## practice-load-the-original-diff-context-before-applying-review-feedback
 
 - **kind:** practice
-- **title:** Load the original diff context before applying review feedback
+- **title:** Load the reviewed source before applying feedback
 - **path:** skills/apply/practice-load-the-original-diff-context-before-applying-review-feedback.md
 - **tags:** self-review, git-diff, context
-- **derived_from:** .opencode/skills/self-review-apply/SKILL.md
+- **relates_to:** map-self-review-apply-skill
+- **derived_from:** .agents/skills/self-review-apply/SKILL.md
 
 ## practice-make-no-network-connections-at-runtime
 
@@ -913,6 +1048,7 @@ Total nodes: 175
 - **title:** Make no network connections at runtime
 - **path:** app/practice-make-no-network-connections-at-runtime.md
 - **tags:** network, privacy, local-only
+- **relates_to:** map-self-review
 - **derived_from:** docs/PRD.md
 
 ## practice-make-zero-network-requests-except-the-startup-version-check
@@ -920,8 +1056,9 @@ Total nodes: 175
 - **kind:** practice
 - **title:** Make zero network requests except the startup version check
 - **path:** app/practice-make-zero-network-requests-except-the-startup-version-check.md
-- **tags:** task-manager, network, privacy
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, network, privacy
+- **relates_to:** map-self-review
+- **derived_from:** AGENTS.md
 
 ## practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing
 
@@ -929,7 +1066,8 @@ Total nodes: 175
 - **title:** Mark completed phases and tasks in the blueprint before advancing
 - **path:** planning/execution/practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing.md
 - **tags:** workflow, progress-tracking, blueprint
-- **derived_from:** .ai/task-manager/config/hooks/POST_PHASE.md
+- **relates_to:** map-post-phase-hook
+- **derived_from:** .ai/strikethroo/config/hooks/POST_PHASE.md
 
 ## practice-match-task-skills-to-sub-agents-during-pre-task-assignment
 
@@ -937,7 +1075,8 @@ Total nodes: 175
 - **title:** Match task skills to sub-agents during PRE_TASK_ASSIGNMENT
 - **path:** planning/assignment/practice-match-task-skills-to-sub-agents-during-pre-task-assignment.md
 - **tags:** task-assignment, agents, hooks
-- **derived_from:** .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
+- **relates_to:** map-pre-task-assignment-hook
+- **derived_from:** .ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md
 
 ## practice-never-auto-resolve-contradictions-during-bootstrap
 
@@ -945,31 +1084,35 @@ Total nodes: 175
 - **title:** Never auto-resolve contradictions during bootstrap
 - **path:** knowledge-base/bootstrap/admission/practice-never-auto-resolve-contradictions-during-bootstrap.md
 - **tags:** knowledge-base, contradictions
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-never-import-electron-directly-in-the-renderer
 
 - **kind:** practice
 - **title:** Never import electron directly in the renderer
 - **path:** app/architecture/practice-never-import-electron-directly-in-the-renderer.md
-- **tags:** task-manager, ipc, security
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, ipc, security
+- **relates_to:** map-two-process-electron-architecture, map-ipc-channel-registry
+- **derived_from:** AGENTS.md
 
 ## practice-never-overwrite-an-existing-node-during-bootstrap
 
 - **kind:** practice
-- **title:** Never overwrite an existing node during bootstrap
+- **title:** Do not duplicate or overwrite existing nodes during bootstrap
 - **path:** knowledge-base/bootstrap/admission/practice-never-overwrite-an-existing-node-during-bootstrap.md
 - **tags:** knowledge-base, node-authoring, collision
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-never-write-to-stdout-in-the-main-process
 
 - **kind:** practice
 - **title:** Never write to stdout in the main process
 - **path:** app/cli/practice-never-write-to-stdout-in-the-main-process.md
-- **tags:** task-manager, logging, stdout
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, logging, stdout
+- **relates_to:** map-self-review-cli-invocations
+- **derived_from:** AGENTS.md
 
 ## practice-never-write-to-stdout-use-stderr-for-all-logging
 
@@ -977,15 +1120,17 @@ Total nodes: 175
 - **title:** Never write to stdout; use stderr for all logging
 - **path:** app/cli/practice-never-write-to-stdout-use-stderr-for-all-logging.md
 - **tags:** logging, stdout, cli
+- **relates_to:** map-self-review-cli-invocations
 - **derived_from:** docs/PRD.md
 
 ## practice-pair-comment-line-numbers-as-either-new-or-old-never-both
 
 - **kind:** practice
-- **title:** Pair comment line numbers as either new or old, never both
+- **title:** Pair comment line numbers as either new or old
 - **path:** review-xml/line-anchors/practice-pair-comment-line-numbers-as-either-new-or-old-never-both.md
 - **tags:** self-review, xml, line-numbers
-- **derived_from:** .opencode/skills/self-review-apply/SKILL.md, .agents/skills/self-review-apply/SKILL.md
+- **relates_to:** map-review-xml-format-and-xsd
+- **derived_from:** .agents/skills/self-review-apply/assets/self-review-v3.xsd, AGENTS.md
 
 ## practice-pair-line-number-attributes-correctly-in-review-comments
 
@@ -993,6 +1138,7 @@ Total nodes: 175
 - **title:** Pair line-number attributes correctly in review comments
 - **path:** review-xml/line-anchors/practice-pair-line-number-attributes-correctly-in-review-comments.md
 - **tags:** self-review, xml, comments
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-pair-line-number-attributes-correctly-on-review-comments
@@ -1001,6 +1147,7 @@ Total nodes: 175
 - **title:** Pair line-number attributes correctly on review comments
 - **path:** review-xml/line-anchors/practice-pair-line-number-attributes-correctly-on-review-comments.md
 - **tags:** self-review, xml, comments
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
 ## practice-parallelize-self-review-application-per-file-above-a-3-file-threshold
@@ -1009,15 +1156,17 @@ Total nodes: 175
 - **title:** Parallelize self-review application per file above a 3-file threshold
 - **path:** skills/apply/practice-parallelize-self-review-application-per-file-above-a-3-file-threshold.md
 - **tags:** self-review, workflow, subagents
+- **relates_to:** map-self-review-apply-skill
 - **derived_from:** .opencode/skills/self-review-apply/SKILL.md
 
 ## practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase
 
 - **kind:** practice
-- **title:** Pass linting and create a descriptive conventional commit at the end of each phase
+- **title:** Complete configured checks and commit each phase
 - **path:** planning/execution/practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md
 - **tags:** workflow, linting, commits
-- **derived_from:** .ai/task-manager/config/hooks/POST_PHASE.md
+- **relates_to:** map-post-phase-hook
+- **derived_from:** .ai/strikethroo/config/hooks/POST_PHASE.md
 
 ## practice-pass-portalcontainer-to-all-radix-shadcn-portal-components
 
@@ -1025,6 +1174,7 @@ Total nodes: 175
 - **title:** Pass portalContainer to all Radix/shadcn portal components
 - **path:** packages/styling/practice-pass-portalcontainer-to-all-radix-shadcn-portal-components.md
 - **tags:** radix, portals, theming
+- **relates_to:** map-self-review-wrapper-div
 - **derived_from:** packages/react/AGENTS.md
 
 ## practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code
@@ -1033,6 +1183,7 @@ Total nodes: 175
 - **title:** Prefill the suggestion proposed-code editor with the original code
 - **path:** app/ui/interactions/practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code.md
 - **tags:** suggestions, ux
+- **relates_to:** map-self-review-react-package
 - **derived_from:** docs/PRD.md
 
 ## practice-preserve-orphaned-comments-on-resume-never-silently-drop-them
@@ -1041,6 +1192,7 @@ Total nodes: 175
 - **title:** Preserve orphaned comments on resume; never silently drop them
 - **path:** app/cli/practice-preserve-orphaned-comments-on-resume-never-silently-drop-them.md
 - **tags:** resume, comments, data-integrity
+- **relates_to:** map-self-review-cli-invocations
 - **derived_from:** docs/PRD.md
 
 ## practice-preserve-review-body-whitespace-during-xml-parsing
@@ -1050,7 +1202,7 @@ Total nodes: 175
 - **path:** review-xml/comments/practice-preserve-review-body-whitespace-during-xml-parsing.md
 - **tags:** self-review, xml, parsing, markdown
 - **relates_to:** map-review-xml-format-and-xsd
-- **derived_from:** 77699372-867d-4d60-9007-5aa0b672863d:practice:1
+- **derived_from:** .ai/kenkeep/_sessions/20260731-2121-77699372-867d-4d60-9007-5aa0b672863d.md
 
 ## practice-prioritize-the-largest-diffs-when-reviewing-many-files
 
@@ -1058,6 +1210,7 @@ Total nodes: 175
 - **title:** Prioritize the largest diffs when reviewing many files
 - **path:** skills/critique/review-strategy/practice-prioritize-the-largest-diffs-when-reviewing-many-files.md
 - **tags:** self-review, critique, performance
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-read-categories-from-self-review-yaml-before-generating-critique
@@ -1066,6 +1219,7 @@ Total nodes: 175
 - **title:** Read categories from .self-review.yaml before generating critique
 - **path:** skills/critique/configuration/practice-read-categories-from-self-review-yaml-before-generating-critique.md
 - **tags:** self-review, critique, categories
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-read-entry-points-first-then-sample-and-follow-cross-references
@@ -1074,7 +1228,8 @@ Total nodes: 175
 - **title:** Read entry points first, then sample and follow cross-references
 - **path:** knowledge-base/bootstrap/discovery/practice-read-entry-points-first-then-sample-and-follow-cross-references.md
 - **tags:** knowledge-base, reading-strategy
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-read-full-file-contents-for-added-modified-files-when-critiquing
 
@@ -1082,15 +1237,17 @@ Total nodes: 175
 - **title:** Read full file contents for added/modified files when critiquing
 - **path:** skills/critique/review-strategy/practice-read-full-file-contents-for-added-modified-files-when-critiquing.md
 - **tags:** self-review, critique, context
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
 ## practice-refresh-index-md-and-graph-md-after-writing-nodes
 
 - **kind:** practice
-- **title:** Refresh INDEX.md and GRAPH.md after writing nodes
+- **title:** Regenerate kenkeep navigation after node changes
 - **path:** knowledge-base/structure/practice-refresh-index-md-and-graph-md-after-writing-nodes.md
 - **tags:** knowledge-base, cli, indexing
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .agents/skills/kk-curate/SKILL.md, .lintstagedrc
 
 ## practice-require-a-category-on-every-comment
 
@@ -1098,23 +1255,26 @@ Total nodes: 175
 - **title:** Require a category on every comment
 - **path:** review-xml/comments/practice-require-a-category-on-every-comment.md
 - **tags:** xml, categories
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** docs/PRD.md
 
 ## practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call
 
 - **kind:** practice
-- **title:** Resolve the active KB harness and pass `--harness "$HARNESS"` to every CLI call
+- **title:** Select the harness for harness-specific kenkeep commands
 - **path:** knowledge-base/tooling/practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call.md
 - **tags:** knowledge-base, harness, cli
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-ai-knowledge-base-cli
+- **derived_from:** .ai/kenkeep/scripts/kk-detect-harness.mjs, .agents/skills/kk-curate/SKILL.md, .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-review-every-generated-task-for-complexity-vagueness-and-triviality
 
 - **kind:** practice
-- **title:** Review every generated task for complexity, vagueness, and triviality
+- **title:** Score and refine generated task complexity
 - **path:** planning/task-generation/practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md
-- **tags:** task-management, planning, quality
-- **derived_from:** .ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md
+- **tags:** strikethroo, planning, quality
+- **relates_to:** map-post-task-generation-all-hook
+- **derived_from:** .agents/skills/st-generate-tasks/SKILL.md
 
 ## practice-review-knowledge-base-changes-via-git-diff-before-committing
 
@@ -1122,31 +1282,35 @@ Total nodes: 175
 - **title:** Review knowledge-base changes via git diff before committing
 - **path:** knowledge-base/structure/practice-review-knowledge-base-changes-via-git-diff-before-committing.md
 - **tags:** knowledge-base, git, review
-- **derived_from:** .ai/knowledge-base/README.md
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .ai/kenkeep/README.md
 
 ## practice-review-plans-against-prd-and-test-features-updates
 
 - **kind:** practice
-- **title:** Review plans against PRD and test/features updates
+- **title:** Specify plan validation and documentation needs
 - **path:** planning/authoring/practice-review-plans-against-prd-and-test-features-updates.md
 - **tags:** planning, prd, tests
-- **derived_from:** .ai/task-manager/config/hooks/POST_PLAN.md
+- **relates_to:** map-pre-plan-hook
+- **derived_from:** .ai/strikethroo/config/hooks/POST_PLAN.md
 
 ## practice-run-kb-bootstrap-as-a-one-pass-supervised-operation
 
 - **kind:** practice
-- **title:** Run kb-bootstrap as a one-pass, supervised operation
+- **title:** Run bootstrap as a supervised pass
 - **path:** knowledge-base/bootstrap/workflow/practice-run-kb-bootstrap-as-a-one-pass-supervised-operation.md
 - **tags:** knowledge-base, bootstrap, workflow
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-run-kb-curator-via-npx-with-explicit-harness-id
 
 - **kind:** practice
-- **title:** Run kb curator via npx with explicit harness id
+- **title:** Run curation in the current session
 - **path:** knowledge-base/curate/practice-run-kb-curator-via-npx-with-explicit-harness-id.md
-- **tags:** kb-curate, cli, harness
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **tags:** kk-curate, cli, harness
+- **relates_to:** map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div
 
@@ -1154,6 +1318,7 @@ Total nodes: 175
 - **title:** Scope styles and dark mode via the .self-review wrapper div
 - **path:** packages/styling/practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div.md
 - **tags:** css, scoping, theming
+- **relates_to:** map-self-review-wrapper-div
 - **derived_from:** packages/react/AGENTS.md
 
 ## practice-sessions-is-gitignored-provenance-does-not-travel-with-the-repo
@@ -1162,7 +1327,8 @@ Total nodes: 175
 - **title:** _sessions/ is gitignored; provenance does not travel with the repo
 - **path:** knowledge-base/structure/practice-sessions-is-gitignored-provenance-does-not-travel-with-the-repo.md
 - **tags:** knowledge-base, sessions, provenance
-- **derived_from:** .ai/knowledge-base/README.md
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .ai/kenkeep/README.md
 
 ## practice-set-author-to-your-model-name-on-every-generated-comment
 
@@ -1170,6 +1336,7 @@ Total nodes: 175
 - **title:** Set author to your model name on every generated comment
 - **path:** skills/critique/output/practice-set-author-to-your-model-name-on-every-generated-comment.md
 - **tags:** self-review, attribution, critique
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-set-the-comment-author-attribute-to-the-model-name
@@ -1178,6 +1345,7 @@ Total nodes: 175
 - **title:** Set the comment `author` attribute to the model name
 - **path:** skills/critique/output/practice-set-the-comment-author-attribute-to-the-model-name.md
 - **tags:** self-review, attribution, author
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
 ## practice-set-viewed-true-on-every-file-in-ai-generated-review-xml
@@ -1186,6 +1354,7 @@ Total nodes: 175
 - **title:** Set `viewed="true"` on every file in AI-generated review.xml
 - **path:** skills/critique/output/practice-set-viewed-true-on-every-file-in-ai-generated-review-xml.md
 - **tags:** self-review, xml, attributes
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
 ## practice-set-viewed-true-on-every-file-in-critique-output
@@ -1194,15 +1363,17 @@ Total nodes: 175
 - **title:** Set viewed="true" on every file in critique output
 - **path:** skills/critique/output/practice-set-viewed-true-on-every-file-in-critique-output.md
 - **tags:** self-review, xml, critique
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-short-circuit-kb-curate-with-one-line-summary-when-no-conflicts-and-no-failures
 
 - **kind:** practice
-- **title:** Short-circuit kb-curate with one-line summary when no conflicts and no failures
+- **title:** Finish curation after reporting placements and rebalance
 - **path:** knowledge-base/curate/practice-short-circuit-kb-curate-with-one-line-summary-when-no-conflicts-and-no-failures.md
-- **tags:** kb-curate, fast-path, summary
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **tags:** kk-curate, fast-path, summary
+- **relates_to:** map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## practice-show-welcome-screen-when-launched-outside-a-git-repo-with-no-directory-arg
 
@@ -1210,6 +1381,7 @@ Total nodes: 175
 - **title:** Show welcome screen when launched outside a git repo with no directory arg
 - **path:** app/cli/practice-show-welcome-screen-when-launched-outside-a-git-repo-with-no-directory-arg.md
 - **tags:** startup, launcher, welcome
+- **relates_to:** map-self-review-cli-invocations
 - **derived_from:** docs/PRD.md
 
 ## practice-skip-files-that-look-correct-do-not-force-comments-on-every-file
@@ -1218,6 +1390,7 @@ Total nodes: 175
 - **title:** Skip files that look correct; do not force comments on every file
 - **path:** skills/critique/review-strategy/practice-skip-files-that-look-correct-do-not-force-comments-on-every-file.md
 - **tags:** self-review, critique, scope
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-skip-files-that-look-correct-rather-than-forcing-comments
@@ -1226,6 +1399,7 @@ Total nodes: 175
 - **title:** Skip files that look correct rather than forcing comments
 - **path:** skills/critique/review-strategy/practice-skip-files-that-look-correct-rather-than-forcing-comments.md
 - **tags:** self-review, critique, scope
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
 ## practice-sort-and-group-pending-conflicts-before-resolving
@@ -1233,8 +1407,9 @@ Total nodes: 175
 - **kind:** practice
 - **title:** Sort and group pending conflicts before resolving
 - **path:** knowledge-base/curate/practice-sort-and-group-pending-conflicts-before-resolving.md
-- **tags:** kb-curate, conflicts, grouping
-- **derived_from:** .cursor/skills/kb-curate/SKILL.md
+- **tags:** kk-curate, conflicts, grouping
+- **relates_to:** map-knowledge-base-capture-curate-review-workflow
+- **derived_from:** .agents/skills/kk-curate/SKILL.md
 
 ## practice-split-combined-content-across-practice-and-map-nodes
 
@@ -1242,7 +1417,8 @@ Total nodes: 175
 - **title:** Split combined content across practice and map nodes
 - **path:** knowledge-base/structure/practice-split-combined-content-across-practice-and-map-nodes.md
 - **tags:** knowledge-base, node-authoring, ownership
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-ai-knowledge-base-directory
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap
 
@@ -1250,7 +1426,8 @@ Total nodes: 175
 - **title:** Stick to markdown documentation; do not read code files during bootstrap
 - **path:** knowledge-base/bootstrap/discovery/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md
 - **tags:** knowledge-base, scope
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-stop-and-ask-the-user-when-bootstrap-conditions-go-off-track
 
@@ -1258,7 +1435,8 @@ Total nodes: 175
 - **title:** Stop and ask the user when bootstrap conditions go off-track
 - **path:** knowledge-base/bootstrap/workflow/practice-stop-and-ask-the-user-when-bootstrap-conditions-go-off-track.md
 - **tags:** knowledge-base, escalation
-- **derived_from:** .cursor/skills/kb-bootstrap/SKILL.md
+- **relates_to:** map-kb-bootstrap-skill
+- **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
 ## practice-treat-every-review-comment-as-actionable-including-questions
 
@@ -1266,6 +1444,7 @@ Total nodes: 175
 - **title:** Treat every review comment as actionable, including questions
 - **path:** skills/apply/practice-treat-every-review-comment-as-actionable-including-questions.md
 - **tags:** self-review, comments, questions
+- **relates_to:** map-self-review-apply-skill
 - **derived_from:** .opencode/skills/self-review-apply/SKILL.md
 
 ## practice-treat-self-review-as-a-cli-first-one-shot-tool
@@ -1274,6 +1453,7 @@ Total nodes: 175
 - **title:** Treat self-review as a CLI-first, one-shot tool
 - **path:** app/cli/practice-treat-self-review-as-a-cli-first-one-shot-tool.md
 - **tags:** cli, workflow, output
+- **relates_to:** map-self-review-cli-invocations
 - **derived_from:** README.md
 
 ## practice-trigger-large-payload-guard-at-configurable-file-line-thresholds
@@ -1282,7 +1462,17 @@ Total nodes: 175
 - **title:** Trigger large-payload guard at configurable file/line thresholds
 - **path:** app/architecture/practice-trigger-large-payload-guard-at-configurable-file-line-thresholds.md
 - **tags:** payload, performance, ux
+- **relates_to:** map-two-process-electron-architecture
 - **derived_from:** README.md
+
+## practice-upload-release-zips-using-the-makerzip-filenames
+
+- **kind:** practice
+- **title:** Upload release ZIPs using the MakerZIP filenames
+- **path:** engineering/practice-upload-release-zips-using-the-makerzip-filenames.md
+- **tags:** release, packaging
+- **relates_to:** map-self-review
+- **derived_from:** .ai/kenkeep/_sessions/20260708-0612-8ba72cf2-8c9f-43fa-ae1b-570ec4ddab17.md
 
 ## practice-use-categories-from-self-review-yaml-when-present
 
@@ -1290,6 +1480,7 @@ Total nodes: 175
 - **title:** Use categories from .self-review.yaml when present
 - **path:** skills/critique/configuration/practice-use-categories-from-self-review-yaml-when-present.md
 - **tags:** self-review, critique, categories
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
 
 ## practice-use-conventional-commit-naming-for-pr-titles
@@ -1297,48 +1488,54 @@ Total nodes: 175
 - **kind:** practice
 - **title:** Use conventional commit naming for PR titles
 - **path:** engineering/practice-use-conventional-commit-naming-for-pr-titles.md
-- **tags:** task-manager, pr, conventional-commits
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, pr, conventional-commits
+- **relates_to:** map-self-review
+- **derived_from:** AGENTS.md
 
 ## practice-use-es-module-imports-in-the-renderer-not-require
 
 - **kind:** practice
 - **title:** Use ES module imports in the renderer, not require()
 - **path:** app/architecture/practice-use-es-module-imports-in-the-renderer-not-require.md
-- **tags:** task-manager, modules, imports
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, modules, imports
+- **relates_to:** map-two-process-electron-architecture
+- **derived_from:** AGENTS.md
 
 ## practice-use-old-vs-new-line-numbers-based-on-the-commented-line-type
 
 - **kind:** practice
 - **title:** Use old vs new line numbers based on the commented line type
 - **path:** review-xml/line-anchors/practice-use-old-vs-new-line-numbers-based-on-the-commented-line-type.md
-- **tags:** task-manager, line-numbers, comments
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, line-numbers, comments
+- **relates_to:** map-review-xml-format-and-xsd
+- **derived_from:** AGENTS.md
 
 ## practice-use-prism-js-for-syntax-highlighting-with-theme-matching
 
 - **kind:** practice
 - **title:** Use Prism.js for syntax highlighting with theme matching
 - **path:** app/ui/previews/practice-use-prism-js-for-syntax-highlighting-with-theme-matching.md
-- **tags:** task-manager, syntax-highlighting, prism
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, syntax-highlighting, prism
+- **relates_to:** map-rendered-file-previews
+- **derived_from:** AGENTS.md
 
 ## practice-use-shadcn-ui-components-instead-of-raw-html-for-ui
 
 - **kind:** practice
 - **title:** Use shadcn/ui components instead of raw HTML for UI
 - **path:** app/ui/interactions/practice-use-shadcn-ui-components-instead-of-raw-html-for-ui.md
-- **tags:** task-manager, ui, shadcn
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, ui, shadcn
+- **relates_to:** map-self-review-react-package
+- **derived_from:** AGENTS.md
 
 ## practice-use-src-shared-types-ts-as-the-single-source-of-truth-for-shared-types
 
 - **kind:** practice
 - **title:** Use src/shared/types.ts as the single source of truth for shared types
 - **path:** app/architecture/practice-use-src-shared-types-ts-as-the-single-source-of-truth-for-shared-types.md
-- **tags:** task-manager, types, duplication
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, types, duplication
+- **relates_to:** map-two-process-electron-architecture
+- **derived_from:** AGENTS.md
 
 ## practice-use-suggestion-blocks-whenever-a-concrete-fix-can-be-proposed
 
@@ -1346,6 +1543,7 @@ Total nodes: 175
 - **title:** Use <suggestion> blocks whenever a concrete fix can be proposed
 - **path:** skills/critique/suggestions/practice-use-suggestion-blocks-whenever-a-concrete-fix-can-be-proposed.md
 - **tags:** self-review, suggestions, critique
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-use-the-new-path-for-renamed-files-in-review-xml
@@ -1354,6 +1552,7 @@ Total nodes: 175
 - **title:** Use the new path for renamed files in review XML
 - **path:** review-xml/comments/practice-use-the-new-path-for-renamed-files-in-review-xml.md
 - **tags:** self-review, xml, renames
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-use-the-reviewadapter-pattern-for-platform-specific-operations
@@ -1362,6 +1561,7 @@ Total nodes: 175
 - **title:** Use the ReviewAdapter pattern for platform-specific operations
 - **path:** packages/architecture/practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md
 - **tags:** architecture, adapter, platform
+- **relates_to:** map-self-review-react-package, map-reviewadapter-interface
 - **derived_from:** packages/react/AGENTS.md
 
 ## practice-validate-generated-review-xml-against-the-xsd-before-finishing
@@ -1370,6 +1570,7 @@ Total nodes: 175
 - **title:** Validate generated review.xml against the XSD before finishing
 - **path:** skills/critique/output/practice-validate-generated-review-xml-against-the-xsd-before-finishing.md
 - **tags:** self-review, xml, validation
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
 ## practice-validate-generated-review-xml-against-the-xsd-with-xmllint
@@ -1378,6 +1579,7 @@ Total nodes: 175
 - **title:** Validate generated review.xml against the XSD with xmllint
 - **path:** skills/critique/output/practice-validate-generated-review-xml-against-the-xsd-with-xmllint.md
 - **tags:** self-review, critique, validation
+- **relates_to:** map-self-review-critique-skill
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md, .agents/skills/self-review-critique/SKILL.md
 
 ## practice-validate-self-review-xml-against-the-xsd-before-applying
@@ -1386,6 +1588,7 @@ Total nodes: 175
 - **title:** Validate self-review XML against the XSD before applying
 - **path:** skills/apply/practice-validate-self-review-xml-against-the-xsd-before-applying.md
 - **tags:** self-review, validation, xmllint
+- **relates_to:** map-self-review-apply-skill
 - **derived_from:** .opencode/skills/self-review-apply/SKILL.md, .agents/skills/self-review-apply/SKILL.md
 
 ## practice-validate-xml-output-against-the-xsd-before-writing
@@ -1393,8 +1596,9 @@ Total nodes: 175
 - **kind:** practice
 - **title:** Validate XML output against the XSD before writing
 - **path:** review-xml/schema/practice-validate-xml-output-against-the-xsd-before-writing.md
-- **tags:** task-manager, xml, validation
-- **derived_from:** .ai/task-manager/config/TASK_MANAGER.md
+- **tags:** strikethroo, xml, validation
+- **relates_to:** map-review-xml-format-and-xsd
+- **derived_from:** AGENTS.md
 
 ## practice-write-prds-without-tasks-or-phases-during-plan-creation
 
@@ -1402,7 +1606,8 @@ Total nodes: 175
 - **title:** Write PRDs without tasks or phases during plan creation
 - **path:** planning/authoring/practice-write-prds-without-tasks-or-phases-during-plan-creation.md
 - **tags:** planning, prd, workflow
-- **derived_from:** .ai/task-manager/config/hooks/PRE_PLAN.md
+- **relates_to:** map-pre-plan-hook
+- **derived_from:** .ai/strikethroo/config/hooks/PRE_PLAN.md
 
 ## practice-xml-escape-all-text-content-in-review-xml
 
@@ -1410,4 +1615,5 @@ Total nodes: 175
 - **title:** XML-escape all text content in review.xml
 - **path:** review-xml/comments/practice-xml-escape-all-text-content-in-review-xml.md
 - **tags:** self-review, xml, escaping
+- **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md

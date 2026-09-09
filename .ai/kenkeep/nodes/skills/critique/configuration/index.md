@@ -15,8 +15,8 @@ _None._
 - Open [**Use categories from .self-review.yaml when present**](practice-use-categories-from-self-review-yaml-when-present.md) to learn about: If \`.self-review.yaml\` exists with a \`categories\` array, use only those category names. Otherwise, fall back to the documented defaults. #self-review #critique #categories
 
 ## Components (what exists)
+- Open [**self-review-critique skill**](map-self-review-critique-skill.md) to learn about: Generate a guide and evidence-based review XML for local or remote diffs. #self-review #skills #critique
 - Open [**Default critique categories**](map-default-critique-categories.md) to learn about: Six built-in comment categories used when .self-review.yaml is absent: question, bug, security, style, task, nit. #self-review #categories #critique
-- Open [**self-review-critique skill**](map-self-review-critique-skill.md) to learn about: Slash command that critiques a git diff and emits review.xml for human validation via self-review --resume-from. #self-review #skills #critique
 
 ## By topic
 
@@ -33,10 +33,10 @@ _None._
 - Open [**Read categories from .self-review.yaml before generating critique**](practice-read-categories-from-self-review-yaml-before-generating-critique.md) — If .self-review.yaml exists, use only its declared categories; otherwise fall back to the six built-in defaults.
 - Open [**Use categories from .self-review.yaml when present**](practice-use-categories-from-self-review-yaml-when-present.md) — If \`.self-review.yaml\` exists with a \`categories\` array, use only those category names. Otherwise, fall back to the documented defaults.
 ### #cli
-- Open [**ai-knowledge-base CLI**](../../../knowledge-base/tooling/map-ai-knowledge-base-cli.md) — \`npx @e0ipso/ai-knowledge-base\` provides \`bootstrap-incremental\` and \`index rebuild\` subcommands used by kb-bootstrap.
-- Open [**CLI static skip list**](../../../knowledge-base/tooling/map-cli-static-skip-list.md) — The CLI pre-filters \`LICENSE\`, \`CHANGELOG\`, \`CODE_OF_CONDUCT\`, \`CONTRIBUTORS\`, \`INDEX.md\`, \`GRAPH.md\`, and \`releases/**/*.md\` from bootstrap candidates.
-- Open [**Resolve the active KB harness and pass \`--harness "$HARNESS"\` to every CLI call**](../../../knowledge-base/tooling/practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call.md) — Detect the active harness via the kb-detect-harness script before running CLI commands, then pass \`--harness "$HARNESS"\` to each call.
+- Open [**Kenkeep CLI**](../../../knowledge-base/tooling/map-ai-knowledge-base-cli.md) — Deterministic commands discover documents, validate schemas and maintain nodes.
+- Open [**Bootstrap document exclusions**](../../../knowledge-base/tooling/map-cli-static-skip-list.md) — finddocs applies gitignore, kkignore and its static filename exclusions.
+- Open [**Select the harness for harness-specific kenkeep commands**](../../../knowledge-base/tooling/practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call.md) — Use explicit harness selection for launcher commands; deterministic commands need no override.
 ### #skills
-- Open [**self-review-apply skill**](../../apply/map-self-review-apply-skill.md) — Slash command that consumes a v3 review.xml, reads threaded replies in order, and applies accepted feedback to the codebase.
-- Open [**self-review-critique skill**](map-self-review-critique-skill.md) — Slash command that critiques a git diff and emits review.xml for human validation via self-review --resume-from.
-- Open [**Engage relevant assistant skills based on task skills**](../../../planning/assignment/practice-engage-relevant-assistant-skills-based-on-task-skills.md) — Analyze the set of task skills to engage any relevant assistant skills (global or project) during task assignment.
+- Open [**Knowledge-base capture and curation workflow**](../../../knowledge-base/curate/map-knowledge-base-capture-curate-review-workflow.md) — Capture sessions, extract proposals, curate nodes and consume topical navigation.
+- Open [**kk-bootstrap skill**](../../../knowledge-base/bootstrap/workflow/map-kb-bootstrap-skill.md) — Supervised seeding from existing Markdown, with validated node writes.
+- Open [**self-review-critique skill**](map-self-review-critique-skill.md) — Generate a guide and evidence-based review XML for local or remote diffs.

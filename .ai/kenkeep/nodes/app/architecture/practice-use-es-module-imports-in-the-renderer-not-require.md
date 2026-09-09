@@ -5,14 +5,15 @@ description: >-
   Renderer code must use ES module import syntax; CommonJS require() is
   disallowed.
 tags:
-  - task-manager
+  - strikethroo
   - modules
   - imports
 kk_schema_version: 3
 kk_id: practice-use-es-module-imports-in-the-renderer-not-require
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-two-process-electron-architecture
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ Do not use `require()` in the renderer. Use ES module imports exclusively. This 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-two-process-electron-architecture](map-two-process-electron-architecture.md)
+<!-- kk:related:end -->

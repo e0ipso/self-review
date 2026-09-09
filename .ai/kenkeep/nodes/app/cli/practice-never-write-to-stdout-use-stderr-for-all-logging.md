@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-never-write-to-stdout-use-stderr-for-all-logging
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-cli-invocations
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ In the main process, use `console.error()` for logging; never use `console.log()
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-cli-invocations](map-self-review-cli-invocations.md)
+<!-- kk:related:end -->

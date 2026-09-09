@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-pair-line-number-attributes-correctly-in-review-comments
 kk_derived_from:
   - .agents/skills/self-review-critique/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ The current contract is `.agents/skills/self-review-apply/assets/self-review-v3.
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.agents/skills/self-review-critique/SKILL.md](.agents/skills/self-review-critique/SKILL.md)
+[1] [.agents/skills/self-review-critique/SKILL.md](../../../../../.agents/skills/self-review-critique/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](../schema/map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

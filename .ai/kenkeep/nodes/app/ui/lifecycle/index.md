@@ -13,7 +13,7 @@ _None._
 - Open [**Differentiate Finish Review from window close**](practice-differentiate-finish-review-from-window-close.md) to learn about: Finish Review saves and exits immediately. Closing the window via OS shows a three-way Save & Quit / Discard / Cancel dialog. #exit #save #ux
 
 ## Components (what exists)
-- Open [**Finish Review vs window-close behavior**](map-finish-review-vs-window-close-behavior.md) to learn about: Finish Review saves and exits; closing via X/Cmd+Q shows a three-way Save & Quit / Discard / Cancel dialog. #task-manager #close-behavior #save
+- Open [**Finish Review vs window-close behavior**](map-finish-review-vs-window-close-behavior.md) to learn about: Finish Review saves and exits; closing via X/Cmd+Q shows a three-way Save & Quit / Discard / Cancel dialog. #strikethroo #close-behavior #save
 
 ## By topic
 
@@ -24,10 +24,10 @@ _None._
 - Open [**Finish Review vs window-close behavior**](map-finish-review-vs-window-close-behavior.md) — Finish Review saves and exits; closing via X/Cmd+Q shows a three-way Save & Quit / Discard / Cancel dialog.
 ### #exit
 - Open [**Differentiate Finish Review from window close**](practice-differentiate-finish-review-from-window-close.md) — Finish Review saves and exits immediately. Closing the window via OS shows a three-way Save & Quit / Discard / Cancel dialog.
-### #task-manager
-- Open [**POST_PHASE hook**](../../../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+### #strikethroo
 - Open [**PRE_PLAN hook**](../../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Extract shared logic before duplicating across call sites**](../../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
+- Open [**POST_PHASE hook**](../../../planning/execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**POST_PLAN hook**](../../../planning/authoring/map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
 ### #ux
 - Open [**Prefill the suggestion proposed-code editor with the original code**](../interactions/practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code.md) — When the user activates a suggestion, prefill the proposed-code field with the original so they can edit in place.
 - Open [**Differentiate Finish Review from window close**](practice-differentiate-finish-review-from-window-close.md) — Finish Review saves and exits immediately. Closing the window via OS shows a three-way Save & Quit / Discard / Cancel dialog.

@@ -11,11 +11,14 @@
 - Load [`critique/`](critique/index.md) for more information on the self-review-critique skill's diff selection, comment authoring, and validation rules; read when generating review.xml from a diff.
 
 ## Conventions (how we build)
-_None yet._
+- Open [**Keep walkthrough guide paths portable across checkouts**](practice-keep-walkthrough-guide-paths-portable-across-checkouts.md) to learn about: Use repository-relative guide file paths so guides work on host and container checkouts. #guide #portability
 
 ## Components (what exists)
 _None yet._
 
 ## By topic
 
-_No tags yet._
+### #guide
+- Open [**Keep walkthrough guide paths portable across checkouts**](practice-keep-walkthrough-guide-paths-portable-across-checkouts.md) — Use repository-relative guide file paths so guides work on host and container checkouts.
+### #portability
+- Open [**Keep walkthrough guide paths portable across checkouts**](practice-keep-walkthrough-guide-paths-portable-across-checkouts.md) — Use repository-relative guide file paths so guides work on host and container checkouts.

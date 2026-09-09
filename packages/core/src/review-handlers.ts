@@ -23,6 +23,7 @@ import {
   RemoteDriftInfo,
 } from './types';
 import { scanDirectory, scanFile } from './directory-scanner';
+import { tokenizeGitDiffArgs } from './git-diff-args';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 
 /**
@@ -272,9 +273,10 @@ export async function expandContext(
     const { parseDiff } = await import('./diff-parser');
 
     const source = diffData.source;
-    const originalArgs = source.gitDiffArgs
-      .split(/\s+/)
-      .filter(a => a.length > 0);
+    // Shell-style tokenizing, the inverse of how the source string was
+    // written: a search string or path with a space comes back as one
+    // argument instead of several.
+    const originalArgs = tokenizeGitDiffArgs(source.gitDiffArgs);
 
     // Strip -U/--unified flags. Stop at `--` — paths after it were the
     // original path restriction; the specific file is supplied below.

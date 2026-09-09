@@ -11,8 +11,9 @@ tags:
 kk_schema_version: 3
 kk_id: practice-implement-only-what-the-user-explicitly-requests
 kk_derived_from:
-  - .ai/task-manager/config/hooks/PRE_PLAN.md
-kk_relates_to: []
+  - .ai/strikethroo/config/hooks/PRE_PLAN.md
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -27,5 +28,11 @@ When in doubt, ask: "Is this feature explicitly mentioned in the user's request?
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/PRE_PLAN.md](.ai/task-manager/config/hooks/PRE_PLAN.md)
+[1] [.ai/strikethroo/config/hooks/PRE_PLAN.md](../../../strikethroo/config/hooks/PRE_PLAN.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](../app/map-self-review.md)
+<!-- kk:related:end -->

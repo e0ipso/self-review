@@ -2,26 +2,32 @@
 type: map
 title: POST_TASK_GENERATION_ALL hook
 description: >-
-  Lifecycle hook that runs after all tasks are generated to review complexity
-  and append a blueprint to the plan.
+  Append an acyclic dependency diagram and ordered execution phases.
 tags:
-  - task-management
+  - strikethroo
   - hooks
   - lifecycle
 kk_schema_version: 3
 kk_id: map-post-task-generation-all-hook
 kk_derived_from:
-  - .ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md
-kk_relates_to: []
+  - .ai/strikethroo/config/hooks/POST_TASK_GENERATION_ALL.md
+kk_relates_to:
+  - practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan
+  - practice-review-every-generated-task-for-complexity-vagueness-and-triviality
 kk_depends_on: []
 kk_confidence: high
 ---
-The `POST_TASK_GENERATION_ALL` hook fires after all tasks have been generated. It defines two steps: (1) review each generated task for complexity, vagueness, or triviality, and (2) update the plan document with a dependency diagram (Mermaid `graph TD`) and execution phases.
-
-Location: `.ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md`. The blueprint structure references the template at `.ai/task-manager/config/templates/BLUEPRINT_TEMPLATE.md`.
+The hook at `.ai/strikethroo/config/hooks/POST_TASK_GENERATION_ALL.md` appends the execution blueprint: a Mermaid dependency graph when dependencies exist, and phases ordered after their dependencies. Use `.ai/strikethroo/config/templates/BLUEPRINT_TEMPLATE.md`. Each task belongs to one phase and Phase 1 has no dependencies.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md](.ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md)
+[1] [.ai/strikethroo/config/hooks/POST_TASK_GENERATION_ALL.md](../../../../strikethroo/config/hooks/POST_TASK_GENERATION_ALL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan](practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md)
+- Related: [practice-review-every-generated-task-for-complexity-vagueness-and-triviality](practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md)
+<!-- kk:related:end -->

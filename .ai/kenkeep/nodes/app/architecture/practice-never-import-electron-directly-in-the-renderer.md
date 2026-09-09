@@ -2,17 +2,18 @@
 type: practice
 title: Never import electron directly in the renderer
 description: >-
-  Renderer must only access IPC via the preload contextBridge electronAPI
-  object.
+  Renderer must only access IPC via the preload contextBridge electronAPI object.
 tags:
-  - task-manager
+  - strikethroo
   - ipc
   - security
 kk_schema_version: 3
 kk_id: practice-never-import-electron-directly-in-the-renderer
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-two-process-electron-architecture
+  - map-ipc-channel-registry
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,12 @@ The preload script uses `contextBridge.exposeInMainWorld` to expose a typed `ele
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-two-process-electron-architecture](map-two-process-electron-architecture.md)
+- Related: [map-ipc-channel-registry](map-ipc-channel-registry.md)
+<!-- kk:related:end -->

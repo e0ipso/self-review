@@ -10,18 +10,18 @@
 _None._
 
 ## Conventions (how we build)
-- Open [**Append a blueprint with dependency diagram and execution phases to the plan**](practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md) to learn about: After finalizing tasks, add a Mermaid dependency graph and group tasks into execution phases on the plan document. #task-management #blueprint #dependencies
-- Open [**Review every generated task for complexity, vagueness, and triviality**](practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md) to learn about: After task generation, split tasks spanning 3+ technologies/skills, sharpen vague acceptance criteria, and merge trivial tasks. #task-management #planning #quality
+- Open [**Append a blueprint with dependency diagram and execution phases to the plan**](practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md) to learn about: After finalizing tasks, add a Mermaid dependency graph and group tasks into execution phases on the plan document. #strikethroo #blueprint #dependencies
+- Open [**Score and refine generated task complexity**](practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md) to learn about: Keep tasks single-purpose with runnable acceptance checks and one or two skills. #strikethroo #planning #quality
 
 ## Components (what exists)
-- Open [**POST_TASK_GENERATION_ALL hook**](map-post-task-generation-all-hook.md) to learn about: Lifecycle hook that runs after all tasks are generated to review complexity and append a blueprint to the plan. #task-management #hooks #lifecycle
+- Open [**POST_TASK_GENERATION_ALL hook**](map-post-task-generation-all-hook.md) to learn about: Append an acyclic dependency diagram and ordered execution phases. #strikethroo #hooks #lifecycle
 
 ## By topic
 
-### #task-management
-- Open [**Append a blueprint with dependency diagram and execution phases to the plan**](practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md) — After finalizing tasks, add a Mermaid dependency graph and group tasks into execution phases on the plan document.
-- Open [**POST_TASK_GENERATION_ALL hook**](map-post-task-generation-all-hook.md) — Lifecycle hook that runs after all tasks are generated to review complexity and append a blueprint to the plan.
-- Open [**Review every generated task for complexity, vagueness, and triviality**](practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md) — After task generation, split tasks spanning 3+ technologies/skills, sharpen vague acceptance criteria, and merge trivial tasks.
+### #strikethroo
+- Open [**PRE_PLAN hook**](../authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**POST_PHASE hook**](../execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**POST_PLAN hook**](../authoring/map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
 ### #blueprint
 - Open [**Append a blueprint with dependency diagram and execution phases to the plan**](practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md) — After finalizing tasks, add a Mermaid dependency graph and group tasks into execution phases on the plan document.
 - Open [**Mark completed phases and tasks in the blueprint before advancing**](../execution/practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing.md) — After validating a phase, update the blueprint: ✅ in front of the phase title, ✔️ in front of each task, and set task status to completed.
@@ -30,14 +30,14 @@ _None._
 - Open [**Do not add Tailwind as a peer dependency for host apps**](../../packages/styling/practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps.md) — tailwindcss and @tailwindcss/typography are devDependencies; consumers ship no Tailwind.
 - Open [**Keep @self-review/types free of runtime dependencies**](../../packages/types/practice-keep-self-review-types-free-of-runtime-dependencies.md) — The types package must never add runtime dependencies in package.json; it exists solely for type exports.
 ### #hooks
-- Open [**PRE_TASK_ASSIGNMENT hook**](../assignment/map-pre-task-assignment-hook.md) — Hook that runs before task assignment to select an appropriate agent for each task based on required skills.
-- Open [**POST_PLAN hook**](../authoring/map-post-plan-hook.md) — Task-manager hook at .ai/task-manager/config/hooks/POST_PLAN.md that gates plans on PRD/test updates and architecture review.
-- Open [**Do not hand-edit INDEX.md or GRAPH.md**](../../knowledge-base/structure/practice-do-not-hand-edit-index-md-or-graph-md.md) — Both files are regenerated automatically by the lint-staged pre-commit hook and staged into the commit.
+- Open [**PRE_PLAN hook**](../authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**POST_PHASE hook**](../execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**PRE_TASK_ASSIGNMENT hook**](../assignment/map-pre-task-assignment-hook.md) — Match task skills and domain to available agents in the active harness.
 ### #lifecycle
-- Open [**POST_TASK_GENERATION_ALL hook**](map-post-task-generation-all-hook.md) — Lifecycle hook that runs after all tasks are generated to review complexity and append a blueprint to the plan.
+- Open [**POST_TASK_GENERATION_ALL hook**](map-post-task-generation-all-hook.md) — Append an acyclic dependency diagram and ordered execution phases.
 ### #planning
-- Open [**Review plans against PRD and test/features updates**](../authoring/practice-review-plans-against-prd-and-test-features-updates.md) — After producing a plan, confirm whether PRD.md and test/features need updates, keeping additions succinct and skipping them for minimal changes.
+- Open [**POST_PLAN hook**](../authoring/map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
+- Open [**Specify plan validation and documentation needs**](../authoring/practice-review-plans-against-prd-and-test-features-updates.md) — Include Self Validation and decide whether documentation or AGENTS.md needs updates.
 - Open [**Write PRDs without tasks or phases during plan creation**](../authoring/practice-write-prds-without-tasks-or-phases-during-plan-creation.md) — Plan creation produces the PRD only. Tasks and phases are generated in a later workflow step.
-- Open [**Check plans for architecture and code reuse improvements**](../authoring/practice-check-plans-for-architecture-and-code-reuse-improvements.md) — Each plan must identify how architecture and code reuse can be improved in its areas of influence; update the plan if missing.
 ### #quality
-- Open [**Review every generated task for complexity, vagueness, and triviality**](practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md) — After task generation, split tasks spanning 3+ technologies/skills, sharpen vague acceptance criteria, and merge trivial tasks.
+- Open [**Score and refine generated task complexity**](practice-review-every-generated-task-for-complexity-vagueness-and-triviality.md) — Keep tasks single-purpose with runnable acceptance checks and one or two skills.

@@ -41,10 +41,16 @@
           # Fetches the pre-built Linux zip from GitHub Releases.
           # The update-flake-hash workflow updates this hash automatically
           # on each release. To update manually:
-          #   nix store prefetch-file --hash-type sha256 --json <url> | jq .hash
+          #   scripts/update-flake-hash.sh x86_64-linux
+          #
+          # The hash covers the unpacked directory, not the zip bytes, so it
+          # only reproduces under the unpacking options set here. The updater
+          # prefetches with `--unpack`, which collapses a single archive root
+          # the same way stripRoot does.
           src = pkgs.fetchzip {
             url = "https://github.com/e0ipso/self-review/releases/download/v${packageJson.version}/Self.Review-linux-${arch}-${packageJson.version}.zip";
             hash = "sha256-YAFsUarHCfsuOCcuF9gfcjWdbNTA5pzPOV0IGw3MkSI=";
+            stripRoot = true;
           };
 
           nativeBuildInputs = with pkgs; [

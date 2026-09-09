@@ -5,14 +5,15 @@ description: >-
   All buttons, inputs, dropdowns, dialogs, etc. must use shadcn/ui; no raw HTML
   equivalents.
 tags:
-  - task-manager
+  - strikethroo
   - ui
   - shadcn
 kk_schema_version: 3
 kk_id: practice-use-shadcn-ui-components-instead-of-raw-html-for-ui
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-self-review-react-package
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ Do not use raw HTML elements for buttons, inputs, dropdowns, dialogs, or similar
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-react-package](../../../packages/architecture/map-self-review-react-package.md)
+<!-- kk:related:end -->

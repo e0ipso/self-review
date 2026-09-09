@@ -5,14 +5,15 @@ description: >-
   Critique-generated comments include an author attribute (model name); absent
   author shows 'You' with a person icon.
 tags:
-  - task-manager
+  - strikethroo
   - comments
   - author
 kk_schema_version: 3
 kk_id: map-comment-author-attribution
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -21,5 +22,11 @@ Comments from the `self-review-critique` skill include an `author` attribute wit
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](../schema/map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

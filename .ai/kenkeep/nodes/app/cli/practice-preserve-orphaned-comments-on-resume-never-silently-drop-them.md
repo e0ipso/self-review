@@ -2,8 +2,8 @@
 type: practice
 title: Preserve orphaned comments on resume; never silently drop them
 description: >-
-  Comments from a resumed review that can't be mapped to current lines get
-  orphaned="true" and a visual indicator, never deleted.
+  Preserve and expose unmatched prior comments; complete orphan handling remains
+  a PRD requirement.
 tags:
   - resume
   - comments
@@ -12,16 +12,21 @@ kk_schema_version: 3
 kk_id: practice-preserve-orphaned-comments-on-resume-never-silently-drop-them
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-cli-invocations
 kk_depends_on: []
 kk_confidence: high
 ---
-With `--resume-from`, line numbers from a prior review may no longer match the current diff. The app attempts best-effort matching using surrounding context (similar to git rename detection).
-
-Comments that cannot be mapped to any current line are preserved in the output with an `orphaned="true"` attribute and displayed at the top of the relevant file section with a visual indicator. Prior comments are never silently dropped.
+Preserve prior comments when the current diff no longer contains their anchors. The PRD requires unmappable comments to carry `orphaned="true"` and appear at the top of the file. This is a required behavior, not a guarantee of the current implementation: resume currently overlays recorded anchors directly and lacks complete orphan reconciliation. Context-based remapping remains an open PRD design question.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-cli-invocations](map-self-review-cli-invocations.md)
+<!-- kk:related:end -->

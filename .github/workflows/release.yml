@@ -48,9 +48,11 @@ jobs:
 
       - run: npm ci
 
-      - name: Get tag before release
-        id: before
-        run: echo "tag=$(git describe --tags --abbrev=0 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+      # Guards the resolver below, which decides whether this run publishes.
+      # Runs before the tag is minted so a broken decision cannot strand a
+      # release with no artifacts.
+      - name: Check the release tag resolver
+        run: bash scripts/test/resolve-release-tag.test.sh
 
       - name: Run semantic-release
         run: npx semantic-release
@@ -58,22 +60,36 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HUSKY: '0'
 
-      - name: Detect new tag
+      # Asks whether a release exists for this commit, not whether this run
+      # created one, so re-running after an interrupted attempt resumes the
+      # packaging and upload work instead of skipping it.
+      - name: Resolve release tag
         id: tag
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          git fetch --tags
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ "$TAG" != "${{ steps.before.outputs.tag }}" ] && [ -n "$TAG" ]; then
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          git fetch --tags --force
+          tag=$(bash scripts/resolve-release-tag.sh "$HEAD_SHA")
+          if [ -n "$tag" ]; then
+            echo "Publishing artifacts for $tag" >&2
           else
-            echo "No new release tag created"
-            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "No release for $HEAD_SHA" >&2
           fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+      # A resumed run reaches this step with the versions of an earlier
+      # attempt, and npm refuses to republish them. Skip what is already
+      # there rather than failing the retry before it reaches the artifacts.
       - name: Publish workspace packages to npm
         if: steps.tag.outputs.tag != ''
         run: |
           for pkg in packages/types packages/core packages/react; do
+            name=$(jq -r .name "$pkg/package.json")
+            version=$(jq -r .version "$pkg/package.json")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published" >&2
+              continue
+            fi
             (cd "$pkg" && npm run build && npm publish --provenance --access public)
           done
         env:
@@ -87,6 +103,8 @@ jobs:
         if: steps.tag.outputs.tag != ''
         run: npm run make
 
+      # --clobber replaces assets a previous attempt uploaded, so a retry
+      # lands one complete set on the existing release instead of a duplicate.
       - name: Upload release assets
         if: steps.tag.outputs.tag != ''
         run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm out/make/zip/linux/x64/*.zip --clobber

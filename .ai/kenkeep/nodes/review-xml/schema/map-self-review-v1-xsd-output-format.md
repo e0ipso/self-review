@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: map-self-review-v1-xsd-output-format
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ The application reads v1, v2, and v3 documents but always writes v3. The older v
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

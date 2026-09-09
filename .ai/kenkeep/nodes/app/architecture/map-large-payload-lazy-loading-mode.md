@@ -5,14 +5,16 @@ description: >-
   When a diff exceeds max-files or max-total-lines, files load without hunks
   initially and hunks are fetched lazily via diff:load-file.
 tags:
-  - task-manager
+  - strikethroo
   - large-payload
   - perf
 kk_schema_version: 3
 kk_id: map-large-payload-lazy-loading-mode
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-two-process-electron-architecture
+  - practice-lazy-load-file-hunks-in-large-payload-mode
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +25,12 @@ Payload sizing is computed in `src/main/payload-sizing.ts`.
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-two-process-electron-architecture](map-two-process-electron-architecture.md)
+- Related: [practice-lazy-load-file-hunks-in-large-payload-mode](practice-lazy-load-file-hunks-in-large-payload-mode.md)
+<!-- kk:related:end -->

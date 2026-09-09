@@ -11,10 +11,10 @@ _None._
 
 ## Conventions (how we build)
 - Open [**Force unified view for added and deleted files**](practice-force-unified-view-for-added-and-deleted-files.md) to learn about: Files with changeType added or deleted always render in unified view regardless of the user's selected mode. #ui #diff-view
-- Open [**Use Prism.js for syntax highlighting with theme matching**](practice-use-prism-js-for-syntax-highlighting-with-theme-matching.md) to learn about: Detect language by file extension and match Prism theme to the app's light/dark mode. #task-manager #syntax-highlighting #prism
+- Open [**Use Prism.js for syntax highlighting with theme matching**](practice-use-prism-js-for-syntax-highlighting-with-theme-matching.md) to learn about: Detect language by file extension and match Prism theme to the app's light/dark mode. #strikethroo #syntax-highlighting #prism
 
 ## Components (what exists)
-- Open [**Rendered file previews**](map-rendered-file-previews.md) to learn about: Markdown, HTML, raster images, and SVG support Raw/Rendered toggles for newly added files. #task-manager #rendered-preview #file-types
+- Open [**Rendered file previews**](map-rendered-file-previews.md) to learn about: Markdown, HTML, raster images, and SVG support Raw/Rendered toggles for newly added files. #strikethroo #rendered-preview #file-types
 - Open [**Rendered image and SVG previews for added files**](map-rendered-image-and-svg-previews-for-added-files.md) to learn about: Raster images load via diff:load-image as base64 data URIs; SVG content from addition lines renders via img+data-URI to block scripts. #preview #image #svg
 - Open [**Rendered text view for added Markdown and HTML files**](map-rendered-text-view-for-added-markdown-and-html-files.md) to learn about: Newly added .md/.markdown and .html/.htm files get a Raw/Rendered toggle with source-line-mapped gutter for line comments. #preview #markdown #html #rendered
 
@@ -23,10 +23,10 @@ _None._
 ### #preview
 - Open [**Rendered image and SVG previews for added files**](map-rendered-image-and-svg-previews-for-added-files.md) — Raster images load via diff:load-image as base64 data URIs; SVG content from addition lines renders via img+data-URI to block scripts.
 - Open [**Rendered text view for added Markdown and HTML files**](map-rendered-text-view-for-added-markdown-and-html-files.md) — Newly added .md/.markdown and .html/.htm files get a Raw/Rendered toggle with source-line-mapped gutter for line comments.
-### #task-manager
-- Open [**POST_PHASE hook**](../../../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+### #strikethroo
 - Open [**PRE_PLAN hook**](../../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Extract shared logic before duplicating across call sites**](../../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
+- Open [**POST_PHASE hook**](../../../planning/execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**POST_PLAN hook**](../../../planning/authoring/map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
 ### #diff-view
 - Open [**Force unified view for added and deleted files**](practice-force-unified-view-for-added-and-deleted-files.md) — Files with changeType added or deleted always render in unified view regardless of the user's selected mode.
 ### #file-types

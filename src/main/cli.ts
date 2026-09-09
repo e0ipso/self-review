@@ -27,6 +27,56 @@ export interface CliArgs {
 }
 
 /**
+ * Electron and Chromium switches self-review tolerates in front of its own
+ * arguments. A headless launcher (CI, a container, a desktop entry) puts them
+ * there, Chromium reads them straight from process.argv, and git diff has no
+ * use for any of them. Only the `--name` and `--name=value` spellings are
+ * recognized: a switch is never allowed to swallow the argument after it, so
+ * `--no-sandbox main..feature` keeps its revision.
+ */
+const CHROMIUM_SWITCH_NAMES = new Set([
+  'disable-dev-shm-usage',
+  'disable-features',
+  'disable-gpu',
+  'disable-gpu-compositing',
+  'disable-gpu-sandbox',
+  'disable-setuid-sandbox',
+  'disable-software-rasterizer',
+  'enable-features',
+  'enable-logging',
+  'force-device-scale-factor',
+  'headless',
+  'in-process-gpu',
+  'no-sandbox',
+  'no-zygote',
+  'ozone-platform',
+  'ozone-platform-hint',
+  'remote-debugging-port',
+  'single-process',
+  'use-angle',
+  'use-gl',
+  'user-data-dir',
+]);
+
+function isChromiumSwitch(arg: string): boolean {
+  if (!arg.startsWith('--')) return false;
+  const name = arg.slice(2).split('=', 1)[0];
+  return CHROMIUM_SWITCH_NAMES.has(name);
+}
+
+/**
+ * Drop the run of recognized Chromium switches in front of the application's
+ * own arguments, so what remains starts at the argument the user meant first.
+ * Scanning stops at the first token that is not one of them, which keeps every
+ * later argument, including anything after `--`, exactly where it was.
+ */
+function dropLeadingChromiumSwitches(args: string[]): string[] {
+  let start = 0;
+  while (start < args.length && isChromiumSwitch(args[start])) start++;
+  return args.slice(start);
+}
+
+/**
  * Extract application arguments from process.argv.
  * In Electron dev mode (process.defaultApp = true), process.argv contains:
  *   [electron, ...chromiumFlags, mainScript, ...appArgs]
@@ -49,7 +99,12 @@ function getAppArgs(): string[] {
   }
 
   // Filter out macOS Finder process serial number arguments (-psn_XXXX)
-  return args.filter(arg => !arg.startsWith('-psn_'));
+  const appArgs = args.filter(arg => !arg.startsWith('-psn_'));
+
+  // Leading Chromium switches belong to Electron, not to this CLI. Removing
+  // them before anything else reads args[0] is what keeps a subcommand
+  // dispatchable behind, say, `--ozone-platform=headless`.
+  return dropLeadingChromiumSwitches(appArgs);
 }
 
 export function parseCliArgs(): CliArgs {
@@ -116,6 +171,19 @@ export function parseCliArgs(): CliArgs {
         remoteUrl = arg;
         continue; // never forwarded to git diff
       }
+      if (arg === 'fetch-comments') {
+        // The subcommand reached here in a position dispatch cannot honor.
+        // Forwarding it and its URL to git diff would run the wrong command
+        // on arguments that are not git's, so say so instead.
+        console.error(
+          'Error: fetch-comments must be the first argument: ' +
+            'self-review fetch-comments <url> [--all-threads]'
+        );
+        console.error(
+          '       To diff a path named fetch-comments, put it after --.'
+        );
+        process.exit(1);
+      }
     }
 
     // All other args are passed through to git diff
@@ -155,6 +223,8 @@ Examples:
   self-review fetch-comments https://github.com/o/r/pull/42
 
 All arguments except --resume-from and --help are passed to git diff.
+Leading Electron/Chromium switches (--ozone-platform=headless and friends)
+are consumed by the app and never reach git diff.
 If no arguments are provided, shows unstaged working tree changes.
 
 Output is written to ./review.xml by default (configurable via

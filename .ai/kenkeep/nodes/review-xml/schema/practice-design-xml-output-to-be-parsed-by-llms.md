@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-design-xml-output-to-be-parsed-by-llms
 kk_derived_from:
   - README.md
-kk_relates_to: []
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -25,5 +26,11 @@ The README states: "AI-native output. The XML format is designed to be parsed by
 <!-- kk:citations:start -->
 # Citations
 
-[1] [README.md](README.md)
+[1] [README.md](../../../../../README.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

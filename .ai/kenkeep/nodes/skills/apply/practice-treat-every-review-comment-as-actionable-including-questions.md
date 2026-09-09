@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-treat-every-review-comment-as-actionable-including-questions
 kk_derived_from:
   - .opencode/skills/self-review-apply/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-apply-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ If a question is purely informational and warrants no code change, answer it in 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.opencode/skills/self-review-apply/SKILL.md](.opencode/skills/self-review-apply/SKILL.md)
+[1] [.opencode/skills/self-review-apply/SKILL.md](../../../../../.opencode/skills/self-review-apply/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-apply-skill](map-self-review-apply-skill.md)
+<!-- kk:related:end -->

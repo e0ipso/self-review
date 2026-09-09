@@ -10,44 +10,41 @@
 _None._
 
 ## Conventions (how we build)
-- Open [**Check plans for architecture and code reuse improvements**](practice-check-plans-for-architecture-and-code-reuse-improvements.md) to learn about: Each plan must identify how architecture and code reuse can be improved in its areas of influence; update the plan if missing. #planning #architecture #code-reuse
-- Open [**Review plans against PRD and test/features updates**](practice-review-plans-against-prd-and-test-features-updates.md) to learn about: After producing a plan, confirm whether PRD.md and test/features need updates, keeping additions succinct and skipping them for minimal changes. #planning #prd #tests
+- Open [**Keep architecture decisions within the requested plan scope**](practice-check-plans-for-architecture-and-code-reuse-improvements.md) to learn about: Use PRE_PLAN simplicity and scope rules when evaluating abstractions. #planning #architecture #code-reuse
+- Open [**Specify plan validation and documentation needs**](practice-review-plans-against-prd-and-test-features-updates.md) to learn about: Include Self Validation and decide whether documentation or AGENTS.md needs updates. #planning #prd #tests
 - Open [**Write PRDs without tasks or phases during plan creation**](practice-write-prds-without-tasks-or-phases-during-plan-creation.md) to learn about: Plan creation produces the PRD only. Tasks and phases are generated in a later workflow step. #planning #prd #workflow
 
 ## Components (what exists)
-- Open [**POST_PLAN hook**](map-post-plan-hook.md) to learn about: Task-manager hook at .ai/task-manager/config/hooks/POST_PLAN.md that gates plans on PRD/test updates and architecture review. #hooks #task-manager #planning
-- Open [**PRE_PLAN hook**](map-pre-plan-hook.md) to learn about: Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation. #task-manager #hook #workflow
+- Open [**PRE_PLAN hook**](map-pre-plan-hook.md) to learn about: Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation. #strikethroo #hooks #workflow
+- Open [**POST_PLAN hook**](map-post-plan-hook.md) to learn about: Require self-validation steps and decide whether docs or AGENTS.md need updates. #hooks #strikethroo #planning
 
 ## By topic
 
 ### #planning
-- Open [**Review plans against PRD and test/features updates**](practice-review-plans-against-prd-and-test-features-updates.md) — After producing a plan, confirm whether PRD.md and test/features need updates, keeping additions succinct and skipping them for minimal changes.
+- Open [**POST_PLAN hook**](map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
+- Open [**Specify plan validation and documentation needs**](practice-review-plans-against-prd-and-test-features-updates.md) — Include Self Validation and decide whether documentation or AGENTS.md needs updates.
 - Open [**Write PRDs without tasks or phases during plan creation**](practice-write-prds-without-tasks-or-phases-during-plan-creation.md) — Plan creation produces the PRD only. Tasks and phases are generated in a later workflow step.
-- Open [**Check plans for architecture and code reuse improvements**](practice-check-plans-for-architecture-and-code-reuse-improvements.md) — Each plan must identify how architecture and code reuse can be improved in its areas of influence; update the plan if missing.
-### #prd
-- Open [**Review plans against PRD and test/features updates**](practice-review-plans-against-prd-and-test-features-updates.md) — After producing a plan, confirm whether PRD.md and test/features need updates, keeping additions succinct and skipping them for minimal changes.
-- Open [**Write PRDs without tasks or phases during plan creation**](practice-write-prds-without-tasks-or-phases-during-plan-creation.md) — Plan creation produces the PRD only. Tasks and phases are generated in a later workflow step.
-### #task-manager
-- Open [**POST_PHASE hook**](../execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
-- Open [**PRE_PLAN hook**](map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Extract shared logic before duplicating across call sites**](../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
-### #workflow
-- Open [**POST_PHASE hook**](../execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
-- Open [**PRE_PLAN hook**](map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Follow the allowed task status transitions**](../execution/practice-follow-the-allowed-task-status-transitions.md) — Use only the defined transitions: pending→in-progress, in-progress→completed, in-progress→failed, failed→in-progress.
-### #architecture
-- Open [**Check plans for architecture and code reuse improvements**](practice-check-plans-for-architecture-and-code-reuse-improvements.md) — Each plan must identify how architecture and code reuse can be improved in its areas of influence; update the plan if missing.
-- Open [**Do not import sibling packages from @self-review/types**](../../packages/types/practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
-- Open [**Two-process Electron architecture**](../../app/architecture/map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
-### #code-reuse
-- Open [**Check plans for architecture and code reuse improvements**](practice-check-plans-for-architecture-and-code-reuse-improvements.md) — Each plan must identify how architecture and code reuse can be improved in its areas of influence; update the plan if missing.
-- Open [**Extract shared logic before duplicating across call sites**](../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
-### #hook
-- Open [**POST_PHASE hook**](../execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
-- Open [**PRE_PLAN hook**](map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
 ### #hooks
-- Open [**PRE_TASK_ASSIGNMENT hook**](../assignment/map-pre-task-assignment-hook.md) — Hook that runs before task assignment to select an appropriate agent for each task based on required skills.
-- Open [**POST_PLAN hook**](map-post-plan-hook.md) — Task-manager hook at .ai/task-manager/config/hooks/POST_PLAN.md that gates plans on PRD/test updates and architecture review.
-- Open [**Do not hand-edit INDEX.md or GRAPH.md**](../../knowledge-base/structure/practice-do-not-hand-edit-index-md-or-graph-md.md) — Both files are regenerated automatically by the lint-staged pre-commit hook and staged into the commit.
+- Open [**PRE_PLAN hook**](map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**POST_PHASE hook**](../execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**PRE_TASK_ASSIGNMENT hook**](../assignment/map-pre-task-assignment-hook.md) — Match task skills and domain to available agents in the active harness.
+### #prd
+- Open [**Specify plan validation and documentation needs**](practice-review-plans-against-prd-and-test-features-updates.md) — Include Self Validation and decide whether documentation or AGENTS.md needs updates.
+- Open [**Write PRDs without tasks or phases during plan creation**](practice-write-prds-without-tasks-or-phases-during-plan-creation.md) — Plan creation produces the PRD only. Tasks and phases are generated in a later workflow step.
+### #strikethroo
+- Open [**PRE_PLAN hook**](map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**POST_PHASE hook**](../execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**POST_PLAN hook**](map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
+### #workflow
+- Open [**PRE_PLAN hook**](map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**POST_PHASE hook**](../execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**Knowledge-base capture and curation workflow**](../../knowledge-base/curate/map-knowledge-base-capture-curate-review-workflow.md) — Capture sessions, extract proposals, curate nodes and consume topical navigation.
+### #architecture
+- Open [**Two-process Electron architecture**](../../app/architecture/map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
+- Open [**Use the ReviewAdapter pattern for platform-specific operations**](../../packages/architecture/practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md) — Abstract expand-context, image loading, and output-path changes via ReviewAdapter.
+- Open [**Do not import sibling packages from @self-review/types**](../../packages/types/practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
+### #code-reuse
+- Open [**Extract shared logic before duplicating across call sites**](../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
+- Open [**Keep architecture decisions within the requested plan scope**](practice-check-plans-for-architecture-and-code-reuse-improvements.md) — Use PRE_PLAN simplicity and scope rules when evaluating abstractions.
 ### #tests
-- Open [**Review plans against PRD and test/features updates**](practice-review-plans-against-prd-and-test-features-updates.md) — After producing a plan, confirm whether PRD.md and test/features need updates, keeping additions succinct and skipping them for minimal changes.
+- Open [**Specify plan validation and documentation needs**](practice-review-plans-against-prd-and-test-features-updates.md) — Include Self Validation and decide whether documentation or AGENTS.md needs updates.

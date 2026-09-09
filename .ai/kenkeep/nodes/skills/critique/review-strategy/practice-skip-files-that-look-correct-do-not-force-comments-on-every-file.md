@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-skip-files-that-look-correct-do-not-force-comments-on-every-file
 kk_derived_from:
   - .agents/skills/self-review-critique/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-critique-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -25,5 +26,11 @@ The skill explicitly directs reviewers to skip files that look correct rather th
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.agents/skills/self-review-critique/SKILL.md](.agents/skills/self-review-critique/SKILL.md)
+[1] [.agents/skills/self-review-critique/SKILL.md](../../../../../../.agents/skills/self-review-critique/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-critique-skill](../configuration/map-self-review-critique-skill.md)
+<!-- kk:related:end -->

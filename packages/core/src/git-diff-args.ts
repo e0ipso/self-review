@@ -71,3 +71,92 @@ export function normalizeGitDiffArgs(args: string[], cwd: string = process.cwd()
   }
   return args;
 }
+
+/**
+ * Split a configured argument string into argv the way a shell would, so a
+ * quoted path or search string survives as one argument.
+ *
+ * Two callers rely on this: `default-diff-args` from YAML, which people write
+ * with shell quoting, and the `git-diff-args` string carried on a git diff
+ * source, which `formatGitDiffArgs` writes in the same syntax. Unquoted input
+ * splits on whitespace exactly as a plain split did, so older config and older
+ * review documents keep parsing identically.
+ *
+ * Malformed input never throws. An unterminated quote closes at end of input:
+ * a broken config line degrades to a best-effort argument list instead of
+ * taking startup down with it.
+ */
+export function tokenizeGitDiffArgs(value: string): string[] {
+  const args: string[] = [];
+  let current = '';
+  let started = false;
+  let quote: "'" | '"' | null = null;
+
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+
+    if (quote === "'") {
+      if (char === "'") quote = null;
+      else current += char;
+      continue;
+    }
+
+    if (quote === '"') {
+      // Inside double quotes only the quote and the backslash are escapable;
+      // every other backslash is a literal character, as in POSIX shells.
+      if (char === '\\' && (value[i + 1] === '"' || value[i + 1] === '\\')) {
+        current += value[++i];
+      } else if (char === '"') {
+        quote = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      started = true;
+      continue;
+    }
+    if (char === '\\' && i + 1 < value.length) {
+      current += value[++i];
+      started = true;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (started) {
+        args.push(current);
+        current = '';
+        started = false;
+      }
+      continue;
+    }
+    current += char;
+    started = true;
+  }
+
+  if (started) args.push(current);
+  return args;
+}
+
+/** True when rendering this argument bare would lose its boundary. */
+function needsQuoting(arg: string): boolean {
+  return arg.length === 0 || /[\s'"\\]/.test(arg);
+}
+
+/**
+ * Render argv as the single string a git diff source carries, such that
+ * `tokenizeGitDiffArgs` recovers the exact argument list.
+ *
+ * Arguments that survive a bare round trip are written bare, so ordinary
+ * invocations produce byte-identical output to a plain join and the
+ * `git-diff-args` XML attribute does not change shape for them.
+ */
+export function formatGitDiffArgs(args: string[]): string {
+  return args
+    .map(arg =>
+      needsQuoting(arg) ? `'${arg.replace(/'/g, "'\\''")}'` : arg
+    )
+    .join(' ');
+}

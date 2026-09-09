@@ -1,9 +1,9 @@
 ---
 type: practice
-title: Review plans against PRD and test/features updates
+title: Specify plan validation and documentation needs
 description: >-
-  After producing a plan, confirm whether PRD.md and test/features need updates,
-  keeping additions succinct and skipping them for minimal changes.
+  Include Self Validation and decide whether documentation or AGENTS.md needs
+  updates.
 tags:
   - planning
   - prd
@@ -11,17 +11,22 @@ tags:
 kk_schema_version: 3
 kk_id: practice-review-plans-against-prd-and-test-features-updates
 kk_derived_from:
-  - .ai/task-manager/config/hooks/POST_PLAN.md
-kk_relates_to: []
+  - .ai/strikethroo/config/hooks/POST_PLAN.md
+kk_relates_to:
+  - map-pre-plan-hook
 kk_depends_on: []
 kk_confidence: high
 ---
-When the POST_PLAN hook runs, check whether the plan includes necessary updates to `PRD.md` and `test/features`. Keep any inclusions or updates succinct.
-
-For minimal feature changes, consider not amending `PRD.md` or tests at all. Update the plan if either check is unmet.
+Before completing a plan, include concrete Self Validation steps and answer whether documentation or AGENTS.md needs updates. Include only changes justified by the request. The current POST_PLAN hook does not impose a blanket PRD or test/features update.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/POST_PLAN.md](.ai/task-manager/config/hooks/POST_PLAN.md)
+[1] [.ai/strikethroo/config/hooks/POST_PLAN.md](../../../../strikethroo/config/hooks/POST_PLAN.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-pre-plan-hook](map-pre-plan-hook.md)
+<!-- kk:related:end -->

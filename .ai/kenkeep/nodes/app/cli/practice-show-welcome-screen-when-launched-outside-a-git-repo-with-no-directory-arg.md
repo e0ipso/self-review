@@ -13,7 +13,8 @@ kk_id: >-
   practice-show-welcome-screen-when-launched-outside-a-git-repo-with-no-directory-arg
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-cli-invocations
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -24,5 +25,11 @@ Mode determination order on startup: (1) if cwd is inside a git repo → git mod
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-cli-invocations](map-self-review-cli-invocations.md)
+<!-- kk:related:end -->

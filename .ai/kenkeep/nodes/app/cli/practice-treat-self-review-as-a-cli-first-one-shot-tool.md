@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-treat-self-review-as-a-cli-first-one-shot-tool
 kk_derived_from:
   - README.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-cli-invocations
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -25,5 +26,11 @@ self-review is designed as a Unix-style CLI tool: "Launched from the terminal, w
 <!-- kk:citations:start -->
 # Citations
 
-[1] [README.md](README.md)
+[1] [README.md](../../../../../README.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-cli-invocations](map-self-review-cli-invocations.md)
+<!-- kk:related:end -->

@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-apply-review-suggestions-bottom-to-top-by-line-number
 kk_derived_from:
   - .opencode/skills/self-review-apply/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-apply-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ Match on the `original-code` text rather than relying solely on line numbers, si
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.opencode/skills/self-review-apply/SKILL.md](.opencode/skills/self-review-apply/SKILL.md)
+[1] [.opencode/skills/self-review-apply/SKILL.md](../../../../../.opencode/skills/self-review-apply/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-apply-skill](map-self-review-apply-skill.md)
+<!-- kk:related:end -->

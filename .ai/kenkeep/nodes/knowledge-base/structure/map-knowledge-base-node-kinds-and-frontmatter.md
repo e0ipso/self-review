@@ -1,34 +1,32 @@
 ---
 type: map
-title: Knowledge-base node kinds and frontmatter
+title: Knowledge node kinds and frontmatter
 description: >-
-  Nodes are practice (how we build) or map (what exists), with frontmatter
-  including kind, tags, derived_from, relates_to, summary.
+  Leaves use type, description and kk-prefixed identity, provenance and edge
+  fields.
 tags:
   - knowledge-base
-  - node
+  - nodes
   - schema
 kk_schema_version: 3
 kk_id: map-knowledge-base-node-kinds-and-frontmatter
 kk_derived_from:
-  - .ai/knowledge-base/README.md
-kk_relates_to: []
+  - .agents/skills/kk-curate/SKILL.md
+kk_relates_to:
+  - map-ai-knowledge-base-directory
 kk_depends_on: []
 kk_confidence: high
 ---
-Each `.md` file under `.ai/knowledge-base/nodes/` has YAML frontmatter and a markdown body.
-
-Key frontmatter fields:
-- `kind`: `practice` (conventions, prohibitions, gotchas — how we build things) or `map` (features, vocabulary, locations — what exists in the project).
-- `tags`: free-form labels, grouped under `## By topic` in `INDEX.md`.
-- `derived_from`: list of session log filenames or doc paths that produced or refined the node.
-- `relates_to`: cross-references rendered in `GRAPH.md`.
-- `summary`: ≤140-character one-liner injected via `INDEX.md`.
-
-Files live at `nodes/<kind>/<kind>-<slug>.md`.
+A knowledge leaf has YAML frontmatter with `type` (`practice` or `map`), `title`, `description`, `tags`, `kk_schema_version`, `kk_id`, `kk_derived_from`, `kk_relates_to`, `kk_depends_on` and `kk_confidence`, followed by a Markdown body. Practice owns operating rules; map owns named entities. Inspect `npx kenkeep schema node` for the current machine-readable contract. Placement is topical, independent of type.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/knowledge-base/README.md](.ai/knowledge-base/README.md)
+[1] [.agents/skills/kk-curate/SKILL.md](../../../../../.agents/skills/kk-curate/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-ai-knowledge-base-directory](map-ai-knowledge-base-directory.md)
+<!-- kk:related:end -->

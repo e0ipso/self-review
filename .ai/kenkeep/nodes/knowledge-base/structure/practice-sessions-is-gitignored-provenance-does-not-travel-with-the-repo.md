@@ -11,8 +11,9 @@ tags:
 kk_schema_version: 3
 kk_id: practice-sessions-is-gitignored-provenance-does-not-travel-with-the-repo
 kk_derived_from:
-  - .ai/knowledge-base/README.md
-kk_relates_to: []
+  - .ai/kenkeep/README.md
+kk_relates_to:
+  - map-ai-knowledge-base-directory
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ When reading a node, don't assume `derived_from` provenance can be inspected by 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/knowledge-base/README.md](.ai/knowledge-base/README.md)
+[1] [.ai/kenkeep/README.md](../../../README.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-ai-knowledge-base-directory](map-ai-knowledge-base-directory.md)
+<!-- kk:related:end -->

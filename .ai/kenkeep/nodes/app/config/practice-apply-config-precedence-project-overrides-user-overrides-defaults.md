@@ -11,7 +11,8 @@ kk_schema_version: 3
 kk_id: practice-apply-config-precedence-project-overrides-user-overrides-defaults
 kk_derived_from:
   - README.md
-kk_relates_to: []
+kk_relates_to:
+  - map-user-and-project-yaml-configuration
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -24,5 +25,11 @@ From the Configuration section: "Project config overrides user config, which ove
 <!-- kk:citations:start -->
 # Citations
 
-[1] [README.md](README.md)
+[1] [README.md](../../../../../README.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-user-and-project-yaml-configuration](map-user-and-project-yaml-configuration.md)
+<!-- kk:related:end -->

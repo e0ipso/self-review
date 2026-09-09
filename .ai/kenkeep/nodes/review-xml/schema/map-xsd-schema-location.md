@@ -11,10 +11,10 @@ tags:
 kk_schema_version: 3
 kk_id: map-xsd-schema-location
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
   - AGENTS.md
 kk_relates_to:
   - practice-keep-the-xsd-schema-in-sync-across-its-two-locations
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -22,15 +22,15 @@ The live schema is `.agents/skills/self-review-apply/assets/self-review-v3.xsd`.
 
 `.opencode/skills/self-review-apply` is a symlink to the real skill directory, not another copy. `packages/core/src/xsd-schema.test.ts` enforces the byte equality and the skill symlinks. `self-review-v1.xsd` and `self-review-v2.xsd` remain frozen for consumers of older documents; the current version (v3) may gain optional attributes additively, keeping every existing v3 document valid.
 
-<!-- kk:related:start -->
-# Related
-
-- Related: [practice-keep-the-xsd-schema-in-sync-across-its-two-locations](/review-xml/practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md)
-<!-- kk:related:end -->
-
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
-[2] [AGENTS.md](AGENTS.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [practice-keep-the-xsd-schema-in-sync-across-its-two-locations](practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md)
+- Related: [map-review-xml-format-and-xsd](map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

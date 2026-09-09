@@ -153,21 +153,29 @@ export async function readGitBlobAsync(
 
 /**
  * Get list of untracked files (respects .gitignore).
+ *
+ * Pass the repository root. `git ls-files` reports paths relative to the
+ * directory it runs in and lists that subtree only, while `git diff` reports
+ * root-relative paths for the whole repository from anywhere inside it. Run
+ * anywhere else and the names match neither the diff nor the root the files
+ * are read from.
+ *
+ * `-z` keeps the names literal. NUL termination survives newlines in
+ * filenames, and it turns off the C-style quoting git otherwise applies to
+ * control characters and non-ASCII bytes.
  */
-export async function getUntrackedFilesAsync(cwd?: string): Promise<string[]> {
+export async function getUntrackedFilesAsync(repoRoot?: string): Promise<string[]> {
   try {
-    const { stdout } = await execAsync(
-      'git ls-files --others --exclude-standard',
+    const { stdout } = await execFileAsync(
+      'git',
+      ['ls-files', '--others', '--exclude-standard', '-z'],
       {
         maxBuffer: 10 * 1024 * 1024,
         timeout: 10000,
-        cwd,
+        cwd: repoRoot,
       }
     );
-    return stdout
-      .trim()
-      .split('\n')
-      .filter(line => line.length > 0);
+    return stdout.split('\0').filter(name => name.length > 0);
   } catch (error) {
     if (error instanceof Error) {
       console.error(

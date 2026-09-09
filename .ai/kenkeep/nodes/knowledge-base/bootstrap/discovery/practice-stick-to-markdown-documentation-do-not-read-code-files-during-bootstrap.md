@@ -11,8 +11,9 @@ kk_schema_version: 3
 kk_id: >-
   practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap
 kk_derived_from:
-  - .cursor/skills/kb-bootstrap/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-bootstrap/SKILL.md
+kk_relates_to:
+  - map-kb-bootstrap-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ The point of bootstrap is to extract pre-existing written knowledge. Reading cod
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-bootstrap/SKILL.md](.cursor/skills/kb-bootstrap/SKILL.md)
+[1] [.agents/skills/kk-bootstrap/SKILL.md](../../../../../../.agents/skills/kk-bootstrap/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-kb-bootstrap-skill](../workflow/map-kb-bootstrap-skill.md)
+<!-- kk:related:end -->

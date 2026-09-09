@@ -12,11 +12,12 @@ kk_schema_version: 3
 kk_id: practice-set-author-to-your-model-name-on-every-generated-comment
 kk_derived_from:
   - .agents/skills/self-review-critique/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-critique-skill
 kk_depends_on: []
 kk_confidence: high
 ---
-Every `<comment>` produced by [[self-review-critique-skill]] must include an `author` attribute set to the model name (e.g., `author="Claude Sonnet 4.6"`).
+Every `<comment>` produced by [self-review-critique skill](../configuration/map-self-review-critique-skill.md) must include an `author` attribute set to the model name (e.g., `author="Claude Sonnet 4.6"`).
 
 **Why:** The self-review UI distinguishes AI-authored comments from human comments. When `author` is absent, the UI shows "You" with a person icon (human reviewer).
 
@@ -25,5 +26,11 @@ Every `<comment>` produced by [[self-review-critique-skill]] must include an `au
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.agents/skills/self-review-critique/SKILL.md](.agents/skills/self-review-critique/SKILL.md)
+[1] [.agents/skills/self-review-critique/SKILL.md](../../../../../../.agents/skills/self-review-critique/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-critique-skill](../configuration/map-self-review-critique-skill.md)
+<!-- kk:related:end -->

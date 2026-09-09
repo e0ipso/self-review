@@ -10,7 +10,8 @@ kk_schema_version: 3
 kk_id: practice-do-not-use-node-js-apis-in-self-review-react
 kk_derived_from:
   - packages/react/AGENTS.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-react-package
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -21,5 +22,11 @@ This constraint exists because the package is consumed both by the Electron rend
 <!-- kk:citations:start -->
 # Citations
 
-[1] [packages/react/AGENTS.md](packages/react/AGENTS.md)
+[1] [packages/react/AGENTS.md](../../../../../packages/react/AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-react-package](map-self-review-react-package.md)
+<!-- kk:related:end -->

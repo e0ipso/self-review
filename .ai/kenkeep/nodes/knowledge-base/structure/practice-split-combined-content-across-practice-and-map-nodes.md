@@ -11,8 +11,9 @@ tags:
 kk_schema_version: 3
 kk_id: practice-split-combined-content-across-practice-and-map-nodes
 kk_derived_from:
-  - .cursor/skills/kb-bootstrap/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-bootstrap/SKILL.md
+kk_relates_to:
+  - map-ai-knowledge-base-directory
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ For example, "Use bravo_analytics.dispatcher, our service for tracking events" b
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-bootstrap/SKILL.md](.cursor/skills/kb-bootstrap/SKILL.md)
+[1] [.agents/skills/kk-bootstrap/SKILL.md](../../../../../.agents/skills/kk-bootstrap/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-ai-knowledge-base-directory](map-ai-knowledge-base-directory.md)
+<!-- kk:related:end -->

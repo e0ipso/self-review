@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-line-comments-reference-either-old-or-new-line-numbers-never-both
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ Exactly one pair should be present for line-level comments; this constraint is e
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](../schema/map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

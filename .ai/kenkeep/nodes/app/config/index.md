@@ -14,22 +14,22 @@ _None._
 - Open [**Apply config precedence: project overrides user overrides defaults**](practice-apply-config-precedence-project-overrides-user-overrides-defaults.md) to learn about: \`.self-review.yaml\` overrides \`~/.config/self-review/config.yaml\`, which overrides built-in defaults. #config #precedence
 
 ## Components (what exists)
+- Open [**User and project YAML configuration**](map-user-and-project-yaml-configuration.md) to learn about: User config at ~/.config/self-review/config.yaml; project config at .self-review.yaml in the repo root. #config #yaml #files
 - Open [**.self-review.yaml project config**](map-self-review-yaml-project-config.md) to learn about: Optional per-project YAML config defining critique categories and output-file path. #self-review #config
 - Open [**self-review YAML configuration options**](map-self-review-yaml-configuration-options.md) to learn about: User (\`~/.config/self-review/config.yaml\`) and project (\`.self-review.yaml\`) configs control theme, diff view, categories, payload limits, and more. #config #yaml
-- Open [**User and project YAML configuration**](map-user-and-project-yaml-configuration.md) to learn about: User config at ~/.config/self-review/config.yaml; project config at .self-review.yaml in the repo root. #config #yaml #files
 
 ## By topic
 
 ### #config
 - Open [**Apply config precedence: CLI > project YAML > user YAML > defaults**](practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults.md) — Higher-priority values override lower-priority values on a per-key shallow merge.
 - Open [**Apply config precedence: project overrides user overrides defaults**](practice-apply-config-precedence-project-overrides-user-overrides-defaults.md) — \`.self-review.yaml\` overrides \`~/.config/self-review/config.yaml\`, which overrides built-in defaults.
-- Open [**Knowledge base config locations**](../../knowledge-base/structure/map-knowledge-base-config-locations.md) — KB config is read from \`.ai/knowledge-base/config.yaml\`, with fallback to \`~/.config/ai-knowledge-base/config.yaml\`.
+- Open [**Knowledge base configuration**](../../knowledge-base/structure/map-knowledge-base-config-locations.md) — Read project kenkeep configuration, with the user config fallback.
 ### #precedence
 - Open [**Apply config precedence: CLI > project YAML > user YAML > defaults**](practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults.md) — Higher-priority values override lower-priority values on a per-key shallow merge.
 - Open [**Apply config precedence: project overrides user overrides defaults**](practice-apply-config-precedence-project-overrides-user-overrides-defaults.md) — \`.self-review.yaml\` overrides \`~/.config/self-review/config.yaml\`, which overrides built-in defaults.
 ### #yaml
-- Open [**self-review YAML configuration options**](map-self-review-yaml-configuration-options.md) — User (\`~/.config/self-review/config.yaml\`) and project (\`.self-review.yaml\`) configs control theme, diff view, categories, payload limits, and more.
 - Open [**User and project YAML configuration**](map-user-and-project-yaml-configuration.md) — User config at ~/.config/self-review/config.yaml; project config at .self-review.yaml in the repo root.
+- Open [**self-review YAML configuration options**](map-self-review-yaml-configuration-options.md) — User (\`~/.config/self-review/config.yaml\`) and project (\`.self-review.yaml\`) configs control theme, diff view, categories, payload limits, and more.
 ### #files
 - Open [**User and project YAML configuration**](map-user-and-project-yaml-configuration.md) — User config at ~/.config/self-review/config.yaml; project config at .self-review.yaml in the repo root.
 ### #self-review

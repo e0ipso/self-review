@@ -12,14 +12,14 @@ _None._
 ## Conventions (how we build)
 - Open [**Apply review suggestions bottom-to-top by line number**](practice-apply-review-suggestions-bottom-to-top-by-line-number.md) to learn about: Sort suggestions by line number descending before applying so earlier edits don't invalidate later line references. #self-review #suggestions #ordering
 - Open [**Convert v2 gate reviews to v3 before applying**](practice-convert-v2-gate-reviews-to-v3-before-applying.md) to learn about: st-code-review emits v2 XML while self-review-apply validates v3; retarget and validate the document before applying it. #self-review #xml #compatibility #workflow
-- Open [**Load the original diff context before applying review feedback**](practice-load-the-original-diff-context-before-applying-review-feedback.md) to learn about: Reconstruct the reviewer's view via git diff (git mode) or by reading source files (directory mode) before editing. #self-review #git-diff #context
+- Open [**Load the reviewed source before applying feedback**](practice-load-the-original-diff-context-before-applying-review-feedback.md) to learn about: Reconstruct local git, directory or remote review context from the recorded source. #self-review #git-diff #context
 - Open [**Parallelize self-review application per file above a 3-file threshold**](practice-parallelize-self-review-application-per-file-above-a-3-file-threshold.md) to learn about: For reviews with >3 commented files, spawn one subagent per file; for ≤3, apply changes directly. #self-review #workflow #subagents
 - Open [**Treat every review comment as actionable, including questions**](practice-treat-every-review-comment-as-actionable-including-questions.md) to learn about: Question-category comments often imply a code change is needed; answer purely informational ones in the summary. #self-review #comments #questions
 - Open [**Validate self-review XML against the XSD before applying**](practice-validate-self-review-xml-against-the-xsd-before-applying.md) to learn about: Run xmllint against assets/self-review-v3.xsd before processing review feedback; stop on failure. #self-review #validation #xmllint
 
 ## Components (what exists)
 - Open [**self-review-apply skill**](map-self-review-apply-skill.md) to learn about: Slash command that consumes a v3 review.xml, reads threaded replies in order, and applies accepted feedback to the codebase. #self-review #skills #apply
-- Open [**self-review-apply assistant skill**](map-self-review-apply-assistant-skill.md) to learn about: Bundled assistant skill that validates v3 review.xml feedback, reads reply threads, and applies the accepted comments. #skill #ai #workflow
+- Open [**self-review-apply assistant skill**](map-self-review-apply-assistant-skill.md) to learn about: Bundled assistant skill that validates v3 review.xml feedback, reads reply threads, and applies the accepted comments. #skills #ai #workflow
 
 ## By topic
 
@@ -28,12 +28,16 @@ _None._
 - Open [**Attach a suggestion block whenever a concrete fix is possible**](../critique/suggestions/practice-attach-a-suggestion-block-whenever-a-concrete-fix-is-possible.md) — For every critique comment where a fix can be proposed, include a \`<suggestion>\` so the human can accept or reject it individually.
 - Open [**Use <suggestion> blocks whenever a concrete fix can be proposed**](../critique/suggestions/practice-use-suggestion-blocks-whenever-a-concrete-fix-can-be-proposed.md) — For each comment with an actionable fix, include a <suggestion> so the human reviewer can accept or reject the change individually.
 ### #workflow
-- Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
 - Open [**PRE_PLAN hook**](../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Follow the allowed task status transitions**](../../planning/execution/practice-follow-the-allowed-task-status-transitions.md) — Use only the defined transitions: pending→in-progress, in-progress→completed, in-progress→failed, failed→in-progress.
+- Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**Knowledge-base capture and curation workflow**](../../knowledge-base/curate/map-knowledge-base-capture-curate-review-workflow.md) — Capture sessions, extract proposals, curate nodes and consume topical navigation.
+### #skills
+- Open [**Knowledge-base capture and curation workflow**](../../knowledge-base/curate/map-knowledge-base-capture-curate-review-workflow.md) — Capture sessions, extract proposals, curate nodes and consume topical navigation.
+- Open [**kk-bootstrap skill**](../../knowledge-base/bootstrap/workflow/map-kb-bootstrap-skill.md) — Supervised seeding from existing Markdown, with validated node writes.
+- Open [**self-review-critique skill**](../critique/configuration/map-self-review-critique-skill.md) — Generate a guide and evidence-based review XML for local or remote diffs.
 ### #ai
+- Open [**PRE_TASK_ASSIGNMENT hook**](../../planning/assignment/map-pre-task-assignment-hook.md) — Match task skills and domain to available agents in the active harness.
 - Open [**Design XML output to be parsed by LLMs**](../../review-xml/schema/practice-design-xml-output-to-be-parsed-by-llms.md) — Review output is structured XML with an XSD schema so LLMs can reliably parse and act on feedback.
-- Open [**PRE_TASK_ASSIGNMENT hook**](../../planning/assignment/map-pre-task-assignment-hook.md) — Hook that runs before task assignment to select an appropriate agent for each task based on required skills.
 - Open [**self-review-apply assistant skill**](map-self-review-apply-assistant-skill.md) — Bundled assistant skill that validates v3 review.xml feedback, reads reply threads, and applies the accepted comments.
 ### #apply
 - Open [**self-review-apply skill**](map-self-review-apply-skill.md) — Slash command that consumes a v3 review.xml, reads threaded replies in order, and applies accepted feedback to the codebase.
@@ -44,23 +48,17 @@ _None._
 ### #compatibility
 - Open [**Convert v2 gate reviews to v3 before applying**](practice-convert-v2-gate-reviews-to-v3-before-applying.md) — st-code-review emits v2 XML while self-review-apply validates v3; retarget and validate the document before applying it.
 ### #context
-- Open [**Load the original diff context before applying review feedback**](practice-load-the-original-diff-context-before-applying-review-feedback.md) — Reconstruct the reviewer's view via git diff (git mode) or by reading source files (directory mode) before editing.
+- Open [**Load the reviewed source before applying feedback**](practice-load-the-original-diff-context-before-applying-review-feedback.md) — Reconstruct local git, directory or remote review context from the recorded source.
 - Open [**Read full file contents for added/modified files when critiquing**](../critique/review-strategy/practice-read-full-file-contents-for-added-modified-files-when-critiquing.md) — Read the current file (not just the diff hunks) to understand surrounding code; skip reading for deleted or binary files.
 ### #git-diff
-- Open [**Load the original diff context before applying review feedback**](practice-load-the-original-diff-context-before-applying-review-feedback.md) — Reconstruct the reviewer's view via git diff (git mode) or by reading source files (directory mode) before editing.
+- Open [**Load the reviewed source before applying feedback**](practice-load-the-original-diff-context-before-applying-review-feedback.md) — Reconstruct local git, directory or remote review context from the recorded source.
 ### #ordering
 - Open [**Apply review suggestions bottom-to-top by line number**](practice-apply-review-suggestions-bottom-to-top-by-line-number.md) — Sort suggestions by line number descending before applying so earlier edits don't invalidate later line references.
 ### #questions
 - Open [**Treat every review comment as actionable, including questions**](practice-treat-every-review-comment-as-actionable-including-questions.md) — Question-category comments often imply a code change is needed; answer purely informational ones in the summary.
-### #skill
-- Open [**kb-bootstrap skill**](../../knowledge-base/bootstrap/workflow/map-kb-bootstrap-skill.md) — One-time, supervised skill that seeds the project knowledge base from existing markdown documentation.
-- Open [**self-review-apply assistant skill**](map-self-review-apply-assistant-skill.md) — Bundled assistant skill that validates v3 review.xml feedback, reads reply threads, and applies the accepted comments.
-### #skills
-- Open [**self-review-apply skill**](map-self-review-apply-skill.md) — Slash command that consumes a v3 review.xml, reads threaded replies in order, and applies accepted feedback to the codebase.
-- Open [**self-review-critique skill**](../critique/configuration/map-self-review-critique-skill.md) — Slash command that critiques a git diff and emits review.xml for human validation via self-review --resume-from.
-- Open [**Engage relevant assistant skills based on task skills**](../../planning/assignment/practice-engage-relevant-assistant-skills-based-on-task-skills.md) — Analyze the set of task skills to engage any relevant assistant skills (global or project) during task assignment.
 ### #subagents
 - Open [**Parallelize self-review application per file above a 3-file threshold**](practice-parallelize-self-review-application-per-file-above-a-3-file-threshold.md) — For reviews with >3 commented files, spawn one subagent per file; for ≤3, apply changes directly.
+- Open [**Use documented configuration when drafting bootstrap nodes**](../../knowledge-base/bootstrap/workflow/practice-honor-bootstrapmodel-name-from-kb-config-when-delegating-to-sub-agents.md) — Apply current project preferences and the shared delegation contract.
 ### #suggestions
 - Open [**Attach a suggestion block whenever a concrete fix is possible**](../critique/suggestions/practice-attach-a-suggestion-block-whenever-a-concrete-fix-is-possible.md) — For every critique comment where a fix can be proposed, include a \`<suggestion>\` so the human can accept or reject it individually.
 - Open [**Use <suggestion> blocks whenever a concrete fix can be proposed**](../critique/suggestions/practice-use-suggestion-blocks-whenever-a-concrete-fix-can-be-proposed.md) — For each comment with an actionable fix, include a <suggestion> so the human reviewer can accept or reject the change individually.

@@ -10,8 +10,9 @@ tags:
 kk_schema_version: 3
 kk_id: practice-read-entry-points-first-then-sample-and-follow-cross-references
 kk_derived_from:
-  - .cursor/skills/kb-bootstrap/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-bootstrap/SKILL.md
+kk_relates_to:
+  - map-kb-bootstrap-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -22,5 +23,11 @@ For other docs, sample representative content and follow links. If a README ment
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-bootstrap/SKILL.md](.cursor/skills/kb-bootstrap/SKILL.md)
+[1] [.agents/skills/kk-bootstrap/SKILL.md](../../../../../../.agents/skills/kk-bootstrap/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-kb-bootstrap-skill](../workflow/map-kb-bootstrap-skill.md)
+<!-- kk:related:end -->

@@ -13,7 +13,8 @@ kk_id: practice-validate-generated-review-xml-against-the-xsd-with-xmllint
 kk_derived_from:
   - .opencode/skills/self-review-critique/SKILL.md
   - .agents/skills/self-review-critique/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-critique-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -24,6 +25,12 @@ If `xmllint` is not installed on the system, warn the user and proceed without v
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.opencode/skills/self-review-critique/SKILL.md](.opencode/skills/self-review-critique/SKILL.md)
-[2] [.agents/skills/self-review-critique/SKILL.md](.agents/skills/self-review-critique/SKILL.md)
+[1] [.opencode/skills/self-review-critique/SKILL.md](../../../../../../.opencode/skills/self-review-critique/SKILL.md)
+[2] [.agents/skills/self-review-critique/SKILL.md](../../../../../../.agents/skills/self-review-critique/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-critique-skill](../configuration/map-self-review-critique-skill.md)
+<!-- kk:related:end -->

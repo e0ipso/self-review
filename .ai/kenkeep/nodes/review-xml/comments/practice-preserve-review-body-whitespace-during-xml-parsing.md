@@ -12,7 +12,7 @@ tags:
 kk_schema_version: 3
 kk_id: practice-preserve-review-body-whitespace-during-xml-parsing
 kk_derived_from:
-  - '77699372-867d-4d60-9007-5aa0b672863d:practice:1'
+  - .ai/kenkeep/_sessions/20260731-2121-77699372-867d-4d60-9007-5aa0b672863d.md
 kk_relates_to:
   - map-review-xml-format-and-xsd
 kk_depends_on: []
@@ -20,14 +20,14 @@ kk_confidence: high
 ---
 Configure review XML parsing with `trimValues: false`. Comment and reply bodies may contain Markdown indentation, fenced code, or intentional leading and trailing spaces; trimming changes the conversation and violates the byte-identical round-trip contract.
 
-<!-- kk:related:start -->
-# Related
-
-- Related: [map-review-xml-format-and-xsd](/review-xml/map-review-xml-format-and-xsd.md)
-<!-- kk:related:end -->
-
 <!-- kk:citations:start -->
 # Citations
 
-[1] [77699372-867d-4d60-9007-5aa0b672863d:practice:1](77699372-867d-4d60-9007-5aa0b672863d:practice:1)
+[1] [.ai/kenkeep/_sessions/20260731-2121-77699372-867d-4d60-9007-5aa0b672863d.md](../../../_sessions/20260731-2121-77699372-867d-4d60-9007-5aa0b672863d.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](../schema/map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

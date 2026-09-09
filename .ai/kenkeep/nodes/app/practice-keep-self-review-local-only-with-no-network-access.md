@@ -2,8 +2,7 @@
 type: practice
 title: Keep self-review local-only with no network access
 description: >-
-  No network access, no accounts, no telemetry. Code stays on the user's
-  machine.
+  No network access, no accounts, no telemetry. Code stays on the user's machine.
 tags:
   - privacy
   - network
@@ -12,7 +11,8 @@ kk_schema_version: 3
 kk_id: practice-keep-self-review-local-only-with-no-network-access
 kk_derived_from:
   - README.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -25,5 +25,11 @@ A core design principle: "Local-only. No network access, no accounts, no telemet
 <!-- kk:citations:start -->
 # Citations
 
-[1] [README.md](README.md)
+[1] [README.md](../../../../README.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](map-self-review.md)
+<!-- kk:related:end -->

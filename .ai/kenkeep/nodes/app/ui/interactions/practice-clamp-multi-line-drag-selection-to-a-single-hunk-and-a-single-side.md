@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-react-package
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -26,5 +27,11 @@ Single-line and multi-line comments share one interaction model and one state (`
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-react-package](../../../packages/architecture/map-self-review-react-package.md)
+<!-- kk:related:end -->

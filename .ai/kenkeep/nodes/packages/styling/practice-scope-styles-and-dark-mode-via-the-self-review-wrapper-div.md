@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div
 kk_derived_from:
   - packages/react/AGENTS.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-wrapper-div
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ All `*` selectors and component-specific overrides in `styles.css` are prefixed 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [packages/react/AGENTS.md](packages/react/AGENTS.md)
+[1] [packages/react/AGENTS.md](../../../../../packages/react/AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-wrapper-div](map-self-review-wrapper-div.md)
+<!-- kk:related:end -->

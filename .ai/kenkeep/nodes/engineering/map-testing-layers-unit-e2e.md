@@ -5,14 +5,15 @@ description: >-
   Vitest for fast unit tests; Playwright + Cucumber for webapp e2e (CI) and
   Electron e2e (local only).
 tags:
-  - task-manager
+  - strikethroo
   - testing
   - layers
 kk_schema_version: 3
 kk_id: map-testing-layers-unit-e2e
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -28,5 +29,11 @@ Coverage target is ~50–60% on business logic; thresholds are collected but not
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](../app/map-self-review.md)
+<!-- kk:related:end -->

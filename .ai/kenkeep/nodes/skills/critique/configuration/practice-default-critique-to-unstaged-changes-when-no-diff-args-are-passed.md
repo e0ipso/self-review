@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-default-critique-to-unstaged-changes-when-no-diff-args-are-passed
 kk_derived_from:
   - .agents/skills/self-review-critique/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-critique-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ If the resulting diff is empty, report "No changes to review." and stop without 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.agents/skills/self-review-critique/SKILL.md](.agents/skills/self-review-critique/SKILL.md)
+[1] [.agents/skills/self-review-critique/SKILL.md](../../../../../../.agents/skills/self-review-critique/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-critique-skill](map-self-review-critique-skill.md)
+<!-- kk:related:end -->

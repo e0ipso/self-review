@@ -1,9 +1,8 @@
 ---
 type: map
-title: Knowledge base node layout
+title: Knowledge node placement
 description: >-
-  Nodes live under `.ai/knowledge-base/nodes/<kind>/<kind>-<slug>.md`, with
-  `<kind>` being `practice` or `map`.
+  Stable node IDs live in topical folders, independent of practice/map kind.
 tags:
   - knowledge-base
   - layout
@@ -11,17 +10,22 @@ tags:
 kk_schema_version: 3
 kk_id: map-knowledge-base-node-layout
 kk_derived_from:
-  - .cursor/skills/kb-bootstrap/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-curate/SKILL.md
+kk_relates_to:
+  - map-ai-knowledge-base-directory
 kk_depends_on: []
 kk_confidence: high
 ---
-Each node is a markdown file written at `.ai/knowledge-base/nodes/<kind>/<kind>-<slug>.md`. The `<kind>` segment is either `practice` (imperative project guidance) or `map` (what exists — features, vocabulary, locations).
-
-Nodes carry standard frontmatter: `schema_version`, `id`, `title`, `kind`, `tags`, `derived_from`, `relates_to`, `confidence`, `summary`, followed by a markdown body of 1–4 short paragraphs.
+Write leaves to `.ai/kenkeep/nodes/<topic>/<id>.md`. Existing folders are selected by topic; new nodes without a suitable folder fall back to `nodes/`. A curation modify resolves an existing leaf by ID and updates it in place. Only the final trigger-driven rebalance phase changes structure.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-bootstrap/SKILL.md](.cursor/skills/kb-bootstrap/SKILL.md)
+[1] [.agents/skills/kk-curate/SKILL.md](../../../../../.agents/skills/kk-curate/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-ai-knowledge-base-directory](map-ai-knowledge-base-directory.md)
+<!-- kk:related:end -->

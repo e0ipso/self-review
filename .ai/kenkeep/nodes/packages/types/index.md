@@ -12,11 +12,11 @@ _None._
 ## Conventions (how we build)
 - Open [**Define shared data structures only in @self-review/types**](practice-define-shared-data-structures-only-in-self-review-types.md) to learn about: Use @self-review/types as the single source of truth for data structures shared across packages and the Electron app. #types #single-source #shared
 - Open [**Do not import sibling packages from @self-review/types**](practice-do-not-import-sibling-packages-from-self-review-types.md) to learn about: The types package is a leaf dependency and must never import from @self-review/core or @self-review/react. #types #imports #architecture
-- Open [**Keep @self-review/types free of runtime dependencies**](practice-keep-self-review-types-free-of-runtime-dependencies.md) to learn about: The types package must never add runtime dependencies in package.json; it exists solely for type exports. #types #dependencies #package
+- Open [**Keep @self-review/types free of runtime dependencies**](practice-keep-self-review-types-free-of-runtime-dependencies.md) to learn about: The types package must never add runtime dependencies in package.json; it exists solely for type exports. #types #dependencies #packages
 - Open [**Keep all @self-review/types definitions in src/index.ts**](practice-keep-all-self-review-types-definitions-in-src-index-ts.md) to learn about: At current scale, all types live in src/index.ts with no subdirectories. #types #structure #layout
 
 ## Components (what exists)
-- Open [**@self-review/types package**](map-self-review-types-package.md) to learn about: Shared TypeScript type definitions for the self-review workspace, with zero runtime dependencies. #package #types #workspace
+- Open [**@self-review/types package**](map-self-review-types-package.md) to learn about: Shared TypeScript type definitions for the self-review workspace, with zero runtime dependencies. #packages #types #workspace
 
 ## By topic
 
@@ -24,32 +24,33 @@ _None._
 - Open [**@self-review/types package**](map-self-review-types-package.md) — Shared TypeScript type definitions for the self-review workspace, with zero runtime dependencies.
 - Open [**Keep @self-review/types free of runtime dependencies**](practice-keep-self-review-types-free-of-runtime-dependencies.md) — The types package must never add runtime dependencies in package.json; it exists solely for type exports.
 - Open [**Define shared data structures only in @self-review/types**](practice-define-shared-data-structures-only-in-self-review-types.md) — Use @self-review/types as the single source of truth for data structures shared across packages and the Electron app.
-### #package
+### #packages
 - Open [**@self-review/types package**](map-self-review-types-package.md) — Shared TypeScript type definitions for the self-review workspace, with zero runtime dependencies.
 - Open [**Keep @self-review/types free of runtime dependencies**](practice-keep-self-review-types-free-of-runtime-dependencies.md) — The types package must never add runtime dependencies in package.json; it exists solely for type exports.
-- Open [**@self-review/react package**](../architecture/map-self-review-react-package.md) — Embeddable React UI layer: diff viewer, file tree, commenting, syntax highlighting.
+- Open [**npm workspaces packages**](../architecture/map-npm-workspaces-packages.md) — Reusable packages: @self-review/core (logic), @self-review/react (UI), @self-review/types (shared types).
 ### #architecture
-- Open [**Check plans for architecture and code reuse improvements**](../../planning/authoring/practice-check-plans-for-architecture-and-code-reuse-improvements.md) — Each plan must identify how architecture and code reuse can be improved in its areas of influence; update the plan if missing.
-- Open [**Do not import sibling packages from @self-review/types**](practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
 - Open [**Two-process Electron architecture**](../../app/architecture/map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
+- Open [**Use the ReviewAdapter pattern for platform-specific operations**](../architecture/practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md) — Abstract expand-context, image loading, and output-path changes via ReviewAdapter.
+- Open [**Do not import sibling packages from @self-review/types**](practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
 ### #dependencies
 - Open [**Append a blueprint with dependency diagram and execution phases to the plan**](../../planning/task-generation/practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md) — After finalizing tasks, add a Mermaid dependency graph and group tasks into execution phases on the plan document.
 - Open [**Do not add Tailwind as a peer dependency for host apps**](../styling/practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps.md) — tailwindcss and @tailwindcss/typography are devDependencies; consumers ship no Tailwind.
 - Open [**Keep @self-review/types free of runtime dependencies**](practice-keep-self-review-types-free-of-runtime-dependencies.md) — The types package must never add runtime dependencies in package.json; it exists solely for type exports.
 ### #imports
 - Open [**Do not import from @self-review/core in the react package**](../architecture/practice-do-not-import-from-self-review-core-in-the-react-package.md) — Importing core risks pulling Node-only code into the browser bundle.
-- Open [**Do not import sibling packages from @self-review/types**](practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
 - Open [**Import only the compiled dist/styles.css from host apps**](../styling/practice-import-only-the-compiled-dist-styles-css-from-host-apps.md) — src/styles.css and src/build-styles.css are build inputs only; never import them.
+- Open [**Do not import sibling packages from @self-review/types**](practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
 ### #layout
 - Open [**Keep all @self-review/types definitions in src/index.ts**](practice-keep-all-self-review-types-definitions-in-src-index-ts.md) — At current scale, all types live in src/index.ts with no subdirectories.
-- Open [**Knowledge base node layout**](../../knowledge-base/structure/map-knowledge-base-node-layout.md) — Nodes live under \`.ai/knowledge-base/nodes/<kind>/<kind>-<slug>.md\`, with \`<kind>\` being \`practice\` or \`map\`.
-- Open [**Knowledge-base directory layout under .ai/knowledge-base/**](../../knowledge-base/structure/map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes live in nodes/<kind>/, conflicts in conflicts/<id>.md, curator state in .state/state.json, indexes are INDEX.md/GRAPH.md.
+- Open [**Kenkeep directory layout**](../../knowledge-base/structure/map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes use topical folders; sessions, conflicts and logs have separate directories.
+- Open [**Knowledge node placement**](../../knowledge-base/structure/map-knowledge-base-node-layout.md) — Stable node IDs live in topical folders, independent of practice/map kind.
 ### #shared
 - Open [**Define shared data structures only in @self-review/types**](practice-define-shared-data-structures-only-in-self-review-types.md) — Use @self-review/types as the single source of truth for data structures shared across packages and the Electron app.
 ### #single-source
 - Open [**Define shared data structures only in @self-review/types**](practice-define-shared-data-structures-only-in-self-review-types.md) — Use @self-review/types as the single source of truth for data structures shared across packages and the Electron app.
 ### #structure
-- Open [**.ai/knowledge-base/ directory**](../../knowledge-base/structure/map-ai-knowledge-base-directory.md) — AI-session-derived project knowledge base built and maintained by @e0ipso/ai-knowledge-base.
+- Open [**.ai/kenkeep directory**](../../knowledge-base/structure/map-ai-knowledge-base-directory.md) — Topical knowledge nodes, captured sessions, conflicts and generated navigation.
 - Open [**Keep all @self-review/types definitions in src/index.ts**](practice-keep-all-self-review-types-definitions-in-src-index-ts.md) — At current scale, all types live in src/index.ts with no subdirectories.
 ### #workspace
 - Open [**@self-review/types package**](map-self-review-types-package.md) — Shared TypeScript type definitions for the self-review workspace, with zero runtime dependencies.
+- Open [**npm workspaces packages**](../architecture/map-npm-workspaces-packages.md) — Reusable packages: @self-review/core (logic), @self-review/react (UI), @self-review/types (shared types).

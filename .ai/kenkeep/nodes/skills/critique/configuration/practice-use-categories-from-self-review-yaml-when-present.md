@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-use-categories-from-self-review-yaml-when-present
 kk_derived_from:
   - .opencode/skills/self-review-critique/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-critique-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ When no config exists, use the default categories: `question`, `bug`, `security`
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.opencode/skills/self-review-critique/SKILL.md](.opencode/skills/self-review-critique/SKILL.md)
+[1] [.opencode/skills/self-review-critique/SKILL.md](../../../../../../.opencode/skills/self-review-critique/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-critique-skill](map-self-review-critique-skill.md)
+<!-- kk:related:end -->

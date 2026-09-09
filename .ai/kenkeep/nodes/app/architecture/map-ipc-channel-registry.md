@@ -5,14 +5,16 @@ description: >-
   Channels defined in src/shared/ipc-channels.ts cover diff loading, review
   submission, resume, config, output path, and lifecycle events.
 tags:
-  - task-manager
+  - strikethroo
   - ipc
   - channels
 kk_schema_version: 3
 kk_id: map-ipc-channel-registry
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-two-process-electron-architecture
+  - practice-never-import-electron-directly-in-the-renderer
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -31,5 +33,12 @@ All IPC channels are defined as constants in `src/shared/ipc-channels.ts`, impor
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-two-process-electron-architecture](map-two-process-electron-architecture.md)
+- Related: [practice-never-import-electron-directly-in-the-renderer](practice-never-import-electron-directly-in-the-renderer.md)
+<!-- kk:related:end -->

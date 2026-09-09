@@ -1,31 +1,32 @@
 ---
 type: practice
-title: 'Review every generated task for complexity, vagueness, and triviality'
+title: 'Score and refine generated task complexity'
 description: >-
-  After task generation, split tasks spanning 3+ technologies/skills, sharpen
-  vague acceptance criteria, and merge trivial tasks.
+  Keep tasks single-purpose with runnable acceptance checks and one or two
+  skills.
 tags:
-  - task-management
+  - strikethroo
   - planning
   - quality
 kk_schema_version: 3
 kk_id: practice-review-every-generated-task-for-complexity-vagueness-and-triviality
 kk_derived_from:
-  - .ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md
-kk_relates_to: []
+  - .agents/skills/st-generate-tasks/SKILL.md
+kk_relates_to:
+  - map-post-task-generation-all-hook
 kk_depends_on: []
 kk_confidence: high
 ---
-After all tasks have been generated, perform a sanity check on each one:
-
-- **Too complex?** If a task spans 3+ technologies or requires 3+ skills, split it.
-- **Too vague?** If acceptance criteria are unclear, sharpen them.
-- **Too trivial?** If two tasks could be one without adding complexity, merge them.
-
-Target: every task should be completable with 1-2 skills and have clear acceptance criteria.
+During task generation, assign complexity_score from 1 to 10 using the skill rubric. Scores of 8 or more require decomposition; 6–7 require sharpening or splitting unless explicitly justified. Sharpen vague acceptance criteria into runnable checks and merge trivial adjacent tasks. Re-run dependency analysis and scoring after adjustments, up to three passes. Three or more required skills means a task must be split.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md](.ai/task-manager/config/hooks/POST_TASK_GENERATION_ALL.md)
+[1] [.agents/skills/st-generate-tasks/SKILL.md](../../../../../.agents/skills/st-generate-tasks/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-post-task-generation-all-hook](map-post-task-generation-all-hook.md)
+<!-- kk:related:end -->

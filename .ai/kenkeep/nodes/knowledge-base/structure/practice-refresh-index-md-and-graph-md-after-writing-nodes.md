@@ -1,9 +1,8 @@
 ---
 type: practice
-title: Refresh INDEX.md and GRAPH.md after writing nodes
+title: Regenerate kenkeep navigation after node changes
 description: >-
-  Run `npx @e0ipso/ai-knowledge-base index rebuild` after writing nodes so the
-  indices reflect them before reviewer diff.
+  Use index rebuild for ENTRY.md, GRAPH.md and topical index nodes.
 tags:
   - knowledge-base
   - cli
@@ -11,17 +10,24 @@ tags:
 kk_schema_version: 3
 kk_id: practice-refresh-index-md-and-graph-md-after-writing-nodes
 kk_derived_from:
-  - .cursor/skills/kb-bootstrap/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-curate/SKILL.md
+  - .lintstagedrc
+kk_relates_to:
+  - map-ai-knowledge-base-directory
 kk_depends_on: []
 kk_confidence: high
 ---
-After writing nodes, run `npx @e0ipso/ai-knowledge-base index rebuild --harness "$HARNESS"`.
-
-**Why:** The reviewer inspects `git diff nodes/` plus the indices; stale indices hide newly-added nodes. **How to apply:** Always run the rebuild before reporting back to the user.
+Edit knowledge leaves, then run `npx kenkeep index rebuild`. ENTRY.md, GRAPH.md and branch index.md files are generated navigation and must not be edited by hand. The repository `.lintstagedrc` formats Markdown but does not perform this rebuild.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-bootstrap/SKILL.md](.cursor/skills/kb-bootstrap/SKILL.md)
+[1] [.agents/skills/kk-curate/SKILL.md](../../../../../.agents/skills/kk-curate/SKILL.md)
+[2] [.lintstagedrc](../../../../../.lintstagedrc)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-ai-knowledge-base-directory](map-ai-knowledge-base-directory.md)
+<!-- kk:related:end -->

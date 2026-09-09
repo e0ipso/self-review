@@ -5,15 +5,16 @@ description: >-
   All main and renderer code imports shared types from src/shared/types.ts;
   never duplicate definitions.
 tags:
-  - task-manager
+  - strikethroo
   - types
   - duplication
 kk_schema_version: 3
 kk_id: >-
   practice-use-src-shared-types-ts-as-the-single-source-of-truth-for-shared-types
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-two-process-electron-architecture
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -24,5 +25,11 @@ kk_confidence: high
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-two-process-electron-architecture](map-two-process-electron-architecture.md)
+<!-- kk:related:end -->

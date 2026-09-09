@@ -5,14 +5,15 @@ description: >-
   Serializer must validate review output against the XSD; on failure, write to
   stderr and exit(1).
 tags:
-  - task-manager
+  - strikethroo
   - xml
   - validation
 kk_schema_version: 3
 kk_id: practice-validate-xml-output-against-the-xsd-before-writing
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ The XML serializer validates output against the XSD schema before writing the fi
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

@@ -194,22 +194,22 @@ Here is a small example transcript and the correct output, so you know exactly w
 {
   "practice": [
     {
-      "kind": "practice",
+      "type": "practice",
       "tags": ["caching", "pii", "gdpr", "drupal"],
       "title": "Use bravo_pii.cache for any content with PII",
-      "summary": "Don't use Drupal's default render cache for PII-bearing pages; use bravo_pii.cache (encrypts at rest).",
+      "description": "Don't use Drupal's default render cache for PII-bearing pages; use bravo_pii.cache (encrypts at rest).",
       "body": "For pages that render personally-identifiable information, the default Drupal render cache is not acceptable because it stores plaintext in the database. Use the `bravo_pii.cache` service instead - it encrypts at rest. This was flagged during the GDPR audit.\n\nApplies to: any route or render array that includes user-identifying data.",
-      "confidence": "high"
+      "kk_confidence": "high"
     }
   ],
   "map": [
     {
-      "kind": "map",
+      "type": "map",
       "tags": ["service", "caching", "pii"],
       "title": "bravo_pii.cache - encrypted cache backend for PII",
-      "summary": "Custom Drupal cache backend service that encrypts at rest; used wherever content includes user PII.",
+      "description": "Custom Drupal cache backend service that encrypts at rest; used wherever content includes user PII.",
       "body": "`bravo_pii.cache` is a custom cache backend service. It encrypts cached entries at rest, unlike Drupal's default render cache which stores plaintext in the database. Adopted in response to a GDPR audit finding.",
-      "confidence": "high"
+      "kk_confidence": "high"
     }
   ]
 }
@@ -240,12 +240,12 @@ Second, the reviewer pointed out a typo in the JSDoc for `assembleHeroCard`: "re
 {
   "practice": [
     {
-      "kind": "practice",
+      "type": "practice",
       "tags": ["typescript", "naming", "readability"],
       "title": "Loop variables use descriptive names",
-      "summary": "Loop variables in this codebase use descriptive names (for example cardIndex) rather than single letters, so intent is readable at a glance.",
+      "description": "Loop variables in this codebase use descriptive names (for example cardIndex) rather than single letters, so intent is readable at a glance.",
       "body": "Loop variables in this codebase use descriptive names that convey what is being iterated, such as `cardIndex` or `userId`. Single-letter loop counters like `i`, `j`, or `k` are not used. The rule applies to every loop in the codebase, not only to the file where it was flagged.\n\nRationale: readability at a glance. A descriptive loop variable removes the need to scan the loop body to remember what is being indexed.",
-      "confidence": "high"
+      "kk_confidence": "high"
     }
   ],
   "map": []
@@ -266,12 +266,12 @@ You must produce exactly one JSON object as your final output. It has two keys: 
 
 Each candidate has these required fields:
 
-- `kind`: `"practice"` or `"map"` (must match the array it's in).
+- `type`: `"practice"` or `"map"` (must match the array it's in).
 - `tags`: array of 1-5 short lowercase tags. Prefer existing tag conventions if visible from the transcript.
 - `title`: short imperative (for practice) or noun phrase (for map). Max ~80 characters.
-- `summary`: max 140 characters. This is what shows up in the knowledge base index.
+- `description`: max 140 characters. This is what shows up in the knowledge base index.
 - `body`: markdown explaining the knowledge. Include rationale when present in the source ("because…", "since…"). Keep concise - 1-4 short paragraphs is typical.
-- `confidence`: `"low"`, `"medium"`, or `"high"`. Use `"high"` when the user stated it explicitly with rationale; `"medium"` when the user stated it without rationale; `"low"` when you're inferring from context.
+- `kk_confidence`: `"low"`, `"medium"`, or `"high"`. Use `"high"` when the user stated it explicitly with rationale; `"medium"` when the user stated it without rationale; `"low"` when you're inferring from context.
 
 The wrapper rejects any additional keys on a candidate (including the legacy `supports_existing_node` / `contradicts_existing_node` hints).
 

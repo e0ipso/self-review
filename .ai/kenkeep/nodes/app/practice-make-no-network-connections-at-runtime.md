@@ -2,8 +2,8 @@
 type: practice
 title: Make no network connections at runtime
 description: >-
-  The app is local-first: no network calls except the startup version check
-  and user-triggered remote PR/MR review; nothing is sent to the forge.
+  The app is local-first: no network calls except the startup version check and
+  user-triggered remote PR/MR review; nothing is sent to the forge.
 tags:
   - network
   - privacy
@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-make-no-network-connections-at-runtime
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ Rationale: the primary use case is reviewing AI-generated code that may be unfin
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](map-self-review.md)
+<!-- kk:related:end -->

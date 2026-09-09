@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-read-full-file-contents-for-added-modified-files-when-critiquing
 kk_derived_from:
   - .opencode/skills/self-review-critique/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-critique-skill
 kk_depends_on: []
 kk_confidence: medium
 ---
@@ -23,5 +24,11 @@ When the diff touches many files (>15), prioritize reading files with the larges
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.opencode/skills/self-review-critique/SKILL.md](.opencode/skills/self-review-critique/SKILL.md)
+[1] [.opencode/skills/self-review-critique/SKILL.md](../../../../../../.opencode/skills/self-review-critique/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-critique-skill](../configuration/map-self-review-critique-skill.md)
+<!-- kk:related:end -->

@@ -1,28 +1,34 @@
 ---
 type: practice
-title: Honor `bootstrapModel.name` from KB config when delegating to sub-agents
+title: Use documented configuration when drafting bootstrap nodes
 description: >-
-  If `bootstrapModel.name` is set in the KB config, pass it as the sub-agent's
-  model; otherwise omit it so the sub-agent inherits its default.
+  Apply current project preferences and the shared delegation contract.
 tags:
   - knowledge-base
   - config
-  - sub-agents
+  - subagents
 kk_schema_version: 3
 kk_id: >-
   practice-honor-bootstrapmodel-name-from-kb-config-when-delegating-to-sub-agents
 kk_derived_from:
-  - .cursor/skills/kb-bootstrap/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-bootstrap/SKILL.md
+  - .ai/kenkeep/.config/prompts/sub-agent-delegation.md
+kk_relates_to:
+  - map-kb-bootstrap-skill
 kk_depends_on: []
 kk_confidence: high
 ---
-Read `.ai/knowledge-base/config.yaml` (falling back to `~/.config/ai-knowledge-base/config.yaml`) and look for a `bootstrapModel:` block. Accepted values for `bootstrapModel.name` are `haiku`, `sonnet`, or `opus`.
-
-**Why:** Project owners may want bootstrap delegations to run on a specific tier. **How to apply:** Only set the model when delegating to a sub-agent and only when the config key is present.
+Read `.ai/kenkeep/config.yaml` or the user fallback for relevant preferences. Follow `.ai/kenkeep/.config/prompts/sub-agent-delegation.md` for the available-tool probe and batch limits. The current bootstrap skill does not define a `bootstrapModel.name` override; do not invent that setting.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-bootstrap/SKILL.md](.cursor/skills/kb-bootstrap/SKILL.md)
+[1] [.agents/skills/kk-bootstrap/SKILL.md](../../../../../../.agents/skills/kk-bootstrap/SKILL.md)
+[2] [.ai/kenkeep/.config/prompts/sub-agent-delegation.md](../../../../.config/prompts/sub-agent-delegation.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-kb-bootstrap-skill](map-kb-bootstrap-skill.md)
+<!-- kk:related:end -->

@@ -10,7 +10,9 @@ kk_schema_version: 3
 kk_id: practice-do-not-import-from-self-review-core-in-the-react-package
 kk_derived_from:
   - packages/react/AGENTS.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-react-package
+  - map-npm-workspaces-packages
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -21,5 +23,12 @@ For shared type definitions, use `@self-review/types` instead.
 <!-- kk:citations:start -->
 # Citations
 
-[1] [packages/react/AGENTS.md](packages/react/AGENTS.md)
+[1] [packages/react/AGENTS.md](../../../../../packages/react/AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-react-package](map-self-review-react-package.md)
+- Related: [map-npm-workspaces-packages](map-npm-workspaces-packages.md)
+<!-- kk:related:end -->

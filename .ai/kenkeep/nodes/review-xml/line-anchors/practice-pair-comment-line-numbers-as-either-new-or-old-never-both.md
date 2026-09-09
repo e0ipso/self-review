@@ -1,9 +1,8 @@
 ---
 type: practice
-title: 'Pair comment line numbers as either new or old, never both'
+title: 'Pair comment line numbers as either new or old'
 description: >-
-  Self-review comments use exactly one new-line or old-line pair; file-level
-  comments have neither.
+  Line comments use one complete side-specific pair; file comments use neither.
 tags:
   - self-review
   - xml
@@ -11,19 +10,24 @@ tags:
 kk_schema_version: 3
 kk_id: practice-pair-comment-line-numbers-as-either-new-or-old-never-both
 kk_derived_from:
-  - .opencode/skills/self-review-apply/SKILL.md
-  - .agents/skills/self-review-apply/SKILL.md
-kk_relates_to: []
+  - .agents/skills/self-review-apply/assets/self-review-v3.xsd
+  - AGENTS.md
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
-In self-review XML, a comment has exactly one line-number pair: `new-line-start`/`new-line-end` for added or context lines, or `old-line-start`/`old-line-end` for deleted lines. Never include both pairs.
-
-If neither pair is present, the comment is file-level. This rule is enforced by `assets/self-review-v3.xsd` and must be respected by every producer and consumer.
+Use new-line-start/new-line-end for added or context lines and old-line-start/old-line-end for deleted lines. A line comment has exactly one complete pair; a file comment has neither. This is an application/authoring invariant: the XSD 1.0 attributes alone do not enforce the mutual exclusion.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.opencode/skills/self-review-apply/SKILL.md](.opencode/skills/self-review-apply/SKILL.md)
-[2] [.agents/skills/self-review-apply/SKILL.md](.agents/skills/self-review-apply/SKILL.md)
+[1] [.agents/skills/self-review-apply/assets/self-review-v3.xsd](../../../../../.agents/skills/self-review-apply/assets/self-review-v3.xsd)
+[2] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](../schema/map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

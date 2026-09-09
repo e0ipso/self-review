@@ -25,7 +25,12 @@ export async function loadGitDiffWithUntracked(
     return { files, repository };
   }
 
-  const untrackedPaths = await getUntrackedFilesAsync(cwd);
+  // Enumerate at the repository root. `git diff` reports root-relative paths
+  // for the whole repository, while `git ls-files` reports cwd-relative paths
+  // for the cwd subtree only. Read those cwd-relative names against the root
+  // and a nested file resolves to its same-named root neighbour, or to
+  // nothing at all.
+  const untrackedPaths = await getUntrackedFilesAsync(repository);
   let allFiles = files;
   if (untrackedPaths.length > 0) {
     const untrackedDiffStr = generateUntrackedDiffs(untrackedPaths, repository);

@@ -10,34 +10,35 @@
 _None._
 
 ## Conventions (how we build)
+- Open [**Complete configured checks and commit each phase**](practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md) to learn about: Run checks defined by the phase hook and create a descriptive conventional commit. #workflow #linting #commits
 - Open [**Follow the allowed task status transitions**](practice-follow-the-allowed-task-status-transitions.md) to learn about: Use only the defined transitions: pending→in-progress, in-progress→completed, in-progress→failed, failed→in-progress. #workflow #task-status
 - Open [**Mark completed phases and tasks in the blueprint before advancing**](practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing.md) to learn about: After validating a phase, update the blueprint: ✅ in front of the phase title, ✔️ in front of each task, and set task status to completed. #workflow #progress-tracking #blueprint
-- Open [**Pass linting and create a descriptive conventional commit at the end of each phase**](practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md) to learn about: Before moving to the next phase, ensure linting passes and a conventional-commit (subject + description) is created for the phase. #workflow #linting #commits
 
 ## Components (what exists)
-- Open [**POST_PHASE hook**](map-post-phase-hook.md) to learn about: Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates. #hook #workflow #task-manager
+- Open [**POST_PHASE hook**](map-post-phase-hook.md) to learn about: Create a phase commit and update blueprint progress before advancing. #hooks #workflow #strikethroo
 
 ## By topic
 
 ### #workflow
-- Open [**POST_PHASE hook**](map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
 - Open [**PRE_PLAN hook**](../authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Follow the allowed task status transitions**](practice-follow-the-allowed-task-status-transitions.md) — Use only the defined transitions: pending→in-progress, in-progress→completed, in-progress→failed, failed→in-progress.
+- Open [**POST_PHASE hook**](map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**Knowledge-base capture and curation workflow**](../../knowledge-base/curate/map-knowledge-base-capture-curate-review-workflow.md) — Capture sessions, extract proposals, curate nodes and consume topical navigation.
 ### #blueprint
 - Open [**Append a blueprint with dependency diagram and execution phases to the plan**](../task-generation/practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md) — After finalizing tasks, add a Mermaid dependency graph and group tasks into execution phases on the plan document.
 - Open [**Mark completed phases and tasks in the blueprint before advancing**](practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing.md) — After validating a phase, update the blueprint: ✅ in front of the phase title, ✔️ in front of each task, and set task status to completed.
 ### #commits
-- Open [**Pass linting and create a descriptive conventional commit at the end of each phase**](practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md) — Before moving to the next phase, ensure linting passes and a conventional-commit (subject + description) is created for the phase.
-### #hook
-- Open [**POST_PHASE hook**](map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+- Open [**Complete configured checks and commit each phase**](practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md) — Run checks defined by the phase hook and create a descriptive conventional commit.
+### #hooks
 - Open [**PRE_PLAN hook**](../authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
+- Open [**POST_PHASE hook**](map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**PRE_TASK_ASSIGNMENT hook**](../assignment/map-pre-task-assignment-hook.md) — Match task skills and domain to available agents in the active harness.
 ### #linting
-- Open [**Pass linting and create a descriptive conventional commit at the end of each phase**](practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md) — Before moving to the next phase, ensure linting passes and a conventional-commit (subject + description) is created for the phase.
+- Open [**Complete configured checks and commit each phase**](practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md) — Run checks defined by the phase hook and create a descriptive conventional commit.
 ### #progress-tracking
 - Open [**Mark completed phases and tasks in the blueprint before advancing**](practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing.md) — After validating a phase, update the blueprint: ✅ in front of the phase title, ✔️ in front of each task, and set task status to completed.
-### #task-manager
-- Open [**POST_PHASE hook**](map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+### #strikethroo
 - Open [**PRE_PLAN hook**](../authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Extract shared logic before duplicating across call sites**](../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
+- Open [**POST_PHASE hook**](map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**POST_PLAN hook**](../authoring/map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
 ### #task-status
 - Open [**Follow the allowed task status transitions**](practice-follow-the-allowed-task-status-transitions.md) — Use only the defined transitions: pending→in-progress, in-progress→completed, in-progress→failed, failed→in-progress.

@@ -5,14 +5,15 @@ description: >-
   No telemetry, analytics, or CDN fetches; only the startup version check and
   user-triggered remote PR/MR review touch the network.
 tags:
-  - task-manager
+  - strikethroo
   - network
   - privacy
 kk_schema_version: 3
 kk_id: practice-make-zero-network-requests-except-the-startup-version-check
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ The app makes zero network requests at runtime, with two exceptions. First, on s
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](map-self-review.md)
+<!-- kk:related:end -->

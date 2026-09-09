@@ -5,14 +5,18 @@ description: >-
   Markdown, HTML, raster images, and SVG support Raw/Rendered toggles for newly
   added files.
 tags:
-  - task-manager
+  - strikethroo
   - rendered-preview
   - file-types
 kk_schema_version: 3
 kk_id: map-rendered-file-previews
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-rendered-image-and-svg-previews-for-added-files
+  - map-rendered-text-view-for-added-markdown-and-html-files
+  - practice-force-unified-view-for-added-and-deleted-files
+  - practice-use-prism-js-for-syntax-highlighting-with-theme-matching
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -28,5 +32,14 @@ File-level comments are available on all preview types. Line-level comments work
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-rendered-image-and-svg-previews-for-added-files](map-rendered-image-and-svg-previews-for-added-files.md)
+- Related: [map-rendered-text-view-for-added-markdown-and-html-files](map-rendered-text-view-for-added-markdown-and-html-files.md)
+- Related: [practice-force-unified-view-for-added-and-deleted-files](practice-force-unified-view-for-added-and-deleted-files.md)
+- Related: [practice-use-prism-js-for-syntax-highlighting-with-theme-matching](practice-use-prism-js-for-syntax-highlighting-with-theme-matching.md)
+<!-- kk:related:end -->

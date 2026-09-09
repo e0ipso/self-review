@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-define-shared-data-structures-only-in-self-review-types
 kk_derived_from:
   - packages/types/AGENTS.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-types-package
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ Do not duplicate type definitions in consumer packages; import or re-export from
 <!-- kk:citations:start -->
 # Citations
 
-[1] [packages/types/AGENTS.md](packages/types/AGENTS.md)
+[1] [packages/types/AGENTS.md](../../../../../packages/types/AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-types-package](map-self-review-types-package.md)
+<!-- kk:related:end -->

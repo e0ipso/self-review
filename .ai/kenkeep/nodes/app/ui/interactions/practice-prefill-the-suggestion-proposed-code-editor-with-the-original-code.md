@@ -11,7 +11,8 @@ kk_schema_version: 3
 kk_id: practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-react-package
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -22,5 +23,11 @@ The XML output preserves both the original lines (from the diff) and the propose
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-react-package](../../../packages/architecture/map-self-review-react-package.md)
+<!-- kk:related:end -->

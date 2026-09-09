@@ -341,7 +341,7 @@ Project config overrides user config, which overrides built-in defaults.
 - `guide-file`: path to the walkthrough guide sidecar (default: derived from `output-file` as `<output-basename>.guide.xml`, e.g. `review.guide.xml`)
 - `ignore`: file patterns to exclude from diff (gitignore-compatible syntax; defaults cover common vendor/build dirs and lock files)
 - `categories`: custom comment tags (see example above)
-- `default-diff-args`: default arguments passed to `git diff`
+- `default-diff-args`: default arguments passed to `git diff`, split with shell quoting rules, so `-- "my file.txt"` stays a single argument
 - `show-untracked`: show new files not yet added to git (default: true)
 - `word-wrap`: wrap long lines in the diff viewer (default: true)
 - `max-files`: maximum number of files before the large payload guard triggers (default: 500). Set to `0` to disable.

@@ -109,6 +109,10 @@ summaries:
   skills/critique/suggestions: >-
     actionable critique suggestions; read when constructing exact replacement
     suggestions
+  knowledge-base: kenkeep capture, curation, node layout and maintenance commands; read when
+    processing sessions or maintaining project knowledge
+  skills: review generation, feedback application and guide portability; read when
+    authoring or consuming review artifacts
 ---
 # kenkeep Folder Summaries
 

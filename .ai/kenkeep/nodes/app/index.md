@@ -14,12 +14,12 @@
 
 ## Conventions (how we build)
 - Open [**Keep self-review local-only with no network access**](practice-keep-self-review-local-only-with-no-network-access.md) to learn about: No network access, no accounts, no telemetry. Code stays on the user's machine. #privacy #network #local
-- Open [**Limit file writes to the review XML and assets directory**](practice-limit-file-writes-to-the-review-xml-and-assets-directory.md) to learn about: App writes only the output XML, a sibling .self-review-assets/ directory, and (remote mode) a temporary clone under the OS temp dir, removed on exit. #task-manager #filesystem #scope
+- Open [**Limit file writes to the review XML and assets directory**](practice-limit-file-writes-to-the-review-xml-and-assets-directory.md) to learn about: App writes only the output XML, a sibling .self-review-assets/ directory, and (remote mode) a temporary clone under the OS temp dir, removed on exit. #strikethroo #filesystem #scope
 - Open [**Make no network connections at runtime**](practice-make-no-network-connections-at-runtime.md) to learn about: The app is local-first: no network calls except the startup version check and user-triggered remote PR/MR review; nothing is sent to the forge. #network #privacy #local-only
-- Open [**Make zero network requests except the startup version check**](practice-make-zero-network-requests-except-the-startup-version-check.md) to learn about: No telemetry, analytics, or CDN fetches; only the startup version check and user-triggered remote PR/MR review touch the network. #task-manager #network #privacy
+- Open [**Make zero network requests except the startup version check**](practice-make-zero-network-requests-except-the-startup-version-check.md) to learn about: No telemetry, analytics, or CDN fetches; only the startup version check and user-triggered remote PR/MR review touch the network. #strikethroo #network #privacy
 
 ## Components (what exists)
-- Open [**self-review**](map-self-review.md) to learn about: Local-only Electron desktop app providing a GitHub-style PR review UI for local git diffs and directory reviews. #task-manager #app #overview
+- Open [**self-review**](map-self-review.md) to learn about: Local-only Electron desktop app providing a GitHub-style PR review UI for local git diffs and directory reviews. #strikethroo #app #overview
 - Open [**self-review application**](map-self-review-application.md) to learn about: Local-only Electron desktop app providing a GitHub-style PR review UI for local git diffs and directory reviews. #overview #app
 
 ## By topic
@@ -32,10 +32,10 @@
 - Open [**Keep self-review local-only with no network access**](practice-keep-self-review-local-only-with-no-network-access.md) — No network access, no accounts, no telemetry. Code stays on the user's machine.
 - Open [**Make no network connections at runtime**](practice-make-no-network-connections-at-runtime.md) — The app is local-first: no network calls except the startup version check and user-triggered remote PR/MR review; nothing is sent to the forge.
 - Open [**Make zero network requests except the startup version check**](practice-make-zero-network-requests-except-the-startup-version-check.md) — No telemetry, analytics, or CDN fetches; only the startup version check and user-triggered remote PR/MR review touch the network.
-### #task-manager
-- Open [**POST_PHASE hook**](../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+### #strikethroo
 - Open [**PRE_PLAN hook**](../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Extract shared logic before duplicating across call sites**](../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
+- Open [**POST_PHASE hook**](../planning/execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**POST_PLAN hook**](../planning/authoring/map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
 ### #app
 - Open [**self-review**](map-self-review.md) — Local-only Electron desktop app providing a GitHub-style PR review UI for local git diffs and directory reviews.
 - Open [**self-review application**](map-self-review-application.md) — Local-only Electron desktop app providing a GitHub-style PR review UI for local git diffs and directory reviews.
@@ -49,6 +49,6 @@
 ### #local-only
 - Open [**Make no network connections at runtime**](practice-make-no-network-connections-at-runtime.md) — The app is local-first: no network calls except the startup version check and user-triggered remote PR/MR review; nothing is sent to the forge.
 ### #scope
-- Open [**Default bootstrap scope**](../knowledge-base/bootstrap/discovery/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
+- Open [**Default bootstrap scope**](../knowledge-base/bootstrap/discovery/map-default-bootstrap-scope.md) — Without a scope argument, finddocs scans from the repository root.
 - Open [**Stick to markdown documentation; do not read code files during bootstrap**](../knowledge-base/bootstrap/discovery/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
 - Open [**Skip files that look correct rather than forcing comments**](../skills/critique/review-strategy/practice-skip-files-that-look-correct-rather-than-forcing-comments.md) — Critique should leave a file un-commented when nothing substantive is wrong; do not manufacture review comments on every file.

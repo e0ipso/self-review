@@ -5,14 +5,15 @@ description: >-
   E2E tests require a host machine with display; check for dev container before
   running them.
 tags:
-  - task-manager
+  - strikethroo
   - testing
   - devcontainer
 kk_schema_version: 3
 kk_id: practice-do-not-run-e2e-tests-inside-the-dev-container
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ E2E tests use Playwright with Cucumber and cannot run in the dev container. Alwa
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](../app/map-self-review.md)
+<!-- kk:related:end -->

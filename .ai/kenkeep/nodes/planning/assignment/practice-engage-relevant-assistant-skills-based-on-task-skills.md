@@ -11,8 +11,9 @@ tags:
 kk_schema_version: 3
 kk_id: practice-engage-relevant-assistant-skills-based-on-task-skills
 kk_derived_from:
-  - .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
-kk_relates_to: []
+  - .ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md
+kk_relates_to:
+  - map-pre-task-assignment-hook
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ This is called out as `[IMPORTANT]` in the hook documentation, meaning skill eng
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md](.ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md)
+[1] [.ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md](../../../../strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-pre-task-assignment-hook](map-pre-task-assignment-hook.md)
+<!-- kk:related:end -->

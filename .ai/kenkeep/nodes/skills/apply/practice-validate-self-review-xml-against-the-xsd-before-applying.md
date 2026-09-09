@@ -13,7 +13,8 @@ kk_id: practice-validate-self-review-xml-against-the-xsd-before-applying
 kk_derived_from:
   - .opencode/skills/self-review-apply/SKILL.md
   - .agents/skills/self-review-apply/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-apply-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -24,6 +25,12 @@ If `xmllint` is not installed in the environment, warn the user and continue wit
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.opencode/skills/self-review-apply/SKILL.md](.opencode/skills/self-review-apply/SKILL.md)
-[2] [.agents/skills/self-review-apply/SKILL.md](.agents/skills/self-review-apply/SKILL.md)
+[1] [.opencode/skills/self-review-apply/SKILL.md](../../../../../.opencode/skills/self-review-apply/SKILL.md)
+[2] [.agents/skills/self-review-apply/SKILL.md](../../../../../.agents/skills/self-review-apply/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-apply-skill](map-self-review-apply-skill.md)
+<!-- kk:related:end -->

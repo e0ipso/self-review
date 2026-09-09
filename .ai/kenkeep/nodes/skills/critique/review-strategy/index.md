@@ -29,11 +29,11 @@ _None yet._
 - Open [**Attach a suggestion block whenever a concrete fix is possible**](../suggestions/practice-attach-a-suggestion-block-whenever-a-concrete-fix-is-possible.md) — For every critique comment where a fix can be proposed, include a \`<suggestion>\` so the human can accept or reject it individually.
 - Open [**Use <suggestion> blocks whenever a concrete fix can be proposed**](../suggestions/practice-use-suggestion-blocks-whenever-a-concrete-fix-can-be-proposed.md) — For each comment with an actionable fix, include a <suggestion> so the human reviewer can accept or reject the change individually.
 ### #scope
-- Open [**Default bootstrap scope**](../../../knowledge-base/bootstrap/discovery/map-default-bootstrap-scope.md) — With no path argument, kb-bootstrap scans \`docs/\`, top-level README, CONTRIBUTING, ARCHITECTURE, and root-level \`*.md\` files.
+- Open [**Default bootstrap scope**](../../../knowledge-base/bootstrap/discovery/map-default-bootstrap-scope.md) — Without a scope argument, finddocs scans from the repository root.
 - Open [**Stick to markdown documentation; do not read code files during bootstrap**](../../../knowledge-base/bootstrap/discovery/practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap.md) — Bootstrap extracts what's already been written down — read only markdown docs, not source code.
 - Open [**Skip files that look correct rather than forcing comments**](practice-skip-files-that-look-correct-rather-than-forcing-comments.md) — Critique should leave a file un-commented when nothing substantive is wrong; do not manufacture review comments on every file.
 ### #context
-- Open [**Load the original diff context before applying review feedback**](../../apply/practice-load-the-original-diff-context-before-applying-review-feedback.md) — Reconstruct the reviewer's view via git diff (git mode) or by reading source files (directory mode) before editing.
+- Open [**Load the reviewed source before applying feedback**](../../apply/practice-load-the-original-diff-context-before-applying-review-feedback.md) — Reconstruct local git, directory or remote review context from the recorded source.
 - Open [**Read full file contents for added/modified files when critiquing**](practice-read-full-file-contents-for-added-modified-files-when-critiquing.md) — Read the current file (not just the diff hunks) to understand surrounding code; skip reading for deleted or binary files.
 ### #performance
 - Open [**Lazy-load file hunks in large-payload mode**](../../../app/architecture/practice-lazy-load-file-hunks-in-large-payload-mode.md) — When max-files or max-total-lines is exceeded, send file metadata only in diff:load and fetch hunks per file on demand.

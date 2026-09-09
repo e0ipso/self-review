@@ -195,6 +195,30 @@ describe('review-handlers', () => {
       // read-only assertions above cannot cover.
       expect(getFileHunks(sessionB, 'src/app.ts')).toEqual([makeHunk()]);
     });
+
+    it('keeps a quoted search string and path as single arguments', async () => {
+      vi.mocked(runGitDiffAsync).mockResolvedValue(EXPANDED_DIFF);
+
+      const session = createReviewSession();
+      session.diffData = makeGitPayload();
+      session.diffData.source = {
+        type: 'git',
+        gitDiffArgs: `-S 'foo bar' main..feature -- 'src/my dir'`,
+        repository: '/repo',
+      };
+
+      await expandContext(session, {
+        filePath: 'src/my dir/app.ts',
+        contextLines: 10,
+      });
+
+      // A whitespace split would have handed git ["-S", "'foo", "bar'"] and
+      // an argument that is not a revision.
+      expect(runGitDiffAsync).toHaveBeenCalledWith(
+        ['-S', 'foo bar', 'main..feature', '-U10', '--', 'src/my dir/app.ts'],
+        '/repo'
+      );
+    });
   });
 
   describe('diff and guide delivery', () => {

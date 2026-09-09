@@ -11,7 +11,8 @@ kk_schema_version: 3
 kk_id: practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-user-and-project-yaml-configuration
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -27,5 +28,11 @@ Merging is shallow and per-key. Invalid keys are ignored with a warning to stder
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-user-and-project-yaml-configuration](map-user-and-project-yaml-configuration.md)
+<!-- kk:related:end -->

@@ -5,14 +5,15 @@ description: >-
   All review state (comments, suggestions, viewed flags) lives in React context;
   no localStorage or globals.
 tags:
-  - task-manager
+  - strikethroo
   - state
   - renderer
 kk_schema_version: 3
 kk_id: practice-do-not-store-renderer-state-outside-react-context
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-two-process-electron-architecture
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ The renderer manages all review state in React context (`ReviewContext`, `Config
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-two-process-electron-architecture](map-two-process-electron-architecture.md)
+<!-- kk:related:end -->

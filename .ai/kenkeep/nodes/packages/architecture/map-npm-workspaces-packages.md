@@ -5,14 +5,17 @@ description: >-
   Reusable packages: @self-review/core (logic), @self-review/react (UI),
   @self-review/types (shared types).
 tags:
-  - task-manager
+  - strikethroo
   - packages
-  - workspaces
+  - workspace
 kk_schema_version: 3
 kk_id: map-npm-workspaces-packages
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-self-review-react-package
+  - map-self-review-types-package
+  - practice-do-not-import-from-self-review-core-in-the-react-package
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -27,5 +30,13 @@ The Electron app imports these packages via relative path imports to their sourc
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-react-package](map-self-review-react-package.md)
+- Related: [map-self-review-types-package](../types/map-self-review-types-package.md)
+- Related: [practice-do-not-import-from-self-review-core-in-the-react-package](practice-do-not-import-from-self-review-core-in-the-react-package.md)
+<!-- kk:related:end -->

@@ -11,7 +11,8 @@ kk_schema_version: 3
 kk_id: map-self-review-application
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -22,5 +23,11 @@ The app is CLI-first, one-shot (open → review → close → done), with no per
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](map-self-review.md)
+<!-- kk:related:end -->

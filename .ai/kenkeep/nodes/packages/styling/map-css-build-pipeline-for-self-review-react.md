@@ -10,7 +10,9 @@ kk_schema_version: 3
 kk_id: map-css-build-pipeline-for-self-review-react
 kk_derived_from:
   - packages/react/AGENTS.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-wrapper-div
+  - practice-import-only-the-compiled-dist-styles-css-from-host-apps
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -21,5 +23,12 @@ Inputs: `src/styles.css` (Tailwind `@custom-variant`/`@theme inline` directives,
 <!-- kk:citations:start -->
 # Citations
 
-[1] [packages/react/AGENTS.md](packages/react/AGENTS.md)
+[1] [packages/react/AGENTS.md](../../../../../packages/react/AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-wrapper-div](map-self-review-wrapper-div.md)
+- Related: [practice-import-only-the-compiled-dist-styles-css-from-host-apps](practice-import-only-the-compiled-dist-styles-css-from-host-apps.md)
+<!-- kk:related:end -->

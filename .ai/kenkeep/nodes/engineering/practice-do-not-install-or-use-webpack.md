@@ -1,25 +1,35 @@
 ---
 type: practice
-title: Do not install or use webpack
-description: Electron Forge handles bundling; do not add a separate webpack configuration.
+title: Check the existing Forge bundler before changing build tooling
+description: The blanket webpack prohibition conflicts with the configured Forge
+  webpack integration.
 tags:
-  - task-manager
+  - strikethroo
   - build
   - webpack
 kk_schema_version: 3
 kk_id: practice-do-not-install-or-use-webpack
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+  - forge.config.ts
+  - webpack.main.config.ts
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
-Do not install or use webpack. Electron Forge handles all bundling for the app. Adding webpack would duplicate or conflict with the Forge build pipeline.
-
-**Why:** Electron Forge is the established build/packaging tool; introducing another bundler creates maintenance burden and potential conflicts.
+AGENTS.md says not to install or use webpack because Electron Forge handles bundling. The existing Forge configuration nevertheless uses its webpack plugin and webpack.main.config.ts. Preserve that configured integration while this source inconsistency is unresolved; do not interpret the blanket sentence as an instruction to remove working build configuration.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../AGENTS.md)
+[2] [forge.config.ts](../../../../forge.config.ts)
+[3] [webpack.main.config.ts](../../../../webpack.main.config.ts)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](../app/map-self-review.md)
+<!-- kk:related:end -->

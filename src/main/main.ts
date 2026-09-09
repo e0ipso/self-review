@@ -7,7 +7,11 @@ import { resolve } from 'path';
 import { checkWritability } from './fs-utils';
 import { parseCliArgs, checkEarlyExit } from './cli';
 import { runFetchComments } from '../../packages/core/src/fetch-comments';
-import { normalizeGitDiffArgs } from '../../packages/core/src/git-diff-args';
+import {
+  formatGitDiffArgs,
+  normalizeGitDiffArgs,
+  tokenizeGitDiffArgs,
+} from '../../packages/core/src/git-diff-args';
 import { loadGitDiffWithUntracked } from '../../packages/core/src/git-diff-loader';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
@@ -169,9 +173,9 @@ async function initializeApp() {
     // Phase 3: Determine git diff args
     let gitDiffArgs = cliArgs.gitDiffArgs;
     if (gitDiffArgs.length === 0 && appConfig.defaultDiffArgs) {
-      gitDiffArgs = appConfig.defaultDiffArgs
-        .split(' ')
-        .filter((arg: string) => arg.length > 0);
+      // Shell-style quoting, so a configured path or search string with a
+      // space stays one argument on the way to git.
+      gitDiffArgs = tokenizeGitDiffArgs(appConfig.defaultDiffArgs);
     }
 
     // Normalize: insert `--` before bare path args so expand-context
@@ -213,7 +217,7 @@ async function initializeApp() {
       );
     } else if (mode === 'git') {
       // Git mode: existing flow
-      console.error('[main] Git diff args:', gitDiffArgs.join(' '));
+      console.error('[main] Git diff args:', formatGitDiffArgs(gitDiffArgs));
 
       const { files: allFiles, repository } = await loadGitDiffWithUntracked(gitDiffArgs);
       console.error('[main] Loaded', allFiles.length, 'files from git diff');
@@ -223,7 +227,13 @@ async function initializeApp() {
 
       diffData = {
         files: filteredFiles,
-        source: { type: 'git', gitDiffArgs: gitDiffArgs.join(' '), repository },
+        source: {
+          type: 'git',
+          // Quoted where a bare join would lose a boundary, so expand-context
+          // can recover this argv exactly.
+          gitDiffArgs: formatGitDiffArgs(gitDiffArgs),
+          repository,
+        },
       };
     } else if (mode === 'file') {
       // File mode: scan a single file as new addition

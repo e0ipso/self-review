@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: practice-differentiate-finish-review-from-window-close
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-finish-review-vs-window-close-behavior
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ Closing the window by any OS-level method (X, Cmd+Q, Alt+F4) shows a three-way c
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-finish-review-vs-window-close-behavior](map-finish-review-vs-window-close-behavior.md)
+<!-- kk:related:end -->

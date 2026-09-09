@@ -1,9 +1,8 @@
 ---
 type: map
-title: CLI static skip list for bootstrap candidates
+title: Bootstrap document exclusions
 description: >-
-  Pre-filter list of filenames the ai-knowledge-base CLI excludes from bootstrap
-  candidates before the skill runs.
+  finddocs applies gitignore, kkignore and its static filename exclusions.
 tags:
   - knowledge-base
   - cli
@@ -12,17 +11,22 @@ tags:
 kk_schema_version: 3
 kk_id: map-cli-static-skip-list-for-bootstrap-candidates
 kk_derived_from:
-  - .ai/knowledge-base/nodes/map/map-cli-static-skip-list.md
-kk_relates_to: []
+  - .agents/skills/kk-bootstrap/SKILL.md
+kk_relates_to:
+  - map-kb-bootstrap-skill
 kk_depends_on: []
 kk_confidence: high
 ---
-The ai-knowledge-base CLI applies a static filename skip list before the kb-bootstrap skill sees the candidate documentation files. This pre-filter runs in addition to `.gitignore` and project include/exclude rules.
-
-The skip list covers `LICENSE`, `CHANGELOG`, `CODE_OF_CONDUCT`, `CONTRIBUTORS`, `INDEX.md`, `GRAPH.md`, and anything matching `releases/**/*.md`. Files matching these patterns never appear in the dry-run candidate output.
+`kenkeep finddocs` filters candidate Markdown using `.gitignore`, `.kkignore` and a static skip list before bootstrap reads them. Documented exclusions include LICENSE, CHANGELOG, CODE_OF_CONDUCT, CONTRIBUTORS, ENTRY.md, GRAPH.md and releases/**/*.md. Use the primitive rather than maintaining a second skip list.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/knowledge-base/nodes/map/map-cli-static-skip-list.md](.ai/knowledge-base/nodes/map/map-cli-static-skip-list.md)
+[1] [.agents/skills/kk-bootstrap/SKILL.md](../../../../../../.agents/skills/kk-bootstrap/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-kb-bootstrap-skill](../workflow/map-kb-bootstrap-skill.md)
+<!-- kk:related:end -->

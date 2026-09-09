@@ -5,14 +5,15 @@ description: >-
   Typing :xx in the comment editor triggers an inline autocomplete; :shortcode:
   text is converted to Unicode in rendered markdown.
 tags:
-  - task-manager
+  - strikethroo
   - emoji
   - comments
 kk_schema_version: 3
 kk_id: map-emoji-shortcode-support-in-comments
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-self-review-react-package
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -21,5 +22,11 @@ Typing `:` + 2 characters in the comment editor triggers an inline autocomplete 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-react-package](../../../packages/architecture/map-self-review-react-package.md)
+<!-- kk:related:end -->

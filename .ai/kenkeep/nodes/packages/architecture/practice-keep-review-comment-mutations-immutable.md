@@ -12,7 +12,7 @@ tags:
 kk_schema_version: 3
 kk_id: practice-keep-review-comment-mutations-immutable
 kk_derived_from:
-  - '77699372-867d-4d60-9007-5aa0b672863d:practice:2'
+  - .ai/kenkeep/_sessions/20260731-2121-77699372-867d-4d60-9007-5aa0b672863d.md
 kk_relates_to:
   - map-reviewpanel-and-singlefilereview-entry-components
   - map-self-review-react-package
@@ -23,15 +23,15 @@ Every comment or reply mutation must replace the affected `ReviewComment` object
 
 Viewed-only file updates preserve the existing comment references so they do not emit a spurious `onReviewChange` callback.
 
-<!-- kk:related:start -->
-# Related
-
-- Related: [map-reviewpanel-and-singlefilereview-entry-components](/packages/map-reviewpanel-and-singlefilereview-entry-components.md)
-- Related: [map-self-review-react-package](/packages/map-self-review-react-package.md)
-<!-- kk:related:end -->
-
 <!-- kk:citations:start -->
 # Citations
 
-[1] [77699372-867d-4d60-9007-5aa0b672863d:practice:2](77699372-867d-4d60-9007-5aa0b672863d:practice:2)
+[1] [.ai/kenkeep/_sessions/20260731-2121-77699372-867d-4d60-9007-5aa0b672863d.md](../../../_sessions/20260731-2121-77699372-867d-4d60-9007-5aa0b672863d.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-reviewpanel-and-singlefilereview-entry-components](map-reviewpanel-and-singlefilereview-entry-components.md)
+- Related: [map-self-review-react-package](map-self-review-react-package.md)
+<!-- kk:related:end -->

@@ -16,7 +16,7 @@ _None._
 - Open [**XML-escape all text content in review.xml**](practice-xml-escape-all-text-content-in-review-xml.md) to learn about: Escape &, <, >, ", and ' in body, code, and category text when constructing the XML by hand. #self-review #xml #escaping
 
 ## Components (what exists)
-- Open [**Comment author attribution**](map-comment-author-attribution.md) to learn about: Critique-generated comments include an author attribute (model name); absent author shows 'You' with a person icon. #task-manager #comments #author
+- Open [**Comment author attribution**](map-comment-author-attribution.md) to learn about: Critique-generated comments include an author attribute (model name); absent author shows 'You' with a person icon. #strikethroo #comments #author
 
 ## By topic
 
@@ -48,7 +48,7 @@ _None._
 - Open [**Preserve review body whitespace during XML parsing**](practice-preserve-review-body-whitespace-during-xml-parsing.md) — Disable XML value trimming so comment and reply Markdown bodies round-trip byte-identically.
 ### #renames
 - Open [**Use the new path for renamed files in review XML**](practice-use-the-new-path-for-renamed-files-in-review-xml.md) — For change-type="renamed" entries, the path attribute carries the new path, not the original path.
-### #task-manager
-- Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+### #strikethroo
 - Open [**PRE_PLAN hook**](../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Extract shared logic before duplicating across call sites**](../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
+- Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**POST_PLAN hook**](../../planning/authoring/map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.

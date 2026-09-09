@@ -12,7 +12,9 @@ kk_schema_version: 3
 kk_id: practice-lazy-load-file-hunks-in-large-payload-mode
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-two-process-electron-architecture
+  - map-large-payload-lazy-loading-mode
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +25,12 @@ On continue, large-payload mode is enabled: the initial `diff:load` payload incl
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-two-process-electron-architecture](map-two-process-electron-architecture.md)
+- Related: [map-large-payload-lazy-loading-mode](map-large-payload-lazy-loading-mode.md)
+<!-- kk:related:end -->

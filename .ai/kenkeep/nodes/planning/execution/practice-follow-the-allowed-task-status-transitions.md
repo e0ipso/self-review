@@ -10,8 +10,9 @@ tags:
 kk_schema_version: 3
 kk_id: practice-follow-the-allowed-task-status-transitions
 kk_derived_from:
-  - .ai/task-manager/config/hooks/POST_PHASE.md
-kk_relates_to: []
+  - .ai/strikethroo/config/hooks/POST_PHASE.md
+kk_relates_to:
+  - map-post-phase-hook
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -22,5 +23,11 @@ Do not introduce other states or skip transitions when updating task status.
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/POST_PHASE.md](.ai/task-manager/config/hooks/POST_PHASE.md)
+[1] [.ai/strikethroo/config/hooks/POST_PHASE.md](../../../../strikethroo/config/hooks/POST_PHASE.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-post-phase-hook](map-post-phase-hook.md)
+<!-- kk:related:end -->

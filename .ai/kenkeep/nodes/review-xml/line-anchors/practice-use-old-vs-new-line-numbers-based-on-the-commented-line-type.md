@@ -5,14 +5,15 @@ description: >-
   Added/context lines use newLineStart/End; deleted lines use oldLineStart/End;
   exactly one pair, never both.
 tags:
-  - task-manager
+  - strikethroo
   - line-numbers
   - comments
 kk_schema_version: 3
 kk_id: practice-use-old-vs-new-line-numbers-based-on-the-commented-line-type
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ Comments on added or context lines use `newLineStart`/`newLineEnd`. Comments on 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](../schema/map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

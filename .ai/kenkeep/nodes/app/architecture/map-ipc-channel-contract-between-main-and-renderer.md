@@ -11,7 +11,8 @@ kk_schema_version: 3
 kk_id: map-ipc-channel-contract-between-main-and-renderer
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-two-process-electron-architecture
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -28,5 +29,11 @@ Main ↔ renderer communication uses Electron's ipcMain/ipcRenderer bridge over 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-two-process-electron-architecture](map-two-process-electron-architecture.md)
+<!-- kk:related:end -->

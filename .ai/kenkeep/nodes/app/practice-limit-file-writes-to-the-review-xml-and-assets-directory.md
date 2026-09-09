@@ -2,17 +2,18 @@
 type: practice
 title: Limit file writes to the review XML and assets directory
 description: >-
-  App writes only the output XML, a sibling .self-review-assets/ directory,
-  and (remote mode) a temporary clone under the OS temp dir, removed on exit.
+  App writes only the output XML, a sibling .self-review-assets/ directory, and
+  (remote mode) a temporary clone under the OS temp dir, removed on exit.
 tags:
-  - task-manager
+  - strikethroo
   - filesystem
   - scope
 kk_schema_version: 3
 kk_id: practice-limit-file-writes-to-the-review-xml-and-assets-directory
 kk_derived_from:
-  - .ai/task-manager/config/TASK_MANAGER.md
-kk_relates_to: []
+  - AGENTS.md
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -23,5 +24,11 @@ At runtime the app writes the review XML at the configured `output-file` path (d
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/TASK_MANAGER.md](.ai/task-manager/config/TASK_MANAGER.md)
+[1] [AGENTS.md](../../../../AGENTS.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](map-self-review.md)
+<!-- kk:related:end -->

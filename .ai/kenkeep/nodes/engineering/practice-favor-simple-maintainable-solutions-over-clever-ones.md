@@ -11,8 +11,9 @@ tags:
 kk_schema_version: 3
 kk_id: practice-favor-simple-maintainable-solutions-over-clever-ones
 kk_derived_from:
-  - .ai/task-manager/config/hooks/PRE_PLAN.md
-kk_relates_to: []
+  - .ai/strikethroo/config/hooks/PRE_PLAN.md
+kk_relates_to:
+  - map-self-review
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -25,5 +26,11 @@ A working simple solution is better than a complex "perfect" one.
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/PRE_PLAN.md](.ai/task-manager/config/hooks/PRE_PLAN.md)
+[1] [.ai/strikethroo/config/hooks/PRE_PLAN.md](../../../strikethroo/config/hooks/PRE_PLAN.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review](../app/map-self-review.md)
+<!-- kk:related:end -->

@@ -5,14 +5,15 @@ description: >-
   Default `y` for small high-confidence diffs (<5 lines), `n` for >50% changed,
   otherwise `s`; `s` when no target node exists.
 tags:
-  - kb-curate
+  - kk-curate
   - conflicts
   - defaults
 kk_schema_version: 3
 kk_id: practice-compute-conflict-resolution-defaults-from-diff-ratio-and-confidence
 kk_derived_from:
-  - .cursor/skills/kb-curate/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-curate/SKILL.md
+kk_relates_to:
+  - map-knowledge-base-capture-curate-review-workflow
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -25,5 +26,11 @@ Before prompting the user on each conflict, compute `lines_changed` (line-granul
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-curate/SKILL.md](.cursor/skills/kb-curate/SKILL.md)
+[1] [.agents/skills/kk-curate/SKILL.md](../../../../../.agents/skills/kk-curate/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-knowledge-base-capture-curate-review-workflow](map-knowledge-base-capture-curate-review-workflow.md)
+<!-- kk:related:end -->

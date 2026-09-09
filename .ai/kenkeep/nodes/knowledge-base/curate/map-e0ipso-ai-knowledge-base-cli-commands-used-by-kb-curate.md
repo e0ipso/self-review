@@ -1,28 +1,32 @@
 ---
 type: map
-title: '@e0ipso/ai-knowledge-base CLI commands used by kb-curate'
+title: 'Kenkeep curation commands'
 description: >-
-  `curate --harness <id>` runs the curator; `index rebuild --harness <id>
-  --stage` regenerates INDEX/GRAPH for pre-commit hooks.
+  Extract, validate, deduplicate, persist and rebuild through deterministic
+  commands.
 tags:
-  - kb-curate
+  - kk-curate
   - cli
   - subcommands
 kk_schema_version: 3
 kk_id: map-e0ipso-ai-knowledge-base-cli-commands-used-by-kb-curate
 kk_derived_from:
-  - .cursor/skills/kb-curate/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-curate/SKILL.md
+kk_relates_to:
+  - map-knowledge-base-capture-curate-review-workflow
 kk_depends_on: []
 kk_confidence: high
 ---
-The `@e0ipso/ai-knowledge-base` npm package exposes the commands used by the kb-curate workflow:
-
-- `curate --harness "$HARNESS"` — acquires the curator lock, batches pending session logs (`proposal_status: done`, not yet curated), spawns a curator subprocess per batch (with `KB_BUILDER_INTERNAL=1` to prevent recursion), writes node files and conflict files, and regenerates `INDEX.md`/`GRAPH.md`. Stdout reports `Curator finished: N node(s) written, M drop(s) over K batch(es).`, `Run id: <runId>`, conflict warnings, and a `failure(s)` list for `add_collision`/`modify_missing_target`.
-- `index rebuild --harness "$HARNESS" --stage` — regenerates and stages INDEX/GRAPH; intended for pre-commit hooks on hand edits.
+The `kk-curate` skill reads sessions in-host. `session-log update-proposals` validates extraction output. `drafts collect` validates and combines batch drafts. One `curate-dedup` call separates conflicts and stamps consumed sessions, then `curate-persist` writes surviving actions. Run `index rebuild`, then `rebalance trigger`; apply structural operations only through `rebalance move`. `npx kenkeep curate` launches the skill and is not the in-host persistence command.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-curate/SKILL.md](.cursor/skills/kb-curate/SKILL.md)
+[1] [.agents/skills/kk-curate/SKILL.md](../../../../../.agents/skills/kk-curate/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-knowledge-base-capture-curate-review-workflow](map-knowledge-base-capture-curate-review-workflow.md)
+<!-- kk:related:end -->

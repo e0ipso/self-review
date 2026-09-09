@@ -12,7 +12,8 @@ kk_schema_version: 3
 kk_id: map-vimium-style-keyboard-navigation
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-react-package
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -29,5 +30,11 @@ All shortcuts are suppressed when a text input has focus. Implementation lives i
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-react-package](../../../packages/architecture/map-self-review-react-package.md)
+<!-- kk:related:end -->

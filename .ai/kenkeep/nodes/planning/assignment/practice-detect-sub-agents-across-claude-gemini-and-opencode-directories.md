@@ -1,9 +1,8 @@
 ---
 type: practice
-title: 'Detect sub-agents across .claude, .gemini, and .opencode directories'
+title: 'Discover agents through the active harness'
 description: >-
-  Sub-agent availability is determined by scanning the `agents/` subdirectory of
-  each supported assistant directory.
+  Use the current harness agents directory, with general-purpose fallback.
 tags:
   - agents
   - discovery
@@ -11,17 +10,22 @@ tags:
 kk_schema_version: 3
 kk_id: practice-detect-sub-agents-across-claude-gemini-and-opencode-directories
 kk_derived_from:
-  - .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
-kk_relates_to: []
+  - .ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md
+kk_relates_to:
+  - map-pre-task-assignment-hook
 kk_depends_on: []
 kk_confidence: high
 ---
-The PRE_TASK_ASSIGNMENT hook checks `.claude/agents`, `.gemini/agents`, and `.opencode/agents` for available sub-agents. The first non-empty directory found is treated as the source of available agents.
-
-If none of these directories exist or all are empty, the hook falls back to a general-purpose agent. Place sub-agent definitions under one of these paths so the hook can discover them.
+Check the active harness agents directory for task-matching capabilities. If none are available or none match, use a general-purpose agent. The current hook does not mandate a fixed search order across Claude, Gemini and OpenCode directories.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md](.ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md)
+[1] [.ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md](../../../../strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-pre-task-assignment-hook](map-pre-task-assignment-hook.md)
+<!-- kk:related:end -->

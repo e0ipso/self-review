@@ -1,9 +1,8 @@
 ---
 type: map
-title: KB harness detection script at /tmp/kb-detect-harness.mjs
+title: Kenkeep harness detector
 description: >-
-  Node script that resolves the active KB harness id, mirroring
-  src/harnesses/detect.ts resolveWithHint priority.
+  The shipped helper resolves explicit hints, environment or CLI defaults.
 tags:
   - kb
   - harness
@@ -11,15 +10,22 @@ tags:
 kk_schema_version: 3
 kk_id: map-kb-harness-detection-script-at-tmp-kb-detect-harness-mjs
 kk_derived_from:
-  - .cursor/skills/kb-curate/SKILL.md
-kk_relates_to: []
+  - .ai/kenkeep/scripts/kk-detect-harness.mjs
+kk_relates_to:
+  - map-ai-knowledge-base-cli
 kk_depends_on: []
 kk_confidence: high
 ---
-`/tmp/kb-detect-harness.mjs` is a Node script materialized lazily by the kb-curate skill. It resolves the active harness id from one of four registered ids (`claude`, `codex`, `cursor`, `opencode`) using this priority: (1) `--hint <id>` argv if registered; (2) environment detection (`CLAUDECODE=1` → `claude`, `CURSOR_VERSION` nonempty → `cursor`); (3) `cliDefaultHarness` in `.ai/knowledge-base/config.yaml` of the nearest repo root (located by walking up looking for `.ai/knowledge-base`). Exits 2 with a stderr message if none resolve.
+Run `node .ai/kenkeep/scripts/kk-detect-harness.mjs --hint <id>`. The helper considers a registered explicit hint first, then environment detection, then `cliDefaultHarness` in the nearest kenkeep project. Registered IDs are claude, codex, copilot, cursor and opencode. An unresolved invocation exits 2. The helper is shipped in the project; it is not materialized under /tmp.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-curate/SKILL.md](.cursor/skills/kb-curate/SKILL.md)
+[1] [.ai/kenkeep/scripts/kk-detect-harness.mjs](../../../scripts/kk-detect-harness.mjs)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-ai-knowledge-base-cli](map-ai-knowledge-base-cli.md)
+<!-- kk:related:end -->

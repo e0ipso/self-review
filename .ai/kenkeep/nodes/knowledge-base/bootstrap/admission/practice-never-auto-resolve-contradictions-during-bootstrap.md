@@ -10,8 +10,9 @@ tags:
 kk_schema_version: 3
 kk_id: practice-never-auto-resolve-contradictions-during-bootstrap
 kk_derived_from:
-  - .cursor/skills/kb-bootstrap/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-bootstrap/SKILL.md
+kk_relates_to:
+  - map-kb-bootstrap-skill
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -22,5 +23,11 @@ Bootstrap should not silently pick a winner when sources disagree.
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-bootstrap/SKILL.md](.cursor/skills/kb-bootstrap/SKILL.md)
+[1] [.agents/skills/kk-bootstrap/SKILL.md](../../../../../../.agents/skills/kk-bootstrap/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-kb-bootstrap-skill](../workflow/map-kb-bootstrap-skill.md)
+<!-- kk:related:end -->

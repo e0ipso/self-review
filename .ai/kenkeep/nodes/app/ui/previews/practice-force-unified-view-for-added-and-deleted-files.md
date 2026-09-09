@@ -11,7 +11,8 @@ kk_schema_version: 3
 kk_id: practice-force-unified-view-for-added-and-deleted-files
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-rendered-file-previews
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -22,5 +23,11 @@ Forcing unified view for these files uses the full width for the content that ma
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-rendered-file-previews](map-rendered-file-previews.md)
+<!-- kk:related:end -->

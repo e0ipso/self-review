@@ -299,6 +299,161 @@ describe('cli', () => {
     });
   });
 
+  describe('parseCliArgs leading Chromium switches', () => {
+    it('dispatches fetch-comments behind a leading Chromium switch', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        '--ozone-platform=headless',
+        'fetch-comments',
+        'https://github.com/owner/repo/pull/42',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBe('fetch-comments');
+      expect(args.remoteUrl).toBe('https://github.com/owner/repo/pull/42');
+      expect(args.gitDiffArgs).toEqual([]);
+      expect(process.exit).not.toHaveBeenCalled();
+    });
+
+    it('dispatches behind several leading Chromium switches', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        '--no-sandbox',
+        '--disable-gpu',
+        '--ozone-platform=headless',
+        'fetch-comments',
+        '--all-threads',
+        'https://gitlab.com/group/project/-/merge_requests/7',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBe('fetch-comments');
+      expect(args.remoteUrl).toBe(
+        'https://gitlab.com/group/project/-/merge_requests/7'
+      );
+      expect(args.allThreads).toBe(true);
+    });
+
+    it('keeps a trailing Chromium switch out of the fetch-comments URL', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        'fetch-comments',
+        'https://github.com/owner/repo/pull/42',
+        '--ozone-platform=headless',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBe('fetch-comments');
+      expect(args.remoteUrl).toBe('https://github.com/owner/repo/pull/42');
+    });
+
+    it('routes a bare forge URL behind a leading Chromium switch', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        '--no-sandbox',
+        'https://github.com/owner/repo/pull/42',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.remoteUrl).toBe('https://github.com/owner/repo/pull/42');
+      expect(args.gitDiffArgs).toEqual([]);
+    });
+
+    it('drops leading Chromium switches from the git pass-through', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        '--ozone-platform=headless',
+        '--staged',
+        '--',
+        'src/app.ts',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.gitDiffArgs).toEqual(['--staged', '--', 'src/app.ts']);
+    });
+
+    it('never swallows the argument after a bare Chromium switch', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', '--no-sandbox', 'main..feature'];
+
+      const args = parseCliArgs();
+
+      expect(args.gitDiffArgs).toEqual(['main..feature']);
+    });
+
+    it('leaves a Chromium switch after a git argument alone', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', '--staged', '--no-sandbox'];
+
+      const args = parseCliArgs();
+
+      expect(args.gitDiffArgs).toEqual(['--staged', '--no-sandbox']);
+    });
+
+    it('keeps a literal fetch-comments path after -- as a git argument', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        '--ozone-platform=headless',
+        '--',
+        'fetch-comments',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.subcommand).toBeNull();
+      expect(args.gitDiffArgs).toEqual(['--', 'fetch-comments']);
+      expect(process.exit).not.toHaveBeenCalled();
+    });
+
+    it('rejects a misplaced fetch-comments instead of passing it to git', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        '--staged',
+        'fetch-comments',
+        'https://github.com/owner/repo/pull/42',
+      ];
+
+      parseCliArgs();
+
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('fetch-comments must be the first argument')
+      );
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    it('keeps --resume-from fetch-comments as a file path', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', '--resume-from', 'fetch-comments'];
+
+      const args = parseCliArgs();
+
+      expect(args.resumeFrom).toBe('fetch-comments');
+      expect(args.gitDiffArgs).toEqual([]);
+      expect(process.exit).not.toHaveBeenCalled();
+    });
+
+    it('reports early exit for --help behind a Chromium switch', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', '--ozone-platform=headless', '--help'];
+
+      const result = checkEarlyExit();
+
+      expect(result.shouldExit).toBe(true);
+    });
+  });
+
   describe('checkEarlyExit', () => {
     it('detects --help flag', () => {
       (process as any).defaultApp = false;

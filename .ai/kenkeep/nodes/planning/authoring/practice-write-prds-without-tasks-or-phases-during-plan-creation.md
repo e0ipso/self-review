@@ -11,8 +11,9 @@ tags:
 kk_schema_version: 3
 kk_id: practice-write-prds-without-tasks-or-phases-during-plan-creation
 kk_derived_from:
-  - .ai/task-manager/config/hooks/PRE_PLAN.md
-kk_relates_to: []
+  - .ai/strikethroo/config/hooks/PRE_PLAN.md
+kk_relates_to:
+  - map-pre-plan-hook
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -20,10 +21,16 @@ During comprehensive plan creation, stick to writing the PRD (Project Requiremen
 
 Prioritize accuracy over speed, and never generate a partial or assumed plan without adequate context. Consider both technical and non-technical aspects.
 
-**How to apply:** When invoked via the PRE_PLAN hook or plan-creation flow, use the template at `.ai/task-manager/config/templates/PLAN_TEMPLATE.md` and emit only PRD content.
+**How to apply:** When invoked via the PRE_PLAN hook or plan-creation flow, use the template at `.ai/strikethroo/config/templates/PLAN_TEMPLATE.md` and emit only PRD content.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/PRE_PLAN.md](.ai/task-manager/config/hooks/PRE_PLAN.md)
+[1] [.ai/strikethroo/config/hooks/PRE_PLAN.md](../../../../strikethroo/config/hooks/PRE_PLAN.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-pre-plan-hook](map-pre-plan-hook.md)
+<!-- kk:related:end -->

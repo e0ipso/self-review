@@ -13,7 +13,8 @@ kk_id: map-self-review-xml-v1-schema
 kk_derived_from:
   - .opencode/skills/self-review-critique/SKILL.md
   - .agents/skills/self-review-critique/SKILL.md
-kk_relates_to: []
+kk_relates_to:
+  - map-review-xml-format-and-xsd
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -24,6 +25,12 @@ The XSD's `<xs:documentation>` annotations are the authoritative reference for e
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.opencode/skills/self-review-critique/SKILL.md](.opencode/skills/self-review-critique/SKILL.md)
-[2] [.agents/skills/self-review-critique/SKILL.md](.agents/skills/self-review-critique/SKILL.md)
+[1] [.opencode/skills/self-review-critique/SKILL.md](../../../../../.opencode/skills/self-review-critique/SKILL.md)
+[2] [.agents/skills/self-review-critique/SKILL.md](../../../../../.agents/skills/self-review-critique/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-review-xml-format-and-xsd](map-review-xml-format-and-xsd.md)
+<!-- kk:related:end -->

@@ -1,33 +1,30 @@
 ---
 type: practice
-title: Conclude bootstrap with a structured final report
+title: Report bootstrap writes and omissions
 description: >-
-  After bootstrap, summarize docs read/skipped, node counts, collisions,
-  unfollowed cross-references, suspect-stale docs, and index refresh.
+  Report sources read, skipped candidates, node counts and index refresh.
 tags:
   - knowledge-base
   - reporting
 kk_schema_version: 3
 kk_id: practice-conclude-bootstrap-with-a-structured-final-report
 kk_derived_from:
-  - .cursor/skills/kb-bootstrap/SKILL.md
-kk_relates_to: []
+  - .agents/skills/kk-bootstrap/SKILL.md
+kk_relates_to:
+  - map-kb-bootstrap-skill
 kk_depends_on: []
 kk_confidence: high
 ---
-At the end of the session, summarize for the user:
-
-- How many docs you read; which ones you skipped and why.
-- Practice node count and map node count.
-- Any collisions you skipped (file already existed).
-- Any cross-references you noticed but didn't follow.
-- Any docs that looked stale or contradictory.
-- Confirmation that `INDEX.md` and `GRAPH.md` were refreshed.
-
-Then instruct the user to review with `git diff nodes/`, accept individual files with `git add nodes/<kind>/<file>.md && git commit`, and reject the rest with `git restore nodes/<kind>/<file>.md`.
+Report documents read or skipped, practice/map counts, overlap with existing nodes, unfollowed cross-references and suspect sources. Rebuild navigation before reporting. The user accepts new files by leaving them in place or rejects them by deleting them.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-bootstrap/SKILL.md](.cursor/skills/kb-bootstrap/SKILL.md)
+[1] [.agents/skills/kk-bootstrap/SKILL.md](../../../../../../.agents/skills/kk-bootstrap/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-kb-bootstrap-skill](map-kb-bootstrap-skill.md)
+<!-- kk:related:end -->

@@ -1,11 +1,10 @@
 ---
 type: practice
 title: >-
-  Resolve the active KB harness and pass `--harness "$HARNESS"` to every CLI
-  call
+  Select the harness for harness-specific kenkeep commands
 description: >-
-  Detect the active harness via the kb-detect-harness script before running CLI
-  commands, then pass `--harness "$HARNESS"` to each call.
+  Use explicit harness selection for launcher commands; deterministic commands
+  need no override.
 tags:
   - knowledge-base
   - harness
@@ -14,17 +13,26 @@ kk_schema_version: 3
 kk_id: >-
   practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call
 kk_derived_from:
-  - .cursor/skills/kb-bootstrap/SKILL.md
-kk_relates_to: []
+  - .ai/kenkeep/scripts/kk-detect-harness.mjs
+  - .agents/skills/kk-curate/SKILL.md
+  - .agents/skills/kk-bootstrap/SKILL.md
+kk_relates_to:
+  - map-ai-knowledge-base-cli
 kk_depends_on: []
 kk_confidence: high
 ---
-Run the materialization block to lazy-write `/tmp/kb-detect-harness.mjs` (first invocation only), then resolve with `HARNESS=$(node /tmp/kb-detect-harness.mjs --hint <hint>)`. Substitute `<hint>` with your best-guess runtime id (`claude`, `codex`, `cursor`, or `opencode`).
-
-**Why:** CLI commands route behavior per harness; an unset or wrong harness silently produces incorrect output. **How to apply:** Resolve once at the start of the skill, then pass `--harness "$HARNESS"` to every subsequent CLI invocation.
+For a harness-specific launcher, pass `--harness <id>` when environment detection is insufficient. The shipped detector is `.ai/kenkeep/scripts/kk-detect-harness.mjs`. In-host curation and bootstrap instructions call deterministic primitives directly without requiring a harness argument on every call.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.cursor/skills/kb-bootstrap/SKILL.md](.cursor/skills/kb-bootstrap/SKILL.md)
+[1] [.ai/kenkeep/scripts/kk-detect-harness.mjs](../../../scripts/kk-detect-harness.mjs)
+[2] [.agents/skills/kk-curate/SKILL.md](../../../../../.agents/skills/kk-curate/SKILL.md)
+[3] [.agents/skills/kk-bootstrap/SKILL.md](../../../../../.agents/skills/kk-bootstrap/SKILL.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-ai-knowledge-base-cli](map-ai-knowledge-base-cli.md)
+<!-- kk:related:end -->

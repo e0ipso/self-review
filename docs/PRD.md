@@ -133,7 +133,7 @@ self-review <pr-or-mr-url>
 self-review fetch-comments <pr-or-mr-url> [--all-threads]
 ```
 
-The CLI accepts any arguments that `git diff` accepts. These are passed through directly to `git diff` as a child process. Alternatively, a positional argument can be a path to a non-git directory, in which case the app enters **directory mode** (see Section 4.6), or a GitHub pull request / GitLab merge request URL, in which case the app enters **remote mode** (see Section 4.7). The `fetch-comments` subcommand runs headlessly, without opening a window (see Section 4.7).
+The CLI accepts any arguments that `git diff` accepts. These are passed through directly to `git diff` as a child process. Alternatively, a positional argument can be a path to a non-git directory, in which case the app enters **directory mode** (see Section 4.6), or a GitHub pull request / GitLab merge request URL, in which case the app enters **remote mode** (see Section 4.7). The `fetch-comments` subcommand runs headlessly, without opening a window (see Section 4.7); it is recognized as the first argument, after any leading Electron/Chromium switches such as `--ozone-platform=headless`, which the app consumes rather than passing to `git diff`.
 
 ### 4.2 Options
 
@@ -612,7 +612,8 @@ categories:
     description: "Minor nitpick, low priority"
     color: "#718096"
 
-# Default git diff arguments for this project
+# Default git diff arguments for this project. Split with shell quoting
+# rules, so an argument with a space must be quoted to stay one argument.
 default-diff-args: "--staged"
 
 # Show untracked files (new files not yet added to git): true or false.
@@ -660,14 +661,14 @@ If the diff has changed since the prior review (e.g., the developer made additio
 
 ### 9.1 Git Diff Execution
 
-The CLI runs `git diff` as a child process with the arguments provided by the user. The working directory is the current working directory of the CLI process (i.e., the repo root).
+The CLI runs `git diff` as a child process with the arguments provided by the user. The working directory is the current working directory of the CLI process, which can be any directory inside the repository. `git diff` covers the whole repository and reports paths relative to its root from anywhere within it.
 
 ```bash
 # Internal execution (simplified)
 const diffOutput = execSync(`git diff ${userArgs.join(' ')}`, { cwd: process.cwd() });
 ```
 
-In addition to tracked changes, the application discovers **untracked files** (new files not yet added to git) via `git ls-files --others --exclude-standard`. For each untracked file, a synthetic unified diff is generated showing all lines as additions. These files are tagged with `isUntracked` internally and can be shown or hidden via a toolbar toggle (default: on) or the `show-untracked` configuration option. Untracked files respect `.gitignore` rules. When the diff is invoked with `--staged` or `--cached` (index-vs-HEAD reviews), untracked files are **hidden by default** since they are not part of the index; they remain preloaded and can be revealed instantly by clicking the "Show New Files" toolbar toggle. Setting `show-untracked: true` explicitly in the YAML config overrides this default and shows them from the start.
+In addition to tracked changes, the application discovers **untracked files** (new files not yet added to git) via `git ls-files --others --exclude-standard -z`, run at the repository root so the names share the root-relative coordinate system of the diff. `git ls-files` reports cwd-relative paths for the cwd subtree only, so a review launched in a subdirectory would otherwise miss files and resolve a nested name against the root. `-z` keeps the names literal. NUL termination survives newlines in filenames, and it turns off the C-style quoting git otherwise applies to control characters and non-ASCII bytes. For each untracked file, a synthetic unified diff is generated showing all lines as additions, with the paths in its headers quoted exactly as git would quote them. These files are tagged with `isUntracked` internally and can be shown or hidden via a toolbar toggle (default: on) or the `show-untracked` configuration option. Untracked files respect `.gitignore` rules. When the diff is invoked with `--staged` or `--cached` (index-vs-HEAD reviews), untracked files are **hidden by default** since they are not part of the index; they remain preloaded and can be revealed instantly by clicking the "Show New Files" toolbar toggle. Setting `show-untracked: true` explicitly in the YAML config overrides this default and shows them from the start.
 
 ### 9.2 Diff Parsing
 

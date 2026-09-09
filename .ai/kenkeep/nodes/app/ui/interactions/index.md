@@ -12,19 +12,19 @@ _None._
 ## Conventions (how we build)
 - Open [**Clamp multi-line drag-selection to a single hunk and a single side**](practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side.md) to learn about: Drag-to-select for comment ranges cannot cross hunk boundaries; in split view it's locked to the side where it started. #drag-select #hunks #split-view
 - Open [**Prefill the suggestion proposed-code editor with the original code**](practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code.md) to learn about: When the user activates a suggestion, prefill the proposed-code field with the original so they can edit in place. #suggestions #ux
-- Open [**Use shadcn/ui components instead of raw HTML for UI**](practice-use-shadcn-ui-components-instead-of-raw-html-for-ui.md) to learn about: All buttons, inputs, dropdowns, dialogs, etc. must use shadcn/ui; no raw HTML equivalents. #task-manager #ui #shadcn
+- Open [**Use shadcn/ui components instead of raw HTML for UI**](practice-use-shadcn-ui-components-instead-of-raw-html-for-ui.md) to learn about: All buttons, inputs, dropdowns, dialogs, etc. must use shadcn/ui; no raw HTML equivalents. #strikethroo #ui #shadcn
 
 ## Components (what exists)
-- Open [**Emoji shortcode support in comments**](map-emoji-shortcode-support-in-comments.md) to learn about: Typing :xx in the comment editor triggers an inline autocomplete; :shortcode: text is converted to Unicode in rendered markdown. #task-manager #emoji #comments
+- Open [**Emoji shortcode support in comments**](map-emoji-shortcode-support-in-comments.md) to learn about: Typing :xx in the comment editor triggers an inline autocomplete; :shortcode: text is converted to Unicode in rendered markdown. #strikethroo #emoji #comments
 - Open [**Vimium-style keyboard navigation**](map-vimium-style-keyboard-navigation.md) to learn about: f activates line-comment hints, g activates file-jump hints, j/k smooth scroll, Ctrl/Cmd+F opens find-in-page, Escape dismisses. #keyboard #navigation #vimium
-- Open [**Vimium-style keyboard shortcuts**](map-vimium-style-keyboard-shortcuts.md) to learn about: Hint-driven navigation: f for diff lines, g for file tree, j/k for scroll, Ctrl+F for find, Escape to dismiss. #task-manager #keyboard #vimium
+- Open [**Vimium-style keyboard shortcuts**](map-vimium-style-keyboard-shortcuts.md) to learn about: Hint-driven navigation: f for diff lines, g for file tree, j/k for scroll, Ctrl+F for find, Escape to dismiss. #strikethroo #keyboard #vimium
 
 ## By topic
 
-### #task-manager
-- Open [**POST_PHASE hook**](../../../planning/execution/map-post-phase-hook.md) — Task-manager hook that runs after each phase to enforce linting, conventional commits, and blueprint progress updates.
+### #strikethroo
 - Open [**PRE_PLAN hook**](../../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
-- Open [**Extract shared logic before duplicating across call sites**](../../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
+- Open [**POST_PHASE hook**](../../../planning/execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
+- Open [**POST_PLAN hook**](../../../planning/authoring/map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
 ### #keyboard
 - Open [**Vimium-style keyboard navigation**](map-vimium-style-keyboard-navigation.md) — f activates line-comment hints, g activates file-jump hints, j/k smooth scroll, Ctrl/Cmd+F opens find-in-page, Escape dismisses.
 - Open [**Vimium-style keyboard shortcuts**](map-vimium-style-keyboard-shortcuts.md) — Hint-driven navigation: f for diff lines, g for file tree, j/k for scroll, Ctrl+F for find, Escape to dismiss.

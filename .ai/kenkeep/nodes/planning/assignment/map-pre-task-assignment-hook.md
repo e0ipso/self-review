@@ -2,26 +2,36 @@
 type: map
 title: PRE_TASK_ASSIGNMENT hook
 description: >-
-  Hook that runs before task assignment to select an appropriate agent for each
-  task based on required skills.
+  Match task skills and domain to available agents in the active harness.
 tags:
   - hooks
-  - task-manager
+  - strikethroo
   - ai
 kk_schema_version: 3
 kk_id: map-pre-task-assignment-hook
 kk_derived_from:
-  - .ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md
-kk_relates_to: []
+  - .ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md
+kk_relates_to:
+  - map-extract-task-skills-cjs
+  - practice-detect-sub-agents-across-claude-gemini-and-opencode-directories
+  - practice-engage-relevant-assistant-skills-based-on-task-skills
+  - practice-match-task-skills-to-sub-agents-during-pre-task-assignment
 kk_depends_on: []
 kk_confidence: high
 ---
-`PRE_TASK_ASSIGNMENT` is a task-manager hook documented at `.ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md`. It executes before task assignment and is responsible for matching each task to the most appropriate sub-agent (or general-purpose agent) based on the task's declared skills and technical domain.
-
-It relies on the helper script `.ai/task-manager/config/scripts/extract-task-skills.cjs` to extract the `skills` array from a task file's frontmatter, and scans assistant agent directories (`.claude/agents`, `.gemini/agents`, `.opencode/agents`) to detect available sub-agents.
+The hook at `.ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md` reads task frontmatter skills, considers the technical domain and complexity, and checks the current harness agents directory. Select a matching agent or fall back to a general-purpose agent. Engage relevant assistant skills across the phase.
 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [.ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md](.ai/task-manager/config/hooks/PRE_TASK_ASSIGNMENT.md)
+[1] [.ai/strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md](../../../../strikethroo/config/hooks/PRE_TASK_ASSIGNMENT.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-extract-task-skills-cjs](map-extract-task-skills-cjs.md)
+- Related: [practice-detect-sub-agents-across-claude-gemini-and-opencode-directories](practice-detect-sub-agents-across-claude-gemini-and-opencode-directories.md)
+- Related: [practice-engage-relevant-assistant-skills-based-on-task-skills](practice-engage-relevant-assistant-skills-based-on-task-skills.md)
+- Related: [practice-match-task-skills-to-sub-agents-during-pre-task-assignment](practice-match-task-skills-to-sub-agents-during-pre-task-assignment.md)
+<!-- kk:related:end -->

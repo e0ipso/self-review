@@ -91,11 +91,6 @@ git diff $ARGUMENTS
 
 If the diff output is empty, report "No changes to guide." and stop.
 
-Also capture the repository root for the XML provenance attributes:
-```bash
-git rev-parse --show-toplevel
-```
-
 ### URL source: materialize the PR/MR first
 
 For a PR/MR URL, materialize the diff through the same clone-aware model the self-review app
@@ -122,10 +117,12 @@ uses, so steps 4–5 can read surrounding code from a real checkout instead of t
    temporary clone the working tree is the default branch, not the PR head, and blobs fetch
    lazily on demand.
 
-Set the guide's `repository` provenance attribute to the checkout path and `git-diff-args` to
-the `<base-ref>...refs/self-review/head` range you diffed. Remove a temporary clone when the
-whole run is finished — when invoked from `self-review-critique`, leave it in place so the
-critique steps can reuse the same checkout, and let the outer run clean it up.
+Set `git-diff-args` to the `<base-ref>...refs/self-review/head` range you diffed, and leave the
+optional `repository` attribute unset. The checkout is often a temporary clone under the OS
+temp directory, and even a reused local clone's path is specific to this machine; recording it
+would mislead anyone opening the guide from a different checkout. Remove a temporary clone
+when the whole run is finished — when invoked from `self-review-critique`, leave it in place so
+the critique steps can reuse the same checkout, and let the outer run clean it up.
 
 ## 4. Understand the Change
 
@@ -171,7 +168,7 @@ Construct the XML using the Write tool at the output path from step 2. Minimal e
 
 ````xml
 <?xml version="1.0" encoding="UTF-8"?>
-<guide xmlns="urn:self-review-guide:v1" timestamp="2026-08-01T14:30:00.000Z" git-diff-args="--staged" repository="/absolute/path/to/repo">
+<guide xmlns="urn:self-review-guide:v1" timestamp="2026-08-01T14:30:00.000Z" git-diff-args="--staged">
   <overview>Adds retry-with-backoff to the HTTP client. Start with the wrapper in `src/retry.ts`; everything else adopts it.
 
 ```mermaid
@@ -193,7 +190,10 @@ graph LR
 
 **Additional notes not in the schema:**
 - `timestamp`: Get current time with `node -e "console.log(new Date().toISOString())"`
-- `repository`: Get absolute path with `git rev-parse --show-toplevel`
+- `repository`: Optional; normally omit it. It records an absolute checkout path, which is
+  stale or misleading once the guide moves to a different checkout (a teammate's clone, the
+  host machine, CI). Set it only when the guide stays in this exact checkout. Get the value
+  with `git rev-parse --show-toplevel`.
 - `git-diff-args`: The same arguments from step 1 (empty string if none)
 - XML-escape all text content: `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`,
   `'` → `&apos;`

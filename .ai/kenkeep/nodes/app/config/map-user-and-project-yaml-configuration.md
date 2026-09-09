@@ -12,7 +12,11 @@ kk_schema_version: 3
 kk_id: map-user-and-project-yaml-configuration
 kk_derived_from:
   - docs/PRD.md
-kk_relates_to: []
+kk_relates_to:
+  - map-self-review-yaml-configuration-options
+  - map-self-review-yaml-project-config
+  - practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults
+  - practice-apply-config-precedence-project-overrides-user-overrides-defaults
 kk_depends_on: []
 kk_confidence: high
 ---
@@ -26,5 +30,14 @@ Project overrides user; CLI flags override project; built-in defaults are last. 
 <!-- kk:citations:start -->
 # Citations
 
-[1] [docs/PRD.md](docs/PRD.md)
+[1] [docs/PRD.md](../../../../../docs/PRD.md)
 <!-- kk:citations:end -->
+
+<!-- kk:related:start -->
+# Related
+
+- Related: [map-self-review-yaml-configuration-options](map-self-review-yaml-configuration-options.md)
+- Related: [map-self-review-yaml-project-config](map-self-review-yaml-project-config.md)
+- Related: [practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults](practice-apply-config-precedence-cli-project-yaml-user-yaml-defaults.md)
+- Related: [practice-apply-config-precedence-project-overrides-user-overrides-defaults](practice-apply-config-precedence-project-overrides-user-overrides-defaults.md)
+<!-- kk:related:end -->
