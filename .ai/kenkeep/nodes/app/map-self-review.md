@@ -20,7 +20,7 @@ kk_relates_to:
   - practice-make-zero-network-requests-except-the-startup-version-check
   - map-testing-layers-unit-e2e
   - practice-do-not-install-or-use-webpack
-  - practice-do-not-run-e2e-tests-inside-the-dev-container
+  - practice-run-the-webapp-e2e-project-in-the-dev-container
   - practice-don-t-support-windows
   - practice-exclude-generated-assistant-tooling-from-eslint
   - practice-extract-shared-logic-before-duplicating-across-call-sites
@@ -53,7 +53,7 @@ When launched outside a git repo without a directory argument (e.g., from an app
 - Related: [practice-make-zero-network-requests-except-the-startup-version-check](practice-make-zero-network-requests-except-the-startup-version-check.md)
 - Related: [map-testing-layers-unit-e2e](../engineering/map-testing-layers-unit-e2e.md)
 - Related: [practice-do-not-install-or-use-webpack](../engineering/practice-do-not-install-or-use-webpack.md)
-- Related: [practice-do-not-run-e2e-tests-inside-the-dev-container](../engineering/practice-do-not-run-e2e-tests-inside-the-dev-container.md)
+- Related: [practice-run-the-webapp-e2e-project-in-the-dev-container](../engineering/practice-run-the-webapp-e2e-project-in-the-dev-container.md)
 - Related: [practice-don-t-support-windows](../engineering/practice-don-t-support-windows.md)
 - Related: [practice-exclude-generated-assistant-tooling-from-eslint](../engineering/practice-exclude-generated-assistant-tooling-from-eslint.md)
 - Related: [practice-extract-shared-logic-before-duplicating-across-call-sites](../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md)

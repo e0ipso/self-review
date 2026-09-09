@@ -8,7 +8,10 @@
     "resolveJsonModule": true,
     "noImplicitAny": true,
     "jsx": "react-jsx",
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@self-review/types": ["../packages/types/src/index.ts"]
+    }
   },
   // tests/webapp/main.tsx pulls in @self-review/react, whose emoji search
   // depends on the ambient `@emoji-mart/data` default-export augmentation in

@@ -1,11 +1,11 @@
 ---
 schema_version: 3
-nodes_hash: 'sha256:613d611dd2ce7b8c049228bb83fc5501ce4da0f51b237e8599018e75b448d5bb'
-node_count: 190
+nodes_hash: 'sha256:935216be0b00721f21b15642a15f5e88f14b43eaa4f204e9afad60532a9092b4'
+node_count: 196
 ---
 # kenkeep Graph
 
-Total nodes: 190
+Total nodes: 196
 
 ## map-ai-knowledge-base-cli
 
@@ -346,7 +346,7 @@ Total nodes: 190
 - **title:** self-review
 - **path:** app/map-self-review.md
 - **tags:** strikethroo, app, overview
-- **relates_to:** map-self-review-application, practice-keep-self-review-local-only-with-no-network-access, practice-limit-file-writes-to-the-review-xml-and-assets-directory, practice-make-no-network-connections-at-runtime, practice-make-zero-network-requests-except-the-startup-version-check, map-testing-layers-unit-e2e, practice-do-not-install-or-use-webpack, practice-do-not-run-e2e-tests-inside-the-dev-container, practice-don-t-support-windows, practice-exclude-generated-assistant-tooling-from-eslint, practice-extract-shared-logic-before-duplicating-across-call-sites, practice-favor-simple-maintainable-solutions-over-clever-ones, practice-fix-the-root-cause-in-tests-never-write-test-specific-code-in-production, practice-implement-only-what-the-user-explicitly-requests, practice-lead-each-platform-installation-section-with-homebrew, practice-upload-release-zips-using-the-makerzip-filenames, practice-use-conventional-commit-naming-for-pr-titles
+- **relates_to:** map-self-review-application, practice-keep-self-review-local-only-with-no-network-access, practice-limit-file-writes-to-the-review-xml-and-assets-directory, practice-make-no-network-connections-at-runtime, practice-make-zero-network-requests-except-the-startup-version-check, map-testing-layers-unit-e2e, practice-do-not-install-or-use-webpack, practice-run-the-webapp-e2e-project-in-the-dev-container, practice-don-t-support-windows, practice-exclude-generated-assistant-tooling-from-eslint, practice-extract-shared-logic-before-duplicating-across-call-sites, practice-favor-simple-maintainable-solutions-over-clever-ones, practice-fix-the-root-cause-in-tests-never-write-test-specific-code-in-production, practice-implement-only-what-the-user-explicitly-requests, practice-lead-each-platform-installation-section-with-homebrew, practice-upload-release-zips-using-the-makerzip-filenames, practice-use-conventional-commit-naming-for-pr-titles
 - **derived_from:** AGENTS.md
 
 ## map-self-review-application
@@ -465,6 +465,14 @@ Total nodes: 190
 - **tags:** self-review, config
 - **relates_to:** map-user-and-project-yaml-configuration
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
+
+## map-suggestion-apply-write-boundary
+
+- **kind:** map
+- **title:** Suggestion-apply write boundary
+- **path:** app/map-suggestion-apply-write-boundary.md
+- **tags:** core, apply-suggestion, file-writes, remote-mode
+- **relates_to:** practice-limit-file-writes-to-the-review-xml-and-assets-directory, practice-split-file-text-on-n-only-and-keep-each-line-s-trailing-r
 
 ## map-testing-layers-unit-e2e
 
@@ -771,15 +779,6 @@ Total nodes: 190
 - **relates_to:** map-self-review
 - **derived_from:** AGENTS.md, forge.config.ts, webpack.main.config.ts
 
-## practice-do-not-run-e2e-tests-inside-the-dev-container
-
-- **kind:** practice
-- **title:** Do not run e2e tests inside the dev container
-- **path:** engineering/practice-do-not-run-e2e-tests-inside-the-dev-container.md
-- **tags:** strikethroo, testing, devcontainer
-- **relates_to:** map-self-review
-- **derived_from:** AGENTS.md
-
 ## practice-do-not-store-renderer-state-outside-react-context
 
 - **kind:** practice
@@ -886,6 +885,13 @@ Total nodes: 190
 - **relates_to:** map-self-review
 - **derived_from:** AGENTS.md
 
+## practice-fix-webpack-type-checking-in-the-root-tsconfig-json-not-in-a-webpack-config
+
+- **kind:** practice
+- **title:** Fix webpack type-checking in the root tsconfig.json, not in a webpack config
+- **path:** engineering/practice-fix-webpack-type-checking-in-the-root-tsconfig-json-not-in-a-webpack-config.md
+- **tags:** build, webpack, typescript, tsconfig
+
 ## practice-follow-the-allowed-task-status-transitions
 
 - **kind:** practice
@@ -956,6 +962,14 @@ Total nodes: 190
 - **tags:** css, build, imports
 - **relates_to:** map-self-review-wrapper-div, map-css-build-pipeline-for-self-review-react
 - **derived_from:** packages/react/AGENTS.md
+
+## practice-install-playwright-chromium-and-its-system-libraries-before-the-first-e2e-run
+
+- **kind:** practice
+- **title:** Install Playwright's Chromium and its system libraries before the first e2e run
+- **path:** engineering/practice-install-playwright-chromium-and-its-system-libraries-before-the-first-e2e-run.md
+- **tags:** testing, e2e, playwright, devcontainer, setup
+- **relates_to:** practice-run-the-webapp-e2e-project-in-the-dev-container, map-testing-layers-unit-e2e
 
 ## practice-keep-all-self-review-types-definitions-in-src-index-ts
 
@@ -1061,7 +1075,7 @@ Total nodes: 190
 - **title:** Limit file writes to the review XML and assets directory
 - **path:** app/practice-limit-file-writes-to-the-review-xml-and-assets-directory.md
 - **tags:** strikethroo, filesystem, scope
-- **relates_to:** map-self-review
+- **relates_to:** map-self-review, map-suggestion-apply-write-boundary
 - **derived_from:** AGENTS.md
 
 ## practice-line-comments-reference-either-old-or-new-line-numbers-never-both
@@ -1261,6 +1275,13 @@ Total nodes: 190
 - **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
+## practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff
+
+- **kind:** practice
+- **title:** Put work that needs the reviewed diff after loadDiff in bootstrapRemoteDiff
+- **path:** packages/architecture/practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff.md
+- **tags:** core, remote-mode, ordering, gotcha
+
 ## practice-re-exec-with-headless-ozone-for-windowless-subcommands
 
 - **kind:** practice
@@ -1375,6 +1396,22 @@ Total nodes: 190
 - **tags:** kk-curate, cli, harness
 - **relates_to:** map-knowledge-base-capture-curate-review-workflow
 - **derived_from:** .agents/skills/kk-curate/SKILL.md
+
+## practice-run-npm-run-prepare-in-a-fresh-worktree-or-the-pre-commit-hook-is-silently-skipped
+
+- **kind:** practice
+- **title:** Run npm run prepare in a fresh worktree or the pre-commit hook silently skips
+- **path:** engineering/practice-run-npm-run-prepare-in-a-fresh-worktree-or-the-pre-commit-hook-is-silently-skipped.md
+- **tags:** git, worktree, husky, hooks, gotcha
+- **relates_to:** practice-keep-extra-worktrees-out-of-the-repo-root, practice-formatting-is-enforced-by-lint-staged-and-ci
+
+## practice-run-the-webapp-e2e-project-in-the-dev-container
+
+- **kind:** practice
+- **title:** Run the webapp e2e project in the dev container; only Electron e2e needs a host
+- **path:** engineering/practice-run-the-webapp-e2e-project-in-the-dev-container.md
+- **tags:** testing, e2e, playwright, devcontainer
+- **relates_to:** map-testing-layers-unit-e2e
 
 ## practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div
 
@@ -1499,6 +1536,14 @@ Total nodes: 190
 - **tags:** knowledge-base, node-authoring, ownership
 - **relates_to:** map-ai-knowledge-base-directory
 - **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
+
+## practice-split-file-text-on-n-only-and-keep-each-line-s-trailing-r
+
+- **kind:** practice
+- **title:** Split file text on \n only and keep each line's trailing \r
+- **path:** packages/architecture/practice-split-file-text-on-n-only-and-keep-each-line-s-trailing-r.md
+- **tags:** core, apply-suggestion, line-endings, diff-parser
+- **relates_to:** practice-encode-diff-header-paths-with-quotegitpath
 
 ## practice-stick-to-markdown-documentation-do-not-read-code-files-during-bootstrap
 

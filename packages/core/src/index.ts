@@ -93,6 +93,16 @@ export { createIgnoreFilter } from './ignore-filter';
 // File system utilities
 export { checkWritability } from './fs-utils';
 
+// Anchored suggestion application (writes a reviewed working file)
+export { applySuggestion } from './apply-suggestion';
+export type {
+  ApplyRefusalReason,
+  ApplySuggestionRequest,
+  ApplySuggestionApplied,
+  ApplySuggestionRefused,
+  ApplySuggestionResult,
+} from './apply-suggestion';
+
 // File type detection utilities
 export {
   getLanguageFromPath,
@@ -139,6 +149,9 @@ export {
   expandContext,
   prepareDirectoryReview,
   commitReviewStart,
+  resolveSourceBaseDir,
+  resolveApplyDestination,
+  applySuggestionForSession,
 } from './review-handlers';
 export type { ReviewSession, ReviewStartResult } from './review-handlers';
 

@@ -39,6 +39,8 @@ export type {
   ReviewGuide,
   GuideGroup,
   GuideFileEntry,
+  SuggestionApplyRequest,
+  SuggestionApplyOutcome,
 } from '@self-review/types';
 
 // Context providers (for advanced/custom composition)

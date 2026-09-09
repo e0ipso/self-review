@@ -9,6 +9,9 @@ import type {
   AppConfig,
   ImageLoadResult,
   GuideLoadPayload,
+  SuggestionApplyRequest,
+  SuggestionApplyOutcome,
+  ApplyDestinationOutcome,
 } from '@self-review/types';
 
 /**
@@ -40,6 +43,29 @@ export interface ReviewAdapter {
 
   /** Load a binary image as a base64 data URI for rendered preview. */
   loadImage?: (filePath: string) => Promise<ImageLoadResult>;
+
+  /**
+   * Write a suggestion's proposed code into the reviewed working file.
+   * Optional, and the only adapter method that writes anything: a host with
+   * no destination it may write to simply omits it, and the UI then offers
+   * no Apply control at all. The host resolves the destination directory,
+   * because the UI knows only the review-relative path.
+   *
+   * Never throws for a refusal. A refused attempt resolves with
+   * `status: 'refused'` and a reason, and leaves the file untouched.
+   */
+  applySuggestion?: (request: SuggestionApplyRequest) => Promise<SuggestionApplyOutcome>;
+
+  /**
+   * Ask the user to name the directory applies write into, and record it for
+   * the rest of the session. Optional, and only ever needed by a review whose
+   * files sit in a temporary clone the host deletes on exit.
+   *
+   * The host owns both the picker and the answer: the UI learns which
+   * directory was chosen but never proposes one, so nothing the renderer
+   * says can widen where the host writes.
+   */
+  chooseApplyDestination?: () => Promise<ApplyDestinationOutcome>;
 
   /**
    * Subscribe to walkthrough guide payloads. Push-style: the host calls the

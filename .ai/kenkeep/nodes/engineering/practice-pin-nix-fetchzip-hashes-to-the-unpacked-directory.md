@@ -25,9 +25,13 @@ the check, no matter how many times it is re-prefetched. Tell the two apart with
 values differ, and only the `--unpack` one belongs in `flake.nix`. The digest also depends on
 `stripRoot`, which is why the flake sets it explicitly instead of leaning on the default.
 
-`scripts/update-flake-hash.sh <nix-system>` is the supported way to refresh it. It prefetches both ways,
-refuses to write when they match, rewrites the single `hash = "sha256-...";` line, and then runs
-`nix build` on the source derivation so the fixed-output check itself confirms the new hash.
+`flake.nix` keys the source hashes by Nix system in a `srcHashes` attribute set, one entry per line, and
+`src` reads `srcHashes.${system}`. `scripts/update-flake-hash.sh <nix-system>` is the supported way to
+refresh one of them. It prefetches both ways, refuses to write when the two hashes match, and anchors its
+`sed` on the `"<system>" = "sha256-...";` line for the system it was given, refusing unless that pattern
+matches exactly once. A run for one architecture therefore cannot overwrite another's entry, and a whole
+release is refreshed by running the script once per system. It then runs `nix build` on the source
+derivation so the fixed-output check itself confirms the new hash.
 
 <!-- kk:related:start -->
 # Related

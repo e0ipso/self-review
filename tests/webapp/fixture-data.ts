@@ -11,6 +11,7 @@ import type {
   AppConfig,
   CategoryDef,
   GuideLoadPayload,
+  RemoteSessionInfo,
 } from '../../packages/core/src/types';
 
 // ── src/auth/login.ts — modified ──
@@ -440,6 +441,22 @@ export function createFixturePayload(): DiffLoadPayload {
   return {
     files: fixtureFiles,
     source: fixtureSource,
+  };
+}
+
+/**
+ * Provenance of a remote PR/MR session, as the Electron main process sends
+ * it on `diff:load`. `temporaryClone` is the write boundary the Apply
+ * control branches on, so a fixture has to be able to say either answer.
+ */
+export function createRemoteSession(temporaryClone: boolean): RemoteSessionInfo {
+  return {
+    remoteUrl: 'https://github.com/mock/self-review/pull/42',
+    remoteBaseSha: 'a'.repeat(40),
+    remoteHeadSha: 'b'.repeat(40),
+    remoteForge: 'github',
+    threadSyncAvailable: true,
+    temporaryClone,
   };
 }
 

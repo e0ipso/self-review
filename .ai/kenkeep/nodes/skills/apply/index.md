@@ -54,6 +54,7 @@ _None._
 - Open [**Load the reviewed source before applying feedback**](practice-load-the-original-diff-context-before-applying-review-feedback.md) — Reconstruct local git, directory or remote review context from the recorded source.
 ### #ordering
 - Open [**Apply review suggestions bottom-to-top by line number**](practice-apply-review-suggestions-bottom-to-top-by-line-number.md) — Sort suggestions by line number descending before applying so earlier edits don't invalidate later line references.
+- Open [**Put work that needs the reviewed diff after loadDiff in bootstrapRemoteDiff**](../../packages/architecture/practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff.md) — startRemoteSession runs before any diff exists; anything that anchors against files belongs in bootstrapRemoteDiff after loadDiff.
 ### #questions
 - Open [**Treat every review comment as actionable, including questions**](practice-treat-every-review-comment-as-actionable-including-questions.md) — Question-category comments often imply a code change is needed; answer purely informational ones in the summary.
 ### #subagents

@@ -38,6 +38,9 @@ export type {
   GuideFileEntry,
   ResolvedGuideGroup,
   ResolvedGuideFile,
+  SuggestionApplyRequest,
+  SuggestionApplyOutcome,
+  ApplyDestinationOutcome,
 } from '../../packages/types/src/index';
 
 // ===== Electron API (preload bridge) =====
@@ -66,6 +69,9 @@ import type {
   DiffHunk,
   ImageLoadResult,
   RemoteOpenUrlResult,
+  SuggestionApplyRequest,
+  SuggestionApplyOutcome,
+  ApplyDestinationOutcome,
 } from '../../packages/types/src/index';
 
 export interface ElectronAPI {
@@ -98,6 +104,8 @@ export interface ElectronAPI {
   loadFileContent: (filePath: string) => Promise<DiffHunk[]>;
   loadImage: (filePath: string) => Promise<ImageLoadResult>;
   openRemoteUrl: (url: string) => Promise<RemoteOpenUrlResult>;
+  applySuggestion: (request: SuggestionApplyRequest) => Promise<SuggestionApplyOutcome>;
+  chooseApplyDestination: () => Promise<ApplyDestinationOutcome>;
 }
 
 declare global {

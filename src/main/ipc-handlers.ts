@@ -16,10 +16,14 @@ import {
   ImageLoadResult,
   AppInfo,
   RemoteDriftInfo,
+  SuggestionApplyRequest,
+  SuggestionApplyOutcome,
+  ApplyDestinationOutcome,
 } from '../shared/types';
 import { getVersionUpdate } from './version-checker';
 import { getAppIconDataUri } from './app-assets';
 import {
+  applySuggestionForSession,
   commitReviewStart,
   createReviewSession,
   expandContext,
@@ -31,6 +35,7 @@ import {
   prepareDirectoryReview,
   preparePayload,
   readAttachment,
+  setApplyDestination,
   submitReviewState,
   takeReviewState,
 } from '../../packages/core/src/review-handlers';
@@ -84,6 +89,35 @@ export function registerIpcHandlers(): void {
     IPC.DIFF_LOAD_IMAGE,
     async (_event, filePath: string): Promise<ImageLoadResult> =>
       loadImage(desktopSession, filePath)
+  );
+
+  // Handle applying one suggestion to the reviewed working file
+  ipcMain.handle(
+    IPC.SUGGESTION_APPLY,
+    async (_event, request: SuggestionApplyRequest): Promise<SuggestionApplyOutcome> =>
+      applySuggestionForSession(desktopSession, request)
+  );
+
+  // Handle the reviewer naming a destination directory for applies. Only a
+  // temporary-clone remote review needs one; the picker is opened here, so
+  // the renderer never names a directory the app then writes into.
+  ipcMain.handle(
+    IPC.SUGGESTION_CHOOSE_DESTINATION,
+    async (event): Promise<ApplyDestinationOutcome> => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const options: Electron.OpenDialogOptions = {
+        properties: ['openDirectory', 'createDirectory'],
+        title: 'Choose a directory to apply suggestions into',
+        defaultPath: app.getPath('home'),
+      };
+      const result = win
+        ? await dialog.showOpenDialog(win, options)
+        : await dialog.showOpenDialog(options);
+      if (result.canceled || result.filePaths.length === 0) {
+        return { status: 'cancelled' };
+      }
+      return setApplyDestination(desktopSession, result.filePaths[0]);
+    }
   );
 
   // Handle single-file content loading for lazy (large-payload) mode

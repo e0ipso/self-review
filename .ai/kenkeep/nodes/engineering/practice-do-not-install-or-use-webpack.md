@@ -1,8 +1,9 @@
 ---
 type: practice
 title: Check the existing Forge bundler before changing build tooling
-description: The blanket webpack prohibition conflicts with the configured Forge
-  webpack integration.
+description: >-
+  Forge is the build entry point; bundling changes belong in the three webpack
+  configs its plugin points at.
 tags:
   - strikethroo
   - build
@@ -18,7 +19,14 @@ kk_relates_to:
 kk_depends_on: []
 kk_confidence: high
 ---
-AGENTS.md says not to install or use webpack because Electron Forge handles bundling. The existing Forge configuration nevertheless uses its webpack plugin and webpack.main.config.ts. Preserve that configured integration while this source inconsistency is unresolved; do not interpret the blanket sentence as an instruction to remove working build configuration.
+Electron Forge is the build entry point: `forge.config.ts` registers `WebpackPlugin` from
+`@electron-forge/plugin-webpack`, and that plugin owns the bundling. Do not run webpack outside Forge
+and do not swap in another bundler.
+
+Webpack itself is not forbidden. A bundling change belongs in the three configs the plugin points at,
+`webpack.main.config.ts`, `webpack.renderer.config.ts` and `webpack.preload.config.ts`, plus the shared
+`webpack.plugins.ts`. An older reading of AGENTS.md as a blanket prohibition on webpack is out of date;
+AGENTS.md now states the narrower rule directly.
 
 <!-- kk:citations:start -->
 # Citations

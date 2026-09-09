@@ -50,9 +50,9 @@ _None._
 - Open [**Apply config precedence: project overrides user overrides defaults**](../../app/config/practice-apply-config-precedence-project-overrides-user-overrides-defaults.md) — \`.self-review.yaml\` overrides \`~/.config/self-review/config.yaml\`, which overrides built-in defaults.
 - Open [**Knowledge base configuration**](map-knowledge-base-config-locations.md) — Read project kenkeep configuration, with the user config fallback.
 ### #git
+- Open [**Scrub git's repository env vars before spawning git in tests**](../../engineering/practice-scrub-git-repository-env-vars-before-spawning-git-in-tests.md) — Git's hook environment outranks cwd and git -C; packages/core/vitest.setup.ts strips it so suites stay hermetic.
 - Open [**Apply curator conflicts using the selected reply**](../curate/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
 - Open [**Review knowledge-base changes via git diff before committing**](practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
-- Open [**Convert git diff args only through format/tokenize**](../../app/cli/practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
 ### #hooks
 - Open [**PRE_PLAN hook**](../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
 - Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
@@ -68,8 +68,8 @@ _None._
 ### #ownership
 - Open [**Split combined content across practice and map nodes**](practice-split-combined-content-across-practice-and-map-nodes.md) — When content has both imperative and named-entity aspects, split it: practice owns the rule; map owns the definition.
 ### #paths
-- Open [**Kenkeep directory layout**](map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes use topical folders; sessions, conflicts and logs have separate directories.
 - Open [**Encode diff header paths with quoteGitPath**](../../packages/architecture/practice-encode-diff-header-paths-with-quotegitpath.md) — quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts.
+- Open [**Kenkeep directory layout**](map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes use topical folders; sessions, conflicts and logs have separate directories.
 ### #provenance
 - Open [**_sessions/ is gitignored; provenance does not travel with the repo**](practice-sessions-is-gitignored-provenance-does-not-travel-with-the-repo.md) — derived_from session filenames only resolve for the original contributor unless your team explicitly commits _sessions/.
 ### #rationale

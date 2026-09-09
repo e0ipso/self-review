@@ -316,7 +316,7 @@ describe('materialize', () => {
       const gitStderr = 'fatal: repository not found';
       const handlers = tempCloneHandlers();
       handlers.clone = fail(gitStderr);
-      const { runner } = createRunner(handlers);
+      const { runner, calls } = createRunner(handlers);
 
       let thrown: Error | undefined;
       try {
@@ -329,15 +329,16 @@ describe('materialize', () => {
       expect(thrown!.message).toContain(gitStderr);
       expect(thrown!.message).toContain('gh auth setup-git');
       expect(thrown!.message).toContain('glab auth git-credential');
-      // The partially created temp directory is not left behind.
-      const leftovers = fs
-        .readdirSync(os.tmpdir())
-        .filter(name => name.startsWith('self-review-') && !name.startsWith('self-review-test-'));
-      for (const name of leftovers) {
-        const stat = fs.statSync(path.join(os.tmpdir(), name));
-        // Any survivor must predate this test run by more than a few seconds.
-        expect(Date.now() - stat.mtimeMs).toBeGreaterThan(5_000);
-      }
+      // materialize() names the temp dir before invoking git, so the clone
+      // call's last argument is the exact directory it created. Assert that
+      // one path is gone rather than sampling the shared os.tmpdir() — a
+      // fresh self-review-* directory from another process or worktree must
+      // not make this pass or fail.
+      const clone = findCall(calls, 'clone');
+      expect(clone).toBeDefined();
+      const tempDir = clone![clone!.length - 1];
+      expect(path.basename(tempDir).startsWith('self-review-')).toBe(true);
+      expect(fs.existsSync(tempDir)).toBe(false);
     });
   });
 });

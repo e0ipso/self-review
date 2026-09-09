@@ -249,7 +249,9 @@ export async function runFetchComments(
       materialized.baseSha,
       materialized.headSha
     );
-    const comments = mapThreadsToReviewComments(threads);
+    // The diff is what anchors a `suggestion` fence: without it the mapper
+    // cannot read the original code a fence proposes to replace.
+    const comments = mapThreadsToReviewComments(threads, diffFiles);
 
     const state = buildRemoteReviewState({
       remoteUrl: url,

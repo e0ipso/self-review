@@ -2,12 +2,21 @@
 #
 # Install the Nix source hash for one supported system into flake.nix.
 #
+# Each release publishes one artifact per architecture, so flake.nix carries one
+# hash per system in its srcHashes attribute set. This script rewrites the entry
+# for the system it is given and leaves every other architecture alone; run it
+# once per system to refresh a whole release.
+#
 # fetchzip pins the hash of the unpacked archive directory, not the hash of the
 # downloaded zip bytes. Those are different values: two zips built from the same
 # tree hash differently, so an archive hash can never satisfy fetchzip's
 # integrity check. This script prefetches with the same unpacking semantics the
 # consumer uses, refuses a value that is merely the archive hash, and proves the
 # result by building the real fetchzip source.
+#
+# The verification build runs the target system's fetch derivation, so it needs
+# a builder for that system: run it natively, or give Nix the platform through
+# emulation (see .github/workflows/update-flake-hash.yml).
 #
 # Usage: scripts/update-flake-hash.sh <nix-system> [flake-dir]
 #   nix-system  e.g. x86_64-linux
@@ -49,11 +58,14 @@ if [ "$unpacked_hash" = "$archive_hash" ]; then
   die "prefetch returned the raw archive hash for $url; fetchzip needs the unpacked directory hash"
 fi
 
-matches=$(grep -c '^\([[:space:]]*\)hash = "sha256-[^"]*";$' "$flake_file" || true)
-[ "$matches" = "1" ] || die "expected exactly one source hash in $flake_file, found $matches"
+# Anchored on the system key, so the edit is architecture-specific: a run for
+# one system cannot reach another system's entry, and an entry that is missing
+# or written twice is refused rather than guessed at.
+entry_pattern="^\([[:space:]]*\)\"$system\" = \"sha256-[^\"]*\";\$"
+matches=$(grep -c "$entry_pattern" "$flake_file" || true)
+[ "$matches" = "1" ] || die "expected exactly one \"$system\" hash entry in $flake_file, found $matches"
 
-# shellcheck disable=SC2016 # the replacement is applied by sed, not the shell
-sed -i "s|^\([[:space:]]*\)hash = \"sha256-[^\"]*\";\$|\1hash = \"$unpacked_hash\";|" "$flake_file"
+sed -i "s|$entry_pattern|\1\"$system\" = \"$unpacked_hash\";|" "$flake_file"
 
 echo "update-flake-hash: $system -> $unpacked_hash (archive hash was $archive_hash)" >&2
 

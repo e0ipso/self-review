@@ -68,13 +68,54 @@ function makeDeps(overrides: Partial<RemoteSessionDeps> = {}): RemoteSessionDeps
   };
 }
 
-function makeDiffFile(newPath: string): DiffFile {
+/**
+ * A modified file. With `newLines`, its new side carries those lines from
+ * `start`, which is what the mapper reads to anchor a suggestion fence.
+ */
+function makeDiffFile(newPath: string, newLines: string[] = [], start = 3): DiffFile {
   return {
     oldPath: newPath,
     newPath,
     changeType: 'modified',
     isBinary: false,
-    hunks: [],
+    hunks:
+      newLines.length === 0
+        ? []
+        : [
+            {
+              header: `@@ -${start},${newLines.length} +${start},${newLines.length} @@`,
+              oldStart: start,
+              oldLines: newLines.length,
+              newStart: start,
+              newLines: newLines.length,
+              lines: newLines.map((content, index) => ({
+                type: 'addition' as const,
+                oldLineNumber: null,
+                newLineNumber: start + index,
+                content,
+              })),
+            },
+          ],
+  };
+}
+
+/** A thread anchored on `filePath` whose root body carries one fence. */
+function makeSuggestionThread(filePath = 'src/a.ts'): ForgeThread {
+  const base = makeThread('t1', filePath);
+  return {
+    ...base,
+    root: {
+      ...base.root,
+      body: 'Prefer a constant.\n\n```suggestion\nconst b = 22;\n```\n',
+    },
+  };
+}
+
+function providerFor(threads: ForgeThread[]): ForgeProvider {
+  return {
+    forge: 'github',
+    fetchBaseBranch: vi.fn(async () => 'main'),
+    fetchThreads: vi.fn(async () => threads),
   };
 }
 
@@ -122,6 +163,7 @@ describe('startRemoteSession', () => {
       remoteHeadSha: 'bbb222',
       remoteForge: 'github',
       threadSyncAvailable: true,
+      temporaryClone: true,
     });
   });
 
@@ -269,6 +311,58 @@ describe('bootstrapRemoteDiff', () => {
     expect(tokenizeGitDiffArgs(rendered)).toHaveLength(1);
   });
 
+  // SR-0063: a `suggestion` fence only becomes a Suggestion when the mapper
+  // is handed the reviewed diff, and that diff does not exist until loadDiff
+  // returns — so the threads are mapped here, not in startRemoteSession.
+  it('anchors a suggestion fence against the loaded diff', async () => {
+    const deps = makeDeps({
+      createProvider: vi.fn(() => providerFor([makeSuggestionThread()])),
+      loadDiff: vi.fn(async (_args: string[], cwd: string) => ({
+        files: [makeDiffFile('src/a.ts', ['const b = 2;'])],
+        repository: cwd,
+      })),
+    });
+    const { session } = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps);
+
+    expect(session.fetchedComments).toHaveLength(1);
+    expect(session.fetchedComments[0]).toMatchObject({ remoteId: 't1', filePath: 'src/a.ts' });
+    expect(session.fetchedComments[0].suggestion).toEqual({
+      originalCode: 'const b = 2;',
+      proposedCode: 'const b = 22;',
+    });
+  });
+
+  it('anchors against the ignore-filtered files the renderer receives', async () => {
+    const deps = makeDeps({
+      createProvider: vi.fn(() => providerFor([makeSuggestionThread('dist/bundle.js')])),
+      loadDiff: vi.fn(async (_args: string[], cwd: string) => ({
+        files: [makeDiffFile('dist/bundle.js', ['const b = 2;'])],
+        repository: cwd,
+      })),
+    });
+    const { payload, session } = await bootstrapRemoteDiff(PR_URL, '/cwd', ['dist/**'], deps);
+
+    expect(payload.files).toEqual([]);
+    // Nothing left to anchor against, so the fence stays plain body text
+    // rather than a suggestion over code the reviewer never sees.
+    expect(session.fetchedComments[0].suggestion).toBeNull();
+    expect(session.fetchedComments[0].body).toContain('```suggestion');
+  });
+
+  it('keeps thread-sync degradation intact when the forge CLI is missing', async () => {
+    const provider: ForgeProvider = {
+      forge: 'github',
+      fetchBaseBranch: vi.fn(cliUnavailable),
+      fetchThreads: vi.fn(async () => [makeThread('t1')]),
+    };
+    const deps = makeDeps({ createProvider: vi.fn(() => provider) });
+    const { session } = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps);
+
+    expect(provider.fetchThreads).not.toHaveBeenCalled();
+    expect(session.fetchedComments).toEqual([]);
+    expect(session.remote.threadSyncAvailable).toBe(false);
+  });
+
   it('cleans up the materialized clone when diff loading fails', async () => {
     const cleanup = vi.fn();
     const deps = makeDeps({
@@ -329,6 +423,7 @@ describe('applyRemoteProvenance', () => {
     remoteHeadSha: 'bbb222',
     remoteForge: 'github' as const,
     threadSyncAvailable: true,
+    temporaryClone: false,
   };
 
   function makeState(): ReviewState {
@@ -423,6 +518,7 @@ describe('remote state assembly serializes to valid XML', () => {
         remoteHeadSha: 'bbb222',
         remoteForge: 'github',
         threadSyncAvailable: true,
+        temporaryClone: false,
       }
     );
 

@@ -14,6 +14,7 @@ import {
   FindInPageRequest,
   FindInPageResult,
   VersionUpdateInfo,
+  SuggestionApplyRequest,
 } from '../shared/types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -122,6 +123,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadImage: (filePath: string) => ipcRenderer.invoke(IPC.DIFF_LOAD_IMAGE, filePath),
 
   openRemoteUrl: (url: string) => ipcRenderer.invoke(IPC.REMOTE_OPEN_URL, url),
+
+  applySuggestion: (request: SuggestionApplyRequest) =>
+    ipcRenderer.invoke(IPC.SUGGESTION_APPLY, request),
+
+  chooseApplyDestination: () => ipcRenderer.invoke(IPC.SUGGESTION_CHOOSE_DESTINATION),
 
   onShowAbout: (callback: () => void) => {
     const handler = () => callback();

@@ -281,7 +281,12 @@ export default function CommentDisplay({
 
           {comment.suggestion && (
             <div className='px-3 pb-3'>
-              <SuggestionBlock suggestion={comment.suggestion} language='typescript' />
+              <SuggestionBlock
+                suggestion={comment.suggestion}
+                language='typescript'
+                filePath={comment.filePath}
+                lineRange={comment.lineRange}
+              />
             </div>
           )}
 

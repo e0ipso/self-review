@@ -1,6 +1,7 @@
 import React from 'react';
 import Prism from 'prismjs';
-import type { Suggestion } from '@self-review/types';
+import type { LineRange, Suggestion } from '@self-review/types';
+import SuggestionApplyControl from './SuggestionApplyControl';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-jsx';
@@ -16,11 +17,21 @@ import 'prismjs/components/prism-markdown';
 export interface SuggestionBlockProps {
   suggestion: Suggestion;
   language?: string;
+  /**
+   * Path of the file the owning comment is anchored in, relative to the
+   * review root. Omitted where the block has no owning comment (previews in
+   * the composer), and the Apply control is then never offered.
+   */
+  filePath?: string;
+  /** The owning comment's anchor. `null` means a file-level comment. */
+  lineRange?: LineRange | null;
 }
 
 export default function SuggestionBlock({
   suggestion,
   language = 'typescript',
+  filePath,
+  lineRange = null,
 }: SuggestionBlockProps) {
   const highlightCode = (code: string, lang: string): string => {
     try {
@@ -76,6 +87,9 @@ export default function SuggestionBlock({
           </div>
         ))}
       </div>
+      {filePath !== undefined && (
+        <SuggestionApplyControl filePath={filePath} lineRange={lineRange} suggestion={suggestion} />
+      )}
     </div>
   );
 }

@@ -184,6 +184,15 @@ export interface RemoteSessionInfo {
    * not be fetched; the review still opens fully (diff only).
    */
   threadSyncAvailable: boolean;
+  /**
+   * True when the diff was materialized into a temporary clone the app
+   * removes on exit, false when it reused a clone the user already owns.
+   *
+   * The distinction is a write boundary, not a detail: PRD Section 5.4.8
+   * bars applying a suggestion inside a temporary clone, so a front end
+   * branches on this to ask for a destination directory first.
+   */
+  temporaryClone: boolean;
 }
 
 /**
@@ -415,3 +424,72 @@ export interface PayloadStats {
   exceedsLines: boolean;
   exceedsAny: boolean;
 }
+
+// ===== Suggestion Apply Types =====
+//
+// The contract between the review UI and whatever host can write files.
+// It is deliberately narrower and looser than the apply engine's own result
+// type in @self-review/core. Narrower: the front end is handed no absolute
+// path, so the host projects the engine result onto this shape rather than
+// forwarding it. Looser: the UI never switches on a reason, it renders the
+// sentence the engine already wrote, and the host refuses for reasons the
+// engine cannot see, having no writable destination for one. So `reason` is
+// a plain string here rather than the engine's closed union.
+
+/** One apply attempt, as the UI knows it. The host names the destination. */
+export interface SuggestionApplyRequest {
+  /** Path of the file to modify, relative to the review's source root. */
+  filePath: string;
+  /** The comment's anchor. `null` (file-level) is always refused. */
+  lineRange: LineRange | null;
+  suggestion: Suggestion;
+}
+
+export interface SuggestionApplyApplied {
+  status: 'applied';
+  /** Echoed from the request, so a caller can attribute the result. */
+  filePath: string;
+  /** How many on-disk lines the proposal replaced. */
+  replacedLines: number;
+}
+
+export interface SuggestionApplyRefused {
+  status: 'refused';
+  filePath: string;
+  /** Stable machine-readable reason, for logs and tests. Never file content. */
+  reason: string;
+  /** One sentence naming the refusal, safe to show to the reviewer. */
+  detail: string;
+}
+
+export type SuggestionApplyOutcome = SuggestionApplyApplied | SuggestionApplyRefused;
+
+/**
+ * The destination directory an apply writes into was named by the user.
+ * Only a temporary-clone review needs one; every other review already has
+ * a destination the user controls.
+ */
+export interface ApplyDestinationChosen {
+  status: 'chosen';
+  /** Absolute directory every later apply in this session resolves against. */
+  destinationRoot: string;
+}
+
+/** The user dismissed the picker. Nothing changed. */
+export interface ApplyDestinationCancelled {
+  status: 'cancelled';
+}
+
+/** The picked directory cannot be written into. Nothing changed. */
+export interface ApplyDestinationRejected {
+  status: 'rejected';
+  /** Stable machine-readable reason, for logs and tests. Never a file path. */
+  reason: string;
+  /** One sentence naming the rejection, safe to show to the reviewer. */
+  detail: string;
+}
+
+export type ApplyDestinationOutcome =
+  | ApplyDestinationChosen
+  | ApplyDestinationCancelled
+  | ApplyDestinationRejected;

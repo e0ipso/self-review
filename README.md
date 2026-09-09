@@ -225,17 +225,20 @@ brew upgrade self-review
 Prefer to install manually? Download the latest release from
 [GitHub Releases](https://github.com/e0ipso/self-review/releases).
 
+Every release ships an x64 and an arm64 build of each package. Run `uname -m` and take the `amd64` /
+`x86_64` asset on `x86_64`, or the `arm64` asset on `aarch64`.
+
 **Debian/Ubuntu** — download the `.deb` package and install it:
 
 ```bash
-# Replace X.Y.Z with the version you downloaded
+# Replace X.Y.Z with the version you downloaded, and amd64 with arm64 on arm hardware
 sudo dpkg -i self-review_X.Y.Z_amd64.deb
 ```
 
 **Fedora/RHEL** — download the `.rpm` package and install it:
 
 ```bash
-# Replace X.Y.Z with the version you downloaded
+# Replace X.Y.Z with the version you downloaded, and x86_64 with arm64 on arm hardware
 sudo rpm -i self-review-X.Y.Z-1.x86_64.rpm
 ```
 

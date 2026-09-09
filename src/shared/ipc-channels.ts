@@ -31,4 +31,6 @@ export const IPC = {
   APP_SHOW_ABOUT: 'app:show-about',
   APP_GET_INFO: 'app:get-info',
   REMOTE_OPEN_URL: 'remote:open-url',
+  SUGGESTION_APPLY: 'suggestion:apply',
+  SUGGESTION_CHOOSE_DESTINATION: 'suggestion:choose-destination',
 } as const;

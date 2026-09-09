@@ -99,15 +99,34 @@ jobs:
         if: steps.tag.outputs.tag != ''
         run: sudo apt-get install -y dpkg-dev fakeroot rpm
 
+      # Both architectures come out of one `make` run because the npm script
+      # cleans `out/` first, so a second invocation would delete the first
+      # architecture's output. Cross-packaging on the x64 runner is sound here:
+      # the app ships no native modules, so an arm64 package is the webpack
+      # bundle plus the arm64 Electron prebuilt that the packager downloads.
       - name: Build Linux packages
         if: steps.tag.outputs.tag != ''
-        run: npm run make
+        run: npm run make -- --arch=x64,arm64
 
+      # Artifact naming contract, consumed by the Nix flake and by the external
+      # Homebrew tap. Every asset below is uploaded under the name its maker
+      # produced; GitHub then replaces each space with a dot, which is why the
+      # published zip reads `Self.Review-...`:
+      #
+      #   zip  Self.Review-linux-<x64|arm64>-<version>.zip
+      #   deb  self-review_<version>_<amd64|arm64>.deb
+      #   rpm  self-review-<version>-1.<x86_64|arm64>.rpm
+      #
+      # The zip is the architecture-specific artifact the tap and the flake
+      # select on; flake.nix maps a Nix system to the <x64|arm64> token and
+      # pins one unpacked-source hash per architecture. Renaming an asset
+      # breaks both consumers, so upload by glob rather than by hand.
+      #
       # --clobber replaces assets a previous attempt uploaded, so a retry
       # lands one complete set on the existing release instead of a duplicate.
       - name: Upload release assets
         if: steps.tag.outputs.tag != ''
-        run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/x64/*.deb out/make/rpm/x64/*.rpm out/make/zip/linux/x64/*.zip --clobber
+        run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/*/*.deb out/make/rpm/*/*.rpm out/make/zip/linux/*/*.zip --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

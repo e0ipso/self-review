@@ -45,9 +45,9 @@ _None._
 ### #fast-path
 - Open [**Finish curation after reporting placements and rebalance**](practice-short-circuit-kb-curate-with-one-line-summary-when-no-conflicts-and-no-failures.md) — With no conflicts, report placements and structural results before the final summary.
 ### #git
+- Open [**Scrub git's repository env vars before spawning git in tests**](../../engineering/practice-scrub-git-repository-env-vars-before-spawning-git-in-tests.md) — Git's hook environment outranks cwd and git -C; packages/core/vitest.setup.ts strips it so suites stay hermetic.
 - Open [**Apply curator conflicts using the selected reply**](practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
 - Open [**Review knowledge-base changes via git diff before committing**](../structure/practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
-- Open [**Convert git diff args only through format/tokenize**](../../app/cli/practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
 ### #grouping
 - Open [**Sort and group pending conflicts before resolving**](practice-sort-and-group-pending-conflicts-before-resolving.md) — Sort pending conflicts by target_node_id, proposed_kind, detected_at; show the shared existing node once per group.
 ### #handoff

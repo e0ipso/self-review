@@ -10,10 +10,9 @@
     let
       lib = nixpkgs.lib;
 
-      supportedSystems = [
-        "x86_64-linux"
-        "aarch64-linux"
-      ];
+      # Derived from srcHashes so a system can never be offered without the
+      # release hash that makes it buildable.
+      supportedSystems = builtins.attrNames srcHashes;
       forAllSystems = lib.genAttrs supportedSystems;
 
       packageJson = builtins.fromJSON (builtins.readFile ./package.json);
@@ -23,9 +22,22 @@
       # uses the matching nixpkgs Electron binary.
       electronMajor = lib.versions.major packageLockJson.packages."node_modules/electron".version;
 
+      # The architecture token the release workflow puts in the artifact name.
       archForSystem = {
         "x86_64-linux" = "x64";
         "aarch64-linux" = "arm64";
+      };
+
+      # The unpacked-directory hash of each system's release artifact, keyed by
+      # Nix system. One entry per line so scripts/update-flake-hash.sh rewrites
+      # exactly one architecture per run and can never install one
+      # architecture's hash under another.
+      srcHashes = {
+        "x86_64-linux" = "sha256-YAFsUarHCfsuOCcuF9gfcjWdbNTA5pzPOV0IGw3MkSI=";
+        # lib.fakeHash written out, because the updater matches a literal
+        # sha256 string. scripts/update-flake-hash.sh aarch64-linux replaces it
+        # once a release publishes an arm64 artifact.
+        "aarch64-linux" = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
       };
 
       mkSelfReview =
@@ -38,10 +50,12 @@
           pname = "self-review";
           version = packageJson.version;
 
-          # Fetches the pre-built Linux zip from GitHub Releases.
-          # The update-flake-hash workflow updates this hash automatically
-          # on each release. To update manually:
+          # Fetches this system's pre-built Linux zip from GitHub Releases.
+          # The release workflow publishes one zip per architecture and the
+          # update-flake-hash workflow installs each architecture's hash
+          # automatically. To update manually, once per system:
           #   scripts/update-flake-hash.sh x86_64-linux
+          #   scripts/update-flake-hash.sh aarch64-linux
           #
           # The hash covers the unpacked directory, not the zip bytes, so it
           # only reproduces under the unpacking options set here. The updater
@@ -49,7 +63,7 @@
           # the same way stripRoot does.
           src = pkgs.fetchzip {
             url = "https://github.com/e0ipso/self-review/releases/download/v${packageJson.version}/Self.Review-linux-${arch}-${packageJson.version}.zip";
-            hash = "sha256-YAFsUarHCfsuOCcuF9gfcjWdbNTA5pzPOV0IGw3MkSI=";
+            hash = srcHashes.${system};
             stripRoot = true;
           };
 
@@ -123,10 +137,7 @@
             # package.json declares MIT but the LICENSE file is a proprietary
             # revocable license — using unfree pending upstream clarification.
             license = lib.licenses.unfree;
-            platforms = [
-              "x86_64-linux"
-              "aarch64-linux"
-            ];
+            platforms = supportedSystems;
             mainProgram = "self-review";
           };
         };

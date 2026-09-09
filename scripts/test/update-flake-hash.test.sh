@@ -16,6 +16,9 @@ subject="$repo_root/scripts/update-flake-hash.sh"
 UNPACKED_HASH='sha256-UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU='
 ARCHIVE_HASH='sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 STALE_HASH='sha256-SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS='
+# A second stale value, so a run for one architecture visibly leaves the other
+# architecture's entry alone instead of matching by luck.
+STALE_ARM_HASH='sha256-RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR='
 ARTIFACT_URL='https://example.invalid/releases/download/v9.9.9/Self.Review-linux-x64-9.9.9.zip'
 
 failures=0
@@ -50,9 +53,14 @@ make_sandbox() {
   cat > "$dir/flake.nix" <<FLAKE
 {
   outputs = _: {
+    srcHashes = {
+      "x86_64-linux" = "$STALE_HASH";
+      "aarch64-linux" = "$STALE_ARM_HASH";
+    };
     src = fetchzip {
       url = "$ARTIFACT_URL";
-      hash = "$STALE_HASH";
+      hash = srcHashes.\${system};
+      stripRoot = true;
     };
   };
 }
@@ -82,8 +90,10 @@ case "\$1 \${2:-}" in
     ;;
   'build '*)
     # Stands in for the fixed-output integrity check: the build only
-    # succeeds when flake.nix carries the hash the artifact reproduces.
-    installed=\$(sed -n 's/.*hash = "\(sha256-[^"]*\)";.*/\1/p' '$dir/flake.nix')
+    # succeeds when flake.nix carries the hash the artifact reproduces for
+    # the architecture the installable names.
+    target=\$(printf '%s' "\$3" | sed 's/.*#packages\.\([^.]*\)\..*/\1/')
+    installed=\$(sed -n "s/.*\"\$target\" = \"\(sha256-[^\"]*\)\";.*/\1/p" '$dir/flake.nix')
     if [ "\$installed" = '$buildable' ]; then
       exit 0
     fi
@@ -101,20 +111,23 @@ STUB
 }
 
 installed_hash() {
-  sed -n 's/.*hash = "\(sha256-[^"]*\)";.*/\1/p' "$1/flake.nix"
+  local dir=$1 system=$2
+  sed -n "s/.*\"$system\" = \"\(sha256-[^\"]*\)\";.*/\1/p" "$dir/flake.nix"
 }
 
 run_subject() {
-  local dir=$1
-  shift
-  PATH="$dir/bin:$PATH" "$subject" x86_64-linux "$dir" >"$dir/stdout" 2>"$dir/stderr"
+  local dir=$1 system=${2:-x86_64-linux}
+  PATH="$dir/bin:$PATH" "$subject" "$system" "$dir" >"$dir/stdout" 2>"$dir/stderr"
 }
 
 # 1. The installed hash is the unpacked one, and the source still validates.
 dir=$(make_sandbox "$UNPACKED_HASH" "$ARCHIVE_HASH" "$UNPACKED_HASH")
 run_subject "$dir"
 check "installs the unpacked hash: exit code" 0 "$?"
-check "installs the unpacked hash: flake.nix value" "$UNPACKED_HASH" "$(installed_hash "$dir")"
+check "installs the unpacked hash: flake.nix value" "$UNPACKED_HASH" \
+  "$(installed_hash "$dir" x86_64-linux)"
+check "installs the unpacked hash: leaves the other architecture alone" "$STALE_ARM_HASH" \
+  "$(installed_hash "$dir" aarch64-linux)"
 if grep -q 'verified' "$dir/stderr"; then
   pass "installs the unpacked hash: reports fetchzip verification"
 else
@@ -135,7 +148,8 @@ rm -rf "$dir"
 dir=$(make_sandbox "$ARCHIVE_HASH" "$ARCHIVE_HASH" "$ARCHIVE_HASH")
 run_subject "$dir"
 check "refuses a raw archive hash: exit code" 1 "$?"
-check "refuses a raw archive hash: flake.nix untouched" "$STALE_HASH" "$(installed_hash "$dir")"
+check "refuses a raw archive hash: flake.nix untouched" "$STALE_HASH" \
+  "$(installed_hash "$dir" x86_64-linux)"
 if grep -q 'raw archive hash' "$dir/stderr"; then
   pass "refuses a raw archive hash: explains why"
 else
@@ -161,12 +175,33 @@ check "hashes the URL the flake declares" "$ARTIFACT_URL
 $ARTIFACT_URL" "$(cat "$dir/prefetched-urls")"
 rm -rf "$dir"
 
-# 6. Extension guard for SR-0027: an ambiguous set of hashes is refused rather
-#    than silently rewriting the wrong architecture's entry.
+# 6. An architecture whose entry appears twice is refused rather than rewritten
+#    at one of two ambiguous sites.
 dir=$(make_sandbox "$UNPACKED_HASH" "$ARCHIVE_HASH" "$UNPACKED_HASH")
-sed -i "s|hash = \"$STALE_HASH\";|hash = \"$STALE_HASH\";\n      hash = \"$STALE_HASH\";|" "$dir/flake.nix"
+sed -i "s|\"x86_64-linux\" = \"$STALE_HASH\";|&\n      \"x86_64-linux\" = \"$STALE_HASH\";|" \
+  "$dir/flake.nix"
 run_subject "$dir"
 check "refuses an ambiguous hash site: exit code" 1 "$?"
+rm -rf "$dir"
+
+# 7. The arm64 run writes the arm64 entry and only that one, which is what makes
+#    the per-architecture hashes independent.
+dir=$(make_sandbox "$UNPACKED_HASH" "$ARCHIVE_HASH" "$UNPACKED_HASH")
+run_subject "$dir" aarch64-linux
+check "updates the named architecture: exit code" 0 "$?"
+check "updates the named architecture: arm64 value" "$UNPACKED_HASH" \
+  "$(installed_hash "$dir" aarch64-linux)"
+check "updates the named architecture: x64 value untouched" "$STALE_HASH" \
+  "$(installed_hash "$dir" x86_64-linux)"
+rm -rf "$dir"
+
+# 8. A system the flake does not declare is refused, so a typo cannot pass for a
+#    successful update.
+dir=$(make_sandbox "$UNPACKED_HASH" "$ARCHIVE_HASH" "$UNPACKED_HASH")
+run_subject "$dir" riscv64-linux
+check "refuses a system with no entry: exit code" 1 "$?"
+check "refuses a system with no entry: x64 value untouched" "$STALE_HASH" \
+  "$(installed_hash "$dir" x86_64-linux)"
 rm -rf "$dir"
 
 echo "passed: $passes, failed: $failures"

@@ -21,10 +21,14 @@ import {
   ExpandContextRequest,
   ImageLoadResult,
   RemoteDriftInfo,
+  SuggestionApplyRequest,
+  SuggestionApplyOutcome,
+  ApplyDestinationOutcome,
 } from './types';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { tokenizeGitDiffArgs } from './git-diff-args';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
+import { applySuggestion } from './apply-suggestion';
 
 /**
  * The state a single review session owns. One desktop application window is
@@ -39,6 +43,12 @@ export interface ReviewSession {
   resumeComments: ReviewComment[];
   resumeViewedFiles: string[];
   resumeRemoteDrift: RemoteDriftInfo | null;
+  /**
+   * Destination directory the user named for this session's applies, or
+   * null when none has been named. Only a temporary-clone remote review
+   * needs one; see {@link resolveApplyDestination}.
+   */
+  applyDestinationRoot: string | null;
 }
 
 /** Create an empty session. */
@@ -52,6 +62,7 @@ export function createReviewSession(): ReviewSession {
     resumeComments: [],
     resumeViewedFiles: [],
     resumeRemoteDrift: null,
+    applyDestinationRoot: null,
   };
 }
 
@@ -94,6 +105,23 @@ export function getDiffLoad(
 }
 
 /**
+ * The directory the session's reviewed paths are relative to, or null when the
+ * session has no diff yet.
+ *
+ * Scanner paths are relative to the reviewed directory, or to the reviewed
+ * file's parent. Git paths are relative to the repository, which in remote
+ * mode is the materialized clone.
+ */
+export function resolveSourceBaseDir(session: ReviewSession): string | null {
+  const source = session.diffData?.source;
+  if (!source) return null;
+  if (source.type === 'git') return source.repository;
+  if (source.type === 'directory') return source.sourcePath;
+  if (source.type === 'file') return path.dirname(source.sourcePath);
+  return null;
+}
+
+/**
  * Load a binary image as a base64 data URI for the rendered preview.
  */
 export async function loadImage(
@@ -111,17 +139,7 @@ export async function loadImage(
     '.svg': 'image/svg+xml',
   };
   const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
-  // Scanner paths are relative to the reviewed directory or file's parent.
-  // Git paths are relative to the repository (the clone in remote mode).
-  const source = session.diffData?.source;
-  let baseDir = process.cwd();
-  if (source?.type === 'git') {
-    baseDir = source.repository;
-  } else if (source?.type === 'directory') {
-    baseDir = source.sourcePath;
-  } else if (source?.type === 'file') {
-    baseDir = path.dirname(source.sourcePath);
-  }
+  const baseDir = resolveSourceBaseDir(session) ?? process.cwd();
   const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
   const ext = path.extname(filePath).toLowerCase();
   const mimeType = MIME_MAP[ext] ?? 'application/octet-stream';
@@ -208,6 +226,157 @@ export function takeReviewState(session: ReviewSession): ReviewState | null {
   const state = session.reviewState;
   session.reviewState = null;
   return state;
+}
+
+/**
+ * True when this session reviews a remote PR/MR that was materialized into
+ * a temporary clone. That clone is removed when the app exits, so a write
+ * into it is lost the moment the review ends (PRD Section 5.4.8).
+ */
+export function isTemporaryCloneSession(session: ReviewSession): boolean {
+  return session.diffData?.remote?.temporaryClone === true;
+}
+
+/** Canonical form of a path, following symlinks when the path exists. */
+function canonicalize(target: string): string {
+  try {
+    return fs.realpathSync(target);
+  } catch {
+    return path.resolve(target);
+  }
+}
+
+/** True when `candidate` is `root` itself or sits anywhere beneath it. */
+function isWithin(root: string, candidate: string): boolean {
+  const relative = path.relative(canonicalize(root), canonicalize(candidate));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+/**
+ * The directory an apply may write into for this session, or null when the
+ * session has none.
+ *
+ * For every review whose files sit in a place the user controls — a git
+ * working tree, a scanned directory, a reused remote clone — that is the
+ * root the reviewed paths are relative to, and no one is asked anything.
+ *
+ * A temporary-clone review is the one exception. Its files live in a
+ * directory the app deletes on exit, so the clone is never a destination:
+ * the answer is the directory the user named, and null until they name one.
+ */
+export function resolveApplyDestination(session: ReviewSession): string | null {
+  if (isTemporaryCloneSession(session)) {
+    return session.applyDestinationRoot;
+  }
+  return resolveSourceBaseDir(session);
+}
+
+/**
+ * Record the directory the user named as this session's apply destination.
+ *
+ * The caller supplies a path the user picked; this decides whether it can
+ * be written into and stores it only if so. The temporary clone, and
+ * anything inside it, is refused however it was reached — that directory
+ * is gone when the review ends, which is the whole reason a destination is
+ * asked for.
+ */
+export function setApplyDestination(
+  session: ReviewSession,
+  directoryPath: string
+): ApplyDestinationOutcome {
+  if (!path.isAbsolute(directoryPath)) {
+    return {
+      status: 'rejected',
+      reason: 'destination-not-absolute',
+      detail: 'Pick a destination by its full path.',
+    };
+  }
+
+  let isDirectory = false;
+  try {
+    isDirectory = fs.statSync(directoryPath).isDirectory();
+  } catch {
+    isDirectory = false;
+  }
+  if (!isDirectory) {
+    return {
+      status: 'rejected',
+      reason: 'destination-not-a-directory',
+      detail: 'That destination is not a directory that exists.',
+    };
+  }
+
+  const clonePath = isTemporaryCloneSession(session) ? resolveSourceBaseDir(session) : null;
+  if (clonePath && isWithin(clonePath, directoryPath)) {
+    return {
+      status: 'rejected',
+      reason: 'destination-inside-temporary-clone',
+      detail:
+        'That directory is inside the temporary clone, which is deleted when the review ends.',
+    };
+  }
+
+  session.applyDestinationRoot = canonicalize(directoryPath);
+  console.error(`[suggestion:apply] destination set for this session`);
+  return { status: 'chosen', destinationRoot: session.applyDestinationRoot };
+}
+
+/**
+ * Apply one suggestion to the reviewed working file, or refuse and write
+ * nothing. The engine in `apply-suggestion.ts` does the work; this handler
+ * only names the destination the session reviews, which the engine never
+ * derives for itself.
+ *
+ * A refusal travels as a value, never as a thrown error. The front end
+ * renders its `detail` next to the suggestion the attempt came from.
+ */
+export function applySuggestionForSession(
+  session: ReviewSession,
+  request: SuggestionApplyRequest
+): SuggestionApplyOutcome {
+  const destinationRoot = resolveApplyDestination(session);
+  if (!destinationRoot) {
+    const temporary = isTemporaryCloneSession(session);
+    return {
+      status: 'refused',
+      filePath: request.filePath,
+      reason: temporary ? 'destination-required' : 'no-destination',
+      detail: temporary
+        ? 'This pull request was cloned into a temporary directory that is deleted when the review ends. Choose a destination directory to apply into.'
+        : 'This review has no working directory to write into.',
+    };
+  }
+
+  const result = applySuggestion({
+    destinationRoot,
+    filePath: request.filePath,
+    lineRange: request.lineRange,
+    suggestion: request.suggestion,
+  });
+  console.error(
+    `[suggestion:apply] ${request.filePath}: ${
+      result.status === 'applied' ? 'applied' : `refused (${result.reason})`
+    }`
+  );
+
+  // Projected field by field rather than passed through. The engine also
+  // reports the resolved absolute path, which the front end has no use for
+  // and should not be handed; naming the fields here keeps the wire shape
+  // exactly what SuggestionApplyOutcome declares, today and after the engine
+  // grows a field.
+  if (result.status === 'applied') {
+    return {
+      status: 'applied',
+      filePath: result.filePath,
+      replacedLines: result.replacedLines,
+    };
+  }
+  return {
+    status: 'refused',
+    filePath: result.filePath,
+    reason: result.reason,
+    detail: result.detail,
+  };
 }
 
 /**

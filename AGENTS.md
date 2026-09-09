@@ -10,8 +10,10 @@ reviewed with the same machinery (see Remote PR/MR mode).
 
 ## Dev Container
 
-Do NOT run e2e tests inside the container, they will not work. Check if you are inside of the dev
-container before running the e2e tests.
+The two e2e projects differ here. `npm run test:e2e` (the webapp project) runs headless Chromium
+against a Vite dev server and passes inside the container once the Playwright browser and its system
+libraries are installed. `npm run test:e2e:electron` cannot run here: it packages the app and needs
+`xvfb-run` plus a `DISPLAY`. Check which project a command targets before you skip it.
 
 ## Tech Stack
 
@@ -212,10 +214,19 @@ default). When the forge CLI is absent or unauthenticated, the review itself pro
 (base branch falls back to `git ls-remote --symref` via `resolveRemoteDefaultBranch`) and thread
 sync reports as unavailable on stderr. Fetched threads are mapped deterministically to
 `ReviewComment` threads by `packages/core/src/thread-mapper.ts` (pure code, no LLM); threads with no
-file association land on the sentinel path `''` (`REVIEW_LEVEL_FILE_PATH`). On resume, the recorded
-`remote-head-sha` is compared with the live head fetched during materialization and the renderer
-shows a non-blocking drift warning when the PR/MR has moved. Nothing is ever sent to the forge. The
-headless `self-review fetch-comments <URL> [--all-threads]` subcommand
+file association land on the sentinel path `''` (`REVIEW_LEVEL_FILE_PATH`). A root body carrying one
+top-level ` ```suggestion ` fence also yields a `Suggestion` anchored at the thread's line range,
+with `originalCode` read out of the reviewed diff rather than out of the body — which is what makes
+it anchored rather than quoted. Anything the mapper cannot verify stays `null`: no fence, more than
+one fence, a fence nested in another code block, GitLab's `suggestion:-1+2` range form (it widens
+the anchor by an amount the diff cannot confirm), a file-level or outdated anchor, and an anchor the
+diff does not cover end to end. Mapping needs the diff, so both entry points map after loading it.
+`bootstrapRemoteDiff` re-maps the threads it fetched before the diff existed, and `fetch-comments`
+maps once against the diff it just loaded, so the app and the subcommand produce the same
+suggestions for the same PR/MR. On resume, the recorded `remote-head-sha` is compared with the live
+head fetched during materialization and the renderer shows a non-blocking drift warning when the
+PR/MR has moved. Nothing is ever sent to the forge. The headless
+`self-review fetch-comments <URL> [--all-threads]` subcommand
 (`packages/core/src/fetch-comments.ts`) runs the same flow without a window and writes a v3
 `review.xml` with remote provenance and per-thread `remote-id`s.
 
@@ -246,30 +257,33 @@ files for rationale.
 
 Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here.
 
-| Channel                    | Direction                | Payload                                | Purpose                                                              |
-| -------------------------- | ------------------------ | -------------------------------------- | -------------------------------------------------------------------- |
-| `diff:load`                | Main → Renderer          | `DiffLoadPayload`                      | Send parsed diff on startup                                          |
-| `review:submit`            | Renderer → Main          | `ReviewState`                          | Collect review on window close                                       |
-| `resume:load`              | Main → Renderer          | `ResumeLoadPayload`                    | Load prior comments and viewed files for --resume-from               |
-| `config:load`              | Main → Renderer          | `AppConfig`                            | Send merged configuration                                            |
-| `app:close-requested`      | Main → Renderer          | (none)                                 | Notify renderer that user tried to close the window                  |
-| `app:save-and-quit`        | Renderer → Main          | (none)                                 | Save review to file and exit                                         |
-| `app:discard-and-quit`     | Renderer → Main          | (none)                                 | Exit without saving                                                  |
-| `diff:expand-context`      | Renderer → Main          | `ExpandContextRequest`                 | Re-run git diff with more context for a single file                  |
-| `output-path:change`       | Renderer → Main          | `OutputPathInfo \| null`               | Open native save dialog to change output path                        |
-| `output-path:changed`      | Main → Renderer          | `OutputPathInfo`                       | Notify renderer when output path changes                             |
-| `version-update:available` | Main → Renderer          | `VersionUpdateInfo`                    | Notify renderer of available update                                  |
-| `diff:load-file`           | Renderer → Main          | `string` (filePath)                    | Load single file's hunks on demand (large mode)                      |
-| `diff:load-image`          | Renderer → Main          | `{ filePath }` / `ImageLoadResult`     | Load a binary image as base64 data URI for rendered preview          |
-| `guide:load`               | Main → Renderer          | `GuideLoadPayload`                     | Send reconciled walkthrough guide when a valid sidecar is discovered |
-| `open-external`            | Renderer → Main          | `string` (URL)                         | Open URL in default browser                                          |
-| `remote:open-url`          | Renderer → Main (invoke) | `string` (URL) / `RemoteOpenUrlResult` | Open a forge PR/MR URL entered on the welcome screen                 |
+| Channel                         | Direction                | Payload                                             | Purpose                                                              |
+| ------------------------------- | ------------------------ | --------------------------------------------------- | -------------------------------------------------------------------- |
+| `diff:load`                     | Main → Renderer          | `DiffLoadPayload`                                   | Send parsed diff on startup                                          |
+| `review:submit`                 | Renderer → Main          | `ReviewState`                                       | Collect review on window close                                       |
+| `resume:load`                   | Main → Renderer          | `ResumeLoadPayload`                                 | Load prior comments and viewed files for --resume-from               |
+| `config:load`                   | Main → Renderer          | `AppConfig`                                         | Send merged configuration                                            |
+| `app:close-requested`           | Main → Renderer          | (none)                                              | Notify renderer that user tried to close the window                  |
+| `app:save-and-quit`             | Renderer → Main          | (none)                                              | Save review to file and exit                                         |
+| `app:discard-and-quit`          | Renderer → Main          | (none)                                              | Exit without saving                                                  |
+| `diff:expand-context`           | Renderer → Main          | `ExpandContextRequest`                              | Re-run git diff with more context for a single file                  |
+| `output-path:change`            | Renderer → Main          | `OutputPathInfo \| null`                            | Open native save dialog to change output path                        |
+| `output-path:changed`           | Main → Renderer          | `OutputPathInfo`                                    | Notify renderer when output path changes                             |
+| `version-update:available`      | Main → Renderer          | `VersionUpdateInfo`                                 | Notify renderer of available update                                  |
+| `diff:load-file`                | Renderer → Main          | `string` (filePath)                                 | Load single file's hunks on demand (large mode)                      |
+| `diff:load-image`               | Renderer → Main          | `{ filePath }` / `ImageLoadResult`                  | Load a binary image as base64 data URI for rendered preview          |
+| `guide:load`                    | Main → Renderer          | `GuideLoadPayload`                                  | Send reconciled walkthrough guide when a valid sidecar is discovered |
+| `open-external`                 | Renderer → Main          | `string` (URL)                                      | Open URL in default browser                                          |
+| `remote:open-url`               | Renderer → Main (invoke) | `string` (URL) / `RemoteOpenUrlResult`              | Open a forge PR/MR URL entered on the welcome screen                 |
+| `suggestion:apply`              | Renderer → Main (invoke) | `SuggestionApplyRequest` / `SuggestionApplyOutcome` | Write one suggestion's proposal into the reviewed working file       |
+| `suggestion:choose-destination` | Renderer → Main (invoke) | (none) / `ApplyDestinationOutcome`                  | Ask the reviewer to name the directory applies write into            |
 
 Remote payload fields: `DiffLoadPayload.remote` (`RemoteSessionInfo`: URL, base/head SHAs, forge,
-thread-sync availability) is present only in a remote PR/MR session. `ResumeLoadPayload.remoteDrift`
-(`RemoteDriftInfo`: recorded vs live head SHA, `drifted` flag) is present only when a resumed
-document recorded a `remote-head-sha` in a remote session; the renderer shows a non-blocking warning
-when `drifted` is true.
+thread-sync availability, and `temporaryClone`, true when the diff was materialized into a throwaway
+clone rather than one the user already had) is present only in a remote PR/MR session.
+`ResumeLoadPayload.remoteDrift` (`RemoteDriftInfo`: recorded vs live head SHA, `drifted` flag) is
+present only when a resumed document recorded a `remote-head-sha` in a remote session; the renderer
+shows a non-blocking warning when `drifted` is true.
 
 ## Shared Types
 
@@ -316,7 +330,8 @@ npm run test:coverage          # Run main, renderer, and core tests with coverag
 Coverage reports are retained separately in `coverage/main/`, `coverage/renderer/`, and
 `coverage/core/`.
 
-**Dev Container**: Unit tests work in both the dev container and host machine (unlike e2e tests).
+**Dev Container**: Unit tests work in both the dev container and host machine, as does the webapp
+e2e project. Only the Electron e2e project needs a host.
 
 **Coverage target**: ~50-60% coverage on business logic. Coverage is collected but thresholds are
 not enforced.
@@ -330,7 +345,9 @@ E2E tests use Playwright with Cucumber BDD in a two-tier approach:
 2. **Electron e2e** (supplementary, local only), Tests Electron-specific behavior (XML output,
    resume, error handling, welcome screen, expand context, find-in-page). Requires packaging + xvfb.
 
-**Cannot run in dev container**, requires host machine with display.
+Only tier 2 is host-only: it needs a display, so it cannot run in the dev container. Tier 1 runs in
+the dev container after `npx playwright install chromium` and
+`sudo npx playwright install-deps chromium`.
 
 **Running e2e tests**:
 
@@ -379,10 +396,20 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   clone in a uniquely named directory under the OS temp root, removed on exit (a leftover from a
   crash sits in the OS temp area, which the OS reclaims); when reusing an existing clone, it only
   fetches into namespaced refs (`refs/self-review/*`) — the working tree is never touched. No other
-  files are written. The app writes no source file, and no reviewed file. Applying a suggestion to a
-  local working file is accepted product scope with boundaries recorded in PRD Section 5.4.8, but
-  nothing implements it. Until those follow-up tickets land, code that writes anywhere except the
-  output path and its `.self-review-assets/` directory is out of policy.
+  files are written by the app itself. There is now one sanctioned exception, the suggestion-apply
+  path whose boundaries PRD Section 5.4.8 records: `applySuggestion` in
+  `packages/core/src/apply-suggestion.ts` rewrites one reviewed working file when the caller names
+  an explicit destination root and the anchored lines still match the suggestion's recorded original
+  code byte for byte. It refuses and writes nothing otherwise, and it never consults the current
+  working directory. The app reaches it through the `suggestion:apply` channel, and only when the
+  reviewer presses Apply on one suggestion. `applySuggestionForSession` in
+  `packages/core/src/review-handlers.ts` names the destination, which is the git repository root,
+  the reviewed directory, or the reviewed file's parent, and refuses when the session has none. A
+  remote review materialized into a temporary clone is the one session with no destination of its
+  own: the clone is deleted on exit, so applies are refused with `destination-required` until the
+  reviewer names a directory through `suggestion:choose-destination`, and `setApplyDestination`
+  rejects any directory inside the clone. Outside that one function, code that writes anywhere
+  except the output path and its `.self-review-assets/` directory is out of policy.
 - **XSD sync.** Each XSD schema exists in two places and both copies must be byte-identical:
   `.agents/skills/self-review-apply/assets/self-review-v3.xsd` pairs with the `XSD_SCHEMA` string
   embedded in `packages/core/src/xml-serializer.ts`, and

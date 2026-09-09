@@ -13,10 +13,12 @@ _None._
 - Open [**Do not import from @self-review/core in the react package**](practice-do-not-import-from-self-review-core-in-the-react-package.md) to learn about: Importing core risks pulling Node-only code into the browser bundle. #react #imports #bundling
 - Open [**Use the ReviewAdapter pattern for platform-specific operations**](practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md) to learn about: Abstract expand-context, image loading, and output-path changes via ReviewAdapter. #architecture #adapter #platform
 - Open [**Do not use Node.js APIs in @self-review/react**](practice-do-not-use-node-js-apis-in-self-review-react.md) to learn about: The react package is browser-only; no fs, child_process, or path imports. #react #browser #constraints
+- Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) to learn about: quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts. #git #diff #paths #encoding
 - Open [**Keep file-type detection utilities duplicated across core and react packages**](practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md) to learn about: getRenderedTextMode, isPreviewableImage, isPreviewableSvg, getLanguageFromPath are intentionally duplicated. #strikethroo #file-type-utils #duplication
 - Open [**Keep file-type-utils.ts duplicates in sync across core and react**](practice-keep-file-type-utils-ts-duplicates-in-sync-across-core-and-react.md) to learn about: The file is intentionally duplicated; both copies must be updated together. #duplication #sync #utils
 - Open [**Keep review comment mutations immutable**](practice-keep-review-comment-mutations-immutable.md) to learn about: Replace affected comment objects so useReviewBridge emits onReviewChange; preserve them for viewed-only file updates. #react #review-state #callbacks #immutability
-- Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) to learn about: quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts. #git #diff #paths #encoding
+- Open [**Split file text on \\n only and keep each line's trailing \\r**](practice-split-file-text-on-n-only-and-keep-each-line-s-trailing-r.md) to learn about: apply-suggestion, the diff parser and the thread mapper all carry a CRLF file's \\r inside the line, which is what makes the byte compare work. #core #apply-suggestion #line-endings #diff-parser
+- Open [**Put work that needs the reviewed diff after loadDiff in bootstrapRemoteDiff**](practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff.md) to learn about: startRemoteSession runs before any diff exists; anything that anchors against files belongs in bootstrapRemoteDiff after loadDiff. #core #remote-mode #ordering #gotcha
 
 ## Components (what exists)
 - Open [**@self-review/react package**](map-self-review-react-package.md) to learn about: Embeddable React UI layer: diff viewer, file tree, commenting, syntax highlighting. #packages #react #ui
@@ -33,6 +35,10 @@ _None._
 ### #adapter
 - Open [**ReviewAdapter interface**](map-reviewadapter-interface.md) — Abstraction for platform-specific operations defined in src/adapter.ts.
 - Open [**Use the ReviewAdapter pattern for platform-specific operations**](practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md) — Abstract expand-context, image loading, and output-path changes via ReviewAdapter.
+### #core
+- Open [**Suggestion-apply write boundary**](../../app/map-suggestion-apply-write-boundary.md) — applySuggestion does the byte-compare and the write; resolveApplyDestination and setApplyDestination decide where, and never inside a temporary clone.
+- Open [**Split file text on \\n only and keep each line's trailing \\r**](practice-split-file-text-on-n-only-and-keep-each-line-s-trailing-r.md) — apply-suggestion, the diff parser and the thread mapper all carry a CRLF file's \\r inside the line, which is what makes the byte compare work.
+- Open [**Put work that needs the reviewed diff after loadDiff in bootstrapRemoteDiff**](practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff.md) — startRemoteSession runs before any diff exists; anything that anchors against files belongs in bootstrapRemoteDiff after loadDiff.
 ### #duplication
 - Open [**Extract shared logic before duplicating across call sites**](../../engineering/practice-extract-shared-logic-before-duplicating-across-call-sites.md) — Refactor existing code into reusable utilities before building overlapping features; never copy-paste and modify.
 - Open [**Keep file-type detection utilities duplicated across core and react packages**](practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md) — getRenderedTextMode, isPreviewableImage, isPreviewableSvg, getLanguageFromPath are intentionally duplicated.
@@ -49,6 +55,9 @@ _None._
 - Open [**PRE_PLAN hook**](../../planning/authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
 - Open [**POST_PHASE hook**](../../planning/execution/map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.
 - Open [**POST_PLAN hook**](../../planning/authoring/map-post-plan-hook.md) — Require self-validation steps and decide whether docs or AGENTS.md need updates.
+### #apply-suggestion
+- Open [**Split file text on \\n only and keep each line's trailing \\r**](practice-split-file-text-on-n-only-and-keep-each-line-s-trailing-r.md) — apply-suggestion, the diff parser and the thread mapper all carry a CRLF file's \\r inside the line, which is what makes the byte compare work.
+- Open [**Suggestion-apply write boundary**](../../app/map-suggestion-apply-write-boundary.md) — applySuggestion does the byte-compare and the write; resolveApplyDestination and setApplyDestination decide where, and never inside a temporary clone.
 ### #architecture
 - Open [**Two-process Electron architecture**](../../app/architecture/map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
 - Open [**Use the ReviewAdapter pattern for platform-specific operations**](practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md) — Abstract expand-context, image loading, and output-path changes via ReviewAdapter.
@@ -65,6 +74,8 @@ _None._
 - Open [**Do not use Node.js APIs in @self-review/react**](practice-do-not-use-node-js-apis-in-self-review-react.md) — The react package is browser-only; no fs, child_process, or path imports.
 ### #diff
 - Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) — quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts.
+### #diff-parser
+- Open [**Split file text on \\n only and keep each line's trailing \\r**](practice-split-file-text-on-n-only-and-keep-each-line-s-trailing-r.md) — apply-suggestion, the diff parser and the thread mapper all carry a CRLF file's \\r inside the line, which is what makes the byte compare work.
 ### #encoding
 - Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) — quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts.
 ### #entrypoint
@@ -72,9 +83,12 @@ _None._
 ### #file-type-utils
 - Open [**Keep file-type detection utilities duplicated across core and react packages**](practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md) — getRenderedTextMode, isPreviewableImage, isPreviewableSvg, getLanguageFromPath are intentionally duplicated.
 ### #git
+- Open [**Scrub git's repository env vars before spawning git in tests**](../../engineering/practice-scrub-git-repository-env-vars-before-spawning-git-in-tests.md) — Git's hook environment outranks cwd and git -C; packages/core/vitest.setup.ts strips it so suites stay hermetic.
 - Open [**Apply curator conflicts using the selected reply**](../../knowledge-base/curate/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
 - Open [**Review knowledge-base changes via git diff before committing**](../../knowledge-base/structure/practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
-- Open [**Convert git diff args only through format/tokenize**](../../app/cli/practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
+### #gotcha
+- Open [**Put work that needs the reviewed diff after loadDiff in bootstrapRemoteDiff**](practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff.md) — startRemoteSession runs before any diff exists; anything that anchors against files belongs in bootstrapRemoteDiff after loadDiff.
+- Open [**Run npm run prepare in a fresh worktree or the pre-commit hook silently skips**](../../engineering/practice-run-npm-run-prepare-in-a-fresh-worktree-or-the-pre-commit-hook-is-silently-skipped.md) — core.hooksPath points at .husky/_, which husky generates and git never tracks, so a new worktree commits with no hook and no warning.
 ### #immutability
 - Open [**Keep review comment mutations immutable**](practice-keep-review-comment-mutations-immutable.md) — Replace affected comment objects so useReviewBridge emits onReviewChange; preserve them for viewed-only file updates.
 ### #imports
@@ -83,9 +97,17 @@ _None._
 - Open [**Do not import sibling packages from @self-review/types**](../types/practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
 ### #interface
 - Open [**ReviewAdapter interface**](map-reviewadapter-interface.md) — Abstraction for platform-specific operations defined in src/adapter.ts.
+### #line-endings
+- Open [**Split file text on \\n only and keep each line's trailing \\r**](practice-split-file-text-on-n-only-and-keep-each-line-s-trailing-r.md) — apply-suggestion, the diff parser and the thread mapper all carry a CRLF file's \\r inside the line, which is what makes the byte compare work.
+### #ordering
+- Open [**Apply review suggestions bottom-to-top by line number**](../../skills/apply/practice-apply-review-suggestions-bottom-to-top-by-line-number.md) — Sort suggestions by line number descending before applying so earlier edits don't invalidate later line references.
+- Open [**Put work that needs the reviewed diff after loadDiff in bootstrapRemoteDiff**](practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff.md) — startRemoteSession runs before any diff exists; anything that anchors against files belongs in bootstrapRemoteDiff after loadDiff.
 ### #paths
-- Open [**Kenkeep directory layout**](../../knowledge-base/structure/map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes use topical folders; sessions, conflicts and logs have separate directories.
 - Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) — quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts.
+- Open [**Kenkeep directory layout**](../../knowledge-base/structure/map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes use topical folders; sessions, conflicts and logs have separate directories.
+### #remote-mode
+- Open [**Suggestion-apply write boundary**](../../app/map-suggestion-apply-write-boundary.md) — applySuggestion does the byte-compare and the write; resolveApplyDestination and setApplyDestination decide where, and never inside a temporary clone.
+- Open [**Put work that needs the reviewed diff after loadDiff in bootstrapRemoteDiff**](practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff.md) — startRemoteSession runs before any diff exists; anything that anchors against files belongs in bootstrapRemoteDiff after loadDiff.
 ### #review-state
 - Open [**Keep review comment mutations immutable**](practice-keep-review-comment-mutations-immutable.md) — Replace affected comment objects so useReviewBridge emits onReviewChange; preserve them for viewed-only file updates.
 ### #sync

@@ -11,7 +11,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "@self-review/types": ["../types/src/index.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]

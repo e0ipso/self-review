@@ -10,7 +10,10 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "@self-review/types": ["../types/src/index.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"]

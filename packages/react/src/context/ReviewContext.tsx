@@ -19,6 +19,7 @@ import type {
   ReviewComment,
   ResumeLoadPayload,
   RemoteDriftInfo,
+  RemoteSessionInfo,
   LineRange,
   Suggestion,
 } from '@self-review/types';
@@ -61,6 +62,20 @@ export interface ReviewContextValue {
    * resumed remote review. `null` for local reviews and drift-free resumes.
    */
   remoteDrift: RemoteDriftInfo | null;
+  /**
+   * Provenance of the remote PR/MR under review, or `null` for a local one.
+   * Carries `temporaryClone`, which decides whether an apply has anywhere
+   * to write (PRD Section 5.4.8).
+   */
+  remote: RemoteSessionInfo | null;
+  /**
+   * Destination directory the reviewer named for this session's applies, as
+   * the host reported it, or `null` while none has been named. Only a
+   * temporary-clone review ever needs one.
+   */
+  applyDestination: string | null;
+  /** Record the destination the host accepted. */
+  setApplyDestination: (destinationRoot: string) => void;
 }
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
@@ -84,6 +99,16 @@ export function useReview() {
   return context;
 }
 
+/**
+ * The review session when there is one, `null` otherwise.
+ *
+ * For a component that renders both inside a review and on its own, and
+ * only reads session facts to decide how much of itself to show.
+ */
+export function useOptionalReview() {
+  return useContext(ReviewContext);
+}
+
 export interface ReviewProviderProps {
   children: ReactNode;
   /** Optional: provide diff data directly instead of using adapter.loadDiff() */
@@ -105,6 +130,8 @@ export function ReviewProvider({
     initialSource || (initialFiles ? { type: 'directory', sourcePath: '' } : { type: 'loading' })
   );
   const [resumedReview, setResumedReview] = useState<ResumeLoadPayload | null>(null);
+  const [remote, setRemote] = useState<RemoteSessionInfo | null>(null);
+  const [applyDestination, setApplyDestination] = useState<string | null>(null);
   const resumeAppliedRef = useRef(false);
   const { config } = useConfig();
   const adapter = useAdapter();
@@ -215,6 +242,7 @@ export function ReviewProvider({
         if (cancelled) return;
         setAllDiffFiles(payload.files);
         setDiffSource(payload.source);
+        setRemote(payload.remote ?? null);
 
         // Load resumed review if adapter supports it. Applying it is deferred to
         // the effect below: the per-file state it merges into does not exist
@@ -245,6 +273,10 @@ export function ReviewProvider({
       setResumedReview(null);
       setAllDiffFiles(payload.files);
       setDiffSource(payload.source);
+      setRemote(payload.remote ?? null);
+      // A pushed payload replaces the session, and a destination named for
+      // the previous one says nothing about this review's files.
+      setApplyDestination(null);
     });
   }, []);
 
@@ -308,6 +340,9 @@ export function ReviewProvider({
         expandFileContext,
         updateFileHunks,
         remoteDrift: resumedReview?.remoteDrift ?? null,
+        remote,
+        applyDestination,
+        setApplyDestination,
       }}
     >
       {children}

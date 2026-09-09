@@ -39,6 +39,8 @@ const electronAdapter: ReviewAdapter = {
   readAttachment: filePath => window.electronAPI.readAttachment(filePath),
   changeOutputPath: () => window.electronAPI.changeOutputPath(),
   loadImage: filePath => window.electronAPI.loadImage(filePath),
+  applySuggestion: request => window.electronAPI.applySuggestion(request),
+  chooseApplyDestination: () => window.electronAPI.chooseApplyDestination(),
   onGuideLoad: callback => window.electronAPI.onGuideLoad(callback),
   onDiffLoad: callback => window.electronAPI.onDiffLoad(callback),
 };

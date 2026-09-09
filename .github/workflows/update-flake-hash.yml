@@ -21,9 +21,20 @@ jobs:
       - name: Check the hash updater
         run: bash scripts/test/update-flake-hash.test.sh
 
-      - uses: DeterminateSystems/nix-installer-action@main
+      # The updater proves each hash by building that system's fetch
+      # derivation, which needs a builder for the system it names. Emulating
+      # aarch64 keeps every architecture in one job, and so in one pull
+      # request. A runner without binfmt fails this workflow only: the release
+      # and its artifacts are already published by the time it runs.
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
-      - name: Install the unpacked source hash
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: extra-platforms = aarch64-linux
+
+      - name: Install the unpacked source hashes
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
@@ -33,14 +44,19 @@ jobs:
             echo "flake.nix tracks package.json version $declared, not $version" >&2
             exit 1
           fi
-          bash scripts/update-flake-hash.sh x86_64-linux
+          # One system per entry in the flake's srcHashes, each with a release
+          # artifact of its own. Keep this list and that attribute set aligned.
+          for system in x86_64-linux aarch64-linux; do
+            bash scripts/update-flake-hash.sh "$system"
+          done
 
       - uses: peter-evans/create-pull-request@v8
         with:
-          commit-message: 'chore: update flake hash for ${{ inputs.tag }}'
-          title: 'chore: update flake hash for ${{ inputs.tag }}'
+          commit-message: 'chore: update flake hashes for ${{ inputs.tag }}'
+          title: 'chore: update flake hashes for ${{ inputs.tag }}'
           body: |
-            Automated update of the `flake.nix` unpacked source hash for release
-            ${{ inputs.tag }}, verified by building the fetchzip source.
+            Automated update of the `flake.nix` unpacked source hashes for
+            release ${{ inputs.tag }}, one per supported architecture, each
+            verified by building the fetchzip source.
           branch: flake-hash-${{ inputs.tag }}
           labels: dependencies

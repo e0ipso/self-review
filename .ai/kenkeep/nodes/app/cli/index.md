@@ -31,9 +31,9 @@ _None._
 - Open [**Bootstrap document exclusions**](../../knowledge-base/tooling/map-cli-static-skip-list.md) — finddocs applies gitignore, kkignore and its static filename exclusions.
 - Open [**Select the harness for harness-specific kenkeep commands**](../../knowledge-base/tooling/practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call.md) — Use explicit harness selection for launcher commands; deterministic commands need no override.
 ### #git
+- Open [**Scrub git's repository env vars before spawning git in tests**](../../engineering/practice-scrub-git-repository-env-vars-before-spawning-git-in-tests.md) — Git's hook environment outranks cwd and git -C; packages/core/vitest.setup.ts strips it so suites stay hermetic.
 - Open [**Apply curator conflicts using the selected reply**](../../knowledge-base/curate/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
 - Open [**Review knowledge-base changes via git diff before committing**](../../knowledge-base/structure/practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
-- Open [**Convert git diff args only through format/tokenize**](practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
 ### #logging
 - Open [**Never write to stdout in the main process**](practice-never-write-to-stdout-in-the-main-process.md) — Use console.error() for logging in the main process; stdout is unused and reserved.
 - Open [**Never write to stdout; use stderr for all logging**](practice-never-write-to-stdout-use-stderr-for-all-logging.md) — stdout is unused. XML goes to a file; all progress, warnings, errors go to stderr.

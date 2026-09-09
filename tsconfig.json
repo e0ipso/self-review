@@ -13,7 +13,8 @@
     "resolveJsonModule": true,
     "jsx": "react-jsx",
     "paths": {
-      "@self-review/core": ["packages/core/src/index.ts"]
+      "@self-review/core": ["packages/core/src/index.ts"],
+      "@self-review/types": ["packages/types/src/index.ts"]
     }
   },
   "include": ["src/**/*", "packages/**/*"],

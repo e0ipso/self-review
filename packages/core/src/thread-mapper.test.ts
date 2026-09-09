@@ -3,9 +3,14 @@
 // mapper. Fixtures cover both forges' normalized shapes: GitHub-style
 // numeric-string ids and GitLab-style discussion-hash ids.
 
-import { describe, it, expect } from 'vitest';
-import type { ForgeThread } from './forge-provider';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
+import { mkdtempSync, readdirSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import type { ForgeThread, ForgeThreadAnchor } from './forge-provider';
 import { mapThreadsToReviewComments, REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
+import { serializeReview } from './xml-serializer';
+import type { DiffFile, ReviewState } from './types';
 
 /** Build a thread with sensible defaults, overridable per fixture. */
 function thread(overrides: Partial<ForgeThread> = {}): ForgeThread {
@@ -253,5 +258,280 @@ describe('mapThreadsToReviewComments', () => {
       mapThreadsToReviewComments(input);
       expect(input).toEqual(snapshot);
     });
+  });
+});
+
+describe('suggestion extraction from thread bodies', () => {
+  /** A modified file whose new side carries `contents` starting at `start`. */
+  function diffFile(path: string, start: number, contents: string[]): DiffFile {
+    return {
+      oldPath: path,
+      newPath: path,
+      changeType: 'modified',
+      isBinary: false,
+      hunks: [
+        {
+          header: `@@ -${start},${contents.length} +${start},${contents.length} @@`,
+          oldStart: start,
+          oldLines: contents.length,
+          newStart: start,
+          newLines: contents.length,
+          lines: contents.map((content, index) => ({
+            type: 'addition' as const,
+            oldLineNumber: null,
+            newLineNumber: start + index,
+            content,
+          })),
+        },
+      ],
+    };
+  }
+
+  const DIFF = [diffFile('src/app.ts', 9, ['const a = 1;', 'const b = 2;', 'const c = 3;'])];
+
+  function withBody(body: string, anchor?: Partial<ForgeThreadAnchor>): ForgeThread {
+    return thread({
+      root: { remoteId: '9001', author: 'octocat', body },
+      anchor: {
+        filePath: 'src/app.ts',
+        side: 'new',
+        startLine: 10,
+        endLine: 10,
+        outdated: false,
+        ...anchor,
+      },
+    });
+  }
+
+  it('maps a single suggestion fence to a Suggestion anchored at the thread line range', () => {
+    const [comment] = mapThreadsToReviewComments(
+      [withBody('Prefer a constant.\n\n```suggestion\nconst b = 22;\n```\n')],
+      DIFF
+    );
+
+    expect(comment.lineRange).toEqual({ side: 'new', start: 10, end: 10 });
+    expect(comment.suggestion).toEqual({
+      originalCode: 'const b = 2;',
+      proposedCode: 'const b = 22;',
+    });
+    // The body is still passed through verbatim; the fence is not consumed.
+    expect(comment.body).toContain('```suggestion');
+  });
+
+  it('takes originalCode from the diff across the whole multi-line anchor', () => {
+    const [comment] = mapThreadsToReviewComments(
+      [
+        withBody('```suggestion\nconst [a, b] = [1, 2];\n```', {
+          startLine: 9,
+          endLine: 10,
+        }),
+      ],
+      DIFF
+    );
+
+    expect(comment.suggestion?.originalCode).toBe('const a = 1;\nconst b = 2;');
+  });
+
+  it('reads the old side of the diff for an old-side anchor', () => {
+    const deletion: DiffFile = {
+      oldPath: 'src/old.ts',
+      newPath: 'src/old.ts',
+      changeType: 'modified',
+      isBinary: false,
+      hunks: [
+        {
+          header: '@@ -4,1 +4,0 @@',
+          oldStart: 4,
+          oldLines: 1,
+          newStart: 4,
+          newLines: 0,
+          lines: [{ type: 'deletion', oldLineNumber: 4, newLineNumber: null, content: 'gone();' }],
+        },
+      ],
+    };
+
+    const [comment] = mapThreadsToReviewComments(
+      [
+        withBody('```suggestion\nkept();\n```', {
+          filePath: 'src/old.ts',
+          side: 'old',
+          startLine: 4,
+          endLine: 4,
+        }),
+      ],
+      [deletion]
+    );
+
+    expect(comment.suggestion).toEqual({ originalCode: 'gone();', proposedCode: 'kept();' });
+  });
+
+  it('reads an empty fence as a deletion proposal rather than no suggestion', () => {
+    const [comment] = mapThreadsToReviewComments([withBody('```suggestion\n```')], DIFF);
+
+    expect(comment.suggestion).toEqual({ originalCode: 'const b = 2;', proposedCode: '' });
+  });
+
+  it('accepts a tilde fence and a CRLF body', () => {
+    const [comment] = mapThreadsToReviewComments(
+      [withBody('Try this:\r\n~~~suggestion\r\nconst b = 22;\r\n~~~\r\n')],
+      DIFF
+    );
+
+    expect(comment.suggestion?.proposedCode).toBe('const b = 22;');
+  });
+
+  it('maps a thread with no fence exactly as it does without a diff', () => {
+    const threads = [withBody('Plain prose, no fence.')];
+
+    const withDiff = mapThreadsToReviewComments(threads, DIFF);
+    expect(withDiff[0].suggestion).toBeNull();
+    expect(withDiff).toEqual(mapThreadsToReviewComments(threads));
+  });
+
+  it('ignores a fence that is not tagged suggestion', () => {
+    const [comment] = mapThreadsToReviewComments([withBody('```ts\nconst b = 22;\n```')], DIFF);
+
+    expect(comment.suggestion).toBeNull();
+  });
+
+  it('ignores a suggestion fence nested inside another code block', () => {
+    const [comment] = mapThreadsToReviewComments(
+      [withBody('````md\n```suggestion\nconst b = 22;\n```\n````')],
+      DIFF
+    );
+
+    expect(comment.suggestion).toBeNull();
+  });
+
+  it('refuses an ambiguous body carrying more than one suggestion fence', () => {
+    const [comment] = mapThreadsToReviewComments(
+      [withBody('```suggestion\nfirst;\n```\n\n```suggestion\nsecond;\n```')],
+      DIFF
+    );
+
+    expect(comment.suggestion).toBeNull();
+  });
+
+  it("does not recognize GitLab's range form, whose widened anchor it cannot verify", () => {
+    const [comment] = mapThreadsToReviewComments(
+      [withBody('```suggestion:-0+1\nconst b = 22;\n```')],
+      DIFF
+    );
+
+    expect(comment.suggestion).toBeNull();
+  });
+
+  it('keeps suggestion null when the anchor degraded to file level', () => {
+    const [outdated] = mapThreadsToReviewComments(
+      [withBody('```suggestion\nconst b = 22;\n```', { outdated: true })],
+      DIFF
+    );
+    const [lineless] = mapThreadsToReviewComments(
+      [withBody('```suggestion\nconst b = 22;\n```', { startLine: null, endLine: null })],
+      DIFF
+    );
+
+    expect(outdated.lineRange).toBeNull();
+    expect(outdated.suggestion).toBeNull();
+    expect(lineless.suggestion).toBeNull();
+  });
+
+  it('keeps suggestion null when the reviewed diff does not cover the anchor', () => {
+    const [missingFile] = mapThreadsToReviewComments(
+      [withBody('```suggestion\nx;\n```', { filePath: 'src/absent.ts' })],
+      DIFF
+    );
+    const [outsideHunk] = mapThreadsToReviewComments(
+      [withBody('```suggestion\nx;\n```', { startLine: 99, endLine: 99 })],
+      DIFF
+    );
+    const [partlyCovered] = mapThreadsToReviewComments(
+      [withBody('```suggestion\nx;\n```', { startLine: 11, endLine: 12 })],
+      DIFF
+    );
+
+    expect(missingFile.suggestion).toBeNull();
+    expect(outsideHunk.suggestion).toBeNull();
+    expect(partlyCovered.suggestion).toBeNull();
+  });
+
+  it('keeps suggestion null when no diff is supplied at all', () => {
+    const [comment] = mapThreadsToReviewComments([withBody('```suggestion\nconst b = 22;\n```')]);
+
+    expect(comment.suggestion).toBeNull();
+  });
+});
+
+// This suite deliberately does not mock xmllint-wasm: the point is that a
+// mapped comment carrying an extracted suggestion really does validate
+// against self-review-v3.xsd.
+describe('serializing an extracted suggestion', () => {
+  let outputDir: string;
+
+  beforeAll(() => {
+    outputDir = mkdtempSync(join(tmpdir(), 'self-review-thread-mapper-'));
+  });
+
+  afterAll(() => {
+    rmSync(outputDir, { recursive: true, force: true });
+  });
+
+  it('produces XML that validates against self-review-v3.xsd', async () => {
+    const diffFiles: DiffFile[] = [
+      {
+        oldPath: 'src/app.ts',
+        newPath: 'src/app.ts',
+        changeType: 'modified',
+        isBinary: false,
+        hunks: [
+          {
+            header: '@@ -10,1 +10,1 @@',
+            oldStart: 10,
+            oldLines: 1,
+            newStart: 10,
+            newLines: 1,
+            lines: [
+              {
+                type: 'addition',
+                oldLineNumber: null,
+                newLineNumber: 10,
+                content: 'const b = 2 & 3;',
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const comments = mapThreadsToReviewComments(
+      [
+        thread({
+          root: {
+            remoteId: '9100',
+            author: 'octocat',
+            body: 'Parenthesize.\n\n```suggestion\nconst b = (2 & 3);\n```',
+          },
+        }),
+      ],
+      diffFiles
+    );
+    expect(comments[0].suggestion).not.toBeNull();
+
+    const state: ReviewState = {
+      timestamp: '2026-09-09T10:00:00.000Z',
+      source: { type: 'welcome' },
+      remoteUrl: 'https://github.com/owner/repo/pull/42',
+      remoteBaseSha: 'aaa111',
+      remoteHeadSha: 'bbb222',
+      remoteForge: 'github',
+      files: [{ path: 'src/app.ts', changeType: 'modified', viewed: false, comments }],
+    };
+
+    // serializeReview throws when the document fails XSD validation.
+    const xml = await serializeReview(state, join(outputDir, 'review.xml'));
+
+    expect(xml).toContain('<original-code>const b = 2 &amp; 3;</original-code>');
+    expect(xml).toContain('<proposed-code>const b = (2 &amp; 3);</proposed-code>');
+    // Serialization of an attachment-free review writes nothing to disk.
+    expect(readdirSync(outputDir)).toEqual([]);
   });
 });

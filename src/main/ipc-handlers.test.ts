@@ -53,6 +53,7 @@ vi.mock('../../packages/core/src/git', () => ({
   readGitBlobAsync: vi.fn(),
 }));
 
+import { BrowserWindow, dialog } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import { registerIpcHandlers, setDiffData } from './ipc-handlers';
 
@@ -322,6 +323,7 @@ describe('ipc-handlers', () => {
           remoteHeadSha: 'bbb222',
           remoteForge: 'github',
           threadSyncAvailable: true,
+          temporaryClone: false,
         },
       };
       setDiffData(payload);
@@ -341,6 +343,140 @@ describe('ipc-handlers', () => {
       );
       expect(result.error).toBeUndefined();
       expect(result.dataUri).toMatch(/^data:image\/png;base64,/);
+    });
+  });
+  // The apply write boundary, through the registrations that carry it. What
+  // each handler decides is covered against fresh sessions in
+  // packages/core/src/review-handlers.test.ts; what is covered here is that
+  // the channels exist, reach the desktop session, and open the picker in
+  // the main process rather than trusting a directory from the renderer.
+  //
+  // The desktop session lives at module scope and nothing clears the
+  // destination once it is set, so the sequence below must run before any
+  // other test in this file records one.
+  describe('SUGGESTION_APPLY and SUGGESTION_CHOOSE_DESTINATION handlers', () => {
+    function temporaryClonePayload(clonePath: string): DiffLoadPayload {
+      return {
+        files: [makeFile('src/app.ts')],
+        source: { type: 'git', gitDiffArgs: 'aaa111...bbb222', repository: clonePath },
+        remote: {
+          remoteUrl: 'https://github.com/owner/repo/pull/42',
+          remoteBaseSha: 'aaa111',
+          remoteHeadSha: 'bbb222',
+          remoteForge: 'github',
+          threadSyncAvailable: true,
+          temporaryClone: true,
+        },
+      };
+    }
+
+    const request = {
+      filePath: 'src/app.ts',
+      lineRange: { side: 'new', start: 2, end: 2 },
+      suggestion: { originalCode: 'const b = 2;', proposedCode: 'const b = 20;' },
+    };
+    const ORIGINAL = 'const a = 1;\nconst b = 2;\nconst c = 3;\n';
+
+    it('refuses, asks for a destination, then writes into the directory picked', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const os = await import('os');
+      const fsMod = await import('fs');
+      const pathMod = await import('path');
+      const tmpRoot = fsMod.realpathSync(
+        fsMod.mkdtempSync(pathMod.join(os.tmpdir(), 'self-review-apply-ipc-'))
+      );
+      try {
+        const clonePath = pathMod.join(tmpRoot, 'clone');
+        const destination = pathMod.join(tmpRoot, 'work');
+        for (const root of [clonePath, destination]) {
+          fsMod.mkdirSync(pathMod.join(root, 'src'), { recursive: true });
+          fsMod.writeFileSync(pathMod.join(root, 'src', 'app.ts'), ORIGINAL);
+        }
+        setDiffData(temporaryClonePayload(clonePath));
+
+        const apply = handlers[IPC.SUGGESTION_APPLY];
+        const choose = handlers[IPC.SUGGESTION_CHOOSE_DESTINATION];
+        expect(apply).toBeDefined();
+        expect(choose).toBeDefined();
+
+        // 1. Nothing picked yet, so the clone is not written into.
+        expect(await apply({}, request)).toMatchObject({
+          status: 'refused',
+          reason: 'destination-required',
+        });
+        expect(fsMod.readFileSync(pathMod.join(clonePath, 'src', 'app.ts'), 'utf-8')).toBe(
+          ORIGINAL
+        );
+
+        // 2. A dismissed picker changes nothing.
+        vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({ canceled: true, filePaths: [] });
+        expect(await choose({ sender: {} })).toEqual({ status: 'cancelled' });
+
+        // 3. A directory inside the clone is refused however it was reached.
+        vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+          canceled: false,
+          filePaths: [pathMod.join(clonePath, 'src')],
+        });
+        expect(await choose({ sender: {} })).toMatchObject({
+          status: 'rejected',
+          reason: 'destination-inside-temporary-clone',
+        });
+        expect(await apply({}, request)).toMatchObject({
+          status: 'refused',
+          reason: 'destination-required',
+        });
+
+        // 4. A directory outside it is accepted, and the next apply lands there.
+        vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+          canceled: false,
+          filePaths: [destination],
+        });
+        expect(await choose({ sender: {} })).toEqual({
+          status: 'chosen',
+          destinationRoot: destination,
+        });
+
+        expect(await apply({}, request)).toEqual({
+          status: 'applied',
+          filePath: 'src/app.ts',
+          replacedLines: 1,
+        });
+        expect(fsMod.readFileSync(pathMod.join(destination, 'src', 'app.ts'), 'utf-8')).toBe(
+          'const a = 1;\nconst b = 20;\nconst c = 3;\n'
+        );
+        // The clone is still exactly as it was materialized.
+        expect(fsMod.readFileSync(pathMod.join(clonePath, 'src', 'app.ts'), 'utf-8')).toBe(
+          ORIGINAL
+        );
+      } finally {
+        fsMod.rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('opens a directory picker on the requesting window, or standalone without one', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const choose = handlers[IPC.SUGGESTION_CHOOSE_DESTINATION];
+      const win = { id: 1 };
+      vi.mocked(BrowserWindow.fromWebContents).mockReturnValueOnce(
+        win as unknown as ReturnType<typeof BrowserWindow.fromWebContents>
+      );
+      vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: true, filePaths: [] });
+
+      await choose({ sender: {} });
+
+      // showOpenDialog is overloaded on its first argument, so read the
+      // recorded arguments positionally rather than through one signature.
+      const calls = vi.mocked(dialog.showOpenDialog).mock.calls as unknown as unknown[][];
+      const directoryPicker = { properties: ['openDirectory', 'createDirectory'] };
+      expect(calls[0][0]).toBe(win);
+      expect(calls[0][1]).toMatchObject(directoryPicker);
+
+      // No owning window: the dialog is opened application-modal instead, and
+      // the options must still be the first argument.
+      vi.mocked(BrowserWindow.fromWebContents).mockReturnValueOnce(null);
+      await choose({ sender: {} });
+
+      expect(calls[1][0]).toMatchObject(directoryPicker);
     });
   });
 });

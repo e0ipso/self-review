@@ -27,6 +27,7 @@ import type {
   ForgeCommandRunner,
   ForgeName,
   ForgeProvider,
+  ForgeThread,
   ForgeUrl,
   ExistingClone,
   MaterializeMode,
@@ -59,8 +60,17 @@ export interface RemoteSession {
    * Forge discussion threads mapped to ReviewComments. Empty when the forge
    * CLI is unavailable. Review-level threads keep the mapper's sentinel
    * `filePath: ''` (REVIEW_LEVEL_FILE_PATH).
+   *
+   * Mapped here without the reviewed diff, which is not loaded yet, so a
+   * `suggestion` fence stays plain body text. {@link bootstrapRemoteDiff}
+   * replaces these with the same threads mapped against the loaded files.
    */
   fetchedComments: ReviewComment[];
+  /**
+   * The threads behind `fetchedComments`, verbatim. Carried so the caller
+   * that loads the diff can map them again with it (SR-0063).
+   */
+  fetchedThreads: ForgeThread[];
 }
 
 /** Injectable seams; defaults are the real core APIs. */
@@ -151,12 +161,11 @@ export async function startRemoteSession(
 
   const materialized = await d.materialize(forgeUrl, baseBranch, cwd, d.runner, existingClone);
 
-  let fetchedComments: ReviewComment[] = [];
+  let fetchedThreads: ForgeThread[] = [];
   let threadSyncAvailable = false;
   if (cliAvailable) {
     try {
-      const threads = await provider.fetchThreads(forgeUrl);
-      fetchedComments = mapThreadsToReviewComments(threads);
+      fetchedThreads = await provider.fetchThreads(forgeUrl);
       threadSyncAvailable = true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -182,8 +191,12 @@ export async function startRemoteSession(
       remoteHeadSha: materialized.headSha,
       remoteForge: forgeUrl.forge,
       threadSyncAvailable,
+      // A temporary clone is deleted on exit, so nothing may be written
+      // into it; the front end needs the fact, not the path.
+      temporaryClone: materialized.mode === 'temp-clone',
     },
-    fetchedComments,
+    fetchedComments: mapThreadsToReviewComments(fetchedThreads),
+    fetchedThreads,
   };
 }
 
@@ -196,9 +209,9 @@ export interface RemoteBootstrapResult {
 /**
  * Full remote bootstrap: materialize the session, load the diff from the
  * clone through the existing git-diff machinery, apply the ignore filter,
- * and shape the git-mode `DiffLoadPayload` (with `remote` provenance
- * attached). Shared by the CLI URL startup path and the splash-screen
- * `remote:open-url` handler.
+ * map the fetched threads against those files, and shape the git-mode
+ * `DiffLoadPayload` (with `remote` provenance attached). Shared by the CLI
+ * URL startup path and the splash-screen `remote:open-url` handler.
  */
 export async function bootstrapRemoteDiff(
   url: string,
@@ -207,20 +220,28 @@ export async function bootstrapRemoteDiff(
   deps: Partial<RemoteSessionDeps> = {}
 ): Promise<RemoteBootstrapResult> {
   const d: RemoteSessionDeps = { ...defaultDeps, ...deps };
-  const session = await startRemoteSession(url, cwd, d);
+  const started = await startRemoteSession(url, cwd, d);
 
   // From here on the session may own a temporary clone; if anything below
   // fails the caller never receives the cleanup handle, so release it here.
   let files: DiffFile[];
   let repository: string;
   try {
-    ({ files, repository } = await d.loadDiff(session.gitDiffArgs, session.repoPath));
+    ({ files, repository } = await d.loadDiff(started.gitDiffArgs, started.repoPath));
   } catch (error) {
-    session.cleanup();
+    started.cleanup();
     throw error;
   }
   const shouldKeep = createIgnoreFilter(ignorePatterns);
   const filteredFiles = files.filter(f => shouldKeep(f.newPath || f.oldPath));
+
+  // The reviewed diff exists only now, and the mapper needs it to anchor a
+  // `suggestion` fence. Mapping against the filtered files keeps the
+  // comments consistent with the payload the renderer receives.
+  const session: RemoteSession = {
+    ...started,
+    fetchedComments: mapThreadsToReviewComments(started.fetchedThreads, filteredFiles),
+  };
 
   return {
     session,
