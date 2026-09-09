@@ -231,10 +231,10 @@ describe('createGitLabProvider', () => {
       const provider = createGitLabProvider(runner);
 
       const defaultThreads = await provider.fetchThreads(mrUrl);
-      expect(defaultThreads.map((t) => t.root.remoteId)).toEqual(['3']);
+      expect(defaultThreads.map(t => t.root.remoteId)).toEqual(['3']);
 
       const allThreads = await provider.fetchThreads(mrUrl, { includeResolved: true });
-      expect(allThreads.map((t) => t.root.remoteId)).toEqual(['1', '3']);
+      expect(allThreads.map(t => t.root.remoteId)).toEqual(['1', '3']);
     });
 
     it('treats a partially resolved discussion as unresolved', async () => {
@@ -379,7 +379,7 @@ describe('createGitLabProvider', () => {
       const provider = createGitLabProvider(runner);
 
       const threads = await provider.fetchThreads(mrUrl);
-      expect(threads.map((t) => t.root.remoteId)).toEqual(['1', '2']);
+      expect(threads.map(t => t.root.remoteId)).toEqual(['1', '2']);
     });
   });
 

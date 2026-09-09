@@ -16,21 +16,15 @@ import type { ReviewState } from './types';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
-const CANONICAL_SCHEMA =
-  '.agents/skills/self-review-apply/assets/self-review-v3.xsd';
+const CANONICAL_SCHEMA = '.agents/skills/self-review-apply/assets/self-review-v3.xsd';
 
-const CANONICAL_GUIDE_SCHEMA =
-  '.agents/skills/self-review-guide/assets/self-review-guide-v1.xsd';
+const CANONICAL_GUIDE_SCHEMA = '.agents/skills/self-review-guide/assets/self-review-guide-v1.xsd';
 
 // opencode discovers skills under .opencode/skills, so those entries are
 // symlinks to the .agents originals rather than copies. Byte-comparing them
 // would be tautological, so guard the link itself: that is what stops a real
 // copy, and the drift it invites, from creeping back in.
-const SYMLINKED_SKILLS = [
-  'self-review-apply',
-  'self-review-critique',
-  'self-review-guide',
-];
+const SYMLINKED_SKILLS = ['self-review-apply', 'self-review-critique', 'self-review-guide'];
 
 const SCHEMA_FILE_NAME = 'self-review-v3.xsd';
 
@@ -48,9 +42,7 @@ async function validate(xml: string) {
 async function validateGuide(xml: string) {
   return validateXML({
     xml: [{ fileName: 'review.guide.xml', contents: xml }],
-    schema: [
-      { fileName: 'self-review-guide-v1.xsd', contents: GUIDE_XSD_SCHEMA },
-    ],
+    schema: [{ fileName: 'self-review-guide-v1.xsd', contents: GUIDE_XSD_SCHEMA }],
   });
 }
 
@@ -129,7 +121,9 @@ describe('XSD conformance', () => {
 
   it('rejects a confidence value outside the enumeration', async () => {
     const result = await validate(
-      reviewXml('    <comment confidence="certain"><body>b</body><category>bug</category></comment>')
+      reviewXml(
+        '    <comment confidence="certain"><body>b</body><category>bug</category></comment>'
+      )
     );
 
     expect(result.valid).toBe(false);

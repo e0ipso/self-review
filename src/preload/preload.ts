@@ -43,9 +43,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => {
-    ipcRenderer.on(IPC.RESUME_LOAD, (_event, payload: ResumeLoadPayload) =>
-      callback(payload)
-    );
+    ipcRenderer.on(IPC.RESUME_LOAD, (_event, payload: ResumeLoadPayload) => callback(payload));
   },
 
   onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => {
@@ -73,8 +71,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send(IPC.APP_SAVE_AND_QUIT);
   },
 
-  readAttachment: (filePath: string) =>
-    ipcRenderer.invoke(IPC.ATTACHMENT_READ, filePath),
+  readAttachment: (filePath: string) => ipcRenderer.invoke(IPC.ATTACHMENT_READ, filePath),
 
   discardAndQuit: () => {
     ipcRenderer.send(IPC.APP_DISCARD_AND_QUIT);
@@ -82,8 +79,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   pickDirectory: () => ipcRenderer.invoke(IPC.DIALOG_PICK_DIRECTORY),
 
-  startDirectoryReview: (path: string) =>
-    ipcRenderer.invoke(IPC.REVIEW_START_DIRECTORY, path),
+  startDirectoryReview: (path: string) => ipcRenderer.invoke(IPC.REVIEW_START_DIRECTORY, path),
 
   expandContext: (request: ExpandContextRequest) =>
     ipcRenderer.invoke(IPC.DIFF_EXPAND_CONTEXT, request),
@@ -91,9 +87,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   changeOutputPath: () => ipcRenderer.invoke(IPC.OUTPUT_PATH_CHANGE),
 
   onOutputPathChanged: (callback: (info: OutputPathInfo) => void) => {
-    ipcRenderer.on(IPC.OUTPUT_PATH_CHANGED, (_event, info: OutputPathInfo) =>
-      callback(info)
-    );
+    ipcRenderer.on(IPC.OUTPUT_PATH_CHANGED, (_event, info: OutputPathInfo) => callback(info));
   },
 
   findInPage: (request: FindInPageRequest) => {
@@ -123,11 +117,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   openExternal: (url: string) => ipcRenderer.invoke(IPC.OPEN_EXTERNAL, url),
 
-  loadFileContent: (filePath: string) =>
-    ipcRenderer.invoke(IPC.DIFF_LOAD_FILE, filePath),
+  loadFileContent: (filePath: string) => ipcRenderer.invoke(IPC.DIFF_LOAD_FILE, filePath),
 
-  loadImage: (filePath: string) =>
-    ipcRenderer.invoke(IPC.DIFF_LOAD_IMAGE, filePath),
+  loadImage: (filePath: string) => ipcRenderer.invoke(IPC.DIFF_LOAD_IMAGE, filePath),
 
   openRemoteUrl: (url: string) => ipcRenderer.invoke(IPC.REMOTE_OPEN_URL, url),
 

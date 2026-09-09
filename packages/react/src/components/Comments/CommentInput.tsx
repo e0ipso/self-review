@@ -1,10 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type {
-  Attachment,
-  LineRange,
-  ReviewComment,
-  Suggestion,
-} from '@self-review/types';
+import type { Attachment, LineRange, ReviewComment, Suggestion } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { isUsableCategory } from '../../utils/category-utils';
@@ -56,7 +51,8 @@ export default function CommentInput({
     }
   }, [existingComment]);
 
-  const hasContent = body.trim().length > 0 || (showSuggestion && !!originalCode) || attachments.length > 0;
+  const hasContent =
+    body.trim().length > 0 || (showSuggestion && !!originalCode) || attachments.length > 0;
   const isValid = hasContent && category.length > 0;
 
   const handleSubmit = () => {
@@ -78,7 +74,14 @@ export default function CommentInput({
         ...(attachments.length ? { attachments } : {}),
       });
     } else {
-      addComment(filePath, lineRange, body, category, suggestion, attachments.length ? attachments : undefined);
+      addComment(
+        filePath,
+        lineRange,
+        body,
+        category,
+        suggestion,
+        attachments.length ? attachments : undefined
+      );
     }
 
     setBody('');
@@ -105,13 +108,15 @@ export default function CommentInput({
       attachments={attachments}
       setAttachments={setAttachments}
       placeholder='Add your review comment... (paste or drop images here)'
-      headerLabel={lineRange ? (
-        <span className='text-xs font-medium text-muted-foreground whitespace-nowrap'>
-          {lineRange.start === lineRange.end
-            ? `Comment on line ${lineRange.start}`
-            : `Comment on lines ${lineRange.start} to ${lineRange.end}`}
-        </span>
-      ) : undefined}
+      headerLabel={
+        lineRange ? (
+          <span className='text-xs font-medium text-muted-foreground whitespace-nowrap'>
+            {lineRange.start === lineRange.end
+              ? `Comment on line ${lineRange.start}`
+              : `Comment on lines ${lineRange.start} to ${lineRange.end}`}
+          </span>
+        ) : undefined
+      }
       onSubmit={handleSubmit}
       testId='comment-input'
       actionsRef={actionsRef}
@@ -128,7 +133,12 @@ export default function CommentInput({
       <Separator />
 
       {/* Actions bar */}
-      <div className='flex items-center justify-between px-3 py-2 bg-muted/10 outline-none' data-testid='comment-actions' tabIndex={-1} ref={actionsRef}>
+      <div
+        className='flex items-center justify-between px-3 py-2 bg-muted/10 outline-none'
+        data-testid='comment-actions'
+        tabIndex={-1}
+        ref={actionsRef}
+      >
         <div className='flex items-center gap-2'>
           <CategorySelector value={category} onChange={setCategory} />
           {originalCode && (

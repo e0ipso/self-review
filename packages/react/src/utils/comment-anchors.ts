@@ -11,8 +11,8 @@ export function createCommentAnchorMatcher(file: DiffFile) {
   }
   return (comment: ReviewComment): boolean => {
     const range = comment.lineRange;
-    return range === null || (
-      lines[range.side].has(range.start) && lines[range.side].has(range.end)
+    return (
+      range === null || (lines[range.side].has(range.start) && lines[range.side].has(range.end))
     );
   };
 }

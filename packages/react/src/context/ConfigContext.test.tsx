@@ -29,9 +29,9 @@ function renderWithConfig(initialConfig?: { categories: CategoryDef[] }) {
 }
 
 function probeNames(): string[] {
-  return Array.from(
-    screen.getByTestId('categories-probe').querySelectorAll('li')
-  ).map(li => li.textContent);
+  return Array.from(screen.getByTestId('categories-probe').querySelectorAll('li')).map(
+    li => li.textContent
+  );
 }
 
 const defaultNames = defaultConfig.categories.map(c => c.name);

@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  formatGitDiffArgs,
-  normalizeGitDiffArgs,
-  tokenizeGitDiffArgs,
-} from './git-diff-args';
+import { formatGitDiffArgs, normalizeGitDiffArgs, tokenizeGitDiffArgs } from './git-diff-args';
 
 describe('normalizeGitDiffArgs', () => {
   it('returns unchanged when no positional path args', () => {
@@ -77,16 +73,11 @@ describe('tokenizeGitDiffArgs', () => {
   });
 
   it('joins a quoted run to the text touching it', () => {
-    expect(tokenizeGitDiffArgs('--output-indicator-new="+"')).toEqual([
-      '--output-indicator-new=+',
-    ]);
+    expect(tokenizeGitDiffArgs('--output-indicator-new="+"')).toEqual(['--output-indicator-new=+']);
   });
 
   it('honours a backslash escape outside quotes', () => {
-    expect(tokenizeGitDiffArgs('-- my\\ file.txt')).toEqual([
-      '--',
-      'my file.txt',
-    ]);
+    expect(tokenizeGitDiffArgs('-- my\\ file.txt')).toEqual(['--', 'my file.txt']);
   });
 
   it('unescapes only the quote and the backslash inside double quotes', () => {
@@ -102,10 +93,7 @@ describe('tokenizeGitDiffArgs', () => {
   });
 
   it('keeps an empty quoted argument', () => {
-    expect(tokenizeGitDiffArgs("--src-prefix ''")).toEqual([
-      '--src-prefix',
-      '',
-    ]);
+    expect(tokenizeGitDiffArgs("--src-prefix ''")).toEqual(['--src-prefix', '']);
   });
 });
 

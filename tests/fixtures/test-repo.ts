@@ -15,8 +15,7 @@ import { tmpdir } from 'os';
 export function createTestRepo(): string {
   const repoDir = mkdtempSync(join(tmpdir(), 'self-review-test-'));
 
-  const run = (cmd: string) =>
-    execSync(cmd, { cwd: repoDir, stdio: 'pipe' }).toString();
+  const run = (cmd: string) => execSync(cmd, { cwd: repoDir, stdio: 'pipe' }).toString();
 
   // Initialize repo
   run('git init');
@@ -61,10 +60,7 @@ export function createTestRepo(): string {
   );
 
   // README.md — will be "modified" (2 additions, 1 deletion)
-  writeFileSync(
-    join(repoDir, 'README.md'),
-    ['# My App', '', 'A simple application.'].join('\n')
-  );
+  writeFileSync(join(repoDir, 'README.md'), ['# My App', '', 'A simple application.'].join('\n'));
 
   run('git add -A');
   run('git commit -m "Initial commit"');
@@ -229,9 +225,7 @@ export function createPriorReviewXml(
 
     const allAttrs = [lineAttrs, signalAttrs].filter(Boolean).join(' ');
     const attrs = allAttrs ? ` ${allAttrs}` : '';
-    const categoryEl = c.category
-      ? `\n      <category>${c.category}</category>`
-      : '';
+    const categoryEl = c.category ? `\n      <category>${c.category}</category>` : '';
 
     // `<reply>` follows `<category>` because CommentType is an xs:sequence of
     // body, category, suggestion, attachment, reply.

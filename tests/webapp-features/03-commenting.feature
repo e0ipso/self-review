@@ -19,6 +19,18 @@ Feature: Webapp Commenting System
     And the comment header should show "line 5"
     And the file tree entry for "src/auth/login.ts" should show comment count 1
 
+  # --- Multi-Line Range Comment ---
+
+  Scenario: Add a multi-line range comment via drag-select
+    When I drag-select new lines 5 to 8 in "src/auth/login.ts"
+    Then a comment input box should appear below that line
+    And the comment input header should show "Comment on lines 5 to 8"
+    When I type "This whole block needs a guard clause" in the comment input
+    And I click "Comment"
+    Then a comment should be displayed below new line 8 of "src/auth/login.ts"
+    And the comment should show "This whole block needs a guard clause"
+    And the comment header should show "lines 5–8"
+
   # --- File-Level Comments ---
 
   Scenario: Add a file-level comment

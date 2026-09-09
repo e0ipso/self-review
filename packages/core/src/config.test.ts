@@ -180,9 +180,7 @@ categories:
 
       expect(config.categories).toHaveLength(6);
       expect(config.categories[0].name).toBe('question');
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('no usable categories')
-      );
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('no usable categories'));
     });
 
     it('falls back to default categories when every entry is shaped wrong', () => {
@@ -197,9 +195,7 @@ categories:
       const config = loadConfig();
 
       expect(config.categories).toHaveLength(6);
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('no usable categories')
-      );
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('no usable categories'));
     });
 
     it('falls back to default categories when every entry has an empty name', () => {
@@ -215,9 +211,7 @@ categories:
       const config = loadConfig();
 
       expect(config.categories).toHaveLength(6);
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('no usable categories')
-      );
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('no usable categories'));
     });
 
     it('drops empty-name entries but keeps other valid custom categories, without warning', () => {
@@ -250,9 +244,7 @@ theme: invalid-theme
       const config = loadConfig();
 
       expect(config.theme).toBe('system'); // Falls back to default
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid theme value')
-      );
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Invalid theme value'));
     });
 
     it('validates diff-view values and rejects invalid ones', () => {
@@ -312,9 +304,7 @@ diff-view: invalid-view
       const config = loadConfig();
 
       expect(config.theme).toBe('system');
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid YAML format')
-      );
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Invalid YAML format'));
     });
 
     it('loads ignore patterns from config', () => {

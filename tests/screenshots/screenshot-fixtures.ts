@@ -38,9 +38,7 @@ export function createPlanReviewFixture(): string {
   // Initial commit with a basic README
   writeFileSync(
     join(repoDir, 'README.md'),
-    ['# Project Notes', '', 'Working directory for implementation plans.'].join(
-      '\n'
-    )
+    ['# Project Notes', '', 'Working directory for implementation plans.'].join('\n')
   );
   run('git add -A', repoDir);
   run('git commit -m "Initial commit"', repoDir);

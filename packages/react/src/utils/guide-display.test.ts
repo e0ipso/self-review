@@ -63,11 +63,7 @@ describe('buildGuideDisplaySections', () => {
 
   it('orders groups and files within groups in payload order in guided mode', () => {
     const sections = buildGuideDisplaySections(allFiles, groups, 'guided');
-    expect(sections.map(s => s.header?.name)).toEqual([
-      'Core change',
-      'Config',
-      'Everything else',
-    ]);
+    expect(sections.map(s => s.header?.name)).toEqual(['Core change', 'Config', 'Everything else']);
     expect(sections[0].entries.map(e => e.file)).toEqual([feature, login]);
     expect(sections[0].entries.map(e => e.description)).toEqual([
       'adds the retry wrapper',
@@ -99,10 +95,7 @@ describe('buildGuideDisplaySections', () => {
     // Simulates a search that only matches login + readme.
     const filtered = [readme, login];
     const sections = buildGuideDisplaySections(filtered, groups, 'guided');
-    expect(sections.map(s => s.header?.name)).toEqual([
-      'Core change',
-      'Everything else',
-    ]);
+    expect(sections.map(s => s.header?.name)).toEqual(['Core change', 'Everything else']);
     expect(sections[0].entries.map(e => e.file)).toEqual([login]);
     expect(sections[1].entries.map(e => e.file)).toEqual([readme]);
   });
@@ -137,11 +130,7 @@ describe('buildGuideDisplaySections', () => {
   it('synthesizes an implicit trailing group for unmentioned files when the payload has none', () => {
     const stray = makeFile('src/stray.ts');
     const explicitOnly = groups.slice(0, 2);
-    const sections = buildGuideDisplaySections(
-      [login, config, stray],
-      explicitOnly,
-      'guided'
-    );
+    const sections = buildGuideDisplaySections([login, config, stray], explicitOnly, 'guided');
     const last = sections[sections.length - 1];
     // Labeled and implicit so the files render under a group instead of
     // visually merging into the preceding section; no groupIndex because

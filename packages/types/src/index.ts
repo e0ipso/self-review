@@ -205,9 +205,7 @@ export interface RemoteDriftInfo {
  * On success the main process pushes `diff:load` (and `resume:load` when
  * threads were fetched) to the requesting window before resolving.
  */
-export type RemoteOpenUrlResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type RemoteOpenUrlResult = { ok: true } | { ok: false; error: string };
 
 // ===== Walkthrough Guide Types =====
 // The guide is a read-only sidecar (self-review-guide-v1.xsd) generated

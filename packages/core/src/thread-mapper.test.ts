@@ -5,10 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type { ForgeThread } from './forge-provider';
-import {
-  mapThreadsToReviewComments,
-  REVIEW_LEVEL_FILE_PATH,
-} from './thread-mapper';
+import { mapThreadsToReviewComments, REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 
 /** Build a thread with sensible defaults, overridable per fixture. */
 function thread(overrides: Partial<ForgeThread> = {}): ForgeThread {
@@ -181,21 +178,13 @@ describe('mapThreadsToReviewComments', () => {
       expect(comment.body).toBe('Finding.');
       expect(comment.author).toBe('alice');
       expect(comment.remoteId).toBe('3001');
-      expect(comment.replies?.map((r) => r.body)).toEqual([
+      expect(comment.replies?.map(r => r.body)).toEqual([
         'First reply.',
         'Second reply.',
         'Third reply.',
       ]);
-      expect(comment.replies?.map((r) => r.author)).toEqual([
-        'bob',
-        'alice',
-        'carol',
-      ]);
-      expect(comment.replies?.map((r) => r.remoteId)).toEqual([
-        '3002',
-        '3003',
-        '3004',
-      ]);
+      expect(comment.replies?.map(r => r.author)).toEqual(['bob', 'alice', 'carol']);
+      expect(comment.replies?.map(r => r.remoteId)).toEqual(['3002', '3003', '3004']);
     });
 
     it('omits replies entirely when the thread has none', () => {
@@ -253,11 +242,7 @@ describe('mapThreadsToReviewComments', () => {
       ];
       const first = mapThreadsToReviewComments(threads);
       const second = mapThreadsToReviewComments(threads);
-      expect(first.map((c) => c.body)).toEqual([
-        'First thread.',
-        'Second thread.',
-        'Third thread.',
-      ]);
+      expect(first.map(c => c.body)).toEqual(['First thread.', 'Second thread.', 'Third thread.']);
       expect(second).toEqual(first);
       expect(mapThreadsToReviewComments([])).toEqual([]);
     });

@@ -3,10 +3,10 @@
  * It imports tailwindcss and the library styles, then tells Tailwind
  * to scan the compiled JS for class names.
  */
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin "@tailwindcss/typography";
-@import "./styles.css";
-@import "./vendor/md-editor-scoped.css";
-@import "./vendor/prism-light-scoped.css";
-@import "./vendor/prism-dark-scoped.css";
+@import './styles.css';
+@import './vendor/md-editor-scoped.css';
+@import './vendor/prism-light-scoped.css';
+@import './vendor/prism-dark-scoped.css';
 @source "../dist";

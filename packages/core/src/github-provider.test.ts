@@ -25,9 +25,10 @@ interface RecordedCall {
   args: string[];
 }
 
-function makeRunner(
-  results: ForgeCommandResult[]
-): { runner: ForgeCommandRunner; calls: RecordedCall[] } {
+function makeRunner(results: ForgeCommandResult[]): {
+  runner: ForgeCommandRunner;
+  calls: RecordedCall[];
+} {
   const calls: RecordedCall[] = [];
   const queue = [...results];
   const runner: ForgeCommandRunner = async (command, args) => {
@@ -153,9 +154,7 @@ describe('createGitHubProvider', () => {
 
   describe('fetchBaseBranch', () => {
     it('returns the base branch via gh pr view --json baseRefName', async () => {
-      const { runner, calls } = makeRunner([
-        ok(JSON.stringify({ baseRefName: 'main' })),
-      ]);
+      const { runner, calls } = makeRunner([ok(JSON.stringify({ baseRefName: 'main' }))]);
       const provider = createGitHubProvider(runner);
 
       await expect(provider.fetchBaseBranch(PR_URL)).resolves.toBe('main');
@@ -174,9 +173,7 @@ describe('createGitHubProvider', () => {
     });
 
     it('passes the URL host verbatim for enterprise hosts with a port', async () => {
-      const { runner, calls } = makeRunner([
-        ok(JSON.stringify({ baseRefName: 'develop' })),
-      ]);
+      const { runner, calls } = makeRunner([ok(JSON.stringify({ baseRefName: 'develop' }))]);
       const provider = createGitHubProvider(runner);
 
       await expect(
@@ -287,11 +284,7 @@ describe('createGitHubProvider', () => {
     });
 
     it('attaches a reply targeting a non-root member to the same thread', async () => {
-      const chained = [
-        REPLY_CHAIN[0],
-        REPLY_CHAIN[1],
-        { ...REPLY_CHAIN[2], in_reply_to_id: 2002 },
-      ];
+      const chained = [REPLY_CHAIN[0], REPLY_CHAIN[1], { ...REPLY_CHAIN[2], in_reply_to_id: 2002 }];
       const { runner } = makeRunner([ok(slurpPages(chained))]);
       const provider = createGitHubProvider(runner);
 
@@ -347,9 +340,7 @@ describe('createGitHubProvider', () => {
     });
 
     it('flattens multiple paginated pages in order', async () => {
-      const { runner } = makeRunner([
-        ok(slurpPages([SINGLE_COMMENT], [RANGE_COMMENT])),
-      ]);
+      const { runner } = makeRunner([ok(slurpPages([SINGLE_COMMENT], [RANGE_COMMENT]))]);
       const provider = createGitHubProvider(runner);
 
       const threads = await provider.fetchThreads(PR_URL);
@@ -370,9 +361,7 @@ describe('createGitHubProvider', () => {
     });
 
     it('attributes comments from deleted users to ghost', async () => {
-      const { runner } = makeRunner([
-        ok(slurpPages([{ ...SINGLE_COMMENT, user: null }])),
-      ]);
+      const { runner } = makeRunner([ok(slurpPages([{ ...SINGLE_COMMENT, user: null }]))]);
       const provider = createGitHubProvider(runner);
 
       const [thread] = await provider.fetchThreads(PR_URL);
@@ -386,9 +375,7 @@ describe('createGitHubProvider', () => {
       };
       const provider = createGitHubProvider(runner);
 
-      await expect(provider.fetchThreads(PR_URL)).rejects.toBeInstanceOf(
-        ForgeCliUnavailableError
-      );
+      await expect(provider.fetchThreads(PR_URL)).rejects.toBeInstanceOf(ForgeCliUnavailableError);
     });
 
     it('throws ForgeCliUnavailableError on non-zero exit (auth failure)', async () => {

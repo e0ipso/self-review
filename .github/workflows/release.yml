@@ -7,7 +7,7 @@ name: Release (Linux)
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ['CI']
     branches: [main]
     types: [completed]
 
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NO_COLOR: "1"
+  NO_COLOR: '1'
 
 jobs:
   release:

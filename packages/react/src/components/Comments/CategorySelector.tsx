@@ -9,10 +9,7 @@ export interface CategorySelectorProps {
   onChange: (category: string) => void;
 }
 
-export default function CategorySelector({
-  value,
-  onChange,
-}: CategorySelectorProps) {
+export default function CategorySelector({ value, onChange }: CategorySelectorProps) {
   const { config } = useConfig();
   const usableCategories = getUsableCategories(config.categories);
 

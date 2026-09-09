@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  runGitDiff,
-  getRepoRoot,
-  validateGitAvailable,
-  generateUntrackedDiffs,
-} from './git';
+import { runGitDiff, getRepoRoot, validateGitAvailable, generateUntrackedDiffs } from './git';
 import * as child_process from 'child_process';
 import * as fs from 'fs';
 
@@ -73,9 +68,7 @@ describe('git', () => {
 
       runGitDiff(['--staged']);
 
-      expect(console.error).toHaveBeenCalledWith(
-        'Error: git is not installed or not in PATH'
-      );
+      expect(console.error).toHaveBeenCalledWith('Error: git is not installed or not in PATH');
       expect(process.exit).toHaveBeenCalledWith(1);
     });
 
@@ -116,9 +109,7 @@ describe('git', () => {
 
       runGitDiff(['invalid..revision']);
 
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('Error running git diff')
-      );
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Error running git diff'));
       expect(process.exit).toHaveBeenCalledWith(1);
     });
   });
@@ -176,9 +167,7 @@ describe('git', () => {
 
       validateGitAvailable();
 
-      expect(console.error).toHaveBeenCalledWith(
-        'Error: git is not installed or not in PATH'
-      );
+      expect(console.error).toHaveBeenCalledWith('Error: git is not installed or not in PATH');
       expect(process.exit).toHaveBeenCalledWith(1);
     });
 
@@ -240,10 +229,7 @@ describe('git', () => {
         .mockReturnValueOnce(Buffer.from('content1\n'))
         .mockReturnValueOnce(Buffer.from('content2\n'));
 
-      const result = generateUntrackedDiffs(
-        ['file1.txt', 'file2.txt'],
-        '/repo'
-      );
+      const result = generateUntrackedDiffs(['file1.txt', 'file2.txt'], '/repo');
 
       expect(result).toContain('diff --git a/file1.txt b/file1.txt');
       expect(result).toContain('diff --git a/file2.txt b/file2.txt');
@@ -257,10 +243,7 @@ describe('git', () => {
         })
         .mockImplementationOnce(() => Buffer.from('content3\n'));
 
-      const result = generateUntrackedDiffs(
-        ['file1.txt', 'deleted.txt', 'file3.txt'],
-        '/repo'
-      );
+      const result = generateUntrackedDiffs(['file1.txt', 'deleted.txt', 'file3.txt'], '/repo');
 
       expect(result).toContain('file1.txt');
       expect(result).not.toContain('deleted.txt');

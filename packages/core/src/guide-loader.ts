@@ -19,10 +19,7 @@
 
 import { readFile } from 'fs/promises';
 import { extname, resolve } from 'path';
-import {
-  parseGuideXml,
-  reconcileGuide,
-} from './guide-parser';
+import { parseGuideXml, reconcileGuide } from './guide-parser';
 import { AppConfig, GuideLoadPayload } from './types';
 
 /**
@@ -42,10 +39,7 @@ export function deriveGuidePath(outputPath: string): string {
  * (resolved against cwd, like `output-file`) when set, otherwise the path
  * derived from the resolved output path.
  */
-export function resolveGuidePath(
-  outputPath: string,
-  config: Pick<AppConfig, 'guideFile'>
-): string {
+export function resolveGuidePath(outputPath: string, config: Pick<AppConfig, 'guideFile'>): string {
   if (config.guideFile) {
     return resolve(process.cwd(), config.guideFile);
   }
@@ -91,9 +85,7 @@ export async function loadGuide(
     // Explicit comparison: with strictNullChecks off (see tsconfig),
     // truthiness alone does not narrow the discriminated union.
     if (result.ok === false) {
-      console.error(
-        `[guide] Ignoring guide at ${guidePath}: invalid (${result.reason})`
-      );
+      console.error(`[guide] Ignoring guide at ${guidePath}: invalid (${result.reason})`);
       return null;
     }
 
@@ -107,9 +99,7 @@ export async function loadGuide(
   } catch (error) {
     // Belt and braces: no failure mode of the guide loader may escape.
     const message = error instanceof Error ? error.message : String(error);
-    console.error(
-      `[guide] Ignoring guide at ${guidePath}: invalid (${message})`
-    );
+    console.error(`[guide] Ignoring guide at ${guidePath}: invalid (${message})`);
     return null;
   }
 }

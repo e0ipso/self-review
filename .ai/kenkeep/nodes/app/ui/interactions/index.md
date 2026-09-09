@@ -12,11 +12,12 @@ _None._
 ## Conventions (how we build)
 - Open [**Clamp multi-line drag-selection to a single hunk and a single side**](practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side.md) to learn about: Drag-to-select for comment ranges cannot cross hunk boundaries; in split view it's locked to the side where it started. #drag-select #hunks #split-view
 - Open [**Prefill the suggestion proposed-code editor with the original code**](practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code.md) to learn about: When the user activates a suggestion, prefill the proposed-code field with the original so they can edit in place. #suggestions #ux
+- Open [**Restore collapsed panels inside flushSync**](practice-restore-collapsed-panels-inside-flushsync.md) to learn about: react-resizable-panels' expand() only writes to its store; flush the render before measuring rects. #react #panels #dom #keyboard-navigation
 - Open [**Use shadcn/ui components instead of raw HTML for UI**](practice-use-shadcn-ui-components-instead-of-raw-html-for-ui.md) to learn about: All buttons, inputs, dropdowns, dialogs, etc. must use shadcn/ui; no raw HTML equivalents. #strikethroo #ui #shadcn
 
 ## Components (what exists)
-- Open [**Emoji shortcode support in comments**](map-emoji-shortcode-support-in-comments.md) to learn about: Typing :xx in the comment editor triggers an inline autocomplete; :shortcode: text is converted to Unicode in rendered markdown. #strikethroo #emoji #comments
 - Open [**Vimium-style keyboard navigation**](map-vimium-style-keyboard-navigation.md) to learn about: f activates line-comment hints, g activates file-jump hints, j/k smooth scroll, Ctrl/Cmd+F opens find-in-page, Escape dismisses. #keyboard #navigation #vimium
+- Open [**Emoji shortcode support in comments**](map-emoji-shortcode-support-in-comments.md) to learn about: Typing :xx in the comment editor triggers an inline autocomplete; :shortcode: text is converted to Unicode in rendered markdown. #strikethroo #emoji #comments
 - Open [**Vimium-style keyboard shortcuts**](map-vimium-style-keyboard-shortcuts.md) to learn about: Hint-driven navigation: f for diff lines, g for file tree, j/k for scroll, Ctrl+F for find, Escape to dismiss. #strikethroo #keyboard #vimium
 
 ## By topic
@@ -35,14 +36,26 @@ _None._
 - Open [**Pair line-number attributes correctly in review comments**](../../../review-xml/line-anchors/practice-pair-line-number-attributes-correctly-in-review-comments.md) — Use exactly one complete new-line or old-line pair on line comments; omit both pairs for file-level comments.
 - Open [**Pair line-number attributes correctly on review comments**](../../../review-xml/line-anchors/practice-pair-line-number-attributes-correctly-on-review-comments.md) — A comment has exactly one pair: new-line-start/end for added/context lines OR old-line-start/end for deleted lines. Never both.
 - Open [**Line comments reference either old or new line numbers, never both**](../../../review-xml/line-anchors/practice-line-comments-reference-either-old-or-new-line-numbers-never-both.md) — Comments on added/context lines use new-line-start/end; comments on deleted lines use old-line-start/end. File-level comments have neither.
+### #dom
+- Open [**.self-review wrapper div**](../../../packages/styling/map-self-review-wrapper-div.md) — Scoping wrapper rendered by ConfigProvider for CSS containment and dark-mode toggling.
+- Open [**Restore collapsed panels inside flushSync**](practice-restore-collapsed-panels-inside-flushsync.md) — react-resizable-panels' expand() only writes to its store; flush the render before measuring rects.
 ### #drag-select
 - Open [**Clamp multi-line drag-selection to a single hunk and a single side**](practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side.md) — Drag-to-select for comment ranges cannot cross hunk boundaries; in split view it's locked to the side where it started.
 ### #emoji
 - Open [**Emoji shortcode support in comments**](map-emoji-shortcode-support-in-comments.md) — Typing :xx in the comment editor triggers an inline autocomplete; :shortcode: text is converted to Unicode in rendered markdown.
 ### #hunks
 - Open [**Clamp multi-line drag-selection to a single hunk and a single side**](practice-clamp-multi-line-drag-selection-to-a-single-hunk-and-a-single-side.md) — Drag-to-select for comment ranges cannot cross hunk boundaries; in split view it's locked to the side where it started.
+### #keyboard-navigation
+- Open [**Restore collapsed panels inside flushSync**](practice-restore-collapsed-panels-inside-flushsync.md) — react-resizable-panels' expand() only writes to its store; flush the render before measuring rects.
 ### #navigation
 - Open [**Vimium-style keyboard navigation**](map-vimium-style-keyboard-navigation.md) — f activates line-comment hints, g activates file-jump hints, j/k smooth scroll, Ctrl/Cmd+F opens find-in-page, Escape dismisses.
+### #panels
+- Open [**Restore collapsed panels inside flushSync**](practice-restore-collapsed-panels-inside-flushsync.md) — react-resizable-panels' expand() only writes to its store; flush the render before measuring rects.
+- Open [**Drive resizable panels through the imperative handle in jsdom**](../../../engineering/practice-drive-resizable-panels-through-the-imperative-handle-in-jsdom.md) — react-resizable-panels needs a ResizeObserver stub under jsdom and never fires onResize there.
+### #react
+- Open [**Restore collapsed panels inside flushSync**](practice-restore-collapsed-panels-inside-flushsync.md) — react-resizable-panels' expand() only writes to its store; flush the render before measuring rects.
+- Open [**Drive resizable panels through the imperative handle in jsdom**](../../../engineering/practice-drive-resizable-panels-through-the-imperative-handle-in-jsdom.md) — react-resizable-panels needs a ResizeObserver stub under jsdom and never fires onResize there.
+- Open [**@self-review/react package**](../../../packages/architecture/map-self-review-react-package.md) — Embeddable React UI layer: diff viewer, file tree, commenting, syntax highlighting.
 ### #shadcn
 - Open [**Use shadcn/ui components instead of raw HTML for UI**](practice-use-shadcn-ui-components-instead-of-raw-html-for-ui.md) — All buttons, inputs, dropdowns, dialogs, etc. must use shadcn/ui; no raw HTML equivalents.
 ### #split-view

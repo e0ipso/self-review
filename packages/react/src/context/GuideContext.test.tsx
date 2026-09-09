@@ -24,11 +24,7 @@ function makeFile(path: string): DiffFile {
   };
 }
 
-const files = [
-  makeFile('README.md'),
-  makeFile('src/auth/login.ts'),
-  makeFile('src/config.ts'),
-];
+const files = [makeFile('README.md'), makeFile('src/auth/login.ts'), makeFile('src/config.ts')];
 
 const guide: GuideLoadPayload = {
   overview: 'Start with the core change.',
@@ -67,9 +63,7 @@ function renderWithGuide(guidePayload?: GuideLoadPayload) {
 
 function displayedFileOrder(): string[] {
   return Array.from(
-    document.querySelectorAll<HTMLElement>(
-      '[data-testid="file-tree"] [data-file-path]'
-    )
+    document.querySelectorAll<HTMLElement>('[data-testid="file-tree"] [data-file-path]')
   ).map(el => el.getAttribute('data-file-path')!);
 }
 
@@ -89,15 +83,11 @@ describe('Guided/Flat toggle', () => {
     );
     // Implicit group labeled with its payload name, rendered last.
     expect(screen.queryByTestId('guide-group-Everything else')).not.toBeNull();
-    expect(displayedFileOrder()).toEqual([
-      'src/config.ts',
-      'src/auth/login.ts',
-      'README.md',
-    ]);
+    expect(displayedFileOrder()).toEqual(['src/config.ts', 'src/auth/login.ts', 'README.md']);
     // Per-file one-liner from the guide on the tree entry.
-    expect(
-      screen.getByTestId('guide-file-description-src/config.ts').textContent
-    ).toBe('adds the knobs');
+    expect(screen.getByTestId('guide-file-description-src/config.ts').textContent).toBe(
+      'adds the knobs'
+    );
   });
 
   it('switching to Flat restores the flat order with no group headers or one-liners', () => {
@@ -105,14 +95,8 @@ describe('Guided/Flat toggle', () => {
     fireEvent.click(screen.getByTestId('guide-mode-flat'));
     expect(screen.queryByTestId('guide-group-Core change')).toBeNull();
     expect(screen.queryByTestId('guide-group-Everything else')).toBeNull();
-    expect(
-      screen.queryByTestId('guide-file-description-src/config.ts')
-    ).toBeNull();
-    expect(displayedFileOrder()).toEqual([
-      'README.md',
-      'src/auth/login.ts',
-      'src/config.ts',
-    ]);
+    expect(screen.queryByTestId('guide-file-description-src/config.ts')).toBeNull();
+    expect(displayedFileOrder()).toEqual(['README.md', 'src/auth/login.ts', 'src/config.ts']);
   });
 
   it('viewed state is keyed by path and survives mode switches', () => {

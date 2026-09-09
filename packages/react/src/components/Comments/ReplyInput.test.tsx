@@ -30,14 +30,12 @@ vi.mock('./ComposerCore', () => ({
   }) => (
     <div>
       <span data-testid='reply-body'>{body}</span>
-      {attachments.map((attachment) => (
+      {attachments.map(attachment => (
         <button
           key={attachment.id}
           data-testid={`remove-attachment-${attachment.id}`}
           onClick={() =>
-            setAttachments((current) =>
-              current.filter((candidate) => candidate.id !== attachment.id)
-            )
+            setAttachments(current => current.filter(candidate => candidate.id !== attachment.id))
           }
         >
           Remove {attachment.fileName}
@@ -69,11 +67,7 @@ describe('ReplyInput', () => {
     };
 
     const { getByTestId } = render(
-      <ReplyInput
-        commentId='comment-1'
-        existingReply={existingReply}
-        onCancel={vi.fn()}
-      />
+      <ReplyInput commentId='comment-1' existingReply={existingReply} onCancel={vi.fn()} />
     );
 
     fireEvent.click(getByTestId('remove-attachment-attachment-1'));

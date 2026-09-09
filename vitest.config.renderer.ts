@@ -3,17 +3,8 @@ import path from 'path';
 export default {
   test: {
     environment: 'jsdom',
-    include: [
-      'packages/react/src/**/*.test.{ts,tsx}',
-      'src/renderer/**/*.test.{ts,tsx}',
-    ],
-    exclude: [
-      'node_modules/**',
-      '.webpack/**',
-      'out/**',
-      '.features-gen/**',
-      'tests/**',
-    ],
+    include: ['packages/react/src/**/*.test.{ts,tsx}', 'src/renderer/**/*.test.{ts,tsx}'],
+    exclude: ['node_modules/**', '.webpack/**', 'out/**', '.features-gen/**', 'tests/**'],
     globals: true, // Enable browser globals
     mockReset: true,
     restoreMocks: true,

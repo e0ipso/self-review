@@ -41,6 +41,7 @@ import type {
   ReviewState,
 } from './types';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
+import { formatGitDiffArgs } from './git-diff-args';
 
 /** A materialized remote PR/MR session, ready for the git-mode pipeline. */
 export interface RemoteSession {
@@ -90,13 +91,8 @@ export interface RemoteSessionDeps {
   ) => Promise<{ files: DiffFile[]; repository: string }>;
 }
 
-function defaultCreateProvider(
-  forge: ForgeName,
-  runner: ForgeCommandRunner
-): ForgeProvider {
-  return forge === 'github'
-    ? createGitHubProvider(runner)
-    : createGitLabProvider(runner);
+function defaultCreateProvider(forge: ForgeName, runner: ForgeCommandRunner): ForgeProvider {
+  return forge === 'github' ? createGitHubProvider(runner) : createGitLabProvider(runner);
 }
 
 const defaultDeps: RemoteSessionDeps = {
@@ -130,9 +126,7 @@ export async function startRemoteSession(
 
   const forgeUrl = parseForgeUrl(url);
   if (!forgeUrl) {
-    throw new Error(
-      `Not a recognized pull-request or merge-request URL: ${url}`
-    );
+    throw new Error(`Not a recognized pull-request or merge-request URL: ${url}`);
   }
 
   const provider = d.createProvider(forgeUrl.forge, d.runner);
@@ -152,20 +146,10 @@ export async function startRemoteSession(
         'falling back to the remote default branch via git.'
     );
     existingClone = await d.detectExistingClone(forgeUrl, cwd, d.runner);
-    baseBranch = await d.resolveRemoteDefaultBranch(
-      forgeUrl,
-      d.runner,
-      existingClone
-    );
+    baseBranch = await d.resolveRemoteDefaultBranch(forgeUrl, d.runner, existingClone);
   }
 
-  const materialized = await d.materialize(
-    forgeUrl,
-    baseBranch,
-    cwd,
-    d.runner,
-    existingClone
-  );
+  const materialized = await d.materialize(forgeUrl, baseBranch, cwd, d.runner, existingClone);
 
   let fetchedComments: ReviewComment[] = [];
   let threadSyncAvailable = false;
@@ -230,10 +214,7 @@ export async function bootstrapRemoteDiff(
   let files: DiffFile[];
   let repository: string;
   try {
-    ({ files, repository } = await d.loadDiff(
-      session.gitDiffArgs,
-      session.repoPath
-    ));
+    ({ files, repository } = await d.loadDiff(session.gitDiffArgs, session.repoPath));
   } catch (error) {
     session.cleanup();
     throw error;
@@ -247,7 +228,9 @@ export async function bootstrapRemoteDiff(
       files: filteredFiles,
       source: {
         type: 'git',
-        gitDiffArgs: session.gitDiffArgs.join(' '),
+        // Same renderer the git-mode path uses, so expand-context can
+        // tokenize this string back into the exact argv.
+        gitDiffArgs: formatGitDiffArgs(session.gitDiffArgs),
         repository,
       },
       remote: session.remote,
@@ -271,9 +254,7 @@ export function mergeRemoteThreads(
   );
   return [
     ...resumed,
-    ...fetched.filter(
-      c => c.remoteId === undefined || !resumedRemoteIds.has(c.remoteId)
-    ),
+    ...fetched.filter(c => c.remoteId === undefined || !resumedRemoteIds.has(c.remoteId)),
   ];
 }
 
@@ -283,10 +264,7 @@ export function mergeRemoteThreads(
  * live session values: the saved document describes the diff that was
  * actually reviewed.
  */
-export function applyRemoteProvenance(
-  state: ReviewState,
-  remote: RemoteSessionInfo
-): ReviewState {
+export function applyRemoteProvenance(state: ReviewState, remote: RemoteSessionInfo): ReviewState {
   return {
     ...state,
     // The three source shapes are mutually exclusive in the document: the

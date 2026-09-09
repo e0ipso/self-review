@@ -79,9 +79,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                   variant='ghost'
                   size='sm'
                   data-testid='toggle-untracked-btn'
-                  onClick={() =>
-                    updateConfig({ showUntracked: !config.showUntracked })
-                  }
+                  onClick={() => updateConfig({ showUntracked: !config.showUntracked })}
                   className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
                 >
                   {config.showUntracked ? (
@@ -111,9 +109,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
               variant='ghost'
               size='sm'
               data-testid={
-                allCommentsCollapsed
-                  ? 'expand-all-comments-btn'
-                  : 'collapse-all-comments-btn'
+                allCommentsCollapsed ? 'expand-all-comments-btn' : 'collapse-all-comments-btn'
               }
               onClick={handleToggleAllComments}
               className='gap-1.5 h-8 px-2.5 text-muted-foreground hover:text-foreground'
@@ -129,9 +125,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {allCommentsCollapsed
-              ? 'Expand all comments'
-              : 'Collapse all comments'}
+            {allCommentsCollapsed ? 'Expand all comments' : 'Collapse all comments'}
           </TooltipContent>
         </Tooltip>
 
@@ -161,9 +155,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                     <span className='text-xs'>Guided</span>
                   </ToggleGroupItem>
                 </TooltipTrigger>
-                <TooltipContent>
-                  Group files by the review walkthrough
-                </TooltipContent>
+                <TooltipContent>Group files by the review walkthrough</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -181,7 +173,6 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
             </ToggleGroup>
           </>
         )}
-
       </div>
 
       <div
@@ -209,14 +200,10 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
           {stats.files} {stats.files === 1 ? 'file' : 'files'} changed
         </span>
         {stats.additions > 0 && (
-          <span className='text-green-600 dark:text-green-400'>
-            +{stats.additions}
-          </span>
+          <span className='text-green-600 dark:text-green-400'>+{stats.additions}</span>
         )}
         {stats.deletions > 0 && (
-          <span className='text-red-600 dark:text-red-400'>
-            -{stats.deletions}
-          </span>
+          <span className='text-red-600 dark:text-red-400'>-{stats.deletions}</span>
         )}
       </div>
 
@@ -235,15 +222,11 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
               ) : (
                 <MoveHorizontal className='h-3.5 w-3.5' />
               )}
-              <span className='text-xs'>
-                {config.wordWrap ? 'Wrap Lines' : 'No Wrap'}
-              </span>
+              <span className='text-xs'>{config.wordWrap ? 'Wrap Lines' : 'No Wrap'}</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {config.wordWrap
-              ? 'Wrap long lines'
-              : 'Scroll long lines horizontally'}
+            {config.wordWrap ? 'Wrap long lines' : 'Scroll long lines horizontally'}
           </TooltipContent>
         </Tooltip>
 
@@ -254,49 +237,43 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
           variant='outline'
           size='sm'
           value={config.theme}
-          onValueChange={value =>
-            value && handleThemeChange(value as 'light' | 'dark' | 'system')
-          }
+          onValueChange={value => value && handleThemeChange(value as 'light' | 'dark' | 'system')}
         >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <ToggleGroupItem
-              value='light'
-              data-testid='theme-option-light'
-              className='h-8 w-8 p-0'
-            >
-              <Sun className='h-3.5 w-3.5' />
-              <span className='sr-only'>Light theme</span>
-            </ToggleGroupItem>
-          </TooltipTrigger>
-          <TooltipContent>Light theme</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <ToggleGroupItem
-              value='dark'
-              data-testid='theme-option-dark'
-              className='h-8 w-8 p-0'
-            >
-              <Moon className='h-3.5 w-3.5' />
-              <span className='sr-only'>Dark theme</span>
-            </ToggleGroupItem>
-          </TooltipTrigger>
-          <TooltipContent>Dark theme</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <ToggleGroupItem
-              value='system'
-              data-testid='theme-option-system'
-              className='h-8 w-8 p-0'
-            >
-              <Monitor className='h-3.5 w-3.5' />
-              <span className='sr-only'>System theme</span>
-            </ToggleGroupItem>
-          </TooltipTrigger>
-          <TooltipContent>System theme</TooltipContent>
-        </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ToggleGroupItem
+                value='light'
+                data-testid='theme-option-light'
+                className='h-8 w-8 p-0'
+              >
+                <Sun className='h-3.5 w-3.5' />
+                <span className='sr-only'>Light theme</span>
+              </ToggleGroupItem>
+            </TooltipTrigger>
+            <TooltipContent>Light theme</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ToggleGroupItem value='dark' data-testid='theme-option-dark' className='h-8 w-8 p-0'>
+                <Moon className='h-3.5 w-3.5' />
+                <span className='sr-only'>Dark theme</span>
+              </ToggleGroupItem>
+            </TooltipTrigger>
+            <TooltipContent>Dark theme</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ToggleGroupItem
+                value='system'
+                data-testid='theme-option-system'
+                className='h-8 w-8 p-0'
+              >
+                <Monitor className='h-3.5 w-3.5' />
+                <span className='sr-only'>System theme</span>
+              </ToggleGroupItem>
+            </TooltipTrigger>
+            <TooltipContent>System theme</TooltipContent>
+          </Tooltip>
         </ToggleGroup>
 
         <Separator orientation='vertical' className='h-5' />

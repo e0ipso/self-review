@@ -58,9 +58,7 @@ export default function CloseConfirmDialog() {
           >
             Discard
           </AlertDialogAction>
-          <AlertDialogAction onClick={handleSaveAndQuit}>
-            Save & Quit
-          </AlertDialogAction>
+          <AlertDialogAction onClick={handleSaveAndQuit}>Save & Quit</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -3,7 +3,15 @@
  * This provides the same DiffFile[] that the Electron app would generate
  * from the test repository, but without needing git.
  */
-import type { DiffFile, DiffLoadPayload, DiffSource, AppConfig, CategoryDef, GuideLoadPayload } from '../../packages/core/src/types';
+import type {
+  DiffFile,
+  DiffLine,
+  DiffLoadPayload,
+  DiffSource,
+  AppConfig,
+  CategoryDef,
+  GuideLoadPayload,
+} from '../../packages/core/src/types';
 
 // ── src/auth/login.ts — modified ──
 
@@ -71,40 +79,141 @@ const loginFile: DiffFile = {
       newStart: 1,
       newLines: 27,
       lines: [
-        { type: 'context', oldLineNumber: 1, newLineNumber: 1, content: 'import { db } from "../db";' },
+        {
+          type: 'context',
+          oldLineNumber: 1,
+          newLineNumber: 1,
+          content: 'import { db } from "../db";',
+        },
         { type: 'deletion', oldLineNumber: 2, newLineNumber: null, content: '' },
-        { type: 'addition', newLineNumber: 2, oldLineNumber: null, content: 'import { createSession } from "../session";' },
-        { type: 'addition', newLineNumber: 3, oldLineNumber: null, content: 'import { logger } from "../logger";' },
+        {
+          type: 'addition',
+          newLineNumber: 2,
+          oldLineNumber: null,
+          content: 'import { createSession } from "../session";',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 3,
+          oldLineNumber: null,
+          content: 'import { logger } from "../logger";',
+        },
         { type: 'addition', newLineNumber: 4, oldLineNumber: null, content: '' },
-        { type: 'context', oldLineNumber: 3, newLineNumber: 5, content: 'export async function login(username: string, password: string) {' },
+        {
+          type: 'context',
+          oldLineNumber: 3,
+          newLineNumber: 5,
+          content: 'export async function login(username: string, password: string) {',
+        },
         { type: 'addition', newLineNumber: 6, oldLineNumber: null, content: '  try {' },
-        { type: 'context', oldLineNumber: 4, newLineNumber: 7, content: '  const user = await db.findUser(username);' },
+        {
+          type: 'context',
+          oldLineNumber: 4,
+          newLineNumber: 7,
+          content: '  const user = await db.findUser(username);',
+        },
         { type: 'context', oldLineNumber: 5, newLineNumber: 8, content: '  if (!user) {' },
-        { type: 'deletion', oldLineNumber: 6, newLineNumber: null, content: '    throw new Error("User not found");' },
-        { type: 'addition', newLineNumber: 9, oldLineNumber: null, content: '    logger.warn("Login failed: user not found", { username });' },
+        {
+          type: 'deletion',
+          oldLineNumber: 6,
+          newLineNumber: null,
+          content: '    throw new Error("User not found");',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 9,
+          oldLineNumber: null,
+          content: '    logger.warn("Login failed: user not found", { username });',
+        },
         { type: 'addition', newLineNumber: 10, oldLineNumber: null, content: '    return null;' },
         { type: 'context', oldLineNumber: 7, newLineNumber: 11, content: '  }' },
-        { type: 'deletion', oldLineNumber: 8, newLineNumber: null, content: '  const valid = checkPassword(password, user.hash);' },
-        { type: 'addition', newLineNumber: 12, oldLineNumber: null, content: '  const valid = await verifyPassword(password, user.hash);' },
+        {
+          type: 'deletion',
+          oldLineNumber: 8,
+          newLineNumber: null,
+          content: '  const valid = checkPassword(password, user.hash);',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 12,
+          oldLineNumber: null,
+          content: '  const valid = await verifyPassword(password, user.hash);',
+        },
         { type: 'context', oldLineNumber: 9, newLineNumber: 13, content: '  if (!valid) {' },
-        { type: 'deletion', oldLineNumber: 10, newLineNumber: null, content: '    throw new Error("Invalid password");' },
-        { type: 'addition', newLineNumber: 14, oldLineNumber: null, content: '    logger.warn("Login failed: invalid password", { username });' },
+        {
+          type: 'deletion',
+          oldLineNumber: 10,
+          newLineNumber: null,
+          content: '    throw new Error("Invalid password");',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 14,
+          oldLineNumber: null,
+          content: '    logger.warn("Login failed: invalid password", { username });',
+        },
         { type: 'addition', newLineNumber: 15, oldLineNumber: null, content: '    return null;' },
         { type: 'context', oldLineNumber: 11, newLineNumber: 16, content: '  }' },
-        { type: 'deletion', oldLineNumber: 12, newLineNumber: null, content: '  return { id: user.id, username: user.username };' },
-        { type: 'addition', newLineNumber: 17, oldLineNumber: null, content: '  const session = await createSession(user.id);' },
-        { type: 'addition', newLineNumber: 18, oldLineNumber: null, content: '  return { id: user.id, username: user.username, sessionToken: session.token };' },
+        {
+          type: 'deletion',
+          oldLineNumber: 12,
+          newLineNumber: null,
+          content: '  return { id: user.id, username: user.username };',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 17,
+          oldLineNumber: null,
+          content: '  const session = await createSession(user.id);',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 18,
+          oldLineNumber: null,
+          content:
+            '  return { id: user.id, username: user.username, sessionToken: session.token };',
+        },
         { type: 'addition', newLineNumber: 19, oldLineNumber: null, content: '  } catch (err) {' },
-        { type: 'addition', newLineNumber: 20, oldLineNumber: null, content: '    logger.error("Login error", { username, error: err });' },
+        {
+          type: 'addition',
+          newLineNumber: 20,
+          oldLineNumber: null,
+          content: '    logger.error("Login error", { username, error: err });',
+        },
         { type: 'addition', newLineNumber: 21, oldLineNumber: null, content: '    throw err;' },
         { type: 'addition', newLineNumber: 22, oldLineNumber: null, content: '  }' },
         { type: 'context', oldLineNumber: 13, newLineNumber: 23, content: '}' },
         { type: 'context', oldLineNumber: 14, newLineNumber: 24, content: '' },
-        { type: 'deletion', oldLineNumber: 15, newLineNumber: null, content: 'function checkPassword(input: string, hash: string): boolean {' },
-        { type: 'deletion', oldLineNumber: 16, newLineNumber: null, content: '  return input === hash; // TODO: proper hashing' },
-        { type: 'addition', newLineNumber: 25, oldLineNumber: null, content: 'async function verifyPassword(input: string, hash: string): Promise<boolean> {' },
-        { type: 'addition', newLineNumber: 26, oldLineNumber: null, content: '  // TODO: use bcrypt' },
-        { type: 'addition', newLineNumber: 27, oldLineNumber: null, content: '  return input === hash;' },
+        {
+          type: 'deletion',
+          oldLineNumber: 15,
+          newLineNumber: null,
+          content: 'function checkPassword(input: string, hash: string): boolean {',
+        },
+        {
+          type: 'deletion',
+          oldLineNumber: 16,
+          newLineNumber: null,
+          content: '  return input === hash; // TODO: proper hashing',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 25,
+          oldLineNumber: null,
+          content: 'async function verifyPassword(input: string, hash: string): Promise<boolean> {',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 26,
+          oldLineNumber: null,
+          content: '  // TODO: use bcrypt',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 27,
+          oldLineNumber: null,
+          content: '  return input === hash;',
+        },
         { type: 'context', oldLineNumber: 17, newLineNumber: 28, content: '}' },
       ],
     },
@@ -131,12 +240,14 @@ const configFile: DiffFile = {
       oldLines: 0,
       newStart: 1,
       newLines: 25,
-      lines: configLines.map((line, i) => ({
-        type: 'addition' as const,
-        oldLineNumber: null,
-        newLineNumber: i + 1,
-        content: line,
-      })),
+      lines: configLines.map(
+        (line, i): DiffLine => ({
+          type: 'addition',
+          oldLineNumber: null,
+          newLineNumber: i + 1,
+          content: line,
+        })
+      ),
     },
   ],
 };
@@ -157,12 +268,14 @@ const legacyFile: DiffFile = {
       oldLines: 40,
       newStart: 0,
       newLines: 0,
-      lines: legacyLines.map((line, i) => ({
-        type: 'deletion' as const,
-        oldLineNumber: i + 1,
-        newLineNumber: null,
-        content: line,
-      })),
+      lines: legacyLines.map(
+        (line, i): DiffLine => ({
+          type: 'deletion',
+          oldLineNumber: i + 1,
+          newLineNumber: null,
+          content: line,
+        })
+      ),
     },
   ],
 };
@@ -184,10 +297,25 @@ const readmeFile: DiffFile = {
       lines: [
         { type: 'context', oldLineNumber: 1, newLineNumber: 1, content: '# My App' },
         { type: 'context', oldLineNumber: 2, newLineNumber: 2, content: '' },
-        { type: 'deletion', oldLineNumber: 3, newLineNumber: null, content: 'A simple application.' },
-        { type: 'addition', newLineNumber: 3, oldLineNumber: null, content: 'A modern application with authentication.' },
+        {
+          type: 'deletion',
+          oldLineNumber: 3,
+          newLineNumber: null,
+          content: 'A simple application.',
+        },
+        {
+          type: 'addition',
+          newLineNumber: 3,
+          oldLineNumber: null,
+          content: 'A modern application with authentication.',
+        },
         { type: 'addition', newLineNumber: 4, oldLineNumber: null, content: '' },
-        { type: 'addition', newLineNumber: 5, oldLineNumber: null, content: 'See docs/ for more info.' },
+        {
+          type: 'addition',
+          newLineNumber: 5,
+          oldLineNumber: null,
+          content: 'See docs/ for more info.',
+        },
       ],
     },
   ],
@@ -195,7 +323,10 @@ const readmeFile: DiffFile = {
 
 // ── src/new-feature.ts — added (untracked) ──
 
-const newFeatureLines = Array.from({ length: 20 }, (_, i) => `export const feature${i + 1} = true;`);
+const newFeatureLines = Array.from(
+  { length: 20 },
+  (_, i) => `export const feature${i + 1} = true;`
+);
 
 const newFeatureFile: DiffFile = {
   oldPath: '/dev/null',
@@ -210,12 +341,14 @@ const newFeatureFile: DiffFile = {
       oldLines: 0,
       newStart: 1,
       newLines: 20,
-      lines: newFeatureLines.map((line, i) => ({
-        type: 'addition' as const,
-        oldLineNumber: null,
-        newLineNumber: i + 1,
-        content: line,
-      })),
+      lines: newFeatureLines.map(
+        (line, i): DiffLine => ({
+          type: 'addition',
+          oldLineNumber: null,
+          newLineNumber: i + 1,
+          content: line,
+        })
+      ),
     },
   ],
 };
@@ -273,12 +406,14 @@ const architectureFile: DiffFile = {
       oldLines: 0,
       newStart: 1,
       newLines: architectureLines.length,
-      lines: architectureLines.map((line, i) => ({
-        type: 'addition' as const,
-        oldLineNumber: null,
-        newLineNumber: i + 1,
-        content: line,
-      })),
+      lines: architectureLines.map(
+        (line, i): DiffLine => ({
+          type: 'addition',
+          oldLineNumber: null,
+          newLineNumber: i + 1,
+          content: line,
+        })
+      ),
     },
   ],
 };
@@ -353,12 +488,14 @@ const markdownNewDocsFile: DiffFile = {
       oldLines: 0,
       newStart: 1,
       newLines: markdownNewDocsLines.length,
-      lines: markdownNewDocsLines.map((line, i) => ({
-        type: 'addition' as const,
-        oldLineNumber: null,
-        newLineNumber: i + 1,
-        content: line,
-      })),
+      lines: markdownNewDocsLines.map(
+        (line, i): DiffLine => ({
+          type: 'addition',
+          oldLineNumber: null,
+          newLineNumber: i + 1,
+          content: line,
+        })
+      ),
     },
   ],
 };
@@ -392,19 +529,19 @@ const renderedHtmlFile: DiffFile = {
       oldLines: 0,
       newStart: 1,
       newLines: renderedHtmlLines.length,
-      lines: renderedHtmlLines.map((line, i) => ({
-        type: 'addition' as const,
-        oldLineNumber: null,
-        newLineNumber: i + 1,
-        content: line,
-      })),
+      lines: renderedHtmlLines.map(
+        (line, i): DiffLine => ({
+          type: 'addition',
+          oldLineNumber: null,
+          newLineNumber: i + 1,
+          content: line,
+        })
+      ),
     },
   ],
 };
 
-const markdownIndexLines = [
-  "export const version = '1.0.0';",
-];
+const markdownIndexLines = ["export const version = '1.0.0';"];
 
 const markdownIndexFile: DiffFile = {
   oldPath: '/dev/null',
@@ -418,12 +555,14 @@ const markdownIndexFile: DiffFile = {
       oldLines: 0,
       newStart: 1,
       newLines: markdownIndexLines.length,
-      lines: markdownIndexLines.map((line, i) => ({
-        type: 'addition' as const,
-        oldLineNumber: null,
-        newLineNumber: i + 1,
-        content: line,
-      })),
+      lines: markdownIndexLines.map(
+        (line, i): DiffLine => ({
+          type: 'addition',
+          oldLineNumber: null,
+          newLineNumber: i + 1,
+          content: line,
+        })
+      ),
     },
   ],
 };
@@ -490,26 +629,26 @@ export function createGuideFixturePayload(): GuideLoadPayload {
         rationale: 'The new module and the call site that adopts it',
         implicit: false,
         files: [
-          { path: 'src/new-feature.ts', description: 'adds the feature flags everything else reads' },
-          { path: 'src/auth/login.ts', description: 'rewrites login flow with sessions and logging' },
+          {
+            path: 'src/new-feature.ts',
+            description: 'adds the feature flags everything else reads',
+          },
+          {
+            path: 'src/auth/login.ts',
+            description: 'rewrites login flow with sessions and logging',
+          },
         ],
       },
       {
         name: 'Configuration',
         rationale: 'Settings that gate the new behavior',
         implicit: false,
-        files: [
-          { path: 'src/config.ts', description: 'adds retry and timeout knobs' },
-        ],
+        files: [{ path: 'src/config.ts', description: 'adds retry and timeout knobs' }],
       },
       {
         name: 'Everything else',
         implicit: true,
-        files: [
-          { path: 'README.md' },
-          { path: 'src/legacy.ts' },
-          { path: 'docs/architecture.md' },
-        ],
+        files: [{ path: 'README.md' }, { path: 'src/legacy.ts' }, { path: 'docs/architecture.md' }],
       },
     ],
   };

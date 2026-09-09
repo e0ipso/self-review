@@ -11,7 +11,16 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { Search, ChevronsDownUp, ChevronsUpDown, Keyboard, CheckCircle2, AlertCircle, Columns2, AlignJustify } from 'lucide-react';
+import {
+  Search,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Keyboard,
+  CheckCircle2,
+  AlertCircle,
+  Columns2,
+  AlignJustify,
+} from 'lucide-react';
 import TruncatedPath from './TruncatedPath';
 import { FileTreeEntry } from './FileTreeEntry';
 import { GuideStation } from './GuideStation';
@@ -25,7 +34,6 @@ export default function FileTree() {
   const { guide, mode } = useGuide();
   const [searchQuery, setSearchQuery] = useState('');
   const [allExpanded, setAllExpanded] = useState(true);
-
 
   const handleChangeOutputPath = async () => {
     if (!adapter?.changeOutputPath) return;
@@ -72,7 +80,6 @@ export default function FileTree() {
     const fileState = files.find(f => f.path === filePath);
     return fileState?.viewed || false;
   };
-
 
   return (
     <div className='flex flex-col h-full' data-testid='file-tree'>
@@ -131,11 +138,26 @@ export default function FileTree() {
               </TooltipTrigger>
               <TooltipContent side='right' className='text-xs space-y-1 p-2'>
                 <div className='font-medium mb-1'>Keyboard Shortcuts</div>
-                <div className='flex justify-between gap-4'><span>Find in page</span><kbd className='font-mono'>Ctrl+F</kbd></div>
-                <div className='flex justify-between gap-4'><span>Comment on line</span><kbd className='font-mono'>f</kbd></div>
-                <div className='flex justify-between gap-4'><span>Jump to file</span><kbd className='font-mono'>g</kbd></div>
-                <div className='flex justify-between gap-4'><span>Scroll diffs</span><kbd className='font-mono'>j/k</kbd></div>
-                <div className='flex justify-between gap-4'><span>Cancel</span><kbd className='font-mono'>Esc</kbd></div>
+                <div className='flex justify-between gap-4'>
+                  <span>Find in page</span>
+                  <kbd className='font-mono'>Ctrl+F</kbd>
+                </div>
+                <div className='flex justify-between gap-4'>
+                  <span>Comment on line</span>
+                  <kbd className='font-mono'>f</kbd>
+                </div>
+                <div className='flex justify-between gap-4'>
+                  <span>Jump to file</span>
+                  <kbd className='font-mono'>g</kbd>
+                </div>
+                <div className='flex justify-between gap-4'>
+                  <span>Scroll diffs</span>
+                  <kbd className='font-mono'>j/k</kbd>
+                </div>
+                <div className='flex justify-between gap-4'>
+                  <span>Cancel</span>
+                  <kbd className='font-mono'>Esc</kbd>
+                </div>
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -195,8 +217,7 @@ export default function FileTree() {
               ? guide?.groups[section.header.groupIndex]?.files.map(f => f.path)
               : undefined;
           const progressPaths =
-            fullGroupPaths ??
-            section.entries.map(({ file }) => file.newPath || file.oldPath);
+            fullGroupPaths ?? section.entries.map(({ file }) => file.newPath || file.oldPath);
           const viewedCount = section.header
             ? progressPaths.filter(path => isViewed(path)).length
             : 0;
@@ -215,11 +236,10 @@ export default function FileTree() {
               />
             );
           });
-          if (!section.header) return (
-            <React.Fragment key={`section-${sectionIndex}-flat`}>
-              {entryNodes}
-            </React.Fragment>
-          );
+          if (!section.header)
+            return (
+              <React.Fragment key={`section-${sectionIndex}-flat`}>{entryNodes}</React.Fragment>
+            );
           const isFirst = sectionIndex === 0;
           const isLast = sectionIndex === displaySections.length - 1;
           return (
@@ -243,18 +263,12 @@ export default function FileTree() {
                 }`}
                 aria-hidden='true'
               />
-              <div
-                className='px-2 pt-4 pb-1.5'
-                data-testid={`guide-group-${section.header.name}`}
-              >
+              <div className='px-2 pt-4 pb-1.5' data-testid={`guide-group-${section.header.name}`}>
                 <div className='flex items-center gap-2'>
                   <GuideStation
                     index={stationIndex}
                     implicit={section.header.implicit}
-                    complete={
-                      progressPaths.length > 0 &&
-                      viewedCount === progressPaths.length
-                    }
+                    complete={progressPaths.length > 0 && viewedCount === progressPaths.length}
                     surfaceClassName='bg-sidebar'
                     className='relative z-10'
                   />
@@ -292,7 +306,10 @@ export default function FileTree() {
               <span className='font-medium'>Output:</span>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <TruncatedPath path={outputPathInfo.resolvedOutputPath} className='cursor-default' />
+                  <TruncatedPath
+                    path={outputPathInfo.resolvedOutputPath}
+                    className='cursor-default'
+                  />
                 </TooltipTrigger>
                 <TooltipContent side='right' className='max-w-sm'>
                   <p className='font-mono text-xs break-all'>{outputPathInfo.resolvedOutputPath}</p>
@@ -321,7 +338,6 @@ export default function FileTree() {
           </div>
         </>
       )}
-
     </div>
   );
 }

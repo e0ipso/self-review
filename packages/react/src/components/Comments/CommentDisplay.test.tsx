@@ -81,21 +81,15 @@ describe('CommentDisplay threads', () => {
     expect(thread).toBeTruthy();
 
     const rendered = Array.from(
-      container.querySelectorAll(
-        '[data-testid^="thread-"] > [data-testid^="reply-"]'
-      )
-    ).map((el) => el.getAttribute('data-testid'));
+      container.querySelectorAll('[data-testid^="thread-"] > [data-testid^="reply-"]')
+    ).map(el => el.getAttribute('data-testid'));
     expect(rendered).toEqual(['reply-r1', 'reply-r2', 'reply-r3']);
 
-    expect(within(thread).getByTestId('reply-r1').textContent).toContain(
-      'First turn'
-    );
+    expect(within(thread).getByTestId('reply-r1').textContent).toContain('First turn');
   });
 
   it('attributes authored replies to their author and unauthored ones to "You"', () => {
-    const { getByTestId } = render(
-      <CommentDisplay comment={makeComment({ replies })} />
-    );
+    const { getByTestId } = render(<CommentDisplay comment={makeComment({ replies })} />);
 
     expect(getByTestId('reply-r1').textContent).toContain('claude-opus-5');
     expect(getByTestId('reply-r2').textContent).toContain('You');
@@ -111,16 +105,12 @@ describe('CommentDisplay threads', () => {
     ['authored', 'claude-opus-5'],
     ['unauthored', undefined],
   ])('offers Reply on an %s comment', (_label, author) => {
-    const { getByTestId } = render(
-      <CommentDisplay comment={makeComment({ author })} />
-    );
+    const { getByTestId } = render(<CommentDisplay comment={makeComment({ author })} />);
     expect(getByTestId('reply-btn-c1')).toBeTruthy();
   });
 
   it('mounts the reply composer on Reply and unmounts it on Cancel', () => {
-    const { getByTestId, queryByTestId } = render(
-      <CommentDisplay comment={makeComment()} />
-    );
+    const { getByTestId, queryByTestId } = render(<CommentDisplay comment={makeComment()} />);
 
     expect(queryByTestId('reply-input')).toBeNull();
     fireEvent.click(getByTestId('reply-btn-c1'));
@@ -151,9 +141,7 @@ describe('CommentDisplay threads', () => {
   });
 
   it('deletes any reply regardless of author', () => {
-    const { getByTestId } = render(
-      <CommentDisplay comment={makeComment({ replies })} />
-    );
+    const { getByTestId } = render(<CommentDisplay comment={makeComment({ replies })} />);
 
     fireEvent.click(getByTestId('delete-reply-btn-r1'));
     expect(mocks.deleteReply).toHaveBeenCalledWith('c1', 'r1');
@@ -175,14 +163,9 @@ describe('CommentDisplay threads', () => {
   });
 
   it('hides the thread on the global toggle-all-comments event', () => {
-    const { queryByTestId } = render(
-      <CommentDisplay comment={makeComment({ replies })} />
-    );
+    const { queryByTestId } = render(<CommentDisplay comment={makeComment({ replies })} />);
 
-    fireEvent(
-      document,
-      new CustomEvent('toggle-all-comments', { detail: { collapsed: true } })
-    );
+    fireEvent(document, new CustomEvent('toggle-all-comments', { detail: { collapsed: true } }));
 
     expect(queryByTestId('thread-c1')).toBeNull();
     expect(queryByTestId('reply-btn-c1')).toBeNull();
@@ -201,11 +184,7 @@ describe('CommentDisplay threads', () => {
 
     const thread = getByTestId('thread-c1');
     expect(thread.querySelector('.category-badge')).toBeNull();
-    expect(
-      thread.querySelector('[data-testid^="comment-severity-"]')
-    ).toBeNull();
-    expect(
-      thread.querySelector('[data-testid^="comment-confidence-"]')
-    ).toBeNull();
+    expect(thread.querySelector('[data-testid^="comment-severity-"]')).toBeNull();
+    expect(thread.querySelector('[data-testid^="comment-confidence-"]')).toBeNull();
   });
 });

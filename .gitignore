@@ -140,6 +140,9 @@ review.guide.xml
 /.self-review-assets
 
 .claude/worktrees
+
+# Nested sitting worktrees created by the sift-drain coordinator under the repo root
+.sift-worktrees/
 # >>> @e0ipso/ai-knowledge-base >>>
 .ai/knowledge-base/_sessions/
 .ai/knowledge-base/_logs/

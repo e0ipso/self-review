@@ -25,9 +25,7 @@ export interface GuideOverviewContentProps {
  * places — the trailhead at the top of the review and the recall dialog
  * opened from the wayfinding HUD — so both always show the same thing.
  */
-export default function GuideOverviewContent({
-  onNavigate,
-}: GuideOverviewContentProps) {
+export default function GuideOverviewContent({ onNavigate }: GuideOverviewContentProps) {
   const { guide } = useGuide();
   const { diffFiles, files } = useReview();
   const navigation = useOptionalDiffNavigation();
@@ -55,12 +53,9 @@ export default function GuideOverviewContent({
   const groups = guide.groups;
   const totalFiles = groups.reduce((sum, group) => sum + group.files.length, 0);
 
-  const viewedPaths = new Set(
-    (files ?? []).filter(f => f.viewed).map(f => f.path)
-  );
+  const viewedPaths = new Set((files ?? []).filter(f => f.viewed).map(f => f.path));
   const isGroupComplete = (group: (typeof groups)[number]) =>
-    group.files.length > 0 &&
-    group.files.every(file => viewedPaths.has(file.path));
+    group.files.length > 0 && group.files.every(file => viewedPaths.has(file.path));
 
   return (
     <div>
@@ -72,20 +67,12 @@ export default function GuideOverviewContent({
           </span>
         </span>
         <span className='font-mono text-[11px] tabular-nums text-muted-foreground'>
-          {groups.length} {groups.length === 1 ? 'stop' : 'stops'} ·{' '}
-          {totalFiles} {totalFiles === 1 ? 'file' : 'files'}
+          {groups.length} {groups.length === 1 ? 'stop' : 'stops'} · {totalFiles}{' '}
+          {totalFiles === 1 ? 'file' : 'files'}
           {additions > 0 && (
-            <span className='text-emerald-600 dark:text-emerald-400'>
-              {' '}
-              +{additions}
-            </span>
+            <span className='text-emerald-600 dark:text-emerald-400'> +{additions}</span>
           )}
-          {deletions > 0 && (
-            <span className='text-red-600 dark:text-red-400'>
-              {' '}
-              −{deletions}
-            </span>
-          )}
+          {deletions > 0 && <span className='text-red-600 dark:text-red-400'> −{deletions}</span>}
         </span>
       </div>
 

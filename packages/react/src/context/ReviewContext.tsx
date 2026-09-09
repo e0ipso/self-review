@@ -41,17 +41,8 @@ export interface ReviewContextValue {
   ) => void;
   editComment: (id: string, updates: Partial<ReviewComment>) => void;
   deleteComment: (id: string) => void;
-  addReply: (
-    commentId: string,
-    body: string,
-    author?: string,
-    attachments?: Attachment[]
-  ) => void;
-  updateReply: (
-    commentId: string,
-    replyId: string,
-    updates: Partial<Reply>
-  ) => void;
+  addReply: (commentId: string, body: string, author?: string, attachments?: Attachment[]) => void;
+  updateReply: (commentId: string, replyId: string, updates: Partial<Reply>) => void;
   deleteReply: (commentId: string, replyId: string) => void;
   toggleViewed: (filePath: string) => void;
   getCommentsForFile: (filePath: string) => ReviewComment[];
@@ -60,7 +51,10 @@ export interface ReviewContextValue {
     lineNumber: number,
     side: 'old' | 'new'
   ) => ReviewComment[];
-  expandFileContext: (filePath: string, contextLines: number) => Promise<{ hunks: DiffHunk[]; totalLines: number } | null>;
+  expandFileContext: (
+    filePath: string,
+    contextLines: number
+  ) => Promise<{ hunks: DiffHunk[]; totalLines: number } | null>;
   updateFileHunks: (filePath: string, hunks: DiffHunk[]) => void;
   /**
    * Remote head drift from the resumed document, when the session is a
@@ -71,9 +65,7 @@ export interface ReviewContextValue {
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
 
-function groupCommentsByFile(
-  comments: ReviewComment[]
-): Map<string, ReviewComment[]> {
+function groupCommentsByFile(comments: ReviewComment[]): Map<string, ReviewComment[]> {
   const byFile = new Map<string, ReviewComment[]>();
   comments.forEach(comment => {
     if (!byFile.has(comment.filePath)) {
@@ -112,9 +104,7 @@ export function ReviewProvider({
   const [diffSource, setDiffSource] = useState<DiffSource>(
     initialSource || (initialFiles ? { type: 'directory', sourcePath: '' } : { type: 'loading' })
   );
-  const [resumedReview, setResumedReview] = useState<ResumeLoadPayload | null>(
-    null
-  );
+  const [resumedReview, setResumedReview] = useState<ResumeLoadPayload | null>(null);
   const resumeAppliedRef = useRef(false);
   const { config } = useConfig();
   const adapter = useAdapter();
@@ -239,7 +229,9 @@ export function ReviewProvider({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Later pushed diff payloads replace the session wholesale — the host may
@@ -270,7 +262,10 @@ export function ReviewProvider({
     );
   }, [initialComments]);
 
-  const expandFileContext = async (filePath: string, contextLines: number): Promise<{ hunks: DiffHunk[]; totalLines: number } | null> => {
+  const expandFileContext = async (
+    filePath: string,
+    contextLines: number
+  ): Promise<{ hunks: DiffHunk[]; totalLines: number } | null> => {
     if (!adapter?.expandContext) return null;
     try {
       const response = await adapter.expandContext({ filePath, contextLines });

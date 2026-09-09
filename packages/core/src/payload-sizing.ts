@@ -1,11 +1,11 @@
 // src/main/payload-sizing.ts
 // Payload size estimation and threshold checking for large review guards.
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import type { DiffFile, AppConfig, PayloadStats } from './types';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Compute payload statistics and check against configured thresholds.
@@ -52,7 +52,7 @@ export async function getGitDiffStats(
   repoRoot: string
 ): Promise<{ fileCount: number; totalLines: number }> {
   try {
-    const { stdout } = await execAsync(`git diff --numstat ${args.join(' ')}`, {
+    const { stdout } = await execFileAsync('git', ['diff', '--numstat', ...args], {
       maxBuffer: 10 * 1024 * 1024,
       timeout: 15000,
       cwd: repoRoot,

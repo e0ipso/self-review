@@ -1,9 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { getRepoRoot, getRepoRootAsync, getUntrackedFilesAsync, runGitDiff, runGitDiffAsync } from './git';
+import {
+  getRepoRoot,
+  getRepoRootAsync,
+  getUntrackedFilesAsync,
+  runGitDiff,
+  runGitDiffAsync,
+} from './git';
+import { gitSync } from './test-support/git-env';
 
 // Exercise real child processes: mocked argv checks cannot detect shell expansion.
 describe.each(['sync', 'async'] as const)('literal git diff arguments (%s)', mode => {
@@ -12,7 +26,7 @@ describe.each(['sync', 'async'] as const)('literal git diff arguments (%s)', mod
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'self-review-test-diff-literal-'));
-    execFileSync('git', ['init', '-q', root]);
+    gitSync(['init', '-q', root]);
     // The async wrapper receives an explicit cwd; the sync wrapper inherits it.
     if (mode === 'sync') process.chdir(root);
   });
@@ -31,7 +45,7 @@ describe.each(['sync', 'async'] as const)('literal git diff arguments (%s)', mod
   ])('reviews the literal filename without executing shell syntax: %s', async filename => {
     writeFileSync(join(root, filename), 'selected content\n');
     writeFileSync(join(root, 'other.txt'), 'unselected content\n');
-    execFileSync('git', ['add', '--', filename, 'other.txt'], { cwd: root });
+    gitSync(['add', '--', filename, 'other.txt'], { cwd: root });
     const args = ['--cached', '--', filename];
 
     const diff = mode === 'sync' ? runGitDiff(args) : await runGitDiffAsync(args, root);
@@ -46,31 +60,34 @@ describe.each(['sync', 'async'] as const)('literal git diff arguments (%s)', mod
 // real. `git rev-parse --show-toplevel` prints it followed by one newline;
 // a blanket .trim() ate the whitespace along with that newline and reported
 // a path that doesn't exist on disk.
-describe.each(['sync', 'async'] as const)('repository root with whitespace in its path (%s)', mode => {
-  const originalCwd = process.cwd();
-  let parent: string;
-  let root: string;
+describe.each(['sync', 'async'] as const)(
+  'repository root with whitespace in its path (%s)',
+  mode => {
+    const originalCwd = process.cwd();
+    let parent: string;
+    let root: string;
 
-  beforeEach(() => {
-    // git reports the resolved top level, and temp dirs can be symlinked.
-    parent = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-root-space-')));
-    root = join(parent, ' trailing and leading space ');
-    mkdirSync(root);
-    execFileSync('git', ['init', '-q', root]);
-    if (mode === 'sync') process.chdir(root);
-  });
+    beforeEach(() => {
+      // git reports the resolved top level, and temp dirs can be symlinked.
+      parent = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-root-space-')));
+      root = join(parent, ' trailing and leading space ');
+      mkdirSync(root);
+      gitSync(['init', '-q', root]);
+      if (mode === 'sync') process.chdir(root);
+    });
 
-  afterEach(() => {
-    process.chdir(originalCwd);
-    rmSync(parent, { recursive: true, force: true });
-  });
+    afterEach(() => {
+      process.chdir(originalCwd);
+      rmSync(parent, { recursive: true, force: true });
+    });
 
-  it('reports the exact root path, whitespace included', async () => {
-    const reported = mode === 'sync' ? getRepoRoot() : await getRepoRootAsync(root);
+    it('reports the exact root path, whitespace included', async () => {
+      const reported = mode === 'sync' ? getRepoRoot() : await getRepoRootAsync(root);
 
-    expect(reported).toBe(root);
-  });
-});
+      expect(reported).toBe(root);
+    });
+  }
+);
 
 // Names git quotes, plus names that survive only NUL-terminated output.
 const LITERAL_NAMES = [
@@ -90,7 +107,7 @@ describe('getUntrackedFilesAsync', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'self-review-test-untracked-'));
-    execFileSync('git', ['init', '-q', root]);
+    gitSync(['init', '-q', root]);
   });
 
   afterEach(() => {

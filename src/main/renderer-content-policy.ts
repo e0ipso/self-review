@@ -7,9 +7,12 @@ export function isAllowedRendererRequest(url: string, entryUrl: string): boolean
     const resource = new URL(url);
     if (['file:', 'data:', 'blob:'].includes(resource.protocol)) return true;
     const entry = new URL(entryUrl);
-    if (entry.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(entry.hostname)) return false;
-    return resource.origin === entry.origin ||
-      (resource.protocol === 'ws:' && resource.host === entry.host);
+    if (entry.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(entry.hostname))
+      return false;
+    return (
+      resource.origin === entry.origin ||
+      (resource.protocol === 'ws:' && resource.host === entry.host)
+    );
   } catch {
     return false;
   }
@@ -18,7 +21,9 @@ export function isAllowedRendererRequest(url: string, entryUrl: string): boolean
 function openReviewedLink(url: string): void {
   try {
     if (!['https:', 'http:', 'mailto:'].includes(new URL(url).protocol)) return;
-    void shell.openExternal(url).catch(error => console.error('[main] Could not open link:', error));
+    void shell
+      .openExternal(url)
+      .catch(error => console.error('[main] Could not open link:', error));
   } catch {
     // Invalid links from reviewed text stay inert.
   }

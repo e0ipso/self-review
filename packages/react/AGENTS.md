@@ -1,27 +1,26 @@
 # @self-review/react
 
-Embeddable React components for code review UI: diff viewer, file tree, commenting, and
-syntax highlighting.
+Embeddable React components for code review UI: diff viewer, file tree, commenting, and syntax
+highlighting.
 
 ## Purpose
 
-Reusable UI layer consumed by the Electron renderer and the webapp e2e test harness.
-Provides `ReviewPanel` as the main entry point and exports individual components for
-custom composition.
+Reusable UI layer consumed by the Electron renderer and the webapp e2e test harness. Provides
+`ReviewPanel` as the main entry point and exports individual components for custom composition.
 
 ## Constraints
 
-- **Browser-only.** No Node.js APIs (`fs`, `child_process`, `path`). This package runs in
-  renderer processes and browser environments.
-- **No imports from `@self-review/core`.** Core has Node-only dependencies. Importing from
-  it, even a single function, risks pulling Node code into the browser bundle. Use
-  `@self-review/types` for shared type definitions.
+- **Browser-only.** No Node.js APIs (`fs`, `child_process`, `path`). This package runs in renderer
+  processes and browser environments.
+- **No imports from `@self-review/core`.** Core has Node-only dependencies. Importing from it, even
+  a single function, risks pulling Node code into the browser bundle. Use `@self-review/types` for
+  shared type definitions.
 - **`file-type-utils.ts` is duplicated from `@self-review/core`.** The file at
   `src/utils/file-type-utils.ts` is an intentional copy of `packages/core/src/file-type-utils.ts`.
   Both copies must be kept in sync. See the comment in the file for rationale.
 - **Adapter pattern for platform integration.** The `ReviewAdapter` interface abstracts
-  platform-specific operations (expand context, load images, change output path). The Electron
-  app and webapp e2e harness each provide their own adapter implementation.
+  platform-specific operations (expand context, load images, change output path). The Electron app
+  and webapp e2e harness each provide their own adapter implementation.
 
 ## Structure
 
@@ -48,9 +47,9 @@ src/
 
 ### Compiled CSS output
 
-`npm run build` runs `tsup && npm run build:css`. The `build:css` script uses `@tailwindcss/cli`
-to compile `src/build-styles.css` into `dist/styles.css`, a self-contained CSS file that includes
-all Tailwind utility classes used by the library. Host apps import it as:
+`npm run build` runs `tsup && npm run build:css`. The `build:css` script uses `@tailwindcss/cli` to
+compile `src/build-styles.css` into `dist/styles.css`, a self-contained CSS file that includes all
+Tailwind utility classes used by the library. Host apps import it as:
 
 ```js
 import '@self-review/react/styles.css';
@@ -69,16 +68,16 @@ stylesheet source would rebuild nothing.
 ### Build entrypoints
 
 - `src/styles.css`, **build input only**. Contains Tailwind `@custom-variant`/`@theme inline`
-  directives, CSS custom property definitions (`:root`, `.dark`), and component-level overrides.
-  Do not import this file directly from a host app.
-- `src/build-styles.css`, **Tailwind CLI entrypoint**. Imports `tailwindcss`, the typography
-  plugin, `styles.css`, and adds `@source "../dist"` to scan compiled JS for class names. Not
-  shipped in the package.
+  directives, CSS custom property definitions (`:root`, `.dark`), and component-level overrides. Do
+  not import this file directly from a host app.
+- `src/build-styles.css`, **Tailwind CLI entrypoint**. Imports `tailwindcss`, the typography plugin,
+  `styles.css`, and adds `@source "../dist"` to scan compiled JS for class names. Not shipped in the
+  package.
 
 ### Dependencies
 
-`tailwindcss` and `@tailwindcss/typography` are `devDependencies` (not `peerDependencies`).
-Host apps do not need Tailwind in their project.
+`tailwindcss` and `@tailwindcss/typography` are `devDependencies` (not `peerDependencies`). Host
+apps do not need Tailwind in their project.
 
 ### `.self-review` wrapper div
 
@@ -93,9 +92,9 @@ Host apps do not need Tailwind in their project.
 
 ### Radix/Base UI portal containers
 
-All shadcn/ui portal-based components (`alert-dialog`, `dropdown-menu`, `select`, `tooltip`)
-receive the `.self-review` wrapper div as their `container` prop via `useConfig().portalContainer`.
-This ensures portals render inside the scoped subtree and inherit dark-mode CSS variables.
+All shadcn/ui portal-based components (`alert-dialog`, `dropdown-menu`, `select`, `tooltip`) receive
+the `.self-review` wrapper div as their `container` prop via `useConfig().portalContainer`. This
+ensures portals render inside the scoped subtree and inherit dark-mode CSS variables.
 
 `portalContainer` is set synchronously via a callback ref during React's commit phase, before
 effects and before the browser paints. Portals always render inside the scoped subtree from the

@@ -1,10 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Group,
-  Panel,
-  Separator,
-  type PanelImperativeHandle,
-} from 'react-resizable-panels';
+import { flushSync } from 'react-dom';
+import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { GripVertical } from 'lucide-react';
 import FileTree from './FileTree';
 import DiffViewer from './DiffViewer/DiffViewer';
@@ -45,12 +41,19 @@ export default function Layout() {
     function handleExpandRequest() {
       const panel = fileTreePanel.current;
       if (!panel || !panel.isCollapsed()) return;
-      panel.expand();
-      syncCollapsed();
+      // expand() only writes the new size into the panel library's store; the
+      // width reaches the DOM on the render that store update schedules, which
+      // React would otherwise run a microtask after dispatchEvent returns. The
+      // requester measures rects on the next statement, so flush that render
+      // here. Deferring the measurement a frame instead would work too, at the
+      // cost of one painted frame of expanded tree with no hints on it.
+      flushSync(() => {
+        panel.expand();
+        syncCollapsed();
+      });
     }
     document.addEventListener('expand-file-tree', handleExpandRequest);
-    return () =>
-      document.removeEventListener('expand-file-tree', handleExpandRequest);
+    return () => document.removeEventListener('expand-file-tree', handleExpandRequest);
   }, [syncCollapsed]);
 
   return (
@@ -90,7 +93,7 @@ export default function Layout() {
 
       <Panel id='diffViewer' defaultSize='75%'>
         <div className='relative h-full'>
-          <div className='h-full overflow-y-auto bg-background' data-scroll-container="diff">
+          <div className='h-full overflow-y-auto bg-background' data-scroll-container='diff'>
             <DiffViewer />
           </div>
           <div className='absolute bottom-4 left-4 z-30'>

@@ -4,11 +4,7 @@ import FrontMatterTable from './FrontMatterTable';
 
 describe('FrontMatterTable', () => {
   it('renders scalar values correctly', () => {
-    render(
-      <FrontMatterTable
-        metadata={{ title: 'Hello', count: 42, date: '2024-01-15' }}
-      />,
-    );
+    render(<FrontMatterTable metadata={{ title: 'Hello', count: 42, date: '2024-01-15' }} />);
 
     expect(screen.getByText('title')).toBeTruthy();
     expect(screen.getByText('Hello')).toBeTruthy();
@@ -19,9 +15,7 @@ describe('FrontMatterTable', () => {
   });
 
   it('renders arrays as <ul> lists', () => {
-    const { container } = render(
-      <FrontMatterTable metadata={{ tags: ['react', 'typescript'] }} />,
-    );
+    const { container } = render(<FrontMatterTable metadata={{ tags: ['react', 'typescript'] }} />);
 
     const list = container.querySelector('ul');
     expect(list).toBeTruthy();
@@ -38,7 +32,7 @@ describe('FrontMatterTable', () => {
         metadata={{
           author: { name: 'Jane', email: 'jane@example.com' },
         }}
-      />,
+      />
     );
 
     // Should have outer table + nested table
@@ -60,7 +54,7 @@ describe('FrontMatterTable', () => {
           meta: { key: 'value' },
           count: 5,
         }}
-      />,
+      />
     );
 
     expect(screen.getByText('title')).toBeTruthy();
@@ -75,11 +69,7 @@ describe('FrontMatterTable', () => {
   });
 
   it('renders null and boolean values as text', () => {
-    render(
-      <FrontMatterTable
-        metadata={{ draft: true, published: false, extra: null }}
-      />,
-    );
+    render(<FrontMatterTable metadata={{ draft: true, published: false, extra: null }} />);
 
     expect(screen.getByText('true')).toBeTruthy();
     expect(screen.getByText('false')).toBeTruthy();

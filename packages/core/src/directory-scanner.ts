@@ -24,20 +24,14 @@ export async function scanDirectory(
   try {
     const dirStat = await stat(directoryPath);
     if (!dirStat.isDirectory()) {
-      console.error(
-        `Error: "${directoryPath}" is not a directory`
-      );
+      console.error(`Error: "${directoryPath}" is not a directory`);
       return [];
     }
   } catch (error) {
     if (error instanceof Error) {
-      console.error(
-        `Error accessing directory "${directoryPath}": ${error.message}`
-      );
+      console.error(`Error accessing directory "${directoryPath}": ${error.message}`);
     } else {
-      console.error(
-        `Error accessing directory "${directoryPath}": unknown error`
-      );
+      console.error(`Error accessing directory "${directoryPath}": unknown error`);
     }
     return [];
   }
@@ -63,13 +57,9 @@ export async function scanDirectory(
     }
   } catch (error) {
     if (error instanceof Error) {
-      console.error(
-        `Error reading directory "${directoryPath}": ${error.message}`
-      );
+      console.error(`Error reading directory "${directoryPath}": ${error.message}`);
     } else {
-      console.error(
-        `Error reading directory "${directoryPath}": unknown error`
-      );
+      console.error(`Error reading directory "${directoryPath}": unknown error`);
     }
     return [];
   }

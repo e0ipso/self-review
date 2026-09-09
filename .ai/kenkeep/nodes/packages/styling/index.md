@@ -14,6 +14,7 @@ _None._
 - Open [**Do not add Tailwind as a peer dependency for host apps**](practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps.md) to learn about: tailwindcss and @tailwindcss/typography are devDependencies; consumers ship no Tailwind. #css #tailwind #dependencies
 - Open [**Pass portalContainer to all Radix/shadcn portal components**](practice-pass-portalcontainer-to-all-radix-shadcn-portal-components.md) to learn about: Portals must render inside the .self-review subtree to inherit dark-mode variables. #radix #portals #theming
 - Open [**Scope styles and dark mode via the .self-review wrapper div**](practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div.md) to learn about: All overrides are prefixed .self-review; dark class toggles on the wrapper, not html. #css #scoping #theming
+- Open [**Watch CSS sources explicitly with tsup**](practice-watch-css-sources-explicitly-with-tsup.md) to learn about: tsup --watch only follows the entry import graph, so the react dev script watches src and rebuilds CSS on success. #build #tsup #css #dev-loop
 
 ## Components (what exists)
 - Open [**.self-review wrapper div**](map-self-review-wrapper-div.md) to learn about: Scoping wrapper rendered by ConfigProvider for CSS containment and dark-mode toggling. #dom #scoping #theming
@@ -24,15 +25,15 @@ _None._
 ### #css
 - Open [**CSS build pipeline for @self-review/react**](map-css-build-pipeline-for-self-review-react.md) — tsup + @tailwindcss/cli compile src/build-styles.css into dist/styles.css.
 - Open [**Import only the compiled dist/styles.css from host apps**](practice-import-only-the-compiled-dist-styles-css-from-host-apps.md) — src/styles.css and src/build-styles.css are build inputs only; never import them.
-- Open [**Do not add Tailwind as a peer dependency for host apps**](practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps.md) — tailwindcss and @tailwindcss/typography are devDependencies; consumers ship no Tailwind.
+- Open [**Watch CSS sources explicitly with tsup**](practice-watch-css-sources-explicitly-with-tsup.md) — tsup --watch only follows the entry import graph, so the react dev script watches src and rebuilds CSS on success.
+### #build
+- Open [**CSS build pipeline for @self-review/react**](map-css-build-pipeline-for-self-review-react.md) — tsup + @tailwindcss/cli compile src/build-styles.css into dist/styles.css.
+- Open [**Import only the compiled dist/styles.css from host apps**](practice-import-only-the-compiled-dist-styles-css-from-host-apps.md) — src/styles.css and src/build-styles.css are build inputs only; never import them.
+- Open [**Watch CSS sources explicitly with tsup**](practice-watch-css-sources-explicitly-with-tsup.md) — tsup --watch only follows the entry import graph, so the react dev script watches src and rebuilds CSS on success.
 ### #theming
 - Open [**.self-review wrapper div**](map-self-review-wrapper-div.md) — Scoping wrapper rendered by ConfigProvider for CSS containment and dark-mode toggling.
 - Open [**Scope styles and dark mode via the .self-review wrapper div**](practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div.md) — All overrides are prefixed .self-review; dark class toggles on the wrapper, not html.
 - Open [**Pass portalContainer to all Radix/shadcn portal components**](practice-pass-portalcontainer-to-all-radix-shadcn-portal-components.md) — Portals must render inside the .self-review subtree to inherit dark-mode variables.
-### #build
-- Open [**CSS build pipeline for @self-review/react**](map-css-build-pipeline-for-self-review-react.md) — tsup + @tailwindcss/cli compile src/build-styles.css into dist/styles.css.
-- Open [**Import only the compiled dist/styles.css from host apps**](practice-import-only-the-compiled-dist-styles-css-from-host-apps.md) — src/styles.css and src/build-styles.css are build inputs only; never import them.
-- Open [**Check the existing Forge bundler before changing build tooling**](../../engineering/practice-do-not-install-or-use-webpack.md) — The blanket webpack prohibition conflicts with the configured Forge webpack integration.
 ### #scoping
 - Open [**.self-review wrapper div**](map-self-review-wrapper-div.md) — Scoping wrapper rendered by ConfigProvider for CSS containment and dark-mode toggling.
 - Open [**Scope styles and dark mode via the .self-review wrapper div**](practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div.md) — All overrides are prefixed .self-review; dark class toggles on the wrapper, not html.
@@ -43,8 +44,11 @@ _None._
 - Open [**Append a blueprint with dependency diagram and execution phases to the plan**](../../planning/task-generation/practice-append-a-blueprint-with-dependency-diagram-and-execution-phases-to-the-plan.md) — After finalizing tasks, add a Mermaid dependency graph and group tasks into execution phases on the plan document.
 - Open [**Do not add Tailwind as a peer dependency for host apps**](practice-do-not-add-tailwind-as-a-peer-dependency-for-host-apps.md) — tailwindcss and @tailwindcss/typography are devDependencies; consumers ship no Tailwind.
 - Open [**Keep @self-review/types free of runtime dependencies**](../types/practice-keep-self-review-types-free-of-runtime-dependencies.md) — The types package must never add runtime dependencies in package.json; it exists solely for type exports.
+### #dev-loop
+- Open [**Watch CSS sources explicitly with tsup**](practice-watch-css-sources-explicitly-with-tsup.md) — tsup --watch only follows the entry import graph, so the react dev script watches src and rebuilds CSS on success.
 ### #dom
 - Open [**.self-review wrapper div**](map-self-review-wrapper-div.md) — Scoping wrapper rendered by ConfigProvider for CSS containment and dark-mode toggling.
+- Open [**Restore collapsed panels inside flushSync**](../../app/ui/interactions/practice-restore-collapsed-panels-inside-flushsync.md) — react-resizable-panels' expand() only writes to its store; flush the render before measuring rects.
 ### #imports
 - Open [**Do not import from @self-review/core in the react package**](../architecture/practice-do-not-import-from-self-review-core-in-the-react-package.md) — Importing core risks pulling Node-only code into the browser bundle.
 - Open [**Import only the compiled dist/styles.css from host apps**](practice-import-only-the-compiled-dist-styles-css-from-host-apps.md) — src/styles.css and src/build-styles.css are build inputs only; never import them.
@@ -53,3 +57,5 @@ _None._
 - Open [**Pass portalContainer to all Radix/shadcn portal components**](practice-pass-portalcontainer-to-all-radix-shadcn-portal-components.md) — Portals must render inside the .self-review subtree to inherit dark-mode variables.
 ### #radix
 - Open [**Pass portalContainer to all Radix/shadcn portal components**](practice-pass-portalcontainer-to-all-radix-shadcn-portal-components.md) — Portals must render inside the .self-review subtree to inherit dark-mode variables.
+### #tsup
+- Open [**Watch CSS sources explicitly with tsup**](practice-watch-css-sources-explicitly-with-tsup.md) — tsup --watch only follows the entry import graph, so the react dev script watches src and rebuilds CSS on success.

@@ -7,16 +7,8 @@
 
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
-import {
-  ForgeCliUnavailableError,
-  parseForgeUrl,
-} from './forge-provider';
-import type {
-  ForgeCommandRunner,
-  ForgeName,
-  ForgeProvider,
-  ForgeUrl,
-} from './forge-provider';
+import { ForgeCliUnavailableError, parseForgeUrl } from './forge-provider';
+import type { ForgeCommandRunner, ForgeName, ForgeProvider, ForgeUrl } from './forge-provider';
 import { createGitHubProvider } from './github-provider';
 import { createGitLabProvider } from './gitlab-provider';
 import {
@@ -25,14 +17,8 @@ import {
   materialize,
   resolveRemoteDefaultBranch,
 } from './materializer';
-import type {
-  ExistingClone,
-  MaterializeResult,
-} from './materializer';
-import {
-  mapThreadsToReviewComments,
-  REVIEW_LEVEL_FILE_PATH,
-} from './thread-mapper';
+import type { ExistingClone, MaterializeResult } from './materializer';
+import { mapThreadsToReviewComments, REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 import { parseDiff } from './diff-parser';
 import { runGitDiffAsync } from './git';
 import { serializeReview } from './xml-serializer';
@@ -71,11 +57,7 @@ export interface FetchCommentsDeps {
     runner: ForgeCommandRunner,
     existing?: ExistingClone | null
   ) => Promise<string>;
-  loadDiffFiles: (
-    repoPath: string,
-    baseSha: string,
-    headSha: string
-  ) => Promise<DiffFile[]>;
+  loadDiffFiles: (repoPath: string, baseSha: string, headSha: string) => Promise<DiffFile[]>;
   serialize: (state: ReviewState, outputPath: string) => Promise<string>;
   writeFile: (path: string, content: string) => void;
   loadConfig: () => AppConfig;
@@ -86,9 +68,7 @@ function defaultDeps(): FetchCommentsDeps {
   return {
     runner: defaultGitRunner,
     createProvider: (forge, runner) =>
-      forge === 'github'
-        ? createGitHubProvider(runner)
-        : createGitLabProvider(runner),
+      forge === 'github' ? createGitHubProvider(runner) : createGitLabProvider(runner),
     detectExistingClone,
     materialize,
     resolveRemoteDefaultBranch,
@@ -137,9 +117,7 @@ export interface BuildRemoteReviewStateArgs {
  *   are mutually exclusive by contract, so no local source attributes are
  *   serialized.
  */
-export function buildRemoteReviewState(
-  args: BuildRemoteReviewStateArgs
-): ReviewState {
+export function buildRemoteReviewState(args: BuildRemoteReviewStateArgs): ReviewState {
   const commentsByPath = new Map<string, ReviewComment[]>();
   for (const comment of args.comments) {
     const list = commentsByPath.get(comment.filePath);
@@ -234,16 +212,8 @@ export async function runFetchComments(
       `[fetch-comments] ${error.cli} unavailable for the base-branch lookup — ` +
         'falling back to the remote default branch via git ls-remote.'
     );
-    existingClone = await deps.detectExistingClone(
-      forgeUrl,
-      cwd,
-      deps.runner
-    );
-    baseBranch = await deps.resolveRemoteDefaultBranch(
-      forgeUrl,
-      deps.runner,
-      existingClone
-    );
+    existingClone = await deps.detectExistingClone(forgeUrl, cwd, deps.runner);
+    baseBranch = await deps.resolveRemoteDefaultBranch(forgeUrl, deps.runner, existingClone);
   }
   console.error(`[fetch-comments] Base branch: ${baseBranch}`);
 
@@ -295,9 +265,7 @@ export async function runFetchComments(
     const outputPath = resolve(cwd, config.outputFile);
     const xml = await deps.serialize(state, outputPath);
     deps.writeFile(outputPath, xml + '\n');
-    console.error(
-      `[fetch-comments] ${comments.length} threads written to ${outputPath}`
-    );
+    console.error(`[fetch-comments] ${comments.length} threads written to ${outputPath}`);
   } finally {
     materialized.cleanup();
   }

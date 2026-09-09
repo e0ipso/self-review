@@ -76,7 +76,12 @@ export default function ReplyInput({
       <Separator />
 
       {/* Actions bar */}
-      <div className='flex items-center justify-between px-3 py-2 bg-muted/10 outline-none' data-testid='reply-actions' tabIndex={-1} ref={actionsRef}>
+      <div
+        className='flex items-center justify-between px-3 py-2 bg-muted/10 outline-none'
+        data-testid='reply-actions'
+        tabIndex={-1}
+        ref={actionsRef}
+      >
         <div className='flex items-center gap-2'>
           <AttachButton setAttachments={setAttachments} />
         </div>

@@ -113,9 +113,7 @@ export function registerIpcHandlers(): void {
   });
 
   // Handle attachment file read from renderer
-  ipcMain.handle(IPC.ATTACHMENT_READ, async (_event, filePath: string) =>
-    readAttachment(filePath)
-  );
+  ipcMain.handle(IPC.ATTACHMENT_READ, async (_event, filePath: string) => readAttachment(filePath));
 
   // Send resumed comments and viewed files when the renderer is ready
   // (after diff data is loaded)
@@ -140,10 +138,8 @@ export function registerIpcHandlers(): void {
   });
 
   // Expand context for a single file by re-running git diff with more context lines
-  ipcMain.handle(
-    IPC.DIFF_EXPAND_CONTEXT,
-    async (_event, request: ExpandContextRequest) =>
-      expandContext(desktopSession, request)
+  ipcMain.handle(IPC.DIFF_EXPAND_CONTEXT, async (_event, request: ExpandContextRequest) =>
+    expandContext(desktopSession, request)
   );
 
   // Find in page: forward search request to Chromium
@@ -189,88 +185,76 @@ export function registerIpcHandlers(): void {
   });
 
   // Start a directory review from a picked path
-  ipcMain.handle(
-    IPC.REVIEW_START_DIRECTORY,
-    async (event, directoryPath: string) => {
-      const { payload, stats, exceedsThresholds } = await prepareDirectoryReview(
-        desktopSession,
-        directoryPath
-      );
+  ipcMain.handle(IPC.REVIEW_START_DIRECTORY, async (event, directoryPath: string) => {
+    const { payload, stats, exceedsThresholds } = await prepareDirectoryReview(
+      desktopSession,
+      directoryPath
+    );
 
-      // Large payload guard
-      if (exceedsThresholds && stats && desktopSession.config) {
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) {
-          const result = dialog.showMessageBoxSync(win, {
-            type: 'warning',
-            buttons: ['Continue', 'Cancel'],
-            defaultId: 1,
-            title: 'Large Review Detected',
-            message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
-            detail: `Thresholds: ${desktopSession.config.maxFiles} files, ${desktopSession.config.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
-          });
-          if (result === 1) {
-            // Nothing is committed and nothing is sent: the review the user was
-            // already looking at stays on screen.
-            console.error(
-              payload.source.type === 'file'
-                ? '[ipc] User cancelled large file review'
-                : '[ipc] User cancelled large directory review'
-            );
-            return;
-          }
-          payload.isLargePayload = true;
+    // Large payload guard
+    if (exceedsThresholds && stats && desktopSession.config) {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) {
+        const result = dialog.showMessageBoxSync(win, {
+          type: 'warning',
+          buttons: ['Continue', 'Cancel'],
+          defaultId: 1,
+          title: 'Large Review Detected',
+          message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
+          detail: `Thresholds: ${desktopSession.config.maxFiles} files, ${desktopSession.config.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
+        });
+        if (result === 1) {
+          // Nothing is committed and nothing is sent: the review the user was
+          // already looking at stays on screen.
+          console.error(
+            payload.source.type === 'file'
+              ? '[ipc] User cancelled large file review'
+              : '[ipc] User cancelled large directory review'
+          );
+          return;
         }
-      }
-
-      // Update the cache and send to renderer
-      const outgoing = commitReviewStart(desktopSession, payload);
-      const window = BrowserWindow.fromWebContents(event.sender);
-      if (window) {
-        window.webContents.send(IPC.DIFF_LOAD, outgoing);
-      }
-
-      if (payload.source.type === 'file') {
-        console.error(
-          '[ipc] File review started:',
-          payload.files.length,
-          'files'
-        );
-      } else {
-        console.error(
-          '[ipc] Directory review started:',
-          payload.source.type,
-          'mode with',
-          payload.files.length,
-          'files'
-        );
+        payload.isLargePayload = true;
       }
     }
-  );
+
+    // Update the cache and send to renderer
+    const outgoing = commitReviewStart(desktopSession, payload);
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window) {
+      window.webContents.send(IPC.DIFF_LOAD, outgoing);
+    }
+
+    if (payload.source.type === 'file') {
+      console.error('[ipc] File review started:', payload.files.length, 'files');
+    } else {
+      console.error(
+        '[ipc] Directory review started:',
+        payload.source.type,
+        'mode with',
+        payload.files.length,
+        'files'
+      );
+    }
+  });
 }
 
-export function sendDiffLoad(
-  window: BrowserWindow,
-  payload: DiffLoadPayload
-): void {
+export function sendDiffLoad(window: BrowserWindow, payload: DiffLoadPayload): void {
   window.webContents.send(IPC.DIFF_LOAD, preparePayload(payload));
 }
 
-export function sendConfigLoad(window: BrowserWindow, config: AppConfig, outputPathInfo?: OutputPathInfo): void {
+export function sendConfigLoad(
+  window: BrowserWindow,
+  config: AppConfig,
+  outputPathInfo?: OutputPathInfo
+): void {
   window.webContents.send(IPC.CONFIG_LOAD, config, outputPathInfo);
 }
 
-export function sendResumeLoad(
-  window: BrowserWindow,
-  payload: ResumeLoadPayload
-): void {
+export function sendResumeLoad(window: BrowserWindow, payload: ResumeLoadPayload): void {
   window.webContents.send(IPC.RESUME_LOAD, payload);
 }
 
-export function sendGuideLoad(
-  window: BrowserWindow,
-  payload: GuideLoadPayload
-): void {
+export function sendGuideLoad(window: BrowserWindow, payload: GuideLoadPayload): void {
   window.webContents.send(IPC.GUIDE_LOAD, payload);
 }
 
@@ -284,9 +268,7 @@ export function registerFindInPageForWindow(window: BrowserWindow): void {
   });
 }
 
-export function requestReviewFromRenderer(
-  window: BrowserWindow
-): Promise<ReviewState> {
+export function requestReviewFromRenderer(window: BrowserWindow): Promise<ReviewState> {
   return new Promise(resolve => {
     // Host-driven flow: renderer pushes state before triggering save.
     // If the session already holds a state, use it directly.
@@ -303,9 +285,7 @@ export function requestReviewFromRenderer(
 
     // Wait for response with timeout
     const timeout = setTimeout(() => {
-      console.error(
-        '[ipc] WARNING: Timeout waiting for review state from renderer (5s)'
-      );
+      console.error('[ipc] WARNING: Timeout waiting for review state from renderer (5s)');
       console.error('[ipc] Resolving with empty review state');
       resolve({
         timestamp: new Date().toISOString(),

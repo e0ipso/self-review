@@ -9,11 +9,7 @@ export interface ReviewAdapterProviderProps {
 }
 
 export function ReviewAdapterProvider({ adapter, children }: ReviewAdapterProviderProps) {
-  return (
-    <ReviewAdapterContext.Provider value={adapter}>
-      {children}
-    </ReviewAdapterContext.Provider>
-  );
+  return <ReviewAdapterContext.Provider value={adapter}>{children}</ReviewAdapterContext.Provider>;
 }
 
 export function useAdapter(): ReviewAdapter | null {

@@ -66,13 +66,17 @@ export function ComposerCore({
 
   const emoji = useEmojiAutocomplete(body, onBodyChange, editorContainerRef);
 
-  const handleAttach = useCallback((newAttachments: Attachment[]) => {
-    setAttachments(prev => [...prev, ...newAttachments]);
-  }, [setAttachments]);
+  const handleAttach = useCallback(
+    (newAttachments: Attachment[]) => {
+      setAttachments(prev => [...prev, ...newAttachments]);
+    },
+    [setAttachments]
+  );
 
   useEffect(() => {
     // Auto-focus the editor textarea when the composer mounts
-    const textarea = editorContainerRef.current?.querySelector<HTMLTextAreaElement>('.w-md-editor-text-input');
+    const textarea =
+      editorContainerRef.current?.querySelector<HTMLTextAreaElement>('.w-md-editor-text-input');
     textarea?.focus();
   }, []);
 
@@ -93,27 +97,42 @@ export function ComposerCore({
         isDragging={isDragging}
         onDragChange={setIsDragging}
       >
-        <div className='p-1 relative' data-color-mode={resolveIsDark() ? 'dark' : 'light'} ref={editorContainerRef}>
+        <div
+          className='p-1 relative'
+          data-color-mode={resolveIsDark() ? 'dark' : 'light'}
+          ref={editorContainerRef}
+        >
           <MDEditor
             value={body}
-            onChange={(val) => onBodyChange(val || '')}
+            onChange={val => onBodyChange(val || '')}
             preview='edit'
             highlightEnable={false}
             commands={[
-              commands.bold, commands.italic,
+              commands.bold,
+              commands.italic,
               commands.divider,
-              commands.quote, commands.code, commands.link,
+              commands.quote,
+              commands.code,
+              commands.link,
               commands.divider,
-              commands.unorderedListCommand, commands.orderedListCommand, commands.checkedListCommand,
+              commands.unorderedListCommand,
+              commands.orderedListCommand,
+              commands.checkedListCommand,
             ]}
-            extraCommands={headerLabel ? [{
-              name: 'header-label',
-              keyCommand: 'header-label',
-              render: () => <>{headerLabel}</>,
-            }] : []}
+            extraCommands={
+              headerLabel
+                ? [
+                    {
+                      name: 'header-label',
+                      keyCommand: 'header-label',
+                      render: () => <>{headerLabel}</>,
+                    },
+                  ]
+                : []
+            }
             textareaProps={{
               placeholder,
-              onKeyDown: (e) => {
+              onKeyDown: e => {
                 // Let emoji autocomplete handle keys first when dropdown is open
                 if (emoji.onKeyDown(e)) return;
 
@@ -149,7 +168,7 @@ export function ComposerCore({
 
       {attachments.length > 0 && (
         <div className='flex gap-2 flex-wrap px-3 py-2 border-t border-border/50'>
-          {attachments.map((att) => (
+          {attachments.map(att => (
             <AttachmentThumbnail
               key={att.id}
               attachment={att}
@@ -197,7 +216,7 @@ export function AttachButton({ setAttachments }: AttachButtonProps) {
         accept='image/*'
         multiple
         className='hidden'
-        onChange={(e) => {
+        onChange={e => {
           const files = Array.from(e.target.files || []);
           if (files.length > 0) {
             Promise.all(files.map(processImageFile))

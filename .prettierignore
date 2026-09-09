@@ -50,4 +50,18 @@ docs/
 tmp/
 temp/
 
+# Agent harness directories. .agents/ holds vendored skills pinned by content hash in
+# skills-lock.json, and .cursor/, .opencode/ and .codex/ mirror them (some entries are
+# symlinks into .agents/, which Prettier would replace with regular files). .ai/ is
+# machine-managed knowledge-base and planning state. Same set eslint.config.mjs ignores.
+.agents/
+.ai/
 .claude/
+.codex/
+.cursor/
+.opencode/
+
+# Nested sitting worktrees created by the sift-drain coordinator under the repo root. Not
+# visible to git (see .gitignore), but Prettier walks the filesystem directly and would
+# otherwise re-check the worktree's own copy of the tree.
+.sift-worktrees/

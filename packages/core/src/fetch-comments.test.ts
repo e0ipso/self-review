@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type {
-  ForgeThread,
-  ForgeUrl,
-  ForgeProvider,
-} from './forge-provider';
+import type { ForgeThread, ForgeUrl, ForgeProvider } from './forge-provider';
 import { ForgeCliUnavailableError } from './forge-provider';
 import type { MaterializeResult } from './materializer';
 import { REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
@@ -11,11 +7,7 @@ import { mapThreadsToReviewComments } from './thread-mapper';
 import { serializeReview } from './xml-serializer';
 import { parseReviewXmlString } from './xml-parser';
 import type { AppConfig, DiffFile } from './types';
-import {
-  buildRemoteReviewState,
-  runFetchComments,
-  type FetchCommentsDeps,
-} from './fetch-comments';
+import { buildRemoteReviewState, runFetchComments, type FetchCommentsDeps } from './fetch-comments';
 
 // Mock xmllint-wasm so the round-trip test does not load WASM. The
 // serializer's validation call is still asserted through the mock.
@@ -101,9 +93,7 @@ describe('buildRemoteReviewState', () => {
 
   it('adds synthetic entries for comment paths missing from the diff', () => {
     const diffFiles = [makeDiffFile('src/a.ts')];
-    const comments = mapThreadsToReviewComments([
-      makeThread('t1', 'src/gone.ts'),
-    ]);
+    const comments = mapThreadsToReviewComments([makeThread('t1', 'src/gone.ts')]);
 
     const state = buildRemoteReviewState({ ...baseArgs, diffFiles, comments });
 
@@ -213,11 +203,7 @@ describe('runFetchComments', () => {
 
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 
-    expect(deps.detectExistingClone).toHaveBeenCalledWith(
-      expect.anything(),
-      '/work',
-      deps.runner
-    );
+    expect(deps.detectExistingClone).toHaveBeenCalledWith(expect.anything(), '/work', deps.runner);
     expect(deps.resolveRemoteDefaultBranch).toHaveBeenCalledWith(
       expect.anything(),
       deps.runner,
@@ -226,9 +212,7 @@ describe('runFetchComments', () => {
     const materializeMock = deps.materialize as ReturnType<typeof vi.fn>;
     expect(materializeMock.mock.calls[0][1]).toBe('trunk');
     expect(materializeMock.mock.calls[0][4]).toBeNull();
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('falling back')
-    );
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('falling back'));
   });
 
   it('fails with a clear error when thread fetching is unavailable, and still cleans up', async () => {
@@ -236,9 +220,7 @@ describe('runFetchComments', () => {
       .fn()
       .mockRejectedValue(new ForgeCliUnavailableError('github', 'gh', 'gh not found'));
 
-    await expect(runFetchComments(PR_URL, { cwd: '/work', deps })).rejects.toThrow(
-      /gh/
-    );
+    await expect(runFetchComments(PR_URL, { cwd: '/work', deps })).rejects.toThrow(/gh/);
     expect(cleanup).toHaveBeenCalled();
     expect(written).toHaveLength(0);
   });
@@ -262,19 +244,17 @@ describe('runFetchComments', () => {
   it('forwards --all-threads as includeResolved', async () => {
     await runFetchComments(PR_URL, { cwd: '/work', deps, includeResolved: true });
 
-    expect(provider.fetchThreads).toHaveBeenCalledWith(
-      expect.objectContaining({ number: 42 }),
-      { includeResolved: true }
-    );
+    expect(provider.fetchThreads).toHaveBeenCalledWith(expect.objectContaining({ number: 42 }), {
+      includeResolved: true,
+    });
   });
 
   it('defaults to unresolved threads only', async () => {
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 
-    expect(provider.fetchThreads).toHaveBeenCalledWith(
-      expect.objectContaining({ number: 42 }),
-      { includeResolved: false }
-    );
+    expect(provider.fetchThreads).toHaveBeenCalledWith(expect.objectContaining({ number: 42 }), {
+      includeResolved: false,
+    });
   });
 
   it('produces a state that round-trips through serialize and parse', async () => {

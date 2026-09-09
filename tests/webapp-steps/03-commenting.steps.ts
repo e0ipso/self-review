@@ -44,29 +44,54 @@ async function fillReplyInput(page: Page, text: string): Promise<void> {
   await page.locator('[data-testid="reply-input"] textarea').fill(text);
 }
 
-const activeDragFile: string | null = null;
-
-async function dragMoveToLine(page: Page, line: number, side: 'new' | 'old'): Promise<void> {
-  const sectionSel = activeDragFile
-    ? `[data-testid="file-section-${activeDragFile}"]`
-    : null;
-  await page.evaluate(({ ln, s, secSel }) => {
-    const container = secSel ? document.querySelector(secSel) : document;
-    if (!container) return;
-    const el = container.querySelector(`[data-line-number="${ln}"][data-line-side="${s}"]`);
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      document.dispatchEvent(new MouseEvent('mousemove', {
-        clientX: rect.x + 20,
-        clientY: rect.y + rect.height / 2,
-        bubbles: true,
-      }));
-    }
-  }, { ln: line, s: side, secSel: sectionSel });
-  await page.waitForFunction(
-    () => document.querySelector('[class*="bg-blue"]') !== null,
-    { timeout: 3000 }
-  ).catch(() => {});
+/**
+ * Simulate a drag-to-select gesture across a line range: mousedown on the
+ * start line's comment icon, mousemove to the end line, mouseup. Mirrors the
+ * Electron tree's `selectLineRange` (tests/steps/07-xml-output.steps.ts),
+ * which drives the same rendered markup and is already exercised there.
+ */
+async function selectLineRange(
+  filePath: string,
+  start: number,
+  end: number,
+  side: 'old' | 'new'
+): Promise<void> {
+  const page = getPage();
+  const section = page.locator(`[data-testid="file-section-${filePath}"]`);
+  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${start}"]`);
+  await gutter.hover();
+  const startIcon = section.locator(`[data-testid="comment-icon-${side}-${start}"]`);
+  const box = await startIcon.boundingBox();
+  if (box === null) {
+    throw new Error(`Comment icon for ${side} line ${start} in ${filePath} did not render`);
+  }
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  const sectionSelector = `[data-testid="file-section-${filePath}"]`;
+  await page.evaluate(
+    ({ ln, s, secSel }) => {
+      const container = document.querySelector(secSel);
+      const el = container?.querySelector(`[data-line-number="${ln}"][data-line-side="${s}"]`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        document.dispatchEvent(
+          new MouseEvent('mousemove', {
+            clientX: rect.x + 20,
+            clientY: rect.y + rect.height / 2,
+            bubbles: true,
+          })
+        );
+      }
+    },
+    { ln: end, s: side, secSel: sectionSelector }
+  );
+  // Wait for the drag-select highlight before releasing, so the range
+  // actually spans both endpoints instead of collapsing to a click.
+  await page
+    .waitForFunction(() => document.querySelector('[class*="bg-blue"]') !== null, { timeout: 3000 })
+    .catch(() => {});
+  await page.mouse.up();
+  await page.locator('[data-testid="comment-input"]').waitFor({ state: 'visible', timeout: 5000 });
 }
 
 // ── Given: pre-existing comments ──
@@ -81,17 +106,12 @@ Given(
   }
 );
 
-Given(
-  'I have added a file-level comment on {string}',
-  async ({}, filePath: string) => {
-    const page = getPage();
-    await page.locator(`[data-testid="add-file-comment-${filePath}"]`).click();
-    await page
-      .locator('[data-testid="comment-input"] textarea')
-      .fill('File comment');
-    await page.locator('[data-testid="add-comment-btn"]').click();
-  }
-);
+Given('I have added a file-level comment on {string}', async ({}, filePath: string) => {
+  const page = getPage();
+  await page.locator(`[data-testid="add-file-comment-${filePath}"]`).click();
+  await page.locator('[data-testid="comment-input"] textarea').fill('File comment');
+  await page.locator('[data-testid="add-comment-btn"]').click();
+});
 
 // ── When: icon/gutter interactions ──
 
@@ -114,6 +134,13 @@ When(
   'I click the {string} icon on old line {int} in {string}',
   async ({}, _icon: string, line: number, filePath: string) => {
     await triggerCommentIcon(filePath, line, 'old');
+  }
+);
+
+When(
+  'I drag-select new lines {int} to {int} in {string}',
+  async ({}, start: number, end: number, filePath: string) => {
+    await selectLineRange(filePath, start, end, 'new');
   }
 );
 
@@ -140,34 +167,25 @@ When(
   async ({}, buttonText: string, filePath: string) => {
     const page = getPage();
     if (buttonText === 'Add file comment') {
-      await page
-        .locator(`[data-testid="add-file-comment-${filePath}"]`)
-        .click();
+      await page.locator(`[data-testid="add-file-comment-${filePath}"]`).click();
     }
   }
 );
 
-When(
-  'I select category {string} in the comment input',
-  async ({}, category: string) => {
-    const page = getPage();
-    await page.locator('[data-testid="category-selector"]').click();
-    await page.locator(`[data-testid="category-option-${category}"]`).click();
-  }
-);
+When('I select category {string} in the comment input', async ({}, category: string) => {
+  const page = getPage();
+  await page.locator('[data-testid="category-selector"]').click();
+  await page.locator(`[data-testid="category-option-${category}"]`).click();
+});
 
 When('I click {string} on that comment', async ({}, action: string) => {
   const comment = lastComment(getPage());
   if (action === 'Edit') {
     await comment.hover();
-    await comment
-      .locator('button:has(> .lucide-pencil), button:has-text("Edit")')
-      .click();
+    await comment.locator('button:has(> .lucide-pencil), button:has-text("Edit")').click();
   } else if (action === 'Delete') {
     await comment.hover();
-    await comment
-      .locator('button:has(> .lucide-trash-2), button:has-text("Delete")')
-      .click();
+    await comment.locator('button:has(> .lucide-trash-2), button:has-text("Delete")').click();
   } else if (action === 'Reply') {
     // Addressed by test id rather than by the pencil/trash icon trick above,
     // because a thread's own per-reply controls sit inside this container.
@@ -201,22 +219,16 @@ Then('a comment input box should appear below that line', async () => {
   await expect(page.locator('[data-testid="comment-input"]')).toBeVisible();
 });
 
-Then(
-  'a comment input box should appear at the top of the file section',
-  async () => {
-    const page = getPage();
-    await expect(page.locator('[data-testid="comment-input"]')).toBeVisible();
-  }
-);
+Then('a comment input box should appear at the top of the file section', async () => {
+  const page = getPage();
+  await expect(page.locator('[data-testid="comment-input"]')).toBeVisible();
+});
 
-Then(
-  'the comment input header should show {string}',
-  async ({}, text: string) => {
-    const page = getPage();
-    const input = page.locator('[data-testid="comment-input"]');
-    await expect(input).toContainText(text);
-  }
-);
+Then('the comment input header should show {string}', async ({}, text: string) => {
+  const page = getPage();
+  const input = page.locator('[data-testid="comment-input"]');
+  await expect(input).toContainText(text);
+});
 
 /**
  * Assert the card hangs off the requested anchor. The placement comes back
@@ -320,23 +332,17 @@ Then('the comment should be removed', async () => {
   await expect(comments).toHaveCount(0);
 });
 
-Then(
-  'no comment should be displayed below new line {int}',
-  async ({}, _line: number) => {
-    const page = getPage();
-    const comments = page.locator(COMMENT_SELECTOR);
-    await expect(comments).toHaveCount(0);
-  }
-);
+Then('no comment should be displayed below new line {int}', async ({}, _line: number) => {
+  const page = getPage();
+  const comments = page.locator(COMMENT_SELECTOR);
+  await expect(comments).toHaveCount(0);
+});
 
-Then(
-  'the comment body should render {string} as bold text',
-  async ({}, text: string) => {
-    const page = getPage();
-    const comments = page.locator(COMMENT_SELECTOR);
-    await expect(comments.last().locator('strong')).toContainText(text);
-  }
-);
+Then('the comment body should render {string} as bold text', async ({}, text: string) => {
+  const page = getPage();
+  const comments = page.locator(COMMENT_SELECTOR);
+  await expect(comments.last().locator('strong')).toContainText(text);
+});
 
 Then('{string} as italic text', async ({}, text: string) => {
   const page = getPage();
@@ -405,15 +411,10 @@ Then('reply {int} should show {string}', async ({}, index: number, text: string)
   await expect(replyAt(getPage(), index)).toContainText(text);
 });
 
-Then(
-  'reply {int} should be attributed to {string}',
-  async ({}, index: number, author: string) => {
-    // The author span is the reply header's first element.
-    await expect(replyAt(getPage(), index).locator('span').first()).toHaveText(
-      author
-    );
-  }
-);
+Then('reply {int} should be attributed to {string}', async ({}, index: number, author: string) => {
+  // The author span is the reply header's first element.
+  await expect(replyAt(getPage(), index).locator('span').first()).toHaveText(author);
+});
 
 Then(
   'the comment replies should read {string}, {string} in that order',

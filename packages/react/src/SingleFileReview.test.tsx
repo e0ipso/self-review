@@ -10,7 +10,7 @@ installBrowserApiStubs();
 
 let capturedAdapter: ReviewAdapter | null = null;
 
-vi.mock('./context/ReviewAdapterContext', async (importOriginal) => {
+vi.mock('./context/ReviewAdapterContext', async importOriginal => {
   const actual = await importOriginal<typeof import('./context/ReviewAdapterContext')>();
   return {
     ...actual,
@@ -34,11 +34,7 @@ vi.mock('./components/DiffViewer/FileSection', async () => {
   return {
     default: () => {
       const { config } = useConfig();
-      return (
-        <div data-testid='category-names'>
-          {config.categories.map(c => c.name).join(',')}
-        </div>
-      );
+      return <div data-testid='category-names'>{config.categories.map(c => c.name).join(',')}</div>;
     },
   };
 });

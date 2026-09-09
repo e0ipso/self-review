@@ -105,10 +105,7 @@ export interface ForgeCommandResult {
  * code on any completed run (including non-zero); rejects only when the
  * binary cannot be spawned at all (e.g. ENOENT when the CLI is absent).
  */
-export type ForgeCommandRunner = (
-  command: string,
-  args: string[]
-) => Promise<ForgeCommandResult>;
+export type ForgeCommandRunner = (command: string, args: string[]) => Promise<ForgeCommandResult>;
 
 /**
  * The conversation plane of a forge. Exactly two capabilities: base-branch
@@ -123,10 +120,7 @@ export interface ForgeProvider {
   /** Resolve the PR/MR base (target) branch name. */
   fetchBaseBranch(url: ForgeUrl): Promise<string>;
   /** Fetch the PR/MR discussion threads in normalized form. */
-  fetchThreads(
-    url: ForgeUrl,
-    options?: FetchThreadsOptions
-  ): Promise<ForgeThread[]>;
+  fetchThreads(url: ForgeUrl, options?: FetchThreadsOptions): Promise<ForgeThread[]>;
 }
 
 /**

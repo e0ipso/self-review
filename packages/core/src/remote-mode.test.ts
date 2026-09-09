@@ -7,13 +7,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
-import type {
-  ForgeProvider,
-  ForgeThread,
-  MaterializeResult,
-} from './index';
+import type { ForgeProvider, ForgeThread, MaterializeResult } from './index';
 import { REVIEW_LEVEL_FILE_PATH } from './index';
 import type { DiffFile, ReviewComment, ReviewState } from './types';
+import { tokenizeGitDiffArgs } from './git-diff-args';
 import {
   startRemoteSession,
   bootstrapRemoteDiff,
@@ -40,9 +37,7 @@ function makeThread(remoteId: string, filePath = 'src/a.ts'): ForgeThread {
   };
 }
 
-function makeMaterializeResult(
-  overrides: Partial<MaterializeResult> = {}
-): MaterializeResult {
+function makeMaterializeResult(overrides: Partial<MaterializeResult> = {}): MaterializeResult {
   return {
     repoPath: '/tmp/self-review-clone',
     baseSha: 'aaa111',
@@ -85,9 +80,7 @@ function makeDiffFile(newPath: string): DiffFile {
 
 // A ForgeCliUnavailableError lookalike built from the real class.
 async function cliUnavailable(): Promise<never> {
-  const { ForgeCliUnavailableError } = await import(
-    './index'
-  );
+  const { ForgeCliUnavailableError } = await import('./index');
   throw new ForgeCliUnavailableError('github', 'gh', 'gh not found');
 }
 
@@ -158,11 +151,7 @@ describe('startRemoteSession', () => {
     const deps = makeDeps({ createProvider: vi.fn(() => provider) });
     const session = await startRemoteSession(PR_URL, '/cwd', deps);
 
-    expect(deps.detectExistingClone).toHaveBeenCalledWith(
-      expect.anything(),
-      '/cwd',
-      deps.runner
-    );
+    expect(deps.detectExistingClone).toHaveBeenCalledWith(expect.anything(), '/cwd', deps.runner);
     expect(deps.resolveRemoteDefaultBranch).toHaveBeenCalledWith(
       expect.anything(),
       deps.runner,
@@ -180,9 +169,7 @@ describe('startRemoteSession', () => {
     expect(session.fetchedComments).toEqual([]);
     expect(session.remote.threadSyncAvailable).toBe(false);
     // stderr note, no crash
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('thread sync unavailable')
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('thread sync unavailable'));
   });
 
   it('degrades cleanly when only the thread fetch fails', async () => {
@@ -196,9 +183,7 @@ describe('startRemoteSession', () => {
 
     expect(session.fetchedComments).toEqual([]);
     expect(session.remote.threadSyncAvailable).toBe(false);
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('thread sync unavailable')
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('thread sync unavailable'));
   });
 
   it('propagates materialization failures as fatal errors', async () => {
@@ -207,9 +192,7 @@ describe('startRemoteSession', () => {
         throw new Error('git clone failed (exit code 128)');
       }),
     });
-    await expect(startRemoteSession(PR_URL, '/cwd', deps)).rejects.toThrow(
-      /git clone failed/
-    );
+    await expect(startRemoteSession(PR_URL, '/cwd', deps)).rejects.toThrow(/git clone failed/);
   });
 
   it('propagates non-CLI base-branch failures as fatal errors', async () => {
@@ -221,9 +204,7 @@ describe('startRemoteSession', () => {
       fetchThreads: vi.fn(async () => []),
     };
     const deps = makeDeps({ createProvider: vi.fn(() => provider) });
-    await expect(startRemoteSession(PR_URL, '/cwd', deps)).rejects.toThrow(
-      /PR not found/
-    );
+    await expect(startRemoteSession(PR_URL, '/cwd', deps)).rejects.toThrow(/PR not found/);
   });
 });
 
@@ -240,10 +221,7 @@ describe('bootstrapRemoteDiff', () => {
     const deps = makeDeps();
     const { payload, session } = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps);
 
-    expect(deps.loadDiff).toHaveBeenCalledWith(
-      ['aaa111...bbb222'],
-      '/tmp/self-review-clone'
-    );
+    expect(deps.loadDiff).toHaveBeenCalledWith(['aaa111...bbb222'], '/tmp/self-review-clone');
     expect(payload.source).toEqual({
       type: 'git',
       gitDiffArgs: 'aaa111...bbb222',
@@ -262,6 +240,33 @@ describe('bootstrapRemoteDiff', () => {
     });
     const { payload } = await bootstrapRemoteDiff(PR_URL, '/cwd', ['dist/**'], deps);
     expect(payload.files.map(f => f.newPath)).toEqual(['src/a.ts']);
+  });
+
+  // SR-0037: expand-context tokenizes source.gitDiffArgs back into argv. A
+  // plain join() passes the ordinary case and silently breaks the moment an
+  // argument carries whitespace, so pin the round trip, not the string.
+  it('renders a git-diff-args string that tokenizes back to the argv it loaded', async () => {
+    const deps = makeDeps();
+    const { payload, session } = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps);
+
+    expect(payload.source.type).toBe('git');
+    const rendered = (payload.source as { gitDiffArgs: string }).gitDiffArgs;
+    // Sha ranges need no quoting, so the attribute keeps its historical shape.
+    expect(rendered).toBe('aaa111...bbb222');
+    expect(tokenizeGitDiffArgs(rendered)).toEqual(session.gitDiffArgs);
+  });
+
+  it('keeps the round trip intact for a ref whose name carries whitespace', async () => {
+    const deps = makeDeps({
+      materialize: vi.fn(async () =>
+        makeMaterializeResult({ baseSha: 'release 1.0', headSha: "pr'42" })
+      ),
+    });
+    const { payload, session } = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps);
+
+    const rendered = (payload.source as { gitDiffArgs: string }).gitDiffArgs;
+    expect(tokenizeGitDiffArgs(rendered)).toEqual(session.gitDiffArgs);
+    expect(tokenizeGitDiffArgs(rendered)).toHaveLength(1);
   });
 
   it('cleans up the materialized clone when diff loading fails', async () => {
@@ -373,12 +378,8 @@ describe('computeRemoteDrift', () => {
 
 describe('remote state assembly serializes to valid XML', () => {
   it('carries remote-* root attributes, keeps remote-id/author on fetched threads, and none on new material', async () => {
-    const { serializeReview } = await import(
-      './xml-serializer'
-    );
-    const { mapThreadsToReviewComments } = await import(
-      './index'
-    );
+    const { serializeReview } = await import('./xml-serializer');
+    const { mapThreadsToReviewComments } = await import('./index');
 
     const fetched = mapThreadsToReviewComments([
       makeThread('t1', 'src/a.ts'),

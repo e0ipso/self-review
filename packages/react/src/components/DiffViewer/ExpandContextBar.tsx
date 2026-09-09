@@ -8,7 +8,11 @@ export interface ExpandContextBarProps {
   position: 'top' | 'between' | 'bottom';
   hunkIndex: number;
   gapSize?: number;
-  onExpand: (direction: ExpandDirection, hunkIndex: number, position: 'top' | 'between' | 'bottom') => void;
+  onExpand: (
+    direction: ExpandDirection,
+    hunkIndex: number,
+    position: 'top' | 'between' | 'bottom'
+  ) => void;
   loading?: boolean;
 }
 
@@ -23,11 +27,7 @@ export default function ExpandContextBar({
 
   const showSingleButton = gapSize !== undefined && gapSize <= 20;
 
-  const iconButton = (
-    direction: ExpandDirection,
-    Icon: typeof ChevronUp,
-    title: string
-  ) => (
+  const iconButton = (direction: ExpandDirection, Icon: typeof ChevronUp, title: string) => (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
@@ -52,7 +52,11 @@ export default function ExpandContextBar({
         {loading ? (
           <span className='text-[10px] text-muted-foreground/50'>...</span>
         ) : showSingleButton ? (
-          iconButton('all', UnfoldVertical, `Show ${gapSize} hidden line${gapSize !== 1 ? 's' : ''}`)
+          iconButton(
+            'all',
+            UnfoldVertical,
+            `Show ${gapSize} hidden line${gapSize !== 1 ? 's' : ''}`
+          )
         ) : (
           <>
             {(position === 'top' || position === 'between') &&

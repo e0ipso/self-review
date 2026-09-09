@@ -26,37 +26,39 @@ async function selectLineRange(
 ) {
   const page = getPage();
   const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-  const gutter = section.locator(
-    `[data-testid="${side}-line-${filePath}-${start}"]`
-  );
+  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${start}"]`);
   await gutter.hover();
-  const startIcon = section.locator(
-    `[data-testid="comment-icon-${side}-${start}"]`
-  );
+  const startIcon = section.locator(`[data-testid="comment-icon-${side}-${start}"]`);
   const box = await startIcon.boundingBox();
   if (box) {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
     // Dispatch mousemove from browser context, scoped to the file section
     const secSel = `[data-testid="file-section-${filePath}"]`;
-    await page.evaluate(({ ln, s, secSelector }) => {
-      const container = document.querySelector(secSelector);
-      if (!container) return;
-      const el = container.querySelector(`[data-line-number="${ln}"][data-line-side="${s}"]`);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        document.dispatchEvent(new MouseEvent('mousemove', {
-          clientX: rect.x + 20,
-          clientY: rect.y + rect.height / 2,
-          bubbles: true,
-        }));
-      }
-    }, { ln: end, s: side, secSelector: secSel });
+    await page.evaluate(
+      ({ ln, s, secSelector }) => {
+        const container = document.querySelector(secSelector);
+        if (!container) return;
+        const el = container.querySelector(`[data-line-number="${ln}"][data-line-side="${s}"]`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          document.dispatchEvent(
+            new MouseEvent('mousemove', {
+              clientX: rect.x + 20,
+              clientY: rect.y + rect.height / 2,
+              bubbles: true,
+            })
+          );
+        }
+      },
+      { ln: end, s: side, secSelector: secSel }
+    );
     // Wait for React to process the selection
-    await page.waitForFunction(
-      () => document.querySelector('[class*="bg-blue"]') !== null,
-      { timeout: 3000 }
-    ).catch(() => {});
+    await page
+      .waitForFunction(() => document.querySelector('[class*="bg-blue"]') !== null, {
+        timeout: 3000,
+      })
+      .catch(() => {});
     await page.mouse.up();
     // Wait for comment input to appear after drag
     await page
@@ -89,13 +91,7 @@ When(
 
 When(
   'I add a comment {string} with category {string} on new line {int} of {string}',
-  async (
-    {},
-    body: string,
-    category: string,
-    line: number,
-    filePath: string
-  ) => {
+  async ({}, body: string, category: string, line: number, filePath: string) => {
     await triggerCommentIcon(filePath, line, 'new');
     const page = getPage();
     await page.locator('[data-testid="category-selector"]').click();
@@ -110,13 +106,9 @@ When(
   async ({}, start: number, end: number, filePath: string) => {
     await selectLineRange(filePath, start, end);
     const page = getPage();
-    await page
-      .locator('[data-testid="comment-input"] textarea')
-      .fill('Suggestion comment');
+    await page.locator('[data-testid="comment-input"] textarea').fill('Suggestion comment');
     await page.locator('[data-testid="add-suggestion-btn"]').click();
-    await page
-      .locator('[data-testid="suggestion-proposed"] textarea')
-      .fill('replacement code');
+    await page.locator('[data-testid="suggestion-proposed"] textarea').fill('replacement code');
     await page.locator('[data-testid="add-comment-btn"]').click();
   }
 );
@@ -168,18 +160,14 @@ function parseXmlOutput(): any {
 
 function getFileElement(filePath: string): any {
   const parsed = parseXmlOutput();
-  const files = Array.isArray(parsed.review.file)
-    ? parsed.review.file
-    : [parsed.review.file];
+  const files = Array.isArray(parsed.review.file) ? parsed.review.file : [parsed.review.file];
   return files.find((f: any) => f['@_path'] === filePath);
 }
 
 function getLastComment(filePath: string): any {
   const fileEl = getFileElement(filePath);
   if (!fileEl || !fileEl.comment) return null;
-  const comments = Array.isArray(fileEl.comment)
-    ? fileEl.comment
-    : [fileEl.comment];
+  const comments = Array.isArray(fileEl.comment) ? fileEl.comment : [fileEl.comment];
   return comments[comments.length - 1];
 }
 
@@ -242,20 +230,15 @@ Then(
   }
 );
 
-Then(
-  'the XML should contain {int} file elements',
-  async ({}, count: number) => {
-    const parsed = parseXmlOutput();
-    if (count === 0) {
-      expect(parsed.review.file).toBeUndefined();
-    } else {
-      const files = Array.isArray(parsed.review.file)
-        ? parsed.review.file
-        : [parsed.review.file];
-      expect(files.length).toBe(count);
-    }
+Then('the XML should contain {int} file elements', async ({}, count: number) => {
+  const parsed = parseXmlOutput();
+  if (count === 0) {
+    expect(parsed.review.file).toBeUndefined();
+  } else {
+    const files = Array.isArray(parsed.review.file) ? parsed.review.file : [parsed.review.file];
+    expect(files.length).toBe(count);
   }
-);
+});
 
 Then(
   'the XML {string} element should have a {string} attribute',
@@ -283,9 +266,7 @@ Then(
     if (count === 0) {
       expect(fileEl.comment).toBeUndefined();
     } else {
-      const comments = Array.isArray(fileEl.comment)
-        ? fileEl.comment
-        : [fileEl.comment];
+      const comments = Array.isArray(fileEl.comment) ? fileEl.comment : [fileEl.comment];
       expect(comments.length).toBe(count);
     }
   }
@@ -317,15 +298,11 @@ Then('that comment should have body {string}', async ({}, body: string) => {
 Then('that comment should not have line attributes', async () => {
   // The last comment in the output file should not have line attributes
   const parsed = parseXmlOutput();
-  const files = Array.isArray(parsed.review.file)
-    ? parsed.review.file
-    : [parsed.review.file];
+  const files = Array.isArray(parsed.review.file) ? parsed.review.file : [parsed.review.file];
   // Find the first file with comments
   for (const file of files) {
     if (file.comment) {
-      const comments = Array.isArray(file.comment)
-        ? file.comment
-        : [file.comment];
+      const comments = Array.isArray(file.comment) ? file.comment : [file.comment];
       const lastComment = comments[comments.length - 1];
       expect(lastComment['@_old-line-start']).toBeUndefined();
       expect(lastComment['@_old-line-end']).toBeUndefined();
@@ -350,80 +327,61 @@ Then('that comment should have a suggestion element', async () => {
   expect(xmlContent).toContain('</suggestion>');
 });
 
-Then(
-  'the suggestion should have a/an {string} element',
-  async ({}, element: string) => {
-    const xmlContent = readOutputFile();
-    expect(xmlContent).toContain(`<${element}>`);
-    expect(xmlContent).toContain(`</${element}>`);
-  }
-);
+Then('the suggestion should have a/an {string} element', async ({}, element: string) => {
+  const xmlContent = readOutputFile();
+  expect(xmlContent).toContain(`<${element}>`);
+  expect(xmlContent).toContain(`</${element}>`);
+});
 
-Then(
-  'that comment should not have new-line-start or new-line-end attributes',
-  async () => {
-    // Find the last comment in the XML and check it doesn't have new-line attrs
-    const parsed = parseXmlOutput();
-    const files = Array.isArray(parsed.review.file)
-      ? parsed.review.file
-      : [parsed.review.file];
-    for (const file of files) {
-      if (file.comment) {
-        const comments = Array.isArray(file.comment)
-          ? file.comment
-          : [file.comment];
-        const lastComment = comments[comments.length - 1];
-        expect(lastComment['@_new-line-start']).toBeUndefined();
-        expect(lastComment['@_new-line-end']).toBeUndefined();
-        break;
-      }
+Then('that comment should not have new-line-start or new-line-end attributes', async () => {
+  // Find the last comment in the XML and check it doesn't have new-line attrs
+  const parsed = parseXmlOutput();
+  const files = Array.isArray(parsed.review.file) ? parsed.review.file : [parsed.review.file];
+  for (const file of files) {
+    if (file.comment) {
+      const comments = Array.isArray(file.comment) ? file.comment : [file.comment];
+      const lastComment = comments[comments.length - 1];
+      expect(lastComment['@_new-line-start']).toBeUndefined();
+      expect(lastComment['@_new-line-end']).toBeUndefined();
+      break;
     }
   }
-);
+});
 
-Then(
-  'that comment should contain {int} reply element(s)',
-  async ({}, count: number) => {
-    const comment = getThatComment();
-    expect(toArray(comment.reply).length).toBe(count);
-  }
-);
+Then('that comment should contain {int} reply element(s)', async ({}, count: number) => {
+  const comment = getThatComment();
+  expect(toArray(comment.reply).length).toBe(count);
+});
 
-Then(
-  'the replies for that comment should read, in order:',
-  async ({}, table: DataTable) => {
-    const comment = getThatComment();
-    const replies = toArray(comment.reply);
-    const expected = table.hashes();
-    expect(replies.length).toBe(expected.length);
-    // Read positionally: document order is the only ordering signal a reply
-    // has, so asserting presence would not test the thing under test.
-    expected.forEach((row, index) => {
-      expect(String(replies[index].body)).toBe(row.body);
-      const author = replies[index]['@_author'];
-      if (row.author) {
-        expect(String(author)).toBe(row.author);
-      } else {
-        expect(author).toBeUndefined();
-      }
-    });
-  }
-);
+Then('the replies for that comment should read, in order:', async ({}, table: DataTable) => {
+  const comment = getThatComment();
+  const replies = toArray(comment.reply);
+  const expected = table.hashes();
+  expect(replies.length).toBe(expected.length);
+  // Read positionally: document order is the only ordering signal a reply
+  // has, so asserting presence would not test the thing under test.
+  expected.forEach((row, index) => {
+    expect(String(replies[index].body)).toBe(row.body);
+    const author = replies[index]['@_author'];
+    if (row.author) {
+      expect(String(author)).toBe(row.author);
+    } else {
+      expect(author).toBeUndefined();
+    }
+  });
+});
 
-Then(
-  'the output file should validate against {string}',
-  async ({}, xsdPath: string) => {
-    // Use xmllint-wasm for validation
-    const { validateXML } = await import('xmllint-wasm');
-    const xmlContent = readOutputFile();
-    const xsdContent = readFileSync(resolve(process.cwd(), xsdPath), 'utf-8');
-    const result = await validateXML({
-      xml: [{ fileName: 'review.xml', contents: xmlContent }],
-      schema: [{ fileName: 'schema.xsd', contents: xsdContent }],
-    });
-    expect(result.valid).toBe(true);
-  }
-);
+Then('the output file should validate against {string}', async ({}, xsdPath: string) => {
+  // Use xmllint-wasm for validation
+  const { validateXML } = await import('xmllint-wasm');
+  const xmlContent = readOutputFile();
+  const xsdContent = readFileSync(resolve(process.cwd(), xsdPath), 'utf-8');
+  const result = await validateXML({
+    xml: [{ fileName: 'review.xml', contents: xmlContent }],
+    schema: [{ fileName: 'schema.xsd', contents: xsdContent }],
+  });
+  expect(result.valid).toBe(true);
+});
 
 Then('stderr should not be empty', async () => {
   const stderr = getStderr();

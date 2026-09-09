@@ -24,7 +24,11 @@ export interface SplitViewProps {
   onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
-  onExpandContext?: (direction: 'up' | 'down' | 'all', hunkIndex: number, position: 'top' | 'between' | 'bottom') => void;
+  onExpandContext?: (
+    direction: 'up' | 'down' | 'all',
+    hunkIndex: number,
+    position: 'top' | 'between' | 'bottom'
+  ) => void;
   isExpandable?: boolean;
   expandLoading?: boolean;
   totalLines?: number | null;
@@ -55,8 +59,7 @@ export default function SplitView({
 
   const isLineSelected = (lineNumber: number, side: 'old' | 'new') => {
     if (commentRange && commentRange.side === side) {
-      if (lineNumber >= commentRange.start && lineNumber <= commentRange.end)
-        return true;
+      if (lineNumber >= commentRange.start && lineNumber <= commentRange.end) return true;
     }
     if (dragState && dragState.side === side) {
       const min = Math.min(dragState.startLine, dragState.currentLine);
@@ -114,11 +117,7 @@ export default function SplitView({
     return extractOriginalCode(file, commentRange);
   };
 
-  const renderLineCell = (
-    line: DiffLine | null,
-    side: 'old' | 'new',
-    hasComment = false
-  ) => {
+  const renderLineCell = (line: DiffLine | null, side: 'old' | 'new', hasComment = false) => {
     if (!line) {
       return <EmptyLinePane />;
     }
@@ -158,7 +157,9 @@ export default function SplitView({
           <span className='pointer-events-none'>{lineNumber || ''}</span>
         </div>
         {/* Code content */}
-        <div className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}>
+        <div
+          className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}
+        >
           <SyntaxLine
             content={line.content}
             language={language}
@@ -185,15 +186,18 @@ export default function SplitView({
     <div className='font-mono text-[13px] leading-[22px] split-view'>
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
-          {isExpandable && onExpandContext && hunkIndex === 0 && (file.hunks[0].oldStart > 1 || file.hunks[0].newStart > 1) && (
-            <ExpandContextBar
-              position='top'
-              hunkIndex={0}
-              gapSize={computeGapBefore(0)}
-              onExpand={onExpandContext}
-              loading={expandLoading}
-            />
-          )}
+          {isExpandable &&
+            onExpandContext &&
+            hunkIndex === 0 &&
+            (file.hunks[0].oldStart > 1 || file.hunks[0].newStart > 1) && (
+              <ExpandContextBar
+                position='top'
+                hunkIndex={0}
+                gapSize={computeGapBefore(0)}
+                onExpand={onExpandContext}
+                loading={expandLoading}
+              />
+            )}
           {isExpandable && onExpandContext && hunkIndex > 0 && (
             <ExpandContextBar
               position='between'
@@ -208,18 +212,10 @@ export default function SplitView({
             const oldLineNumber = row.oldLine?.oldLineNumber;
             const newLineNumber = row.newLine?.newLineNumber;
             const oldComments = oldLineNumber
-              ? getCommentsForLine(
-                  file.newPath || file.oldPath,
-                  oldLineNumber,
-                  'old'
-                )
+              ? getCommentsForLine(file.newPath || file.oldPath, oldLineNumber, 'old')
               : [];
             const newComments = newLineNumber
-              ? getCommentsForLine(
-                  file.newPath || file.oldPath,
-                  newLineNumber,
-                  'new'
-                )
+              ? getCommentsForLine(file.newPath || file.oldPath, newLineNumber, 'new')
               : [];
             const oldCommentsToRender = oldComments.filter(
               c => c.lineRange!.end === oldLineNumber && hasAnchor(c)
@@ -229,10 +225,8 @@ export default function SplitView({
             );
             const showCommentInputHere =
               commentRange &&
-              ((commentRange.side === 'old' &&
-                oldLineNumber === commentRange.end) ||
-                (commentRange.side === 'new' &&
-                  newLineNumber === commentRange.end));
+              ((commentRange.side === 'old' && oldLineNumber === commentRange.end) ||
+                (commentRange.side === 'new' && newLineNumber === commentRange.end));
 
             return (
               <React.Fragment key={`${hunkIndex}-${rowIndex}`}>
@@ -259,7 +253,7 @@ export default function SplitView({
                   originalCode={getOriginalCode()}
                   onCancel={onCancelComment}
                   onSaved={onCommentSaved}
-                  getOriginalCodeForComment={(comment) =>
+                  getOriginalCodeForComment={comment =>
                     comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
                   }
                 />
@@ -268,22 +262,24 @@ export default function SplitView({
           })}
         </div>
       ))}
-      {isExpandable && onExpandContext && (() => {
-        const lastIdx = file.hunks.length - 1;
-        const lastHunk = file.hunks[lastIdx];
-        const lastNewLine = lastHunk.newStart + lastHunk.newLines - 1;
-        const bottomGap = totalLines != null ? totalLines - lastNewLine : undefined;
-        if (bottomGap !== undefined && bottomGap <= 0) return null;
-        return (
-          <ExpandContextBar
-            position='bottom'
-            hunkIndex={lastIdx}
-            gapSize={bottomGap}
-            onExpand={onExpandContext}
-            loading={expandLoading}
-          />
-        );
-      })()}
+      {isExpandable &&
+        onExpandContext &&
+        (() => {
+          const lastIdx = file.hunks.length - 1;
+          const lastHunk = file.hunks[lastIdx];
+          const lastNewLine = lastHunk.newStart + lastHunk.newLines - 1;
+          const bottomGap = totalLines != null ? totalLines - lastNewLine : undefined;
+          if (bottomGap !== undefined && bottomGap <= 0) return null;
+          return (
+            <ExpandContextBar
+              position='bottom'
+              hunkIndex={lastIdx}
+              gapSize={bottomGap}
+              onExpand={onExpandContext}
+              loading={expandLoading}
+            />
+          );
+        })()}
     </div>
   );
 }

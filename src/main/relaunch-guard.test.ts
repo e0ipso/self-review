@@ -1,10 +1,6 @@
 import { resolve } from 'path';
 import { describe, it, expect } from 'vitest';
-import {
-  resolveInvokedPath,
-  resolveReexecExit,
-  resolveReexecTarget,
-} from './relaunch-guard';
+import { resolveInvokedPath, resolveReexecExit, resolveReexecTarget } from './relaunch-guard';
 
 // Real bundle binary and a symlink to it, as they appear on a Homebrew install.
 const REAL = '/Applications/Self Review.app/Contents/MacOS/Self Review';
@@ -23,9 +19,7 @@ const realpath = makeRealpath({ [REAL]: REAL, [SYMLINK]: REAL });
 
 describe('resolveReexecTarget', () => {
   it('re-execs from the real binary when launched via a symlink', () => {
-    expect(
-      resolveReexecTarget('darwin', true, SYMLINK, REAL, {}, realpath)
-    ).toBe(REAL);
+    expect(resolveReexecTarget('darwin', true, SYMLINK, REAL, {}, realpath)).toBe(REAL);
   });
 
   it('re-execs when launched by a bare command name resolved on PATH', () => {
@@ -61,41 +55,26 @@ describe('resolveReexecTarget', () => {
   });
 
   it('does not re-exec when launched directly from the real binary', () => {
-    expect(
-      resolveReexecTarget('darwin', true, REAL, REAL, {}, realpath)
-    ).toBeNull();
+    expect(resolveReexecTarget('darwin', true, REAL, REAL, {}, realpath)).toBeNull();
   });
 
   it('never re-execs on non-macOS platforms', () => {
-    expect(
-      resolveReexecTarget('linux', true, SYMLINK, REAL, {}, realpath)
-    ).toBeNull();
+    expect(resolveReexecTarget('linux', true, SYMLINK, REAL, {}, realpath)).toBeNull();
   });
 
   it('never re-execs in unpackaged/dev builds', () => {
-    expect(
-      resolveReexecTarget('darwin', false, SYMLINK, REAL, {}, realpath)
-    ).toBeNull();
+    expect(resolveReexecTarget('darwin', false, SYMLINK, REAL, {}, realpath)).toBeNull();
   });
 
   it('does not loop: skips when the re-exec guard env is set', () => {
     expect(
-      resolveReexecTarget(
-        'darwin',
-        true,
-        SYMLINK,
-        REAL,
-        { SELF_REVIEW_REEXECED: '1' },
-        realpath
-      )
+      resolveReexecTarget('darwin', true, SYMLINK, REAL, { SELF_REVIEW_REEXECED: '1' }, realpath)
     ).toBeNull();
   });
 
   it('does not re-exec when a bare invoked name is not on PATH', () => {
     // e.g. a bare name with no PATH to resolve it against.
-    expect(
-      resolveReexecTarget('darwin', true, 'Self Review', REAL, {}, realpath)
-    ).toBeNull();
+    expect(resolveReexecTarget('darwin', true, 'Self Review', REAL, {}, realpath)).toBeNull();
   });
 
   it('does not re-exec when the symlink points somewhere else entirely', () => {
@@ -103,15 +82,11 @@ describe('resolveReexecTarget', () => {
       [REAL]: REAL,
       [SYMLINK]: '/usr/bin/unrelated',
     });
-    expect(
-      resolveReexecTarget('darwin', true, SYMLINK, REAL, {}, other)
-    ).toBeNull();
+    expect(resolveReexecTarget('darwin', true, SYMLINK, REAL, {}, other)).toBeNull();
   });
 
   it('ignores an empty invoked path', () => {
-    expect(
-      resolveReexecTarget('darwin', true, '', REAL, {}, realpath)
-    ).toBeNull();
+    expect(resolveReexecTarget('darwin', true, '', REAL, {}, realpath)).toBeNull();
   });
 });
 
@@ -121,37 +96,25 @@ describe('resolveInvokedPath', () => {
   });
 
   it('resolves a relative path against the cwd', () => {
-    expect(resolveInvokedPath('./bin/self-review', {})).toBe(
-      resolve('./bin/self-review')
-    );
+    expect(resolveInvokedPath('./bin/self-review', {})).toBe(resolve('./bin/self-review'));
   });
 
   it('resolves a bare name against PATH', () => {
     const fileExists = (p: string): boolean => p === SYMLINK;
     expect(
-      resolveInvokedPath(
-        'self-review',
-        { PATH: '/usr/bin:/opt/homebrew/bin' },
-        fileExists
-      )
+      resolveInvokedPath('self-review', { PATH: '/usr/bin:/opt/homebrew/bin' }, fileExists)
     ).toBe(SYMLINK);
   });
 
   it('returns the first PATH match', () => {
     const fileExists = (): boolean => true;
-    expect(
-      resolveInvokedPath(
-        'self-review',
-        { PATH: '/first:/second' },
-        fileExists
-      )
-    ).toBe('/first/self-review');
+    expect(resolveInvokedPath('self-review', { PATH: '/first:/second' }, fileExists)).toBe(
+      '/first/self-review'
+    );
   });
 
   it('returns null for a bare name absent from PATH', () => {
-    expect(
-      resolveInvokedPath('self-review', { PATH: '/usr/bin' }, () => false)
-    ).toBeNull();
+    expect(resolveInvokedPath('self-review', { PATH: '/usr/bin' }, () => false)).toBeNull();
   });
 
   it('returns null for a bare name with no PATH', () => {

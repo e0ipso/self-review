@@ -28,6 +28,8 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck:tests
 
   unit-test:
     name: Unit Tests
@@ -59,4 +61,3 @@ jobs:
           name: e2e-test-results
           path: test-results/
           retention-days: 7
-

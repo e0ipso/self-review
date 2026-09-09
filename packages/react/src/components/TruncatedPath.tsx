@@ -19,14 +19,8 @@ export default function TruncatedPath({ path, className = '' }: TruncatedPathPro
 
   return (
     <span className={`flex-1 min-w-0 flex font-mono text-xs leading-tight ${className}`}>
-      {dir && (
-        <span className='truncate text-muted-foreground/70'>
-          {dir}
-        </span>
-      )}
-      <span className='truncate flex-shrink-0 max-w-full'>
-        {fileName}
-      </span>
+      {dir && <span className='truncate text-muted-foreground/70'>{dir}</span>}
+      <span className='truncate flex-shrink-0 max-w-full'>{fileName}</span>
     </span>
   );
 }

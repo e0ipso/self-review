@@ -1,9 +1,5 @@
 import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '../ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import GuideOverviewContent from './GuideOverviewContent';
 
 export interface GuideOverviewDialogProps {
@@ -17,10 +13,7 @@ export interface GuideOverviewDialogProps {
  * one click away at any depth in the diff — jumping to a station closes
  * the dialog to reveal the target.
  */
-export default function GuideOverviewDialog({
-  open,
-  onOpenChange,
-}: GuideOverviewDialogProps) {
+export default function GuideOverviewDialog({ open, onOpenChange }: GuideOverviewDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent

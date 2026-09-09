@@ -2,7 +2,10 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src <% if (webpackConfig.mode === 'development') { %>'self' ws:<% } else { %>'none'<% } %>; script-src 'self'<% if (webpackConfig.mode === 'development') { %> 'unsafe-eval'<% } %>; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src <% if (webpackConfig.mode === 'development') { %>'self' ws:<% } else { %>'none'<% } %>; script-src 'self'<% if (webpackConfig.mode === 'development') { %> 'unsafe-eval'<% } %>; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'"
+    />
     <title>self-review</title>
   </head>
   <body>

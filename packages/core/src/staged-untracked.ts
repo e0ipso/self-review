@@ -12,16 +12,11 @@ import type { AppConfig } from './types';
  * Untracked files are still preloaded by the backend so that the toolbar
  * toggle can reveal them instantly without re-running git.
  */
-export function applyStagedUntrackedDefault(
-  config: AppConfig,
-  gitDiffArgs: string[]
-): AppConfig {
-  const stagedMode =
-    gitDiffArgs.includes('--staged') || gitDiffArgs.includes('--cached');
+export function applyStagedUntrackedDefault(config: AppConfig, gitDiffArgs: string[]): AppConfig {
+  const stagedMode = gitDiffArgs.includes('--staged') || gitDiffArgs.includes('--cached');
   if (!stagedMode) return config;
 
-  const userExplicitOptIn =
-    config.showUntrackedExplicit && config.showUntracked;
+  const userExplicitOptIn = config.showUntrackedExplicit && config.showUntracked;
   if (userExplicitOptIn) return config;
 
   return { ...config, showUntracked: false };

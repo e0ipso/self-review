@@ -46,11 +46,7 @@ export { parseReviewXml, parseReviewXmlString } from './xml-parser';
 export { GUIDE_XSD_SCHEMA } from './guide-schema';
 
 // Walkthrough guide parsing and reconciliation
-export {
-  parseGuideXml,
-  reconcileGuide,
-  IMPLICIT_GUIDE_GROUP_NAME,
-} from './guide-parser';
+export { parseGuideXml, reconcileGuide, IMPLICIT_GUIDE_GROUP_NAME } from './guide-parser';
 export type { GuideParseResult } from './guide-parser';
 
 // Git operations
@@ -113,10 +109,7 @@ export type { RenderedTextMode } from './file-type-utils';
 export { createGitHubProvider } from './github-provider';
 
 // Forge thread → ReviewComment mapper (remote PR/MR fetch direction)
-export {
-  mapThreadsToReviewComments,
-  REVIEW_LEVEL_FILE_PATH,
-} from './thread-mapper';
+export { mapThreadsToReviewComments, REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 
 // GitLab forge provider (glab CLI backed)
 export { createGitLabProvider } from './gitlab-provider';
@@ -128,11 +121,7 @@ export {
   resolveRemoteDefaultBranch,
   defaultGitRunner,
 } from './materializer';
-export type {
-  ExistingClone,
-  MaterializeMode,
-  MaterializeResult,
-} from './materializer';
+export type { ExistingClone, MaterializeMode, MaterializeResult } from './materializer';
 
 // Review session orchestration (transport agnostic; each handler takes the
 // session it acts on and reads no module-scope state)
@@ -173,11 +162,7 @@ export {
   applyRemoteProvenance,
   computeRemoteDrift,
 } from './remote-mode';
-export type {
-  RemoteSession,
-  RemoteSessionDeps,
-  RemoteBootstrapResult,
-} from './remote-mode';
+export type { RemoteSession, RemoteSessionDeps, RemoteBootstrapResult } from './remote-mode';
 
 // Headless fetch-comments orchestrator
 export { buildRemoteReviewState, runFetchComments } from './fetch-comments';

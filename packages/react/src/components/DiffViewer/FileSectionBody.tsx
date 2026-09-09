@@ -32,7 +32,8 @@ export function FileSectionBody({
         >
           <h3 className='text-sm font-medium'>Comments outside the current diff</h3>
           <p className='text-xs text-muted-foreground'>
-            These recorded line ranges are not in the loaded diff. Their original locations are preserved when you save.
+            These recorded line ranges are not in the loaded diff. Their original locations are
+            preserved when you save.
           </p>
           {orphanedComments.map(comment => (
             <CommentDisplay key={comment.id} comment={comment} />

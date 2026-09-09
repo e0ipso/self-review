@@ -37,8 +37,8 @@ jobs:
 
       - uses: peter-evans/create-pull-request@v8
         with:
-          commit-message: "chore: update flake hash for ${{ inputs.tag }}"
-          title: "chore: update flake hash for ${{ inputs.tag }}"
+          commit-message: 'chore: update flake hash for ${{ inputs.tag }}'
+          title: 'chore: update flake hash for ${{ inputs.tag }}'
           body: |
             Automated update of the `flake.nix` unpacked source hash for release
             ${{ inputs.tag }}, verified by building the fetchzip source.

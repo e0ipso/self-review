@@ -266,9 +266,7 @@ describe('ipc-handlers', () => {
       const os = await import('os');
       const fsMod = await import('fs');
       const pathMod = await import('path');
-      const repoDir = fsMod.mkdtempSync(
-        pathMod.join(os.tmpdir(), 'self-review-clone-')
-      );
+      const repoDir = fsMod.mkdtempSync(pathMod.join(os.tmpdir(), 'self-review-clone-'));
       try {
         // 1x1 transparent PNG
         const png = Buffer.from(

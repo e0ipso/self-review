@@ -7,11 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { ForgeCommandResult, ForgeCommandRunner, ForgeUrl } from './forge-provider';
-import {
-  detectExistingClone,
-  materialize,
-  resolveRemoteDefaultBranch,
-} from './materializer';
+import { detectExistingClone, materialize, resolveRemoteDefaultBranch } from './materializer';
 
 const BASE_SHA = 'a'.repeat(40);
 const HEAD_SHA = 'b'.repeat(40);
@@ -70,7 +66,7 @@ function createRunner(handlers: Record<string, Handler>): {
 /** Handlers for a happy-path existing clone at /home/user/project. */
 function existingCloneHandlers(remotesOutput: string): Record<string, Handler> {
   return {
-    'rev-parse': (args) => {
+    'rev-parse': args => {
       if (args[1] === '--show-toplevel') return ok('/home/user/project\n');
       if (args[1] === 'refs/self-review/base') return ok(`${BASE_SHA}\n`);
       if (args[1] === 'refs/self-review/head') return ok(`${HEAD_SHA}\n`);
@@ -84,7 +80,7 @@ function existingCloneHandlers(remotesOutput: string): Record<string, Handler> {
 /** Handlers for the temp-clone path (cwd is not a repo). */
 function tempCloneHandlers(baseBranch = 'main'): Record<string, Handler> {
   return {
-    'rev-parse': (args) => {
+    'rev-parse': args => {
       if (args[1] === '--show-toplevel') {
         return fail('fatal: not a git repository');
       }
@@ -98,7 +94,7 @@ function tempCloneHandlers(baseBranch = 'main'): Record<string, Handler> {
 }
 
 function findCall(calls: string[][], subcommand: string): string[] | undefined {
-  return calls.find((call) => call.includes(subcommand));
+  return calls.find(call => call.includes(subcommand));
 }
 
 describe('materialize', () => {
@@ -218,7 +214,7 @@ describe('materialize', () => {
   describe('temp-clone path', () => {
     it('falls back to a temp clone when the remote does not match', async () => {
       const handlers = tempCloneHandlers();
-      handlers['rev-parse'] = (args) => {
+      handlers['rev-parse'] = args => {
         if (args[1] === '--show-toplevel') return ok('/home/user/other\n');
         if (args[1] === 'refs/self-review/head') return ok(`${HEAD_SHA}\n`);
         if (args[1] === 'origin/main') return ok(`${BASE_SHA}\n`);
@@ -244,7 +240,7 @@ describe('materialize', () => {
       expect(result.mode).toBe('temp-clone');
       expect(clone).toBeDefined();
       expect(clone).toContain('--filter=blob:none');
-      expect(clone!.some((arg) => arg.startsWith('--depth'))).toBe(false);
+      expect(clone!.some(arg => arg.startsWith('--depth'))).toBe(false);
       expect(clone).toContain('https://github.com/e0ipso/self-review.git');
       expect(clone).toContain(result.repoPath);
       expect(result.repoPath.startsWith(os.tmpdir())).toBe(true);
@@ -308,12 +304,12 @@ describe('materialize', () => {
           message: expect.stringContaining(gitStderr),
         })
       );
-      await expect(
-        materialize(githubUrl, 'main', '/home/user/project', runner)
-      ).rejects.toThrow(/gh auth setup-git/);
-      await expect(
-        materialize(githubUrl, 'main', '/home/user/project', runner)
-      ).rejects.toThrow(/glab auth git-credential/);
+      await expect(materialize(githubUrl, 'main', '/home/user/project', runner)).rejects.toThrow(
+        /gh auth setup-git/
+      );
+      await expect(materialize(githubUrl, 'main', '/home/user/project', runner)).rejects.toThrow(
+        /glab auth git-credential/
+      );
     });
 
     it('propagates clone failures with the auth hint and removes the temp dir', async () => {
@@ -336,7 +332,7 @@ describe('materialize', () => {
       // The partially created temp directory is not left behind.
       const leftovers = fs
         .readdirSync(os.tmpdir())
-        .filter((name) => name.startsWith('self-review-') && !name.startsWith('self-review-test-'));
+        .filter(name => name.startsWith('self-review-') && !name.startsWith('self-review-test-'));
       for (const name of leftovers) {
         const stat = fs.statSync(path.join(os.tmpdir(), name));
         // Any survivor must predate this test run by more than a few seconds.
@@ -355,7 +351,7 @@ describe('detectExistingClone', () => {
   it('preserves whitespace in the detected repo root', async () => {
     const spacedRoot = '/home/user/my project ';
     const { runner, calls } = createRunner({
-      'rev-parse': (args) => {
+      'rev-parse': args => {
         if (args[1] === '--show-toplevel') return ok(`${spacedRoot}\n`);
         return fail(`fatal: unknown rev ${args[1]}`);
       },
@@ -378,16 +374,10 @@ describe('resolveRemoteDefaultBranch', () => {
     const handlers = existingCloneHandlers(
       'origin\tgit@github.com:e0ipso/self-review.git (fetch)\n'
     );
-    handlers['ls-remote'] = ok(
-      'ref: refs/heads/main\tHEAD\n' + `${HEAD_SHA}\tHEAD\n`
-    );
+    handlers['ls-remote'] = ok('ref: refs/heads/main\tHEAD\n' + `${HEAD_SHA}\tHEAD\n`);
     const { runner, calls } = createRunner(handlers);
 
-    const existing = await detectExistingClone(
-      githubUrl,
-      '/home/user/project/sub',
-      runner
-    );
+    const existing = await detectExistingClone(githubUrl, '/home/user/project/sub', runner);
     const branch = await resolveRemoteDefaultBranch(githubUrl, runner, existing);
 
     expect(branch).toBe('main');
@@ -439,16 +429,12 @@ describe('resolveRemoteDefaultBranch', () => {
         repoPath: '/home/user/project',
         remoteName: 'origin',
       })
-    ).rejects.toThrow(
-      'ls-remote of origin (https://github.com/e0ipso/self-review.git)'
-    );
+    ).rejects.toThrow('ls-remote of origin (https://github.com/e0ipso/self-review.git)');
   });
 
   it('throws when the symref line is missing from the output', async () => {
     const { runner } = createRunner({ 'ls-remote': ok(`${HEAD_SHA}\tHEAD\n`) });
 
-    await expect(resolveRemoteDefaultBranch(githubUrl, runner)).rejects.toThrow(
-      /default branch/i
-    );
+    await expect(resolveRemoteDefaultBranch(githubUrl, runner)).rejects.toThrow(/default branch/i);
   });
 });

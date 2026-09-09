@@ -17,11 +17,7 @@ export interface FileTreeToggleProps {
  * and carries `aria-expanded`/`aria-controls` because the panel it operates on
  * is a sibling rather than its own child.
  */
-export default function FileTreeToggle({
-  collapsed,
-  controls,
-  onToggle,
-}: FileTreeToggleProps) {
+export default function FileTreeToggle({ collapsed, controls, onToggle }: FileTreeToggleProps) {
   const label = collapsed ? 'Show file tree' : 'Hide file tree';
   const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
 

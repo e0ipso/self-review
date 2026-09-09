@@ -31,9 +31,9 @@ export default function EmojiAutocomplete({
   return (
     <div
       ref={listRef}
-      className="absolute z-50 w-64 max-h-56 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md"
+      className='absolute z-50 w-64 max-h-56 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md'
       style={{ top: position.top, left: position.left }}
-      data-testid="emoji-autocomplete"
+      data-testid='emoji-autocomplete'
     >
       {results.map((emoji, index) => (
         <div
@@ -41,15 +41,15 @@ export default function EmojiAutocomplete({
           className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${
             index === selectedIndex ? 'bg-accent text-accent-foreground' : ''
           }`}
-          onMouseDown={(e) => {
+          onMouseDown={e => {
             // Use mousedown instead of click to fire before textarea blur
             e.preventDefault();
             onSelect(emoji);
           }}
           onMouseEnter={() => onHover(index)}
         >
-          <span className="text-lg leading-none">{emoji.native}</span>
-          <span className="text-muted-foreground truncate">:{emoji.id}:</span>
+          <span className='text-lg leading-none'>{emoji.native}</span>
+          <span className='text-muted-foreground truncate'>:{emoji.id}:</span>
         </div>
       ))}
     </div>

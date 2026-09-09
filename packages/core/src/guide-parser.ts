@@ -21,9 +21,7 @@ import { GUIDE_XSD_SCHEMA } from './guide-schema';
 /** Display name given to the derived trailing group of unmentioned files. */
 export const IMPLICIT_GUIDE_GROUP_NAME = 'Everything else';
 
-export type GuideParseResult =
-  | { ok: true; guide: ReviewGuide }
-  | { ok: false; reason: string };
+export type GuideParseResult = { ok: true; guide: ReviewGuide } | { ok: false; reason: string };
 
 /**
  * Parse and validate a guide XML string.
@@ -38,9 +36,7 @@ export async function parseGuideXml(xmlContent: string): Promise<GuideParseResul
   try {
     const validationResult = await validateXML({
       xml: [{ fileName: 'guide.xml', contents: xmlContent }],
-      schema: [
-        { fileName: 'self-review-guide-v1.xsd', contents: GUIDE_XSD_SCHEMA },
-      ],
+      schema: [{ fileName: 'self-review-guide-v1.xsd', contents: GUIDE_XSD_SCHEMA }],
     });
 
     if (!validationResult.valid) {
@@ -127,10 +123,7 @@ function asArray(value: unknown): unknown[] {
  *   `implicit: true` so the UI can label it.
  * - Guide group order and in-group file order are preserved.
  */
-export function reconcileGuide(
-  guide: ReviewGuide,
-  diffFilePaths: string[]
-): ResolvedGuideGroup[] {
+export function reconcileGuide(guide: ReviewGuide, diffFilePaths: string[]): ResolvedGuideGroup[] {
   const diffPaths = new Set(diffFilePaths);
   const claimed = new Set<string>();
   const resolved: ResolvedGuideGroup[] = [];

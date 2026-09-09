@@ -37,10 +37,7 @@ export function useDragSelection({
 
   // Build lookup map for hunk boundaries (line number + side -> hunk bounds)
   const hunkLineMap = useMemo(() => {
-    const map = new Map<
-      string,
-      { hunkIndex: number; minLine: number; maxLine: number }
-    >();
+    const map = new Map<string, { hunkIndex: number; minLine: number; maxLine: number }>();
     file.hunks.forEach((hunk, hunkIndex) => {
       let minOld = Infinity,
         maxOld = -Infinity;
@@ -79,15 +76,11 @@ export function useDragSelection({
   // Build row-index mapping for unified view cross-type drag
   const unifiedRowMap = useMemo(() => {
     if (effectiveViewMode !== 'unified') return null;
-    const map = new Map<
-      number,
-      { lineNumber: number; side: 'old' | 'new'; hunkIndex: number }
-    >();
+    const map = new Map<number, { lineNumber: number; side: 'old' | 'new'; hunkIndex: number }>();
     let rowIndex = 0;
     file.hunks.forEach((hunk, hunkIdx) => {
       for (const line of hunk.lines) {
-        const ln =
-          line.type === 'deletion' ? line.oldLineNumber! : line.newLineNumber!;
+        const ln = line.type === 'deletion' ? line.oldLineNumber! : line.newLineNumber!;
         const s: 'old' | 'new' = line.type === 'deletion' ? 'old' : 'new';
         map.set(rowIndex, { lineNumber: ln, side: s, hunkIndex: hunkIdx });
         rowIndex++;
@@ -142,9 +135,7 @@ export function useDragSelection({
 
       // Fallback: search within the file section for element at coordinates
       if (!lineEl && sectionRef.current) {
-        const candidates = sectionRef.current.querySelectorAll<HTMLElement>(
-          '[data-line-number]'
-        );
+        const candidates = sectionRef.current.querySelectorAll<HTMLElement>('[data-line-number]');
         for (const el of candidates) {
           const rect = el.getBoundingClientRect();
           if (
@@ -175,10 +166,7 @@ export function useDragSelection({
         const startInfo = rowMap.get(ds.startLine);
         if (!startInfo) return;
         const hunkBounds = bounds[startInfo.hunkIndex];
-        const clamped = Math.max(
-          hunkBounds.min,
-          Math.min(hunkBounds.max, rowIndex)
-        );
+        const clamped = Math.max(hunkBounds.min, Math.min(hunkBounds.max, rowIndex));
         setDragState(prev => {
           const next = prev ? { ...prev, currentLine: clamped } : null;
           dragStateRef.current = next;
@@ -186,20 +174,14 @@ export function useDragSelection({
         });
       } else {
         // Split mode: use line numbers with side matching
-        const lineNumber = parseInt(
-          lineEl.getAttribute('data-line-number')!,
-          10
-        );
+        const lineNumber = parseInt(lineEl.getAttribute('data-line-number')!, 10);
         const side = lineEl.getAttribute('data-line-side') as 'old' | 'new';
         if (!isNaN(lineNumber) && side === ds.side) {
           const startKey = `${ds.side}-${ds.startLine}`;
           const hunkInfo = hunkLineMapRef.current.get(startKey);
           if (!hunkInfo) return;
 
-          const clampedLine = Math.max(
-            hunkInfo.minLine,
-            Math.min(hunkInfo.maxLine, lineNumber)
-          );
+          const clampedLine = Math.max(hunkInfo.minLine, Math.min(hunkInfo.maxLine, lineNumber));
           setDragState(prev => {
             const next = prev ? { ...prev, currentLine: clampedLine } : null;
             dragStateRef.current = next;
@@ -231,17 +213,9 @@ export function useDragSelection({
 
         // Prefer new side; fall back to old for deletion-only selections
         if (newLines.length > 0) {
-          onCommentRangeRef.current(
-            Math.min(...newLines),
-            Math.max(...newLines),
-            'new'
-          );
+          onCommentRangeRef.current(Math.min(...newLines), Math.max(...newLines), 'new');
         } else if (oldLines.length > 0) {
-          onCommentRangeRef.current(
-            Math.min(...oldLines),
-            Math.max(...oldLines),
-            'old'
-          );
+          onCommentRangeRef.current(Math.min(...oldLines), Math.max(...oldLines), 'old');
         }
       } else {
         const start = Math.min(ds.startLine, ds.currentLine);

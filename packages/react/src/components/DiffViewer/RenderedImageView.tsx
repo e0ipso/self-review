@@ -43,33 +43,33 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className='flex justify-center items-center p-8'>
+        <Loader2 className='h-6 w-6 animate-spin text-muted-foreground' />
       </div>
     );
   }
 
   if (error || !dataUri) {
     return (
-      <div className="flex justify-center items-center p-8 text-sm text-muted-foreground">
+      <div className='flex justify-center items-center p-8 text-sm text-muted-foreground'>
         {error ?? 'Failed to load image.'}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center p-4 gap-2">
+    <div className='flex flex-col items-center p-4 gap-2'>
       <img
         src={dataUri}
         alt={filePath}
         style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
-        onLoad={(e) => {
+        onLoad={e => {
           const img = e.currentTarget;
           setDimensions({ w: img.naturalWidth, h: img.naturalHeight });
         }}
       />
       {dimensions && (
-        <span className="text-xs text-muted-foreground">
+        <span className='text-xs text-muted-foreground'>
           {dimensions.w} × {dimensions.h}
         </span>
       )}

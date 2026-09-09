@@ -112,9 +112,7 @@ function makeReviewState(timestamp: string): ReviewState {
   return {
     timestamp,
     source: { type: 'directory', sourcePath: '/tmp' },
-    files: [
-      { path: 'src/app.ts', changeType: 'added', viewed: true, comments: [] },
-    ],
+    files: [{ path: 'src/app.ts', changeType: 'added', viewed: true, comments: [] }],
   };
 }
 
@@ -158,9 +156,7 @@ describe('review-handlers', () => {
       submitReviewState(sessionB, makeReviewState('2026-01-02T00:00:00Z'));
 
       expect(getConfigLoad(sessionB)?.config.outputFile).toBe('b-review.xml');
-      expect(takeReviewState(sessionB)?.timestamp).toBe(
-        '2026-01-02T00:00:00Z'
-      );
+      expect(takeReviewState(sessionB)?.timestamp).toBe('2026-01-02T00:00:00Z');
 
       // B's config and review state are invisible from A.
       expect(getConfigLoad(sessionA)).toBeNull();
@@ -387,7 +383,9 @@ describe('review-handlers', () => {
       const outgoing = commitReviewStart(session, payload);
 
       expect(session.diffData).toBe(payload);
-      expect(outgoing.files.every(f => f.hunks.length === 0 && f.contentLoaded === false)).toBe(true);
+      expect(outgoing.files.every(f => f.hunks.length === 0 && f.contentLoaded === false)).toBe(
+        true
+      );
       // The session keeps the full hunks for later per-file loads.
       expect(getFileHunks(session, 'a.ts')?.length).toBeGreaterThan(0);
     });

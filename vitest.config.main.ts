@@ -4,13 +4,7 @@ export default {
   test: {
     environment: 'node',
     include: ['src/main/**/*.test.ts'],
-    exclude: [
-      'node_modules/**',
-      '.webpack/**',
-      'out/**',
-      '.features-gen/**',
-      'tests/**',
-    ],
+    exclude: ['node_modules/**', '.webpack/**', 'out/**', '.features-gen/**', 'tests/**'],
     globals: false,
     mockReset: true,
     restoreMocks: true,

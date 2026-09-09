@@ -32,15 +32,11 @@ describe('deriveGuidePath', () => {
   });
 
   it('handles a custom output filename', () => {
-    expect(deriveGuidePath('/work/my-review.xml')).toBe(
-      '/work/my-review.guide.xml'
-    );
+    expect(deriveGuidePath('/work/my-review.xml')).toBe('/work/my-review.guide.xml');
   });
 
   it('strips only the last extension of a multi-dot filename', () => {
-    expect(deriveGuidePath('/work/release.notes.xml')).toBe(
-      '/work/release.notes.guide.xml'
-    );
+    expect(deriveGuidePath('/work/release.notes.xml')).toBe('/work/release.notes.guide.xml');
   });
 
   it('appends .guide.xml verbatim when the output filename has no extension', () => {
@@ -60,9 +56,7 @@ describe('resolveGuidePath', () => {
   });
 
   it('derives from the output path when no guide-file override is set', () => {
-    expect(resolveGuidePath('/work/review.xml', {})).toBe(
-      '/work/review.guide.xml'
-    );
+    expect(resolveGuidePath('/work/review.xml', {})).toBe('/work/review.guide.xml');
   });
 
   it('uses the guide-file config override, resolved against cwd', () => {
@@ -72,9 +66,9 @@ describe('resolveGuidePath', () => {
   });
 
   it('uses an absolute guide-file override as-is', () => {
-    expect(
-      resolveGuidePath('/work/review.xml', { guideFile: '/elsewhere/g.xml' })
-    ).toBe('/elsewhere/g.xml');
+    expect(resolveGuidePath('/work/review.xml', { guideFile: '/elsewhere/g.xml' })).toBe(
+      '/elsewhere/g.xml'
+    );
   });
 });
 
@@ -90,9 +84,7 @@ describe('loadGuide', () => {
   });
 
   it('returns null silently when the guide file is missing', async () => {
-    vi.mocked(readFile).mockRejectedValue(
-      fsError('ENOENT', 'no such file or directory')
-    );
+    vi.mocked(readFile).mockRejectedValue(fsError('ENOENT', 'no such file or directory'));
 
     const payload = await loadGuide('/work/review.xml', {}, ['src/retry.ts']);
 
@@ -101,9 +93,7 @@ describe('loadGuide', () => {
   });
 
   it('returns null with exactly one stderr warning when the file is unreadable', async () => {
-    vi.mocked(readFile).mockRejectedValue(
-      fsError('EACCES', 'permission denied')
-    );
+    vi.mocked(readFile).mockRejectedValue(fsError('EACCES', 'permission denied'));
 
     const payload = await loadGuide('/work/review.xml', {}, ['src/retry.ts']);
 
@@ -129,10 +119,7 @@ describe('loadGuide', () => {
   it('returns the reconciled payload for a valid guide', async () => {
     vi.mocked(readFile).mockResolvedValue(VALID_GUIDE_XML);
 
-    const payload = await loadGuide('/work/review.xml', {}, [
-      'src/retry.ts',
-      'src/unmentioned.ts',
-    ]);
+    const payload = await loadGuide('/work/review.xml', {}, ['src/retry.ts', 'src/unmentioned.ts']);
 
     expect(errorSpy).not.toHaveBeenCalled();
     expect(payload).toEqual({
@@ -142,9 +129,7 @@ describe('loadGuide', () => {
           name: 'Core change',
           rationale: 'The retry wrapper everything else calls.',
           implicit: false,
-          files: [
-            { path: 'src/retry.ts', description: 'Adds the retry wrapper.' },
-          ],
+          files: [{ path: 'src/retry.ts', description: 'Adds the retry wrapper.' }],
         },
         {
           name: 'Everything else',
@@ -158,13 +143,8 @@ describe('loadGuide', () => {
   it('reads from the guide-file override path when configured', async () => {
     vi.mocked(readFile).mockResolvedValue(VALID_GUIDE_XML);
 
-    await loadGuide('/work/review.xml', { guideFile: '/custom/guide.xml' }, [
-      'src/retry.ts',
-    ]);
+    await loadGuide('/work/review.xml', { guideFile: '/custom/guide.xml' }, ['src/retry.ts']);
 
-    expect(vi.mocked(readFile)).toHaveBeenCalledWith(
-      '/custom/guide.xml',
-      'utf-8'
-    );
+    expect(vi.mocked(readFile)).toHaveBeenCalledWith('/custom/guide.xml', 'utf-8');
   });
 });

@@ -29,3 +29,12 @@ Feature: Webapp File Tree Navigation
   Scenario: File search with no matches shows empty list
     When I type "nonexistent" in the file tree search input
     Then the file tree should list 0 files
+
+  # SR-0058: the `g` hint key has to restore a collapsed tree and measure the
+  # restored layout within the same press. Only a browser can show this —
+  # jsdom performs no layout, so every rect there is zero.
+  Scenario: Pressing g with the file tree collapsed shows hints in the same press
+    When I collapse the file tree
+    And I press "g"
+    Then the file tree should be expanded
+    And hint labels should be shown over the file tree

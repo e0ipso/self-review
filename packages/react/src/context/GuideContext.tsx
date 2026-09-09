@@ -56,9 +56,7 @@ export interface GuideProviderProps {
 }
 
 export function GuideProvider({ children, initialGuide }: GuideProviderProps) {
-  const [guide, setGuide] = useState<GuideLoadPayload | null>(
-    initialGuide ?? null
-  );
+  const [guide, setGuide] = useState<GuideLoadPayload | null>(initialGuide ?? null);
   // Session state only — never persisted. Guided is the default whenever a
   // guide is present; without a guide the mode is ignored by consumers.
   const [mode, setMode] = useState<GuideMode>('guided');

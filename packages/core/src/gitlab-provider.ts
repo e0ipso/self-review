@@ -148,8 +148,8 @@ function toTurn(note: GitLabNote): ForgeThreadTurn {
  * notes (non-diff discussions) are never "resolved".
  */
 function isDiscussionResolved(notes: GitLabNote[]): boolean {
-  const resolvable = notes.filter((note) => note.resolvable === true);
-  return resolvable.length > 0 && resolvable.every((note) => note.resolved === true);
+  const resolvable = notes.filter(note => note.resolvable === true);
+  return resolvable.length > 0 && resolvable.every(note => note.resolved === true);
 }
 
 /**
@@ -172,9 +172,7 @@ function toAnchor(position: GitLabPosition | null | undefined): ForgeThreadAncho
   if (!position) return null;
 
   const side: ForgeAnchorSide =
-    typeof position.old_line === 'number' && typeof position.new_line !== 'number'
-      ? 'old'
-      : 'new';
+    typeof position.old_line === 'number' && typeof position.new_line !== 'number' ? 'old' : 'new';
   const pathForSide = side === 'old' ? position.old_path : position.new_path;
   const filePath = pathForSide ?? position.new_path ?? position.old_path;
   if (!filePath) return null;
@@ -198,7 +196,7 @@ function toAnchor(position: GitLabPosition | null | undefined): ForgeThreadAncho
  * are ordered replies (GitLab document order is preserved verbatim).
  */
 function toThread(discussion: GitLabDiscussion): ForgeThread | null {
-  const notes = (discussion.notes ?? []).filter((note) => note.system !== true);
+  const notes = (discussion.notes ?? []).filter(note => note.system !== true);
   if (notes.length === 0) return null;
   const [rootNote, ...replyNotes] = notes;
   return {
@@ -247,7 +245,7 @@ export function createGitLabProvider(runCommand: ForgeCommandRunner): ForgeProvi
         if (pages.length === 0 && stdout.trim() !== '') {
           throw new Error('no JSON documents in output');
         }
-        discussions = pages.flatMap((page) =>
+        discussions = pages.flatMap(page =>
           Array.isArray(page) ? (page as GitLabDiscussion[]) : []
         );
       } catch {

@@ -70,7 +70,9 @@ describe('parseForgeUrl', () => {
     });
 
     it('parses a self-hosted GitLab MR URL (git.drupalcode.org)', () => {
-      expect(parseForgeUrl('https://git.drupalcode.org/project/drupal/-/merge_requests/42')).toEqual({
+      expect(
+        parseForgeUrl('https://git.drupalcode.org/project/drupal/-/merge_requests/42')
+      ).toEqual({
         forge: 'gitlab',
         host: 'git.drupalcode.org',
         owner: 'project',
@@ -80,15 +82,15 @@ describe('parseForgeUrl', () => {
     });
 
     it('parses a subgroup MR URL with the full namespace path as owner', () => {
-      expect(
-        parseForgeUrl('https://gitlab.com/group/subgroup/project/-/merge_requests/5')
-      ).toEqual({
-        forge: 'gitlab',
-        host: 'gitlab.com',
-        owner: 'group/subgroup',
-        repo: 'project',
-        number: 5,
-      });
+      expect(parseForgeUrl('https://gitlab.com/group/subgroup/project/-/merge_requests/5')).toEqual(
+        {
+          forge: 'gitlab',
+          host: 'gitlab.com',
+          owner: 'group/subgroup',
+          repo: 'project',
+          number: 5,
+        }
+      );
     });
 
     it('parses an MR URL with a trailing slash and query string', () => {
@@ -145,11 +147,7 @@ describe('parseForgeUrl', () => {
 
 describe('ForgeCliUnavailableError', () => {
   it('is an Error carrying forge and cli identification', () => {
-    const error = new ForgeCliUnavailableError(
-      'github',
-      'gh',
-      'gh: command not found'
-    );
+    const error = new ForgeCliUnavailableError('github', 'gh', 'gh: command not found');
     expect(error).toBeInstanceOf(Error);
     expect(error).toBeInstanceOf(ForgeCliUnavailableError);
     expect(error.name).toBe('ForgeCliUnavailableError');
@@ -175,8 +173,7 @@ describe('ForgeProvider contract', () => {
     const provider: ForgeProvider = {
       forge: 'github',
       fetchBaseBranch: async () => 'main',
-      fetchThreads: async (_url, options) =>
-        options?.includeResolved ? [thread] : [],
+      fetchThreads: async (_url, options) => (options?.includeResolved ? [thread] : []),
     };
     const url = parseForgeUrl('https://github.com/o/r/pull/1') as ForgeUrl;
     expect(await provider.fetchBaseBranch(url)).toBe('main');

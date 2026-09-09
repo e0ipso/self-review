@@ -31,11 +31,7 @@ function clip(name: string, max = 18): string {
  * Pure SVG in a fixed viewBox so it scales with its container; all colors
  * come from theme classes so light and dark both work.
  */
-export function GuideRouteMap({
-  groups,
-  isGroupComplete,
-  onJump,
-}: GuideRouteMapProps) {
+export function GuideRouteMap({ groups, isGroupComplete, onJump }: GuideRouteMapProps) {
   const n = groups.length;
   if (n === 0) return null;
 
@@ -69,11 +65,7 @@ export function GuideRouteMap({
             strokeWidth={2.5}
             strokeLinecap='round'
             strokeDasharray={dashed ? '2 7' : undefined}
-            className={
-              dashed
-                ? 'stroke-muted-foreground/50'
-                : getGuideAccent(i).strokeSoft
-            }
+            className={dashed ? 'stroke-muted-foreground/50' : getGuideAccent(i).strokeSoft}
           />
         );
       })}
@@ -93,9 +85,7 @@ export function GuideRouteMap({
             role={onJump && firstFilePath ? 'button' : undefined}
             tabIndex={onJump && firstFilePath ? 0 : undefined}
             aria-label={`Go to stop ${i + 1}: ${group.name}`}
-            onClick={
-              onJump && firstFilePath ? () => onJump(firstFilePath) : undefined
-            }
+            onClick={onJump && firstFilePath ? () => onJump(firstFilePath) : undefined}
             onKeyDown={
               onJump && firstFilePath
                 ? e => {

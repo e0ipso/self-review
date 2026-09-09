@@ -35,16 +35,13 @@ Then(
 
 // ── Then: count diff lines for before/after comparison ──
 
-Then(
-  'I should see diff lines in the {string} file section',
-  async ({}, filePath: string) => {
-    const page = getPage();
-    const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-    const lines = section.locator('[data-line-number]');
-    lineCountBefore = await lines.count();
-    expect(lineCountBefore).toBeGreaterThan(0);
-  }
-);
+Then('I should see diff lines in the {string} file section', async ({}, filePath: string) => {
+  const page = getPage();
+  const section = page.locator(`[data-testid="file-section-${filePath}"]`);
+  const lines = section.locator('[data-line-number]');
+  lineCountBefore = await lines.count();
+  expect(lineCountBefore).toBeGreaterThan(0);
+});
 
 // ── When: expand interactions ──
 

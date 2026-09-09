@@ -6,19 +6,18 @@ import { Eye, MessageSquare } from 'lucide-react';
 export default function ReviewProgress() {
   const { files, diffFiles } = useReview();
 
-  const { viewedCount, totalFiles, commentCount, filesWithComments } =
-    useMemo(() => {
-      const viewed = files.filter(f => f.viewed).length;
-      const total = diffFiles.length;
-      const comments = files.reduce((sum, f) => sum + f.comments.length, 0);
-      const withComments = files.filter(f => f.comments.length > 0).length;
-      return {
-        viewedCount: viewed,
-        totalFiles: total,
-        commentCount: comments,
-        filesWithComments: withComments,
-      };
-    }, [files, diffFiles]);
+  const { viewedCount, totalFiles, commentCount, filesWithComments } = useMemo(() => {
+    const viewed = files.filter(f => f.viewed).length;
+    const total = diffFiles.length;
+    const comments = files.reduce((sum, f) => sum + f.comments.length, 0);
+    const withComments = files.filter(f => f.comments.length > 0).length;
+    return {
+      viewedCount: viewed,
+      totalFiles: total,
+      commentCount: comments,
+      filesWithComments: withComments,
+    };
+  }, [files, diffFiles]);
 
   if (totalFiles === 0) return null;
 
@@ -60,8 +59,8 @@ export default function ReviewProgress() {
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            {commentCount} {commentCount === 1 ? 'comment' : 'comments'} across{' '}
-            {filesWithComments} {filesWithComments === 1 ? 'file' : 'files'}
+            {commentCount} {commentCount === 1 ? 'comment' : 'comments'} across {filesWithComments}{' '}
+            {filesWithComments === 1 ? 'file' : 'files'}
           </TooltipContent>
         </Tooltip>
       )}

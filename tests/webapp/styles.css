@@ -1,5 +1,5 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 @source "../../packages/react/src/";
 
-@import "../../packages/react/src/styles.css";
+@import '../../packages/react/src/styles.css';

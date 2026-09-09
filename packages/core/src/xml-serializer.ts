@@ -743,9 +743,13 @@ export async function serializeReview(state: ReviewState, outputFilePath: string
     }
     // Infrastructure failure (e.g. WASM load): log warning and return XML anyway
     if (error instanceof Error) {
-      console.error(`[main] XML validation infrastructure failed: ${error.message} - emitting XML without validation`);
+      console.error(
+        `[main] XML validation infrastructure failed: ${error.message} - emitting XML without validation`
+      );
     } else {
-      console.error('[main] XML validation infrastructure failed - emitting XML without validation');
+      console.error(
+        '[main] XML validation infrastructure failed - emitting XML without validation'
+      );
     }
     return xml;
   }

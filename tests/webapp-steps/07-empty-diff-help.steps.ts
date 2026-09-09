@@ -18,9 +18,12 @@ Given('the webapp is loaded with an empty diff', async () => {
   await launchWebapp({ fixture: 'empty' });
 });
 
-Given('the webapp is loaded with an empty diff and arguments {string}', async ({}, args: string) => {
-  await launchWebapp({ fixture: 'empty', gitDiffArgs: args });
-});
+Given(
+  'the webapp is loaded with an empty diff and arguments {string}',
+  async ({}, args: string) => {
+    await launchWebapp({ fixture: 'empty', gitDiffArgs: args });
+  }
+);
 
 // ── Then: empty diff help assertions ──
 
@@ -45,11 +48,14 @@ Then('the help message should include the following examples:', async ({}, table
   }
 });
 
-Then('the help message should show that the arguments {string} were passed to git diff', async ({}, args: string) => {
-  const page = getPage();
-  const helpMessage = page.locator('[data-testid="empty-diff-help"]');
-  await expect(helpMessage).toContainText(args);
-});
+Then(
+  'the help message should show that the arguments {string} were passed to git diff',
+  async ({}, args: string) => {
+    const page = getPage();
+    const helpMessage = page.locator('[data-testid="empty-diff-help"]');
+    await expect(helpMessage).toContainText(args);
+  }
+);
 
 Then('the help message should suggest trying different arguments', async () => {
   const page = getPage();

@@ -2,10 +2,10 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execFileSync, execSync } from 'child_process';
 import { determineMode } from './startup-mode';
 import { loadConfig } from './config';
-import { normalizeGitDiffArgs } from './git-diff-args';
+import { formatGitDiffArgs, normalizeGitDiffArgs, tokenizeGitDiffArgs } from './git-diff-args';
+import { gitSync } from './test-support/git-env';
 
 // determineMode reads the process CWD, so each suite runs from a temp tree.
 // The vitest main config runs in a forked process, where chdir is allowed.
@@ -58,11 +58,19 @@ describe('determineMode', () => {
       root = makeTempDir('self-review-test-mode-git-');
       fs.writeFileSync(path.join(root, 'tracked.ts'), 'export {};\n');
       fs.writeFileSync(path.join(root, 'untracked.ts'), 'export {};\n');
-      const git = (cmd: string) =>
-        execSync(`git ${cmd}`, { cwd: root, stdio: 'ignore' });
-      git('init -q');
-      git('add tracked.ts');
-      git('-c user.name=test -c user.email=test@example.com commit -q -m init');
+      const git = (args: string[]) => gitSync(args, { cwd: root });
+      git(['init', '-q']);
+      git(['add', 'tracked.ts']);
+      git([
+        '-c',
+        'user.name=test',
+        '-c',
+        'user.email=test@example.com',
+        'commit',
+        '-q',
+        '-m',
+        'init',
+      ]);
       process.chdir(root);
     });
 
@@ -97,7 +105,7 @@ describe('determineMode', () => {
 
     beforeEach(() => {
       root = makeTempDir('self-review-mode-literal-');
-      execFileSync('git', ['init', '-q', root]);
+      gitSync(['init', '-q', root]);
       process.chdir(root);
     });
 
@@ -117,7 +125,7 @@ describe('determineMode', () => {
       expect(determineMode(['--', filename])).toBe('file');
       expect(fs.existsSync(marker)).toBe(false);
 
-      execFileSync('git', ['add', '--', filename]);
+      gitSync(['add', '--', filename]);
       expect(determineMode(['--', filename])).toBe('git');
       expect(fs.existsSync(marker)).toBe(false);
     });
@@ -128,12 +136,33 @@ describe('determineMode', () => {
     ])('does not execute filenames selected by configuration: %s', filename => {
       fs.writeFileSync(filename, 'content\n');
       fs.writeFileSync('.self-review.yaml', `default-diff-args: '${filename}'\n`);
-      const args = normalizeGitDiffArgs(
-        loadConfig().defaultDiffArgs.split(' ').filter(Boolean)
-      );
+      // Same split main performs on default-diff-args, so this exercises
+      // the real path rather than a whitespace approximation of it.
+      const args = normalizeGitDiffArgs(tokenizeGitDiffArgs(loadConfig().defaultDiffArgs));
 
       expect(determineMode(args)).toBe('file');
       expect(fs.existsSync(marker)).toBe(false);
+    });
+
+    // SR-0037: default-diff-args is one string that people quote the way a
+    // shell expects. Splitting it on whitespace tore these names into
+    // fragments and the selected file stopped existing.
+    it.each([
+      'file with spaces.txt',
+      'file "with quotes".txt',
+      "file 'with quotes'.txt",
+      'trailing space .txt',
+    ])('keeps a quoted configured filename as one argument: %s', filename => {
+      fs.writeFileSync(filename, 'content\n');
+      // formatGitDiffArgs is the renderer the git-diff-args attribute uses,
+      // so this is the exact syntax a resumed document round-trips through.
+      const configured = formatGitDiffArgs([filename]);
+      fs.writeFileSync('.self-review.yaml', `default-diff-args: ${JSON.stringify(configured)}\n`);
+
+      const argv = tokenizeGitDiffArgs(loadConfig().defaultDiffArgs);
+
+      expect(argv).toEqual([filename]);
+      expect(determineMode(normalizeGitDiffArgs(argv))).toBe('file');
     });
   });
 });

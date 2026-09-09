@@ -53,11 +53,7 @@ function makeAddedFile(filePath: string, lines: string[]): DiffFile {
   };
 }
 
-function renderView(
-  file: DiffFile,
-  contentMode: RenderedTextMode,
-  onGutterMouseDown = vi.fn(),
-) {
+function renderView(file: DiffFile, contentMode: RenderedTextMode, onGutterMouseDown = vi.fn()) {
   const result = render(
     <RenderedMarkdownView
       file={file}
@@ -66,7 +62,7 @@ function renderView(
       onCancelComment={vi.fn()}
       onCommentSaved={vi.fn()}
       onGutterMouseDown={onGutterMouseDown}
-    />,
+    />
   );
 
   return { ...result, onGutterMouseDown };
@@ -92,7 +88,9 @@ describe('RenderedMarkdownView', () => {
     expect(container.firstElementChild?.getAttribute('data-rendered-text-mode')).toBe('markdown');
     expect(screen.getByText('title')).toBeTruthy();
     expect(screen.getByText('Guide')).toBeTruthy();
-    expect(screen.getByText('Hello 🚀').closest('h1')?.getAttribute('data-source-start-line')).toBe('4');
+    expect(screen.getByText('Hello 🚀').closest('h1')?.getAttribute('data-source-start-line')).toBe(
+      '4'
+    );
   });
 
   it('renders added-file HTML directly through commentable block wrappers', () => {

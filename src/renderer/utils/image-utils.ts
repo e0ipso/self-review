@@ -12,8 +12,8 @@ async function resizeImageIfNeeded(blob: Blob, maxDimension = 1920): Promise<Blo
     canvas.height = Math.round(bitmap.height * scale);
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    return await new Promise<Blob>((resolve) => {
-      canvas.toBlob((resized) => resolve(resized || blob), blob.type);
+    return await new Promise<Blob>(resolve => {
+      canvas.toBlob(resized => resolve(resized || blob), blob.type);
     });
   } finally {
     bitmap.close();

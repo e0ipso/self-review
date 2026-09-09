@@ -3,11 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { serializeReview } from './xml-serializer';
-import type {
-  ReviewState,
-  FileReviewState,
-  ReviewComment,
-} from './types';
+import type { ReviewState, FileReviewState, ReviewComment } from './types';
 
 // Mock xmllint-wasm to avoid WASM loading issues in tests
 vi.mock('xmllint-wasm', () => ({
@@ -15,7 +11,7 @@ vi.mock('xmllint-wasm', () => ({
 }));
 
 // Mock fs for attachment file writing tests
-vi.mock('fs', async (importOriginal) => {
+vi.mock('fs', async importOriginal => {
   const actual = await importOriginal<typeof import('fs')>();
   return {
     ...actual,
@@ -73,9 +69,7 @@ describe('serializeReview', () => {
 
       const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
-      expect(xml).toContain(
-        '<file path="src/main.ts" change-type="modified" viewed="true" />'
-      );
+      expect(xml).toContain('<file path="src/main.ts" change-type="modified" viewed="true" />');
       expect(xml).not.toContain('<comment');
     });
 
@@ -193,9 +187,7 @@ describe('serializeReview', () => {
 
       const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
-      expect(xml).toContain(
-        '<file path="src/main.ts" change-type="modified" viewed="true">'
-      );
+      expect(xml).toContain('<file path="src/main.ts" change-type="modified" viewed="true">');
       expect(xml).toContain('<comment>');
       expect(xml).toContain('<body>Overall looks good</body>');
       expect(xml).toContain('<category>praise</category>');
@@ -474,9 +466,7 @@ describe('serializeReview', () => {
       const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       // Check basic XML structure
-      expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(
-        true
-      );
+      expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
       expect(xml).toContain('<review');
       expect(xml).toContain('</review>');
       expect(xml.indexOf('<review')).toBeLessThan(xml.indexOf('</review>'));
@@ -616,10 +606,9 @@ describe('serializeReview', () => {
 
       await serializeReview(reviewState, '/tmp/test-output/review.xml');
 
-      expect(fs.mkdirSync).toHaveBeenCalledWith(
-        '/tmp/test-output/.self-review-assets',
-        { recursive: true }
-      );
+      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/test-output/.self-review-assets', {
+        recursive: true,
+      });
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         expect.stringContaining('.self-review-assets/att-write-1-0.png'),
         expect.any(Buffer)

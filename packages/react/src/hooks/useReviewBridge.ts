@@ -16,7 +16,7 @@ export interface ReviewHandle {
  */
 export function useReviewBridge(
   ref: ForwardedRef<ReviewHandle>,
-  onReviewChange?: (comments: ReviewComment[]) => void,
+  onReviewChange?: (comments: ReviewComment[]) => void
 ): void {
   const { files, diffSource } = useReview();
 
@@ -44,7 +44,7 @@ export function useReviewBridge(
   const prevCommentsRef = useRef<ReviewComment[] | null>(null);
 
   useEffect(() => {
-    const comments = files.flatMap((f) => f.comments);
+    const comments = files.flatMap(f => f.comments);
     const previousComments = prevCommentsRef.current;
     const commentsChanged =
       previousComments === null ||

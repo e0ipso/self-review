@@ -79,50 +79,49 @@ export interface ReviewPanelProps {
  * }}>Finish Review</button>
  * ```
  */
-export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(
-  function ReviewPanel(
-    { adapter, config, className, prismLightCss, prismDarkCss, children, onReviewChange },
-    ref,
-  ) {
-    return (
-      <ReviewAdapterProvider adapter={adapter}>
-        <ConfigProvider
-          initialConfig={config}
-          prismLightCss={prismLightCss}
-          prismDarkCss={prismDarkCss}
-        >
-          <GuideProvider>
-            <ReviewProvider>
-              <DiffNavigationProvider>
-                <TooltipProvider>
-                  <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
-                    {children}
-                  </ReviewPanelInner>
-                </TooltipProvider>
-              </DiffNavigationProvider>
-            </ReviewProvider>
-          </GuideProvider>
-        </ConfigProvider>
-      </ReviewAdapterProvider>
-    );
-  },
-);
+export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(function ReviewPanel(
+  { adapter, config, className, prismLightCss, prismDarkCss, children, onReviewChange },
+  ref
+) {
+  return (
+    <ReviewAdapterProvider adapter={adapter}>
+      <ConfigProvider
+        initialConfig={config}
+        prismLightCss={prismLightCss}
+        prismDarkCss={prismDarkCss}
+      >
+        <GuideProvider>
+          <ReviewProvider>
+            <DiffNavigationProvider>
+              <TooltipProvider>
+                <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
+                  {children}
+                </ReviewPanelInner>
+              </TooltipProvider>
+            </DiffNavigationProvider>
+          </ReviewProvider>
+        </GuideProvider>
+      </ConfigProvider>
+    </ReviewAdapterProvider>
+  );
+});
 
 /**
  * Inner component that lives inside all providers and can therefore
  * use useReviewBridge() to expose state through the imperative handle
  * and reactive callback.
  */
-const ReviewPanelInner = forwardRef<ReviewPanelHandle, { className?: string; children?: ReactNode; onReviewChange?: (comments: ReviewComment[]) => void }>(
-  function ReviewPanelInner({ className, children, onReviewChange }, ref) {
-    useReviewBridge(ref, onReviewChange);
+const ReviewPanelInner = forwardRef<
+  ReviewPanelHandle,
+  { className?: string; children?: ReactNode; onReviewChange?: (comments: ReviewComment[]) => void }
+>(function ReviewPanelInner({ className, children, onReviewChange }, ref) {
+  useReviewBridge(ref, onReviewChange);
 
-    return (
-      <div className={className}>
-        <KeyboardNavigationManager />
-        {children}
-        <Layout />
-      </div>
-    );
-  },
-);
+  return (
+    <div className={className}>
+      <KeyboardNavigationManager />
+      {children}
+      <Layout />
+    </div>
+  );
+});

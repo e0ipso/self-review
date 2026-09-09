@@ -1,5 +1,11 @@
 import React, { forwardRef, useMemo } from 'react';
-import type { AppConfig, DiffFile, DiffSource, ReviewComment, DiffLoadPayload } from '@self-review/types';
+import type {
+  AppConfig,
+  DiffFile,
+  DiffSource,
+  ReviewComment,
+  DiffLoadPayload,
+} from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
 import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
 import { ConfigProvider } from './context/ConfigContext';
@@ -55,7 +61,7 @@ const SingleFileReviewInner = forwardRef<ReviewHandle, SingleFileReviewInnerProp
         <FileSection file={file} viewMode={viewMode} expanded={true} />
       </div>
     );
-  },
+  }
 );
 
 /**
@@ -73,27 +79,33 @@ const SingleFileReviewInner = forwardRef<ReviewHandle, SingleFileReviewInnerProp
  * ```
  */
 export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
-  function SingleFileReview({
-    file,
-    source,
-    config,
-    onReviewChange,
-    adapter,
-    className,
-    defaultViewMode = 'unified',
-    prismLightCss,
-    prismDarkCss,
-  }, ref) {
+  function SingleFileReview(
+    {
+      file,
+      source,
+      config,
+      onReviewChange,
+      adapter,
+      className,
+      defaultViewMode = 'unified',
+      prismLightCss,
+      prismDarkCss,
+    },
+    ref
+  ) {
     // Merge consumer-supplied adapter under the internally-generated loadDiff.
     // Spread order is load-bearing: the internal loadDiff must always win, since
     // file/source are the source of truth in single-file mode.
-    const mergedAdapter: ReviewAdapter = useMemo(() => ({
-      ...adapter,
-      loadDiff: async (): Promise<DiffLoadPayload> => ({
-        files: [file],
-        source: source || { type: 'file', sourcePath: file.newPath || file.oldPath },
+    const mergedAdapter: ReviewAdapter = useMemo(
+      () => ({
+        ...adapter,
+        loadDiff: async (): Promise<DiffLoadPayload> => ({
+          files: [file],
+          source: source || { type: 'file', sourcePath: file.newPath || file.oldPath },
+        }),
       }),
-    }), [file, source, adapter]);
+      [file, source, adapter]
+    );
 
     return (
       <ReviewAdapterProvider adapter={mergedAdapter}>
@@ -118,5 +130,5 @@ export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
         </ConfigProvider>
       </ReviewAdapterProvider>
     );
-  },
+  }
 );

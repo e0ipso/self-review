@@ -27,13 +27,7 @@ export function MarkdownCode({
 
   if (lang && Prism.languages[lang]) {
     const html = Prism.highlight(code, Prism.languages[lang], lang);
-    return (
-      <code
-        className={className}
-        dangerouslySetInnerHTML={{ __html: html }}
-        {...props}
-      />
-    );
+    return <code className={className} dangerouslySetInnerHTML={{ __html: html }} {...props} />;
   }
   return (
     <code className={className} {...props}>

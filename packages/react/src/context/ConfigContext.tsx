@@ -161,7 +161,7 @@ export function ConfigProvider({
           styleRef.current = el;
         }
         if (styleRef.current) {
-          styleRef.current.textContent = isDark ? (prismDarkCss || '') : (prismLightCss || '');
+          styleRef.current.textContent = isDark ? prismDarkCss || '' : prismLightCss || '';
         }
       }
     };
@@ -196,8 +196,17 @@ export function ConfigProvider({
   }, [config.theme, prismLightCss, prismDarkCss, portalContainer]);
 
   return (
-    <ConfigContext.Provider value={{ config, setConfig, updateConfig, outputPathInfo, setOutputPathInfo, portalContainer }}>
-      <div ref={wrapperCallbackRef} className="self-review" style={{ display: 'contents' }}>
+    <ConfigContext.Provider
+      value={{
+        config,
+        setConfig,
+        updateConfig,
+        outputPathInfo,
+        setOutputPathInfo,
+        portalContainer,
+      }}
+    >
+      <div ref={wrapperCallbackRef} className='self-review' style={{ display: 'contents' }}>
         {children}
       </div>
     </ConfigContext.Provider>

@@ -4,7 +4,9 @@ import { useRef } from 'react';
 import { useDragSelection } from './useDragSelection';
 import type { DiffFile } from '@self-review/types';
 
-function makeFile(lines: { type: 'addition' | 'deletion' | 'context'; old: number | null; new: number | null }[]): DiffFile {
+function makeFile(
+  lines: { type: 'addition' | 'deletion' | 'context'; old: number | null; new: number | null }[]
+): DiffFile {
   return {
     oldPath: 'src/foo.ts',
     newPath: 'src/foo.ts',

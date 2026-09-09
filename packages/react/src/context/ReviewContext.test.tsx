@@ -32,13 +32,9 @@ function StateProbe() {
   return (
     <>
       <div data-testid='probe'>
-        {files
-          .map(f => `${f.path}:${f.viewed}:${f.comments.length}`)
-          .join('|')}
+        {files.map(f => `${f.path}:${f.viewed}:${f.comments.length}`).join('|')}
       </div>
-      <div data-testid='diff-probe'>
-        {diffFiles.map(f => f.newPath || f.oldPath).join('|')}
-      </div>
+      <div data-testid='diff-probe'>{diffFiles.map(f => f.newPath || f.oldPath).join('|')}</div>
       <div data-testid='source-probe'>{diffSource.type}</div>
     </>
   );
@@ -66,9 +62,7 @@ describe('ReviewProvider resume flow', () => {
     renderWithResume({ comments: [], viewedFiles: ['src/a.ts'] });
 
     await waitFor(() => {
-      expect(screen.getByTestId('probe').textContent).toBe(
-        'src/a.ts:true:0|src/b.ts:false:0'
-      );
+      expect(screen.getByTestId('probe').textContent).toBe('src/a.ts:true:0|src/b.ts:false:0');
     });
   });
 
@@ -88,9 +82,7 @@ describe('ReviewProvider resume flow', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('probe').textContent).toBe(
-        'src/a.ts:true:0|src/b.ts:false:1'
-      );
+      expect(screen.getByTestId('probe').textContent).toBe('src/a.ts:true:0|src/b.ts:false:1');
     });
   });
 
@@ -98,9 +90,7 @@ describe('ReviewProvider resume flow', () => {
     renderWithResume({ comments: [] });
 
     await waitFor(() => {
-      expect(screen.getByTestId('probe').textContent).toBe(
-        'src/a.ts:false:0|src/b.ts:false:0'
-      );
+      expect(screen.getByTestId('probe').textContent).toBe('src/a.ts:false:0|src/b.ts:false:0');
     });
   });
 });
@@ -139,9 +129,7 @@ describe('ReviewProvider resume merge for paths absent from the diff', () => {
         'src/a.ts:false:0|src/b.ts:false:0|:false:1|gone/old.ts:false:1'
       );
       // …and synthetic diff entries exist so the UI can render them.
-      expect(screen.getByTestId('diff-probe').textContent).toBe(
-        'src/a.ts|src/b.ts||gone/old.ts'
-      );
+      expect(screen.getByTestId('diff-probe').textContent).toBe('src/a.ts|src/b.ts||gone/old.ts');
     });
   });
 });
@@ -182,9 +170,7 @@ describe('ReviewProvider pushed diff payloads (welcome → remote URL open)', ()
 
     await waitFor(() => {
       expect(screen.getByTestId('source-probe').textContent).toBe('git');
-      expect(screen.getByTestId('diff-probe').textContent).toBe(
-        'src/a.ts|src/b.ts'
-      );
+      expect(screen.getByTestId('diff-probe').textContent).toBe('src/a.ts|src/b.ts');
     });
   });
 });

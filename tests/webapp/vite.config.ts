@@ -5,10 +5,7 @@ import path from 'path';
 
 export default defineConfig({
   root: path.resolve(__dirname),
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       '@self-review/core': path.resolve(__dirname, '../../packages/core/src/browser.ts'),

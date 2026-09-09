@@ -31,9 +31,7 @@ export function runGitDiff(args: string[]): string {
     try {
       execSync('git rev-parse --git-dir', { stdio: 'ignore' });
     } catch {
-      console.error(
-        'Error: not a git repository (or any parent up to mount point)'
-      );
+      console.error('Error: not a git repository (or any parent up to mount point)');
       process.exit(1);
     }
 
@@ -85,9 +83,7 @@ export function validateGitAvailable(): void {
   try {
     execSync('git rev-parse --git-dir', { stdio: 'ignore' });
   } catch {
-    console.error(
-      'Error: not a git repository (or any parent up to mount point)'
-    );
+    console.error('Error: not a git repository (or any parent up to mount point)');
     process.exit(1);
   }
 }
@@ -140,10 +136,7 @@ export async function runGitDiffAsync(args: string[], cwd?: string): Promise<str
  * clone's working tree stays on the default branch and never reflects the
  * PR/MR head.
  */
-export async function readGitBlobAsync(
-  repoPath: string,
-  spec: string
-): Promise<Buffer> {
+export async function readGitBlobAsync(repoPath: string, spec: string): Promise<Buffer> {
   return await new Promise<Buffer>((resolve, reject) => {
     execFile(
       'git',
@@ -187,9 +180,7 @@ export async function getUntrackedFilesAsync(repoRoot?: string): Promise<string[
     return stdout.split('\0').filter(name => name.length > 0);
   } catch (error) {
     if (error instanceof Error) {
-      console.error(
-        `Warning: Failed to list untracked files: ${error.message}`
-      );
+      console.error(`Warning: Failed to list untracked files: ${error.message}`);
     } else {
       console.error('Warning: Failed to list untracked files: unknown error');
     }
@@ -203,9 +194,6 @@ export async function getUntrackedFilesAsync(repoRoot?: string): Promise<string[
  *
  * Delegates to the reusable generateSyntheticDiffs module.
  */
-export function generateUntrackedDiffs(
-  paths: string[],
-  repoRoot: string
-): string {
+export function generateUntrackedDiffs(paths: string[], repoRoot: string): string {
   return generateSyntheticDiffs(paths, repoRoot);
 }

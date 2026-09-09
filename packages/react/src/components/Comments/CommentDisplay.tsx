@@ -2,11 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
-import type {
-  ReviewComment,
-  CommentSeverity,
-  CommentConfidence,
-} from '@self-review/types';
+import type { ReviewComment, CommentSeverity, CommentConfidence } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
@@ -14,7 +10,15 @@ import { Badge } from '../ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 // `Reply` is aliased because the identifier is also the reply *type* exported
 // by @self-review/types, which this file's thread markup talks about.
-import { Pencil, Trash2, ChevronDown, ChevronUp, Bot, User, Reply as ReplyIcon } from 'lucide-react';
+import {
+  Pencil,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Bot,
+  User,
+  Reply as ReplyIcon,
+} from 'lucide-react';
 import CommentInput from './CommentInput';
 import ReplyInput from './ReplyInput';
 import ReplyDisplay, { PROSE_CLASSES } from './ReplyDisplay';
@@ -93,16 +97,17 @@ function SignalBadge({
   );
 }
 
-export default function CommentDisplay({ comment, originalCode: originalCodeProp }: CommentDisplayProps) {
+export default function CommentDisplay({
+  comment,
+  originalCode: originalCodeProp,
+}: CommentDisplayProps) {
   const { deleteComment } = useReview();
   const { config } = useConfig();
   const [isEditing, setIsEditing] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
 
-  const categoryDef = config.categories?.find(
-    cat => cat.name === comment.category
-  );
+  const categoryDef = config.categories?.find(cat => cat.name === comment.category);
 
   // Listen for global collapse/expand all events
   useEffect(() => {
@@ -113,10 +118,7 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
 
     document.addEventListener('toggle-all-comments', handleToggleAllComments);
     return () => {
-      document.removeEventListener(
-        'toggle-all-comments',
-        handleToggleAllComments
-      );
+      document.removeEventListener('toggle-all-comments', handleToggleAllComments);
     };
   }, []);
 
@@ -166,9 +168,7 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
             ) : (
               <ChevronUp className='h-3.5 w-3.5' />
             )}
-            <span className='sr-only'>
-              {isCollapsed ? 'Expand' : 'Collapse'}
-            </span>
+            <span className='sr-only'>{isCollapsed ? 'Expand' : 'Collapse'}</span>
           </Button>
           <span className='flex items-center gap-1 text-xs font-semibold text-foreground max-w-[200px] truncate'>
             {comment.author ? (
@@ -207,9 +207,7 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
                     {comment.category}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent side='bottom'>
-                  {categoryDef.description}
-                </TooltipContent>
+                <TooltipContent side='bottom'>{categoryDef.description}</TooltipContent>
               </Tooltip>
             ) : (
               <Badge
@@ -273,23 +271,23 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
       {!isCollapsed && (
         <>
           <div className={`px-3 pb-3 text-sm text-foreground leading-relaxed ${PROSE_CLASSES}`}>
-            <ReactMarkdown urlTransform={localContentUrlTransform} remarkPlugins={[remarkGfm, remarkEmoji]}>
+            <ReactMarkdown
+              urlTransform={localContentUrlTransform}
+              remarkPlugins={[remarkGfm, remarkEmoji]}
+            >
               {comment.body}
             </ReactMarkdown>
           </div>
 
           {comment.suggestion && (
             <div className='px-3 pb-3'>
-              <SuggestionBlock
-                suggestion={comment.suggestion}
-                language='typescript'
-              />
+              <SuggestionBlock suggestion={comment.suggestion} language='typescript' />
             </div>
           )}
 
           {comment.attachments && comment.attachments.length > 0 && (
             <div className='flex gap-2 flex-wrap px-3 pb-3'>
-              {comment.attachments.map((att) => (
+              {comment.attachments.map(att => (
                 <AttachmentImage key={att.id} attachment={att} />
               ))}
             </div>
@@ -301,16 +299,9 @@ export default function CommentDisplay({ comment, originalCode: originalCodeProp
             replies with the rest of the comment body, with no extra wiring.
           */}
           {comment.replies && comment.replies.length > 0 && (
-            <div
-              className='ml-4 border-l-2 border-border/60'
-              data-testid={`thread-${comment.id}`}
-            >
-              {comment.replies.map((reply) => (
-                <ReplyDisplay
-                  key={reply.id}
-                  commentId={comment.id}
-                  reply={reply}
-                />
+            <div className='ml-4 border-l-2 border-border/60' data-testid={`thread-${comment.id}`}>
+              {comment.replies.map(reply => (
+                <ReplyDisplay key={reply.id} commentId={comment.id} reply={reply} />
               ))}
             </div>
           )}

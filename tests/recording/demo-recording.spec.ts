@@ -19,11 +19,7 @@
  *   npm run record:demo
  */
 import { test } from '@playwright/test';
-import {
-  _electron as electron,
-  ElectronApplication,
-  Page,
-} from '@playwright/test';
+import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
 import { existsSync, copyFileSync, writeFileSync, rmSync } from 'fs';
 import { mkdtempSync } from 'fs';
 import * as path from 'path';
@@ -72,17 +68,29 @@ async function injectCursor(page: Page): Promise<void> {
     });
     document.body.appendChild(cursor);
 
-    document.addEventListener('mousemove', (e) => {
-      cursor.style.left = e.clientX + 'px';
-      cursor.style.top = e.clientY + 'px';
-    }, true);
+    document.addEventListener(
+      'mousemove',
+      e => {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+      },
+      true
+    );
 
-    document.addEventListener('mousedown', () => {
-      cursor.style.scale = '0.7';
-    }, true);
-    document.addEventListener('mouseup', () => {
-      cursor.style.scale = '1';
-    }, true);
+    document.addEventListener(
+      'mousedown',
+      () => {
+        cursor.style.scale = '0.7';
+      },
+      true
+    );
+    document.addEventListener(
+      'mouseup',
+      () => {
+        cursor.style.scale = '1';
+      },
+      true
+    );
   });
 }
 
@@ -109,7 +117,7 @@ async function humanClick(page: Page, locator: ReturnType<Page['locator']>): Pro
 async function humanType(
   page: Page,
   locator: ReturnType<Page['locator']>,
-  text: string,
+  text: string
 ): Promise<void> {
   await humanClick(page, locator);
   await pause(page, 200);
@@ -124,12 +132,10 @@ async function triggerCommentIcon(
   page: Page,
   filePath: string,
   line: number,
-  side: 'old' | 'new',
+  side: 'old' | 'new'
 ): Promise<void> {
   const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-  const gutter = section.locator(
-    `[data-testid="${side}-line-${filePath}-${line}"]`,
-  );
+  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${line}"]`);
   // Move cursor visibly to the gutter
   const gBox = await gutter.boundingBox();
   if (gBox) {
@@ -139,9 +145,7 @@ async function triggerCommentIcon(
   const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
   await icon.dispatchEvent('mousedown');
   await page.waitForTimeout(100);
-  await page.evaluate(() =>
-    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })),
-  );
+  await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
   await section
     .locator('[data-testid="comment-input"]')
     .first()
@@ -176,7 +180,7 @@ test('Record demo', async () => {
       '  - name: "question"',
       '    description: "question category"',
       '    color: "#805ad5"',
-    ].join('\n') + '\n',
+    ].join('\n') + '\n'
   );
 
   const videoDir = mkdtempSync(path.join(tmpdir(), 'self-review-recording-'));
@@ -194,7 +198,10 @@ test('Record demo', async () => {
 
   const page: Page = await electronApp.firstWindow();
   await page.waitForLoadState('domcontentloaded');
-  await page.locator('[data-testid^="file-entry-"]').first().waitFor({ state: 'visible', timeout: 10000 });
+  await page
+    .locator('[data-testid^="file-entry-"]')
+    .first()
+    .waitFor({ state: 'visible', timeout: 10000 });
 
   // Inject visible cursor
   await injectCursor(page);
@@ -221,31 +228,41 @@ test('Record demo', async () => {
 
     // Paste image first — before typing text — so the async re-render triggered by
     // setAttachments cannot interfere with MDEditor's controlled textarea content.
-    await page.evaluate(() => new Promise<void>((resolve) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 100;
-      canvas.height = 100;
-      const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = '#4a90d9';
-      ctx.fillRect(0, 0, 100, 100);
-      ctx.fillStyle = '#2c5f8a';
-      ctx.fillRect(10, 10, 80, 60);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.fillText('screenshot', 12, 45);
-      canvas.toBlob((blob) => {
-        if (!blob) { resolve(); return; }
-        const file = new File([blob], 'screenshot.png', { type: 'image/png' });
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        const section = document.querySelector('[data-testid="file-section-src/auth/login.ts"]');
-        const input = section?.querySelector('[data-testid="comment-input"]') as HTMLElement | null;
-        input?.dispatchEvent(
-          new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }),
-        );
-        resolve();
-      }, 'image/png');
-    }));
+    await page.evaluate(
+      () =>
+        new Promise<void>(resolve => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 100;
+          canvas.height = 100;
+          const ctx = canvas.getContext('2d')!;
+          ctx.fillStyle = '#4a90d9';
+          ctx.fillRect(0, 0, 100, 100);
+          ctx.fillStyle = '#2c5f8a';
+          ctx.fillRect(10, 10, 80, 60);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText('screenshot', 12, 45);
+          canvas.toBlob(blob => {
+            if (!blob) {
+              resolve();
+              return;
+            }
+            const file = new File([blob], 'screenshot.png', { type: 'image/png' });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            const section = document.querySelector(
+              '[data-testid="file-section-src/auth/login.ts"]'
+            );
+            const input = section?.querySelector(
+              '[data-testid="comment-input"]'
+            ) as HTMLElement | null;
+            input?.dispatchEvent(
+              new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })
+            );
+            resolve();
+          }, 'image/png');
+        })
+    );
     await pause(page, 800); // allow image processing + thumbnail render
 
     // Type comment text after the image is attached
@@ -270,7 +287,11 @@ test('Record demo', async () => {
     await humanClick(page, page.locator('[data-testid="category-option-question"]').first());
     await pause(page, 400);
 
-    await humanType(page, getInput().locator('textarea'), 'Should this file be split into smaller modules?');
+    await humanType(
+      page,
+      getInput().locator('textarea'),
+      'Should this file be split into smaller modules?'
+    );
     await pause(page, 500);
     await humanClick(page, getInput().locator('[data-testid="add-comment-btn"]'));
     await pause(page, 1500);
@@ -311,11 +332,9 @@ test('Record demo', async () => {
     await renderedToggle.waitFor({ state: 'visible', timeout: 5000 });
     const toggleBox = await renderedToggle.boundingBox();
     if (toggleBox) {
-      await page.mouse.move(
-        toggleBox.x + toggleBox.width / 2,
-        toggleBox.y + toggleBox.height / 2,
-        { steps: 12 },
-      );
+      await page.mouse.move(toggleBox.x + toggleBox.width / 2, toggleBox.y + toggleBox.height / 2, {
+        steps: 12,
+      });
       await pause(page, 200);
     }
     await renderedToggle.click();
@@ -330,9 +349,7 @@ test('Record demo', async () => {
     const renderedGutter = pBlock.locator('.rendered-gutter');
     await renderedGutter.dispatchEvent('mousedown');
     await page.waitForTimeout(100);
-    await page.evaluate(() =>
-      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })),
-    );
+    await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
     await pause(page, 500);
 
     const mdInput = mdSection.locator('[data-testid="comment-input"]').first();
@@ -345,7 +362,11 @@ test('Record demo', async () => {
     await pause(page, 600);
 
     // Type the comment body — target the MDEditor textarea specifically
-    await humanType(page, mdInput.locator('.w-md-editor-text-input'), 'Consider adding a diagram here');
+    await humanType(
+      page,
+      mdInput.locator('.w-md-editor-text-input'),
+      'Consider adding a diagram here'
+    );
     await pause(page, 400);
 
     // Replace the proposed markdown text — fill() clears existing content, then type visibly
@@ -355,7 +376,7 @@ test('Record demo', async () => {
     await humanType(
       page,
       proposedEditor,
-      'This document describes the high-level architecture. See the diagram below.',
+      'This document describes the high-level architecture. See the diagram below.'
     );
     await pause(page, 600);
 
@@ -385,7 +406,11 @@ test('Record demo', async () => {
       const proc = electronApp.process();
       proc.on('close', () => resolve());
       setTimeout(() => {
-        try { proc.kill(); } catch { /* already dead */ }
+        try {
+          proc.kill();
+        } catch {
+          /* already dead */
+        }
         resolve();
       }, 10000);
     });
@@ -393,12 +418,18 @@ test('Record demo', async () => {
     // On failure, still close the app
     try {
       await page.evaluate(() => (window as any).electronAPI.discardAndQuit());
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     await new Promise<void>(resolve => {
       const proc = electronApp.process();
       proc.on('close', () => resolve());
       setTimeout(() => {
-        try { proc.kill(); } catch { /* dead */ }
+        try {
+          proc.kill();
+        } catch {
+          /* dead */
+        }
         resolve();
       }, 5000);
     });
@@ -422,6 +453,8 @@ test('Record demo', async () => {
     try {
       rmSync(repoDir, { recursive: true, force: true });
       rmSync(videoDir, { recursive: true, force: true });
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
   }
 });

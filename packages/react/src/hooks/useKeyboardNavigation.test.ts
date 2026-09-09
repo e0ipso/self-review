@@ -26,7 +26,7 @@ describe('generateLabels', () => {
     expect(labels[18]).toBe('sa');
     expect(labels[19]).toBe('ss');
     // Every label should be exactly 2 characters
-    labels.forEach((label) => expect(label).toHaveLength(2));
+    labels.forEach(label => expect(label).toHaveLength(2));
   });
 
   it('generates unique labels', () => {

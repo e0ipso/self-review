@@ -27,7 +27,7 @@ export async function checkForUpdate(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { version: currentVersion } = require('../../package.json');
 
-  return new Promise<void>((resolve) => {
+  return new Promise<void>(resolve => {
     const request = net.request({
       url: GITHUB_API_URL,
       method: 'GET',
@@ -43,7 +43,7 @@ export async function checkForUpdate(): Promise<void> {
 
     let body = '';
 
-    request.on('response', (response) => {
+    request.on('response', response => {
       if (response.statusCode !== 200) {
         clearTimeout(timeout);
         resolve();
@@ -59,12 +59,16 @@ export async function checkForUpdate(): Promise<void> {
         try {
           const data = JSON.parse(body);
           const tagName = data.tag_name;
-          if (typeof tagName !== 'string') { resolve(); return; }
+          if (typeof tagName !== 'string') {
+            resolve();
+            return;
+          }
           const latestVersion = tagName.replace(/^v/, '');
           if (compareVersions(currentVersion, latestVersion)) {
             versionUpdateCache = {
               latestVersion,
-              releaseUrl: data.html_url || `https://github.com/e0ipso/self-review/releases/tag/${tagName}`,
+              releaseUrl:
+                data.html_url || `https://github.com/e0ipso/self-review/releases/tag/${tagName}`,
             };
           }
         } catch {

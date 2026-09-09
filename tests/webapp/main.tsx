@@ -1,13 +1,18 @@
 import React, { useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import {
-  ReviewPanel,
-  Toolbar,
-} from '../../packages/react/src/index';
+import { ReviewPanel, Toolbar } from '../../packages/react/src/index';
 import type { ReviewPanelHandle } from '../../packages/react/src/index';
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, DiffLoadPayload, CategoryDef } from '../../packages/core/src/types';
-import { createFixturePayload, createEmptyPayload, createMarkdownPayload, createRenderedHtmlPayload, createGuideFixturePayload, defaultCategories, commentingCategories } from './fixture-data';
+import {
+  createFixturePayload,
+  createEmptyPayload,
+  createMarkdownPayload,
+  createRenderedHtmlPayload,
+  createGuideFixturePayload,
+  defaultCategories,
+  commentingCategories,
+} from './fixture-data';
 import './styles.css';
 
 /**
@@ -97,7 +102,7 @@ function App() {
         ref={reviewRef}
         adapter={adapter}
         config={getConfig()}
-        className="flex-1 flex flex-col overflow-hidden bg-background text-foreground"
+        className='flex-1 flex flex-col overflow-hidden bg-background text-foreground'
       >
         <Toolbar onFinishReview={handleFinishReview} />
       </ReviewPanel>

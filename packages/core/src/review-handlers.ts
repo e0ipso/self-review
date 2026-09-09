@@ -164,10 +164,7 @@ export async function loadImage(
  * Return a single file's hunks for lazy (large-payload) mode, or null when the
  * session has no diff or the diff has no such file.
  */
-export function getFileHunks(
-  session: ReviewSession,
-  filePath: string
-): DiffHunk[] | null {
+export function getFileHunks(session: ReviewSession, filePath: string): DiffHunk[] | null {
   if (!session.diffData) return null;
   const file = session.diffData.files.find(f => (f.newPath || f.oldPath) === filePath);
   if (!file) return null;
@@ -191,10 +188,7 @@ export function getConfigLoad(
 /**
  * Store a review state submitted by the front end on the session.
  */
-export function submitReviewState(
-  session: ReviewSession,
-  state: ReviewState
-): void {
+export function submitReviewState(session: ReviewSession, state: ReviewState): void {
   console.error(
     '[review] Review state submitted:',
     JSON.stringify({
@@ -296,12 +290,7 @@ export async function expandContext(
       filteredArgs.push(arg);
     }
 
-    const expandArgs = [
-      ...filteredArgs,
-      `-U${request.contextLines}`,
-      '--',
-      request.filePath,
-    ];
+    const expandArgs = [...filteredArgs, `-U${request.contextLines}`, '--', request.filePath];
 
     // Run in the diff's repository root — in remote mode this is the
     // materialized clone, not the process cwd.
@@ -343,10 +332,7 @@ export async function expandContext(
 
     return { hunks: expandedFile.hunks, totalLines };
   } catch (error) {
-    console.error(
-      `[review] Failed to expand context for ${request.filePath}:`,
-      error
-    );
+    console.error(`[review] Failed to expand context for ${request.filePath}:`, error);
     return null;
   }
 }

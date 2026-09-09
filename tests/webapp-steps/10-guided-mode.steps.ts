@@ -25,41 +25,32 @@ When('I switch the guide mode to {string}', async ({}, mode: string) => {
 
 // ── Then: grouping and ordering ──
 
-Then(
-  'the file tree should show guide groups in this order:',
-  async ({}, table: DataTable) => {
-    const page = getPage();
-    const expected = table.hashes();
-    const headers = page.locator('[data-testid="file-tree"] [data-testid^="guide-group-"]');
-    await expect(headers).toHaveCount(expected.length);
-    for (let i = 0; i < expected.length; i++) {
-      const header = headers.nth(i);
-      await expect(header).toHaveAttribute(
-        'data-testid',
-        `guide-group-${expected[i].group}`
-      );
-      if (expected[i].rationale) {
-        await expect(header).toContainText(expected[i].rationale);
-      }
+Then('the file tree should show guide groups in this order:', async ({}, table: DataTable) => {
+  const page = getPage();
+  const expected = table.hashes();
+  const headers = page.locator('[data-testid="file-tree"] [data-testid^="guide-group-"]');
+  await expect(headers).toHaveCount(expected.length);
+  for (let i = 0; i < expected.length; i++) {
+    const header = headers.nth(i);
+    await expect(header).toHaveAttribute('data-testid', `guide-group-${expected[i].group}`);
+    if (expected[i].rationale) {
+      await expect(header).toContainText(expected[i].rationale);
     }
   }
-);
+});
 
-Then(
-  'the file tree should list files in this order:',
-  async ({}, table: DataTable) => {
-    const page = getPage();
-    const expectedFiles = table.hashes().map(row => row.file);
-    const entries = page.locator('[data-testid="file-tree"] [data-testid^="file-entry-"]');
-    await expect(entries).toHaveCount(expectedFiles.length);
-    const actualFiles: string[] = [];
-    for (let i = 0; i < expectedFiles.length; i++) {
-      const testId = await entries.nth(i).getAttribute('data-testid');
-      if (testId) actualFiles.push(testId.replace('file-entry-', ''));
-    }
-    expect(actualFiles).toEqual(expectedFiles);
+Then('the file tree should list files in this order:', async ({}, table: DataTable) => {
+  const page = getPage();
+  const expectedFiles = table.hashes().map(row => row.file);
+  const entries = page.locator('[data-testid="file-tree"] [data-testid^="file-entry-"]');
+  await expect(entries).toHaveCount(expectedFiles.length);
+  const actualFiles: string[] = [];
+  for (let i = 0; i < expectedFiles.length; i++) {
+    const testId = await entries.nth(i).getAttribute('data-testid');
+    if (testId) actualFiles.push(testId.replace('file-entry-', ''));
   }
-);
+  expect(actualFiles).toEqual(expectedFiles);
+});
 
 Then(
   '{string} should appear under guide group {string}',
@@ -68,9 +59,7 @@ Then(
     // Walk the tree's group headers and entries in DOM order; the group a
     // file belongs to is the nearest preceding header.
     const groupOfFile = await page.evaluate((fp: string) => {
-      const nodes = document.querySelectorAll(
-        '[data-testid="file-tree"] [data-testid]'
-      );
+      const nodes = document.querySelectorAll('[data-testid="file-tree"] [data-testid]');
       let currentGroup: string | null = null;
       for (const node of Array.from(nodes)) {
         const testId = node.getAttribute('data-testid') ?? '';
@@ -110,25 +99,21 @@ Then(
 
 // ── Then: overview panel ──
 
-Then(
-  'the guide overview panel should be visible above the first file section',
-  async () => {
-    const page = getPage();
-    const overview = page.locator('[data-testid="guide-overview"]');
-    await expect(overview).toBeVisible();
-    // The overview must precede the first file section in document order.
-    const precedesFirstSection = await page.evaluate(() => {
-      const overviewEl = document.querySelector('[data-testid="guide-overview"]');
-      const firstSection = document.querySelector('[data-testid^="file-section-"]');
-      if (!overviewEl || !firstSection) return false;
-      return Boolean(
-        overviewEl.compareDocumentPosition(firstSection) &
-          Node.DOCUMENT_POSITION_FOLLOWING
-      );
-    });
-    expect(precedesFirstSection).toBe(true);
-  }
-);
+Then('the guide overview panel should be visible above the first file section', async () => {
+  const page = getPage();
+  const overview = page.locator('[data-testid="guide-overview"]');
+  await expect(overview).toBeVisible();
+  // The overview must precede the first file section in document order.
+  const precedesFirstSection = await page.evaluate(() => {
+    const overviewEl = document.querySelector('[data-testid="guide-overview"]');
+    const firstSection = document.querySelector('[data-testid^="file-section-"]');
+    if (!overviewEl || !firstSection) return false;
+    return Boolean(
+      overviewEl.compareDocumentPosition(firstSection) & Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+  expect(precedesFirstSection).toBe(true);
+});
 
 Then('the guide overview should render a Mermaid diagram as SVG', async () => {
   const page = getPage();
@@ -152,7 +137,7 @@ Then('the guide mode toggle should not be present', async () => {
 
 Then('the file tree should show no guide groups', async () => {
   const page = getPage();
-  await expect(
-    page.locator('[data-testid="file-tree"] [data-testid^="guide-group-"]')
-  ).toHaveCount(0);
+  await expect(page.locator('[data-testid="file-tree"] [data-testid^="guide-group-"]')).toHaveCount(
+    0
+  );
 });

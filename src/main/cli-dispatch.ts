@@ -25,10 +25,7 @@
 import { spawnSync } from 'child_process';
 import { checkEarlyExit, parseCliArgs } from './cli';
 import type { CliArgs, EarlyExitInfo } from './cli';
-import {
-  reexecFromRealPathIfNeeded,
-  resolveReexecExit,
-} from './relaunch-guard';
+import { reexecFromRealPathIfNeeded, resolveReexecExit } from './relaunch-guard';
 import { runFetchComments } from '../../packages/core/src/fetch-comments';
 
 /** Set on the re-execed child so the headless launch never loops. */
@@ -69,21 +66,15 @@ export function needsHeadlessReexec(
  * it looks for a subcommand, so the child still finds `fetch-comments`.
  */
 export function reexecHeadless(): void {
-  const result = spawnSync(
-    process.execPath,
-    [HEADLESS_OZONE_SWITCH, ...process.argv.slice(1)],
-    {
-      stdio: 'inherit',
-      env: { ...process.env, [HEADLESS_GUARD_ENV]: '1' },
-    }
-  );
+  const result = spawnSync(process.execPath, [HEADLESS_OZONE_SWITCH, ...process.argv.slice(1)], {
+    stdio: 'inherit',
+    env: { ...process.env, [HEADLESS_GUARD_ENV]: '1' },
+  });
 
   if (result.error) {
     // resolveReexecExit turns this into a non-zero code. Say why, or the
     // command looks like it failed for no reason at all.
-    console.error(
-      `[fetch-comments] Could not start a headless run: ${result.error.message}`
-    );
+    console.error(`[fetch-comments] Could not start a headless run: ${result.error.message}`);
   }
 
   const { signal, code } = resolveReexecExit(result);
@@ -117,10 +108,7 @@ export interface CliDispatchDeps {
   parseArgs: () => CliArgs;
   needsReexec: () => boolean;
   reexec: () => void;
-  fetchComments: (
-    url: string,
-    options: { includeResolved: boolean }
-  ) => Promise<void>;
+  fetchComments: (url: string, options: { includeResolved: boolean }) => Promise<void>;
   logError: (message: string) => void;
   exit: (code: number) => void;
 }
@@ -129,8 +117,7 @@ export const defaultCliDispatchDeps: CliDispatchDeps = {
   earlyExit: checkEarlyExit,
   guardBundlePath,
   parseArgs: parseCliArgs,
-  needsReexec: () =>
-    needsHeadlessReexec(process.platform, process.argv, process.env),
+  needsReexec: () => needsHeadlessReexec(process.platform, process.argv, process.env),
   reexec: reexecHeadless,
   fetchComments: runFetchComments,
   logError: message => console.error(message),
@@ -143,9 +130,7 @@ export const defaultCliDispatchDeps: CliDispatchDeps = {
  * @returns `true` when the invocation was handled without a window, `false`
  *          when the caller should load the desktop main process.
  */
-export function dispatchCli(
-  deps: CliDispatchDeps = defaultCliDispatchDeps
-): boolean {
+export function dispatchCli(deps: CliDispatchDeps = defaultCliDispatchDeps): boolean {
   // --help / --version, before Electron initializes anything.
   const early = deps.earlyExit();
   if (early.shouldExit) {
@@ -173,9 +158,7 @@ export function dispatchCli(
     })
     .then(() => deps.exit(0))
     .catch(error => {
-      deps.logError(
-        `[fetch-comments] ${error instanceof Error ? error.message : String(error)}`
-      );
+      deps.logError(`[fetch-comments] ${error instanceof Error ? error.message : String(error)}`);
       deps.exit(1);
     });
   return true;

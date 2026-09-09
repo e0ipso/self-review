@@ -23,7 +23,11 @@ export interface UnifiedViewProps {
   onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
-  onExpandContext?: (direction: 'up' | 'down' | 'all', hunkIndex: number, position: 'top' | 'between' | 'bottom') => void;
+  onExpandContext?: (
+    direction: 'up' | 'down' | 'all',
+    hunkIndex: number,
+    position: 'top' | 'between' | 'bottom'
+  ) => void;
   isExpandable?: boolean;
   expandLoading?: boolean;
   totalLines?: number | null;
@@ -80,15 +84,18 @@ export default function UnifiedView({
     <div className='font-mono text-[13px] leading-[22px] unified-view'>
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
-          {isExpandable && onExpandContext && hunkIndex === 0 && (file.hunks[0].oldStart > 1 || file.hunks[0].newStart > 1) && (
-            <ExpandContextBar
-              position='top'
-              hunkIndex={0}
-              gapSize={computeGapBefore(0)}
-              onExpand={onExpandContext}
-              loading={expandLoading}
-            />
-          )}
+          {isExpandable &&
+            onExpandContext &&
+            hunkIndex === 0 &&
+            (file.hunks[0].oldStart > 1 || file.hunks[0].newStart > 1) && (
+              <ExpandContextBar
+                position='top'
+                hunkIndex={0}
+                gapSize={computeGapBefore(0)}
+                onExpand={onExpandContext}
+                loading={expandLoading}
+              />
+            )}
           {isExpandable && onExpandContext && hunkIndex > 0 && (
             <ExpandContextBar
               position='between'
@@ -101,28 +108,23 @@ export default function UnifiedView({
           <HunkHeader header={hunk.header} />
           {hunk.lines.map((line, lineIndex) => {
             const rowIndex = hunkRowOffsets[hunkIndex] + lineIndex;
-            const lineNumber =
-              line.type === 'deletion'
-                ? line.oldLineNumber
-                : line.newLineNumber;
-            const side: 'old' | 'new' =
-              line.type === 'deletion' ? 'old' : 'new';
-            const comments = lineNumber
-              ? getCommentsForLine(filePath, lineNumber, side)
-              : [];
+            const lineNumber = line.type === 'deletion' ? line.oldLineNumber : line.newLineNumber;
+            const side: 'old' | 'new' = line.type === 'deletion' ? 'old' : 'new';
+            const comments = lineNumber ? getCommentsForLine(filePath, lineNumber, side) : [];
             // Context rows carry both old and new coordinates. Saved old-side
             // comments must remain visible when switching from split view.
-            const oldContextComments = line.type === 'context' && line.oldLineNumber
-              ? getCommentsForLine(filePath, line.oldLineNumber, 'old')
-              : [];
-            const commentsToRender = [...comments, ...oldContextComments].filter(c =>
-              c.lineRange!.end === (c.lineRange!.side === 'old' ? line.oldLineNumber : line.newLineNumber)
-              && hasAnchor(c)
+            const oldContextComments =
+              line.type === 'context' && line.oldLineNumber
+                ? getCommentsForLine(filePath, line.oldLineNumber, 'old')
+                : [];
+            const commentsToRender = [...comments, ...oldContextComments].filter(
+              c =>
+                c.lineRange!.end ===
+                  (c.lineRange!.side === 'old' ? line.oldLineNumber : line.newLineNumber) &&
+                hasAnchor(c)
             );
             const showCommentInputHere =
-              commentRange &&
-              lineNumber === commentRange.end &&
-              commentRange.side === side;
+              commentRange && lineNumber === commentRange.end && commentRange.side === side;
 
             // Comment range highlight: real line numbers + side
             const isInCommentRange =
@@ -134,8 +136,7 @@ export default function UnifiedView({
             // Drag highlight: row indices (side-agnostic for cross-type drag)
             const isInDragRange =
               dragState !== null &&
-              rowIndex >=
-                Math.min(dragState.startLine, dragState.currentLine) &&
+              rowIndex >= Math.min(dragState.startLine, dragState.currentLine) &&
               rowIndex <= Math.max(dragState.startLine, dragState.currentLine);
             const isSelected = !!(isInCommentRange || isInDragRange);
 
@@ -152,9 +153,7 @@ export default function UnifiedView({
                   <div
                     className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-old relative`}
                     data-testid={
-                      line.oldLineNumber
-                        ? `old-line-${filePath}-${line.oldLineNumber}`
-                        : undefined
+                      line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined
                     }
                   >
                     {line.oldLineNumber && (
@@ -170,17 +169,13 @@ export default function UnifiedView({
                         <MessageSquarePlus className='h-4 w-4' />
                       </button>
                     )}
-                    <span className='pointer-events-none'>
-                      {line.oldLineNumber || ''}
-                    </span>
+                    <span className='pointer-events-none'>{line.oldLineNumber || ''}</span>
                   </div>
                   {/* New line number */}
                   <div
                     className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-new relative`}
                     data-testid={
-                      line.newLineNumber
-                        ? `new-line-${filePath}-${line.newLineNumber}`
-                        : undefined
+                      line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined
                     }
                   >
                     {line.newLineNumber && (
@@ -196,12 +191,12 @@ export default function UnifiedView({
                         <MessageSquarePlus className='h-4 w-4' />
                       </button>
                     )}
-                    <span className='pointer-events-none'>
-                      {line.newLineNumber || ''}
-                    </span>
+                    <span className='pointer-events-none'>{line.newLineNumber || ''}</span>
                   </div>
                   {/* Code content */}
-                  <div className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}>
+                  <div
+                    className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}
+                  >
                     <SyntaxLine
                       content={line.content}
                       language={language}
@@ -220,7 +215,7 @@ export default function UnifiedView({
                   onCancel={onCancelComment}
                   onSaved={onCommentSaved}
                   indentClass='ml-[100px]'
-                  getOriginalCodeForComment={(comment) =>
+                  getOriginalCodeForComment={comment =>
                     comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
                   }
                 />
@@ -229,22 +224,24 @@ export default function UnifiedView({
           })}
         </div>
       ))}
-      {isExpandable && onExpandContext && (() => {
-        const lastIdx = file.hunks.length - 1;
-        const lastHunk = file.hunks[lastIdx];
-        const lastNewLine = lastHunk.newStart + lastHunk.newLines - 1;
-        const bottomGap = totalLines != null ? totalLines - lastNewLine : undefined;
-        if (bottomGap !== undefined && bottomGap <= 0) return null;
-        return (
-          <ExpandContextBar
-            position='bottom'
-            hunkIndex={lastIdx}
-            gapSize={bottomGap}
-            onExpand={onExpandContext}
-            loading={expandLoading}
-          />
-        );
-      })()}
+      {isExpandable &&
+        onExpandContext &&
+        (() => {
+          const lastIdx = file.hunks.length - 1;
+          const lastHunk = file.hunks[lastIdx];
+          const lastNewLine = lastHunk.newStart + lastHunk.newLines - 1;
+          const bottomGap = totalLines != null ? totalLines - lastNewLine : undefined;
+          if (bottomGap !== undefined && bottomGap <= 0) return null;
+          return (
+            <ExpandContextBar
+              position='bottom'
+              hunkIndex={lastIdx}
+              gapSize={bottomGap}
+              onExpand={onExpandContext}
+              loading={expandLoading}
+            />
+          );
+        })()}
     </div>
   );
 }

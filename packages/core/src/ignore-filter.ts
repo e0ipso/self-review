@@ -9,9 +9,7 @@ import ignore from 'ignore';
  * @param patterns - Array of gitignore-compatible glob patterns
  * @returns A predicate that returns `true` if the path should be kept (not ignored)
  */
-export function createIgnoreFilter(
-  patterns: string[]
-): (path: string) => boolean {
+export function createIgnoreFilter(patterns: string[]): (path: string) => boolean {
   if (patterns.length === 0) return () => true;
   const ig = ignore().add(patterns);
   return (filePath: string) => !ig.ignores(filePath);

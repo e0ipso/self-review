@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { execFileSync } from 'child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { generateSyntheticDiffs, quoteGitPath } from './synthetic-diff';
 import { parseDiff } from './diff-parser';
+import { gitSync } from './test-support/git-env';
 
 // Names git writes verbatim, names git quotes, and names that would run past
 // the end of a header line.
@@ -60,9 +60,7 @@ describe('generateSyntheticDiffs', () => {
 
     const files = parseDiff(generateSyntheticDiffs(LITERAL_NAMES, root));
 
-    expect(files.map(file => file.newPath).sort()).toEqual(
-      [...LITERAL_NAMES].sort()
-    );
+    expect(files.map(file => file.newPath).sort()).toEqual([...LITERAL_NAMES].sort());
     for (const file of files) {
       expect(file.changeType).toBe('added');
       expect(file.hunks[0].lines.map(line => line.content)).toEqual(
@@ -72,25 +70,21 @@ describe('generateSyntheticDiffs', () => {
   });
 
   it('writes the same headers git writes for the same names', () => {
-    execFileSync('git', ['init', '-q', root]);
+    gitSync(['init', '-q', root]);
     for (const name of LITERAL_NAMES) {
       write(name, 'content\n');
     }
-    execFileSync('git', ['-C', root, 'add', '--', ...LITERAL_NAMES]);
-    const gitHeaders = execFileSync(
-      'git',
-      [
-        '-c',
-        'core.quotePath=true',
-        '-c',
-        'diff.mnemonicPrefix=false',
-        '-C',
-        root,
-        'diff',
-        '--cached',
-      ],
-      { encoding: 'utf-8' }
-    )
+    gitSync(['-C', root, 'add', '--', ...LITERAL_NAMES]);
+    const gitHeaders = gitSync([
+      '-c',
+      'core.quotePath=true',
+      '-c',
+      'diff.mnemonicPrefix=false',
+      '-C',
+      root,
+      'diff',
+      '--cached',
+    ])
       .split('\n')
       .filter(line => line.startsWith('diff --git '));
 
@@ -114,9 +108,7 @@ describe('generateSyntheticDiffs', () => {
   it('skips names that disappeared between listing and reading', () => {
     write('kept.txt', 'kept\n');
 
-    const files = parseDiff(
-      generateSyntheticDiffs(['kept.txt', 'gone.txt'], root)
-    );
+    const files = parseDiff(generateSyntheticDiffs(['kept.txt', 'gone.txt'], root));
 
     expect(files.map(file => file.newPath)).toEqual(['kept.txt']);
   });

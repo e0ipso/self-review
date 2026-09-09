@@ -15,11 +15,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { stripTrailingNewline } from './git';
-import type {
-  ForgeCommandResult,
-  ForgeCommandRunner,
-  ForgeUrl,
-} from './forge-provider';
+import type { ForgeCommandResult, ForgeCommandRunner, ForgeUrl } from './forge-provider';
 
 /** How the local git context was obtained. */
 export type MaterializeMode = 'existing-clone' | 'temp-clone';
@@ -63,23 +59,18 @@ const AUTH_HINT =
  */
 export const defaultGitRunner: ForgeCommandRunner = (command, args) =>
   new Promise<ForgeCommandResult>((resolve, reject) => {
-    execFile(
-      command,
-      args,
-      { maxBuffer: 50 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        const spawnCode = (error as NodeJS.ErrnoException | null)?.code;
-        if (error && typeof spawnCode === 'string') {
-          reject(error);
-          return;
-        }
-        resolve({
-          stdout: stdout ?? '',
-          stderr: stderr ?? '',
-          exitCode: error ? (typeof spawnCode === 'number' ? spawnCode : 1) : 0,
-        });
+    execFile(command, args, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
+      const spawnCode = (error as NodeJS.ErrnoException | null)?.code;
+      if (error && typeof spawnCode === 'string') {
+        reject(error);
+        return;
       }
-    );
+      resolve({
+        stdout: stdout ?? '',
+        stderr: stderr ?? '',
+        exitCode: error ? (typeof spawnCode === 'number' ? spawnCode : 1) : 0,
+      });
+    });
   });
 
 /** Well-known git ref for the PR/MR head on each forge. */
@@ -97,11 +88,7 @@ function cloneUrlFor(url: ForgeUrl): string {
   return `https://${url.host}/${url.owner}/${url.repo}.git`;
 }
 
-function gitFailure(
-  what: string,
-  result: ForgeCommandResult,
-  withAuthHint: boolean
-): Error {
+function gitFailure(what: string, result: ForgeCommandResult, withAuthHint: boolean): Error {
   const stderr = result.stderr.trim();
   const lines = [
     `git ${what} failed (exit code ${result.exitCode})${stderr ? `:\n${stderr}` : ''}`,
@@ -121,9 +108,7 @@ function stripRepoPath(repoPath: string): string {
  * Normalize a git remote URL (SSH scp-style, ssh://, http(s)://) into a
  * comparable `{ host, path }` pair, or `null` when unrecognized.
  */
-function normalizeRemoteUrl(
-  raw: string
-): { host: string; path: string } | null {
+function normalizeRemoteUrl(raw: string): { host: string; path: string } | null {
   const trimmed = raw.trim();
   if (trimmed.includes('://')) {
     try {
@@ -209,9 +194,7 @@ async function materializeIntoExistingClone(
   repoPath: string,
   remoteName: string
 ): Promise<MaterializeResult> {
-  console.error(
-    `self-review: reusing existing clone at ${repoPath} (remote "${remoteName}")`
-  );
+  console.error(`self-review: reusing existing clone at ${repoPath} (remote "${remoteName}")`);
   // Fetch into namespaced local refs only: no checkout, no branch creation,
   // no working-tree change. Forced refspecs are fine — these refs are ours.
   const fetch = await runner('git', [
@@ -249,17 +232,10 @@ async function materializeIntoTempClone(
   };
 
   try {
-    console.error(
-      `self-review: created temporary blobless clone at ${tempDir}`
-    );
+    console.error(`self-review: created temporary blobless clone at ${tempDir}`);
     const cloneUrl = cloneUrlFor(url);
     // Blobless, never shallow: --depth would break merge-base computation.
-    const clone = await runner('git', [
-      'clone',
-      '--filter=blob:none',
-      cloneUrl,
-      tempDir,
-    ]);
+    const clone = await runner('git', ['clone', '--filter=blob:none', cloneUrl, tempDir]);
     if (clone.exitCode !== 0) {
       throw gitFailure(`clone of ${cloneUrl}`, clone, true);
     }
@@ -308,9 +284,7 @@ export async function materialize(
   existingClone?: ExistingClone | null
 ): Promise<MaterializeResult> {
   const existing =
-    existingClone === undefined
-      ? await detectExistingClone(url, cwd, runner)
-      : existingClone;
+    existingClone === undefined ? await detectExistingClone(url, cwd, runner) : existingClone;
   if (existing) {
     return materializeIntoExistingClone(
       runner,

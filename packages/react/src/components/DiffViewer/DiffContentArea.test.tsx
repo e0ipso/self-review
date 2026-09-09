@@ -124,7 +124,9 @@ describe('DiffContentArea rendered preview dispatch', () => {
       renderedTextMode: 'markdown',
     });
 
-    expect(screen.getByTestId('rendered-text-view').getAttribute('data-content-mode')).toBe('markdown');
+    expect(screen.getByTestId('rendered-text-view').getAttribute('data-content-mode')).toBe(
+      'markdown'
+    );
   });
 
   it('keeps raster image previews on the image branch', () => {
@@ -135,7 +137,9 @@ describe('DiffContentArea rendered preview dispatch', () => {
       showImagePreview: true,
     });
 
-    expect(screen.getByTestId('rendered-image-view').getAttribute('data-file-path')).toBe('assets/photo.png');
+    expect(screen.getByTestId('rendered-image-view').getAttribute('data-file-path')).toBe(
+      'assets/photo.png'
+    );
     expect(screen.queryByTestId('rendered-text-view')).toBeNull();
   });
 

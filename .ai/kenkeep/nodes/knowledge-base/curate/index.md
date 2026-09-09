@@ -47,7 +47,7 @@ _None._
 ### #git
 - Open [**Apply curator conflicts using the selected reply**](practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
 - Open [**Review knowledge-base changes via git diff before committing**](../structure/practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
-- Open [**Three startup modes: git, directory, welcome**](../../app/cli/map-three-startup-modes-git-directory-welcome.md) — git mode reviews a git diff; directory mode treats all files as new additions; welcome mode shows a picker when launched without context.
+- Open [**Convert git diff args only through format/tokenize**](../../app/cli/practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
 ### #grouping
 - Open [**Sort and group pending conflicts before resolving**](practice-sort-and-group-pending-conflicts-before-resolving.md) — Sort pending conflicts by target_node_id, proposed_kind, detected_at; show the shared existing node once per group.
 ### #handoff

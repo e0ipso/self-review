@@ -21,17 +21,8 @@ export interface UseReviewStateReturn {
   ) => void;
   updateComment: (id: string, updates: Partial<ReviewComment>) => void;
   deleteComment: (id: string) => void;
-  addReply: (
-    commentId: string,
-    body: string,
-    author?: string,
-    attachments?: Attachment[]
-  ) => void;
-  updateReply: (
-    commentId: string,
-    replyId: string,
-    updates: Partial<Reply>
-  ) => void;
+  addReply: (commentId: string, body: string, author?: string, attachments?: Attachment[]) => void;
+  updateReply: (commentId: string, replyId: string, updates: Partial<Reply>) => void;
   deleteReply: (commentId: string, replyId: string) => void;
   toggleViewed: (filePath: string) => void;
   getCommentsForFile: (filePath: string) => ReviewComment[];
@@ -65,9 +56,7 @@ export function useReviewState(): UseReviewStateReturn {
 
     setFiles(prevFiles =>
       prevFiles.map(file =>
-        file.path === filePath
-          ? { ...file, comments: [...file.comments, newComment] }
-          : file
+        file.path === filePath ? { ...file, comments: [...file.comments, newComment] } : file
       )
     );
   };
@@ -121,11 +110,7 @@ export function useReviewState(): UseReviewStateReturn {
     );
   };
 
-  const updateReply = (
-    commentId: string,
-    replyId: string,
-    updates: Partial<Reply>
-  ) => {
+  const updateReply = (commentId: string, replyId: string, updates: Partial<Reply>) => {
     setFiles(prevFiles =>
       prevFiles.map(file => ({
         ...file,
@@ -161,9 +146,7 @@ export function useReviewState(): UseReviewStateReturn {
 
   const toggleViewed = (filePath: string) => {
     setFiles(prevFiles =>
-      prevFiles.map(file =>
-        file.path === filePath ? { ...file, viewed: !file.viewed } : file
-      )
+      prevFiles.map(file => (file.path === filePath ? { ...file, viewed: !file.viewed } : file))
     );
   };
 
@@ -183,10 +166,7 @@ export function useReviewState(): UseReviewStateReturn {
     return file.comments.filter(comment => {
       if (!comment.lineRange) return false;
       if (comment.lineRange.side !== side) return false;
-      return (
-        lineNumber >= comment.lineRange.start &&
-        lineNumber <= comment.lineRange.end
-      );
+      return lineNumber >= comment.lineRange.start && lineNumber <= comment.lineRange.end;
     });
   };
 

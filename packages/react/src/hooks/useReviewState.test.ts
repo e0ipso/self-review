@@ -85,20 +85,8 @@ describe('useReviewState', () => {
       });
 
       act(() => {
-        result.current.addComment(
-          'src/test.ts',
-          null,
-          'Comment 1',
-          'note',
-          null
-        );
-        result.current.addComment(
-          'src/test.ts',
-          null,
-          'Comment 2',
-          'note',
-          null
-        );
+        result.current.addComment('src/test.ts', null, 'Comment 1', 'note', null);
+        result.current.addComment('src/test.ts', null, 'Comment 2', 'note', null);
       });
 
       const comments = result.current.getCommentsForFile('src/test.ts');
@@ -560,11 +548,7 @@ describe('useReviewState', () => {
         ]);
       });
 
-      const comments = result.current.getCommentsForLine(
-        'src/test.ts',
-        10,
-        'new'
-      );
+      const comments = result.current.getCommentsForLine('src/test.ts', 10, 'new');
       expect(comments).toHaveLength(1);
       expect(comments[0].body).toBe('Line 10');
     });
@@ -600,16 +584,8 @@ describe('useReviewState', () => {
         ]);
       });
 
-      const newComments = result.current.getCommentsForLine(
-        'src/test.ts',
-        10,
-        'new'
-      );
-      const oldComments = result.current.getCommentsForLine(
-        'src/test.ts',
-        10,
-        'old'
-      );
+      const newComments = result.current.getCommentsForLine('src/test.ts', 10, 'new');
+      const oldComments = result.current.getCommentsForLine('src/test.ts', 10, 'old');
 
       expect(newComments).toHaveLength(1);
       expect(newComments[0].body).toBe('New line');
@@ -641,25 +617,15 @@ describe('useReviewState', () => {
       });
 
       // Line 10 is within range
-      expect(
-        result.current.getCommentsForLine('src/test.ts', 10, 'new')
-      ).toHaveLength(1);
+      expect(result.current.getCommentsForLine('src/test.ts', 10, 'new')).toHaveLength(1);
       // Line 12 is within range
-      expect(
-        result.current.getCommentsForLine('src/test.ts', 12, 'new')
-      ).toHaveLength(1);
+      expect(result.current.getCommentsForLine('src/test.ts', 12, 'new')).toHaveLength(1);
       // Line 15 is within range
-      expect(
-        result.current.getCommentsForLine('src/test.ts', 15, 'new')
-      ).toHaveLength(1);
+      expect(result.current.getCommentsForLine('src/test.ts', 15, 'new')).toHaveLength(1);
       // Line 9 is outside range
-      expect(
-        result.current.getCommentsForLine('src/test.ts', 9, 'new')
-      ).toHaveLength(0);
+      expect(result.current.getCommentsForLine('src/test.ts', 9, 'new')).toHaveLength(0);
       // Line 16 is outside range
-      expect(
-        result.current.getCommentsForLine('src/test.ts', 16, 'new')
-      ).toHaveLength(0);
+      expect(result.current.getCommentsForLine('src/test.ts', 16, 'new')).toHaveLength(0);
     });
 
     it('getCommentsForLine returns empty array for non-existent file', () => {
@@ -685,11 +651,7 @@ describe('useReviewState', () => {
         ]);
       });
 
-      const comments = result.current.getCommentsForLine(
-        'src/nonexistent.ts',
-        10,
-        'new'
-      );
+      const comments = result.current.getCommentsForLine('src/nonexistent.ts', 10, 'new');
       expect(comments).toEqual([]);
     });
 
@@ -724,11 +686,7 @@ describe('useReviewState', () => {
         ]);
       });
 
-      const comments = result.current.getCommentsForLine(
-        'src/test.ts',
-        10,
-        'new'
-      );
+      const comments = result.current.getCommentsForLine('src/test.ts', 10, 'new');
       expect(comments).toHaveLength(1);
       expect(comments[0].body).toBe('Line comment');
     });
@@ -964,13 +922,7 @@ describe('useReviewState', () => {
       const filesBefore = result.current.files;
 
       act(() => {
-        result.current.addComment(
-          'src/test.ts',
-          null,
-          'New comment',
-          'note',
-          null
-        );
+        result.current.addComment('src/test.ts', null, 'New comment', 'note', null);
       });
 
       expect(result.current.files).not.toBe(filesBefore);
@@ -1072,9 +1024,7 @@ describe('useReviewState', () => {
 
   describe('reply operations', () => {
     /** Two files, two comments each, so cross-target leakage is detectable. */
-    function seedThreads(result: {
-      current: ReturnType<typeof useReviewState>;
-    }) {
+    function seedThreads(result: { current: ReturnType<typeof useReviewState> }) {
       act(() => {
         result.current.setFiles([
           {
@@ -1156,9 +1106,10 @@ describe('useReviewState', () => {
           result.current.addReply('c1', 'second');
         });
 
-        expect(
-          result.current.files[0].comments[0].replies!.map(r => r.body)
-        ).toEqual(['first', 'second']);
+        expect(result.current.files[0].comments[0].replies!.map(r => r.body)).toEqual([
+          'first',
+          'second',
+        ]);
       });
 
       it('appends after pre-existing replies rather than prepending', () => {
@@ -1169,9 +1120,11 @@ describe('useReviewState', () => {
           result.current.addReply('comment-1', 'Reply three');
         });
 
-        expect(
-          result.current.files[0].comments[0].replies!.map(r => r.body)
-        ).toEqual(['Reply one', 'Reply two', 'Reply three']);
+        expect(result.current.files[0].comments[0].replies!.map(r => r.body)).toEqual([
+          'Reply one',
+          'Reply two',
+          'Reply three',
+        ]);
       });
 
       it('creates a one-element array when replies is undefined', () => {
@@ -1225,12 +1178,7 @@ describe('useReviewState', () => {
           result.current.addReply('comment-1', 'Bot reply', 'claude-opus-5');
         });
         act(() => {
-          result.current.addReply(
-            'comment-1',
-            'Human reply',
-            undefined,
-            attachments
-          );
+          result.current.addReply('comment-1', 'Human reply', undefined, attachments);
         });
 
         const replies = result.current.files[0].comments[0].replies!;
@@ -1269,12 +1217,12 @@ describe('useReviewState', () => {
           result.current.addReply('comment-1', 'New');
         });
 
-        expect(
-          result.current.files[0].comments[1].replies!.map(r => r.body)
-        ).toEqual(['Sibling comment reply']);
-        expect(
-          result.current.files[1].comments[0].replies!.map(r => r.body)
-        ).toEqual(['Other file reply']);
+        expect(result.current.files[0].comments[1].replies!.map(r => r.body)).toEqual([
+          'Sibling comment reply',
+        ]);
+        expect(result.current.files[1].comments[0].replies!.map(r => r.body)).toEqual([
+          'Other file reply',
+        ]);
       });
 
       it('no-op for non-existent comment ID', () => {
@@ -1304,10 +1252,7 @@ describe('useReviewState', () => {
 
         const comment = result.current.files[0].comments[0];
         expect(comment.body).toBe('Root one');
-        expect(comment.replies!.map(r => r.body)).toEqual([
-          'Edited reply one',
-          'Reply two',
-        ]);
+        expect(comment.replies!.map(r => r.body)).toEqual(['Edited reply one', 'Reply two']);
         expect(comment.replies![0].id).toBe('reply-1');
       });
 
@@ -1322,12 +1267,8 @@ describe('useReviewState', () => {
           });
         });
 
-        expect(result.current.files[0].comments[0].replies![0].body).toBe(
-          'Reply one'
-        );
-        expect(result.current.files[0].comments[1].replies![0].body).toBe(
-          'Sibling comment reply'
-        );
+        expect(result.current.files[0].comments[0].replies![0].body).toBe('Reply one');
+        expect(result.current.files[0].comments[1].replies![0].body).toBe('Sibling comment reply');
       });
 
       it('leaves replies on other comments and files untouched', () => {
@@ -1363,9 +1304,10 @@ describe('useReviewState', () => {
           });
         });
 
-        expect(
-          result.current.files[0].comments[0].replies!.map(r => r.body)
-        ).toEqual(['Reply one', 'Reply two']);
+        expect(result.current.files[0].comments[0].replies!.map(r => r.body)).toEqual([
+          'Reply one',
+          'Reply two',
+        ]);
       });
 
       it('does not create a replies array on a comment that has none', () => {
@@ -1408,9 +1350,9 @@ describe('useReviewState', () => {
           result.current.deleteReply('comment-1', 'reply-1');
         });
 
-        expect(
-          result.current.files[0].comments[0].replies!.map(r => r.body)
-        ).toEqual(['Reply two']);
+        expect(result.current.files[0].comments[0].replies!.map(r => r.body)).toEqual([
+          'Reply two',
+        ]);
       });
 
       it('preserves order of the remaining replies', () => {
@@ -1424,9 +1366,10 @@ describe('useReviewState', () => {
           result.current.deleteReply('comment-1', 'reply-2');
         });
 
-        expect(
-          result.current.files[0].comments[0].replies!.map(r => r.body)
-        ).toEqual(['Reply one', 'Reply three']);
+        expect(result.current.files[0].comments[0].replies!.map(r => r.body)).toEqual([
+          'Reply one',
+          'Reply three',
+        ]);
       });
 
       it('requires the comment id to match, not just the reply id', () => {
@@ -1493,9 +1436,7 @@ describe('useReviewState', () => {
         });
 
         expect(result.current.files).not.toBe(filesBefore);
-        expect(result.current.files[0].comments[0].replies).not.toBe(
-          repliesBefore
-        );
+        expect(result.current.files[0].comments[0].replies).not.toBe(repliesBefore);
         expect(repliesBefore).toHaveLength(2);
       });
 
@@ -1511,9 +1452,7 @@ describe('useReviewState', () => {
           });
         });
 
-        expect(result.current.files[0].comments[0].replies![0]).not.toBe(
-          replyBefore
-        );
+        expect(result.current.files[0].comments[0].replies![0]).not.toBe(replyBefore);
         expect(replyBefore.body).toBe('Reply one');
       });
 
@@ -1527,9 +1466,7 @@ describe('useReviewState', () => {
           result.current.deleteReply('comment-1', 'reply-1');
         });
 
-        expect(result.current.files[0].comments[0].replies).not.toBe(
-          repliesBefore
-        );
+        expect(result.current.files[0].comments[0].replies).not.toBe(repliesBefore);
         expect(repliesBefore).toHaveLength(2);
       });
     });

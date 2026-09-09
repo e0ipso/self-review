@@ -122,11 +122,7 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
 
       // Only handle Enter if target is not a text input/textarea
       const target = e.target as HTMLElement;
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      ) {
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
 
@@ -181,48 +177,48 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
 
   return createPortal(
     <div
-      className="fixed flex items-center gap-1 rounded-md border bg-background p-1.5 shadow-lg"
+      className='fixed flex items-center gap-1 rounded-md border bg-background p-1.5 shadow-lg'
       style={{ top: 44, right: 16, zIndex: 9998 }}
     >
       <Input
         ref={inputRef}
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={e => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Find..."
-        className="h-7 w-52 text-sm"
+        placeholder='Find...'
+        className='h-7 w-52 text-sm'
       />
-      <span className="min-w-[5rem] px-1.5 text-center text-xs text-muted-foreground">
+      <span className='min-w-[5rem] px-1.5 text-center text-xs text-muted-foreground'>
         {matchDisplay}
       </span>
       <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7"
+        variant='ghost'
+        size='icon'
+        className='h-7 w-7'
         onClick={findPrevious}
         disabled={!query || adjustedTotal === 0}
-        title="Previous match (Shift+Enter)"
+        title='Previous match (Shift+Enter)'
       >
-        <ChevronUp className="h-4 w-4" />
+        <ChevronUp className='h-4 w-4' />
       </Button>
       <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7"
+        variant='ghost'
+        size='icon'
+        className='h-7 w-7'
         onClick={findNext}
         disabled={!query || adjustedTotal === 0}
-        title="Next match (Enter)"
+        title='Next match (Enter)'
       >
-        <ChevronDown className="h-4 w-4" />
+        <ChevronDown className='h-4 w-4' />
       </Button>
       <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7"
+        variant='ghost'
+        size='icon'
+        className='h-7 w-7'
         onClick={handleClose}
-        title="Close (Escape)"
+        title='Close (Escape)'
       >
-        <X className="h-4 w-4" />
+        <X className='h-4 w-4' />
       </Button>
     </div>,
     document.body

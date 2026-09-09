@@ -31,18 +31,24 @@ export function InlineCommentSlot({
   return (
     <>
       {commentsToRender.length > 0 && (
-        <div className={`border-y border-border bg-muted/50 px-4 py-3 space-y-2${indentClass ? ` ${indentClass}` : ''}`}>
+        <div
+          className={`border-y border-border bg-muted/50 px-4 py-3 space-y-2${indentClass ? ` ${indentClass}` : ''}`}
+        >
           {commentsToRender.map(comment => (
             <CommentDisplay
               key={comment.id}
               comment={comment}
-              originalCode={getOriginalCodeForComment ? getOriginalCodeForComment(comment) : undefined}
+              originalCode={
+                getOriginalCodeForComment ? getOriginalCodeForComment(comment) : undefined
+              }
             />
           ))}
         </div>
       )}
       {showCommentInput && commentRange && (
-        <div className={`border-y border-border bg-muted/50 px-4 py-3${indentClass ? ` ${indentClass}` : ''}`}>
+        <div
+          className={`border-y border-border bg-muted/50 px-4 py-3${indentClass ? ` ${indentClass}` : ''}`}
+        >
           <CommentInput
             filePath={filePath}
             lineRange={{

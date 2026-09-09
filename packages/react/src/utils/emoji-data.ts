@@ -24,7 +24,7 @@ export function searchEmojis(query: string): EmojiMatch[] {
     const matches =
       emoji.id.startsWith(q) ||
       emoji.name.toLowerCase().includes(q) ||
-      emoji.keywords.some((kw) => kw.includes(q));
+      emoji.keywords.some(kw => kw.includes(q));
 
     if (matches) {
       results.push({

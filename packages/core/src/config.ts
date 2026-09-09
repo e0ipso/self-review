@@ -83,20 +83,13 @@ export function loadConfig(): AppConfig {
   let config = { ...defaults };
 
   // Load user-level config
-  const userConfigPath = join(
-    homedir(),
-    '.config',
-    'self-review',
-    'config.yaml'
-  );
+  const userConfigPath = join(homedir(), '.config', 'self-review', 'config.yaml');
   if (existsSync(userConfigPath)) {
     try {
       const userConfig = loadYamlConfig(userConfigPath);
       config = mergeConfig(config, userConfig);
     } catch (error) {
-      console.error(
-        `Warning: Failed to load user config from ${userConfigPath}: ${error}`
-      );
+      console.error(`Warning: Failed to load user config from ${userConfigPath}: ${error}`);
     }
   }
 
@@ -107,9 +100,7 @@ export function loadConfig(): AppConfig {
       const projectConfig = loadYamlConfig(projectConfigPath);
       config = mergeConfig(config, projectConfig);
     } catch (error) {
-      console.error(
-        `Warning: Failed to load project config from ${projectConfigPath}: ${error}`
-      );
+      console.error(`Warning: Failed to load project config from ${projectConfigPath}: ${error}`);
     }
   }
 
@@ -136,9 +127,7 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     if (['light', 'dark', 'system'].includes(raw.theme)) {
       config.theme = raw.theme;
     } else {
-      console.error(
-        `Warning: Invalid theme value "${raw.theme}", using default`
-      );
+      console.error(`Warning: Invalid theme value "${raw.theme}", using default`);
     }
   }
 
@@ -146,9 +135,7 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     if (['split', 'unified'].includes(raw['diff-view'])) {
       config.diffView = raw['diff-view'];
     } else {
-      console.error(
-        `Warning: Invalid diff-view value "${raw['diff-view']}", using default`
-      );
+      console.error(`Warning: Invalid diff-view value "${raw['diff-view']}", using default`);
     }
   }
 
@@ -161,9 +148,7 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
   }
 
   if ('ignore' in raw && Array.isArray(raw.ignore)) {
-    config.ignore = raw.ignore.filter(
-      (item: unknown) => typeof item === 'string'
-    );
+    config.ignore = raw.ignore.filter((item: unknown) => typeof item === 'string');
   }
 
   if ('categories' in raw && Array.isArray(raw.categories)) {
@@ -189,10 +174,7 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     }
   }
 
-  if (
-    'default-diff-args' in raw &&
-    typeof raw['default-diff-args'] === 'string'
-  ) {
+  if ('default-diff-args' in raw && typeof raw['default-diff-args'] === 'string') {
     config.defaultDiffArgs = raw['default-diff-args'];
   }
 
@@ -210,7 +192,8 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
   }
 
   if ('max-total-lines' in raw && typeof raw['max-total-lines'] === 'number') {
-    config.maxTotalLines = raw['max-total-lines'] >= 0 ? raw['max-total-lines'] : defaults.maxTotalLines;
+    config.maxTotalLines =
+      raw['max-total-lines'] >= 0 ? raw['max-total-lines'] : defaults.maxTotalLines;
   }
 
   if (
@@ -238,7 +221,6 @@ function mergeConfig(base: AppConfig, override: Partial<AppConfig>): AppConfig {
     ...override,
     // Arrays are replaced, not merged
     ignore: override.ignore !== undefined ? override.ignore : base.ignore,
-    categories:
-      override.categories !== undefined ? override.categories : base.categories,
+    categories: override.categories !== undefined ? override.categories : base.categories,
   };
 }

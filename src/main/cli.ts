@@ -127,9 +127,7 @@ export function parseCliArgs(): CliArgs {
     }
 
     if (remoteUrl === null) {
-      console.error(
-        'Error: fetch-comments requires a pull/merge request URL argument'
-      );
+      console.error('Error: fetch-comments requires a pull/merge request URL argument');
       process.exit(1);
     }
 
@@ -179,9 +177,7 @@ export function parseCliArgs(): CliArgs {
           'Error: fetch-comments must be the first argument: ' +
             'self-review fetch-comments <url> [--all-threads]'
         );
-        console.error(
-          '       To diff a path named fetch-comments, put it after --.'
-        );
+        console.error('       To diff a path named fetch-comments, put it after --.');
         process.exit(1);
       }
     }

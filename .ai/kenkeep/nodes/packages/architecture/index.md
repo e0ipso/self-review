@@ -16,6 +16,7 @@ _None._
 - Open [**Keep file-type detection utilities duplicated across core and react packages**](practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md) to learn about: getRenderedTextMode, isPreviewableImage, isPreviewableSvg, getLanguageFromPath are intentionally duplicated. #strikethroo #file-type-utils #duplication
 - Open [**Keep file-type-utils.ts duplicates in sync across core and react**](practice-keep-file-type-utils-ts-duplicates-in-sync-across-core-and-react.md) to learn about: The file is intentionally duplicated; both copies must be updated together. #duplication #sync #utils
 - Open [**Keep review comment mutations immutable**](practice-keep-review-comment-mutations-immutable.md) to learn about: Replace affected comment objects so useReviewBridge emits onReviewChange; preserve them for viewed-only file updates. #react #review-state #callbacks #immutability
+- Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) to learn about: quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts. #git #diff #paths #encoding
 
 ## Components (what exists)
 - Open [**@self-review/react package**](map-self-review-react-package.md) to learn about: Embeddable React UI layer: diff viewer, file tree, commenting, syntax highlighting. #packages #react #ui
@@ -26,9 +27,9 @@ _None._
 ## By topic
 
 ### #react
+- Open [**Restore collapsed panels inside flushSync**](../../app/ui/interactions/practice-restore-collapsed-panels-inside-flushsync.md) — react-resizable-panels' expand() only writes to its store; flush the render before measuring rects.
+- Open [**Drive resizable panels through the imperative handle in jsdom**](../../engineering/practice-drive-resizable-panels-through-the-imperative-handle-in-jsdom.md) — react-resizable-panels needs a ResizeObserver stub under jsdom and never fires onResize there.
 - Open [**@self-review/react package**](map-self-review-react-package.md) — Embeddable React UI layer: diff viewer, file tree, commenting, syntax highlighting.
-- Open [**Do not import from @self-review/core in the react package**](practice-do-not-import-from-self-review-core-in-the-react-package.md) — Importing core risks pulling Node-only code into the browser bundle.
-- Open [**Do not use Node.js APIs in @self-review/react**](practice-do-not-use-node-js-apis-in-self-review-react.md) — The react package is browser-only; no fs, child_process, or path imports.
 ### #adapter
 - Open [**ReviewAdapter interface**](map-reviewadapter-interface.md) — Abstraction for platform-specific operations defined in src/adapter.ts.
 - Open [**Use the ReviewAdapter pattern for platform-specific operations**](practice-use-the-reviewadapter-pattern-for-platform-specific-operations.md) — Abstract expand-context, image loading, and output-path changes via ReviewAdapter.
@@ -62,10 +63,18 @@ _None._
 - Open [**ReviewPanel and SingleFileReview entry components**](map-reviewpanel-and-singlefilereview-entry-components.md) — Top-level components exported from @self-review/react for embedding the review UI.
 ### #constraints
 - Open [**Do not use Node.js APIs in @self-review/react**](practice-do-not-use-node-js-apis-in-self-review-react.md) — The react package is browser-only; no fs, child_process, or path imports.
+### #diff
+- Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) — quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts.
+### #encoding
+- Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) — quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts.
 ### #entrypoint
 - Open [**ReviewPanel and SingleFileReview entry components**](map-reviewpanel-and-singlefilereview-entry-components.md) — Top-level components exported from @self-review/react for embedding the review UI.
 ### #file-type-utils
 - Open [**Keep file-type detection utilities duplicated across core and react packages**](practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages.md) — getRenderedTextMode, isPreviewableImage, isPreviewableSvg, getLanguageFromPath are intentionally duplicated.
+### #git
+- Open [**Apply curator conflicts using the selected reply**](../../knowledge-base/curate/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
+- Open [**Review knowledge-base changes via git diff before committing**](../../knowledge-base/structure/practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
+- Open [**Convert git diff args only through format/tokenize**](../../app/cli/practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
 ### #immutability
 - Open [**Keep review comment mutations immutable**](practice-keep-review-comment-mutations-immutable.md) — Replace affected comment objects so useReviewBridge emits onReviewChange; preserve them for viewed-only file updates.
 ### #imports
@@ -74,6 +83,9 @@ _None._
 - Open [**Do not import sibling packages from @self-review/types**](../types/practice-do-not-import-sibling-packages-from-self-review-types.md) — The types package is a leaf dependency and must never import from @self-review/core or @self-review/react.
 ### #interface
 - Open [**ReviewAdapter interface**](map-reviewadapter-interface.md) — Abstraction for platform-specific operations defined in src/adapter.ts.
+### #paths
+- Open [**Kenkeep directory layout**](../../knowledge-base/structure/map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes use topical folders; sessions, conflicts and logs have separate directories.
+- Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) — quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts.
 ### #review-state
 - Open [**Keep review comment mutations immutable**](practice-keep-review-comment-mutations-immutable.md) — Replace affected comment objects so useReviewBridge emits onReviewChange; preserve them for viewed-only file updates.
 ### #sync

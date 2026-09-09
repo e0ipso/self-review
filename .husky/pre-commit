@@ -1,1 +1,10 @@
-npm run lint && npm run test:unit
+# Run the installed lint-staged rather than `npx lint-staged`: bare npx fetches
+# the package from the registry mid-commit on a checkout whose install predates
+# it, and `npx --no-install` quietly runs whatever copy the npx cache holds
+# instead of the one package-lock.json pins.
+if [ ! -x node_modules/.bin/lint-staged ]; then
+  echo "pre-commit: node_modules/.bin/lint-staged is missing. Run npm install." >&2
+  exit 1
+fi
+
+node_modules/.bin/lint-staged && npm run lint && npm run test:unit

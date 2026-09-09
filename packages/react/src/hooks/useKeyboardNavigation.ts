@@ -30,8 +30,7 @@ export function isTextInputFocused(): boolean {
   const tag = el.tagName.toLowerCase();
   if (tag === 'input' || tag === 'textarea') return true;
   if (el.getAttribute('contenteditable') === 'true') return true;
-  if (el.closest('[class*="md-editor"]') || el.closest('[data-color-mode]'))
-    return true;
+  if (el.closest('[class*="md-editor"]') || el.closest('[data-color-mode]')) return true;
   return false;
 }
 
@@ -73,7 +72,15 @@ export function useKeyboardNavigation() {
 
         // Comment form buttons and file-level actions: just click them
         const hintAction = hint.element.getAttribute('data-hint-action');
-        if (testId === 'cancel-comment-btn' || testId === 'add-comment-btn' || testId?.startsWith('category-option-') || hintAction === 'toggle-viewed' || hintAction === 'add-file-comment' || hintAction === 'delete-comment' || hintAction === 'finish-review') {
+        if (
+          testId === 'cancel-comment-btn' ||
+          testId === 'add-comment-btn' ||
+          testId?.startsWith('category-option-') ||
+          hintAction === 'toggle-viewed' ||
+          hintAction === 'add-file-comment' ||
+          hintAction === 'delete-comment' ||
+          hintAction === 'finish-review'
+        ) {
           hint.element.click();
           clearHintsRef.current();
           return;
@@ -136,9 +143,9 @@ export function useKeyboardNavigation() {
       // the visibility filter below then discards, so hint-file mode would
       // silently find nothing. Layout owns the collapse state; ask it to
       // restore the panel before collecting candidates rather than reaching
-      // into its panel handle from here. The panel's imperative expand()
-      // applies its width synchronously, so the query right after this
-      // dispatch already sees the restored layout.
+      // into its panel handle from here. The panel's expand() only schedules a
+      // render, so Layout's handler flushes it before returning; that flush,
+      // not expand() itself, is what makes the rects below the restored ones.
       document.dispatchEvent(new CustomEvent('expand-file-tree'));
       selector =
         '.file-tree [data-file-path], [data-testid="file-tree"] [data-file-path], button[data-file-path]';
@@ -147,7 +154,7 @@ export function useKeyboardNavigation() {
     const elements = document.querySelectorAll<HTMLElement>(selector);
     const visible: { element: HTMLElement; rect: DOMRect }[] = [];
 
-    elements.forEach((el) => {
+    elements.forEach(el => {
       const rect = el.getBoundingClientRect();
       if (
         rect.top >= 0 &&
@@ -221,16 +228,14 @@ export function useKeyboardNavigation() {
         const newBuffer = currentBuffer + e.key.toLowerCase();
 
         // Check for exact match
-        const exactMatch = currentHints.find((h) => h.label === newBuffer);
+        const exactMatch = currentHints.find(h => h.label === newBuffer);
         if (exactMatch) {
           activateHint(exactMatch);
           return;
         }
 
         // Check for partial prefix match
-        const hasPrefix = currentHints.some((h) =>
-          h.label.startsWith(newBuffer)
-        );
+        const hasPrefix = currentHints.some(h => h.label.startsWith(newBuffer));
         if (hasPrefix) {
           setInputBuffer(newBuffer);
         } else {

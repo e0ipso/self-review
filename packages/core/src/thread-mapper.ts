@@ -87,10 +87,8 @@ function mapReply(turn: ForgeThreadTurn): Reply {
  *
  * Output order is input order. The input is never mutated.
  */
-export function mapThreadsToReviewComments(
-  threads: ForgeThread[]
-): ReviewComment[] {
-  return threads.map((thread) => {
+export function mapThreadsToReviewComments(threads: ForgeThread[]): ReviewComment[] {
+  return threads.map(thread => {
     const comment: ReviewComment = {
       id: internalId(thread.root),
       filePath: thread.anchor?.filePath ?? REVIEW_LEVEL_FILE_PATH,

@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": true,
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  // tests/webapp/main.tsx pulls in @self-review/react, whose emoji search
+  // depends on the ambient `@emoji-mart/data` default-export augmentation in
+  // packages/react/src/declarations.d.ts. That file only joins the program
+  // through this explicit include — nothing under tests/ imports it — so
+  // without this line the package's own default-export shape resolves to the
+  // untyped upstream .d.ts and the build fails on `data.emojis`/`data.aliases`.
+  "include": ["**/*.ts", "**/*.tsx", "../packages/react/src/declarations.d.ts"]
+}

@@ -7,17 +7,14 @@ import { getPage } from './app';
 
 const { When, Then } = createBdd();
 
-When(
-  'I click the {string} view mode toggle in the file tree',
-  async ({}, mode: string) => {
-    const page = getPage();
-    if (mode === 'Unified') {
-      await page.locator('[data-testid="view-mode-unified"]').click();
-    } else if (mode === 'Split') {
-      await page.locator('[data-testid="view-mode-split"]').click();
-    }
+When('I click the {string} view mode toggle in the file tree', async ({}, mode: string) => {
+  const page = getPage();
+  if (mode === 'Unified') {
+    await page.locator('[data-testid="view-mode-unified"]').click();
+  } else if (mode === 'Split') {
+    await page.locator('[data-testid="view-mode-split"]').click();
   }
-);
+});
 
 When('I click {string} in the toolbar', async ({}, buttonText: string) => {
   const page = getPage();
@@ -37,31 +34,19 @@ When(
   }
 );
 
-When(
-  'I switch the theme to {string} in the toolbar',
-  async ({}, theme: string) => {
-    const page = getPage();
-    await page
-      .locator(`[data-testid="theme-option-${theme.toLowerCase()}"]`)
-      .click();
-  }
-);
+When('I switch the theme to {string} in the toolbar', async ({}, theme: string) => {
+  const page = getPage();
+  await page.locator(`[data-testid="theme-option-${theme.toLowerCase()}"]`).click();
+});
 
-Then(
-  'the diff viewer should be in {string} view mode',
-  async ({}, mode: string) => {
-    const page = getPage();
-    if (mode === 'split') {
-      await expect(
-        page.locator('[data-testid="diff-viewer"] .split-view').first()
-      ).toBeVisible();
-    } else if (mode === 'unified') {
-      await expect(
-        page.locator('[data-testid="diff-viewer"] .unified-view').first()
-      ).toBeVisible();
-    }
+Then('the diff viewer should be in {string} view mode', async ({}, mode: string) => {
+  const page = getPage();
+  if (mode === 'split') {
+    await expect(page.locator('[data-testid="diff-viewer"] .split-view').first()).toBeVisible();
+  } else if (mode === 'unified') {
+    await expect(page.locator('[data-testid="diff-viewer"] .unified-view').first()).toBeVisible();
   }
-);
+});
 
 Then('the split view should show two columns', async () => {
   const page = getPage();
@@ -104,47 +89,38 @@ Then('all file sections should be expanded', async () => {
   }
 });
 
-Then(
-  'the {string} file section should be collapsed',
-  async ({}, filePath: string) => {
-    const page = getPage();
-    const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-    await expect(section.locator('.file-diff-content')).toHaveCount(0);
-  }
-);
+Then('the {string} file section should be collapsed', async ({}, filePath: string) => {
+  const page = getPage();
+  const section = page.locator(`[data-testid="file-section-${filePath}"]`);
+  await expect(section.locator('.file-diff-content')).toHaveCount(0);
+});
 
-Then(
-  'the {string} file section should still be expanded',
-  async ({}, filePath: string) => {
-    const page = getPage();
-    const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-    await expect(section.locator('.file-diff-content')).toHaveCount(1);
-  }
-);
+Then('the {string} file section should still be expanded', async ({}, filePath: string) => {
+  const page = getPage();
+  const section = page.locator(`[data-testid="file-section-${filePath}"]`);
+  await expect(section.locator('.file-diff-content')).toHaveCount(1);
+});
 
 Then('the application should use dark theme colors', async () => {
   const page = getPage();
-  const hasDarkClass = await page.evaluate(() =>
-    document.querySelector('.self-review')?.classList.contains('dark') ?? false
+  const hasDarkClass = await page.evaluate(
+    () => document.querySelector('.self-review')?.classList.contains('dark') ?? false
   );
   expect(hasDarkClass).toBe(true);
 });
 
 Then('the application should use light theme colors', async () => {
   const page = getPage();
-  const hasDarkClass = await page.evaluate(() =>
-    document.querySelector('.self-review')?.classList.contains('dark') ?? false
+  const hasDarkClass = await page.evaluate(
+    () => document.querySelector('.self-review')?.classList.contains('dark') ?? false
   );
   expect(hasDarkClass).toBe(false);
 });
 
-When(
-  'I click the {string} toggle in the toolbar',
-  async ({}, _label: string) => {
-    const page = getPage();
-    await page.locator('[data-testid="toggle-word-wrap-btn"]').click();
-  }
-);
+When('I click the {string} toggle in the toolbar', async ({}, _label: string) => {
+  const page = getPage();
+  await page.locator('[data-testid="toggle-word-wrap-btn"]').click();
+});
 
 Then('long lines should be wrapped by default', async () => {
   const page = getPage();
@@ -166,17 +142,14 @@ When('I scroll the diff pane to the bottom', async () => {
   });
 });
 
-Then(
-  'the toolbar should remain anchored at the top of the viewport',
-  async () => {
-    const page = getPage();
-    const toolbar = page.locator('[data-testid="toolbar"]');
-    await expect(toolbar).toBeVisible();
-    const box = await toolbar.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.y).toBeLessThanOrEqual(1);
-  }
-);
+Then('the toolbar should remain anchored at the top of the viewport', async () => {
+  const page = getPage();
+  const toolbar = page.locator('[data-testid="toolbar"]');
+  await expect(toolbar).toBeVisible();
+  const box = await toolbar.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.y).toBeLessThanOrEqual(1);
+});
 
 Then('the document itself should not have scrolled', async () => {
   const page = getPage();

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { execFileSync } from 'child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
+import { gitSync } from './test-support/git-env';
 
 describe('loadGitDiffWithUntracked', () => {
   let root: string;
@@ -11,13 +11,13 @@ describe('loadGitDiffWithUntracked', () => {
   beforeEach(() => {
     // git reports the resolved top level, and temp dirs can be symlinked.
     root = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-loader-')));
-    execFileSync('git', ['init', '-q', root]);
-    execFileSync('git', ['-C', root, 'config', 'user.email', 'test@example.com']);
-    execFileSync('git', ['-C', root, 'config', 'user.name', 'Test']);
+    gitSync(['init', '-q', root]);
+    gitSync(['-C', root, 'config', 'user.email', 'test@example.com']);
+    gitSync(['-C', root, 'config', 'user.name', 'Test']);
     mkdirSync(join(root, 'sub'));
     writeFileSync(join(root, 'tracked.txt'), 'original\n');
-    execFileSync('git', ['-C', root, 'add', '-A']);
-    execFileSync('git', ['-C', root, 'commit', '-qm', 'init']);
+    gitSync(['-C', root, 'add', '-A']);
+    gitSync(['-C', root, 'commit', '-qm', 'init']);
 
     // Same basename at two depths, different bytes.
     writeFileSync(join(root, 'dup.txt'), 'ROOT CONTENT\n');
@@ -41,18 +41,18 @@ describe('loadGitDiffWithUntracked', () => {
   it.each([
     ['the repository root', ''],
     ['a nested directory', 'sub'],
-  ])('reviews each untracked file with its own bytes when launched from %s', async (_label, from) => {
-    const { files, repository } = await loadGitDiffWithUntracked(
-      [],
-      join(root, from)
-    );
+  ])(
+    'reviews each untracked file with its own bytes when launched from %s',
+    async (_label, from) => {
+      const { files, repository } = await loadGitDiffWithUntracked([], join(root, from));
 
-    expect(repository).toBe(root);
-    expect(untrackedContent(files)).toEqual({
-      'dup.txt': 'ROOT CONTENT',
-      'sub/dup.txt': 'NESTED CONTENT',
-    });
-  });
+      expect(repository).toBe(root);
+      expect(untrackedContent(files)).toEqual({
+        'dup.txt': 'ROOT CONTENT',
+        'sub/dup.txt': 'NESTED CONTENT',
+      });
+    }
+  );
 
   it('reports tracked changes outside the launch directory', async () => {
     writeFileSync(join(root, 'tracked.txt'), 'changed\n');
@@ -77,7 +77,7 @@ describe('loadGitDiffWithUntracked', () => {
     const parent = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-loader-space-')));
     const spacedRoot = join(parent, 'trailing space ');
     mkdirSync(spacedRoot);
-    execFileSync('git', ['init', '-q', spacedRoot]);
+    gitSync(['init', '-q', spacedRoot]);
     writeFileSync(join(spacedRoot, 'untracked.txt'), 'content\n');
 
     try {

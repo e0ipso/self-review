@@ -17,8 +17,7 @@ Given(
   'a git repository with a file {string} containing:',
   async ({}, filePath: string, docString: string) => {
     const repoDir = mkdtempSync(join(tmpdir(), 'self-review-test-'));
-    const run = (cmd: string) =>
-      execSync(cmd, { cwd: repoDir, stdio: 'pipe' }).toString();
+    const run = (cmd: string) => execSync(cmd, { cwd: repoDir, stdio: 'pipe' }).toString();
 
     run('git init');
     run('git config user.email "test@test.com"');
@@ -95,9 +94,7 @@ When('I type {string} in the find bar', async ({}, text: string) => {
 Then('the match counter should show {string}', async ({}, expected: string) => {
   const page = getPage();
   // The match counter is a span sibling of the input inside the find bar
-  const counter = page.locator('input[placeholder="Find..."]')
-    .locator('..')
-    .locator('span');
+  const counter = page.locator('input[placeholder="Find..."]').locator('..').locator('span');
   await expect(counter).toContainText(expected, { timeout: 5000 });
 });
 
@@ -105,9 +102,7 @@ Then('the first match should be highlighted', async () => {
   // Chromium's native find-in-page highlights matches automatically.
   // We verify that the active match ordinal is 1 via the match counter.
   const page = getPage();
-  const counter = page.locator('input[placeholder="Find..."]')
-    .locator('..')
-    .locator('span');
+  const counter = page.locator('input[placeholder="Find..."]').locator('..').locator('span');
   const text = await counter.textContent();
   expect(text).toMatch(/^1 of \d+$/);
 });

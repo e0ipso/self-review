@@ -1,11 +1,7 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type {
-  DiffFile,
-  DiffLoadPayload,
-  ResumeLoadPayload,
-} from '@self-review/types';
+import type { DiffFile, DiffLoadPayload, ResumeLoadPayload } from '@self-review/types';
 
 import { installBrowserApiStubs } from '../test-helpers';
 import { ConfigProvider } from '../context/ConfigContext';

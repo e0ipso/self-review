@@ -22,7 +22,7 @@ export function AttachmentImage({ attachment }: AttachmentImageProps) {
     } else if (attachment.fileName && adapter?.readAttachment) {
       adapter
         .readAttachment(attachment.fileName)
-        .then((buffer) => {
+        .then(buffer => {
           if (buffer) {
             const url = URL.createObjectURL(new Blob([buffer]));
             setImageUrl(url);

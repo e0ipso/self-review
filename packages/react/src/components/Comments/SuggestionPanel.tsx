@@ -37,7 +37,7 @@ export function SuggestionPanel({
           <Textarea
             value={proposedCode}
             onChange={e => onProposedChange(e.target.value)}
-            onKeyDown={(e) => {
+            onKeyDown={e => {
               if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault();
                 onSubmit();

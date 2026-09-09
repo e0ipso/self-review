@@ -42,20 +42,13 @@ const GH_CLI = 'gh';
  * (e.g. ENOENT when gh is absent), a non-zero exit means gh ran but failed
  * (unauthenticated, API error). Callers degrade on this error, never crash.
  */
-async function runGh(
-  runCommand: ForgeCommandRunner,
-  args: string[]
-): Promise<string> {
+async function runGh(runCommand: ForgeCommandRunner, args: string[]): Promise<string> {
   let result: ForgeCommandResult;
   try {
     result = await runCommand(GH_CLI, args);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new ForgeCliUnavailableError(
-      'github',
-      GH_CLI,
-      `Failed to run the gh CLI: ${detail}`
-    );
+    throw new ForgeCliUnavailableError('github', GH_CLI, `Failed to run the gh CLI: ${detail}`);
   }
   if (result.exitCode !== 0) {
     const detail = result.stderr.trim() || `exit code ${result.exitCode}`;
@@ -150,9 +143,7 @@ function groupIntoThreads(comments: GitHubReviewComment[]): ForgeThread[] {
  * Create the GitHub {@link ForgeProvider} backed by an injected command
  * runner, mirroring how `git.ts` keeps child-process execution testable.
  */
-export function createGitHubProvider(
-  runCommand: ForgeCommandRunner
-): ForgeProvider {
+export function createGitHubProvider(runCommand: ForgeCommandRunner): ForgeProvider {
   return {
     forge: 'github',
 
@@ -170,11 +161,7 @@ export function createGitHubProvider(
         baseRefName?: unknown;
       };
       if (typeof parsed?.baseRefName !== 'string' || parsed.baseRefName === '') {
-        throw new ForgeCliUnavailableError(
-          'github',
-          GH_CLI,
-          'gh pr view returned no baseRefName'
-        );
+        throw new ForgeCliUnavailableError('github', GH_CLI, 'gh pr view returned no baseRefName');
       }
       return parsed.baseRefName;
     },
@@ -183,10 +170,7 @@ export function createGitHubProvider(
     // `options.includeResolved` is deliberately ignored: GitHub fetch
     // returns all review threads (resolved-state filtering is a GitLab
     // concern).
-    async fetchThreads(
-      url: ForgeUrl,
-      _options?: FetchThreadsOptions
-    ): Promise<ForgeThread[]> {
+    async fetchThreads(url: ForgeUrl, _options?: FetchThreadsOptions): Promise<ForgeThread[]> {
       const stdout = await runGh(runCommand, [
         'api',
         `repos/${url.owner}/${url.repo}/pulls/${url.number}/comments`,

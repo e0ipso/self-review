@@ -25,21 +25,17 @@ export default function DiffViewer() {
     [diffFiles, guide, guideMode]
   );
   const totalStops = displaySections.filter(section => section.header).length;
-  const implicitLast = Boolean(
-    displaySections[displaySections.length - 1]?.header?.implicit
-  );
+  const implicitLast = Boolean(displaySections[displaySections.length - 1]?.header?.implicit);
 
   // Initialize files as expanded (small sets) or collapsed (large sets)
-  const [expandedState, setExpandedState] = useState<Record<string, boolean>>(
-    () => {
-      const defaultExpanded = diffFiles.length <= COLLAPSE_THRESHOLD;
-      const initial: Record<string, boolean> = {};
-      diffFiles.forEach(file => {
-        initial[file.newPath || file.oldPath] = defaultExpanded;
-      });
-      return initial;
-    }
-  );
+  const [expandedState, setExpandedState] = useState<Record<string, boolean>>(() => {
+    const defaultExpanded = diffFiles.length <= COLLAPSE_THRESHOLD;
+    const initial: Record<string, boolean> = {};
+    diffFiles.forEach(file => {
+      initial[file.newPath || file.oldPath] = defaultExpanded;
+    });
+    return initial;
+  });
 
   // Update expanded state when diffFiles changes
   useEffect(() => {
@@ -81,9 +77,7 @@ export default function DiffViewer() {
   // Apply scroll compensation synchronously after DOM update, before paint
   useLayoutEffect(() => {
     if (scrollAdjustRef.current > 0) {
-      const scrollContainer = document.querySelector<HTMLElement>(
-        '[data-scroll-container="diff"]'
-      );
+      const scrollContainer = document.querySelector<HTMLElement>('[data-scroll-container="diff"]');
       if (scrollContainer) {
         scrollContainer.scrollTop -= scrollAdjustRef.current;
       }
@@ -96,9 +90,7 @@ export default function DiffViewer() {
 
     // Compensate scroll position when collapsing a file above the viewport
     if (isCurrentlyExpanded) {
-      const scrollContainer = document.querySelector<HTMLElement>(
-        '[data-scroll-container="diff"]'
-      );
+      const scrollContainer = document.querySelector<HTMLElement>('[data-scroll-container="diff"]');
       // Scope query to scroll container to avoid matching FileTree elements
       const sectionEl = scrollContainer?.querySelector<HTMLElement>(
         `[data-file-path="${filePath}"]`
@@ -140,9 +132,7 @@ export default function DiffViewer() {
     >
       <GuideOverviewPanel />
       {displaySections.map((section, sectionIndex) => (
-        <React.Fragment
-          key={`chapter-${sectionIndex}-${section.header?.name ?? 'flat'}`}
-        >
+        <React.Fragment key={`chapter-${sectionIndex}-${section.header?.name ?? 'flat'}`}>
           {section.header && (
             <GuideChapterDivider
               header={section.header}

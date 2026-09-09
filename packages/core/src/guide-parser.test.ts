@@ -298,11 +298,7 @@ describe('reconcileGuide', () => {
   });
 
   it('omits the implicit group when the guide accounts for every diff file', () => {
-    const resolved = reconcileGuide(guide, [
-      'src/retry.ts',
-      'src/client.ts',
-      'src/retry.test.ts',
-    ]);
+    const resolved = reconcileGuide(guide, ['src/retry.ts', 'src/client.ts', 'src/retry.test.ts']);
 
     expect(resolved).toHaveLength(2);
     expect(resolved.every(group => !group.implicit)).toBe(true);

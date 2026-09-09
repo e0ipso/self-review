@@ -5,7 +5,11 @@ import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import { useGuide } from '../../context/GuideContext';
-import { getRenderedTextMode, isPreviewableImage, isPreviewableSvg } from '../../utils/file-type-utils';
+import {
+  getRenderedTextMode,
+  isPreviewableImage,
+  isPreviewableSvg,
+} from '../../utils/file-type-utils';
 import { getGuideAccent } from '../../utils/guide-accents';
 import { FileSectionHeader } from './FileSectionHeader';
 import { FileSectionBody } from './FileSectionBody';
@@ -28,8 +32,7 @@ export default function FileSection({
   const adapter = useAdapter();
   const { mode: guideMode, getFileDescription, getFileGroupIndex } = useGuide();
   const [internalExpanded, setInternalExpanded] = useState(true);
-  const expanded =
-    controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
+  const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
   const [commentRange, setCommentRange] = useState<{
     start: number;
     end: number;
@@ -50,8 +53,7 @@ export default function FileSection({
   const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
 
   const filePath = file.newPath || file.oldPath;
-  const guideDescription =
-    guideMode === 'guided' ? getFileDescription(filePath) : undefined;
+  const guideDescription = guideMode === 'guided' ? getFileDescription(filePath) : undefined;
   const comments = getCommentsForFile(filePath);
   const fileComments = comments.filter(c => c.lineRange === null);
   const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
@@ -70,17 +72,20 @@ export default function FileSection({
     setContentLoading(true);
     setContentError(false);
 
-    adapter.loadFileContent(filePath).then(hunks => {
-      if (hunks) {
-        updateFileHunks(filePath, hunks);
-      } else {
+    adapter
+      .loadFileContent(filePath)
+      .then(hunks => {
+        if (hunks) {
+          updateFileHunks(filePath, hunks);
+        } else {
+          setContentError(true);
+        }
+        setContentLoading(false);
+      })
+      .catch(() => {
         setContentError(true);
-      }
-      setContentLoading(false);
-    }).catch(() => {
-      setContentError(true);
-      setContentLoading(false);
-    });
+        setContentLoading(false);
+      });
   }, [expanded, file.contentLoaded, contentLoading, filePath, updateFileHunks, adapter]);
 
   // Expand context state
@@ -94,9 +99,10 @@ export default function FileSection({
   });
 
   // Effective view mode: added/deleted files are forced to unified view
-  const effectiveViewMode = viewMode === 'split' && (file.changeType === 'added' || file.changeType === 'deleted')
-    ? 'unified'
-    : viewMode;
+  const effectiveViewMode =
+    viewMode === 'split' && (file.changeType === 'added' || file.changeType === 'deleted')
+      ? 'unified'
+      : viewMode;
 
   const handleCommentRange = (start: number, end: number, side: 'old' | 'new') => {
     setCommentRange({

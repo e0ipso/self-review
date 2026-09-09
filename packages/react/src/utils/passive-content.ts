@@ -4,13 +4,76 @@ import type { Element, Root } from 'hast';
 // Reviewed HTML may format text, but cannot create browsing contexts, forms,
 // custom elements, SVG, or other active content. Keep positions for the gutter.
 export const PASSIVE_HTML_TAGS: ReadonlySet<string> = new Set([
-  'a', 'abbr', 'address', 'article', 'aside', 'b', 'bdi', 'bdo', 'blockquote',
-  'br', 'caption', 'cite', 'code', 'col', 'colgroup', 'dd', 'del', 'details',
-  'dfn', 'div', 'dl', 'dt', 'em', 'figcaption', 'figure', 'footer', 'h1', 'h2',
-  'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'i', 'img', 'input', 'ins', 'kbd',
-  'li', 'main', 'mark', 'nav', 'ol', 'p', 'pre', 'q', 'rp', 'rt', 'ruby', 's',
-  'samp', 'section', 'small', 'span', 'strong', 'sub', 'summary', 'sup', 'table',
-  'tbody', 'td', 'th', 'thead', 'time', 'tr', 'u', 'ul', 'var', 'wbr',
+  'a',
+  'abbr',
+  'address',
+  'article',
+  'aside',
+  'b',
+  'bdi',
+  'bdo',
+  'blockquote',
+  'br',
+  'caption',
+  'cite',
+  'code',
+  'col',
+  'colgroup',
+  'dd',
+  'del',
+  'details',
+  'dfn',
+  'div',
+  'dl',
+  'dt',
+  'em',
+  'figcaption',
+  'figure',
+  'footer',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'header',
+  'hr',
+  'i',
+  'img',
+  'input',
+  'ins',
+  'kbd',
+  'li',
+  'main',
+  'mark',
+  'nav',
+  'ol',
+  'p',
+  'pre',
+  'q',
+  'rp',
+  'rt',
+  'ruby',
+  's',
+  'samp',
+  'section',
+  'small',
+  'span',
+  'strong',
+  'sub',
+  'summary',
+  'sup',
+  'table',
+  'tbody',
+  'td',
+  'th',
+  'thead',
+  'time',
+  'tr',
+  'u',
+  'ul',
+  'var',
+  'wbr',
 ]);
 
 const GLOBAL_ATTRIBUTES = new Set(['className', 'title', 'lang', 'dir']);
@@ -58,7 +121,12 @@ export function rehypePassiveContent() {
 export function isLocalImageUrl(url: string): boolean {
   const normalized = url.trim().replace(/[\t\r\n]/g, '');
   if (!normalized || normalized.startsWith('//') || normalized.includes('\\')) return false;
-  if (/^data:image\/(?:png|jpeg|gif|webp|bmp|x-icon|vnd\.microsoft\.icon|svg\+xml)[;,]/i.test(normalized)) return true;
+  if (
+    /^data:image\/(?:png|jpeg|gif|webp|bmp|x-icon|vnd\.microsoft\.icon|svg\+xml)[;,]/i.test(
+      normalized
+    )
+  )
+    return true;
   if (/^blob:/i.test(normalized)) return true;
   return !/^[a-z][a-z\d+.-]*:/i.test(normalized);
 }

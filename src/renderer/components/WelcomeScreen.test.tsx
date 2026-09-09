@@ -62,9 +62,7 @@ describe('WelcomeScreen remote URL entry', () => {
     submitUrl('https://github.com/owner/repo/pull/42');
 
     await waitFor(() => {
-      expect(api.openRemoteUrl).toHaveBeenCalledWith(
-        'https://github.com/owner/repo/pull/42'
-      );
+      expect(api.openRemoteUrl).toHaveBeenCalledWith('https://github.com/owner/repo/pull/42');
     });
     expect(screen.queryByTestId('remote-url-error')).toBeNull();
   });

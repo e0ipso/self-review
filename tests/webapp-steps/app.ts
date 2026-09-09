@@ -122,19 +122,12 @@ function stopViteServer(): void {
  * Launch the webapp in a browser. Starts Vite if needed.
  * @param queryParams Optional URL query parameters (e.g., { categories: 'commenting' })
  */
-export async function launchWebapp(
-  queryParams: Record<string, string> = {}
-): Promise<Page> {
+export async function launchWebapp(queryParams: Record<string, string> = {}): Promise<Page> {
   await startViteServer();
 
   browser = await chromium.launch({
     executablePath: process.env.PW_CHROMIUM_PATH || undefined,
-    args: [
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-setuid-sandbox',
-      '--disable-gpu',
-    ],
+    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-setuid-sandbox', '--disable-gpu'],
   });
   context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
@@ -201,18 +194,12 @@ export async function triggerCommentIcon(
 ): Promise<void> {
   const page = getPage();
   const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-  const gutter = section.locator(
-    `[data-testid="${side}-line-${filePath}-${line}"]`
-  );
+  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${line}"]`);
   await gutter.hover();
   const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
   await icon.waitFor({ state: 'visible', timeout: 5000 });
   await icon.dispatchEvent('mousedown');
   await page.waitForTimeout(150);
-  await page.evaluate(() =>
-    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-  );
-  await page
-    .locator('[data-testid="comment-input"]')
-    .waitFor({ state: 'visible', timeout: 5000 });
+  await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
+  await page.locator('[data-testid="comment-input"]').waitFor({ state: 'visible', timeout: 5000 });
 }

@@ -1,11 +1,11 @@
 ---
 schema_version: 3
-nodes_hash: 'sha256:79b83e6be13d1cc2951485e92d781c31644f75574152fe52e814822b641c9ce8'
-node_count: 179
+nodes_hash: 'sha256:613d611dd2ce7b8c049228bb83fc5501ce4da0f51b237e8599018e75b448d5bb'
+node_count: 190
 ---
 # kenkeep Graph
 
-Total nodes: 179
+Total nodes: 190
 
 ## map-ai-knowledge-base-cli
 
@@ -637,6 +637,14 @@ Total nodes: 179
 - **relates_to:** map-kb-bootstrap-skill
 - **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
+## practice-convert-git-diff-args-only-through-format-and-tokenize
+
+- **kind:** practice
+- **title:** Convert git diff args only through format/tokenize
+- **path:** app/cli/practice-convert-git-diff-args-only-through-format-and-tokenize.md
+- **tags:** cli, git, review-xml, round-trip
+- **relates_to:** map-review-xml-format-and-xsd, map-self-review-cli-invocations
+
 ## practice-convert-v2-gate-reviews-to-v3-before-applying
 
 - **kind:** practice
@@ -808,6 +816,14 @@ Total nodes: 179
 - **relates_to:** map-self-review
 - **derived_from:** docs/PRD.md
 
+## practice-drive-resizable-panels-through-the-imperative-handle-in-jsdom
+
+- **kind:** practice
+- **title:** Drive resizable panels through the imperative handle in jsdom
+- **path:** engineering/practice-drive-resizable-panels-through-the-imperative-handle-in-jsdom.md
+- **tags:** testing, jsdom, react, panels
+- **relates_to:** practice-restore-collapsed-panels-inside-flushsync, map-testing-layers-unit-e2e
+
 ## practice-emit-no-wrapper-elements-in-the-xml-output
 
 - **kind:** practice
@@ -816,6 +832,14 @@ Total nodes: 179
 - **tags:** xml, schema
 - **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** docs/PRD.md
+
+## practice-encode-diff-header-paths-with-quotegitpath
+
+- **kind:** practice
+- **title:** Encode diff header paths with quoteGitPath
+- **path:** packages/architecture/practice-encode-diff-header-paths-with-quotegitpath.md
+- **tags:** git, diff, paths, encoding
+- **relates_to:** practice-convert-git-diff-args-only-through-format-and-tokenize
 
 ## practice-engage-relevant-assistant-skills-based-on-task-skills
 
@@ -880,6 +904,14 @@ Total nodes: 179
 - **relates_to:** map-rendered-file-previews
 - **derived_from:** docs/PRD.md
 
+## practice-formatting-is-enforced-by-lint-staged-and-ci
+
+- **kind:** practice
+- **title:** Formatting is enforced by lint-staged and CI
+- **path:** engineering/practice-formatting-is-enforced-by-lint-staged-and-ci.md
+- **tags:** formatting, prettier, husky, ci
+- **relates_to:** practice-use-conventional-commit-naming-for-pr-titles
+
 ## practice-hand-off-curate-runs-via-git-diff-and-optional-pre-commit-index-rebuild
 
 - **kind:** practice
@@ -933,6 +965,14 @@ Total nodes: 179
 - **tags:** types, structure, layout
 - **relates_to:** map-self-review-types-package
 - **derived_from:** packages/types/AGENTS.md
+
+## practice-keep-extra-worktrees-out-of-the-repo-root
+
+- **kind:** practice
+- **title:** Keep extra worktrees out of the repo root
+- **path:** engineering/practice-keep-extra-worktrees-out-of-the-repo-root.md
+- **tags:** worktree, tooling, lint, node-modules
+- **relates_to:** practice-formatting-is-enforced-by-lint-staged-and-ci
 
 ## practice-keep-file-type-detection-utilities-duplicated-across-core-and-react-packages
 
@@ -1177,6 +1217,14 @@ Total nodes: 179
 - **relates_to:** map-self-review-wrapper-div
 - **derived_from:** packages/react/AGENTS.md
 
+## practice-pin-nix-fetchzip-hashes-to-the-unpacked-directory
+
+- **kind:** practice
+- **title:** Pin Nix fetchzip hashes to the unpacked directory
+- **path:** engineering/practice-pin-nix-fetchzip-hashes-to-the-unpacked-directory.md
+- **tags:** nix, packaging, flake, build
+- **relates_to:** practice-upload-release-zips-using-the-makerzip-filenames
+
 ## practice-prefill-the-suggestion-proposed-code-editor-with-the-original-code
 
 - **kind:** practice
@@ -1212,6 +1260,14 @@ Total nodes: 179
 - **tags:** self-review, critique, performance
 - **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
+
+## practice-re-exec-with-headless-ozone-for-windowless-subcommands
+
+- **kind:** practice
+- **title:** Re-exec with headless Ozone for windowless subcommands
+- **path:** app/cli/practice-re-exec-with-headless-ozone-for-windowless-subcommands.md
+- **tags:** electron, cli, packaging, headless
+- **relates_to:** map-self-review-cli-invocations
 
 ## practice-read-categories-from-self-review-yaml-before-generating-critique
 
@@ -1267,6 +1323,14 @@ Total nodes: 179
 - **relates_to:** map-ai-knowledge-base-cli
 - **derived_from:** .ai/kenkeep/scripts/kk-detect-harness.mjs, .agents/skills/kk-curate/SKILL.md, .agents/skills/kk-bootstrap/SKILL.md
 
+## practice-restore-collapsed-panels-inside-flushsync
+
+- **kind:** practice
+- **title:** Restore collapsed panels inside flushSync
+- **path:** app/ui/interactions/practice-restore-collapsed-panels-inside-flushsync.md
+- **tags:** react, panels, dom, keyboard-navigation
+- **relates_to:** map-vimium-style-keyboard-navigation
+
 ## practice-review-every-generated-task-for-complexity-vagueness-and-triviality
 
 - **kind:** practice
@@ -1320,6 +1384,14 @@ Total nodes: 179
 - **tags:** css, scoping, theming
 - **relates_to:** map-self-review-wrapper-div
 - **derived_from:** packages/react/AGENTS.md
+
+## practice-scrub-git-repository-env-vars-before-spawning-git-in-tests
+
+- **kind:** practice
+- **title:** Scrub git's repository env vars before spawning git in tests
+- **path:** engineering/practice-scrub-git-repository-env-vars-before-spawning-git-in-tests.md
+- **tags:** testing, git, hooks, hermetic-tests
+- **relates_to:** map-testing-layers-unit-e2e
 
 ## practice-sessions-is-gitignored-provenance-does-not-travel-with-the-repo
 
@@ -1410,6 +1482,14 @@ Total nodes: 179
 - **tags:** kk-curate, conflicts, grouping
 - **relates_to:** map-knowledge-base-capture-curate-review-workflow
 - **derived_from:** .agents/skills/kk-curate/SKILL.md
+
+## practice-spawn-git-with-an-argv-array-never-a-shell-string
+
+- **kind:** practice
+- **title:** Spawn git with an argv array, never a shell string
+- **path:** engineering/practice-spawn-git-with-an-argv-array-never-a-shell-string.md
+- **tags:** security, git, subprocess, shell-injection
+- **relates_to:** practice-convert-git-diff-args-only-through-format-and-tokenize
 
 ## practice-split-combined-content-across-practice-and-map-nodes
 
@@ -1599,6 +1679,14 @@ Total nodes: 179
 - **tags:** strikethroo, xml, validation
 - **relates_to:** map-review-xml-format-and-xsd
 - **derived_from:** AGENTS.md
+
+## practice-watch-css-sources-explicitly-with-tsup
+
+- **kind:** practice
+- **title:** Watch CSS sources explicitly with tsup
+- **path:** packages/styling/practice-watch-css-sources-explicitly-with-tsup.md
+- **tags:** build, tsup, css, dev-loop
+- **relates_to:** map-css-build-pipeline-for-self-review-react
 
 ## practice-write-prds-without-tasks-or-phases-during-plan-creation
 

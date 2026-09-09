@@ -118,9 +118,7 @@ export function parseDiff(rawDiff: string): DiffFile[] {
       }
 
       // Parse hunk header: @@ -oldStart,oldLines +newStart,newLines @@ context
-      const match = line.match(
-        /@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/
-      );
+      const match = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
       if (match) {
         const oldStart = parseInt(match[1], 10);
         const oldLines = match[2] ? parseInt(match[2], 10) : 1;
@@ -214,20 +212,27 @@ function decodeGitPath(path: string): string {
   if (!path.startsWith('"') || !path.endsWith('"')) return path;
 
   const escapes: Record<string, string> = {
-    a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v',
-    '"': '"', '\\': '\\',
+    a: '\x07',
+    b: '\b',
+    f: '\f',
+    n: '\n',
+    r: '\r',
+    t: '\t',
+    v: '\v',
+    '"': '"',
+    '\\': '\\',
   };
-  return path.slice(1, -1).replace(
-    /(?:\\[0-7]{1,3})+|\\[abfnrtv"\\]/g,
-    (escape) => {
-      if (/^\\[0-7]/.test(escape)) {
-        // Git quotes UTF-8 bytes as octal, so decode each run together.
-        const bytes = escape.slice(1).split('\\').map((byte) => parseInt(byte, 8));
-        return Buffer.from(bytes).toString('utf8');
-      }
-      return escapes[escape[1]];
+  return path.slice(1, -1).replace(/(?:\\[0-7]{1,3})+|\\[abfnrtv"\\]/g, escape => {
+    if (/^\\[0-7]/.test(escape)) {
+      // Git quotes UTF-8 bytes as octal, so decode each run together.
+      const bytes = escape
+        .slice(1)
+        .split('\\')
+        .map(byte => parseInt(byte, 8));
+      return Buffer.from(bytes).toString('utf8');
     }
-  );
+    return escapes[escape[1]];
+  });
 }
 
 function parseGitDiffHeader(line: string): {
@@ -249,10 +254,12 @@ function parseGitDiffHeader(line: string): {
   // Unquoted names can contain spaces. Prefer a boundary whose two paths
   // agree; rename headers supply the exact paths when they differ.
   const separators = [...paths.matchAll(/ [bwico]\//g)];
-  const boundary = separators.find((match) =>
-    stripPrefix(paths.substring(0, match.index)) ===
-    stripPrefix(paths.substring(match.index! + 1))
-  ) || separators[0];
+  const boundary =
+    separators.find(
+      match =>
+        stripPrefix(paths.substring(0, match.index)) ===
+        stripPrefix(paths.substring(match.index! + 1))
+    ) || separators[0];
   if (!boundary) return { oldPath: '', newPath: '' };
 
   return {

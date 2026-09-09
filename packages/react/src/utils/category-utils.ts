@@ -16,9 +16,7 @@ export function isUsableCategory(category: CategoryDef): boolean {
 }
 
 /** Filters a categories list down to entries with a non-blank name. */
-export function getUsableCategories(
-  categories: CategoryDef[] | undefined
-): CategoryDef[] {
+export function getUsableCategories(categories: CategoryDef[] | undefined): CategoryDef[] {
   return (categories ?? []).filter(isUsableCategory);
 }
 

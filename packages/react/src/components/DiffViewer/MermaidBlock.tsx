@@ -42,7 +42,9 @@ export default function MermaidBlock({ code }: { code: string }) {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [code, isDark]);
 
   if (error) {
@@ -55,7 +57,7 @@ export default function MermaidBlock({ code }: { code: string }) {
   if (!svg) return <div className='animate-pulse bg-muted h-32 rounded' />;
   return (
     <div
-      className="mermaid-block flex justify-center overflow-x-auto max-w-full rounded-lg border border-border bg-white dark:bg-muted/20 p-4 [&_svg]:max-w-full [&_svg]:h-auto"
+      className='mermaid-block flex justify-center overflow-x-auto max-w-full rounded-lg border border-border bg-white dark:bg-muted/20 p-4 [&_svg]:max-w-full [&_svg]:h-auto'
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

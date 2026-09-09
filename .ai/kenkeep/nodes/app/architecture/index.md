@@ -53,6 +53,7 @@ _None._
 - Open [**Use src/shared/types.ts as the single source of truth for shared types**](practice-use-src-shared-types-ts-as-the-single-source-of-truth-for-shared-types.md) — All main and renderer code imports shared types from src/shared/types.ts; never duplicate definitions.
 ### #electron
 - Open [**Two-process Electron architecture**](map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
+- Open [**Re-exec with headless Ozone for windowless subcommands**](../cli/practice-re-exec-with-headless-ozone-for-windowless-subcommands.md) — Packaged fuses disable RunAsNode, so ELECTRON_RUN_AS_NODE cannot make a subcommand headless; cli-dispatch re-execs.
 ### #imports
 - Open [**Do not import from @self-review/core in the react package**](../../packages/architecture/practice-do-not-import-from-self-review-core-in-the-react-package.md) — Importing core risks pulling Node-only code into the browser bundle.
 - Open [**Import only the compiled dist/styles.css from host apps**](../../packages/styling/practice-import-only-the-compiled-dist-styles-css-from-host-apps.md) — src/styles.css and src/build-styles.css are build inputs only; never import them.
@@ -69,6 +70,7 @@ _None._
 - Open [**Do not store renderer state outside React context**](practice-do-not-store-renderer-state-outside-react-context.md) — All review state (comments, suggestions, viewed flags) lives in React context; no localStorage or globals.
 ### #security
 - Open [**Never import electron directly in the renderer**](practice-never-import-electron-directly-in-the-renderer.md) — Renderer must only access IPC via the preload contextBridge electronAPI object.
+- Open [**Spawn git with an argv array, never a shell string**](../../engineering/practice-spawn-git-with-an-argv-array-never-a-shell-string.md) — Diff arguments reach git through execFile; joining argv into a command line let a command substitution run.
 ### #state
 - Open [**Do not store renderer state outside React context**](practice-do-not-store-renderer-state-outside-react-context.md) — All review state (comments, suggestions, viewed flags) lives in React context; no localStorage or globals.
 ### #types

@@ -84,12 +84,7 @@ export function DiffContentArea({
   }
 
   if (showImagePreview && renderViewMode === 'rendered') {
-    return (
-      <RenderedImageView
-        filePath={filePath ?? ''}
-        onLoadImage={adapter?.loadImage}
-      />
-    );
+    return <RenderedImageView filePath={filePath ?? ''} onLoadImage={adapter?.loadImage} />;
   }
 
   if (showSvgPreview && renderViewMode === 'rendered') {

@@ -85,7 +85,9 @@ Then(
   async ({}, toggleLabel: string, filePath: string) => {
     const page = getPage();
     const header = page.locator(`[data-testid="file-header-${filePath}"]`);
-    await expect(header.locator(`[aria-label="${toggleLabel} view"]`)).toBeVisible({ timeout: 5000 });
+    await expect(header.locator(`[aria-label="${toggleLabel} view"]`)).toBeVisible({
+      timeout: 5000,
+    });
   }
 );
 

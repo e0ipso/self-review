@@ -3,7 +3,13 @@ import type { Attachment } from '@self-review/types';
 import { Button } from '../ui/button';
 import { X, ImageIcon } from 'lucide-react';
 
-export default function AttachmentThumbnail({ attachment, onRemove }: { attachment: Attachment; onRemove: () => void }) {
+export default function AttachmentThumbnail({
+  attachment,
+  onRemove,
+}: {
+  attachment: Attachment;
+  onRemove: () => void;
+}) {
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -16,11 +22,7 @@ export default function AttachmentThumbnail({ attachment, onRemove }: { attachme
   return (
     <div className='relative group'>
       {url ? (
-        <img
-          src={url}
-          alt='Attachment preview'
-          className='h-16 w-16 object-cover rounded border'
-        />
+        <img src={url} alt='Attachment preview' className='h-16 w-16 object-cover rounded border' />
       ) : (
         <div className='h-16 w-16 flex items-center justify-center rounded border bg-muted'>
           <ImageIcon className='h-4 w-4 text-muted-foreground' />

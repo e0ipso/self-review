@@ -63,23 +63,20 @@ Then(
   }
 );
 
-Then(
-  'the diff viewer should show file sections in this order:',
-  async ({}, table: DataTable) => {
-    const page = getPage();
-    const expectedFiles = table.hashes().map(row => row.file);
-    const sections = page.locator('[data-testid^="file-section-"]');
-    const count = await sections.count();
-    const actualFiles: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const testId = await sections.nth(i).getAttribute('data-testid');
-      if (testId) {
-        actualFiles.push(testId.replace('file-section-', ''));
-      }
+Then('the diff viewer should show file sections in this order:', async ({}, table: DataTable) => {
+  const page = getPage();
+  const expectedFiles = table.hashes().map(row => row.file);
+  const sections = page.locator('[data-testid^="file-section-"]');
+  const count = await sections.count();
+  const actualFiles: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const testId = await sections.nth(i).getAttribute('data-testid');
+    if (testId) {
+      actualFiles.push(testId.replace('file-section-', ''));
     }
-    expect(actualFiles).toEqual(expectedFiles);
   }
-);
+  expect(actualFiles).toEqual(expectedFiles);
+});
 
 Then(
   'the file section for {string} should contain highlighted code lines',

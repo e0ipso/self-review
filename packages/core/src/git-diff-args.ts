@@ -7,12 +7,28 @@ import { resolve } from 'path';
 // Only options whose bare spelling consumes the next argument belong here.
 // Optional values (for example --color, --relative and -U) must be attached.
 const OPTIONS_WITH_SEPARATE_VALUES = new Set([
-  '--output', '--src-prefix', '--dst-prefix', '--line-prefix',
-  '--output-indicator-new', '--output-indicator-old', '--output-indicator-context',
-  '--inter-hunk-context', '--stat-width', '--stat-name-width', '--stat-graph-width',
-  '--stat-count', '--diff-algorithm', '--word-diff-regex', '--ignore-matching-lines',
-  '--anchored', '--diff-filter', '--find-object', '--rotate-to', '--skip-to',
-  '--ws-error-highlight', '--color-moved-ws',
+  '--output',
+  '--src-prefix',
+  '--dst-prefix',
+  '--line-prefix',
+  '--output-indicator-new',
+  '--output-indicator-old',
+  '--output-indicator-context',
+  '--inter-hunk-context',
+  '--stat-width',
+  '--stat-name-width',
+  '--stat-graph-width',
+  '--stat-count',
+  '--diff-algorithm',
+  '--word-diff-regex',
+  '--ignore-matching-lines',
+  '--anchored',
+  '--diff-filter',
+  '--find-object',
+  '--rotate-to',
+  '--skip-to',
+  '--ws-error-highlight',
+  '--color-moved-ws',
 ]);
 
 function consumesNextArgument(arg: string): boolean {
@@ -154,9 +170,5 @@ function needsQuoting(arg: string): boolean {
  * `git-diff-args` XML attribute does not change shape for them.
  */
 export function formatGitDiffArgs(args: string[]): string {
-  return args
-    .map(arg =>
-      needsQuoting(arg) ? `'${arg.replace(/'/g, "'\\''")}'` : arg
-    )
-    .join(' ');
+  return args.map(arg => (needsQuoting(arg) ? `'${arg.replace(/'/g, "'\\''")}'` : arg)).join(' ');
 }

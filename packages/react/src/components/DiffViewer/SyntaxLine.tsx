@@ -80,10 +80,7 @@ const SyntaxLine = React.memo(function SyntaxLine({
   lineType: _lineType,
   wordWrap,
 }: SyntaxLineProps) {
-  const html = useMemo(
-    () => highlight(Prism, content, language),
-    [content, language],
-  );
+  const html = useMemo(() => highlight(Prism, content, language), [content, language]);
 
   return (
     <code

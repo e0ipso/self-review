@@ -93,14 +93,17 @@ export default function ReplyDisplay({ commentId, reply }: ReplyDisplayProps) {
       </div>
 
       <div className={`px-3 pb-2 text-sm text-foreground leading-relaxed ${PROSE_CLASSES}`}>
-        <ReactMarkdown urlTransform={localContentUrlTransform} remarkPlugins={[remarkGfm, remarkEmoji]}>
+        <ReactMarkdown
+          urlTransform={localContentUrlTransform}
+          remarkPlugins={[remarkGfm, remarkEmoji]}
+        >
           {reply.body}
         </ReactMarkdown>
       </div>
 
       {reply.attachments && reply.attachments.length > 0 && (
         <div className='flex gap-2 flex-wrap px-3 pb-2'>
-          {reply.attachments.map((att) => (
+          {reply.attachments.map(att => (
             <AttachmentImage key={att.id} attachment={att} />
           ))}
         </div>

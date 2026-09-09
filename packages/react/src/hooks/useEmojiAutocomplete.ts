@@ -12,19 +12,35 @@ const TRIGGER_REGEX = /:(\w{2,})$/;
 
 function getCaretPosition(
   textarea: HTMLTextAreaElement,
-  cursorPos: number,
+  cursorPos: number
 ): { top: number; left: number } {
   const mirror = document.createElement('div');
   const style = window.getComputedStyle(textarea);
 
   // Copy relevant styles to mirror
   const stylesToCopy = [
-    'font-family', 'font-size', 'font-weight', 'font-style',
-    'letter-spacing', 'line-height', 'text-transform', 'word-spacing',
-    'text-indent', 'white-space', 'word-wrap', 'overflow-wrap',
-    'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-    'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
-    'box-sizing', 'width',
+    'font-family',
+    'font-size',
+    'font-weight',
+    'font-style',
+    'letter-spacing',
+    'line-height',
+    'text-transform',
+    'word-spacing',
+    'text-indent',
+    'white-space',
+    'word-wrap',
+    'overflow-wrap',
+    'padding-top',
+    'padding-right',
+    'padding-bottom',
+    'padding-left',
+    'border-top-width',
+    'border-right-width',
+    'border-bottom-width',
+    'border-left-width',
+    'box-sizing',
+    'width',
   ];
 
   for (const prop of stylesToCopy) {
@@ -67,7 +83,7 @@ export interface UseEmojiAutocompleteReturn {
 export function useEmojiAutocomplete(
   body: string,
   setBody: (value: string) => void,
-  containerRef: React.RefObject<HTMLDivElement | null>,
+  containerRef: React.RefObject<HTMLDivElement | null>
 ): UseEmojiAutocompleteReturn {
   const [state, setState] = useState<EmojiAutocompleteState>({
     isOpen: false,
@@ -80,12 +96,11 @@ export function useEmojiAutocomplete(
   const colonPosRef = useRef<number>(-1);
 
   useEffect(() => {
-    const textarea = containerRef.current?.querySelector<HTMLTextAreaElement>(
-      '.w-md-editor-text-input',
-    );
+    const textarea =
+      containerRef.current?.querySelector<HTMLTextAreaElement>('.w-md-editor-text-input');
     if (!textarea) {
       if (state.isOpen) {
-        setState((prev) => ({ ...prev, isOpen: false, results: [] }));
+        setState(prev => ({ ...prev, isOpen: false, results: [] }));
       }
       return;
     }
@@ -110,25 +125,27 @@ export function useEmojiAutocomplete(
           results,
           selectedIndex: 0,
           position: {
-            top: caretPos.top + (textareaRect.top - containerRect.top) + parseFloat(getComputedStyle(textarea).lineHeight || '20'),
+            top:
+              caretPos.top +
+              (textareaRect.top - containerRect.top) +
+              parseFloat(getComputedStyle(textarea).lineHeight || '20'),
             left: caretPos.left + (textareaRect.left - containerRect.left),
           },
         });
       } else {
-        setState((prev) => ({ ...prev, isOpen: false, results: [] }));
+        setState(prev => ({ ...prev, isOpen: false, results: [] }));
       }
     } else {
       if (state.isOpen) {
-        setState((prev) => ({ ...prev, isOpen: false, results: [] }));
+        setState(prev => ({ ...prev, isOpen: false, results: [] }));
       }
     }
   }, [body, containerRef]);
 
   const selectEmoji = useCallback(
     (emoji: EmojiMatch) => {
-      const textarea = containerRef.current?.querySelector<HTMLTextAreaElement>(
-        '.w-md-editor-text-input',
-      );
+      const textarea =
+        containerRef.current?.querySelector<HTMLTextAreaElement>('.w-md-editor-text-input');
       if (!textarea) return;
 
       const cursorPos = textarea.selectionStart;
@@ -143,9 +160,8 @@ export function useEmojiAutocomplete(
       // Restore cursor position after the emoji
       const newCursorPos = colonIndex + emoji.native.length;
       requestAnimationFrame(() => {
-        const ta = containerRef.current?.querySelector<HTMLTextAreaElement>(
-          '.w-md-editor-text-input',
-        );
+        const ta =
+          containerRef.current?.querySelector<HTMLTextAreaElement>('.w-md-editor-text-input');
         if (ta) {
           ta.selectionStart = newCursorPos;
           ta.selectionEnd = newCursorPos;
@@ -153,13 +169,13 @@ export function useEmojiAutocomplete(
         }
       });
 
-      setState((prev) => ({ ...prev, isOpen: false, results: [] }));
+      setState(prev => ({ ...prev, isOpen: false, results: [] }));
     },
-    [body, setBody, containerRef],
+    [body, setBody, containerRef]
   );
 
   const setSelectedIndex = useCallback((index: number) => {
-    setState((prev) => ({ ...prev, selectedIndex: index }));
+    setState(prev => ({ ...prev, selectedIndex: index }));
   }, []);
 
   const onKeyDown = useCallback(
@@ -168,7 +184,7 @@ export function useEmojiAutocomplete(
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setState((prev) => ({
+        setState(prev => ({
           ...prev,
           selectedIndex: (prev.selectedIndex + 1) % prev.results.length,
         }));
@@ -177,11 +193,9 @@ export function useEmojiAutocomplete(
 
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setState((prev) => ({
+        setState(prev => ({
           ...prev,
-          selectedIndex:
-            (prev.selectedIndex - 1 + prev.results.length) %
-            prev.results.length,
+          selectedIndex: (prev.selectedIndex - 1 + prev.results.length) % prev.results.length,
         }));
         return true;
       }
@@ -196,13 +210,13 @@ export function useEmojiAutocomplete(
 
       if (e.key === 'Escape') {
         e.preventDefault();
-        setState((prev) => ({ ...prev, isOpen: false, results: [] }));
+        setState(prev => ({ ...prev, isOpen: false, results: [] }));
         return true;
       }
 
       return false;
     },
-    [state.isOpen, state.results, state.selectedIndex, selectEmoji],
+    [state.isOpen, state.results, state.selectedIndex, selectEmoji]
   );
 
   return {

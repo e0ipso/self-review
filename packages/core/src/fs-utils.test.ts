@@ -44,9 +44,6 @@ describe('checkWritability', () => {
 
     checkWritability('/home/user/projects/output.xml');
 
-    expect(fs.accessSync).toHaveBeenCalledWith(
-      '/home/user/projects',
-      fs.constants.W_OK
-    );
+    expect(fs.accessSync).toHaveBeenCalledWith('/home/user/projects', fs.constants.W_OK);
   });
 });

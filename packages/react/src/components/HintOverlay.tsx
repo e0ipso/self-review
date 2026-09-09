@@ -13,14 +13,13 @@ interface HintOverlayProps {
 }
 
 export function HintOverlay({ hints, inputBuffer }: HintOverlayProps) {
-  const visibleHints = inputBuffer
-    ? hints.filter((h) => h.label.startsWith(inputBuffer))
-    : hints;
+  const visibleHints = inputBuffer ? hints.filter(h => h.label.startsWith(inputBuffer)) : hints;
 
   if (visibleHints.length === 0) return null;
 
   return createPortal(
     <div
+      data-testid='hint-overlay'
       style={{
         position: 'fixed',
         inset: 0,
@@ -28,9 +27,10 @@ export function HintOverlay({ hints, inputBuffer }: HintOverlayProps) {
         zIndex: 9999,
       }}
     >
-      {visibleHints.map((hint) => (
+      {visibleHints.map(hint => (
         <span
           key={hint.label}
+          data-testid={`hint-label-${hint.label}`}
           style={{
             position: 'absolute',
             left: hint.rect.left,
@@ -46,9 +46,7 @@ export function HintOverlay({ hints, inputBuffer }: HintOverlayProps) {
             zIndex: 9999,
           }}
         >
-          <span style={{ opacity: 0.4 }}>
-            {hint.label.slice(0, inputBuffer.length)}
-          </span>
+          <span style={{ opacity: 0.4 }}>{hint.label.slice(0, inputBuffer.length)}</span>
           <span>{hint.label.slice(inputBuffer.length)}</span>
         </span>
       ))}

@@ -139,10 +139,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
  * keeps a resumed review serializable, since the serializer validates its
  * output against the XSD before writing.
  */
-function parseEnumAttribute<T extends string>(
-  raw: unknown,
-  allowed: readonly T[]
-): T | undefined {
+function parseEnumAttribute<T extends string>(raw: unknown, allowed: readonly T[]): T | undefined {
   if (raw === undefined || raw === null) return undefined;
   const value = String(raw);
   return allowed.includes(value as T) ? (value as T) : undefined;
@@ -189,11 +186,9 @@ function parseSource(review: Record<string, unknown>): DiffSource {
 
 function parseLineRange(comment: Record<string, unknown>): LineRange | null {
   const hasOld =
-    comment['@_old-line-start'] !== undefined &&
-    comment['@_old-line-end'] !== undefined;
+    comment['@_old-line-start'] !== undefined && comment['@_old-line-end'] !== undefined;
   const hasNew =
-    comment['@_new-line-start'] !== undefined &&
-    comment['@_new-line-end'] !== undefined;
+    comment['@_new-line-start'] !== undefined && comment['@_new-line-end'] !== undefined;
 
   if (hasOld) {
     return {

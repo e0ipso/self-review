@@ -58,10 +58,7 @@ vi.mock('./FileSectionBody', () => ({
   ),
 }));
 
-function makeDiffFile(
-  filePath: string,
-  overrides: Partial<DiffFile> = {},
-): DiffFile {
+function makeDiffFile(filePath: string, overrides: Partial<DiffFile> = {}): DiffFile {
   return {
     oldPath: filePath,
     newPath: filePath,
@@ -107,7 +104,7 @@ describe('FileSection preview eligibility', () => {
 
   it('does not make non-added HTML files previewable', () => {
     const { header, body } = renderFileSection(
-      makeDiffFile('index.html', { changeType: 'modified' }),
+      makeDiffFile('index.html', { changeType: 'modified' })
     );
 
     expect(header.getAttribute('data-previewable')).toBe('false');

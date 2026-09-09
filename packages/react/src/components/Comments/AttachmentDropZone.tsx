@@ -18,58 +18,71 @@ export function AttachmentDropZone({
 }: AttachmentDropZoneProps) {
   const dragCounter = useRef(0);
 
-  const handleImageFiles = useCallback(async (files: (File | Blob)[]) => {
-    try {
-      const newAttachments = await Promise.all(files.map(processImageFile));
-      onAttach(newAttachments);
-    } catch (err) {
-      console.error('Failed to attach image:', err);
-    }
-  }, [onAttach]);
+  const handleImageFiles = useCallback(
+    async (files: (File | Blob)[]) => {
+      try {
+        const newAttachments = await Promise.all(files.map(processImageFile));
+        onAttach(newAttachments);
+      } catch (err) {
+        console.error('Failed to attach image:', err);
+      }
+    },
+    [onAttach]
+  );
 
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = Array.from(e.clipboardData.items);
-    const imageItems = items.filter(item => item.type.startsWith('image/'));
-    if (imageItems.length === 0) return;
-    e.preventDefault();
-    const files = imageItems
-      .map(item => item.getAsFile())
-      .filter((f): f is File => f !== null);
-    if (files.length > 0) {
-      handleImageFiles(files);
-    }
-  }, [handleImageFiles]);
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = Array.from(e.clipboardData.items);
+      const imageItems = items.filter(item => item.type.startsWith('image/'));
+      if (imageItems.length === 0) return;
+      e.preventDefault();
+      const files = imageItems.map(item => item.getAsFile()).filter((f): f is File => f !== null);
+      if (files.length > 0) {
+        handleImageFiles(files);
+      }
+    },
+    [handleImageFiles]
+  );
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current = 0;
-    onDragChange(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    if (files.length === 0) return;
-    handleImageFiles(files);
-  }, [handleImageFiles, onDragChange]);
-
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current++;
-    if (e.dataTransfer.types.includes('Files')) {
-      onDragChange(true);
-    }
-  }, [onDragChange]);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current--;
-    if (dragCounter.current === 0) {
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      dragCounter.current = 0;
       onDragChange(false);
-    }
-  }, [onDragChange]);
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      if (files.length === 0) return;
+      handleImageFiles(files);
+    },
+    [handleImageFiles, onDragChange]
+  );
+
+  const handleDragEnter = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      dragCounter.current++;
+      if (e.dataTransfer.types.includes('Files')) {
+        onDragChange(true);
+      }
+    },
+    [onDragChange]
+  );
+
+  const handleDragLeave = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      dragCounter.current--;
+      if (dragCounter.current === 0) {
+        onDragChange(false);
+      }
+    },
+    [onDragChange]
+  );
 
   return (
     <div
       onPaste={handlePaste}
       onDrop={handleDrop}
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={e => e.preventDefault()}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
     >

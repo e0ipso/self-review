@@ -4,16 +4,12 @@ import type { DiffFile, DiffHunk, LineRange } from '@self-review/types';
  * Extract the original code content for a given line range from a DiffFile.
  * Used to provide originalCode for the Suggest feature in both SplitView and UnifiedView.
  */
-export function extractOriginalCode(
-  file: DiffFile,
-  lineRange: LineRange
-): string | undefined {
+export function extractOriginalCode(file: DiffFile, lineRange: LineRange): string | undefined {
   const { start, end, side } = lineRange;
   const lines: string[] = [];
   for (const hunk of file.hunks) {
     for (const line of hunk.lines) {
-      const lineNum =
-        side === 'old' ? line.oldLineNumber : line.newLineNumber;
+      const lineNum = side === 'old' ? line.oldLineNumber : line.newLineNumber;
       if (lineNum !== null && lineNum >= start && lineNum <= end) {
         lines.push(line.content);
       }
@@ -36,8 +32,10 @@ export interface HunkContextBudget {
 
 /** Extract the line number ranges of non-context (changed) lines in a hunk. */
 export function getHunkChangeRange(hunk: DiffHunk): HunkChangeRange {
-  let minOld = Infinity, maxOld = -Infinity;
-  let minNew = Infinity, maxNew = -Infinity;
+  let minOld = Infinity,
+    maxOld = -Infinity;
+  let minNew = Infinity,
+    maxNew = -Infinity;
   for (const line of hunk.lines) {
     if (line.type === 'context') continue;
     if (line.oldLineNumber !== null) {
@@ -79,12 +77,20 @@ export function countTrailingContext(hunk: DiffHunk): number {
 function hunkContainsRange(hunk: DiffHunk, range: HunkChangeRange): boolean {
   for (const line of hunk.lines) {
     if (line.type === 'context') continue;
-    if (range.oldRange && line.oldLineNumber !== null &&
-        line.oldLineNumber >= range.oldRange[0] && line.oldLineNumber <= range.oldRange[1]) {
+    if (
+      range.oldRange &&
+      line.oldLineNumber !== null &&
+      line.oldLineNumber >= range.oldRange[0] &&
+      line.oldLineNumber <= range.oldRange[1]
+    ) {
       return true;
     }
-    if (range.newRange && line.newLineNumber !== null &&
-        line.newLineNumber >= range.newRange[0] && line.newLineNumber <= range.newRange[1]) {
+    if (
+      range.newRange &&
+      line.newLineNumber !== null &&
+      line.newLineNumber >= range.newRange[0] &&
+      line.newLineNumber <= range.newRange[1]
+    ) {
       return true;
     }
   }
@@ -103,7 +109,7 @@ function hunkContainsRange(hunk: DiffHunk, range: HunkChangeRange): boolean {
 export function trimHunkContext(
   expandedHunks: DiffHunk[],
   originalRanges: HunkChangeRange[],
-  budgets: HunkContextBudget[],
+  budgets: HunkContextBudget[]
 ): DiffHunk[] {
   return expandedHunks.map(hunk => {
     // Find which original hunks this expanded hunk contains
@@ -133,7 +139,8 @@ export function trimHunkContext(
     if (trimmedLines.length === 0) return hunk;
 
     // Recompute hunk metadata from actual trimmed lines
-    let newOldLines = 0, newNewLines = 0;
+    let newOldLines = 0,
+      newNewLines = 0;
     for (const line of trimmedLines) {
       if (line.type === 'context' || line.type === 'deletion') newOldLines++;
       if (line.type === 'context' || line.type === 'addition') newNewLines++;

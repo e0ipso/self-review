@@ -19,9 +19,7 @@ class MockIntersectionObserver implements IntersectionObserver {
 }
 
 export function installBrowserApiStubs(): void {
-  (
-    globalThis as { IntersectionObserver: typeof IntersectionObserver }
-  ).IntersectionObserver =
+  (globalThis as { IntersectionObserver: typeof IntersectionObserver }).IntersectionObserver =
     MockIntersectionObserver as unknown as typeof IntersectionObserver;
 
   if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {

@@ -58,10 +58,7 @@ export function quoteGitPath(path: string): string {
  * @param rootDir - Absolute path to the root directory the paths are relative to
  * @returns A unified diff string covering all provided files
  */
-export function generateSyntheticDiffs(
-  paths: string[],
-  rootDir: string
-): string {
+export function generateSyntheticDiffs(paths: string[], rootDir: string): string {
   const diffs: string[] = [];
 
   for (const filePath of paths) {

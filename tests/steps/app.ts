@@ -2,11 +2,7 @@
  * Shared Electron app management for E2E tests.
  * Provides helpers to launch/close the app and capture stdout/stderr.
  */
-import {
-  _electron as electron,
-  ElectronApplication,
-  Page,
-} from '@playwright/test';
+import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
 import { ChildProcess, spawn, execSync } from 'child_process';
 import * as path from 'path';
 import { rmSync, existsSync, readFileSync } from 'fs';
@@ -157,9 +153,7 @@ async function launchAppWithRetry(
     }
 
     process.stderr.write(`\n[launchApp failed] ${error}\n`);
-    process.stderr.write(
-      `[stderr from Electron] ${stderrData.slice(0, 1000)}\n`
-    );
+    process.stderr.write(`[stderr from Electron] ${stderrData.slice(0, 1000)}\n`);
     throw error;
   }
 }
@@ -177,15 +171,11 @@ export async function launchAppExpectExit(
   resetState();
 
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn(
-      ELECTRON_BIN,
-      [...CHROMIUM_FLAGS, getMainBundle(), ...cliArgs],
-      {
-        cwd,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, NODE_ENV: 'test' },
-      }
-    );
+    const proc = spawn(ELECTRON_BIN, [...CHROMIUM_FLAGS, getMainBundle(), ...cliArgs], {
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, NODE_ENV: 'test' },
+    });
 
     const timer = setTimeout(() => {
       proc.kill();
@@ -348,9 +338,7 @@ export async function triggerCommentIcon(
 ): Promise<void> {
   const page = getPage();
   const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-  const gutter = section.locator(
-    `[data-testid="${side}-line-${filePath}-${line}"]`
-  );
+  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${line}"]`);
   await gutter.hover();
   const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
   await icon.waitFor({ state: 'visible', timeout: 5000 });
@@ -359,12 +347,8 @@ export async function triggerCommentIcon(
   // There's no observable intermediate DOM state between mousedown and mouseup,
   // so a short fixed delay is appropriate here.
   await page.waitForTimeout(150);
-  await page.evaluate(() =>
-    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-  );
-  await page
-    .locator('[data-testid="comment-input"]')
-    .waitFor({ state: 'visible', timeout: 5000 });
+  await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
+  await page.locator('[data-testid="comment-input"]').waitFor({ state: 'visible', timeout: 5000 });
 }
 
 /**

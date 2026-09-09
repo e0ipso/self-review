@@ -12,16 +12,12 @@ export interface DiffNavigationContextValue {
   scrollToFile: (filePath: string) => void;
 }
 
-const DiffNavigationContext = createContext<DiffNavigationContextValue | null>(
-  null
-);
+const DiffNavigationContext = createContext<DiffNavigationContextValue | null>(null);
 
 export function useDiffNavigationContext(): DiffNavigationContextValue {
   const context = useContext(DiffNavigationContext);
   if (!context) {
-    throw new Error(
-      'useDiffNavigationContext must be used within a DiffNavigationProvider'
-    );
+    throw new Error('useDiffNavigationContext must be used within a DiffNavigationProvider');
   }
   return context;
 }
@@ -39,12 +35,8 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
   const scrollToFile = useCallback((filePath: string) => {
-    const scrollContainer = document.querySelector(
-      '[data-scroll-container="diff"]'
-    );
-    const element = scrollContainer?.querySelector(
-      `[data-file-path="${filePath}"]`
-    );
+    const scrollContainer = document.querySelector('[data-scroll-container="diff"]');
+    const element = scrollContainer?.querySelector(`[data-file-path="${filePath}"]`);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -66,7 +58,9 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
         });
 
         if (mostVisible && (mostVisible as IntersectionObserverEntry).isIntersecting) {
-          const filePath = (mostVisible as IntersectionObserverEntry).target.getAttribute('data-file-path');
+          const filePath = (mostVisible as IntersectionObserverEntry).target.getAttribute(
+            'data-file-path'
+          );
           if (filePath) {
             setActiveFilePath(filePath);
           }
@@ -80,9 +74,7 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
 
     // Observe file sections within the diff viewer only
     const observeElements = () => {
-      const scrollContainer = document.querySelector(
-        '[data-scroll-container="diff"]'
-      );
+      const scrollContainer = document.querySelector('[data-scroll-container="diff"]');
       if (!scrollContainer) return;
       const elements = scrollContainer.querySelectorAll('[data-file-path]');
       elements.forEach(el => observer.observe(el));

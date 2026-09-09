@@ -37,9 +37,7 @@ export function FileTreeEntry({
           data-file-path={filePath}
           onClick={() => onScrollToFile(filePath)}
           className={`w-full text-left px-2 py-1.5 rounded-md transition-colors cursor-pointer ${
-            isActive
-              ? 'bg-accent text-accent-foreground'
-              : 'hover:bg-accent/50 text-foreground'
+            isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50 text-foreground'
           }`}
         >
           <div className='flex items-center gap-1.5 min-w-0'>
@@ -68,9 +66,7 @@ export function FileTreeEntry({
               {commentCount > 0 && (
                 <span className='inline-flex items-center gap-0.5 text-muted-foreground'>
                   <MessageSquare className='h-3 w-3' />
-                  <span className='text-[10px] tabular-nums'>
-                    {commentCount}
-                  </span>
+                  <span className='text-[10px] tabular-nums'>{commentCount}</span>
                 </span>
               )}
               <Tooltip>

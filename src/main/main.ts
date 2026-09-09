@@ -60,9 +60,7 @@ declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 // Install signal handlers FIRST, before any app initialization
 process.on('SIGTRAP', () => {
-  console.error(
-    '[main] SIGTRAP received (debugger signal) - exiting gracefully'
-  );
+  console.error('[main] SIGTRAP received (debugger signal) - exiting gracefully');
   process.exit(0); // Exit 0 since SIGTRAP is from Playwright debugger, not an error
 });
 
@@ -166,7 +164,12 @@ async function initializeApp() {
     appConfig = loadConfig();
     currentOutputPath = resolve(process.cwd(), appConfig.outputFile);
     outputPathWritable = checkWritability(currentOutputPath);
-    console.error('[main] Config loaded, output path:', currentOutputPath, 'writable:', outputPathWritable);
+    console.error(
+      '[main] Config loaded, output path:',
+      currentOutputPath,
+      'writable:',
+      outputPathWritable
+    );
 
     // Phase 3: Determine git diff args
     let gitDiffArgs = cliArgs.gitDiffArgs;
@@ -329,10 +332,7 @@ async function initializeApp() {
     let remoteDrift: RemoteDriftInfo | null = null;
     if (remoteSessionInfo) {
       resumeComments = mergeRemoteThreads(resumeComments, fetchedRemoteComments);
-      remoteDrift = computeRemoteDrift(
-        resumeRemoteHeadSha,
-        remoteSessionInfo.remoteHeadSha
-      );
+      remoteDrift = computeRemoteDrift(resumeRemoteHeadSha, remoteSessionInfo.remoteHeadSha);
       if (remoteDrift?.drifted) {
         console.error(
           `[main] Remote head drift detected: reviewed ${remoteDrift.recordedHeadSha}, live ${remoteDrift.liveHeadSha}`
@@ -359,11 +359,7 @@ async function initializeApp() {
     setDiffData(diffData);
     setConfigData(appConfig);
     setOutputPathInfo({ resolvedOutputPath: currentOutputPath, outputPathWritable });
-    if (
-      resumeComments.length > 0 ||
-      resumeViewedFiles.length > 0 ||
-      remoteDrift !== null
-    ) {
+    if (resumeComments.length > 0 || resumeViewedFiles.length > 0 || remoteDrift !== null) {
       setResumeData(resumeComments, resumeViewedFiles, remoteDrift);
     }
 
@@ -478,87 +474,80 @@ function createWindow(): void {
 
   // Start a remote PR/MR session from a renderer-supplied URL (the welcome
   // screen's URL field). Shares the bootstrap with the CLI URL path.
-  ipcMain.handle(
-    IPC.REMOTE_OPEN_URL,
-    async (event, url: string): Promise<RemoteOpenUrlResult> => {
-      try {
-        console.error('[main] Remote URL open requested:', url);
-        const { session, payload } = await bootstrapRemoteDiff(
-          url,
-          process.cwd(),
-          appConfig?.ignore ?? []
+  ipcMain.handle(IPC.REMOTE_OPEN_URL, async (event, url: string): Promise<RemoteOpenUrlResult> => {
+    try {
+      console.error('[main] Remote URL open requested:', url);
+      const { session, payload } = await bootstrapRemoteDiff(
+        url,
+        process.cwd(),
+        appConfig?.ignore ?? []
+      );
+
+      // Large payload guard, matching the startup path.
+      if (appConfig) {
+        const stats = computePayloadStats(
+          payload.files.length,
+          countTotalLines(payload.files),
+          appConfig
         );
-
-        // Large payload guard, matching the startup path.
-        if (appConfig) {
-          const stats = computePayloadStats(
-            payload.files.length,
-            countTotalLines(payload.files),
-            appConfig
-          );
-          if (stats.exceedsAny) {
-            const result = dialog.showMessageBoxSync({
-              type: 'warning',
-              buttons: ['Continue', 'Cancel'],
-              defaultId: 1,
-              title: 'Large Review Detected',
-              message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
-              detail: `Thresholds: ${appConfig.maxFiles} files, ${appConfig.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
-            });
-            if (result === 1) {
-              console.error('[main] User cancelled large remote review');
-              session.cleanup();
-              return { ok: false, error: 'Review cancelled.' };
-            }
-            payload.isLargePayload = true;
+        if (stats.exceedsAny) {
+          const result = dialog.showMessageBoxSync({
+            type: 'warning',
+            buttons: ['Continue', 'Cancel'],
+            defaultId: 1,
+            title: 'Large Review Detected',
+            message: `This review contains ${stats.fileCount} files and approximately ${stats.totalLines} lines.`,
+            detail: `Thresholds: ${appConfig.maxFiles} files, ${appConfig.maxTotalLines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?`,
+          });
+          if (result === 1) {
+            console.error('[main] User cancelled large remote review');
+            session.cleanup();
+            return { ok: false, error: 'Review cancelled.' };
           }
+          payload.isLargePayload = true;
         }
-
-        remoteCleanup = session.cleanup;
-        remoteSessionInfo = session.remote;
-        setDiffData(payload);
-        setResumeData(session.fetchedComments, [], null);
-
-        // Guide sidecar discovery for the welcome→remote path: startup
-        // discovery ran against the welcome payload and skipped, so run it
-        // now against the remote diff (same tolerant, never-fatal contract).
-        const guidePayload = appConfig
-          ? await loadGuide(
-              currentOutputPath,
-              appConfig,
-              payload.files.map(f => f.newPath || f.oldPath)
-            )
-          : null;
-        setGuideData(guidePayload);
-        if (guidePayload) {
-          console.error(
-            '[main] Walkthrough guide loaded:',
-            guidePayload.groups.length,
-            'groups'
-          );
-        }
-
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) {
-          sendDiffLoad(win, payload);
-          if (guidePayload) {
-            sendGuideLoad(win, guidePayload);
-          }
-          if (session.fetchedComments.length > 0) {
-            sendResumeLoad(win, {
-              comments: session.fetchedComments,
-              viewedFiles: [],
-            });
-          }
-        }
-        return { ok: true };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error('[main] Failed to open remote URL:', message);
-        return { ok: false, error: message };
       }
+
+      remoteCleanup = session.cleanup;
+      remoteSessionInfo = session.remote;
+      setDiffData(payload);
+      setResumeData(session.fetchedComments, [], null);
+
+      // Guide sidecar discovery for the welcome→remote path: startup
+      // discovery ran against the welcome payload and skipped, so run it
+      // now against the remote diff (same tolerant, never-fatal contract).
+      const guidePayload = appConfig
+        ? await loadGuide(
+            currentOutputPath,
+            appConfig,
+            payload.files.map(f => f.newPath || f.oldPath)
+          )
+        : null;
+      setGuideData(guidePayload);
+      if (guidePayload) {
+        console.error('[main] Walkthrough guide loaded:', guidePayload.groups.length, 'groups');
+      }
+
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) {
+        sendDiffLoad(win, payload);
+        if (guidePayload) {
+          sendGuideLoad(win, guidePayload);
+        }
+        if (session.fetchedComments.length > 0) {
+          sendResumeLoad(win, {
+            comments: session.fetchedComments,
+            viewedFiles: [],
+          });
+        }
+      }
+      return { ok: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[main] Failed to open remote URL:', message);
+      return { ok: false, error: message };
     }
-  );
+  });
 
   // Handle output path change via native save dialog
   ipcMain.handle(IPC.OUTPUT_PATH_CHANGE, async (): Promise<OutputPathInfo | null> => {
@@ -574,7 +563,12 @@ function createWindow(): void {
 
     currentOutputPath = result.filePath;
     outputPathWritable = checkWritability(currentOutputPath);
-    console.error('[main] Output path changed to:', currentOutputPath, 'writable:', outputPathWritable);
+    console.error(
+      '[main] Output path changed to:',
+      currentOutputPath,
+      'writable:',
+      outputPathWritable
+    );
 
     const info: OutputPathInfo = { resolvedOutputPath: currentOutputPath, outputPathWritable };
     mainWindow.webContents.send(IPC.OUTPUT_PATH_CHANGED, info);

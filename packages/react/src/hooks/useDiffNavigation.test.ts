@@ -13,10 +13,7 @@ class MockIntersectionObserver implements IntersectionObserver {
   readonly rootMargin: string = '';
   readonly thresholds: ReadonlyArray<number> = [];
 
-  constructor(
-    callback: IntersectionObserverCallback,
-    options?: IntersectionObserverInit
-  ) {
+  constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
     intersectionCallback = callback;
     this.rootMargin = options?.rootMargin || '';
     this.thresholds = Array.isArray(options?.threshold)

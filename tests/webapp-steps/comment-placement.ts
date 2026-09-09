@@ -34,23 +34,17 @@ export interface CommentPlacement {
 export function readCommentPlacement(commentEl: Element): CommentPlacement {
   const carriesLine = (node: Element | null): boolean =>
     node !== null &&
-    (node.hasAttribute('data-line-number') ||
-      node.querySelector('[data-line-number]') !== null);
+    (node.hasAttribute('data-line-number') || node.querySelector('[data-line-number]') !== null);
 
   const section = commentEl.closest('[data-testid^="file-section-"]');
 
   // Stop at the section boundary. The previous file section is full of rows,
   // and walking into it would report a neighbouring file's lines as the anchor.
   let node: Element | null = commentEl;
-  while (
-    node !== null &&
-    node !== section &&
-    !carriesLine(node.previousElementSibling)
-  ) {
+  while (node !== null && node !== section && !carriesLine(node.previousElementSibling)) {
     node = node.parentElement;
   }
-  const row =
-    node === null || node === section ? null : node.previousElementSibling;
+  const row = node === null || node === section ? null : node.previousElementSibling;
   const pairs: { line: number; side: string }[] = [];
   if (row !== null) {
     const cells = row.hasAttribute('data-line-number')
@@ -67,9 +61,7 @@ export function readCommentPlacement(commentEl: Element): CommentPlacement {
     // recovers the old coordinate a comment on a deleted-side context line
     // anchors to.
     for (const gutter of Array.from(row.querySelectorAll('[data-testid]'))) {
-      const match = /^(old|new)-line-.+-(\d+)$/.exec(
-        gutter.getAttribute('data-testid') || ''
-      );
+      const match = /^(old|new)-line-.+-(\d+)$/.exec(gutter.getAttribute('data-testid') || '');
       if (match === null) continue;
       const pair = { line: Number(match[2]), side: match[1] };
       if (!pairs.some(p => p.line === pair.line && p.side === pair.side)) {
@@ -77,20 +69,14 @@ export function readCommentPlacement(commentEl: Element): CommentPlacement {
       }
     }
   }
-  const firstRow =
-    section === null ? null : section.querySelector('[data-line-number]');
+  const firstRow = section === null ? null : section.querySelector('[data-line-number]');
 
   return {
     section: section === null ? null : section.getAttribute('data-testid'),
     anchors: pairs,
     aboveDiffRows:
       firstRow !== null &&
-      (commentEl.compareDocumentPosition(firstRow) &
-        Node.DOCUMENT_POSITION_FOLLOWING) !==
-        0,
-    orphaned:
-      commentEl.closest(
-        'section[aria-label="Comments outside the current diff"]'
-      ) !== null,
+      (commentEl.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+    orphaned: commentEl.closest('section[aria-label="Comments outside the current diff"]') !== null,
   };
 }

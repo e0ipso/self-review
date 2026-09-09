@@ -26,17 +26,12 @@ const toggleGroupItemVariants = cva(
   }
 );
 
-const ToggleGroupContext = React.createContext<
-  VariantProps<typeof toggleGroupItemVariants>
->({
+const ToggleGroupContext = React.createContext<VariantProps<typeof toggleGroupItemVariants>>({
   size: 'default',
   variant: 'default',
 });
 
-interface ToggleGroupProps extends Omit<
-  React.HTMLAttributes<HTMLDivElement>,
-  'defaultValue'
-> {
+interface ToggleGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'defaultValue'> {
   type?: 'single' | 'multiple';
   variant?: VariantProps<typeof toggleGroupItemVariants>['variant'];
   size?: VariantProps<typeof toggleGroupItemVariants>['size'];
@@ -80,10 +75,7 @@ const ToggleGroup = React.forwardRef<HTMLDivElement, ToggleGroupProps>(
         value={baseValue}
         defaultValue={baseDefaultValue}
         onValueChange={handleValueChange}
-        className={cn(
-          'inline-flex -space-x-px rounded-md shadow-sm',
-          className
-        )}
+        className={cn('inline-flex -space-x-px rounded-md shadow-sm', className)}
         {...props}
       >
         <ToggleGroupContext.Provider value={{ variant, size }}>
@@ -102,27 +94,26 @@ interface ToggleGroupItemProps
   value: string;
 }
 
-const ToggleGroupItem = React.forwardRef<
-  HTMLButtonElement,
-  ToggleGroupItemProps
->(({ className, children, variant, size, ...props }, ref) => {
-  const context = React.useContext(ToggleGroupContext);
-  return (
-    <Toggle
-      ref={ref}
-      className={cn(
-        toggleGroupItemVariants({
-          variant: variant || context.variant,
-          size: size || context.size,
-        }),
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </Toggle>
-  );
-});
+const ToggleGroupItem = React.forwardRef<HTMLButtonElement, ToggleGroupItemProps>(
+  ({ className, children, variant, size, ...props }, ref) => {
+    const context = React.useContext(ToggleGroupContext);
+    return (
+      <Toggle
+        ref={ref}
+        className={cn(
+          toggleGroupItemVariants({
+            variant: variant || context.variant,
+            size: size || context.size,
+          }),
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </Toggle>
+    );
+  }
+);
 ToggleGroupItem.displayName = 'ToggleGroupItem';
 
 export { ToggleGroup, ToggleGroupItem };

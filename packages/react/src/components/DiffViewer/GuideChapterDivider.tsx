@@ -1,10 +1,7 @@
 import React from 'react';
 import { useReview } from '../../context/ReviewContext';
 import { getGuideAccent } from '../../utils/guide-accents';
-import type {
-  GuideDisplayEntry,
-  GuideDisplayHeader,
-} from '../../utils/guide-display';
+import type { GuideDisplayEntry, GuideDisplayHeader } from '../../utils/guide-display';
 
 export interface GuideChapterDividerProps {
   header: GuideDisplayHeader;
@@ -58,13 +55,10 @@ export default function GuideChapterDivider({
 
       <div className='relative'>
         <div className='font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground'>
-          {header.implicit ? 'Appendix' : `Stop ${index + 1} of ${totalStops}`}{' '}
-          · {entries.length} {entries.length === 1 ? 'file' : 'files'} ·{' '}
-          {viewedCount}/{entries.length} reviewed
+          {header.implicit ? 'Appendix' : `Stop ${index + 1} of ${totalStops}`} · {entries.length}{' '}
+          {entries.length === 1 ? 'file' : 'files'} · {viewedCount}/{entries.length} reviewed
         </div>
-        <h3 className='mt-1.5 text-xl font-bold tracking-tight text-foreground'>
-          {header.name}
-        </h3>
+        <h3 className='mt-1.5 text-xl font-bold tracking-tight text-foreground'>{header.name}</h3>
         {header.rationale && (
           <p className='mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground'>
             {header.rationale}
@@ -75,10 +69,7 @@ export default function GuideChapterDivider({
             full size and strength, the rest faded. */}
         <div className='mt-3 flex items-center gap-1.5' aria-hidden='true'>
           {Array.from({ length: totalStops }, (_, stop) => {
-            const stopAccent = getGuideAccent(
-              stop,
-              implicitLast && stop === totalStops - 1
-            );
+            const stopAccent = getGuideAccent(stop, implicitLast && stop === totalStops - 1);
             return (
               <span
                 key={stop}

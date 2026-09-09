@@ -16,11 +16,7 @@ vi.mock('./components/Layout', async () => {
   return {
     default: () => {
       const { config } = useConfig();
-      return (
-        <div data-testid='category-names'>
-          {config.categories.map(c => c.name).join(',')}
-        </div>
-      );
+      return <div data-testid='category-names'>{config.categories.map(c => c.name).join(',')}</div>;
     },
   };
 });

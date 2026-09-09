@@ -7,11 +7,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { XMLParser } from 'fast-xml-parser';
 import { createPriorReviewXml } from '../fixtures/test-repo';
-import {
-  getPage,
-  getTestRepoDir,
-  readOutputFile,
-} from './app';
+import { getPage, getTestRepoDir, readOutputFile } from './app';
 // Pure DOM helper shared with the webapp step tree. The Electron app renders
 // the same components, so the placement markup is identical.
 import { readCommentPlacement } from '../webapp-steps/comment-placement';
@@ -43,9 +39,7 @@ Given(
     const rows = table.hashes();
     const comments = rows.map(row => ({
       filePath: row.file,
-      newLineStart: row.new_line_start
-        ? parseInt(row.new_line_start, 10)
-        : undefined,
+      newLineStart: row.new_line_start ? parseInt(row.new_line_start, 10) : undefined,
       newLineEnd: row.new_line_end ? parseInt(row.new_line_end, 10) : undefined,
       body: row.body,
       category: row.category || undefined,
@@ -72,14 +66,7 @@ Given(
 
 Given(
   'a prior review XML file {string} with a comment {string} on new line {int} of {string} carrying these replies:',
-  async (
-    {},
-    fileName: string,
-    body: string,
-    line: number,
-    filePath: string,
-    table: DataTable
-  ) => {
+  async ({}, fileName: string, body: string, line: number, filePath: string, table: DataTable) => {
     const repoDir = getTestRepoDir();
     const replies = table.hashes().map(row => ({
       body: row.body,
@@ -160,45 +147,32 @@ Then(
   }
 );
 
-Then(
-  'the file {string} should be marked as done reviewing',
-  async ({}, filePath: string) => {
-    const page = getPage();
-    await expect(
-      page.locator(`[data-testid="viewed-${filePath}"]`)
-    ).toContainText('Done reviewing');
-  }
-);
+Then('the file {string} should be marked as done reviewing', async ({}, filePath: string) => {
+  const page = getPage();
+  await expect(page.locator(`[data-testid="viewed-${filePath}"]`)).toContainText('Done reviewing');
+});
 
-Then(
-  'the file {string} should not be marked as done reviewing',
-  async ({}, filePath: string) => {
-    const page = getPage();
-    await expect(
-      page.locator(`[data-testid="viewed-${filePath}"]`)
-    ).toContainText('To review');
-  }
-);
+Then('the file {string} should not be marked as done reviewing', async ({}, filePath: string) => {
+  const page = getPage();
+  await expect(page.locator(`[data-testid="viewed-${filePath}"]`)).toContainText('To review');
+});
 
-Then(
-  'the output file should mark {string} as viewed',
-  async ({}, filePath: string) => {
-    const xmlContent = readOutputFile();
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      attributeNamePrefix: '@_',
-    });
-    const parsed = parser.parse(xmlContent);
-    const files = Array.isArray(parsed.review.file)
-      ? parsed.review.file
-      : parsed.review.file
-        ? [parsed.review.file]
-        : [];
-    const fileEl = files.find((f: any) => f['@_path'] === filePath);
-    expect(fileEl).toBeDefined();
-    expect(String(fileEl['@_viewed'])).toBe('true');
-  }
-);
+Then('the output file should mark {string} as viewed', async ({}, filePath: string) => {
+  const xmlContent = readOutputFile();
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: '@_',
+  });
+  const parsed = parser.parse(xmlContent);
+  const files = Array.isArray(parsed.review.file)
+    ? parsed.review.file
+    : parsed.review.file
+      ? [parsed.review.file]
+      : [];
+  const fileEl = files.find((f: any) => f['@_path'] === filePath);
+  expect(fileEl).toBeDefined();
+  expect(String(fileEl['@_viewed'])).toBe('true');
+});
 
 Then(
   'the output file should contain {int} comments for {string}',
@@ -228,17 +202,12 @@ Then(
   }
 );
 
-
 Then(
   'the comment {string} should show a {string} severity badge and {string} confidence badge',
   async ({}, body: string, severity: string, confidence: string) => {
     const comment = commentCard(body);
-    await expect(
-      comment.locator(`[data-testid="comment-severity-${severity}"]`)
-    ).toBeVisible();
-    await expect(
-      comment.locator(`[data-testid="comment-confidence-${confidence}"]`)
-    ).toBeVisible();
+    await expect(comment.locator(`[data-testid="comment-severity-${severity}"]`)).toBeVisible();
+    await expect(comment.locator(`[data-testid="comment-confidence-${confidence}"]`)).toBeVisible();
   }
 );
 
@@ -250,9 +219,7 @@ Then(
     // Each reply is a direct child of the thread container. The composer and
     // the "Reply" button are siblings of that container, not descendants, so a
     // descendant match here resolves to the reply cards alone.
-    const replies = comment
-      .locator('[data-testid^="thread-"]')
-      .locator('[data-testid^="reply-"]');
+    const replies = comment.locator('[data-testid^="thread-"]').locator('[data-testid^="reply-"]');
     const expected = table.hashes();
     await expect(replies).toHaveCount(expected.length);
     // Positional, because document order is conversation order.
@@ -261,9 +228,7 @@ Then(
       await expect(reply).toContainText(expected[i].body);
       // The attribution line is the reply's first <span>: the lucide icon is an
       // <svg>, and the button labels come later in DOM order.
-      await expect(reply.locator('span').first()).toHaveText(
-        expected[i].author
-      );
+      await expect(reply.locator('span').first()).toHaveText(expected[i].author);
     }
   }
 );

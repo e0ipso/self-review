@@ -57,19 +57,14 @@ export default function GuideRouteHud() {
             const accent = getGuideAccent(index, group.implicit);
             const isCurrent = index === currentIndex;
             const complete =
-              group.files.length > 0 &&
-              group.files.every(file => viewedPaths.has(file.path));
+              group.files.length > 0 && group.files.every(file => viewedPaths.has(file.path));
             const firstFilePath = group.files[0]?.path;
             return (
               <button
                 key={`hud-stop-${index}-${group.name}`}
                 type='button'
                 title={group.name}
-                onClick={
-                  firstFilePath
-                    ? () => scrollToFile(firstFilePath)
-                    : undefined
-                }
+                onClick={firstFilePath ? () => scrollToFile(firstFilePath) : undefined}
                 className='flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-muted'
               >
                 <span
@@ -93,12 +88,7 @@ export default function GuideRouteHud() {
         </span>
       </div>
 
-      {hasOverview && (
-        <GuideOverviewDialog
-          open={overviewOpen}
-          onOpenChange={setOverviewOpen}
-        />
-      )}
+      {hasOverview && <GuideOverviewDialog open={overviewOpen} onOpenChange={setOverviewOpen} />}
     </div>
   );
 }

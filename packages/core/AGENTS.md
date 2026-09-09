@@ -1,25 +1,25 @@
 # @self-review/core
 
-Node.js library for diff parsing, git operations, XML serialization, configuration, and
-file system utilities.
+Node.js library for diff parsing, git operations, XML serialization, configuration, and file system
+utilities.
 
 ## Purpose
 
-Headless business logic consumed by the Electron main process. Provides the complete pipeline
-from CLI args → git diff → parsed AST → XML output.
+Headless business logic consumed by the Electron main process. Provides the complete pipeline from
+CLI args → git diff → parsed AST → XML output.
 
 ## Constraints
 
 - **Node.js only.** This package uses `child_process`, `fs`, and Node-only libraries
-  (`xmllint-wasm`, `fast-xml-parser`, `yaml`, `ignore`). It cannot be imported in browser
-  or renderer code.
-- **No imports from `@self-review/react`.** Dependency flows one way: `core` depends on
-  `types`, never on `react`.
+  (`xmllint-wasm`, `fast-xml-parser`, `yaml`, `ignore`). It cannot be imported in browser or
+  renderer code.
+- **No imports from `@self-review/react`.** Dependency flows one way: `core` depends on `types`,
+  never on `react`.
 - **`file-type-utils.ts` is duplicated in `@self-review/react`.** The functions in this file
-  (`getLanguageFromPath`, `isPreviewableImage`, `isPreviewableSvg`) are pure string utilities
-  with no Node dependencies. They are intentionally duplicated in
-  `packages/react/src/utils/file-type-utils.ts` to avoid forcing `react` to depend on this
-  package. Keep both copies in sync when changing the logic.
+  (`getLanguageFromPath`, `isPreviewableImage`, `isPreviewableSvg`) are pure string utilities with
+  no Node dependencies. They are intentionally duplicated in
+  `packages/react/src/utils/file-type-utils.ts` to avoid forcing `react` to depend on this package.
+  Keep both copies in sync when changing the logic.
 
 ## Structure
 
@@ -47,7 +47,13 @@ npm run test:unit    # from package root, or
 npm run test:unit --workspace @self-review/core   # from workspace root
 ```
 
-Tests are colocated (`*.test.ts` next to source files). `npm run test:unit:main` from the
-workspace root does not run these tests despite the similar name — that script targets
+Tests are colocated (`*.test.ts` next to source files). `npm run test:unit:main` from the workspace
+root does not run these tests despite the similar name — that script targets
 `vitest.config.main.ts`, which is scoped to the desktop main-process suite
 (`src/main/**/*.test.ts`), a separate suite from this package.
+
+Suites that spawn real git call `gitSync` from `src/test-support/git-env.ts` instead of
+`execFileSync('git', ...)`, and `vitest.setup.ts` scrubs the same variables from the worker's own
+environment. Git exports `GIT_DIR` and `GIT_INDEX_FILE` into hook processes, and they outrank both
+`git -C <dir>` and the child's cwd — inheriting them made these suites commit to whatever repository
+the `pre-commit` hook was running in (SR-0055).

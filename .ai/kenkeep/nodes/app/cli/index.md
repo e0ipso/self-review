@@ -10,12 +10,14 @@
 _None._
 
 ## Conventions (how we build)
+- Open [**Convert git diff args only through format/tokenize**](practice-convert-git-diff-args-only-through-format-and-tokenize.md) to learn about: formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions. #cli #git #review-xml #round-trip
 - Open [**Hide untracked files by default for --staged/--cached reviews**](practice-hide-untracked-files-by-default-for-staged-cached-reviews.md) to learn about: Index-vs-HEAD reviews hide untracked files by default since they aren't part of the index; users can reveal them via toolbar toggle. #staged #untracked #defaults
 - Open [**Never write to stdout in the main process**](practice-never-write-to-stdout-in-the-main-process.md) to learn about: Use console.error() for logging in the main process; stdout is unused and reserved. #strikethroo #logging #stdout
 - Open [**Never write to stdout; use stderr for all logging**](practice-never-write-to-stdout-use-stderr-for-all-logging.md) to learn about: stdout is unused. XML goes to a file; all progress, warnings, errors go to stderr. #logging #stdout #cli
 - Open [**Preserve orphaned comments on resume; never silently drop them**](practice-preserve-orphaned-comments-on-resume-never-silently-drop-them.md) to learn about: Preserve and expose unmatched prior comments; complete orphan handling remains a PRD requirement. #resume #comments #data-integrity
 - Open [**Show welcome screen when launched outside a git repo with no directory arg**](practice-show-welcome-screen-when-launched-outside-a-git-repo-with-no-directory-arg.md) to learn about: Don't error-exit when launched from Finder or an app launcher; show the welcome screen with a directory picker instead. #startup #launcher #welcome
 - Open [**Treat self-review as a CLI-first, one-shot tool**](practice-treat-self-review-as-a-cli-first-one-shot-tool.md) to learn about: self-review launches from the terminal, writes review output to a file, then exits. No servers or persistent state. #cli #workflow #output
+- Open [**Re-exec with headless Ozone for windowless subcommands**](practice-re-exec-with-headless-ozone-for-windowless-subcommands.md) to learn about: Packaged fuses disable RunAsNode, so ELECTRON_RUN_AS_NODE cannot make a subcommand headless; cli-dispatch re-execs. #electron #cli #packaging #headless
 
 ## Components (what exists)
 - Open [**self-review CLI invocations**](map-self-review-cli-invocations.md) to learn about: Review local diffs, directories or forge URLs, or fetch comments headlessly. #cli #flags
@@ -28,6 +30,10 @@ _None._
 - Open [**Kenkeep CLI**](../../knowledge-base/tooling/map-ai-knowledge-base-cli.md) — Deterministic commands discover documents, validate schemas and maintain nodes.
 - Open [**Bootstrap document exclusions**](../../knowledge-base/tooling/map-cli-static-skip-list.md) — finddocs applies gitignore, kkignore and its static filename exclusions.
 - Open [**Select the harness for harness-specific kenkeep commands**](../../knowledge-base/tooling/practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call.md) — Use explicit harness selection for launcher commands; deterministic commands need no override.
+### #git
+- Open [**Apply curator conflicts using the selected reply**](../../knowledge-base/curate/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
+- Open [**Review knowledge-base changes via git diff before committing**](../../knowledge-base/structure/practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
+- Open [**Convert git diff args only through format/tokenize**](practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
 ### #logging
 - Open [**Never write to stdout in the main process**](practice-never-write-to-stdout-in-the-main-process.md) — Use console.error() for logging in the main process; stdout is unused and reserved.
 - Open [**Never write to stdout; use stderr for all logging**](practice-never-write-to-stdout-use-stderr-for-all-logging.md) — stdout is unused. XML goes to a file; all progress, warnings, errors go to stderr.
@@ -51,12 +57,13 @@ _None._
 - Open [**Hide untracked files by default for --staged/--cached reviews**](practice-hide-untracked-files-by-default-for-staged-cached-reviews.md) — Index-vs-HEAD reviews hide untracked files by default since they aren't part of the index; users can reveal them via toolbar toggle.
 ### #directory
 - Open [**Three startup modes: git, directory, welcome**](map-three-startup-modes-git-directory-welcome.md) — git mode reviews a git diff; directory mode treats all files as new additions; welcome mode shows a picker when launched without context.
+### #electron
+- Open [**Two-process Electron architecture**](../architecture/map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
+- Open [**Re-exec with headless Ozone for windowless subcommands**](practice-re-exec-with-headless-ozone-for-windowless-subcommands.md) — Packaged fuses disable RunAsNode, so ELECTRON_RUN_AS_NODE cannot make a subcommand headless; cli-dispatch re-execs.
 ### #flags
 - Open [**self-review CLI invocations**](map-self-review-cli-invocations.md) — Review local diffs, directories or forge URLs, or fetch comments headlessly.
-### #git
-- Open [**Apply curator conflicts using the selected reply**](../../knowledge-base/curate/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
-- Open [**Review knowledge-base changes via git diff before committing**](../../knowledge-base/structure/practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
-- Open [**Three startup modes: git, directory, welcome**](map-three-startup-modes-git-directory-welcome.md) — git mode reviews a git diff; directory mode treats all files as new additions; welcome mode shows a picker when launched without context.
+### #headless
+- Open [**Re-exec with headless Ozone for windowless subcommands**](practice-re-exec-with-headless-ozone-for-windowless-subcommands.md) — Packaged fuses disable RunAsNode, so ELECTRON_RUN_AS_NODE cannot make a subcommand headless; cli-dispatch re-execs.
 ### #launcher
 - Open [**Show welcome screen when launched outside a git repo with no directory arg**](practice-show-welcome-screen-when-launched-outside-a-git-repo-with-no-directory-arg.md) — Don't error-exit when launched from Finder or an app launcher; show the welcome screen with a directory picker instead.
 ### #mode
@@ -65,6 +72,14 @@ _None._
 - Open [**Design XML output to be parsed by LLMs**](../../review-xml/schema/practice-design-xml-output-to-be-parsed-by-llms.md) — Review output is structured XML with an XSD schema so LLMs can reliably parse and act on feedback.
 - Open [**self-review-v3 XSD output format**](../../review-xml/schema/map-self-review-v1-xsd-output-format.md) — Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 stay frozen, while the current version may gain optional attributes additively.
 - Open [**Treat self-review as a CLI-first, one-shot tool**](practice-treat-self-review-as-a-cli-first-one-shot-tool.md) — self-review launches from the terminal, writes review output to a file, then exits. No servers or persistent state.
+### #packaging
+- Open [**Upload release ZIPs using the MakerZIP filenames**](../../engineering/practice-upload-release-zips-using-the-makerzip-filenames.md) — Upload MakerZIP archives directly by glob without renaming them.
+- Open [**Pin Nix fetchzip hashes to the unpacked directory**](../../engineering/practice-pin-nix-fetchzip-hashes-to-the-unpacked-directory.md) — A fetchzip hash covers the unpacked tree, never the archive bytes; update-flake-hash.sh prefetches with --unpack.
+- Open [**Re-exec with headless Ozone for windowless subcommands**](practice-re-exec-with-headless-ozone-for-windowless-subcommands.md) — Packaged fuses disable RunAsNode, so ELECTRON_RUN_AS_NODE cannot make a subcommand headless; cli-dispatch re-execs.
+### #review-xml
+- Open [**Convert git diff args only through format/tokenize**](practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
+### #round-trip
+- Open [**Convert git diff args only through format/tokenize**](practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
 ### #staged
 - Open [**Hide untracked files by default for --staged/--cached reviews**](practice-hide-untracked-files-by-default-for-staged-cached-reviews.md) — Index-vs-HEAD reviews hide untracked files by default since they aren't part of the index; users can reveal them via toolbar toggle.
 ### #startup

@@ -22,7 +22,7 @@ export default function RenderedSvgView({ file }: RenderedSvgViewProps) {
 
   if (!svgContent.trim()) {
     return (
-      <div className="flex justify-center items-center p-8 text-sm text-muted-foreground">
+      <div className='flex justify-center items-center p-8 text-sm text-muted-foreground'>
         SVG content could not be extracted.
       </div>
     );
@@ -31,7 +31,7 @@ export default function RenderedSvgView({ file }: RenderedSvgViewProps) {
   const dataUri = svgToDataUri(svgContent);
 
   return (
-    <div className="flex justify-center p-4">
+    <div className='flex justify-center p-4'>
       <img
         src={dataUri}
         alt={file.newPath ?? file.oldPath ?? 'SVG preview'}

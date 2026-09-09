@@ -45,13 +45,10 @@ Given('a git repository with no changes', async () => {
 
 // ── Then: error assertions ──
 
-Then(
-  'stderr should contain an error message about not being a git repository',
-  async () => {
-    const stderr = getStderr();
-    expect(stderr.toLowerCase()).toMatch(/not a git repository|not.*git/i);
-  }
-);
+Then('stderr should contain an error message about not being a git repository', async () => {
+  const stderr = getStderr();
+  expect(stderr.toLowerCase()).toMatch(/not a git repository|not.*git/i);
+});
 
 Then('stderr should contain an error message from git', async () => {
   const stderr = getStderr();

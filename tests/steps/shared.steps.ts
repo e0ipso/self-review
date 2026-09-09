@@ -29,31 +29,22 @@ After(async () => {
 
 // ── Shared Background steps ──
 
-Given(
-  'a git repository with changes to the following files:',
-  async ({}, table: DataTable) => {
-    const repoDir = createTestRepo();
-    setTestRepoDir(repoDir);
-  }
-);
+Given('a git repository with changes to the following files:', async ({}, table: DataTable) => {
+  const repoDir = createTestRepo();
+  setTestRepoDir(repoDir);
+});
 
-Given(
-  'the project has these comment categories:',
-  async ({}, table: DataTable) => {
-    const categories = table.hashes();
-    const yamlLines = ['categories:'];
-    for (const cat of categories) {
-      yamlLines.push(`  - name: "${cat.name}"`);
-      yamlLines.push(`    description: "${cat.name} category"`);
-      yamlLines.push(`    color: "${cat.color}"`);
-    }
-    const repoDir = getTestRepoDir();
-    writeFileSync(
-      join(repoDir, '.self-review.yaml'),
-      yamlLines.join('\n') + '\n'
-    );
+Given('the project has these comment categories:', async ({}, table: DataTable) => {
+  const categories = table.hashes();
+  const yamlLines = ['categories:'];
+  for (const cat of categories) {
+    yamlLines.push(`  - name: "${cat.name}"`);
+    yamlLines.push(`    description: "${cat.name} category"`);
+    yamlLines.push(`    color: "${cat.color}"`);
   }
-);
+  const repoDir = getTestRepoDir();
+  writeFileSync(join(repoDir, '.self-review.yaml'), yamlLines.join('\n') + '\n');
+});
 
 // ── Shared launch steps ──
 
@@ -99,14 +90,8 @@ Given('I launch self-review with {string}', async ({}, args: string) => {
         error
       );
       await launchAppExpectExit(cliArgs, repoDir);
-      console.error(
-        '[Given step] After launchAppExpectExit - stderr:',
-        getStderr().slice(0, 500)
-      );
-      console.error(
-        '[Given step] After launchAppExpectExit - exit code:',
-        getExitCode()
-      );
+      console.error('[Given step] After launchAppExpectExit - stderr:', getStderr().slice(0, 500));
+      console.error('[Given step] After launchAppExpectExit - exit code:', getExitCode());
     }
   }
 });

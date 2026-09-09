@@ -30,38 +30,32 @@ After(async () => {
 
 // ── Given: create a temporary directory with known files ──
 
-Given(
-  'a temporary directory with the following files:',
-  async ({}, table: DataTable) => {
-    const dir = mkdtempSync(join(tmpdir(), 'self-review-dir-'));
-    const rows = table.hashes();
-    for (const row of rows) {
-      const filePath = join(dir, row.file);
-      mkdirSync(dirname(filePath), { recursive: true });
-      writeFileSync(filePath, row.content);
-    }
-    tempDirPath = dir;
-    setTestRepoDir(dir);
-  }
-);
-
-Given(
-  'a temporary directory with a binary file {string}',
-  async ({}, filename: string) => {
-    const dir = mkdtempSync(join(tmpdir(), 'self-review-dir-'));
-    const filePath = join(dir, filename);
+Given('a temporary directory with the following files:', async ({}, table: DataTable) => {
+  const dir = mkdtempSync(join(tmpdir(), 'self-review-dir-'));
+  const rows = table.hashes();
+  for (const row of rows) {
+    const filePath = join(dir, row.file);
     mkdirSync(dirname(filePath), { recursive: true });
-    // Write a minimal PNG header (binary content)
-    const pngHeader = Buffer.from([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00,
-      0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
-      0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde,
-    ]);
-    writeFileSync(filePath, pngHeader);
-    tempDirPath = dir;
-    setTestRepoDir(dir);
+    writeFileSync(filePath, row.content);
   }
-);
+  tempDirPath = dir;
+  setTestRepoDir(dir);
+});
+
+Given('a temporary directory with a binary file {string}', async ({}, filename: string) => {
+  const dir = mkdtempSync(join(tmpdir(), 'self-review-dir-'));
+  const filePath = join(dir, filename);
+  mkdirSync(dirname(filePath), { recursive: true });
+  // Write a minimal PNG header (binary content)
+  const pngHeader = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+    0xde,
+  ]);
+  writeFileSync(filePath, pngHeader);
+  tempDirPath = dir;
+  setTestRepoDir(dir);
+});
 
 // ── When: launch with the directory path as a CLI arg ──
 
@@ -86,14 +80,11 @@ Then('the welcome screen should not be visible', async () => {
   await expect(welcome).toHaveCount(0);
 });
 
-Then(
-  'the welcome screen should show the app title {string}',
-  async ({}, title: string) => {
-    const page = getPage();
-    const welcome = page.locator('[data-testid="welcome-screen"]');
-    await expect(welcome).toContainText(title);
-  }
-);
+Then('the welcome screen should show the app title {string}', async ({}, title: string) => {
+  const page = getPage();
+  const welcome = page.locator('[data-testid="welcome-screen"]');
+  await expect(welcome).toContainText(title);
+});
 
 Then('the welcome screen should describe directory mode', async () => {
   const page = getPage();
@@ -121,14 +112,11 @@ Then('the XML should contain a {string} attribute', async ({}, attr: string) => 
   expect(xmlContent).toContain(`${attr}="`);
 });
 
-Then(
-  'the XML should not contain a {string} attribute',
-  async ({}, attr: string) => {
-    expect(outputFileExists()).toBe(true);
-    const xmlContent = readOutputFile();
-    expect(xmlContent).not.toContain(`${attr}="`);
-  }
-);
+Then('the XML should not contain a {string} attribute', async ({}, attr: string) => {
+  expect(outputFileExists()).toBe(true);
+  const xmlContent = readOutputFile();
+  expect(xmlContent).not.toContain(`${attr}="`);
+});
 
 // ── Then: binary file indicator ──
 
