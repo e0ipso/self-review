@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
 import type { DiffFile } from '@self-review/types';
@@ -9,6 +9,7 @@ import { getRenderedTextMode, isPreviewableImage, isPreviewableSvg } from '../..
 import { getGuideAccent } from '../../utils/guide-accents';
 import { FileSectionHeader } from './FileSectionHeader';
 import { FileSectionBody } from './FileSectionBody';
+import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 
 export interface FileSectionProps {
   file: DiffFile;
@@ -53,6 +54,8 @@ export default function FileSection({
     guideMode === 'guided' ? getFileDescription(filePath) : undefined;
   const comments = getCommentsForFile(filePath);
   const fileComments = comments.filter(c => c.lineRange === null);
+  const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
+  const orphanedComments = comments.filter(c => !hasAnchor(c));
   const fileState = files.find(f => f.path === filePath);
   const isViewed = fileState?.viewed || false;
 
@@ -176,6 +179,7 @@ export default function FileSection({
         <FileSectionBody
           filePath={filePath}
           fileComments={fileComments}
+          orphanedComments={orphanedComments}
           showingFileComment={showingFileComment}
           onCancelFileComment={() => setShowingFileComment(false)}
           onFileCommentSubmit={() => setShowingFileComment(false)}

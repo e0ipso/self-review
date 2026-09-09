@@ -160,7 +160,7 @@ export function ReviewProvider({
     }
   }, [allDiffFiles]);
 
-  // Merge the resumed review once the file state it applies to exists.
+  // Merge the resumed review after loading, even when the current diff is empty.
   //
   // The seeding effect above is declared first, so when both run in the same
   // commit its updater is queued first and this one sees the seeded files.
@@ -168,7 +168,6 @@ export function ReviewProvider({
   // expanded context) from resurrecting comments the user has since deleted.
   useEffect(() => {
     if (!resumedReview || resumeAppliedRef.current) return;
-    if (allDiffFiles.length === 0) return;
     resumeAppliedRef.current = true;
 
     const commentsByFile = groupCommentsByFile(resumedReview.comments);

@@ -10,6 +10,7 @@ import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
 import ExpandContextBar from './ExpandContextBar';
 import { getLineBg, getGutterBg } from '../../utils/diff-styles';
+import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 
 export interface UnifiedViewProps {
   file: DiffFile;
@@ -42,6 +43,7 @@ export default function UnifiedView({
 }: UnifiedViewProps) {
   const { getCommentsForLine } = useReview();
   const { config } = useConfig();
+  const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
   const language = getLanguageFromPath(file.newPath || file.oldPath);
 
   // Pre-compute row offsets per hunk for sequential row indexing
@@ -108,8 +110,14 @@ export default function UnifiedView({
             const comments = lineNumber
               ? getCommentsForLine(filePath, lineNumber, side)
               : [];
-            const commentsToRender = comments.filter(
-              c => c.lineRange!.end === lineNumber
+            // Context rows carry both old and new coordinates. Saved old-side
+            // comments must remain visible when switching from split view.
+            const oldContextComments = line.type === 'context' && line.oldLineNumber
+              ? getCommentsForLine(filePath, line.oldLineNumber, 'old')
+              : [];
+            const commentsToRender = [...comments, ...oldContextComments].filter(c =>
+              c.lineRange!.end === (c.lineRange!.side === 'old' ? line.oldLineNumber : line.newLineNumber)
+              && hasAnchor(c)
             );
             const showCommentInputHere =
               commentRange &&

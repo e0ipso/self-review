@@ -650,8 +650,8 @@ The `--resume-from` flag accepts a path to a previously exported XML file. The a
 
 If the diff has changed since the prior review (e.g., the developer made additional changes), line numbers may no longer match. The application should:
 
-- **Best-effort matching:** Attempt to map prior comments to their original lines using surrounding context (similar to git's rename detection heuristic).
-- **Orphaned comments:** Comments that cannot be mapped to any current line are preserved in the output with an `orphaned="true"` attribute and displayed at the top of the relevant file section with a visual indicator.
+- **Exact anchor matching:** Place prior comments inline when their recorded range endpoints exist on the recorded old or new side. Do not remap line numbers heuristically.
+- **Orphaned comments:** Comments whose recorded range endpoints are absent from the loaded diff appear in a labeled section above the relevant file diff. Files absent from the current diff retain a reviewable section. Saving preserves the original anchors and comment data in XML v3.
 - **No silent data loss:** Prior comments are never silently dropped.
 
 ---

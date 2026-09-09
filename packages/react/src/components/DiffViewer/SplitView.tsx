@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { MessageSquarePlus } from 'lucide-react';
 import type { DiffFile, DiffLine } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
@@ -10,6 +10,7 @@ import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
 import ExpandContextBar from './ExpandContextBar';
 import { getLineBg, getGutterBg } from '../../utils/diff-styles';
+import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 import EmptyLinePane from './EmptyLinePane';
 
 export interface SplitViewProps {
@@ -48,6 +49,7 @@ export default function SplitView({
 }: SplitViewProps) {
   const { getCommentsForLine } = useReview();
   const { config } = useConfig();
+  const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
   const filePath = file.newPath || file.oldPath;
   const language = getLanguageFromPath(filePath);
 
@@ -220,10 +222,10 @@ export default function SplitView({
                 )
               : [];
             const oldCommentsToRender = oldComments.filter(
-              c => c.lineRange!.end === oldLineNumber
+              c => c.lineRange!.end === oldLineNumber && hasAnchor(c)
             );
             const newCommentsToRender = newComments.filter(
-              c => c.lineRange!.end === newLineNumber
+              c => c.lineRange!.end === newLineNumber && hasAnchor(c)
             );
             const showCommentInputHere =
               commentRange &&
