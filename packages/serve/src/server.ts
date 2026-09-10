@@ -21,9 +21,15 @@ import {
   readAttachment,
   expandContext,
   submitReviewState,
+  applySuggestionForSession,
 } from '@self-review/core';
 import type { ReviewSession } from '@self-review/core';
-import { containPath, parseExpandContextBody, parseReviewStateBody } from './validate';
+import {
+  containPath,
+  parseExpandContextBody,
+  parseReviewStateBody,
+  parseSuggestionApplyBody,
+} from './validate';
 
 /** `client/` next to this module, which is `dist/client/` once built. */
 export const CLIENT_DIR = fileURLToPath(new URL('./client/', import.meta.url));
@@ -207,9 +213,7 @@ function sendError(res: http.ServerResponse, status: number, error: string): voi
  * sent (core interprets it relative to the repository) and resolved (for a
  * handler reading disk directly), or answers 400 and returns null.
  */
-function requireContainedPath(
-  ctx: RouteContext
-): { raw: string; resolved: string } | null {
+function requireContainedPath(ctx: RouteContext): { raw: string; resolved: string } | null {
   const raw = ctx.url.searchParams.get('path');
   const resolved = raw ? containPath(ctx.repositoryRoot, raw) : null;
   if (raw === null || resolved === null) {
@@ -219,9 +223,7 @@ function requireContainedPath(
   return { raw, resolved };
 }
 
-type BodyResult =
-  | { ok: true; value: unknown }
-  | { ok: false; status: number; error: string };
+type BodyResult = { ok: true; value: unknown } | { ok: false; status: number; error: string };
 
 /**
  * The declared length is checked before a byte is read and the running total
@@ -345,6 +347,28 @@ const routes: Record<string, RouteHandler> = {
     sendJson(res, 200, await expandContext(session, parsed.value));
   },
 
+  // The one route that rewrites a file in the reviewed tree. Core refuses
+  // unless the anchored lines still match the suggestion's recorded original
+  // byte for byte, and resolves the destination itself; the path is contained
+  // here so a request cannot even name a file outside the repository.
+  'POST /api/apply-suggestion': async ({ req, res, session, repositoryRoot }) => {
+    const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES);
+    if (!body.ok) {
+      sendError(res, body.status, body.error);
+      return;
+    }
+    const parsed = parseSuggestionApplyBody(body.value);
+    if (!parsed.ok) {
+      sendError(res, 400, parsed.error);
+      return;
+    }
+    if (containPath(repositoryRoot, parsed.value.filePath) === null) {
+      sendError(res, 400, 'filePath must be a file under the repository root');
+      return;
+    }
+    sendJson(res, 200, applySuggestionForSession(session, parsed.value));
+  },
+
   'POST /api/review': async ({ req, res, session }) => {
     const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES);
     if (!body.ok) {
@@ -399,7 +423,8 @@ async function serveStatic(
     return;
   }
   res.writeHead(200, {
-    'content-type': CONTENT_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream',
+    'content-type':
+      CONTENT_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream',
     'content-length': data.length,
     ...SECURITY_HEADERS,
   });

@@ -3,7 +3,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { ExpandContextRequest, ReviewState } from '@self-review/core';
+import type { ExpandContextRequest, ReviewState, SuggestionApplyRequest } from '@self-review/core';
 
 /** Realpath the deepest existing ancestor, so a deleted file still resolves. */
 function realpathDeepestExisting(absolute: string): string | null {
@@ -60,6 +60,10 @@ export const MAX_CONTEXT_LINES = 99_999;
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 const EXPAND_CONTEXT_KEYS: ReadonlySet<string> = new Set(['filePath', 'contextLines']);
 
 /**
@@ -95,6 +99,73 @@ export function parseExpandContextBody(body: unknown): ParseResult<ExpandContext
   }
 
   return { ok: true, value: { filePath, contextLines } };
+}
+
+const APPLY_KEYS: ReadonlySet<string> = new Set(['filePath', 'lineRange', 'suggestion']);
+const LINE_RANGE_KEYS: ReadonlySet<string> = new Set(['side', 'start', 'end']);
+const SUGGESTION_KEYS: ReadonlySet<string> = new Set(['originalCode', 'proposedCode']);
+
+/**
+ * Validate the body of `POST /api/apply-suggestion`.
+ *
+ * This is the one route that rewrites a file in the reviewed tree, so the shape
+ * is checked exactly rather than deferred. Core refuses anything whose anchored
+ * lines do not still match `originalCode` byte for byte, but it should never be
+ * asked a question this malformed in the first place.
+ */
+export function parseSuggestionApplyBody(body: unknown): ParseResult<SuggestionApplyRequest> {
+  if (!isRecord(body)) {
+    return { ok: false, error: 'body must be a JSON object' };
+  }
+  for (const key of Object.keys(body)) {
+    if (!APPLY_KEYS.has(key)) return { ok: false, error: `unknown field: ${key}` };
+  }
+
+  const { filePath, lineRange, suggestion } = body;
+  if (typeof filePath !== 'string' || filePath === '') {
+    return { ok: false, error: 'filePath must be a non-empty string' };
+  }
+
+  // A file-level comment has no anchor, and core refuses it. Accept the null so
+  // the refusal comes back in core's vocabulary rather than as a 400.
+  if (lineRange !== null) {
+    if (!isRecord(lineRange)) {
+      return { ok: false, error: 'lineRange must be an object or null' };
+    }
+    for (const key of Object.keys(lineRange)) {
+      if (!LINE_RANGE_KEYS.has(key)) {
+        return { ok: false, error: `unknown lineRange field: ${key}` };
+      }
+    }
+    if (lineRange.side !== 'old' && lineRange.side !== 'new') {
+      return { ok: false, error: "lineRange.side must be 'old' or 'new'" };
+    }
+    for (const key of ['start', 'end'] as const) {
+      const value = lineRange[key];
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+        return { ok: false, error: `lineRange.${key} must be a positive integer` };
+      }
+    }
+    if ((lineRange.end as number) < (lineRange.start as number)) {
+      return { ok: false, error: 'lineRange.end must not precede lineRange.start' };
+    }
+  }
+
+  if (!isRecord(suggestion)) {
+    return { ok: false, error: 'suggestion must be an object' };
+  }
+  for (const key of Object.keys(suggestion)) {
+    if (!SUGGESTION_KEYS.has(key)) {
+      return { ok: false, error: `unknown suggestion field: ${key}` };
+    }
+  }
+  for (const key of ['originalCode', 'proposedCode'] as const) {
+    if (typeof suggestion[key] !== 'string') {
+      return { ok: false, error: `suggestion.${key} must be a string` };
+    }
+  }
+
+  return { ok: true, value: body as unknown as SuggestionApplyRequest };
 }
 
 const REVIEW_STATE_KEYS: ReadonlySet<string> = new Set(['timestamp', 'source', 'files']);
@@ -143,14 +214,11 @@ export function parseReviewStateBody(body: unknown): ParseResult<ReviewState> {
 // so the client sends base64 in `dataBase64` and a raw `data` field is refused.
 
 /** Canonical base64: full quartets, with at most one padded tail group. */
-const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)$/;
+const BASE64_PATTERN =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)$/;
 
 const RAW_DATA_ERROR =
   'attachment data must be sent base64-encoded as dataBase64, never as a serialized ArrayBuffer';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /** Every id this app makes: a randomUUID, or generateId's `${ms}-${base36}`. */
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;

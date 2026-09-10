@@ -26,6 +26,7 @@ vi.mock('@self-review/core', async importOriginal => {
     readAttachment: vi.fn(actual.readAttachment),
     expandContext: vi.fn(actual.expandContext),
     submitReviewState: vi.fn(actual.submitReviewState),
+    applySuggestionForSession: vi.fn(actual.applySuggestionForSession),
   };
 });
 
@@ -56,6 +57,7 @@ const CORE_SPIES = [
   'readAttachment',
   'expandContext',
   'submitReviewState',
+  'applySuggestionForSession',
 ] as const;
 
 function diffFile(p: string, hunks: DiffFile['hunks'] = []): DiffFile {
@@ -68,7 +70,7 @@ const INDEX_HUNK: DiffFile['hunks'][number] = {
   oldLines: 0,
   newStart: 1,
   newLines: 1,
-  lines: [{ type: 'add', content: 'export {};', oldLineNumber: null, newLineNumber: 1 }],
+  lines: [{ type: 'addition', content: 'export {};', oldLineNumber: null, newLineNumber: 1 }],
 };
 
 const CONFIG: AppConfig = {
@@ -95,7 +97,10 @@ function freshSession(): ReviewSession {
   };
   s.guideData = { overview: 'Start with the entry point.', groups: [] };
   s.config = CONFIG;
-  s.outputPathInfo = { resolvedOutputPath: path.join(root, 'review.xml'), outputPathWritable: true };
+  s.outputPathInfo = {
+    resolvedOutputPath: path.join(root, 'review.xml'),
+    outputPathWritable: true,
+  };
   return s;
 }
 
@@ -274,12 +279,16 @@ describe('GET /api/image', () => {
     const res = await fetch(`${base}/api/image?path=img.png`);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.dataUri).toBe(`data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64')}`);
+    expect(body.dataUri).toBe(
+      `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64')}`
+    );
     expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(session, 'img.png');
   });
 
   it('rejects a traversal path with 400 before reaching core', async () => {
-    const res = await fetch(`${base}/api/image?path=${encodeURIComponent('../outside/secret.txt')}`);
+    const res = await fetch(
+      `${base}/api/image?path=${encodeURIComponent('../outside/secret.txt')}`
+    );
     expect(res.status).toBe(400);
     expectNoCoreCall();
   });
@@ -290,7 +299,10 @@ describe('GET /api/image', () => {
     const res = await fetch(`${base}/api/image?path=%252E%252E%252Foutside%252Fsecret.txt`);
     expect(res.status).toBe(200);
     expect(await res.json()).toHaveProperty('error');
-    expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(session, '%2E%2E%2Foutside%2Fsecret.txt');
+    expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(
+      session,
+      '%2E%2E%2Foutside%2Fsecret.txt'
+    );
   });
 });
 
@@ -339,7 +351,9 @@ describe('GET /api/attachment', () => {
   });
 
   it('rejects a traversal path with 400 before reaching core', async () => {
-    const res = await fetch(`${base}/api/attachment?path=${encodeURIComponent('../outside/secret.txt')}`);
+    const res = await fetch(
+      `${base}/api/attachment?path=${encodeURIComponent('../outside/secret.txt')}`
+    );
     expect(res.status).toBe(400);
     expectNoCoreCall();
   });
@@ -349,7 +363,10 @@ describe('POST /api/expand-context', () => {
   it('passes a valid body to core and returns its result', async () => {
     const expanded = { hunks: [INDEX_HUNK], totalLines: 1 };
     vi.mocked(core.expandContext).mockResolvedValueOnce(expanded);
-    const res = await postJson('/api/expand-context', { filePath: 'src/index.ts', contextLines: 10 });
+    const res = await postJson('/api/expand-context', {
+      filePath: 'src/index.ts',
+      contextLines: 10,
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(expanded);
     expect(vi.mocked(core.expandContext)).toHaveBeenCalledWith(session, {
@@ -359,13 +376,19 @@ describe('POST /api/expand-context', () => {
   });
 
   it('rejects a non-integer contextLines with 400 before reaching core', async () => {
-    const res = await postJson('/api/expand-context', { filePath: 'src/index.ts', contextLines: 1.5 });
+    const res = await postJson('/api/expand-context', {
+      filePath: 'src/index.ts',
+      contextLines: 1.5,
+    });
     expect(res.status).toBe(400);
     expectNoCoreCall();
   });
 
   it('rejects an out-of-bounds contextLines with 400 before reaching core', async () => {
-    const res = await postJson('/api/expand-context', { filePath: 'src/index.ts', contextLines: 100_000 });
+    const res = await postJson('/api/expand-context', {
+      filePath: 'src/index.ts',
+      contextLines: 100_000,
+    });
     expect(res.status).toBe(400);
     expectNoCoreCall();
   });
@@ -396,9 +419,13 @@ describe('POST /api/expand-context', () => {
   });
 
   it('rejects a body that is not declared application/json with 415', async () => {
-    const res = await postJson('/api/expand-context', { filePath: 'src/index.ts', contextLines: 3 }, {
-      headers: { 'content-type': 'text/plain' },
-    });
+    const res = await postJson(
+      '/api/expand-context',
+      { filePath: 'src/index.ts', contextLines: 3 },
+      {
+        headers: { 'content-type': 'text/plain' },
+      }
+    );
     expect(res.status).toBe(415);
     expectNoCoreCall();
   });
@@ -551,21 +578,72 @@ describe('POST /api/review', () => {
     const data = submitted.files[0].comments[0].attachments![0].data!;
     expect(new Uint8Array(data)).toEqual(BYTES);
     // And the session holds the same bytes, which is what lifecycle writes.
-    expect(
-      new Uint8Array(session.reviewState!.files[0].comments[0].attachments![0].data!)
-    ).toEqual(BYTES);
+    expect(new Uint8Array(session.reviewState!.files[0].comments[0].attachments![0].data!)).toEqual(
+      BYTES
+    );
   });
 
   it('refuses a raw ArrayBuffer field instead of writing an empty file', async () => {
-    const res = await postJson('/api/review', stateWithAttachment({
-      id: 'a1',
-      fileName: 'shot.png',
-      mediaType: 'image/png',
-      data: {},
-    }));
+    const res = await postJson(
+      '/api/review',
+      stateWithAttachment({
+        id: 'a1',
+        fileName: 'shot.png',
+        mediaType: 'image/png',
+        data: {},
+      })
+    );
     expect(res.status).toBe(400);
     expectNoCoreCall();
     expect(session.reviewState).toBeNull();
+  });
+});
+
+// The one route that rewrites a file in the reviewed tree, so the shape is
+// checked exactly rather than deferred to core.
+describe('POST /api/apply-suggestion', () => {
+  const request = {
+    filePath: 'src/index.ts',
+    lineRange: { side: 'new', start: 1, end: 1 },
+    suggestion: { originalCode: 'export {};', proposedCode: 'export const a = 1;' },
+  };
+
+  it('reaches core with a well-formed request', async () => {
+    const res = await postJson('/api/apply-suggestion', request);
+    expect(res.status).toBe(200);
+    expect(vi.mocked(core.applySuggestionForSession)).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a path outside the repository before core runs', async () => {
+    const res = await postJson('/api/apply-suggestion', {
+      ...request,
+      filePath: '../outside/secret.txt',
+    });
+    expect(res.status).toBe(400);
+    expectNoCoreCall();
+  });
+
+  it.each([
+    ['unknown field', { ...request, destination: '/tmp' }],
+    ['missing filePath', { ...request, filePath: '' }],
+    ['bad side', { ...request, lineRange: { side: 'sideways', start: 1, end: 1 } }],
+    ['zero line', { ...request, lineRange: { side: 'new', start: 0, end: 1 } }],
+    ['inverted range', { ...request, lineRange: { side: 'new', start: 4, end: 2 } }],
+    ['unknown lineRange field', { ...request, lineRange: { side: 'new', start: 1, end: 1, x: 1 } }],
+    ['non-string code', { ...request, suggestion: { originalCode: 1, proposedCode: 'x' } }],
+    ['unknown suggestion field', { ...request, suggestion: { ...request.suggestion, z: 1 } }],
+  ])('rejects %s with 400 before core runs', async (_label, body) => {
+    const res = await postJson('/api/apply-suggestion', body);
+    expect(res.status).toBe(400);
+    expectNoCoreCall();
+  });
+
+  // A file-level comment has no anchor. Core refuses it in its own vocabulary,
+  // which is more useful to the reviewer than a 400 from the door.
+  it('passes a null lineRange through to core', async () => {
+    const res = await postJson('/api/apply-suggestion', { ...request, lineRange: null });
+    expect(res.status).toBe(200);
+    expect(vi.mocked(core.applySuggestionForSession)).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -739,7 +817,7 @@ describe('host and origin', () => {
     expectNoCoreCall();
   });
 
-  it('accepts localhost and the listener\'s own origin', async () => {
+  it("accepts localhost and the listener's own origin", async () => {
     const port = (server.address() as AddressInfo).port;
     const viaLocalhost = await fetch(`http://localhost:${port}/api/diff`);
     expect(viaLocalhost.status).toBe(200);

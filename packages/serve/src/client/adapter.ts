@@ -1,12 +1,15 @@
 // A `ReviewAdapter` over `fetch`: transport only, since every component the
 // browser renders already lives in `@self-review/react`.
 //
-// Three deliberate properties. `changeOutputPath` is absent, not stubbed —
+// Four deliberate properties. `changeOutputPath` is absent, not stubbed —
 // `FileTree` renders its control on the property's presence, so a stub would
-// draw a dead button. `GET /api/diff` is issued once and shared, carrying both
-// the diff and the guide, so there is no push transport. And `submitReview`
-// resolving is acceptance, not a written file: lifecycle.ts writes on the
-// response's `finish`, so nothing here may report a saved review.
+// draw a dead button. `chooseApplyDestination` is absent for a stronger reason:
+// the UI only asks for a destination when the session is a temporary remote
+// clone, and serve mode has no remote mode, so the case cannot arise.
+// `GET /api/diff` is issued once and shared, carrying both the diff and the
+// guide, so there is no push transport. And `submitReview` resolving is
+// acceptance, not a written file: lifecycle.ts writes on the response's
+// `finish`, so nothing here may report a saved review.
 
 // Type-only, erased at build time: no runtime dependency on either package.
 import type { ReviewAdapter, GuideLoadPayload } from '@self-review/react';
@@ -91,9 +94,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
   for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_BYTES) {
-    binary += String.fromCharCode(
-      ...bytes.subarray(offset, offset + BASE64_CHUNK_BYTES)
-    );
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + BASE64_CHUNK_BYTES));
   }
   return btoa(binary);
 }
@@ -125,16 +126,12 @@ export function encodeReviewStateForWire(state: ReviewState): unknown {
       ...file,
       comments: file.comments.map(comment => ({
         ...comment,
-        ...(comment.attachments
-          ? { attachments: encodeAttachments(comment.attachments) }
-          : {}),
+        ...(comment.attachments ? { attachments: encodeAttachments(comment.attachments) } : {}),
         ...(comment.replies
           ? {
               replies: comment.replies.map(reply => ({
                 ...reply,
-                ...(reply.attachments
-                  ? { attachments: encodeAttachments(reply.attachments) }
-                  : {}),
+                ...(reply.attachments ? { attachments: encodeAttachments(reply.attachments) } : {}),
               })),
             }
           : {}),
@@ -209,6 +206,8 @@ export function createFetchAdapter(): ReviewAdapter {
         viewedFiles: [],
       },
 
+    applySuggestion: request => postJson('/api/apply-suggestion', request),
+
     submitReview: async (state: ReviewState): Promise<void> => {
       // Resolving means the submission was *accepted*, not that the review
       // is on disk: the route only stores it on the session, and
@@ -222,8 +221,7 @@ export function createFetchAdapter(): ReviewAdapter {
     loadFileContent: (filePath: string) =>
       getJson<DiffHunk[] | null>(withPath('/api/file', filePath)),
 
-    loadImage: (filePath: string) =>
-      getJson<ImageLoadResult>(withPath('/api/image', filePath)),
+    loadImage: (filePath: string) => getJson<ImageLoadResult>(withPath('/api/image', filePath)),
 
     readAttachment: async (filePath: string): Promise<ArrayBuffer | null> => {
       // Bytes, not JSON: this route answers octet-stream, and 404 for an
