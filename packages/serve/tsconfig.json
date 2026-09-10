@@ -14,9 +14,11 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "paths": {
-      "@self-review/types": ["../types/src/index.ts"]
+      "@self-review/types": ["../types/src/index.ts"],
+      "@self-review/core": ["../core/src/index.ts"],
+      "@self-review/react": ["../react/src/index.ts"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../react/src/declarations.d.ts"],
   "exclude": ["src/**/*.test.ts"]
 }
