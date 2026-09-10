@@ -106,9 +106,9 @@ _None._
 - Open [**Apply review suggestions bottom-to-top by line number**](../../skills/apply/practice-apply-review-suggestions-bottom-to-top-by-line-number.md) — Sort suggestions by line number descending before applying so earlier edits don't invalidate later line references.
 - Open [**Put work that needs the reviewed diff after loadDiff in bootstrapRemoteDiff**](practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff.md) — startRemoteSession runs before any diff exists; anything that anchors against files belongs in bootstrapRemoteDiff after loadDiff.
 ### #packaging
+- Open [**Re-exec with headless Ozone for windowless subcommands**](../../app/cli/practice-re-exec-with-headless-ozone-for-windowless-subcommands.md) — Packaged fuses disable RunAsNode, so ELECTRON_RUN_AS_NODE cannot make a subcommand headless; cli-dispatch re-execs.
 - Open [**Upload release ZIPs using the MakerZIP filenames**](../../engineering/practice-upload-release-zips-using-the-makerzip-filenames.md) — Upload MakerZIP archives directly by glob without renaming them.
-- Open [**Pin Nix fetchzip hashes to the unpacked directory**](../../engineering/practice-pin-nix-fetchzip-hashes-to-the-unpacked-directory.md) — A fetchzip hash covers the unpacked tree, never the archive bytes; update-flake-hash.sh prefetches with --unpack.
-- Open [**Put the types condition first in every package exports block**](practice-put-the-types-condition-first-in-every-package-exports-block.md) — Export conditions resolve in declaration order, and a misordered block still type-checks at exit 0, so nothing here catches it.
+- Open [**asarUnpack is electron-builder's key; @electron/packager spells it asar.unpack**](../../engineering/practice-use-asar-unpack-not-asarunpack-in-forge-config.md) — Forge drops an asarUnpack key on the floor. The packager option is asar: { unpack }, and this repo needs neither.
 ### #paths
 - Open [**Encode diff header paths with quoteGitPath**](practice-encode-diff-header-paths-with-quotegitpath.md) — quoteGitPath in synthetic-diff.ts reproduces git's C-style quoting and inverts decodeGitPath in diff-parser.ts.
 - Open [**Kenkeep directory layout**](../../knowledge-base/structure/map-knowledge-base-directory-layout-under-ai-knowledge-base.md) — Nodes use topical folders; sessions, conflicts and logs have separate directories.
@@ -121,7 +121,7 @@ _None._
 - Open [**Keep the v3 XSD schema in sync across its two locations**](../../review-xml/schema/practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md) — Keep the canonical v3 XSD and the serializer's embedded XSD byte-identical, and preserve the OpenCode skill symlinks.
 - Open [**Keep file-type-utils.ts duplicates in sync across core and react**](practice-keep-file-type-utils-ts-duplicates-in-sync-across-core-and-react.md) — The file is intentionally duplicated; both copies must be updated together.
 ### #typescript
-- Open [**Six tsc programs behind four typecheck npm scripts**](../../engineering/map-type-check-programs-and-scripts.md) — typecheck, typecheck:tests, typecheck:unit and typecheck:packages cover six tsconfig programs; the CI lint job gates on all four.
+- Open [**Seven tsc programs behind five typecheck npm scripts**](../../engineering/map-type-check-programs-and-scripts.md) — typecheck, typecheck:tests, typecheck:unit, typecheck:packages and typecheck:configs cover seven tsconfig programs; the CI lint job gates on all five.
 - Open [**Check each package with its own tsconfig; the root program only follows imports**](../../engineering/practice-check-each-package-with-its-own-tsconfig.md) — The root program includes only src/**/*, so package files the app never imports are covered by typecheck:packages alone.
 - Open [**Fix webpack type-checking in the root tsconfig.json, not in a webpack config**](../../engineering/practice-fix-webpack-type-checking-in-the-root-tsconfig-json-not-in-a-webpack-config.md) — fork-ts-checker defaults configFile to <context>/tsconfig.json and all three webpack configs set context to the project root.
 ### #ui

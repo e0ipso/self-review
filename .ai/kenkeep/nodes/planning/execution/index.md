@@ -28,6 +28,7 @@ _None._
 - Open [**Mark completed phases and tasks in the blueprint before advancing**](practice-mark-completed-phases-and-tasks-in-the-blueprint-before-advancing.md) — After validating a phase, update the blueprint: ✅ in front of the phase title, ✔️ in front of each task, and set task status to completed.
 ### #commits
 - Open [**Complete configured checks and commit each phase**](practice-pass-linting-and-create-a-descriptive-conventional-commit-at-the-end-of-each-phase.md) — Run checks defined by the phase hook and create a descriptive conventional commit.
+- Open [**Commitlint rejects agent attribution in the message and the author email**](../../engineering/practice-strip-agent-attribution-from-commit-messages.md) — A Co-Authored-By trailer naming an assistant fails commit-msg; so does an author email carrying an assistant keyword.
 ### #hooks
 - Open [**PRE_PLAN hook**](../authoring/map-pre-plan-hook.md) — Pre-planning hook that establishes scope control, simplicity principles, and PRD-only output before plan creation.
 - Open [**POST_PHASE hook**](map-post-phase-hook.md) — Create a phase commit and update blueprint progress before advancing.

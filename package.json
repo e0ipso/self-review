@@ -21,6 +21,7 @@
     "typecheck:tests": "tsc -p tests/tsconfig.json",
     "typecheck:unit": "tsc -p tsconfig.unit-tests.json",
     "typecheck:packages": "tsc -p packages/types/tsconfig.json --noEmit && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/react/tsconfig.json --noEmit",
+    "typecheck:configs": "tsc -p tsconfig.build-configs.json",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "vitest run --config vitest.config.main.ts && vitest run --config vitest.config.renderer.ts && npm run test:unit --workspace @self-review/core",
     "test:e2e": "npx bddgen && npx playwright test --project e2e",

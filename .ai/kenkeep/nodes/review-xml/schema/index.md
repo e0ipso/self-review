@@ -13,7 +13,7 @@ _None._
 - Open [**Keep the v3 XSD schema in sync across its two locations**](practice-keep-the-xsd-schema-in-sync-across-its-two-locations.md) to learn about: Keep the canonical v3 XSD and the serializer's embedded XSD byte-identical, and preserve the OpenCode skill symlinks. #self-review #xsd #sync
 - Open [**Design XML output to be parsed by LLMs**](practice-design-xml-output-to-be-parsed-by-llms.md) to learn about: Review output is structured XML with an XSD schema so LLMs can reliably parse and act on feedback. #output #xml #ai
 - Open [**Emit no wrapper elements in the XML output**](practice-emit-no-wrapper-elements-in-the-xml-output.md) to learn about: file elements are direct children of review; no files or comments wrapper, no summary element. #xml #schema
-- Open [**Validate XML output against the XSD before writing**](practice-validate-xml-output-against-the-xsd-before-writing.md) to learn about: Serializer must validate review output against the XSD; on failure, write to stderr and exit(1). #strikethroo #xml #validation
+- Open [**Validate XML output against the XSD before writing**](practice-validate-xml-output-against-the-xsd-before-writing.md) to learn about: A schema violation exits 1 and writes nothing; a validator that fails to load only warns and the file is written unvalidated. #strikethroo #xml #validation
 
 ## Components (what exists)
 - Open [**review.xml format and XSD**](map-review-xml-format-and-xsd.md) to learn about: v3 XML review documents contain files, comments, suggestions, attachments, and ordered flat reply threads. #self-review #schema #xml

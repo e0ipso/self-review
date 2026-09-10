@@ -58,8 +58,9 @@ _None._
 ### #directory
 - Open [**Three startup modes: git, directory, welcome**](map-three-startup-modes-git-directory-welcome.md) — git mode reviews a git diff; directory mode treats all files as new additions; welcome mode shows a picker when launched without context.
 ### #electron
-- Open [**Two-process Electron architecture**](../architecture/map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
 - Open [**Re-exec with headless Ozone for windowless subcommands**](practice-re-exec-with-headless-ozone-for-windowless-subcommands.md) — Packaged fuses disable RunAsNode, so ELECTRON_RUN_AS_NODE cannot make a subcommand headless; cli-dispatch re-execs.
+- Open [**asarUnpack is electron-builder's key; @electron/packager spells it asar.unpack**](../../engineering/practice-use-asar-unpack-not-asarunpack-in-forge-config.md) — Forge drops an asarUnpack key on the floor. The packager option is asar: { unpack }, and this repo needs neither.
+- Open [**Two-process Electron architecture**](../architecture/map-two-process-electron-architecture.md) — Main process runs CLI/git/IPC/file I/O; renderer is a React + TypeScript UI sandboxed via preload contextBridge.
 ### #flags
 - Open [**self-review CLI invocations**](map-self-review-cli-invocations.md) — Review local diffs, directories or forge URLs, or fetch comments headlessly.
 ### #headless
@@ -73,9 +74,9 @@ _None._
 - Open [**self-review-v3 XSD output format**](../../review-xml/schema/map-self-review-v1-xsd-output-format.md) — Review output uses self-review-v3.xsd and urn:self-review:v3; v1 and v2 stay frozen, while the current version may gain optional attributes additively.
 - Open [**Treat self-review as a CLI-first, one-shot tool**](practice-treat-self-review-as-a-cli-first-one-shot-tool.md) — self-review launches from the terminal, writes review output to a file, then exits. No servers or persistent state.
 ### #packaging
+- Open [**Re-exec with headless Ozone for windowless subcommands**](practice-re-exec-with-headless-ozone-for-windowless-subcommands.md) — Packaged fuses disable RunAsNode, so ELECTRON_RUN_AS_NODE cannot make a subcommand headless; cli-dispatch re-execs.
 - Open [**Upload release ZIPs using the MakerZIP filenames**](../../engineering/practice-upload-release-zips-using-the-makerzip-filenames.md) — Upload MakerZIP archives directly by glob without renaming them.
-- Open [**Pin Nix fetchzip hashes to the unpacked directory**](../../engineering/practice-pin-nix-fetchzip-hashes-to-the-unpacked-directory.md) — A fetchzip hash covers the unpacked tree, never the archive bytes; update-flake-hash.sh prefetches with --unpack.
-- Open [**Put the types condition first in every package exports block**](../../packages/architecture/practice-put-the-types-condition-first-in-every-package-exports-block.md) — Export conditions resolve in declaration order, and a misordered block still type-checks at exit 0, so nothing here catches it.
+- Open [**asarUnpack is electron-builder's key; @electron/packager spells it asar.unpack**](../../engineering/practice-use-asar-unpack-not-asarunpack-in-forge-config.md) — Forge drops an asarUnpack key on the floor. The packager option is asar: { unpack }, and this repo needs neither.
 ### #review-xml
 - Open [**Convert git diff args only through format/tokenize**](practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
 ### #round-trip

@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "noEmit": true
+  },
+  // The root-level build configs — forge.config.ts, playwright.config.ts, the
+  // vitest configs and the five webpack files — were in no tsc program
+  // before SR-0078: the root tsconfig includes src/**/*, the unit and e2e
+  // configs reach only test trees, and each package config stays inside its
+  // own directory. Nothing but a packaging run compiled them, and CI performs
+  // none, so forge.config.ts and the three webpack configs AGENTS.md names as
+  // the only sanctioned place for bundling changes shipped unchecked.
+  //
+  // The glob is "*.ts" rather than a fixed name list so a config added at the
+  // root later joins this program without anyone remembering to list it.
+  // Nothing else lives at the repository root.
+  //
+  // ES2022, not the root config's ES6: these run under Node through ts-node
+  // (Forge), vitest and Playwright, never in a browser.
+  "include": ["*.ts"]
+}

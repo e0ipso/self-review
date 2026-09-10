@@ -44,7 +44,24 @@ const devLoggerPort = getAvailablePort(9000);
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    asarUnpack: ['**/xmllint.wasm'],
+    // No asarUnpack key here. aab79af added `asarUnpack: ['**/xmllint.wasm']`
+    // meaning to keep the wasm reachable outside the archive, but that name
+    // belongs to electron-builder; @electron/packager spells it
+    // `asar: { unpack: <glob> }`, so Forge has been dropping the key on the
+    // floor ever since. A packaged tree has no app.asar.unpacked directory and
+    // carries the file at /.webpack/main/native_modules/xmllint.wasm inside
+    // app.asar. Nothing broke, because xmllint-wasm loads it with
+    // fs.readFileSync(__dirname + '/xmllint.wasm') and Electron's asar patch
+    // serves that read from inside the archive. SR-0078 dropped the dead key
+    // when it put this file under tsc rather than translate it, which would
+    // have changed what ships on the strength of no evidence that unpacking is
+    // needed. SR-0081 then measured it on the packaged Linux binary rather
+    // than leaving it inferred. Finishing a review wrote a review.xml that
+    // xmllint validates against self-review-v3.xsd, with no "validation
+    // infrastructure failed" warning on stderr, and the guide loader read the
+    // same wasm both ways, accepting a valid sidecar and rejecting an invalid
+    // one with libxml2's own "No matching global declaration available for the
+    // validation root" error. Unpacking is not needed.
     // On macOS the binary name inside the .app bundle is derived from
     // productName and doesn't need overriding.  Only set executableName on
     // Linux where it controls the CLI command name.

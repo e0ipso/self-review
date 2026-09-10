@@ -518,9 +518,15 @@ describe('serializeReview', () => {
       );
     });
 
+    // A validator that cannot load is deliberately not fatal, unlike a schema
+    // violation: the review is written with a warning rather than lost. The
+    // warning is the only signal that a written review.xml went out
+    // unvalidated, so it is asserted here verbatim and not just as behaviour.
+    // AGENTS.md, "XML must validate", states the same trade.
     it('gracefully falls back when validation infrastructure fails (e.g. WASM load)', async () => {
       const { validateXML } = await import('xmllint-wasm');
       vi.mocked(validateXML).mockRejectedValueOnce(new Error('WASM load failed'));
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
@@ -535,6 +541,32 @@ describe('serializeReview', () => {
       expect(xml).toContain('xmlns="urn:self-review:v3"');
       expect(xml).toContain('timestamp="2024-01-15T10:30:00Z"');
       expect(xml).toContain('</review>');
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[main] XML validation infrastructure failed: WASM load failed - emitting XML without validation'
+      );
+
+      errorSpy.mockRestore();
+    });
+
+    it('warns without a message when the validator rejects with a non-Error', async () => {
+      const { validateXML } = await import('xmllint-wasm');
+      vi.mocked(validateXML).mockRejectedValueOnce('abort(LinkError)');
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        files: [],
+      };
+
+      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+
+      expect(xml).toContain('</review>');
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[main] XML validation infrastructure failed - emitting XML without validation'
+      );
+
+      errorSpy.mockRestore();
     });
   });
 

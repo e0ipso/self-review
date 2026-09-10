@@ -1,6 +1,7 @@
 import path from 'path';
+import { defineConfig } from 'vitest/config';
 
-export default {
+export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['packages/react/src/**/*.test.{ts,tsx}', 'src/renderer/**/*.test.{ts,tsx}'],
@@ -8,7 +9,7 @@ export default {
     globals: true, // Enable browser globals
     mockReset: true,
     restoreMocks: true,
-    timeout: 5000,
+    testTimeout: 5000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],
@@ -40,4 +41,4 @@ export default {
       '@self-review/core': path.resolve(__dirname, 'packages/core/src/index.ts'),
     },
   },
-};
+});

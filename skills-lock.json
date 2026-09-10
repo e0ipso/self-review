@@ -31,6 +31,21 @@
       "skillPath": ".cursor/skills/kk-session-extract/SKILL.md",
       "computedHash": "eec0266ba6d78c60b4f066f2198d657b16aad8bdc54cd3662f89f1ebf84e0d01"
     },
+    "sift-drain": {
+      "source": "../sift",
+      "sourceType": "local",
+      "computedHash": "11d25b80bbd1e660ba887a445df857a9c78e44de7e4a555c26dd5fd3d4ac7884"
+    },
+    "sift-init": {
+      "source": "../sift",
+      "sourceType": "local",
+      "computedHash": "feaa6b2a15ef6611dbc7214ae48931133e346e399103275cfe8a4551727ce309"
+    },
+    "sift-prime": {
+      "source": "../sift",
+      "sourceType": "local",
+      "computedHash": "4696fcd5ba48ace575ff1bcfa650f07c7e91dc71d4fd1c4732fb0e8995cf8532"
+    },
     "st-code-review": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
@@ -72,6 +87,11 @@
       "sourceType": "github",
       "skillPath": "skills/st-refine-plan/SKILL.md",
       "computedHash": "1197993488ca82efeb41e0b7ae52f95ddbed818ea970c547d479e7ade119f190"
+    },
+    "verification-before-completion": {
+      "source": "../sift",
+      "sourceType": "local",
+      "computedHash": "b529822bdac4b197b180fe12225cff86b930b65910435103c10622df7f041651"
     }
   }
 }

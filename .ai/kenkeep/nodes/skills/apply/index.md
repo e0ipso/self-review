@@ -74,3 +74,4 @@ _None._
 - Open [**Pair line-number attributes correctly in review comments**](../../review-xml/line-anchors/practice-pair-line-number-attributes-correctly-in-review-comments.md) — Use exactly one complete new-line or old-line pair on line comments; omit both pairs for file-level comments.
 ### #xmllint
 - Open [**Validate self-review XML against the XSD before applying**](practice-validate-self-review-xml-against-the-xsd-before-applying.md) — Run xmllint against assets/self-review-v3.xsd before processing review feedback; stop on failure.
+- Open [**asarUnpack is electron-builder's key; @electron/packager spells it asar.unpack**](../../engineering/practice-use-asar-unpack-not-asarunpack-in-forge-config.md) — Forge drops an asarUnpack key on the floor. The packager option is asar: { unpack }, and this repo needs neither.

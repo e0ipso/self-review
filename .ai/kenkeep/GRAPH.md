@@ -1,11 +1,11 @@
 ---
 schema_version: 3
-nodes_hash: 'sha256:caf5ab2371634d54eb10d96a1b67a19af337e9618de2a775b7bb3c2a5fee9155'
-node_count: 200
+nodes_hash: 'sha256:b8c499c5d457ed287cfb850a9d8091bcc6d4d6b750adb0b9f355174e5df05fdb'
+node_count: 203
 ---
 # kenkeep Graph
 
-Total nodes: 200
+Total nodes: 203
 
 ## map-ai-knowledge-base-cli
 
@@ -504,7 +504,7 @@ Total nodes: 200
 ## map-type-check-programs-and-scripts
 
 - **kind:** map
-- **title:** Six tsc programs behind four typecheck npm scripts
+- **title:** Seven tsc programs behind five typecheck npm scripts
 - **path:** engineering/map-type-check-programs-and-scripts.md
 - **tags:** typescript, tsconfig, typecheck, ci, build
 - **relates_to:** practice-fix-webpack-type-checking-in-the-root-tsconfig-json-not-in-a-webpack-config
@@ -979,6 +979,14 @@ Total nodes: 200
 - **relates_to:** map-self-review-wrapper-div, map-css-build-pipeline-for-self-review-react
 - **derived_from:** packages/react/AGENTS.md
 
+## practice-install-libgtk-3-0-never-libgtk-3-0t64
+
+- **kind:** practice
+- **title:** Install libgtk-3-0, never libgtk-3-0t64
+- **path:** engineering/practice-install-libgtk-3-0-never-libgtk-3-0t64.md
+- **tags:** apt, ubuntu, debian, devcontainer, ci, electron
+- **relates_to:** practice-run-the-webapp-e2e-project-in-the-dev-container
+
 ## practice-install-playwright-chromium-and-its-system-libraries-before-the-first-e2e-run
 
 - **kind:** practice
@@ -1432,10 +1440,10 @@ Total nodes: 200
 ## practice-run-the-webapp-e2e-project-in-the-dev-container
 
 - **kind:** practice
-- **title:** Run the webapp e2e project in the dev container; only Electron e2e needs a host
+- **title:** Both e2e projects run in the dev container; the Electron tier needs two apt packages
 - **path:** engineering/practice-run-the-webapp-e2e-project-in-the-dev-container.md
 - **tags:** testing, e2e, playwright, devcontainer
-- **relates_to:** map-testing-layers-unit-e2e
+- **relates_to:** map-testing-layers-unit-e2e, practice-install-libgtk-3-0-never-libgtk-3-0t64
 
 ## practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div
 
@@ -1587,6 +1595,14 @@ Total nodes: 200
 - **relates_to:** map-kb-bootstrap-skill
 - **derived_from:** .agents/skills/kk-bootstrap/SKILL.md
 
+## practice-strip-agent-attribution-from-commit-messages
+
+- **kind:** practice
+- **title:** Commitlint rejects agent attribution in the message and the author email
+- **path:** engineering/practice-strip-agent-attribution-from-commit-messages.md
+- **tags:** git, commitlint, husky, commits
+- **relates_to:** practice-run-npm-run-prepare-in-a-fresh-worktree-or-the-pre-commit-hook-is-silently-skipped, practice-use-conventional-commit-naming-for-pr-titles
+
 ## practice-treat-every-review-comment-as-actionable-including-questions
 
 - **kind:** practice
@@ -1622,6 +1638,14 @@ Total nodes: 200
 - **tags:** release, packaging
 - **relates_to:** map-self-review
 - **derived_from:** .ai/kenkeep/_sessions/20260708-0612-8ba72cf2-8c9f-43fa-ae1b-570ec4ddab17.md
+
+## practice-use-asar-unpack-not-asarunpack-in-forge-config
+
+- **kind:** practice
+- **title:** asarUnpack is electron-builder's key; @electron/packager spells it asar.unpack
+- **path:** engineering/practice-use-asar-unpack-not-asarunpack-in-forge-config.md
+- **tags:** electron, forge, packaging, asar, xmllint
+- **relates_to:** practice-do-not-install-or-use-webpack
 
 ## practice-use-categories-from-self-review-yaml-when-present
 

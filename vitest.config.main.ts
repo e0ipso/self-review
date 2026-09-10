@@ -1,6 +1,7 @@
 import path from 'path';
+import { defineConfig } from 'vitest/config';
 
-export default {
+export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/main/**/*.test.ts'],
@@ -8,7 +9,7 @@ export default {
     globals: false,
     mockReset: true,
     restoreMocks: true,
-    timeout: 5000,
+    testTimeout: 5000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],
@@ -29,4 +30,4 @@ export default {
       '@': path.resolve(__dirname, './src'),
     },
   },
-};
+});

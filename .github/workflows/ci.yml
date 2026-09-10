@@ -1,7 +1,8 @@
 # GitHub Actions CI Pipeline for self-review
 #
 # This workflow runs Lint, Unit Tests, and Webapp E2E Tests on every push to main
-# and every PR targeting main. Electron E2E tests run locally only.
+# and every PR targeting main. Electron E2E Tests run after a merge to main, or
+# on demand, but not on a pull request; see AGENTS.md, "E2E Tests", for why.
 
 name: CI
 
@@ -10,6 +11,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Lets a contributor exercise the Electron tier on a branch before merging,
+  # since the pull_request event deliberately skips it.
+  workflow_dispatch:
 
 # Cancel in-progress runs for the same branch/PR
 concurrency:
@@ -33,6 +37,7 @@ jobs:
       - run: npm run typecheck:tests
       - run: npm run typecheck:unit
       - run: npm run typecheck:packages
+      - run: npm run typecheck:configs
 
   unit-test:
     name: Unit Tests
@@ -62,5 +67,31 @@ jobs:
         if: failure()
         with:
           name: e2e-test-results
+          path: test-results/
+          retention-days: 7
+
+  electron-e2e:
+    name: Electron E2E Tests
+    runs-on: ubuntu-latest
+    # Post-merge and on demand only. The tier packages the app before it runs,
+    # which no other job does, so it is the slowest one here.
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+      # The same two packages .devcontainer/devcontainer.json installs, plus
+      # xvfb for the xvfb-run in the test:e2e:electron script. All three ship
+      # with the runner image today; installing them keeps the job working if
+      # that stops being true.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xauth libgtk-3-0 xvfb
+      - run: npm ci
+      - run: npm run test:e2e:electron
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: electron-e2e-test-results
           path: test-results/
           retention-days: 7

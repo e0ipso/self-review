@@ -23,7 +23,7 @@
     },
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/apt-get-packages:1": {
-      "packages": "less,procps,fzf,man-db,unzip,gnupg2,gawk,jq,nano,vim,tree,python3-yaml,libxml2-utils"
+      "packages": "less,procps,fzf,man-db,unzip,gnupg2,gawk,jq,nano,vim,tree,python3-yaml,libxml2-utils,xauth,libgtk-3-0"
     },
     "ghcr.io/e0ipso/devcontainer-feature-ai-assistant/claude:1": {},
     "ghcr.io/e0ipso/devcontainer-feature-ai-assistant/claude-auth:1": {},

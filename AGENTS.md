@@ -10,10 +10,16 @@ reviewed with the same machinery (see Remote PR/MR mode).
 
 ## Dev Container
 
-The two e2e projects differ here. `npm run test:e2e` (the webapp project) runs headless Chromium
-against a Vite dev server and passes inside the container once the Playwright browser and its system
-libraries are installed. `npm run test:e2e:electron` cannot run here: it packages the app and needs
-`xvfb-run` plus a `DISPLAY`. Check which project a command targets before you skip it.
+Both e2e projects run here. `npm run test:e2e` (the webapp project) runs headless Chromium against a
+Vite dev server and passes once the Playwright browser and its system libraries are installed.
+`npm run test:e2e:electron` packages the app and runs it under `xvfb-run`, and at `f1e4eae` all 38
+scenarios passed in 59.5s, exit 0. Getting there took two apt packages the base image leaves out.
+Without `xauth`, `xvfb-run` exits 3 before a single test starts; without `libgtk-3-0`, the Electron
+binary dies at launch on `libgtk-3.so.0`. Both are now in the `apt-get-packages` feature list at
+`.devcontainer/devcontainer.json:26`, so a container rebuilt after that change needs nothing more.
+An older container needs `sudo apt-get install -y xauth libgtk-3-0` once. A display was never the
+problem. `xvfb-run` is installed and the script passes `--auto-servernum`, which starts its own X
+server.
 
 ## Tech Stack
 
@@ -328,16 +334,18 @@ npm run typecheck              # Type-check the app sources (root tsconfig.json)
 npm run typecheck:tests        # Type-check the e2e test sources
 npm run typecheck:unit         # Type-check the unit test sources
 npm run typecheck:packages     # Type-check each workspace package against its own tsconfig.json
+npm run typecheck:configs      # Type-check the root-level build configs (forge, webpack, vitest, playwright)
 ```
 
-The CI lint job gates on `typecheck`, `typecheck:tests`, `typecheck:unit` and `typecheck:packages`;
-a change that fails any of the four locally fails CI the same way.
+The CI lint job gates on `typecheck`, `typecheck:tests`, `typecheck:unit`, `typecheck:packages` and
+`typecheck:configs`; a change that fails any of the five locally fails CI the same way.
 
 Coverage reports are retained separately in `coverage/main/`, `coverage/renderer/`, and
 `coverage/core/`.
 
-**Dev Container**: Unit tests work in both the dev container and host machine, as does the webapp
-e2e project. Only the Electron e2e project needs a host.
+**Dev Container**: Unit tests, the webapp e2e project and the Electron e2e project all work in the
+dev container and on a host machine. The Dev Container section above names the two apt packages the
+Electron tier needs.
 
 **Coverage target**: ~50-60% coverage on business logic. Coverage is collected but thresholds are
 not enforced.
@@ -348,19 +356,29 @@ E2E tests use Playwright with Cucumber BDD in a two-tier approach:
 
 1. **Webapp e2e** (primary, runs in CI), Tests the `@self-review/react` components via a Vite dev
    server with fixture data. Fast, no Electron packaging needed.
-2. **Electron e2e** (supplementary, local only), Tests Electron-specific behavior (XML output,
-   resume, error handling, welcome screen, expand context, find-in-page). Requires packaging + xvfb.
+2. **Electron e2e** (supplementary, runs in CI after a merge to `main`), Tests Electron-specific
+   behavior (XML output, resume, error handling, welcome screen, expand context, find-in-page).
+   Requires packaging + xvfb.
 
-Only tier 2 is host-only: it needs a display, so it cannot run in the dev container. Tier 1 runs in
-the dev container after `npx playwright install chromium` and
-`sudo npx playwright install-deps chromium`.
+Both tiers run in the dev container. Tier 1 needs `npx playwright install chromium` and
+`sudo npx playwright install-deps chromium` first. Tier 2 needs the `xauth` and `libgtk-3-0` apt
+packages, which `.devcontainer/devcontainer.json:26` now installs.
+
+**Tier 2 in CI.** The `electron-e2e` job in `.github/workflows/ci.yml` is gated on
+`github.event_name != 'pull_request'`, so it runs on pushes to `main` and on `workflow_dispatch`,
+and skips on pull requests. Measured in the dev container, `npm run package` takes 34s and the
+Playwright run takes 56s over 38 tests, so the tier's own work is about 90s on top of a full
+`npm ci` this job cannot share with any other. That makes it the slowest job in the workflow, and it
+catches regressions rather than gating new code. Running it post-merge catches a regression within
+one merge instead of never. A contributor touching the Electron shell can trigger
+`workflow_dispatch` on the branch first, or run the tier locally.
 
 **Running e2e tests**:
 
 ```bash
 npm run test:e2e                  # Webapp e2e (CI, fast)
 npm run test:e2e:headed           # Webapp e2e with visible browser
-npm run test:e2e:electron         # Electron e2e (local only, requires packaging + xvfb)
+npm run test:e2e:electron         # Electron e2e (requires packaging + xvfb)
 npm run test:e2e:electron:headed  # Electron e2e with visible browser
 ```
 
@@ -453,8 +471,16 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
 - **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
   Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit / Discard
   / Cancel.
-- **XML must validate.** The serializer validates output against the XSD before writing. If
-  validation fails, write error to stderr and exit(1).
+- **XML must validate, with one stated exception.** The serializer validates output against the XSD
+  before writing. A schema violation writes the errors to stderr and exits 1, and no file is
+  written. A validator that fails to load is deliberately not fatal. `serializeReview` logs
+  `[main] XML validation infrastructure failed: <message> - emitting XML without validation`, then
+  returns the document, so `review.xml` is written unvalidated and the process exits 0. Losing a
+  finished review to a broken xmllint build is the worse outcome. So a `review.xml` on disk proves
+  validation ran only when that warning is absent from stderr. Both branches are pinned in
+  `packages/core/src/xml-serializer.test.ts`. The guide sidecar makes the opposite trade on purpose
+  and folds a validator failure into the same `ok: false` as a schema violation
+  (`packages/core/src/guide-parser.ts`), because a dropped guide costs the reviewer nothing.
 - **Line numbers: old vs new.** Comments on added/context lines use `newLineStart`/`newLineEnd`.
   Comments on deleted lines use `oldLineStart`/`oldLineEnd`. Exactly one pair, never both.
   File-level comments have neither.

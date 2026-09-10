@@ -3,7 +3,7 @@ type: map
 title: Testing layers (unit + e2e)
 description: >-
   Vitest for fast unit tests; Playwright + Cucumber for webapp e2e (CI) and
-  Electron e2e (local only).
+  Electron e2e (not run in CI).
 tags:
   - strikethroo
   - testing
@@ -22,7 +22,7 @@ The app has two testing layers:
 1. **Unit tests** (Vitest) — colocated `*.test.ts` files. Separate configs for main (Node env) and renderer (jsdom). Run via `npm run test:unit`, `test:unit:main`, `test:unit:renderer`, `test:coverage`.
 2. **E2E tests** (Playwright + Cucumber) in two tiers:
    - **Webapp e2e** (primary, runs in CI) — tests `@self-review/react` components via a Vite dev server with fixtures. Run via `npm run test:e2e`.
-   - **Electron e2e** (supplementary, local only) — tests Electron-specific behavior (XML output, resume, error handling, welcome screen, expand context, find-in-page). Requires packaging + xvfb. Run via `npm run test:e2e:electron`.
+   - **Electron e2e** (supplementary, not run in CI) — tests Electron-specific behavior (XML output, resume, error handling, welcome screen, expand context, find-in-page). Requires packaging + xvfb, and in the dev container the `xauth` and `libgtk-3-0` apt packages. Run via `npm run test:e2e:electron`.
 
 Coverage target is ~50–60% on business logic; thresholds are collected but not enforced.
 

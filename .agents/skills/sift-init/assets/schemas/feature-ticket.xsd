@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="urn:sift:ticket:v1"
+           xmlns:tns="urn:sift:ticket:v1"
+           elementFormDefault="qualified">
+
+  <xs:include schemaLocation="sift-common.xsd" />
+
+  <!--
+    Element order is the rendered section order; do not reorder. Optional elements are
+    omitted entirely when they do not apply.
+  -->
+  <xs:element name="feature-ticket">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="front-matter" type="tns:frontMatter" />
+
+        <!-- <motivation> renders as "## Problem". -->
+        <xs:element name="motivation" type="tns:nonEmptyString" />
+
+        <!-- <evidence> renders as "## Evidence". -->
+        <xs:element name="evidence" type="tns:evidence" minOccurs="0" />
+
+        <!-- <proposed-solution> renders as "## Direction". -->
+        <xs:element name="proposed-solution" type="tns:nonEmptyString" />
+
+        <!-- <alternatives-considered> renders as "## Alternatives considered". -->
+        <xs:element name="alternatives-considered" type="tns:nonEmptyString" minOccurs="0" />
+
+        <!-- <acceptance-criteria> renders as "## Acceptance criteria". -->
+        <xs:element name="acceptance-criteria" type="tns:acceptanceCriteria" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
