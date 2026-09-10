@@ -16,12 +16,7 @@ import { join } from 'node:path';
 import { createTestRepo } from '../fixtures/test-repo';
 import { triggerCommentIcon } from '../fixtures/comment-actions';
 import { startServe, ServeProcess } from './serve-process';
-import {
-  commentsFor,
-  filesOf,
-  readReviewDocument,
-  validateAgainstV3Xsd,
-} from './review-document';
+import { commentsFor, filesOf, readReviewDocument, validateAgainstV3Xsd } from './review-document';
 
 /**
  * The fixture's unstaged changes: four tracked files and two untracked ones.
@@ -44,9 +39,7 @@ test.afterEach(() => {
   outputDir = null;
 });
 
-test('a review completed in the browser is written to the output file', async ({
-  page,
-}) => {
+test('a review completed in the browser is written to the output file', async ({ page }) => {
   repoDir = createTestRepo();
   outputDir = mkdtempSync(join(tmpdir(), 'self-review-serve-out-'));
   const outputPath = join(outputDir, 'review.xml');
@@ -54,10 +47,9 @@ test('a review completed in the browser is written to the output file', async ({
   serve = await startServe(['--output', outputPath], repoDir);
 
   await page.goto(serve.url);
-  await expect(page.locator('[data-testid^="file-entry-"]')).toHaveCount(
-    FIXTURE_FILE_COUNT,
-    { timeout: 15_000 }
-  );
+  await expect(page.locator('[data-testid^="file-entry-"]')).toHaveCount(FIXTURE_FILE_COUNT, {
+    timeout: 15_000,
+  });
 
   await triggerCommentIcon(page, COMMENTED_FILE, 5, 'new');
   await page.locator('[data-testid="comment-input"] textarea').fill('Fix this');
@@ -80,16 +72,18 @@ test('a review completed in the browser is written to the output file', async ({
 
   expect(document.review['@_timestamp']).toBeTruthy();
   expect(document.review['@_repository']).toBe(repoDir);
-  expect(filesOf(document).map(file => file['@_path']).sort()).toEqual(
-    [
-      'README.md',
-      'docs/architecture.md',
-      'src/auth/login.ts',
-      'src/config.ts',
-      'src/legacy.ts',
-      'src/new-feature.ts',
-    ]
-  );
+  expect(
+    filesOf(document)
+      .map(file => file['@_path'])
+      .sort()
+  ).toEqual([
+    'README.md',
+    'docs/architecture.md',
+    'src/auth/login.ts',
+    'src/config.ts',
+    'src/legacy.ts',
+    'src/new-feature.ts',
+  ]);
 
   const comments = commentsFor(document, COMMENTED_FILE);
   expect(comments).toHaveLength(1);

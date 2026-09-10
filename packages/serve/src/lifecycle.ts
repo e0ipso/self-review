@@ -21,10 +21,7 @@ export interface CompletionOptions {
  * The same two steps the desktop takes on Finish Review. A document that fails
  * XSD validation throws, and nothing is written.
  */
-export async function writeReviewOutput(
-  state: ReviewState,
-  outputPath: string
-): Promise<void> {
+export async function writeReviewOutput(state: ReviewState, outputPath: string): Promise<void> {
   const xml = await serializeReview(state, outputPath);
   fs.writeFileSync(outputPath, xml + '\n', 'utf-8');
 }

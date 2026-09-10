@@ -14,10 +14,7 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
 /** The built entry point, exactly what `bin.self-review-serve` points at. */
-export const SERVE_CLI = path.resolve(
-  __dirname,
-  '../../packages/serve/dist/cli.js'
-);
+export const SERVE_CLI = path.resolve(__dirname, '../../packages/serve/dist/cli.js');
 
 /** Where the URL line comes from — stderr, since stdout is unused. */
 const READY_LINE = /Review ready at (http:\/\/127\.0\.0\.1:\d+\/?)/;
@@ -44,11 +41,7 @@ export interface ServeProcess {
  * unwritable output path) is reported on stderr and is far more useful than
  * the timeout it would otherwise become.
  */
-export function startServe(
-  args: string[],
-  cwd: string,
-  timeoutMs = 30_000
-): Promise<ServeProcess> {
+export function startServe(args: string[], cwd: string, timeoutMs = 30_000): Promise<ServeProcess> {
   if (!existsSync(SERVE_CLI)) {
     throw new Error(
       `The serve executable is not built: ${SERVE_CLI}. ` +
@@ -94,9 +87,7 @@ export function startServe(
   return new Promise<ServeProcess>((resolve, reject) => {
     const timer = setTimeout(() => {
       child.kill();
-      reject(
-        new Error(`serve did not print a URL within ${timeoutMs}ms.\n${stderrText}`)
-      );
+      reject(new Error(`serve did not print a URL within ${timeoutMs}ms.\n${stderrText}`));
     }, timeoutMs);
 
     const check = () => {
@@ -116,9 +107,7 @@ export function startServe(
     void exited.then(code => {
       if (handle.url) return;
       clearTimeout(timer);
-      reject(
-        new Error(`serve exited with code ${code} before serving.\n${stderrText}`)
-      );
+      reject(new Error(`serve exited with code ${code} before serving.\n${stderrText}`));
     });
   });
 }

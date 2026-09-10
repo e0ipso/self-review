@@ -21,9 +21,7 @@ function json(value: unknown, status = 200): Response {
 }
 
 function stubFetch(handler: Handler) {
-  const spy = vi.fn(async (input: unknown, init?: RequestInit) =>
-    handler(String(input), init)
-  );
+  const spy = vi.fn(async (input: unknown, init?: RequestInit) => handler(String(input), init));
   vi.stubGlobal('fetch', spy);
   return spy;
 }
@@ -160,9 +158,7 @@ describe('createFetchAdapter', () => {
     ];
     const spy = stubRoutes({ '/api/file': hunks });
 
-    await expect(
-      createFetchAdapter().loadFileContent!('src/a b.ts')
-    ).resolves.toEqual(hunks);
+    await expect(createFetchAdapter().loadFileContent!('src/a b.ts')).resolves.toEqual(hunks);
     expect(spy.mock.calls[0][0]).toBe('/api/file?path=src%2Fa%20b.ts');
   });
 
@@ -175,15 +171,11 @@ describe('createFetchAdapter', () => {
   });
 
   it('reads attachment bytes from GET /api/attachment', async () => {
-    const spy = stubFetch(
-      () => new Response(new Uint8Array([1, 2, 3]), { status: 200 })
-    );
+    const spy = stubFetch(() => new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
 
     const buffer = await createFetchAdapter().readAttachment!('.self-review-assets/a-0.png');
     expect(new Uint8Array(buffer!)).toEqual(new Uint8Array([1, 2, 3]));
-    expect(spy.mock.calls[0][0]).toBe(
-      '/api/attachment?path=.self-review-assets%2Fa-0.png'
-    );
+    expect(spy.mock.calls[0][0]).toBe('/api/attachment?path=.self-review-assets%2Fa-0.png');
   });
 
   it('resolves null when an attachment is missing rather than throwing', async () => {
@@ -248,9 +240,9 @@ describe('createFetchAdapter', () => {
 
   it('rejects when the server refuses the review', async () => {
     stubFetch(() => json({ error: 'files must be an array' }, 400));
-    await expect(
-      createFetchAdapter().submitReview!(REVIEW_STATE)
-    ).rejects.toThrow(/files must be an array/);
+    await expect(createFetchAdapter().submitReview!(REVIEW_STATE)).rejects.toThrow(
+      /files must be an array/
+    );
   });
 
   it('reads the config and its output path from GET /api/config', async () => {

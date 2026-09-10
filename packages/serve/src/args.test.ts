@@ -3,9 +3,12 @@ import { parseServeArgs } from './args';
 
 describe('parseServeArgs', () => {
   it('passes everything it does not recognize through to git diff', () => {
-    expect(
-      parseServeArgs(['--staged', 'main..feature', '--', 'src/a.ts']).gitDiffArgs
-    ).toEqual(['--staged', 'main..feature', '--', 'src/a.ts']);
+    expect(parseServeArgs(['--staged', 'main..feature', '--', 'src/a.ts']).gitDiffArgs).toEqual([
+      '--staged',
+      'main..feature',
+      '--',
+      'src/a.ts',
+    ]);
   });
 
   it('takes the output path from --output and keeps it out of the git arguments', () => {
@@ -32,9 +35,7 @@ describe('parseServeArgs', () => {
 
   it('rejects a value-taking flag with no value, rather than handing the flag to git', () => {
     expect(() => parseServeArgs(['--output'])).toThrow(/--output requires/);
-    expect(() => parseServeArgs(['--staged', '--resume-from'])).toThrow(
-      /--resume-from requires/
-    );
+    expect(() => parseServeArgs(['--staged', '--resume-from'])).toThrow(/--resume-from requires/);
   });
 
   it('recognizes the early-exit flags', () => {

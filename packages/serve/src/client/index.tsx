@@ -46,13 +46,12 @@ function Submitted({ outputPath }: { outputPath: string | null }) {
   return (
     <Notice title='Review submitted'>
       <p>
-        The server is writing{' '}
-        {outputPath ? <code>{outputPath}</code> : 'the review file'} and then
+        The server is writing {outputPath ? <code>{outputPath}</code> : 'the review file'} and then
         exits.
       </p>
       <p>
-        Check the terminal it was started from for the confirmation — or for an
-        error, if the review could not be written.
+        Check the terminal it was started from for the confirmation — or for an error, if the review
+        could not be written.
       </p>
     </Notice>
   );
@@ -175,7 +174,7 @@ function App() {
         ref={reviewRef}
         adapter={adapter}
         config={config}
-        onReviewChange={(comments) => setHasUnsavedWork(comments.length > 0)}
+        onReviewChange={comments => setHasUnsavedWork(comments.length > 0)}
         className='flex-1 flex flex-col overflow-hidden bg-background text-foreground'
       >
         <OutputPath info={outputPathInfo} />

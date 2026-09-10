@@ -45,10 +45,7 @@ export interface ServeStartup {
  * Mirrors main.ts phase 4. Welcome mode diverges: there is no directory picker
  * in a browser, so refusing beats serving an interface whose controls are dead.
  */
-async function loadDiffForMode(
-  gitDiffArgs: string[],
-  config: AppConfig
-): Promise<DiffLoadPayload> {
+async function loadDiffForMode(gitDiffArgs: string[], config: AppConfig): Promise<DiffLoadPayload> {
   const mode = determineMode(gitDiffArgs);
   console.error(`[serve] Startup mode: ${mode}`);
 
@@ -122,11 +119,7 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   // Phase 4b (main.ts:264) — large payload. The desktop asks; there is
   // nobody to ask before the browser connects, so the threshold simply
   // turns on lazy per-file loading (GET /api/file) and says so.
-  const stats = computePayloadStats(
-    diffData.files.length,
-    countTotalLines(diffData.files),
-    config
-  );
+  const stats = computePayloadStats(diffData.files.length, countTotalLines(diffData.files), config);
   if (stats.exceedsAny) {
     console.error(
       `[serve] Large payload: ${stats.fileCount} files, ${stats.totalLines} lines ` +

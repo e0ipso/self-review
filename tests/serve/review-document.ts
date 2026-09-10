@@ -53,5 +53,5 @@ export async function validateAgainstV3Xsd(
     xml: [{ fileName: 'review.xml', contents: readFileSync(filePath, 'utf-8') }],
     schema: [{ fileName: 'schema.xsd', contents: readFileSync(schemaPath, 'utf-8') }],
   });
-  return { valid: result.valid, errors: result.errors ?? [] };
+  return { valid: result.valid, errors: [...(result.errors ?? [])] };
 }

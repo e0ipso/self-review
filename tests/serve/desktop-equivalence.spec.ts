@@ -25,12 +25,7 @@ import { startServe, ServeProcess } from './serve-process';
 import { readReviewDocument, XmlNode } from './review-document';
 // Importing this module starts a virtual display when there is none, which is
 // what the Electron half below needs and the serve half above does not.
-import {
-  cleanup as cleanupDesktop,
-  getExitCode,
-  launchApp,
-  saveAndCloseApp,
-} from '../steps/app';
+import { cleanup as cleanupDesktop, getExitCode, launchApp, saveAndCloseApp } from '../steps/app';
 
 const COMMENTED_FILE = 'src/auth/login.ts';
 const COMMENT_BODY = 'Fix this';
@@ -62,9 +57,7 @@ test.afterEach(async () => {
   outputDir = null;
 });
 
-test('serve mode and the desktop application write the same document', async ({
-  page,
-}) => {
+test('serve mode and the desktop application write the same document', async ({ page }) => {
   // A missing bundle means two different things. Locally it means the
   // developer has not packaged, and skipping is a kindness. In CI the
   // workflow packages before calling this, so a missing bundle means the
@@ -79,10 +72,7 @@ test('serve mode and the desktop application write the same document', async ({
         'packaged desktop bundle was found. Run `npm run package` before this suite.'
     ).not.toBeNull();
   }
-  test.skip(
-    bundle === null,
-    'No desktop bundle — run `npm run package` to compare against it.'
-  );
+  test.skip(bundle === null, 'No desktop bundle — run `npm run package` to compare against it.');
   // Electron needs a window server even to render offscreen; the serve half
   // of this file does not.
   test.slow();
@@ -97,10 +87,7 @@ test('serve mode and the desktop application write the same document', async ({
   // in the other's diff. The desktop has no output flag — its path comes from
   // the configuration file, which is why this is written before either runs
   // and is itself part of the reviewed state.
-  writeFileSync(
-    join(repoDir, '.self-review.yaml'),
-    `output-file: "${desktopPath}"\n`
-  );
+  writeFileSync(join(repoDir, '.self-review.yaml'), `output-file: "${desktopPath}"\n`);
 
   // ── Serve mode ──
 
@@ -124,9 +111,7 @@ test('serve mode and the desktop application write the same document', async ({
     timeout: 30_000,
   });
   await triggerCommentIcon(desktopPage, COMMENTED_FILE, 5, 'new');
-  await desktopPage
-    .locator('[data-testid="comment-input"] textarea')
-    .fill(COMMENT_BODY);
+  await desktopPage.locator('[data-testid="comment-input"] textarea').fill(COMMENT_BODY);
   await desktopPage.locator('[data-testid="add-comment-btn"]').click();
   await saveAndCloseApp();
   expect(getExitCode()).toBe(0);

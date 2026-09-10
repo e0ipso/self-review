@@ -25,8 +25,8 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
-    "@self-review/core": "^1.43.4",
-    "@self-review/react": "^1.43.4"
+    "@self-review/core": "^1.44.0",
+    "@self-review/react": "^1.44.0"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

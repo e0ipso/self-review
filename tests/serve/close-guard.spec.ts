@@ -43,10 +43,9 @@ test('closing the tab warns once a comment exists, and stays quiet before that',
   serve = await startServe(['--output', join(outputDir, 'review.xml')], repoDir);
 
   await page.goto(serve.url);
-  await expect(page.locator('[data-testid^="file-entry-"]')).toHaveCount(
-    FIXTURE_FILE_COUNT,
-    { timeout: 15_000 }
-  );
+  await expect(page.locator('[data-testid^="file-entry-"]')).toHaveCount(FIXTURE_FILE_COUNT, {
+    timeout: 15_000,
+  });
 
   // Count the prompts the browser raises. Playwright dismisses them itself, so
   // the handler is what is observed, not a rendered dialog.

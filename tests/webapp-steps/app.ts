@@ -123,19 +123,12 @@ function stopViteServer(): void {
  * Launch the webapp in a browser. Starts Vite if needed.
  * @param queryParams Optional URL query parameters (e.g., { categories: 'commenting' })
  */
-export async function launchWebapp(
-  queryParams: Record<string, string> = {}
-): Promise<Page> {
+export async function launchWebapp(queryParams: Record<string, string> = {}): Promise<Page> {
   await startViteServer();
 
   browser = await chromium.launch({
     executablePath: process.env.PW_CHROMIUM_PATH || undefined,
-    args: [
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-setuid-sandbox',
-      '--disable-gpu',
-    ],
+    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-setuid-sandbox', '--disable-gpu'],
   });
   context = await browser.newContext({
     viewport: { width: 1280, height: 800 },

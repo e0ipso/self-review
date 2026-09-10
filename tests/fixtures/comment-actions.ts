@@ -25,9 +25,7 @@ export async function triggerCommentIcon(
   side: 'old' | 'new'
 ): Promise<void> {
   const section = page.locator(`[data-testid="file-section-${filePath}"]`);
-  const gutter = section.locator(
-    `[data-testid="${side}-line-${filePath}-${line}"]`
-  );
+  const gutter = section.locator(`[data-testid="${side}-line-${filePath}-${line}"]`);
   await gutter.hover();
   const icon = section.locator(`[data-testid="comment-icon-${side}-${line}"]`);
   await icon.waitFor({ state: 'visible', timeout: 5000 });
@@ -36,10 +34,6 @@ export async function triggerCommentIcon(
   // There's no observable intermediate DOM state between mousedown and mouseup,
   // so a short fixed delay is appropriate here.
   await page.waitForTimeout(150);
-  await page.evaluate(() =>
-    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-  );
-  await page
-    .locator('[data-testid="comment-input"]')
-    .waitFor({ state: 'visible', timeout: 5000 });
+  await page.evaluate(() => document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
+  await page.locator('[data-testid="comment-input"]').waitFor({ state: 'visible', timeout: 5000 });
 }

@@ -60,6 +60,7 @@ describe('@self-review/types path mapping', () => {
       'tests/tsconfig.json',
       'packages/core/tsconfig.json',
       'packages/react/tsconfig.json',
+      'packages/serve/tsconfig.json',
     ]);
     expect(fs.existsSync(path.join(REPO_ROOT, EXEMPT))).toBe(true);
   });

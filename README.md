@@ -318,8 +318,8 @@ Electron window is not an option: a remote box, a container, or a machine with n
 npx @self-review/serve --staged
 ```
 
-It takes the same git diff arguments as `self-review`, plus `-o`/`--output` for where to write
-the review and `--resume-from` to carry a previous one in:
+It takes the same git diff arguments as `self-review`, plus `-o`/`--output` for where to write the
+review and `--resume-from` to carry a previous one in:
 
 ```bash
 npx @self-review/serve                            # unstaged changes
@@ -337,18 +337,18 @@ that file and stops the process.
 
 Closing the tab warns you first, once you have entered something. Comments live only in the page
 until you finish, so closing without finishing loses them. The desktop application asks the same
-question with more options, since it can offer to save on the way out and a browser cannot.
-Nothing is auto-saved either way.
+question with more options, since it can offer to save on the way out and a browser cannot. Nothing
+is auto-saved either way.
 
-Walkthrough guides work as they do in the desktop application. A `review.guide.xml` sitting next
-to your output path is picked up at startup and the file tree opens in guided mode.
+Walkthrough guides work as they do in the desktop application. A `review.guide.xml` sitting next to
+your output path is picked up at startup and the file tree opens in guided mode.
 
 The listener binds to `127.0.0.1` and there is no authentication. Anything that can reach the port
-can read your diff and finish the review on your behalf, and on a shared host that means every
-local user, not only you. It will not answer a request that names anything but itself, so a web
-page you happen to be visiting cannot reach it. Reaching it over an `ssh -L` forward works as you
-would expect; anyone who can reach that forwarded port has the access you do, and securing it is
-yours to add.
+can read your diff and finish the review on your behalf, and on a shared host that means every local
+user, not only you. It will not answer a request that names anything but itself, so a web page you
+happen to be visiting cannot reach it. Reaching it over an `ssh -L` forward works as you would
+expect; anyone who can reach that forwarded port has the access you do, and securing it is yours to
+add.
 
 See [`packages/serve/README.md`](packages/serve/README.md) for the package itself.
 

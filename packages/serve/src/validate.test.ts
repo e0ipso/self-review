@@ -118,7 +118,9 @@ describe('parseExpandContextBody', () => {
 
   it('accepts the bounds themselves: 0 and MAX_CONTEXT_LINES', () => {
     expect(parseExpandContextBody({ filePath: 'a', contextLines: 0 }).ok).toBe(true);
-    expect(parseExpandContextBody({ filePath: 'a', contextLines: MAX_CONTEXT_LINES }).ok).toBe(true);
+    expect(parseExpandContextBody({ filePath: 'a', contextLines: MAX_CONTEXT_LINES }).ok).toBe(
+      true
+    );
   });
 
   it('admits the value the shipped React client sends for "expand whole file"', () => {
@@ -307,7 +309,12 @@ describe('parseReviewStateBody attachment blobs', () => {
 
   it('rejects a dataBase64 that is not base64', () => {
     const result = parseReviewStateBody(
-      bodyWith({ id: 'a1', fileName: 'shot.png', mediaType: 'image/png', dataBase64: 'not base64!' })
+      bodyWith({
+        id: 'a1',
+        fileName: 'shot.png',
+        mediaType: 'image/png',
+        dataBase64: 'not base64!',
+      })
     );
     expect(result.ok).toBe(false);
   });

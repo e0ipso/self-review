@@ -2,11 +2,7 @@
  * Shared Electron app management for E2E tests.
  * Provides helpers to launch/close the app and capture stdout/stderr.
  */
-import {
-  _electron as electron,
-  ElectronApplication,
-  Page,
-} from '@playwright/test';
+import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
 import { ChildProcess, spawn, execSync } from 'child_process';
 import * as path from 'path';
 import { rmSync, existsSync, readFileSync } from 'fs';
@@ -158,9 +154,7 @@ async function launchAppWithRetry(
     }
 
     process.stderr.write(`\n[launchApp failed] ${error}\n`);
-    process.stderr.write(
-      `[stderr from Electron] ${stderrData.slice(0, 1000)}\n`
-    );
+    process.stderr.write(`[stderr from Electron] ${stderrData.slice(0, 1000)}\n`);
     throw error;
   }
 }
@@ -178,15 +172,11 @@ export async function launchAppExpectExit(
   resetState();
 
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn(
-      ELECTRON_BIN,
-      [...CHROMIUM_FLAGS, getMainBundle(), ...cliArgs],
-      {
-        cwd,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, NODE_ENV: 'test' },
-      }
-    );
+    const proc = spawn(ELECTRON_BIN, [...CHROMIUM_FLAGS, getMainBundle(), ...cliArgs], {
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, NODE_ENV: 'test' },
+    });
 
     const timer = setTimeout(() => {
       proc.kill();

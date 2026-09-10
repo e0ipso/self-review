@@ -30,12 +30,12 @@ npx @self-review/serve main..feature-branch
 npx @self-review/serve --resume-from review.xml # continue a previous review
 ```
 
-| Flag | What it does |
-| --- | --- |
-| `-o, --output <file>` | Where to write the review. Defaults to `./review.xml`, or `output-file` from `.self-review.yaml` |
-| `--resume-from <file>` | Load a previous review and carry its comments in |
-| `-h, --help` | Print usage |
-| `-v, --version` | Print the version |
+| Flag                   | What it does                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `-o, --output <file>`  | Where to write the review. Defaults to `./review.xml`, or `output-file` from `.self-review.yaml` |
+| `--resume-from <file>` | Load a previous review and carry its comments in                                                 |
+| `-h, --help`           | Print usage                                                                                      |
+| `-v, --version`        | Print the version                                                                                |
 
 ## Run it from a checkout
 
@@ -48,12 +48,12 @@ npm run start:serve -- main..feature-branch -o /tmp/review.xml
 ```
 
 That mirrors `npm start` for the desktop application, and takes a single `--` where the desktop
-needs two. It always rebuilds first, which is a few seconds and is the point: `dist/` is not in
-git, so running `dist/cli.js` on a fresh clone without building fails with
-`ERR_MODULE_NOT_FOUND`. The build covers `@self-review/core` and `@self-review/react` as well as
-the server and the browser bundle.
+needs two. It always rebuilds first, which is a few seconds and is the point: `dist/` is not in git,
+so running `dist/cli.js` on a fresh clone without building fails with `ERR_MODULE_NOT_FOUND`. The
+build covers `@self-review/core` and `@self-review/react` as well as the server and the browser
+bundle.
 
-The build reviews whatever repository *this* checkout is, because npm runs the script from the
+The build reviews whatever repository _this_ checkout is, because npm runs the script from the
 package root. To review a different repository, install the package and run `self-review-serve`
 there.
 
@@ -70,18 +70,18 @@ node packages/serve/dist/cli.js --staged
 
 The URL goes to stderr when the process starts. Open it in a browser.
 
-The output path is set once, when the process starts, by `-o` or by `output-file` in your config.
-No route and no browser control changes it afterward.
+The output path is set once, when the process starts, by `-o` or by `output-file` in your config. No
+route and no browser control changes it afterward.
 
-Finishing the review writes that file and stops the process. The port closes with it, so there is
-no second attempt: if you want to keep reviewing, start it again with `--resume-from`.
+Finishing the review writes that file and stops the process. The port closes with it, so there is no
+second attempt: if you want to keep reviewing, start it again with `--resume-from`.
 
-Closing the tab warns you first, once you have entered something. Your comments live only in
-that page until you finish, so closing without finishing loses them.
+Closing the tab warns you first, once you have entered something. Your comments live only in that
+page until you finish, so closing without finishing loses them.
 
-The desktop application asks the same question with better options, offering to save on the way
-out. A browser will not let a page do that: `beforeunload` is a yes or no prompt whose wording
-belongs to the browser. Nothing is auto-saved in either front end.
+The desktop application asks the same question with better options, offering to save on the way out.
+A browser will not let a page do that: `beforeunload` is a yes or no prompt whose wording belongs to
+the browser. Nothing is auto-saved in either front end.
 
 The server keeps listening after you close the tab. Nothing tells it you left, so stop it with
 Ctrl-C if you are not coming back.
@@ -102,18 +102,17 @@ The listener binds to `127.0.0.1` and there is no authentication. Anything that 
 can read your diff and finish the review on your behalf — and on a shared host that means every
 local user, not only you, because loopback is not scoped to an account.
 
-A *web page* is a different matter, and binding to loopback on its own does not cover it: a page
-you visit can make requests to a loopback port, and DNS rebinding — a hostname the page's author
-controls, re-pointed at `127.0.0.1` after the page loads — would make those requests same-origin
-as far as the browser is concerned. So the server also refuses any request whose `Host` or
-`Origin` names something other than this listener, which is what separates a rebound request
-from a real one.
+A _web page_ is a different matter, and binding to loopback on its own does not cover it: a page you
+visit can make requests to a loopback port, and DNS rebinding — a hostname the page's author
+controls, re-pointed at `127.0.0.1` after the page loads — would make those requests same-origin as
+far as the browser is concerned. So the server also refuses any request whose `Host` or `Origin`
+names something other than this listener, which is what separates a rebound request from a real one.
 
-The page itself is served with a content security policy that forbids frames, plugins, inline
-script and any origin but its own. That matters because the page renders the diff under review,
-and reviewing code you do not trust yet is the whole point of the program: rendered Markdown and
-HTML are sanitized before they become elements, and the policy is the layer that holds if
-something gets past that.
+The page itself is served with a content security policy that forbids frames, plugins, inline script
+and any origin but its own. That matters because the page renders the diff under review, and
+reviewing code you do not trust yet is the whole point of the program: rendered Markdown and HTML
+are sanitized before they become elements, and the policy is the layer that holds if something gets
+past that.
 
 An `ssh -L 9999:127.0.0.1:<port>` forward works and is the expected way to reach this from
 elsewhere. Only the hostname in `Host` is checked, never its port against the port the process
@@ -121,9 +120,9 @@ bound, so the forward's own port is fine. Reach the forward by a name that is no
 `ssh -L -g` bound on an interface and browsed as `http://devbox:9999` — and it refuses, as it
 should. So does anything terminating HTTPS in front of it.
 
-`docker run -p` does **not** work, and cannot: the listener binds `127.0.0.1` inside the
-container's network namespace, which a published port has no route to. Reaching a containerised
-review means a forward into the namespace, not a published port.
+`docker run -p` does **not** work, and cannot: the listener binds `127.0.0.1` inside the container's
+network namespace, which a published port has no route to. Reaching a containerised review means a
+forward into the namespace, not a published port.
 
 Anyone who can reach the forwarded port has the same access you do. The program provides no
 authentication, and securing the tunnel is yours to do.
