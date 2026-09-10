@@ -1,11 +1,11 @@
 ---
 schema_version: 3
-nodes_hash: 'sha256:935216be0b00721f21b15642a15f5e88f14b43eaa4f204e9afad60532a9092b4'
-node_count: 196
+nodes_hash: 'sha256:caf5ab2371634d54eb10d96a1b67a19af337e9618de2a775b7bb3c2a5fee9155'
+node_count: 200
 ---
 # kenkeep Graph
 
-Total nodes: 196
+Total nodes: 200
 
 ## map-ai-knowledge-base-cli
 
@@ -501,6 +501,14 @@ Total nodes: 196
 - **relates_to:** map-ipc-channel-contract-between-main-and-renderer, map-ipc-channel-registry, map-large-payload-lazy-loading-mode, practice-do-not-store-renderer-state-outside-react-context, practice-lazy-load-file-hunks-in-large-payload-mode, practice-never-import-electron-directly-in-the-renderer, practice-trigger-large-payload-guard-at-configurable-file-line-thresholds, practice-use-es-module-imports-in-the-renderer-not-require, practice-use-src-shared-types-ts-as-the-single-source-of-truth-for-shared-types
 - **derived_from:** AGENTS.md
 
+## map-type-check-programs-and-scripts
+
+- **kind:** map
+- **title:** Six tsc programs behind four typecheck npm scripts
+- **path:** engineering/map-type-check-programs-and-scripts.md
+- **tags:** typescript, tsconfig, typecheck, ci, build
+- **relates_to:** practice-fix-webpack-type-checking-in-the-root-tsconfig-json-not-in-a-webpack-config
+
 ## map-user-and-project-yaml-configuration
 
 - **kind:** map
@@ -599,6 +607,14 @@ Total nodes: 196
 - **tags:** self-review, critique, suggestions
 - **relates_to:** map-self-review-critique-skill
 - **derived_from:** .opencode/skills/self-review-critique/SKILL.md
+
+## practice-check-each-package-with-its-own-tsconfig
+
+- **kind:** practice
+- **title:** Check each package with its own tsconfig; the root program only follows imports
+- **path:** engineering/practice-check-each-package-with-its-own-tsconfig.md
+- **tags:** typescript, tsconfig, typecheck, packages, ci
+- **relates_to:** map-type-check-programs-and-scripts, map-npm-workspaces-packages
 
 ## practice-check-plans-for-architecture-and-code-reuse-improvements
 
@@ -1275,6 +1291,14 @@ Total nodes: 196
 - **relates_to:** map-self-review-critique-skill
 - **derived_from:** .agents/skills/self-review-critique/SKILL.md
 
+## practice-put-the-types-condition-first-in-every-package-exports-block
+
+- **kind:** practice
+- **title:** Put the types condition first in every package exports block
+- **path:** packages/architecture/practice-put-the-types-condition-first-in-every-package-exports-block.md
+- **tags:** packages, exports, typescript, packaging
+- **relates_to:** map-npm-workspaces-packages
+
 ## practice-put-work-that-needs-the-reviewed-diff-after-loaddiff-in-bootstrapremotediff
 
 - **kind:** practice
@@ -1732,6 +1756,14 @@ Total nodes: 196
 - **path:** packages/styling/practice-watch-css-sources-explicitly-with-tsup.md
 - **tags:** build, tsup, css, dev-loop
 - **relates_to:** map-css-build-pipeline-for-self-review-react
+
+## practice-write-node-modules-without-a-trailing-slash-in-gitignore
+
+- **kind:** practice
+- **title:** Write node_modules without a trailing slash in .gitignore
+- **path:** engineering/practice-write-node-modules-without-a-trailing-slash-in-gitignore.md
+- **tags:** git, gitignore, worktree, tooling
+- **relates_to:** practice-run-npm-run-prepare-in-a-fresh-worktree-or-the-pre-commit-hook-is-silently-skipped, practice-keep-extra-worktrees-out-of-the-repo-root
 
 ## practice-write-prds-without-tasks-or-phases-during-plan-creation
 

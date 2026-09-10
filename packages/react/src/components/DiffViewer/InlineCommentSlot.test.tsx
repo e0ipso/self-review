@@ -23,7 +23,6 @@ function makeComment(id: string): ReviewComment {
     category: 'general',
     lineRange: { side: 'new', start: 1, end: 1 },
     suggestion: null,
-    createdAt: new Date().toISOString(),
   };
 }
 

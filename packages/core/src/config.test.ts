@@ -118,7 +118,7 @@ font-size: 18
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockImplementation(filepath => {
-        if (filepath.includes('.config/self-review')) {
+        if (String(filepath).includes('.config/self-review')) {
           return userYaml;
         }
         return projectYaml;
@@ -406,7 +406,7 @@ categories:
       const projectYaml = `output-file: './project.xml'`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockImplementation(filepath => {
-        if (filepath.includes('.config/self-review')) {
+        if (String(filepath).includes('.config/self-review')) {
           return userYaml;
         }
         return projectYaml;
@@ -450,7 +450,7 @@ categories:
       const projectYaml = `guide-file: './project.guide.xml'`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockImplementation(filepath => {
-        if (filepath.includes('.config/self-review')) {
+        if (String(filepath).includes('.config/self-review')) {
           return userYaml;
         }
         return projectYaml;

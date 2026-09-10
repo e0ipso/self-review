@@ -320,12 +320,18 @@ Unit tests use Vitest with separate configurations for main and renderer process
 **Running tests**:
 
 ```bash
-npm run test:unit              # Run all unit tests in watch mode
-npm run test:unit          # Run all unit tests once
-npm run test:unit:main         # Run only main process tests
-npm run test:unit:renderer     # Run only renderer tests
+npm run test:unit              # Run all unit tests once
+npm run test:unit:main         # Watch main process tests
+npm run test:unit:renderer     # Watch renderer tests
 npm run test:coverage          # Run main, renderer, and core tests with coverage
+npm run typecheck              # Type-check the app sources (root tsconfig.json)
+npm run typecheck:tests        # Type-check the e2e test sources
+npm run typecheck:unit         # Type-check the unit test sources
+npm run typecheck:packages     # Type-check each workspace package against its own tsconfig.json
 ```
+
+The CI lint job gates on `typecheck`, `typecheck:tests`, `typecheck:unit` and `typecheck:packages`;
+a change that fails any of the four locally fails CI the same way.
 
 Coverage reports are retained separately in `coverage/main/`, `coverage/renderer/`, and
 `coverage/core/`.

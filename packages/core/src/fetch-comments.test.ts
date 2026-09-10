@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import type { ForgeThread, ForgeUrl, ForgeProvider } from './forge-provider';
 import { ForgeCliUnavailableError } from './forge-provider';
 import type { MaterializeResult } from './materializer';
@@ -131,7 +131,9 @@ describe('buildRemoteReviewState', () => {
 
 describe('runFetchComments', () => {
   let written: Array<{ path: string; content: string }>;
-  let cleanup: ReturnType<typeof vi.fn>;
+  // A bare vi.fn() infers Mock<Procedure | Constructable>, which the field
+  // does not accept, so this is pinned to the field's own signature.
+  let cleanup: Mock<MaterializeResult['cleanup']>;
   let provider: ForgeProvider;
   let deps: FetchCommentsDeps;
 
@@ -146,7 +148,7 @@ describe('runFetchComments', () => {
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     written = [];
-    cleanup = vi.fn();
+    cleanup = vi.fn<MaterializeResult['cleanup']>();
     provider = {
       forge: 'github',
       fetchBaseBranch: vi.fn().mockResolvedValue('main'),

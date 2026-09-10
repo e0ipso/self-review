@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "paths": {
+      "@self-review/core": ["./packages/core/src/index.ts"],
+      "@self-review/types": ["./packages/types/src/index.ts"]
+    }
+  },
+  // strict, unlike the root config: packages/core and packages/react already
+  // compile their sources strict, so a test checked any looser is checked
+  // against a different type world than the code it exercises. Non-strict also
+  // reports every `null`/`undefined` fixture field as an implicit any (TS7018),
+  // which is noise, not a defect.
+  //
+  // ES2022, not the root config's ES6: packages/core/src/xml-serializer.test.ts
+  // uses top-level await, which needs target >= ES2017, and vitest runs these
+  // files through esbuild at a modern target anyway.
+  //
+  // Unit tests only. tests/tsconfig.json covers the e2e tree, and the root
+  // tsconfig excludes every *.test.ts(x), so these files are checked nowhere
+  // else. The sources they import join the program through those imports.
+  //
+  // packages/react/src/declarations.d.ts is listed explicitly for the same
+  // reason tests/tsconfig.json lists it: it carries the ambient
+  // `@emoji-mart/data` default-export augmentation the emoji tests depend on,
+  // and no test file imports it directly.
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "packages/*/src/**/*.test.ts",
+    "packages/*/src/**/*.test.tsx",
+    "packages/react/src/declarations.d.ts"
+  ]
+}

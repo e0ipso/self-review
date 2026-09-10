@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useRef } from 'react';
 import { useDragSelection } from './useDragSelection';
@@ -36,11 +36,16 @@ const file = makeFile([
   { type: 'context', old: 3, new: 3 },
 ]);
 
+// A bare vi.fn() infers Mock<Procedure | Constructable>, which no specific
+// signature accepts, so the mocked callback needs its type written out. The
+// hook's own params type is module-private, hence the local copy.
+type CommentRangeHandler = (start: number, end: number, side: 'old' | 'new') => void;
+
 describe('useDragSelection', () => {
-  let onCommentRange: ReturnType<typeof vi.fn>;
+  let onCommentRange: Mock<CommentRangeHandler>;
 
   beforeEach(() => {
-    onCommentRange = vi.fn();
+    onCommentRange = vi.fn<CommentRangeHandler>();
   });
 
   it('starts with null drag state', () => {

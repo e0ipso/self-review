@@ -29,7 +29,7 @@ _None._
 ### #build
 - Open [**CSS build pipeline for @self-review/react**](map-css-build-pipeline-for-self-review-react.md) — tsup + @tailwindcss/cli compile src/build-styles.css into dist/styles.css.
 - Open [**Import only the compiled dist/styles.css from host apps**](practice-import-only-the-compiled-dist-styles-css-from-host-apps.md) — src/styles.css and src/build-styles.css are build inputs only; never import them.
-- Open [**Watch CSS sources explicitly with tsup**](practice-watch-css-sources-explicitly-with-tsup.md) — tsup --watch only follows the entry import graph, so the react dev script watches src and rebuilds CSS on success.
+- Open [**Fix webpack type-checking in the root tsconfig.json, not in a webpack config**](../../engineering/practice-fix-webpack-type-checking-in-the-root-tsconfig-json-not-in-a-webpack-config.md) — fork-ts-checker defaults configFile to <context>/tsconfig.json and all three webpack configs set context to the project root.
 ### #theming
 - Open [**.self-review wrapper div**](map-self-review-wrapper-div.md) — Scoping wrapper rendered by ConfigProvider for CSS containment and dark-mode toggling.
 - Open [**Scope styles and dark mode via the .self-review wrapper div**](practice-scope-styles-and-dark-mode-via-the-self-review-wrapper-div.md) — All overrides are prefixed .self-review; dark class toggles on the wrapper, not html.

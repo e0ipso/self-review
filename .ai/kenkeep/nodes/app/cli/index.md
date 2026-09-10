@@ -31,7 +31,7 @@ _None._
 - Open [**Bootstrap document exclusions**](../../knowledge-base/tooling/map-cli-static-skip-list.md) — finddocs applies gitignore, kkignore and its static filename exclusions.
 - Open [**Select the harness for harness-specific kenkeep commands**](../../knowledge-base/tooling/practice-resolve-the-active-kb-harness-and-pass-harness-harness-to-every-cli-call.md) — Use explicit harness selection for launcher commands; deterministic commands need no override.
 ### #git
-- Open [**Scrub git's repository env vars before spawning git in tests**](../../engineering/practice-scrub-git-repository-env-vars-before-spawning-git-in-tests.md) — Git's hook environment outranks cwd and git -C; packages/core/vitest.setup.ts strips it so suites stay hermetic.
+- Open [**Run npm run prepare in a fresh worktree or the pre-commit hook silently skips**](../../engineering/practice-run-npm-run-prepare-in-a-fresh-worktree-or-the-pre-commit-hook-is-silently-skipped.md) — core.hooksPath points at .husky/_, which husky generates and git never tracks, so a new worktree commits with no hook and no warning.
 - Open [**Apply curator conflicts using the selected reply**](../../knowledge-base/curate/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
 - Open [**Review knowledge-base changes via git diff before committing**](../../knowledge-base/structure/practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
 ### #logging
@@ -75,7 +75,7 @@ _None._
 ### #packaging
 - Open [**Upload release ZIPs using the MakerZIP filenames**](../../engineering/practice-upload-release-zips-using-the-makerzip-filenames.md) — Upload MakerZIP archives directly by glob without renaming them.
 - Open [**Pin Nix fetchzip hashes to the unpacked directory**](../../engineering/practice-pin-nix-fetchzip-hashes-to-the-unpacked-directory.md) — A fetchzip hash covers the unpacked tree, never the archive bytes; update-flake-hash.sh prefetches with --unpack.
-- Open [**Re-exec with headless Ozone for windowless subcommands**](practice-re-exec-with-headless-ozone-for-windowless-subcommands.md) — Packaged fuses disable RunAsNode, so ELECTRON_RUN_AS_NODE cannot make a subcommand headless; cli-dispatch re-execs.
+- Open [**Put the types condition first in every package exports block**](../../packages/architecture/practice-put-the-types-condition-first-in-every-package-exports-block.md) — Export conditions resolve in declaration order, and a misordered block still type-checks at exit 0, so nothing here catches it.
 ### #review-xml
 - Open [**Convert git diff args only through format/tokenize**](practice-convert-git-diff-args-only-through-format-and-tokenize.md) — formatGitDiffArgs and tokenizeGitDiffArgs are the sanctioned argv-to-string conversion in both directions.
 ### #round-trip

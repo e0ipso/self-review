@@ -225,8 +225,10 @@ brew upgrade self-review
 Prefer to install manually? Download the latest release from
 [GitHub Releases](https://github.com/e0ipso/self-review/releases).
 
-Every release ships an x64 and an arm64 build of each package. Run `uname -m` and take the `amd64` /
-`x86_64` asset on `x86_64`, or the `arm64` asset on `aarch64`.
+Linux release assets ship an x64 build of each package; an arm64 build joins them starting with the
+first release cut from the new arm64 pipeline, so `aarch64` readers find no matching asset before
+that. Run `uname -m` and take the asset that matches your architecture: `amd64` / `x86_64`, or
+`arm64` once it is published.
 
 **Debian/Ubuntu** — download the `.deb` package and install it:
 

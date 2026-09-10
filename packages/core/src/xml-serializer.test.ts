@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { serializeReview } from './xml-serializer';
+import type { XMLFileInfo } from 'xmllint-wasm';
 import type { ReviewState, FileReviewState, ReviewComment } from './types';
 
 // Mock xmllint-wasm to avoid WASM loading issues in tests
@@ -485,10 +486,18 @@ describe('serializeReview', () => {
 
       expect(validateXML).toHaveBeenCalledTimes(1);
       const callArgs = vi.mocked(validateXML).mock.calls[0][0];
-      expect(callArgs.xml).toHaveLength(1);
-      expect(callArgs.xml[0].fileName).toBe('review.xml');
-      expect(callArgs.schema).toHaveLength(1);
-      expect(callArgs.schema[0].fileName).toBe('self-review-v3.xsd');
+      // XMLLintOptions models xml/schema as either one input or a list, and
+      // only the schema arm of its union carries `schema` at all. The
+      // serializer always passes one-element XMLFileInfo lists, so the
+      // assertions below read them at that shape.
+      const { xml, schema } = callArgs as {
+        xml: readonly XMLFileInfo[];
+        schema: readonly XMLFileInfo[];
+      };
+      expect(xml).toHaveLength(1);
+      expect(xml[0].fileName).toBe('review.xml');
+      expect(schema).toHaveLength(1);
+      expect(schema[0].fileName).toBe('self-review-v3.xsd');
     });
 
     it('throws error if validation fails', async () => {

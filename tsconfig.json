@@ -5,7 +5,12 @@
     "module": "esnext",
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "noImplicitAny": true,
+    // strict, like every other program in the repo. packages/core, packages/react
+    // and packages/types each set it in their own tsconfig.json, and
+    // tsconfig.unit-tests.json sets it too. This program is the only one that
+    // checks src/main, src/preload and src/renderer, so anything looser lets the
+    // Electron sources carry unchecked nulls and unsound narrowing past a green CI.
+    "strict": true,
     "sourceMap": true,
     "baseUrl": ".",
     "outDir": "dist",
@@ -17,6 +22,20 @@
       "@self-review/types": ["packages/types/src/index.ts"]
     }
   },
-  "include": ["src/**/*", "packages/**/*"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "packages/**/*.test.ts", "packages/**/*.test.tsx"]
+  // packages/**/* used to stay here because nothing ran the package configs on
+  // their own. SR-0077 added `typecheck:packages` (tsc -p packages/<name>/tsconfig.json
+  // --noEmit for types, core and react) to the CI lint job, and widened each
+  // package's own include to also reach its tsup.config.ts/vitest.config.ts/
+  // vitest.setup.ts, which sit outside that config's "src/**/*". Narrowing this
+  // include to src/**/* drops 20 package files from this program; all 20 are
+  // now covered elsewhere, file by file: packages/core/src/browser.ts and the
+  // five packages/react/src/components/ui/*.tsx by their own widened package
+  // tsconfig, the six tsup/vitest config files by that same widening, and the
+  // remaining eight (packages/react/src/ReviewPanel.tsx, SingleFileReview.tsx,
+  // index.ts, declarations.d.ts, hooks/useDiffNavigation.ts, hooks/useReviewBridge.ts,
+  // test-helpers.ts, and packages/core/src/test-support/git-env.ts) by
+  // tsconfig.unit-tests.json or tests/tsconfig.json, which already reach them
+  // through test-file imports.
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

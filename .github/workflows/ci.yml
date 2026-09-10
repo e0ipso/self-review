@@ -29,7 +29,10 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
+      - run: npm run typecheck
       - run: npm run typecheck:tests
+      - run: npm run typecheck:unit
+      - run: npm run typecheck:packages
 
   unit-test:
     name: Unit Tests

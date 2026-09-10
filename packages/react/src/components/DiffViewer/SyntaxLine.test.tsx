@@ -6,7 +6,7 @@ import SyntaxLine from './SyntaxLine';
 // regression guard ensuring static Prism imports have not been reintroduced.
 describe('SyntaxLine', () => {
   it('renders without crashing and without vi.mock for prismjs', () => {
-    render(<SyntaxLine content='const x = 1;' language='typescript' lineType='add' />);
+    render(<SyntaxLine content='const x = 1;' language='typescript' lineType='addition' />);
     // The initial render shows plain-escaped content (Prism hasn't loaded yet in jsdom)
     const code = document.querySelector('code');
     expect(code).toBeTruthy();

@@ -15,6 +15,6 @@
       "@self-review/types": ["../types/src/index.ts"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "tsup.config.ts", "vitest.config.ts", "vitest.setup.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

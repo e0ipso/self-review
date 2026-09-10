@@ -50,7 +50,7 @@ _None._
 - Open [**Apply config precedence: project overrides user overrides defaults**](../../app/config/practice-apply-config-precedence-project-overrides-user-overrides-defaults.md) — \`.self-review.yaml\` overrides \`~/.config/self-review/config.yaml\`, which overrides built-in defaults.
 - Open [**Knowledge base configuration**](map-knowledge-base-config-locations.md) — Read project kenkeep configuration, with the user config fallback.
 ### #git
-- Open [**Scrub git's repository env vars before spawning git in tests**](../../engineering/practice-scrub-git-repository-env-vars-before-spawning-git-in-tests.md) — Git's hook environment outranks cwd and git -C; packages/core/vitest.setup.ts strips it so suites stay hermetic.
+- Open [**Run npm run prepare in a fresh worktree or the pre-commit hook silently skips**](../../engineering/practice-run-npm-run-prepare-in-a-fresh-worktree-or-the-pre-commit-hook-is-silently-skipped.md) — core.hooksPath points at .husky/_, which husky generates and git never tracks, so a new worktree commits with no hook and no warning.
 - Open [**Apply curator conflicts using the selected reply**](../curate/practice-apply-curator-conflict-outcomes-via-targeted-git-commands.md) — Accept updates the target and removes the conflict; reject removes only the conflict.
 - Open [**Review knowledge-base changes via git diff before committing**](practice-review-knowledge-base-changes-via-git-diff-before-committing.md) — Curator and bootstrap writes land directly in nodes/; accept with git commit, reject with git restore.
 ### #hooks
