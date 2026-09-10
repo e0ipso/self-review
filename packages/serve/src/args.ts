@@ -1,12 +1,6 @@
-// Command-line arguments for serve mode.
-//
-// The shape mirrors the desktop application's own parser (src/main/cli.ts):
-// everything the program does not claim for itself is passed through to
-// `git diff` verbatim.
-//
-// The output path is here, and only here. It is fixed for the lifetime of the
-// process: there is no route and no adapter method that changes it, because a
-// browser has no equivalent of the desktop's native save dialog.
+// Mirrors the desktop's parser (src/main/cli.ts): anything the program does not
+// claim is passed to `git diff` verbatim. The output path is fixed for the life
+// of the process — a browser has no equivalent of the native save dialog.
 
 export interface ServeArgs {
   /** Arguments passed through to `git diff`, in the order given. */
@@ -34,11 +28,9 @@ const VALUE_FLAGS: Record<string, 'outputPath' | 'resumeFrom'> = {
  * from the mistake, with a message about a revision.
  */
 /**
- * A value-taking flag given an empty value is a mistake, not a request for the
- * default. `--output=` used to reach `resolve(cwd, '')`, which is the working
- * directory: a directory passes the writability check, so the review looked
- * saveable and the write failed with EISDIR at submit — after the state had
- * left the session, which loses the review outright.
+ * An empty value is a mistake, not a request for the default: `--output=`
+ * resolves to the working directory, which passes the writability check and
+ * then fails with EISDIR at submit, once the review has left the session.
  */
 function requireValue(flag: string, value: string): string {
   if (value === '') {
@@ -68,8 +60,7 @@ export function parseServeArgs(argv: string[]): ServeArgs {
       continue;
     }
 
-    // `--flag=value` — accepted alongside the separated form so a value
-    // written with `=` can never be mistaken for a git revision.
+    // Accepted alongside the separated form, so `=` is never a git revision.
     const equals = arg.indexOf('=');
     if (equals > 0) {
       const field = VALUE_FLAGS[arg.slice(0, equals)];

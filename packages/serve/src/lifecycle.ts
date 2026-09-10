@@ -1,9 +1,5 @@
-// Process lifetime is review lifetime.
-//
-// Completing the review writes the output file and stops the process. Nothing
-// else does: a closed tab is not an event this program observes, nothing is
-// auto-saved, and there is no session to resume from a second tab. That is the
-// desktop application's behaviour — quitting discards — expressed over HTTP.
+// Process lifetime is review lifetime. Completing writes the file and stops the
+// process; nothing else does. A closed tab is not an event this program sees.
 
 import * as fs from 'node:fs';
 import type * as http from 'node:http';
@@ -22,10 +18,8 @@ export interface CompletionOptions {
 }
 
 /**
- * Serialize a submitted review and write it, the same two steps the desktop
- * takes on "Finish Review" (main.ts:439). `serializeReview` validates against
- * the XSD and writes any attachments beside the output file; a document that
- * does not validate throws and nothing is written.
+ * The same two steps the desktop takes on Finish Review. A document that fails
+ * XSD validation throws, and nothing is written.
  */
 export async function writeReviewOutput(
   state: ReviewState,
@@ -36,9 +30,8 @@ export async function writeReviewOutput(
 }
 
 /**
- * Stop serving and end the process. The listener is closed and every open
- * connection with it, so the port is free before the process goes; without
- * that a browser's idle keep-alive socket would hold it.
+ * Closes open connections too, or a browser's idle keep-alive socket holds the
+ * port after the process is done with it.
  */
 function shutdown(server: http.Server, exit: (code: number) => void, code: number): void {
   server.closeAllConnections();
@@ -47,18 +40,12 @@ function shutdown(server: http.Server, exit: (code: number) => void, code: numbe
 }
 
 /**
- * Write the review and stop the process when one is submitted successfully.
+ * The hook is the response, not the route: `finish` fires once the response is
+ * flushed, so the browser has its answer before the socket goes away. A 4xx is
+ * not a completion and is ignored.
  *
- * The hook is the response, not the route: an extra `request` listener sees
- * every request the server handles, and `finish` fires once the response has
- * been flushed — so the browser has its answer before the socket goes away.
- * A rejected submission (a 4xx from the route's validation) is not a
- * completion and is ignored, as is every other request.
- *
- * Because the write happens after the response, a 200 means the submission
- * was accepted, not that the file is on disk. The plan says the same thing
- * from the other side: an end-to-end test must assert the written file, never
- * the status code.
+ * Because the write follows the response, a 200 means accepted, not written —
+ * so an end-to-end test must assert the file, never the status code.
  */
 export function completeReviewOnSubmit(options: CompletionOptions): void {
   const { server, session, outputPath, exit = process.exit } = options;
@@ -92,8 +79,7 @@ async function complete(
   outputPath: string,
   exit: (code: number) => void
 ): Promise<void> {
-  // Taken, not read: the state is consumed exactly once, and this is the
-  // only consumer.
+  // Taken, not read: consumed exactly once, and this is the only consumer.
   const state = takeReviewState(session);
   if (!state) {
     console.error('[serve] Review submission accepted but no state was recorded');

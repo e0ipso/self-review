@@ -1,30 +1,14 @@
-// The browser half of serve mode: a `ReviewAdapter` over `fetch`.
+// A `ReviewAdapter` over `fetch`: transport only, since every component the
+// browser renders already lives in `@self-review/react`.
 //
-// It implements the interface declared in `packages/react/src/adapter.ts`,
-// supplying transport only: every component the browser renders already
-// exists in `@self-review/react`.
-//
-// Three properties of this module are deliberate:
-//
-// 1. `changeOutputPath` is absent, not stubbed. The interface marks it
-//    optional and `FileTree` renders its "Change..." control on the
-//    property's presence, so a stub resolving null would draw a dead button.
-//    The output path is fixed by the command line and there is no browser
-//    save dialog.
-// 2. `GET /api/diff` is issued exactly once and shared. It carries the diff
-//    and the guide, so `loadDiff`, `onDiffLoad` and `onGuideLoad` are all
-//    served from that one response — no SSE, no WebSocket, no polling. This
-//    mirrors the desktop, where the single `diff:load` message both resolves
-//    `loadDiff` and feeds the `onDiffLoad` subscribers.
-// 3. `submitReview` resolving is *acceptance*, not a written file. The route
-//    only stores the state on the session; `../lifecycle.ts` serializes and
-//    writes it on the response's `finish` event. Nothing here may report a
-//    saved review, and the caller must not either.
+// Three deliberate properties. `changeOutputPath` is absent, not stubbed —
+// `FileTree` renders its control on the property's presence, so a stub would
+// draw a dead button. `GET /api/diff` is issued once and shared, carrying both
+// the diff and the guide, so there is no push transport. And `submitReview`
+// resolving is acceptance, not a written file: lifecycle.ts writes on the
+// response's `finish`, so nothing here may report a saved review.
 
-// Type-only imports, erased at build time: this module has no runtime
-// dependency on either package. `@self-review/react` is the home of the
-// interface and of the payload types the UI consumes; the rest come from
-// `@self-review/core`, which re-exports the shared type package.
+// Type-only, erased at build time: no runtime dependency on either package.
 import type { ReviewAdapter, GuideLoadPayload } from '@self-review/react';
 import type {
   AppConfig,
@@ -51,11 +35,7 @@ export interface ConfigApiResponse {
   outputPathInfo: OutputPathInfo | null;
 }
 
-/**
- * Read a JSON route. A non-2xx answer carries `{ error }` from the server;
- * surface that text rather than a bare status, since the adapter's callers
- * only ever log what they are thrown.
- */
+/** Surfaces the server's `{ error }` text, since callers only log what they get. */
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path);
   if (!response.ok) {

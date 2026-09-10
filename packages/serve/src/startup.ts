@@ -1,22 +1,13 @@
-// Startup: resolve one review session, exactly the way the desktop application
-// resolves its own.
+// Resolve one review session the way the desktop does. Each phase below cites
+// the phase of `initializeApp` (src/main/main.ts) it mirrors.
 //
-// The desktop's sequence is `initializeApp` in src/main/main.ts; every phase
-// below cites the phase it mirrors. Two orderings in it are load-bearing here
-// and are the reason this is a module rather than a few lines in the entry
-// point:
+// Two orderings are load-bearing: everything resolves before the caller opens
+// the listener, so no request races a half-built session; and the guide lands
+// on the session during startup, since `GET /api/diff` answers from there.
 //
-//  - Everything is resolved before the listener opens. The listener is opened
-//    by the caller, with what this function returns, so an early request can
-//    never race a half-built session.
-//  - The guide is discovered and put on the session during startup, not after.
-//    `GET /api/diff` answers with whatever `getDiffLoad` finds there, so a
-//    guide loaded later is a guide no client ever sees.
-//
-// What the desktop does here that this cannot: the large-payload prompt and
-// the welcome screen's directory picker are native dialogs. Neither has a
-// browser equivalent, so the first becomes an automatic decision and the
-// second becomes a startup error.
+// The desktop's large-payload prompt and directory picker are native dialogs
+// with no browser equivalent, so the first becomes automatic and the second
+// becomes a startup error.
 
 import { resolve } from 'node:path';
 import {
@@ -42,10 +33,8 @@ export interface ServeStartup {
   /** The resolved session, complete: diff, guide, config and resume state. */
   session: ReviewSession;
   /**
-   * Root every request-supplied path is contained under. This is the value
-   * core itself resolves relative paths against — the diff's repository in
-   * git mode, the working directory otherwise (see `loadImage`) — because
-   * containment only guarantees anything when both agree.
+   * Root every request-supplied path is contained under: the same value core
+   * resolves against, since containment guarantees nothing unless they agree.
    */
   repositoryRoot: string;
   /** Absolute output path, fixed for the lifetime of the process. */
@@ -53,12 +42,8 @@ export interface ServeStartup {
 }
 
 /**
- * Build the diff payload for the detected mode. Mirrors main.ts phase 4.
- *
- * Welcome mode is the one divergence: the desktop opens a window with a
- * directory picker, and there is no such picker here — the browser client
- * cannot open a native dialog and no route offers one. Refusing with a
- * message is better than serving an interface whose only control is dead.
+ * Mirrors main.ts phase 4. Welcome mode diverges: there is no directory picker
+ * in a browser, so refusing beats serving an interface whose controls are dead.
  */
 async function loadDiffForMode(
   gitDiffArgs: string[],
@@ -111,11 +96,8 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   // and never again: no route changes it.
   let config = loadConfig();
   const outputPath = resolve(process.cwd(), args.outputPath ?? config.outputFile);
-  // Refuse rather than serve. The desktop reaches the same disabled Finish
-  // button but offers a native save dialog as the way out; `changeOutputPath`
-  // is deliberately absent from the serve adapter, so the browser has no such
-  // control and the reviewer would have no exit at all. Better to fail here
-  // than an hour into a review that was never going to be saveable.
+  // The desktop offers a save dialog out of this; the browser has no such
+  // control, so a reviewer would have no exit. Fail before the work, not after.
   if (!checkWritability(outputPath)) {
     throw new Error(
       `Output path is not writable: ${outputPath}. ` +
@@ -191,8 +173,7 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   session.diffData = diffData;
   session.guideData = guideData;
   session.config = config;
-  // Always writable: startup refused above if it was not, so the renderer's
-  // not-writable branch is unreachable here by construction.
+  // Always writable: startup refused above if it was not.
   session.outputPathInfo = { resolvedOutputPath: outputPath, outputPathWritable: true };
 
   return { session, repositoryRoot: containmentRoot(diffData), outputPath };
