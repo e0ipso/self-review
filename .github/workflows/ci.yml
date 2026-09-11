@@ -93,6 +93,10 @@ jobs:
       # that stops being true.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xauth libgtk-3-0 xvfb
       - run: npm ci
+      # The Electron tests launch the Electron binary from node_modules and so
+      # need no downloaded browser, but the serve step below drives a real
+      # Chromium and does.
+      - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:electron
       # The step above packaged the app, so the serve/desktop comparison can
       # run for real here. SELF_REVIEW_REQUIRE_DESKTOP turns its skip into a
