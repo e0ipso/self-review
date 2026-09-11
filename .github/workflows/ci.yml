@@ -63,6 +63,11 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      # Serve mode's own project. Two of its three specs need only the built
+      # serve package; the third compares the document serve mode writes
+      # against the desktop's and skips without a packaged app, which is built
+      # in the electron-e2e job below rather than here.
+      - run: npm run test:e2e:serve
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -71,7 +76,7 @@ jobs:
           retention-days: 7
 
   electron-e2e:
-    name: Electron E2E Tests
+    name: Electron & Serve E2E Tests
     runs-on: ubuntu-latest
     # Post-merge and on demand only. The tier packages the app before it runs,
     # which no other job does, so it is the slowest one here.
@@ -89,6 +94,13 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xauth libgtk-3-0 xvfb
       - run: npm ci
       - run: npm run test:e2e:electron
+      # The step above packaged the app, so the serve/desktop comparison can
+      # run for real here. SELF_REVIEW_REQUIRE_DESKTOP turns its skip into a
+      # failure, so a missing bundle is a broken pipeline rather than a silent
+      # pass — that skip is the reason the check went unnoticed before.
+      - run: xvfb-run --auto-servernum npm run test:e2e:serve
+        env:
+          SELF_REVIEW_REQUIRE_DESKTOP: '1'
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

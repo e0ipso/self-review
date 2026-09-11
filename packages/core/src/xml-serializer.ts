@@ -632,6 +632,8 @@ export const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
 </xs:schema>`;
 
 function extFromMediaType(mediaType: string): string {
+  // Same reasoning as `assetNameComponent`: anything not in the map falls
+  // back to png, including a value that is not a string at all.
   const map: Record<string, string> = {
     'image/png': 'png',
     'image/jpeg': 'jpg',
@@ -656,6 +658,26 @@ function extFromMediaType(mediaType: string): string {
  * existing asset names are unchanged; replies pass a prefix that cannot collide
  * with a comment's.
  */
+/**
+ * Reduce an id to something that can only ever name a file *inside* the asset
+ * directory.
+ *
+ * A comment id is not trusted input. The desktop gets its ReviewState from its
+ * own renderer, but the serve front end accepts a whole document over HTTP, so
+ * `../../x` in an id would walk this function's write out of the asset
+ * directory and onto an arbitrary path. Every id this app generates is a UUID,
+ * so restricting the prefix to the URL-safe alphabet renames nothing in
+ * practice and leaves existing asset names byte-identical.
+ */
+function assetNameComponent(idPrefix: string): string {
+  // Coerced rather than assumed: this runs before the document is validated
+  // against anything, so a caller that omits an id reaches here with
+  // `undefined`, and a bare `.replace` would turn that into a crash *after*
+  // the review has already been taken off the session — losing it. The
+  // serializer's job here is to name a file, not to police the document.
+  return String(idPrefix ?? '').replace(/[^A-Za-z0-9_-]/g, '_');
+}
+
 function persistAttachments(
   attachments: Attachment[] | undefined,
   idPrefix: string,
@@ -669,13 +691,23 @@ function persistAttachments(
     onWrite();
 
     const ext = extFromMediaType(att.mediaType);
-    const fileName = `${idPrefix}-${index}.${ext}`;
+    const fileName = `${assetNameComponent(idPrefix)}-${index}.${ext}`;
     const relativePath = `.self-review-assets/${fileName}`;
+    const target = path.join(assetDir, fileName);
+
+    // `assetNameComponent` already makes this unreachable. It stays because
+    // this write happens *before* the document is validated against the XSD
+    // (see `serializeReview`), so a file lands on disk even when serialization
+    // goes on to fail — which makes an escape here permanent, and worth a
+    // second, independent check rather than one clever regex.
+    if (path.dirname(path.resolve(target)) !== path.resolve(assetDir)) {
+      throw new Error(`Refusing to write an attachment outside ${assetDir}: ${fileName}`);
+    }
 
     if (!fs.existsSync(assetDir)) {
       fs.mkdirSync(assetDir, { recursive: true });
     }
-    fs.writeFileSync(path.join(assetDir, fileName), Buffer.from(att.data));
+    fs.writeFileSync(target, Buffer.from(att.data));
 
     return { ...att, fileName: relativePath, data: undefined };
   });

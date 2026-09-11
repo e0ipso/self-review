@@ -128,19 +128,33 @@ self-review/
 │   │               ├── CommentDisplay.tsx  # Rendered comment with edit/delete
 │   │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
 │   │               └── CategorySelector.tsx # Dropdown/chip selector for categories
+│   ├── serve/                   # @self-review/serve, the `self-review-serve` CLI: the same
+│   │   │                        #   review engine served over loopback HTTP instead of
+│   │   │                        #   Electron/IPC. cli.ts (entry point), args.ts (flag parsing:
+│   │   │                        #   --output, --resume-from, --help, --version), startup.ts
+│   │   │                        #   (resolves one ReviewSession before the listener opens,
+│   │   │                        #   mirroring src/main/main.ts), server.ts (HTTP routes over
+│   │   │                        #   core's session handlers; binds 127.0.0.1 only),
+│   │   │                        #   lifecycle.ts (writes the output file and exits on a
+│   │   │                        #   completed submission), validate.ts (request body &
+│   │   │                        #   path-containment checks), client/ (browser entry point +
+│   │   │                        #   fetch-based ReviewAdapter, built into dist/client/ and
+│   │   │                        #   served statically)
 │   └── types/                   # @self-review/types, shared TypeScript interfaces (zero runtime deps)
 │                                #   incl. ReviewGuide/GuideGroup/ResolvedGuideGroup guide types
 ```
 
 The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace
-packages `@self-review/core`, `@self-review/react`, and `@self-review/types` expose shared logic, UI
-components, and shared TypeScript interfaces respectively. `@self-review/core` holds everything
-Node-only: the primitives (diff parsing, git, XML, config, forge providers) and the review engine
-that orchestrates them (session handlers, startup mode, guide and diff loading, remote PR/MR
-bootstrap, `fetch-comments`). The Electron app imports the packages via relative path imports to
-their source (not through workspace symlinks), so no build step is needed for the packages during
-development. The Electron app's `src/shared/types.ts` re-exports from `packages/types/src/index` as
-the canonical type source.
+packages `@self-review/core`, `@self-review/react`, `@self-review/types` and `@self-review/serve`
+expose shared logic, UI components, shared TypeScript interfaces, and the standalone HTTP CLI
+respectively. `@self-review/core` holds everything Node-only: the primitives (diff parsing, git,
+XML, config, forge providers) and the review engine that orchestrates them (session handlers,
+startup mode, guide and diff loading, remote PR/MR bootstrap, `fetch-comments`). The Electron app
+imports the packages via relative path imports to their source (not through workspace symlinks), so
+no build step is needed for the packages during development; `@self-review/serve` is a real
+dependent (declared in its `package.json`, resolved as an installed package) rather than a relative
+import, since it ships and runs independently of the Electron app. The Electron app's
+`src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source.
 
 ## Keyboard Shortcuts
 
@@ -157,7 +171,14 @@ All shortcuts are suppressed when a text input has focus. The implementation liv
 
 ## Architecture
 
-Two-process model:
+The review engine in `packages/core` has two front ends over different transports: the desktop
+Electron app (main process ↔ renderer over IPC) and the `self-review-serve` CLI in `packages/serve`
+(a Node HTTP server ↔ a browser page over `fetch`). Both drive the same `ReviewSession` and the same
+handler functions in `packages/core/src/review-handlers.ts`; a change to that layer affects both
+front ends. The rest of this section describes the desktop app's process model. See
+`packages/serve/README.md` for the HTTP transport.
+
+Two-process model (Electron app):
 
 1. **Main process**, parses CLI args, runs `git diff`, parses the unified diff into a structured AST
    (`DiffFile[]`), sends it to the renderer via IPC. On "Finish Review" or "Save & Quit", collects
@@ -169,9 +190,12 @@ The preload script uses `contextBridge.exposeInMainWorld` to expose a typed `ele
 The renderer NEVER imports from `electron` directly.
 
 Review handler logic lives in `packages/core/src/review-handlers.ts`: each handler takes the
-`ReviewSession` it acts on as a parameter, returns a value, and reads no module-scope state.
-`src/main/ipc-handlers.ts` owns the transport, so a new handler's body belongs in
-`review-handlers.ts` and only its `ipcMain` registration belongs in `ipc-handlers.ts`.
+`ReviewSession` it acts on as a parameter, returns a value, and reads no module-scope state. Each
+front end owns its own transport wiring over that same handler layer: `src/main/ipc-handlers.ts`
+registers the Electron app's `ipcMain` listeners, and `packages/serve/src/server.ts` registers the
+serve command's HTTP routes. A new handler's body belongs in `review-handlers.ts`; only its
+transport registration — an `ipcMain` listener or an HTTP route — belongs in the front end that
+needs it.
 
 Everything that moved into `@self-review/core` was Node-only, with no Electron dependency;
 `src/main/` now holds Electron-bound code — window/menu/dialog wiring, IPC transport, and XML file
@@ -260,6 +284,10 @@ intentionally duplicated in both `@self-review/core` (`packages/core/src/file-ty
 files for rationale.
 
 ## IPC Channels
+
+This table is specific to the Electron app's transport. The `self-review-serve` HTTP routes
+(`packages/serve/src/server.ts`) are the serve command's equivalent and are documented there, not
+here.
 
 Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here.
 
@@ -403,15 +431,20 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
 - **stdout is unused.** Nothing is written to stdout. XML output is written to a file (default
   `./review.xml`, configurable via `output-file` in YAML config). All logging goes to stderr. Use
   `console.error()` for logging in the main process, never `console.log()`.
-- **No network access (except version check and remote mode).** The app makes zero network requests
-  at runtime, with two exceptions. First, on startup it makes a single non-blocking request to the
-  GitHub Releases API (`api.github.com`) to check for updates; this request is fire-and-forget, if
-  it fails for any reason (offline, timeout, firewall), it is silently ignored. Second, when the
-  user supplies a forge PR/MR URL (remote mode), the network is touched only for that URL: git
-  clone/fetch through git's own credential machinery (SSH keys, credential helpers,
-  `gh auth setup-git`), and the `gh`/`glab` CLIs for base-branch lookup and discussion-thread fetch
-  only. Every remote-mode request is user-triggered; nothing is ever sent to the forge. No
-  telemetry, no analytics, no CDN fetches. All assets are bundled.
+- **No network access (except version check and remote mode); one listening socket in serve mode.**
+  The app makes zero _outbound_ network requests at runtime, with two exceptions. First, on startup
+  it makes a single non-blocking request to the GitHub Releases API (`api.github.com`) to check for
+  updates; this request is fire-and-forget, if it fails for any reason (offline, timeout, firewall),
+  it is silently ignored. Second, when the user supplies a forge PR/MR URL (remote mode), the
+  network is touched only for that URL: git clone/fetch through git's own credential machinery (SSH
+  keys, credential helpers, `gh auth setup-git`), and the `gh`/`glab` CLIs for base-branch lookup
+  and discussion-thread fetch only. Every remote-mode request is user-triggered; nothing is ever
+  sent to the forge. No telemetry, no analytics, no CDN fetches. All assets are bundled. Separately
+  from all of that, `self-review-serve` _listens_: it binds one HTTP socket on `127.0.0.1` for the
+  duration of one review. That is inbound rather than outbound, and it is the transport the browser
+  front end runs over — see `packages/serve/README.md`. It answers only requests whose `Host` and
+  `Origin` name the listener itself, because binding to loopback alone does not keep out a web page
+  the reviewer visits.
 - **File writes.** The app writes the review XML output file at the configured `output-file` path
   (default `./review.xml`). The output path can be changed at runtime via the save dialog in the
   file tree footer. When comments include image attachments, it also creates a

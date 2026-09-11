@@ -36,6 +36,19 @@ export default defineConfig({
       },
     },
     {
+      // Serve mode: the built executable run as an ordinary child process,
+      // driven through a browser, asserted on the document it writes. Its own
+      // project because it needs neither the Electron package nor the webapp
+      // fixture server — only `packages/serve/dist`.
+      name: 'serve',
+      testDir: 'tests/serve',
+      timeout: 120_000,
+      use: {
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
       name: 'recording',
       testDir: 'tests/recording',
       timeout: 120_000,

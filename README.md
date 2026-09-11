@@ -309,6 +309,49 @@ self-review fetch-comments https://gitlab.com/group/project/-/merge_requests/7 -
 It needs no display. On Linux the command picks a headless graphics platform for itself, so it runs
 over SSH, in CI and in a container with `$DISPLAY` unset and no `xvfb-run` wrapper.
 
+### Serve mode
+
+The same review UI also runs in your browser, through `self-review-serve`, for when opening an
+Electron window is not an option: a remote box, a container, or a machine with no display.
+
+```bash
+npx @self-review/serve --staged
+```
+
+It takes the same git diff arguments as `self-review`, plus `-o`/`--output` for where to write the
+review and `--resume-from` to carry a previous one in:
+
+```bash
+npx @self-review/serve                            # unstaged changes
+npx @self-review/serve --staged
+npx @self-review/serve main..feature-branch
+npx @self-review/serve --resume-from review.xml   # continue a previous review
+npx @self-review/serve -o my-review.xml --staged  # write somewhere other than ./review.xml
+```
+
+The URL goes to stderr when the process starts. Open it in a browser.
+
+The output path is set once, at startup, by `--output`/`-o` or by `output-file` in
+`.self-review.yaml`. No control in the browser changes it afterward. Finishing the review writes
+that file and stops the process.
+
+Closing the tab warns you first, once you have entered something. Comments live only in the page
+until you finish, so closing without finishing loses them. The desktop application asks the same
+question with more options, since it can offer to save on the way out and a browser cannot. Nothing
+is auto-saved either way.
+
+Walkthrough guides work as they do in the desktop application. A `review.guide.xml` sitting next to
+your output path is picked up at startup and the file tree opens in guided mode.
+
+The listener binds to `127.0.0.1` and there is no authentication. Anything that can reach the port
+can read your diff and finish the review on your behalf, and on a shared host that means every local
+user, not only you. It will not answer a request that names anything but itself, so a web page you
+happen to be visiting cannot reach it. Reaching it over an `ssh -L` forward works as you would
+expect; anyone who can reach that forwarded port has the access you do, and securing it is yours to
+add.
+
+See [`packages/serve/README.md`](packages/serve/README.md) for the package itself.
+
 ## Assistant Skill
 
 self-review ships with an AI assistant skill that closes the feedback loop: it reads your review
@@ -422,7 +465,9 @@ See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 
 - **CLI-first.** Launched from the terminal, writes review output to a file. Behaves like a Unix
   tool.
-- **One-shot.** Open → review → close → done. No servers, no persistent state.
+- **One-shot.** Open → review → close → done. No persistent state. Serve mode does run a listener,
+  but only on loopback and only for the duration of one review: submitting writes the output file
+  and stops the process, so the principle holds even there.
 - **Local-only.** No network access, no accounts, no telemetry. Your code stays on your machine. The
   one opt-in exception: reviewing a remote PR/MR by URL fetches that repository through git and
   reads its discussion threads — and even then, nothing is ever sent to the forge.
