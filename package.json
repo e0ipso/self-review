@@ -46,7 +46,7 @@
     "developer-tools"
   ],
   "author": {
-    "name": "Mateu Aguiló Bosch",
+    "name": "Mateu Aguil\u00f3 Bosch",
     "email": "mateu@mateuaguilo.com"
   },
   "license": "MIT",
@@ -133,5 +133,31 @@
     "tailwindcss": "^4.1.18",
     "xmllint-wasm": "^5.1.0",
     "yaml": "^2.8.2"
+  },
+  "overrides": {
+    "@semantic-release/commit-analyzer": {
+      "handlebars": "4.7.9"
+    },
+    "@semantic-release/git": {
+      "handlebars": "4.7.9"
+    },
+    "@semantic-release/github": {
+      "handlebars": "4.7.9"
+    },
+    "@semantic-release/npm": {
+      "handlebars": "4.7.9"
+    },
+    "@semantic-release/release-notes-generator": {
+      "handlebars": "4.7.9"
+    },
+    "conventional-changelog-writer": {
+      "handlebars": "4.7.9"
+    },
+    "handlebars": {
+      "handlebars": "4.7.9"
+    },
+    "semantic-release": {
+      "handlebars": "4.7.9"
+    }
   }
 }
