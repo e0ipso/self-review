@@ -1,6 +1,6 @@
 {
   "name": "@self-review/serve",
-  "version": "1.43.4",
+  "version": "1.45.0",
   "description": "Serve the self-review interface over HTTP",
   "repository": {
     "type": "git",
