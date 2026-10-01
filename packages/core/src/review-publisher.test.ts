@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { publishReview, ReviewPublishError } from './review-publisher';
+import { inspectOutputPath, publishReview, ReviewPublishError } from './review-publisher';
 import type { PublishReviewOptions } from './review-publisher';
 import { nodeFsLayer } from './safe-fs';
 import type { FsLayer } from './safe-fs';
@@ -418,5 +418,49 @@ describe('publishReview', () => {
 
       expect(fs.statSync(outputPath).mode & 0o777).toBe(0o644);
     });
+  });
+});
+
+describe('inspectOutputPath', () => {
+  // The desktop's startup hint. It must agree with what publishReview would
+  // refuse, and a clean probe is advisory: the save re-checks.
+  it('returns null for a writable path with nothing in the way', () => {
+    expect(inspectOutputPath(outputPath, explicit)).toBeNull();
+  });
+
+  it('reports a directory at the output path with the publisher code', () => {
+    fs.mkdirSync(outputPath);
+    const problem = inspectOutputPath(outputPath, explicit);
+    expect(problem?.code).toBe('output-is-directory');
+    expect(problem?.path).toBe(outputPath);
+  });
+
+  it('reports a symlinked leaf', () => {
+    fs.symlinkSync(path.join(tmp, 'elsewhere.xml'), outputPath);
+    expect(inspectOutputPath(outputPath, explicit)?.code).toBe('unsafe-link');
+  });
+
+  it('reports an inherited path outside its base directory', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-probe-outside-'));
+    try {
+      const problem = inspectOutputPath(path.join(outside, 'review.xml'), {
+        outputOrigin: 'inherited',
+        baseDir: tmp,
+      });
+      expect(problem?.code).toBe('unsafe-link');
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('reports a missing output directory', () => {
+    const problem = inspectOutputPath(path.join(tmp, 'missing', 'review.xml'), explicit);
+    expect(problem).not.toBeNull();
+    expect(problem?.message).toContain(path.join(tmp, 'missing'));
+  });
+
+  it.skipIf(IS_ROOT)('reports a read-only output directory', () => {
+    fs.chmodSync(tmp, 0o555);
+    expect(inspectOutputPath(outputPath, explicit)?.code).toBe('permission-denied');
   });
 });

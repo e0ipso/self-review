@@ -65,7 +65,7 @@ describe('resolveSession', () => {
   it('resolves a git session and roots containment at the repository the diff came from', async () => {
     process.chdir(repo);
 
-    const { session, repositoryRoot, outputPath } = await resolveSession(parseServeArgs([]));
+    const { session, repositoryRoot, output } = await resolveSession(parseServeArgs([]));
 
     expect(session.diffData?.source).toMatchObject({ type: 'git', repository: repo });
     expect(session.diffData?.files.map(f => f.newPath)).toContain('src/retry.ts');
@@ -74,9 +74,15 @@ describe('resolveSession', () => {
     expect(repositoryRoot).toBe(
       session.diffData?.source.type === 'git' ? session.diffData.source.repository : null
     );
-    expect(outputPath).toBe(path.join(repo, 'review.xml'));
+    // Nothing named the path, so it is inherited: the publisher keeps it
+    // inside the launch directory, which a committed config cannot escape.
+    expect(output).toEqual({
+      path: path.join(repo, 'review.xml'),
+      origin: 'inherited',
+      baseDir: repo,
+    });
     expect(session.config).not.toBeNull();
-    expect(session.outputPathInfo?.resolvedOutputPath).toBe(outputPath);
+    expect(session.outputPathInfo?.resolvedOutputPath).toBe(output.path);
   });
 
   it('populates the guide before returning, so the first diff response carries it', async () => {
@@ -96,11 +102,12 @@ describe('resolveSession', () => {
     process.chdir(repo);
     fs.mkdirSync(path.join(repo, 'out'), { recursive: true });
 
-    const { session, outputPath } = await resolveSession(
+    const { session, output } = await resolveSession(
       parseServeArgs(['--output', 'out/custom.xml'])
     );
 
-    expect(outputPath).toBe(path.join(repo, 'out', 'custom.xml'));
+    // The reviewer named it, so it is explicit: it may point anywhere.
+    expect(output).toEqual({ path: path.join(repo, 'out', 'custom.xml'), origin: 'explicit' });
     // review.guide.xml is not custom.guide.xml, so no guide is discovered.
     expect(session.guideData).toBeNull();
   });

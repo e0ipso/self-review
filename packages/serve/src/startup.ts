@@ -13,6 +13,7 @@ import { resolve } from 'node:path';
 import {
   applyStagedUntrackedDefault,
   checkWritability,
+  commitDiffData,
   computePayloadStats,
   countTotalLines,
   createIgnoreFilter,
@@ -28,6 +29,7 @@ import {
 } from '@self-review/core';
 import type { AppConfig, DiffLoadPayload, ReviewSession } from '@self-review/core';
 import type { ServeArgs } from './args';
+import type { ReviewOutputTarget } from './server';
 
 export interface ServeStartup {
   /** The resolved session, complete: diff, guide, config and resume state. */
@@ -37,8 +39,13 @@ export interface ServeStartup {
    * resolves against, since containment guarantees nothing unless they agree.
    */
   repositoryRoot: string;
-  /** Absolute output path, fixed for the lifetime of the process. */
-  outputPath: string;
+  /**
+   * Where the review is published, fixed for the lifetime of the process:
+   * the absolute path, and whether `--output` named it (`explicit`) or the
+   * project configuration or default did (`inherited`, contained under the
+   * launch directory by the publisher).
+   */
+  output: ReviewOutputTarget;
 }
 
 /**
@@ -116,9 +123,17 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   // Phase 2 (main.ts:163) — configuration and the output path. Fixed here
   // and never again: no route changes it.
   let config = loadConfig();
-  const outputPath = resolve(process.cwd(), args.outputPath ?? config.outputFile);
-  // The desktop offers a save dialog out of this; the browser has no such
-  // control, so a reviewer would have no exit. Fail before the work, not after.
+  const cwd = process.cwd();
+  const outputPath = resolve(cwd, args.outputPath ?? config.outputFile);
+  // Which of the two named it decides how far the publisher trusts it: a
+  // committed configuration file must not be able to redirect the save.
+  const output: ReviewOutputTarget =
+    args.outputPath !== null
+      ? { path: outputPath, origin: 'explicit' }
+      : { path: outputPath, origin: 'inherited', baseDir: cwd };
+  // A startup hint, not the guarantee: the publisher reports what actually
+  // goes wrong at submit time, and the browser keeps the review for a retry.
+  // Refusing an obviously unwritable path here still beats serving one.
   if (!checkWritability(outputPath)) {
     throw new Error(
       `Output path is not writable: ${outputPath}. ` +
@@ -191,11 +206,13 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
 
   // Phase 6 (main.ts:350) — assemble. Everything the routes read is on the
   // session before the caller opens the listener.
-  session.diffData = diffData;
+  // Committed through core so the session's reviewed paths, which authorize
+  // every apply, are captured from this diff.
+  commitDiffData(session, diffData);
   session.guideData = guideData;
   session.config = config;
-  // Always writable: startup refused above if it was not.
+  // Writable as far as startup could tell: it refused above if it was not.
   session.outputPathInfo = { resolvedOutputPath: outputPath, outputPathWritable: true };
 
-  return { session, repositoryRoot: containmentRoot(diffData), outputPath };
+  return { session, repositoryRoot: containmentRoot(diffData), output };
 }

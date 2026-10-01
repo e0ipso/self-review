@@ -144,3 +144,92 @@ describe('atomicReplace', () => {
     expect(fs.readlinkSync(target)).toBe(victim);
   });
 });
+
+describe('atomicReplace: owner and modification policy', () => {
+  function errno(code: string): NodeJS.ErrnoException {
+    const error: NodeJS.ErrnoException = new Error(code);
+    error.code = code;
+    return error;
+  }
+
+  /** The real layer, with the target reported as owned by someone else. */
+  function ownedByAnother(target: string, delta: { uid?: number; gid?: number }): FsLayer {
+    return {
+      ...nodeFsLayer,
+      lstatSync(p) {
+        const stats = fs.lstatSync(p);
+        if (p === target) {
+          if (delta.uid !== undefined) stats.uid = stats.uid + delta.uid;
+          if (delta.gid !== undefined) stats.gid = stats.gid + delta.gid;
+        }
+        return stats;
+      },
+    };
+  }
+
+  it('leaves the replacement owned as it was when the owner already matches', () => {
+    const target = path.join(tmp, 'file.txt');
+    fs.writeFileSync(target, 'original');
+    const before = fs.statSync(target);
+
+    atomicReplace(target, Buffer.from('new'), { preserveOwner: true });
+
+    const after = fs.statSync(target);
+    expect(after.uid).toBe(before.uid);
+    expect(after.gid).toBe(before.gid);
+    expect(fs.readFileSync(target, 'utf-8')).toBe('new');
+  });
+
+  it('refuses up front, writing nothing, when another user owns the target and this process is not root', () => {
+    if (process.geteuid?.() === 0) return; // root may chown freely; the refusal is for everyone else
+    const target = path.join(tmp, 'file.txt');
+    fs.writeFileSync(target, 'original');
+
+    expect(
+      codeOf(() =>
+        atomicReplace(target, Buffer.from('new'), {
+          preserveOwner: true,
+          fs: ownedByAnother(target, { uid: 1 }),
+        })
+      )
+    ).toBe('unsupported-target');
+    expect(fs.readFileSync(target, 'utf-8')).toBe('original');
+    expect(fs.readdirSync(tmp)).toEqual(['file.txt']);
+  });
+
+  it('removes the temp file and keeps the target when the owner cannot be restored', () => {
+    const target = path.join(tmp, 'file.txt');
+    fs.writeFileSync(target, 'original');
+    // Only the group differs, so a chgrp is attempted — and refused by the OS.
+    const layer: FsLayer = {
+      ...ownedByAnother(target, { gid: 1 }),
+      fchownSync() {
+        throw errno('EPERM');
+      },
+    };
+
+    expect(
+      codeOf(() => atomicReplace(target, Buffer.from('new'), { preserveOwner: true, fs: layer }))
+    ).toBe('unsupported-target');
+    expect(fs.readFileSync(target, 'utf-8')).toBe('original');
+    expect(fs.readdirSync(tmp)).toEqual(['file.txt']);
+  });
+
+  it('refuses a same-inode rewrite when asked to expect the file unmodified', () => {
+    const target = path.join(tmp, 'file.txt');
+    fs.writeFileSync(target, 'original');
+    const identity = inspectReplaceTarget(target)!;
+    fs.appendFileSync(target, ' and more');
+
+    expect(
+      codeOf(() =>
+        atomicReplace(target, Buffer.from('new'), {
+          expectedIdentity: identity,
+          expectUnmodified: true,
+        })
+      )
+    ).toBe('identity-changed');
+    expect(fs.readFileSync(target, 'utf-8')).toBe('original and more');
+    expect(fs.readdirSync(tmp)).toEqual(['file.txt']);
+  });
+});

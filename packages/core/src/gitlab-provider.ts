@@ -27,6 +27,8 @@ interface GitLabLineRangeEdge {
 }
 
 interface GitLabPosition {
+  /** Diff head the position's line numbers were computed against. */
+  head_sha?: string | null;
   old_path?: string | null;
   new_path?: string | null;
   old_line?: number | null;
@@ -164,9 +166,15 @@ function isDiscussionResolved(notes: GitLabNote[]): boolean {
  * Multi-line `line_range` edges are read on the side chosen above, falling
  * back to the single-line position when an edge lacks that side's line.
  *
- * GitLab has no per-note outdated flag (positions on older heads stay valid
- * positions), so `outdated` is always `false`; drift detection downstream
- * informs the reviewer instead.
+ * Revision provenance: GitLab re-traces every diff note's `position` onto
+ * each new MR diff, so a note still names the previous diff head only when
+ * tracing failed — which is GitLab's own definition of an outdated note. The
+ * API exposes that as `position.head_sha`, never as a flag, so the anchor
+ * carries `headSha` verbatim and no `outdated` verdict at all: the mapper
+ * establishes staleness by comparing `headSha` with the reviewed head, and a
+ * position that names no head stays unverifiable rather than being vouched
+ * for. (`base_sha`/`start_sha` are not carried; nothing consumes them, and
+ * the mapper verifies the anchored lines against the loaded diff anyway.)
  */
 function toAnchor(position: GitLabPosition | null | undefined): ForgeThreadAnchor | null {
   if (!position) return null;
@@ -186,7 +194,11 @@ function toAnchor(position: GitLabPosition | null | undefined): ForgeThreadAncho
   const startLine = lineOf(position.line_range?.start) ?? positionLine;
   const endLine = lineOf(position.line_range?.end) ?? positionLine;
 
-  return { filePath, side, startLine, endLine, outdated: false };
+  const anchor: ForgeThreadAnchor = { filePath, side, startLine, endLine };
+  if (typeof position.head_sha === 'string' && position.head_sha.length > 0) {
+    anchor.headSha = position.head_sha;
+  }
+  return anchor;
 }
 
 /**

@@ -3,11 +3,10 @@
  * as an ordinary child process, a real browser, and the document it leaves on
  * disk.
  *
- * The assertion is the file. `POST /api/review` answers 200 once the state is
- * on the session, and the process serializes and writes only afterwards — so
- * a test that stopped at the status code would pass against a program that
- * never wrote anything at all. Everything asserted below is read back from
- * the output path after the process has exited.
+ * The assertion is the file. `POST /api/review` publishes the document before
+ * it answers, so the page's "Review saved" is read as a claim and the output
+ * path is read back to check it, after the process has exited. See
+ * recoverable-submission.spec.ts for what happens when publishing fails.
  */
 import { test, expect } from '@playwright/test';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -60,6 +59,9 @@ test('a review completed in the browser is written to the output file', async ({
   expect(existsSync(outputPath)).toBe(false);
 
   await page.locator('[data-testid="finish-review-btn"]').click();
+
+  // The page may say so only once the file exists; the process stops after.
+  await expect(page.getByText('Review saved')).toBeVisible({ timeout: 15_000 });
 
   // ── The artifact, after the process that writes it has gone ──
 

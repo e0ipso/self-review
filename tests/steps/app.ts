@@ -209,7 +209,10 @@ export async function launchAppExpectExit(
 }
 
 /**
- * Close the Electron window by triggering saveAndQuit, which writes XML to file and exits.
+ * Finish the review through the toolbar button, which pushes the renderer's
+ * state over review:submit and then asks main to save and exit. Main never
+ * pulls state from the renderer, so a bare `electronAPI.saveAndQuit()` would
+ * be refused as a save with nothing to write; the button is the real path.
  * Use this only when the test needs to assert on the output file.
  */
 export async function saveAndCloseApp(): Promise<void> {
@@ -220,13 +223,11 @@ export async function saveAndCloseApp(): Promise<void> {
 
   try {
     const page = await app.firstWindow();
-    // saveAndQuit triggers process.exit(0) in main after writing the XML.
-    // The page connection may close before evaluate returns.
-    await page.evaluate(() => {
-      (window as any).electronAPI.saveAndQuit();
-    });
+    // The click triggers process.exit(0) in main after writing the XML, so
+    // the page connection may close before the click settles.
+    await page.locator('[data-testid="finish-review-btn"]').click({ timeout: 5000 });
   } catch {
-    // evaluate likely threw because the process exited (closing the
+    // The click likely threw because the process exited (closing the
     // connection).  Do NOT kill here — the process may be exiting cleanly.
   }
 
@@ -263,6 +264,18 @@ export async function closeAppWindow(): Promise<void> {
   if (processExitPromise) {
     await waitForProcessExit(proc, processExitPromise, 15000);
   }
+}
+
+/**
+ * Wait for the running app to exit on its own (after a Save & Quit or Discard
+ * the scenario triggered through the UI) and return its exit code; -1 if it
+ * is still running after `timeoutMs`, in which case it is killed.
+ */
+export async function waitForAppExit(timeoutMs = 15000): Promise<number> {
+  if (!electronApp || !processExitPromise) {
+    throw new Error('App not launched');
+  }
+  return waitForProcessExit(electronApp.process(), processExitPromise, timeoutMs);
 }
 
 /**

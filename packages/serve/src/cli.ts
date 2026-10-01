@@ -39,7 +39,9 @@ Examples:
 The URL is printed to stderr on start. The output path is fixed by the
 arguments above and cannot be changed from the browser. Completing the review
 writes that file and stops this process. Nothing is saved before then, and
-closing the tab once you have written a comment warns you first.
+closing the tab once you have written a comment warns you first. If the file
+cannot be written, the browser says why and keeps the review; fix the problem
+and press Finish Review again.
 
 The listener binds to 127.0.0.1 and refuses any request that names another
 host or origin, so a web page cannot reach it. There is no authentication:
@@ -71,14 +73,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { session, repositoryRoot, outputPath } = await resolveSession(args);
+  const { session, repositoryRoot, output } = await resolveSession(args);
 
-  const server = createReviewServer({ session, repositoryRoot });
-  completeReviewOnSubmit({ server, session, outputPath });
+  const server = createReviewServer({ session, repositoryRoot, output });
+  completeReviewOnSubmit({ server });
 
   const { url } = await listenLoopback(server);
   console.error(`[serve] Review ready at ${url}`);
-  console.error(`[serve] Completing the review writes ${outputPath} and stops this process.`);
+  console.error(`[serve] Completing the review writes ${output.path} and stops this process.`);
   console.error('[serve] The listener is loopback-only and unauthenticated.');
 }
 

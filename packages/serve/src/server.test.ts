@@ -181,7 +181,12 @@ beforeAll(async () => {
   fs.writeFileSync(path.join(clientDir, 'assets', 'app.js'), 'console.log("app");\n');
 
   session = freshSession();
-  server = createReviewServer({ session, repositoryRoot: root, clientDir });
+  server = createReviewServer({
+    session,
+    repositoryRoot: root,
+    clientDir,
+    output: { path: path.join(root, 'review.xml'), origin: 'explicit' },
+  });
   const { port } = await listenLoopback(server, 0);
   base = `http://127.0.0.1:${port}`;
 });
@@ -447,11 +452,17 @@ describe('POST /api/review', () => {
     files: [{ path: 'src/index.ts', changeType: 'added', viewed: true, comments: [] }],
   };
 
-  it('stores a valid review state on the session', async () => {
+  it('records a valid review state and acknowledges it only once it is published', async () => {
+    const outputPath = path.join(root, 'review.xml');
+    fs.rmSync(outputPath, { force: true });
+
     const res = await postJson('/api/review', state);
     expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, outputPath });
     expect(vi.mocked(core.submitReviewState)).toHaveBeenCalledWith(session, state);
     expect(session.reviewState).toEqual(state);
+    // The acknowledgement is the file: ./lifecycle.test.ts has the failure half.
+    expect(fs.readFileSync(outputPath, 'utf-8')).toContain('urn:self-review:v3');
   });
 
   it('rejects a malformed body with 400 before reaching core', async () => {

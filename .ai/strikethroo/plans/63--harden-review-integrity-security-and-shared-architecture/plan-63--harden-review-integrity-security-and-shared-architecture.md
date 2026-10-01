@@ -369,12 +369,12 @@ The graph is acyclic. Task 24 depends on every other task; only its edges from l
 - ✔️ Task 12: Isolate Mermaid and contain passive layout (A7) (depends on: 02, 08)
 - ✔️ Task 13: Bound backend input work (R14 backend) (depends on: 03, 04)
 
-### Phase 4: Apply, hosts and forge provenance
+### ✅ Phase 4: Apply, hosts and forge provenance
 **Parallel Tasks:**
-- Task 11: Apply authorization and safe mutation (R04, A3, A4) (depends on: 03, 10)
-- Task 14: Electron quit and save recovery (R01 desktop) (depends on: 10)
-- Task 15: Serve recoverable submission (R02) (depends on: 10)
-- Task 16: Remote thread provenance and shared helpers (R05) (depends on: 10)
+- ✔️ Task 11: Apply authorization and safe mutation (R04, A3, A4) (depends on: 03, 10)
+- ✔️ Task 14: Electron quit and save recovery (R01 desktop) (depends on: 10)
+- ✔️ Task 15: Serve recoverable submission (R02) (depends on: 10)
+- ✔️ Task 16: Remote thread provenance and shared helpers (R05) (depends on: 10)
 
 ### Phase 5: Serve authorization
 **Parallel Tasks:**

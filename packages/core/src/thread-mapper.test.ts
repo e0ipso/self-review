@@ -462,6 +462,120 @@ describe('suggestion extraction from thread bodies', () => {
   });
 });
 
+// R05: a position's line numbers describe one revision. An anchor that names
+// that revision (`headSha`) is actionable only against the same reviewed
+// head; an anchor that names none is actionable only when the forge itself
+// vouches for it (`outdated: false`, GitHub's re-anchored comments).
+describe('head-verified suggestion activation', () => {
+  const REVIEWED_HEAD = 'bbb222bbb222bbb222bbb222bbb222bbb222bbb2';
+  const OLD_HEAD = 'aaa111aaa111aaa111aaa111aaa111aaa111aaa1';
+  const FENCE = 'Prefer a constant.\n\n```suggestion\nconst b = 22;\n```\n';
+
+  function diffFile(path: string, start: number, contents: string[]): DiffFile {
+    return {
+      oldPath: path,
+      newPath: path,
+      changeType: 'modified',
+      isBinary: false,
+      hunks: [
+        {
+          header: `@@ -${start},${contents.length} +${start},${contents.length} @@`,
+          oldStart: start,
+          oldLines: contents.length,
+          newStart: start,
+          newLines: contents.length,
+          lines: contents.map((content, index) => ({
+            type: 'addition' as const,
+            oldLineNumber: null,
+            newLineNumber: start + index,
+            content,
+          })),
+        },
+      ],
+    };
+  }
+
+  const DIFF = [diffFile('src/app.ts', 9, ['const a = 1;', 'const b = 2;', 'const c = 3;'])];
+
+  function anchored(anchor: Partial<ForgeThreadAnchor>): ForgeThread {
+    return thread({
+      root: { remoteId: '9201', author: 'gitlab-user', body: FENCE },
+      anchor: {
+        filePath: 'src/app.ts',
+        side: 'new',
+        startLine: 10,
+        endLine: 10,
+        ...anchor,
+      } as ForgeThreadAnchor,
+    });
+  }
+
+  it('activates a suggestion whose anchor names the reviewed head', () => {
+    const [comment] = mapThreadsToReviewComments(
+      [anchored({ headSha: REVIEWED_HEAD })],
+      DIFF,
+      REVIEWED_HEAD
+    );
+
+    expect(comment.lineRange).toEqual({ side: 'new', start: 10, end: 10 });
+    expect(comment.suggestion).toEqual({
+      originalCode: 'const b = 2;',
+      proposedCode: 'const b = 22;',
+    });
+  });
+
+  it('treats an anchor naming another head as outdated: file-level, body intact, no suggestion', () => {
+    const [comment] = mapThreadsToReviewComments(
+      [anchored({ headSha: OLD_HEAD })],
+      DIFF,
+      REVIEWED_HEAD
+    );
+
+    expect(comment.lineRange).toBeNull();
+    expect(comment.suggestion).toBeNull();
+    expect(comment.body).toBe(FENCE);
+    expect(comment.filePath).toBe('src/app.ts');
+  });
+
+  it('keeps the line anchor but activates nothing when the anchor names no revision and no forge vouches for it', () => {
+    const [comment] = mapThreadsToReviewComments([anchored({})], DIFF, REVIEWED_HEAD);
+
+    expect(comment.lineRange).toEqual({ side: 'new', start: 10, end: 10 });
+    expect(comment.suggestion).toBeNull();
+  });
+
+  it('activates nothing when the anchor names a revision but the mapper is given no reviewed head', () => {
+    const [comment] = mapThreadsToReviewComments([anchored({ headSha: REVIEWED_HEAD })], DIFF);
+
+    expect(comment.lineRange).toEqual({ side: 'new', start: 10, end: 10 });
+    expect(comment.suggestion).toBeNull();
+  });
+
+  it('still honors a forge that vouches for a revision-less anchor (outdated: false)', () => {
+    const [comment] = mapThreadsToReviewComments(
+      [anchored({ outdated: false })],
+      DIFF,
+      REVIEWED_HEAD
+    );
+
+    expect(comment.suggestion).toEqual({
+      originalCode: 'const b = 2;',
+      proposedCode: 'const b = 22;',
+    });
+  });
+
+  it('lets a forge-reported outdated flag win over a matching head', () => {
+    const [comment] = mapThreadsToReviewComments(
+      [anchored({ headSha: REVIEWED_HEAD, outdated: true })],
+      DIFF,
+      REVIEWED_HEAD
+    );
+
+    expect(comment.lineRange).toBeNull();
+    expect(comment.suggestion).toBeNull();
+  });
+});
+
 // This suite deliberately does not mock xmllint-wasm: the point is that a
 // mapped comment carrying an extracted suggestion really does validate
 // against self-review-v3.xsd.

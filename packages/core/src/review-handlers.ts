@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import path from 'path';
 import {
   DiffLoadPayload,
+  DiffFile,
   DiffHunk,
   ResumeLoadPayload,
   GuideLoadPayload,
@@ -52,6 +53,16 @@ export interface ReviewSession {
    * needs one; see {@link resolveApplyDestination}.
    */
   applyDestinationRoot: string | null;
+  /**
+   * Every path the committed diff contained — `newPath` and `oldPath` of
+   * each file, so a rename's both names and a deletion's old name count —
+   * captured once by {@link commitDiffData} and frozen. This is the
+   * authorization set for anything that writes a reviewed file: the
+   * reviewer saw exactly these paths. Resumed comments, submitted review
+   * state and the renderer's placeholder entries can all name other paths,
+   * and none of them reach this set.
+   */
+  reviewedPaths: ReadonlySet<string>;
 }
 
 /** Create an empty session. */
@@ -67,7 +78,48 @@ export function createReviewSession(): ReviewSession {
     resumeRemoteDrift: null,
     resumeImportDiagnostics: [],
     applyDestinationRoot: null,
+    reviewedPaths: emptyReviewedPaths(),
   };
+}
+
+function emptyReviewedPaths(): ReadonlySet<string> {
+  return freezeSet(new Set<string>());
+}
+
+/** A set no later caller can grow: `add`/`delete`/`clear` throw. */
+function freezeSet(set: Set<string>): ReadonlySet<string> {
+  const frozen = () => {
+    throw new TypeError('reviewedPaths is captured when the diff is committed and cannot change');
+  };
+  Object.defineProperties(set, {
+    add: { value: frozen },
+    delete: { value: frozen },
+    clear: { value: frozen },
+  });
+  return Object.freeze(set);
+}
+
+/** The paths of a diff's files, old and new, with no empty names. */
+function reviewedPathsOf(files: readonly DiffFile[]): ReadonlySet<string> {
+  const paths = new Set<string>();
+  for (const file of files) {
+    if (file.newPath) paths.add(file.newPath);
+    if (file.oldPath) paths.add(file.oldPath);
+  }
+  return freezeSet(paths);
+}
+
+/**
+ * Make `payload` the session's diff. This is the one place a diff is
+ * committed to a session — every front end's startup, the welcome screen's
+ * directory start and the remote bootstrap all land here — and the moment
+ * {@link ReviewSession.reviewedPaths} is captured from it. Later edits to
+ * `session.diffData` (expanded context writes hunks back) leave that set as
+ * it was.
+ */
+export function commitDiffData(session: ReviewSession, payload: DiffLoadPayload): void {
+  session.diffData = payload;
+  session.reviewedPaths = reviewedPathsOf(payload.files);
 }
 
 /**
@@ -328,8 +380,20 @@ export function setApplyDestination(
 /**
  * Apply one suggestion to the reviewed working file, or refuse and write
  * nothing. The engine in `apply-suggestion.ts` does the work; this handler
- * only names the destination the session reviews, which the engine never
- * derives for itself.
+ * names the destination the session reviews, which the engine never derives
+ * for itself, and authorizes the target against the session.
+ *
+ * Authorization is membership in {@link ReviewSession.reviewedPaths}: the
+ * file must be one the committed diff contained (`not-reviewed` otherwise).
+ * That is what stops a resumed document, or a client that can reach this
+ * handler, from naming a file the reviewer never looked at. Repository
+ * control files are refused by the engine even when a crafted payload lists
+ * them. Beyond the path, the request is not bound to a particular comment:
+ * the session holds no registry of live suggestions (the front end owns
+ * review state until it is submitted), so the binding is the anchor plus the
+ * byte-exact match of `originalCode` against the file, which the engine
+ * checks before writing and which a request cannot satisfy for lines it
+ * does not know.
  *
  * A refusal travels as a value, never as a thrown error. The front end
  * renders its `detail` next to the suggestion the attempt came from.
@@ -348,6 +412,16 @@ export function applySuggestionForSession(
       detail: temporary
         ? 'This pull request was cloned into a temporary directory that is deleted when the review ends. Choose a destination directory to apply into.'
         : 'This review has no working directory to write into.',
+    };
+  }
+
+  if (!session.reviewedPaths.has(request.filePath)) {
+    console.error(`[suggestion:apply] ${request.filePath}: refused (not-reviewed)`);
+    return {
+      status: 'refused',
+      filePath: request.filePath,
+      reason: 'not-reviewed',
+      detail: 'This file is not part of the reviewed diff, so nothing was written.',
     };
   }
 
@@ -582,6 +656,6 @@ export function commitReviewStart(
   session: ReviewSession,
   payload: DiffLoadPayload
 ): DiffLoadPayload {
-  session.diffData = payload;
+  commitDiffData(session, payload);
   return preparePayload(payload);
 }

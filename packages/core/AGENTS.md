@@ -31,7 +31,8 @@ src/
 ├── git.ts                # child_process wrappers for git
 ├── xml-serializer.ts     # ReviewState → { xml, assets } (pure; validates against XSD; refuses XML-illegal chars)
 ├── review-publisher.ts   # publishReview: validate → stage assets (unique, exclusive, no-follow) → atomic rename
-├── safe-fs.ts            # No-follow primitives: writeExclusiveNoFollow, atomicReplace, assertNoSymlinkAncestors, FsLayer
+├── safe-fs.ts            # No-follow primitives: writeExclusiveNoFollow, atomicReplace (mode/owner/identity-preserving), assertNoSymlinkAncestors, FsLayer
+├── apply-suggestion.ts   # applySuggestion: anchor validated pre-I/O, .git refused, realpath root + lstat ancestors + O_NOFOLLOW, atomicReplace
 ├── xml-parser.ts         # XML → ReviewState (lossless; downgrades bad anchors with diagnostics)
 ├── xml-text.ts           # The one escape/decode contract (CR/LF/TAB as char refs, single pass)
 ├── xml-errors.ts         # ReviewXmlError / XmlIllegalCharacterError (library never process.exits)

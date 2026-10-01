@@ -10,6 +10,8 @@ import {
   type ForgeUrl,
 } from './forge-provider';
 import { createGitLabProvider } from './gitlab-provider';
+import { mapThreadsToReviewComments } from './thread-mapper';
+import type { DiffFile } from './types';
 
 interface GitLabNoteFixture {
   id: number;
@@ -172,7 +174,6 @@ describe('createGitLabProvider', () => {
             side: 'new',
             startLine: 42,
             endLine: 42,
-            outdated: false,
           },
         },
       ]);
@@ -261,7 +262,6 @@ describe('createGitLabProvider', () => {
         side: 'old',
         startLine: 17,
         endLine: 17,
-        outdated: false,
       });
     });
 
@@ -289,7 +289,6 @@ describe('createGitLabProvider', () => {
         side: 'new',
         startLine: 40,
         endLine: 45,
-        outdated: false,
       });
     });
 
@@ -317,7 +316,6 @@ describe('createGitLabProvider', () => {
         side: 'old',
         startLine: 17,
         endLine: 20,
-        outdated: false,
       });
     });
 
@@ -356,7 +354,6 @@ describe('createGitLabProvider', () => {
         side: 'new',
         startLine: null,
         endLine: null,
-        outdated: false,
       });
     });
 
@@ -380,6 +377,131 @@ describe('createGitLabProvider', () => {
 
       const threads = await provider.fetchThreads(mrUrl);
       expect(threads.map(t => t.root.remoteId)).toEqual(['1', '2']);
+    });
+  });
+
+  // R05: a GitLab position carries the head it was computed against. Only a
+  // position on the reviewed head may become an actionable suggestion; the
+  // mapper would otherwise read `originalCode` out of today's diff at line
+  // numbers that described another revision.
+  describe('head-verified suggestions through the mapper', () => {
+    const CURRENT_HEAD = 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00';
+    const OLD_HEAD = '0ld0ld0ld0ld0ld0ld0ld0ld0ld0ld0ld0ld0ld0';
+    const FENCE = 'Use the constant.\n\n```suggestion\nconst b = B;\n```\n';
+
+    /** The reviewed diff: src/app.ts new lines 40–45 with known content. */
+    const DIFF: DiffFile[] = [
+      {
+        oldPath: 'src/app.ts',
+        newPath: 'src/app.ts',
+        changeType: 'modified',
+        isBinary: false,
+        hunks: [
+          {
+            header: '@@ -40,6 +40,6 @@',
+            oldStart: 40,
+            oldLines: 6,
+            newStart: 40,
+            newLines: 6,
+            lines: [40, 41, 42, 43, 44, 45].map(n => ({
+              type: 'addition' as const,
+              oldLineNumber: null,
+              newLineNumber: n,
+              content: `line ${n};`,
+            })),
+          },
+        ],
+      },
+    ];
+
+    function textPosition(headSha: string | null, extra: Record<string, unknown> = {}) {
+      return {
+        position_type: 'text',
+        base_sha: 'b45eb45eb45eb45eb45eb45eb45eb45eb45eb45e',
+        start_sha: '57a7757a7757a7757a7757a7757a7757a7757a77',
+        ...(headSha === null ? {} : { head_sha: headSha }),
+        old_path: 'src/app.ts',
+        new_path: 'src/app.ts',
+        old_line: null,
+        new_line: 42,
+        line_range: null,
+        ...extra,
+      };
+    }
+
+    async function mapPayload(position: Record<string, unknown>) {
+      const discussion = makeDiscussion([makeNote({ id: 7001, body: FENCE, position })]);
+      const { runner } = makeRunner([jsonResult([discussion])]);
+      const threads = await createGitLabProvider(runner).fetchThreads(mrUrl);
+      return mapThreadsToReviewComments(threads, DIFF, CURRENT_HEAD)[0];
+    }
+
+    it('carries the position head_sha on the anchor and reports no staleness verdict of its own', async () => {
+      const discussion = makeDiscussion([
+        makeNote({ id: 7000, body: 'note', position: textPosition(CURRENT_HEAD) }),
+      ]);
+      const { runner } = makeRunner([jsonResult([discussion])]);
+
+      const [thread] = await createGitLabProvider(runner).fetchThreads(mrUrl);
+
+      expect(thread.anchor).toEqual({
+        filePath: 'src/app.ts',
+        side: 'new',
+        startLine: 42,
+        endLine: 42,
+        headSha: CURRENT_HEAD,
+      });
+      expect(thread.anchor).not.toHaveProperty('outdated');
+    });
+
+    it('activates a suggestion for a position on the current head, with original code from the diff', async () => {
+      const comment = await mapPayload(textPosition(CURRENT_HEAD));
+
+      expect(comment.lineRange).toEqual({ side: 'new', start: 42, end: 42 });
+      expect(comment.suggestion).toEqual({
+        originalCode: 'line 42;',
+        proposedCode: 'const b = B;',
+      });
+    });
+
+    it('activates nothing for a position on an older head, keeping the discussion text', async () => {
+      const comment = await mapPayload(textPosition(OLD_HEAD));
+
+      expect(comment.suggestion).toBeNull();
+      expect(comment.body).toBe(FENCE);
+      expect(comment.filePath).toBe('src/app.ts');
+      // GitLab's own definition of an outdated note: its traced position
+      // still names a previous diff head. Treated like a GitHub outdated
+      // comment, it degrades to file-level rather than pointing at today's
+      // unrelated line 42.
+      expect(comment.lineRange).toBeNull();
+    });
+
+    it('activates nothing for a position that names no head at all', async () => {
+      const comment = await mapPayload(textPosition(null));
+
+      expect(comment.suggestion).toBeNull();
+      expect(comment.body).toBe(FENCE);
+      // Unverifiable rather than known-stale: the line placement is kept.
+      expect(comment.lineRange).toEqual({ side: 'new', start: 42, end: 42 });
+    });
+
+    it('activates a multi-line suggestion on the current head over the exact range', async () => {
+      const comment = await mapPayload(
+        textPosition(CURRENT_HEAD, {
+          new_line: 44,
+          line_range: {
+            start: { old_line: null, new_line: 41, type: 'new' },
+            end: { old_line: null, new_line: 44, type: 'new' },
+          },
+        })
+      );
+
+      expect(comment.lineRange).toEqual({ side: 'new', start: 41, end: 44 });
+      expect(comment.suggestion).toEqual({
+        originalCode: 'line 41;\nline 42;\nline 43;\nline 44;',
+        proposedCode: 'const b = B;',
+      });
     });
   });
 

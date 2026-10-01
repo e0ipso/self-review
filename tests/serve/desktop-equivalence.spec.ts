@@ -80,14 +80,14 @@ test('serve mode and the desktop application write the same document', async ({ 
   repoDir = createTestRepo();
   outputDir = mkdtempSync(join(tmpdir(), 'self-review-equivalence-'));
   const servePath = join(outputDir, 'serve.xml');
-  const desktopPath = join(outputDir, 'desktop.xml');
+  // The desktop has no output flag, so its path comes from the project
+  // configuration, which may only name a file inside the repository. That
+  // file is written after both diffs were loaded, so neither review sees it;
+  // the configuration file itself is part of both reviewed states. Serve's
+  // explicit --output stays outside the repository for the same reason.
+  const desktopPath = join(repoDir, 'desktop.xml');
 
-  // Both reviews must see one repository state, so neither output file may
-  // land inside the repository, where it would show up as an untracked file
-  // in the other's diff. The desktop has no output flag — its path comes from
-  // the configuration file, which is why this is written before either runs
-  // and is itself part of the reviewed state.
-  writeFileSync(join(repoDir, '.self-review.yaml'), `output-file: "${desktopPath}"\n`);
+  writeFileSync(join(repoDir, '.self-review.yaml'), `output-file: desktop.xml\n`);
 
   // ── Serve mode ──
 

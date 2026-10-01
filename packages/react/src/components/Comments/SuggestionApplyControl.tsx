@@ -44,6 +44,26 @@ export default function SuggestionApplyControl({
 
   if (!applySuggestion) return null;
 
+  // A comment can sit on a path the reviewed diff never had: the review-level
+  // sentinel, a resumed comment on a file that left the diff, an outdated
+  // anchor. The session renders those as placeholder entries, but there is no
+  // reviewed file to write, and the host refuses them (`not-reviewed`). Say so
+  // instead of offering a button. While the session is still a placeholder
+  // itself there is nothing to compare against yet.
+  const sessionLoaded =
+    review !== null && review.diffSource.type !== 'loading' && review.diffSource.type !== 'welcome';
+  if (sessionLoaded && !review.reviewedPaths.has(filePath)) {
+    return (
+      <div
+        className='flex items-center gap-1.5 px-3 py-1.5 border-t border-border bg-muted/40 font-sans text-[11px] text-muted-foreground'
+        data-testid='suggestion-apply-unreviewed'
+      >
+        <CircleAlert className='h-3 w-3 flex-shrink-0' />
+        <span>This file is not in the reviewed diff, so the suggestion cannot be applied.</span>
+      </div>
+    );
+  }
+
   const applied = outcome?.status === 'applied';
 
   // The clone is deleted when the review ends, so the reviewed files are not

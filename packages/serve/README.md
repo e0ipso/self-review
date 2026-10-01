@@ -73,8 +73,23 @@ The URL goes to stderr when the process starts. Open it in a browser.
 The output path is set once, when the process starts, by `-o` or by `output-file` in your config. No
 route and no browser control changes it afterward.
 
-Finishing the review writes that file and stops the process. The port closes with it, so there is no
-second attempt: if you want to keep reviewing, start it again with `--resume-from`.
+Finishing the review writes that file and stops the process. The page says "Review saved" only once
+the file is on disk: the server publishes the document before it answers, so that screen is a
+written file, not a promise of one. The port closes right after, so there is no second review from
+the same process: if you want to keep reviewing, start it again with `--resume-from`.
+
+If the file cannot be written — the path has become a directory, the disk is full, the directory is
+no longer writable, a symbolic link sits where the file should go — nothing stops. The page keeps
+the review exactly as it was, shows the server's own error with its code (`output-is-directory`,
+`no-space`, `permission-denied`, `unsafe-link`, ...), and the same lines go to the terminal. Fix the
+problem and press Finish Review again; the retry sends the same review, and the close guard below
+stays up until a save has been acknowledged. The output path itself cannot be changed from the
+browser, so a path that can never work means stopping the server and starting it with another
+`--output`.
+
+A review over 32 MB on the wire is refused before it is sent, with its size in the message. Image
+attachments are the usual cause — they travel base64-encoded, which adds a third — so remove or
+shrink some and finish again. A server-side `413` for the same reason is reported the same way.
 
 Closing the tab warns you first, once you have entered something. Your comments live only in that
 page until you finish, so closing without finishing loses them.

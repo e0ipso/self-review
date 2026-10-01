@@ -2,7 +2,7 @@
 id: 14
 group: "desktop-lifecycle"
 dependencies: [10]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - electron
@@ -20,13 +20,13 @@ Menu Quit / Cmd+Q / Ctrl+Q follow the same Save & Quit / Discard / Cancel workfl
 Electron main-process lifecycle/IPC and TypeScript.
 
 ## Acceptance Criteria
-- [ ] A single explicit close/quit state machine in `src/main/main.ts` (and `menu.ts`): `before-quit` from a user Quit with a review window open is intercepted (`event.preventDefault()`) and routed through `app:close-requested`; only Discard or a successful save sets the "allowed to quit" state. The welcome screen (no review) still quits directly.
-- [ ] Save paths (`app:save-and-quit`, Finish Review, `review:submit` flows in `ipc-handlers.ts:321–329` and `main.ts:432–472`) call core `publishReview` with `outputOrigin` from the session (explicit when the reviewer chose it via CLI flag or save dialog, inherited when it came from project config/default — task 21 finalizes the provenance plumbing; use `'explicit'` for dialog-chosen paths and the session's recorded origin otherwise). On `ReviewPublishError`, the process does not exit: show a native error dialog (`dialog.showMessageBox`) with the error message and code, keep the review window, and let the reviewer retry or change the output path (existing `output-path:change`).
-- [ ] The renderer-request timeout path no longer constructs an empty `ReviewState`; the pull fallback and its polling interval are deleted if the state-push contract makes them unnecessary (verify: every save path receives pushed state first). If a timeout remains, it reports an error and writes nothing.
-- [ ] Startup writability check (parent-dir-only) is replaced by the publisher's error reporting or made consistent with it.
-- [ ] `src/main/xml-serializer.ts` (if it just re-exports core) and any now-unused main-process write helpers are removed or reduced.
-- [ ] Electron e2e (`e2e/` electron project): scenarios for (a) menu Quit with comments → confirmation dialog appears, Cancel keeps the session; (b) Save & Quit with output path that is a directory → error shown, app still running, comments still present, previous output unchanged; then fix path and Save & Quit succeeds; (c) Discard quits without writing. Run `npm run test:e2e:electron` — all scenarios pass.
-- [ ] Unit tests for the state machine where it is extractable (pure reducer or small class in `src/main/`); `npm run test:unit`, `npm run typecheck` pass.
+- [x] A single explicit close/quit state machine in `src/main/main.ts` (and `menu.ts`): `before-quit` from a user Quit with a review window open is intercepted (`event.preventDefault()`) and routed through `app:close-requested`; only Discard or a successful save sets the "allowed to quit" state. The welcome screen (no review) still quits directly.
+- [x] Save paths (`app:save-and-quit`, Finish Review, `review:submit` flows in `ipc-handlers.ts:321–329` and `main.ts:432–472`) call core `publishReview` with `outputOrigin` from the session (explicit when the reviewer chose it via CLI flag or save dialog, inherited when it came from project config/default — task 21 finalizes the provenance plumbing; use `'explicit'` for dialog-chosen paths and the session's recorded origin otherwise). On `ReviewPublishError`, the process does not exit: show a native error dialog (`dialog.showMessageBox`) with the error message and code, keep the review window, and let the reviewer retry or change the output path (existing `output-path:change`).
+- [x] The renderer-request timeout path no longer constructs an empty `ReviewState`; the pull fallback and its polling interval are deleted if the state-push contract makes them unnecessary (verify: every save path receives pushed state first). If a timeout remains, it reports an error and writes nothing.
+- [x] Startup writability check (parent-dir-only) is replaced by the publisher's error reporting or made consistent with it.
+- [x] `src/main/xml-serializer.ts` (if it just re-exports core) and any now-unused main-process write helpers are removed or reduced.
+- [x] Electron e2e (`e2e/` electron project): scenarios for (a) menu Quit with comments → confirmation dialog appears, Cancel keeps the session; (b) Save & Quit with output path that is a directory → error shown, app still running, comments still present, previous output unchanged; then fix path and Save & Quit succeeds; (c) Discard quits without writing. Run `npm run test:e2e:electron` — all scenarios pass.
+- [x] Unit tests for the state machine where it is extractable (pure reducer or small class in `src/main/`); `npm run test:unit`, `npm run typecheck` pass.
 
 Use your internal Todo tool to track these and keep on track.
 

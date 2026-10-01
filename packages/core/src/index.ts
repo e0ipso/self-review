@@ -56,7 +56,7 @@ export { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
 export type { ReviewXmlErrorCode, XmlIllegalCharacterLocation } from './xml-errors';
 
 // Review output publication (the one way review XML and attachments reach disk)
-export { publishReview, ReviewPublishError } from './review-publisher';
+export { publishReview, inspectOutputPath, ReviewPublishError } from './review-publisher';
 export type {
   ReviewPublishErrorCode,
   ReviewOutputOrigin,
@@ -164,9 +164,10 @@ export { createIgnoreFilter } from './ignore-filter';
 export { checkWritability } from './fs-utils';
 
 // Anchored suggestion application (writes a reviewed working file)
-export { applySuggestion } from './apply-suggestion';
+export { applySuggestion, isRepositoryControlPath } from './apply-suggestion';
 export type {
   ApplyRefusalReason,
+  ApplySuggestionOptions,
   ApplySuggestionRequest,
   ApplySuggestionApplied,
   ApplySuggestionRefused,
@@ -219,6 +220,7 @@ export {
   expandContext,
   prepareDirectoryReview,
   commitReviewStart,
+  commitDiffData,
   resolveSourceBaseDir,
   resolveApplyDestination,
   applySuggestionForSession,
@@ -237,15 +239,25 @@ export type { LoadGitDiffOptions, LoadGitDiffResult } from './git-diff-loader';
 export { applyStagedUntrackedDefault } from './staged-untracked';
 export { normalizeGitDiffArgs, findUnsupportedGitDiffOptions } from './git-diff-args';
 
-// Remote PR/MR session bootstrap (URL -> materialized git-mode inputs)
+// Remote PR/MR session bootstrap (URL -> materialized git-mode inputs) and the
+// load/filter/map step the app and fetch-comments share
 export {
   startRemoteSession,
+  loadRemoteReview,
   bootstrapRemoteDiff,
   mergeRemoteThreads,
   applyRemoteProvenance,
   computeRemoteDrift,
+  defaultRemoteSessionDeps,
 } from './remote-mode';
-export type { RemoteSession, RemoteSessionDeps, RemoteBootstrapResult } from './remote-mode';
+export type {
+  MaterializedRemoteSession,
+  RemoteSession,
+  RemoteSessionDeps,
+  StartRemoteSessionOptions,
+  RemoteReviewLoad,
+  RemoteBootstrapResult,
+} from './remote-mode';
 
 // Headless fetch-comments orchestrator
 export { buildRemoteReviewState, runFetchComments } from './fetch-comments';

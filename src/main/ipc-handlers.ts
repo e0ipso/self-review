@@ -24,6 +24,7 @@ import { getVersionUpdate } from './version-checker';
 import { getAppIconDataUri } from './app-assets';
 import {
   applySuggestionForSession,
+  commitDiffData,
   commitReviewStart,
   createReviewSession,
   expandContext,
@@ -46,7 +47,9 @@ import {
 const desktopSession = createReviewSession();
 
 export function setDiffData(data: DiffLoadPayload): void {
-  desktopSession.diffData = data;
+  // Committing through core captures the session's reviewed paths, which
+  // authorize every later apply; a bare assignment would leave them empty.
+  commitDiffData(desktopSession, data);
 }
 
 export function setGuideData(data: GuideLoadPayload | null): void {
@@ -304,41 +307,27 @@ export function registerFindInPageForWindow(window: BrowserWindow): void {
   });
 }
 
-export function requestReviewFromRenderer(window: BrowserWindow): Promise<ReviewState> {
-  return new Promise(resolve => {
-    // Host-driven flow: renderer pushes state before triggering save.
-    // If the session already holds a state, use it directly.
-    const preSubmitted = takeReviewState(desktopSession);
-    if (preSubmitted) {
-      console.error('[ipc] Using pre-submitted review state (host-driven)');
-      resolve(preSubmitted);
-      return;
-    }
+/**
+ * The review state the renderer pushed over `review:submit` ahead of a save,
+ * consumed exactly once. Every save path (Finish Review, Save & Quit) pushes
+ * first, so a `null` here means the renderer did not, and the caller treats
+ * that as a failed save: main never pulls state from the renderer and never
+ * substitutes an empty review.
+ */
+export function takeSubmittedReviewState(): ReviewState | null {
+  const state = takeReviewState(desktopSession);
+  if (state) {
+    console.error('[ipc] Using pushed review state for save');
+  }
+  return state;
+}
 
-    // Fallback: pull-based request for backward compatibility.
-    console.error('[ipc] Sending review:request to renderer (fallback)');
-    window.webContents.send('review:request');
-
-    // Wait for response with timeout
-    const timeout = setTimeout(() => {
-      console.error('[ipc] WARNING: Timeout waiting for review state from renderer (5s)');
-      console.error('[ipc] Resolving with empty review state');
-      resolve({
-        timestamp: new Date().toISOString(),
-        source: { type: 'git', gitDiffArgs: '', repository: '' },
-        files: [],
-      });
-    }, 5000);
-
-    // Poll for the submitted state
-    const interval = setInterval(() => {
-      const state = takeReviewState(desktopSession);
-      if (state) {
-        console.error('[ipc] Review state received from renderer');
-        clearTimeout(timeout);
-        clearInterval(interval);
-        resolve(state);
-      }
-    }, 100);
-  });
+/**
+ * True while this session is reviewing something, as opposed to showing the
+ * welcome screen. The close/quit flow asks the renderer only in that case;
+ * a welcome screen has nothing to save and quits directly.
+ */
+export function isReviewOpen(): boolean {
+  const diff = desktopSession.diffData;
+  return diff !== null && diff.source.type !== 'welcome';
 }

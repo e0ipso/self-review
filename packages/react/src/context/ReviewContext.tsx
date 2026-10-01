@@ -99,6 +99,16 @@ export interface ReviewContextValue {
   /** Record the destination the host accepted. */
   setApplyDestination: (destinationRoot: string) => void;
   /**
+   * Paths of the files the host's diff payload contained (`newPath ||
+   * oldPath` of each): what the reviewer actually reviewed. Captured from
+   * each payload's own files and never from the synthetic entries a resumed
+   * or off-diff comment creates, so a control that writes a file (Apply)
+   * can tell a reviewed file from a placeholder. The host enforces the same
+   * membership on its side; this only keeps the UI from offering what the
+   * host will refuse. Empty until a payload arrives.
+   */
+  reviewedPaths: ReadonlySet<string>;
+  /**
    * Identifies the session the rest of this value describes. It changes
    * whenever the provider starts a new session (a new adapter, a pushed
    * payload for a different source, a different static source) and stays
@@ -372,6 +382,9 @@ function ReviewSessionProvider({
   const [diagnostics, setDiagnostics] = useState<string[]>([]);
   const [isLargePayload, setIsLargePayload] = useState(false);
   const [applyDestination, setApplyDestination] = useState<string | null>(null);
+  const [reviewedPaths, setReviewedPaths] = useState<ReadonlySet<string>>(
+    () => new Set((initialFiles ?? []).map(pathOf))
+  );
   const [sessionId, setSessionId] = useState(() => nextSessionId++);
   const sessionIdRef = useRef(sessionId);
   // Identity of the session currently held, or null before any payload.
@@ -413,6 +426,7 @@ function ReviewSessionProvider({
     if (identity === identityRef.current) {
       const commentedPaths = filesRef.current.filter(f => f.comments.length > 0).map(f => f.path);
       setAllDiffFiles(withSyntheticEntries(payload.files, commentedPaths));
+      setReviewedPaths(new Set(payload.files.map(pathOf)));
       setDiffSource(payload.source);
       setRemote(payload.remote ?? null);
       setDiagnostics(payload.diagnostics ?? []);
@@ -435,6 +449,7 @@ function ReviewSessionProvider({
     resumeAppliedRef.current = false;
     setResumedReview(null);
     setAllDiffFiles(payload.files);
+    setReviewedPaths(new Set(payload.files.map(pathOf)));
     setDiffSource(payload.source);
     setRemote(payload.remote ?? null);
     setDiagnostics(payload.diagnostics ?? []);
@@ -584,6 +599,7 @@ function ReviewSessionProvider({
         isLargePayload,
         applyDestination,
         setApplyDestination,
+        reviewedPaths,
         sessionId,
       }}
     >

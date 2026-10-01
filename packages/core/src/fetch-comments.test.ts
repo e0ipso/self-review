@@ -163,7 +163,9 @@ describe('runFetchComments', () => {
       detectExistingClone: vi.fn().mockResolvedValue(null),
       materialize: vi.fn().mockResolvedValue(materializeResult()),
       resolveRemoteDefaultBranch: vi.fn().mockResolvedValue('trunk'),
-      loadDiffFiles: vi.fn().mockResolvedValue([makeDiffFile('src/a.ts')]),
+      loadDiff: vi
+        .fn()
+        .mockResolvedValue({ files: [makeDiffFile('src/a.ts')], repository: '/tmp/clone' }),
       publish: vi.fn().mockImplementation(async (state: ReviewState, outputPath: string) => {
         written.push({ path: outputPath, content: '<xml/>\n', state });
         return { outputPath, assetPaths: [] };

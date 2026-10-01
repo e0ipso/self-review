@@ -3,7 +3,6 @@
 
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
 import { resolve } from 'path';
-import { checkWritability } from './fs-utils';
 import { parseCliArgs } from './cli';
 import {
   formatGitDiffArgs,
@@ -17,7 +16,13 @@ import { applyStagedUntrackedDefault } from '../../packages/core/src/staged-untr
 import { determineMode } from '../../packages/core/src/startup-mode';
 import { createIgnoreFilter } from './ignore-filter';
 import { parseReviewXml } from './xml-parser';
-import { publishReview } from '../../packages/core/src/review-publisher';
+import { inspectOutputPath, publishReview } from '../../packages/core/src/review-publisher';
+import type {
+  PublishReviewOptions,
+  ReviewOutputOrigin,
+} from '../../packages/core/src/review-publisher';
+import { QuitController, saveAndQuit } from './quit-controller';
+import type { SaveFailure } from './quit-controller';
 import {
   registerIpcHandlers,
   registerFindInPageForWindow,
@@ -26,7 +31,8 @@ import {
   setConfigData,
   setOutputPathInfo,
   setResumeData,
-  requestReviewFromRenderer,
+  takeSubmittedReviewState,
+  isReviewOpen,
   sendDiffLoad,
   sendResumeLoad,
   sendGuideLoad,
@@ -117,18 +123,111 @@ let resumeViewedFiles: string[] = [];
 let appConfig: AppConfig | null = null;
 let currentOutputPath: string = '';
 let outputPathWritable: boolean = false;
-let isQuitting = false;
+// Where the output path came from, which decides how far the publisher
+// trusts it: project configuration or the default is `inherited` and must
+// stay inside the launch directory; a path the reviewer picked in the save
+// dialog is `explicit`. (The desktop CLI has no --output flag.)
+let outputOrigin: ReviewOutputOrigin = 'inherited';
+const launchCwd = process.cwd();
 // Remote PR/MR session state. remoteSessionInfo is injected into the
 // submitted ReviewState on save so the serializer writes the remote-*
 // attributes; remoteCleanup removes a temporary clone when one was created.
 let remoteSessionInfo: RemoteSessionInfo | null = null;
 let remoteCleanup: (() => void) | null = null;
 
-// When the app is quitting (SIGTERM, app.quit(), etc.), allow windows to close
-// without showing the confirmation dialog.
-app.on('before-quit', () => {
-  isQuitting = true;
-});
+// The one close/quit/save state machine. The window's close button, menu
+// Quit, Cmd+Q/Ctrl+Q, Finish Review and the Save & Quit / Discard dialog all
+// consult it; only a successful save or an explicit discard lets the process
+// exit. See quit-controller.ts.
+const quitController = new QuitController();
+
+/**
+ * Whether a review window with something to lose is on screen. A welcome
+ * screen, a missing or destroyed window, or a renderer that has not loaded
+ * yet has nothing to save, so closing it goes straight through.
+ */
+function isReviewWindowOpen(): boolean {
+  return (
+    mainWindow !== null &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isLoading() &&
+    isReviewOpen()
+  );
+}
+
+/**
+ * Applies the controller's decision to a window close or an app quit:
+ * either let it through, or stop it and hand the question to the renderer,
+ * whose dialog answers over app:save-and-quit / app:discard-and-quit (Cancel
+ * answers nothing and the review simply continues).
+ */
+function handleCloseRequest(event: Electron.Event): void {
+  const decision = quitController.closeRequested(isReviewWindowOpen());
+  if (decision === 'allow') return;
+  event.preventDefault();
+  if (decision === 'ask-renderer' && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.APP_CLOSE_REQUESTED);
+  }
+}
+
+// Menu Quit, Cmd+Q/Ctrl+Q and any other app.quit() arrive here first. With a
+// review open they are intercepted and routed through the same confirmation
+// as the window's close button; the welcome screen quits directly. The
+// signal handlers above call process.exit() right after app.quit(), so a
+// SIGTERM/SIGINT is never held up by this.
+app.on('before-quit', handleCloseRequest);
+
+/**
+ * The only way the review flow ends the process. Called after the document
+ * is on disk (Finish Review, Save & Quit) or after an explicit Discard.
+ */
+function exitNow(code: number): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.destroy();
+  }
+  process.exit(code);
+}
+
+function publishOptions(): PublishReviewOptions {
+  return outputOrigin === 'explicit'
+    ? { outputOrigin: 'explicit' }
+    : { outputOrigin: 'inherited', baseDir: launchCwd };
+}
+
+/**
+ * The startup hint behind the file tree's writability mark and the Finish
+ * Review button: the publisher's own read-only checks against the current
+ * output path, so the hint and the save-time error agree. Advisory only —
+ * the save re-checks and reports its own failure.
+ */
+function probeOutputPath(): boolean {
+  const problem = inspectOutputPath(currentOutputPath, publishOptions());
+  if (problem) {
+    console.error(`[main] Output path check (${problem.code}): ${problem.message}`);
+  }
+  return problem === null;
+}
+
+/**
+ * A save that did not happen. Logged in full to stderr, then shown in a
+ * native dialog over the review window, which stays open with every
+ * comment in place.
+ */
+async function reportSaveFailure(failure: SaveFailure): Promise<void> {
+  console.error(`[main] Error saving review (${failure.code}): ${failure.message}`);
+  for (const line of failure.detail.split('\n')) {
+    if (line.length > 0) console.error(`[main]   ${line}`);
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  await dialog.showMessageBox(mainWindow, {
+    type: 'error',
+    title: 'Review not saved',
+    message: failure.message,
+    detail: failure.detail,
+    buttons: ['OK'],
+    defaultId: 0,
+  });
+}
 
 // Temporary remote clones are removed on every exit path. The materializer's
 // cleanup is idempotent: process 'exit' covers the direct process.exit()
@@ -161,8 +260,8 @@ async function initializeApp() {
 
     // Phase 2: Load configuration
     appConfig = loadConfig();
-    currentOutputPath = resolve(process.cwd(), appConfig.outputFile);
-    outputPathWritable = checkWritability(currentOutputPath);
+    currentOutputPath = resolve(launchCwd, appConfig.outputFile);
+    outputPathWritable = probeOutputPath();
     console.error(
       '[main] Config loaded, output path:',
       currentOutputPath,
@@ -398,6 +497,7 @@ async function initializeApp() {
     // Phase 7: Register IPC handlers
     console.error('[main] Registering IPC handlers');
     registerIpcHandlers();
+    registerLifecycleHandlers();
 
     // Phase 7b: Setup menu
     console.error('[main] Setting up menu');
@@ -458,52 +558,53 @@ function createWindow(): void {
 
   // Data is sent when renderer requests it via IPC (see ipc-handlers.ts)
 
-  // Handle window close - intercept and ask renderer to show confirmation dialog
-  // Skip the dialog when the app is quitting (SIGTERM, process.kill, etc.)
-  mainWindow.on('close', event => {
-    if (!mainWindow || isQuitting) return;
-    event.preventDefault();
-    mainWindow.webContents.send(IPC.APP_CLOSE_REQUESTED);
+  // The window's close button (and Cmd+W) go through the same decision as
+  // app quit: a review window asks the renderer, anything else closes.
+  mainWindow.on('close', handleCloseRequest);
+  mainWindow.on('closed', () => {
+    mainWindow = null;
   });
+}
 
-  // Handle save-and-quit from renderer (Finish Review button or dialog Save & Quit)
+/**
+ * The IPC listeners that belong to the app's lifetime rather than to one
+ * window. Registered once from initializeApp: createWindow can run again on
+ * macOS (`activate`), and listeners registered there would stack.
+ */
+function registerLifecycleHandlers(): void {
+  // Finish Review and the dialog's Save & Quit. The renderer has pushed its
+  // state over review:submit first; the document is validated, attachments
+  // staged, then renamed into place, so a failure leaves any previous
+  // review.xml intact — and leaves this window open with every comment in
+  // place, the failure shown in a dialog, and the output path changeable.
   ipcMain.on(IPC.APP_SAVE_AND_QUIT, async () => {
-    if (!mainWindow) return;
-
-    try {
-      console.error('[main] Save and quit requested');
-      const reviewState = await requestReviewFromRenderer(mainWindow);
-      // Remote provenance is injected main-side so "Finish Review" writes
-      // the remote-* attributes without renderer involvement.
-      const finalState = remoteSessionInfo
-        ? applyRemoteProvenance(reviewState, remoteSessionInfo)
-        : reviewState;
-      // Validated, attachments staged, then renamed into place: a failure
-      // leaves any previous review.xml intact. The path is treated as
-      // reviewer-chosen until this host tracks whether it came from the
-      // save dialog or from project configuration.
-      await publishReview(finalState, currentOutputPath, { outputOrigin: 'explicit' });
-      console.error(`[main] Review written to ${currentOutputPath}`);
-
-      mainWindow.destroy();
-      process.exit(0);
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error(`[main] Error saving review: ${error.message}`);
-      } else {
-        console.error('[main] Error saving review: unknown error');
-      }
-      process.exit(1);
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    console.error('[main] Save and quit requested');
+    const outcome = await saveAndQuit({
+      controller: quitController,
+      takeState: takeSubmittedReviewState,
+      publish: async state => {
+        // Remote provenance is injected main-side so "Finish Review" writes
+        // the remote-* attributes without renderer involvement.
+        const finalState = remoteSessionInfo
+          ? applyRemoteProvenance(state, remoteSessionInfo)
+          : state;
+        await publishReview(finalState, currentOutputPath, publishOptions());
+        console.error(`[main] Review written to ${currentOutputPath}`);
+      },
+      reportFailure: reportSaveFailure,
+      quit: () => exitNow(0),
+    });
+    if (outcome === 'busy') {
+      console.error('[main] Save already in progress; ignoring repeated request');
     }
   });
 
-  // Handle discard-and-quit from renderer (dialog Discard button)
+  // The dialog's Discard button: exit without writing anything.
   ipcMain.on(IPC.APP_DISCARD_AND_QUIT, () => {
     console.error('[main] Discard and quit requested');
-    if (mainWindow) {
-      mainWindow.destroy();
-    }
-    process.exit(0);
+    quitController.discard();
+    exitNow(0);
   });
 
   // Start a remote PR/MR session from a renderer-supplied URL (the welcome
@@ -583,9 +684,10 @@ function createWindow(): void {
     }
   });
 
-  // Handle output path change via native save dialog
+  // Handle output path change via native save dialog. A path the reviewer
+  // picked here is explicit: it may be anywhere, inside the project or not.
   ipcMain.handle(IPC.OUTPUT_PATH_CHANGE, async (): Promise<OutputPathInfo | null> => {
-    if (!mainWindow) return null;
+    if (!mainWindow || mainWindow.isDestroyed()) return null;
 
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Save Review As',
@@ -595,8 +697,9 @@ function createWindow(): void {
 
     if (result.canceled || !result.filePath) return null;
 
-    currentOutputPath = result.filePath;
-    outputPathWritable = checkWritability(currentOutputPath);
+    currentOutputPath = resolve(result.filePath);
+    outputOrigin = 'explicit';
+    outputPathWritable = probeOutputPath();
     console.error(
       '[main] Output path changed to:',
       currentOutputPath,

@@ -516,8 +516,23 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   remote review materialized into a temporary clone is the one session with no destination of its
   own: the clone is deleted on exit, so applies are refused with `destination-required` until the
   reviewer names a directory through `suggestion:choose-destination`, and `setApplyDestination`
-  rejects any directory inside the clone. Outside that one function, code that writes anywhere
-  except the output path and its `.self-review-assets/` directory is out of policy.
+  rejects any directory inside the clone. The context match is a staleness check, not permission:
+  the handler also refuses any path not in `session.reviewedPaths` (`not-reviewed`), a frozen set
+  captured by `commitDiffData` from the committed diff's old and new paths — every front end commits
+  its diff through it (`commitReviewStart`, Electron's `setDiffData`, serve startup), and resumed
+  comments, submitted state and the renderer's placeholder entries never reach it. The engine
+  refuses on its own any path with a `.git` segment (`control-file`; `.gitmodules` and
+  `.gitattributes` are reviewed content, gated by membership), validates the anchor with
+  `validateLineRange` before any I/O (`invalid-anchor`), deletes the anchored lines on an empty
+  proposal, resolves the destination with `realpath`, walks every ancestor with `lstat` and opens
+  the target `O_NOFOLLOW`, accepting only a regular file with one hard link (`unsafe-target`), and
+  writes through `atomicReplace` with the original's mode and owner, refusing (`file-changed`) if
+  the inode or its size/mtime moved between the read and the rename. A failure anywhere removes the
+  temp file and leaves the target byte for byte; `refused` is never reported after a mutation. The
+  React `SuggestionApplyControl` shows no Apply button for a path outside
+  `ReviewContext.reviewedPaths` (captured from payload files, never synthetic entries). Outside that
+  one function, code that writes anywhere except the output path and its `.self-review-assets/`
+  directory is out of policy.
 - **XSD sync.** Each XSD schema exists in two places and both copies must be byte-identical:
   `.agents/skills/self-review-apply/assets/self-review-v3.xsd` pairs with the `XSD_SCHEMA` string
   embedded in `packages/core/src/xml-serializer.ts`, and

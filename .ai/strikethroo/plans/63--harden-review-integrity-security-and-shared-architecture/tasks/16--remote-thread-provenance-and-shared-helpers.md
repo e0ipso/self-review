@@ -2,7 +2,7 @@
 id: 16
 group: "remote"
 dependencies: [10]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - typescript
@@ -20,13 +20,13 @@ GitLab note positions keep their revision provenance (`head_sha`, and `base_sha`
 TypeScript forge-provider/mapper logic and Git revision semantics.
 
 ## Acceptance Criteria
-- [ ] `ForgeThreadAnchor` (in `forge-provider.ts`) carries an optional `headSha` (and other position SHAs if needed); `gitlab-provider.ts:29–38,167–189` populates it from each note's `position.head_sha` and no longer hard-codes `outdated: false` when it cannot know. GitHub provider sets the equivalent from its API (`commit_id`/`original_commit_id`) or leaves it undefined, with documented semantics.
-- [ ] `thread-mapper.ts:184` creates a `Suggestion` only when the anchor's head SHA is present and equals the reviewed head SHA (for GitHub, apply the same rule if a SHA is available; otherwise document the existing outdated-flag rule). Otherwise the thread is mapped with its body intact and `suggestion: null`.
-- [ ] Synthetic GitLab payload tests through the real provider and mapper: current head → actionable suggestion with original code from the diff; `OLD_HEAD` → no suggestion, body retained; missing position SHA → no suggestion; multi-line current position → correct range.
-- [ ] A shared helper (e.g. `loadRemoteReview` in `remote-mode.ts`) is used by both `bootstrapRemoteDiff` and `runFetchComments` for load/ignore-filter/map; both apply the same effective ignore configuration. A test feeds the same synthetic forge response + repo through both paths and asserts identical suggestions, including for an ignored path.
-- [ ] The preliminary mapping before the diff exists is removed; the GUI-degrades vs headless-fails thread-fetch error policy is preserved (tests for both).
-- [ ] `fetch-comments` publishes via `publishReview` (from task 10) — keep it.
-- [ ] `npm run test:unit` and `npm run typecheck:packages` pass.
+- [x] `ForgeThreadAnchor` (in `forge-provider.ts`) carries an optional `headSha` (and other position SHAs if needed); `gitlab-provider.ts:29–38,167–189` populates it from each note's `position.head_sha` and no longer hard-codes `outdated: false` when it cannot know. GitHub provider sets the equivalent from its API (`commit_id`/`original_commit_id`) or leaves it undefined, with documented semantics.
+- [x] `thread-mapper.ts:184` creates a `Suggestion` only when the anchor's head SHA is present and equals the reviewed head SHA (for GitHub, apply the same rule if a SHA is available; otherwise document the existing outdated-flag rule). Otherwise the thread is mapped with its body intact and `suggestion: null`.
+- [x] Synthetic GitLab payload tests through the real provider and mapper: current head → actionable suggestion with original code from the diff; `OLD_HEAD` → no suggestion, body retained; missing position SHA → no suggestion; multi-line current position → correct range.
+- [x] A shared helper (e.g. `loadRemoteReview` in `remote-mode.ts`) is used by both `bootstrapRemoteDiff` and `runFetchComments` for load/ignore-filter/map; both apply the same effective ignore configuration. A test feeds the same synthetic forge response + repo through both paths and asserts identical suggestions, including for an ignored path.
+- [x] The preliminary mapping before the diff exists is removed; the GUI-degrades vs headless-fails thread-fetch error policy is preserved (tests for both).
+- [x] `fetch-comments` publishes via `publishReview` (from task 10) — keep it.
+- [x] `npm run test:unit` and `npm run typecheck:packages` pass.
 
 Use your internal Todo tool to track these and keep on track.
 

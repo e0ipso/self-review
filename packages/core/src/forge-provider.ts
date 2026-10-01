@@ -44,16 +44,34 @@ export type ForgeAnchorSide = 'old' | 'new';
  * - `startLine`/`endLine` are `null` when the forge supplies a file path but
  *   no usable line information (the mapper degrades to a file-level comment;
  *   `side` is meaningless in that case and providers should set `'new'`).
- * - `outdated: true` means the forge reports the anchor no longer applies to
- *   the current head (e.g. GitHub outdated review comments); the line fields
+ *
+ * Line numbers describe one revision, and the two fields below say which.
+ * They are the anchor's revision provenance; the mapper, not the provider,
+ * compares them with the reviewed head, so a provider only ever reports what
+ * its forge actually told it:
+ * - `headSha` is the head commit the line numbers were computed against,
+ *   when the forge reports one per note (GitLab `position.head_sha`). An
+ *   anchor is current when it equals the reviewed head and outdated when it
+ *   does not; a suggestion is activated only on a match.
+ * - `outdated` is the forge's own verdict, when the forge tracks one per
+ *   note. `true` means the forge reports the anchor no longer applies to the
+ *   current head (GitHub review comments with `line: null`); the line fields
  *   then hold the historic anchor and the mapper degrades to file-level.
+ *   `false` means the forge re-anchored the comment onto the current head and
+ *   vouches for it, which is what activates a suggestion when no `headSha` is
+ *   available. Absent means the forge does not report staleness per note, so
+ *   only `headSha` can establish it.
+ *
+ * An anchor carrying neither is unverifiable: the mapper keeps its line
+ * placement but never activates a suggestion from it.
  */
 export interface ForgeThreadAnchor {
   filePath: string;
   side: ForgeAnchorSide;
   startLine: number | null;
   endLine: number | null;
-  outdated: boolean;
+  headSha?: string;
+  outdated?: boolean;
 }
 
 /** One turn (root comment or reply) in a forge discussion thread. */

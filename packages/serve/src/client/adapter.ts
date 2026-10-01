@@ -7,9 +7,9 @@
 // the UI only asks for a destination when the session is a temporary remote
 // clone, and serve mode has no remote mode, so the case cannot arise.
 // `GET /api/diff` is issued once and shared, carrying both the diff and the
-// guide, so there is no push transport. And `submitReview` resolving is
-// acceptance, not a written file: lifecycle.ts writes on the response's
-// `finish`, so nothing here may report a saved review.
+// guide, so there is no push transport. And `submitReview` resolving means
+// the review is on disk: the route publishes before it answers, and a 200
+// without that acknowledgement is treated as a failure rather than a save.
 
 // Type-only, erased at build time: no runtime dependency on either package.
 import type { ReviewAdapter, GuideLoadPayload } from '@self-review/react';
@@ -25,6 +25,8 @@ import type {
   ResumeLoadPayload,
   ReviewState,
 } from '@self-review/core';
+import { MAX_REVIEW_BODY_BYTES, REVIEW_TOO_LARGE_CODE, formatMegabytes } from '../protocol';
+import type { ReviewSubmitAck } from '../protocol';
 
 /** What `GET /api/diff` answers: both halves of the initial session. */
 interface DiffApiResponse {
@@ -38,41 +40,97 @@ export interface ConfigApiResponse {
   outputPathInfo: OutputPathInfo | null;
 }
 
-/** Surfaces the server's `{ error }` text, since callers only log what they get. */
+/**
+ * A request the server refused, or one this adapter refused to send. The
+ * message is what the page shows; the code is what it acts on.
+ */
+export class ServeRequestError extends Error {
+  /** The HTTP status of the refusal, or null when the request was never sent. */
+  readonly status: number | null;
+  /**
+   * The publisher's `ReviewPublishError.code` when the server sent one,
+   * `REVIEW_TOO_LARGE_CODE` for a body over the limit, otherwise null.
+   */
+  readonly code: string | null;
+  /** One rendered line per individual problem, when the server listed them. */
+  readonly details: readonly string[];
+
+  constructor(
+    message: string,
+    options: { status: number | null; code?: string | null; details?: readonly string[] }
+  ) {
+    super(message);
+    this.name = 'ServeRequestError';
+    this.status = options.status;
+    this.code = options.code ?? null;
+    this.details = options.details ?? [];
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Read the server's refusal into an error. Two shapes exist: the publisher's
+ * `{ ok: false, code, message, details }`, whose message stands on its own,
+ * and the validation routes' `{ error }`, which is prefixed with the request
+ * it answers since callers only log what they get.
+ */
+async function requestError(response: Response, what: string): Promise<ServeRequestError> {
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    // A non-JSON error body is no more informative than the status.
+  }
+  if (isRecord(body)) {
+    if (body.ok === false && typeof body.message === 'string') {
+      return new ServeRequestError(body.message, {
+        status: response.status,
+        code: typeof body.code === 'string' ? body.code : null,
+        details: Array.isArray(body.details)
+          ? body.details.filter((line): line is string => typeof line === 'string')
+          : [],
+      });
+    }
+    if (typeof body.error === 'string') {
+      return new ServeRequestError(`${what} failed (${response.status}): ${body.error}`, {
+        status: response.status,
+      });
+    }
+  }
+  return new ServeRequestError(`${what} failed (${response.status})`, {
+    status: response.status,
+  });
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path);
   if (!response.ok) {
-    throw new Error(await errorText(response, `GET ${path}`));
+    throw await requestError(response, `GET ${path}`);
   }
   return (await response.json()) as T;
 }
 
 /**
- * Post a JSON body. `content-type: application/json` is not optional: the
- * server answers 415 without it, on both POST routes.
+ * Post an already-serialized JSON body. `content-type: application/json` is
+ * not optional: the server answers 415 without it, on every POST route.
  */
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(path, {
+function postJsonText(path: string, text: string): Promise<Response> {
+  return fetch(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    body: text,
   });
-  if (!response.ok) {
-    throw new Error(await errorText(response, `POST ${path}`));
-  }
-  return (await response.json()) as T;
 }
 
-async function errorText(response: Response, what: string): Promise<string> {
-  try {
-    const body = (await response.json()) as { error?: unknown };
-    if (typeof body?.error === 'string') {
-      return `${what} failed (${response.status}): ${body.error}`;
-    }
-  } catch {
-    // A non-JSON error body is no more informative than the status.
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await postJsonText(path, JSON.stringify(body));
+  if (!response.ok) {
+    throw await requestError(response, `POST ${path}`);
   }
-  return `${what} failed (${response.status})`;
+  return (await response.json()) as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +196,33 @@ export function encodeReviewStateForWire(state: ReviewState): unknown {
       })),
     })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// The body limit.
+//
+// The server caps `POST /api/review` at MAX_REVIEW_BODY_BYTES and closes the
+// connection on anything over it. Attachments are base64-encoded on the wire,
+// so a review can be over the limit as sent while well under it on disk —
+// a reviewer cannot see that coming, and the server's 413 arrives after the
+// socket has been closed on the body. So the size is measured here, before
+// anything is sent, and both refusals carry the same message: what the
+// review weighs, what the limit is, and what to do about it.
+// ---------------------------------------------------------------------------
+
+function tooLarge(bytes: number, status: number | null): ServeRequestError {
+  return new ServeRequestError(
+    `This review is ${formatMegabytes(bytes)} MB as sent, over the server's ` +
+      `${formatMegabytes(MAX_REVIEW_BODY_BYTES)} MB limit. Image attachments are the usual ` +
+      'cause — they are base64-encoded on the wire, which adds a third — so remove or shrink ' +
+      'some and press Finish Review again. Nothing has been lost.',
+    { status, code: REVIEW_TOO_LARGE_CODE }
+  );
+}
+
+/** The byte length of a string as UTF-8, which is what the server counts. */
+function byteLength(text: string): number {
+  return new Blob([text]).size;
 }
 
 /** Path-bearing routes take the path as a query parameter, encoded once. */
@@ -208,11 +293,33 @@ export function createFetchAdapter(): ReviewAdapter {
 
     applySuggestion: request => postJson('/api/apply-suggestion', request),
 
+    /**
+     * Resolves once the review is on disk. The route publishes the document
+     * before it answers, so the 200 is the acknowledgement; every refusal is
+     * a `ServeRequestError` whose message says what to fix, and the review
+     * stays in the page for the retry.
+     */
     submitReview: async (state: ReviewState): Promise<void> => {
-      // Resolving means the submission was *accepted*, not that the review
-      // is on disk: the route only stores it on the session, and
-      // ../lifecycle.ts writes the file on the response's finish event.
-      await postJson<null>('/api/review', encodeReviewStateForWire(state));
+      const text = JSON.stringify(encodeReviewStateForWire(state));
+      const bytes = byteLength(text);
+      if (bytes > MAX_REVIEW_BODY_BYTES) {
+        throw tooLarge(bytes, null);
+      }
+      const response = await postJsonText('/api/review', text);
+      if (response.status === 413) {
+        throw tooLarge(bytes, response.status);
+      }
+      if (!response.ok) {
+        throw await requestError(response, 'POST /api/review');
+      }
+      const ack = (await response.json()) as ReviewSubmitAck | null;
+      if (!isRecord(ack) || ack.ok !== true) {
+        throw new ServeRequestError(
+          'The server answered without acknowledging the review as written. ' +
+            'Check the terminal it was started from, then press Finish Review again.',
+          { status: response.status }
+        );
+      }
     },
 
     expandContext: (request: ExpandContextRequest) =>

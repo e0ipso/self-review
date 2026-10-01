@@ -83,7 +83,6 @@ export interface ElectronAPI {
   onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
   onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => () => void;
   submitReview: (state: ReviewState) => void;
-  onRequestReview: (callback: () => void) => void;
   onCloseRequested: (callback: () => void) => () => void;
   saveAndQuit: () => void;
   readAttachment: (filePath: string) => Promise<ArrayBuffer | null>;

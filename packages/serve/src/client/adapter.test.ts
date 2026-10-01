@@ -8,8 +8,9 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReviewState } from '@self-review/core';
-import { createFetchAdapter } from './adapter';
+import { createFetchAdapter, ServeRequestError } from './adapter';
 import { parseReviewStateBody } from '../validate';
+import { MAX_REVIEW_BODY_BYTES, REVIEW_TOO_LARGE_CODE } from '../protocol';
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>;
 
@@ -58,6 +59,16 @@ const REVIEW_STATE: ReviewState = {
 
 function headersOf(init: RequestInit | undefined): Record<string, string> {
   return (init?.headers ?? {}) as Record<string, string>;
+}
+
+/** The error a submission rejected with, typed as the adapter's own. */
+async function rejectionOf(work: Promise<void> | void): Promise<ServeRequestError> {
+  try {
+    await work;
+  } catch (error) {
+    return error as ServeRequestError;
+  }
+  throw new Error('expected the submission to be refused');
 }
 
 afterEach(() => {
@@ -209,8 +220,10 @@ describe('createFetchAdapter', () => {
     ).resolves.toBeNull();
   });
 
+  const ACK = { ok: true, outputPath: '/repo/review.xml' };
+
   it('posts the review state as JSON to /api/review', async () => {
-    const spy = stubRoutes({ '/api/review': null });
+    const spy = stubRoutes({ '/api/review': ACK });
 
     await createFetchAdapter().submitReview!(REVIEW_STATE);
 
@@ -222,7 +235,7 @@ describe('createFetchAdapter', () => {
   });
 
   it('sends only the three fields the server accepts', async () => {
-    const spy = stubRoutes({ '/api/review': null });
+    const spy = stubRoutes({ '/api/review': ACK });
 
     // Remote provenance is injected server-side; the server rejects an
     // unknown top-level field with 400, so the adapter must not forward it.
@@ -240,9 +253,90 @@ describe('createFetchAdapter', () => {
 
   it('rejects when the server refuses the review', async () => {
     stubFetch(() => json({ error: 'files must be an array' }, 400));
-    await expect(createFetchAdapter().submitReview!(REVIEW_STATE)).rejects.toThrow(
-      /files must be an array/
+    const failure = await rejectionOf(createFetchAdapter().submitReview!(REVIEW_STATE));
+    expect(failure).toBeInstanceOf(ServeRequestError);
+    expect(failure.status).toBe(400);
+    expect(failure.code).toBeNull();
+    expect(failure.message).toMatch(/files must be an array/);
+  });
+
+  // The publisher's refusal, relayed: a 200 is a file on disk, so a failure
+  // is the one thing the page has to explain well enough to be fixed.
+  it("surfaces the publisher's code, message and details from a failed publication", async () => {
+    stubFetch(() =>
+      json(
+        {
+          ok: false,
+          code: 'output-is-directory',
+          message: 'Cannot write /repo/review.xml: it is a directory',
+          details: ['one', 'two'],
+        },
+        500
+      )
     );
+    const failure = await rejectionOf(createFetchAdapter().submitReview!(REVIEW_STATE));
+    expect(failure).toBeInstanceOf(ServeRequestError);
+    expect(failure.status).toBe(500);
+    expect(failure.code).toBe('output-is-directory');
+    expect(failure.message).toContain('Cannot write /repo/review.xml: it is a directory');
+    expect(failure.details).toEqual(['one', 'two']);
+  });
+
+  it('treats a 200 without an acknowledgement as a failure, never as a saved review', async () => {
+    // The old route answered `null` after merely storing the state. A client
+    // that accepted that would report a file the server never wrote.
+    stubRoutes({ '/api/review': null });
+    await expect(createFetchAdapter().submitReview!(REVIEW_STATE)).rejects.toThrow(
+      /without acknowledging/i
+    );
+  });
+
+  it('maps a 413 to the too-large code with an actionable message', async () => {
+    stubFetch(() => json({ error: 'request body too large' }, 413));
+    const failure = await rejectionOf(createFetchAdapter().submitReview!(REVIEW_STATE));
+    expect(failure).toBeInstanceOf(ServeRequestError);
+    expect(failure.status).toBe(413);
+    expect(failure.code).toBe(REVIEW_TOO_LARGE_CODE);
+    expect(failure.message).toMatch(/32\.0 MB/);
+    expect(failure.message).toMatch(/attachment/i);
+  });
+
+  it('refuses to send a body over the limit, and says how big it was', async () => {
+    const spy = stubRoutes({ '/api/review': ACK });
+    // 25 MiB of image bytes is about 33.3 MiB once base64-encoded: over the
+    // 32 MiB limit on the wire while well under it on disk, which is the
+    // case a reviewer cannot see coming.
+    const blob = new Uint8Array(25 * 1024 * 1024).buffer;
+    const state: ReviewState = {
+      ...REVIEW_STATE,
+      files: [
+        {
+          path: 'src/a.ts',
+          changeType: 'modified',
+          viewed: false,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/a.ts',
+              lineRange: null,
+              body: 'look',
+              category: 'bug',
+              suggestion: null,
+              attachments: [{ id: 'a1', fileName: 'big.png', mediaType: 'image/png', data: blob }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const failure = await rejectionOf(createFetchAdapter().submitReview!(state));
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(failure).toBeInstanceOf(ServeRequestError);
+    expect(failure.status).toBeNull();
+    expect(failure.code).toBe(REVIEW_TOO_LARGE_CODE);
+    expect(failure.message).toMatch(/33\.\d MB/);
+    expect(MAX_REVIEW_BODY_BYTES).toBe(32 * 1024 * 1024);
   });
 
   it('reads the config and its output path from GET /api/config', async () => {
@@ -306,7 +400,7 @@ describe('attachment blobs on the wire', () => {
   }
 
   async function submittedBody() {
-    const spy = stubRoutes({ '/api/review': null });
+    const spy = stubRoutes({ '/api/review': { ok: true, outputPath: '/repo/review.xml' } });
     await createFetchAdapter().submitReview!(stateWithAttachments());
     return JSON.parse(String(spy.mock.calls[0][1]?.body));
   }

@@ -2,7 +2,7 @@
 id: 11
 group: "filesystem-authorization"
 dependencies: [3, 10]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - nodejs-filesystem
@@ -20,14 +20,14 @@ Suggestion Apply only changes a file that was in the original reviewed diff, is 
 Node.js filesystem semantics and secure-coding authorization design.
 
 ## Acceptance Criteria
-- [ ] `ReviewSession` gains an authoritative, immutable `reviewedPaths` set captured when the session's diff is committed (`commitReviewStart`/remote bootstrap/directory start) from the loaded diff files (both `newPath` and `oldPath` where relevant). Resume placeholders, client-supplied state and later pushes cannot extend it.
-- [ ] `applySuggestionForSession` (`review-handlers.ts:333`) refuses (with distinct refusal reasons added to `ApplyRefusalReason`) when: the path is not in `reviewedPaths` (`not-reviewed`); the path or any segment is a repository control path (`.git` dir/file at any depth, `.gitmodules`, `.gitattributes`? — decide and document; at minimum `.git/**`) (`control-file`); the anchor fails `validateLineAnchor` from task 3 or exceeds the file's line count (`invalid-anchor`); the comment/suggestion is not one the session knows as actionable, if such binding is available (otherwise document why the anchor+original check is the binding).
-- [ ] Empty `proposedCode` deletes the anchored lines (no blank line inserted); trailing-newline semantics are specified in JSDoc and tested (proposal with/without trailing `\n`, file with/without final newline). Probe: `before\nremove\nafter\n` with empty proposal on line 2 → `before\nafter\n`.
-- [ ] Physical containment in the shared engine (`apply-suggestion.ts:156,169,214`): resolve the destination root with `realpath`; walk each ancestor segment with `lstat` refusing symlinks; open the target with `O_NOFOLLOW`; refuse non-regular files and hardlinked files (nlink > 1) (`unsafe-target`); record `dev/ino/size/mtime` from `fstat`.
-- [ ] Transactional write: read original via the opened fd, compare original bytes (concurrency check), write the new content to a temp file in the same directory with the original mode (and ownership when possible), `fsync`, re-`lstat` the target to confirm identity (`dev/ino`) unchanged, then `rename` over it. Any failure removes the temp file and leaves the target byte-identical; the result is never `refused` after a mutation. Injected ENOSPC test proves the target is untouched.
-- [ ] Electron (`src/main/ipc-handlers.ts:96`) and serve both rely on the core checks (no transport-only validation needed for correctness; serve's existing integer checks may remain as input validation).
-- [ ] Tests with real temp repos: reviewed file applies; unreviewed sentinel and `.git/config` refused with bytes unchanged; resume-placeholder path refused; NaN/Infinity/0/fractional/reversed/both-sided anchors refused before I/O; leaf and ancestor symlink escapes refused with outside sentinel unchanged; identity change between read and commit refused; partial-write fault leaves target intact; deletion proposal. `npm run test:unit` passes.
-- [ ] React: suggestions on files not in the reviewed diff (placeholders) do not show an active Apply control (check `ReviewContext.tsx:200`, `FileSectionBody.tsx:28`).
+- [x] `ReviewSession` gains an authoritative, immutable `reviewedPaths` set captured when the session's diff is committed (`commitReviewStart`/remote bootstrap/directory start) from the loaded diff files (both `newPath` and `oldPath` where relevant). Resume placeholders, client-supplied state and later pushes cannot extend it.
+- [x] `applySuggestionForSession` (`review-handlers.ts:333`) refuses (with distinct refusal reasons added to `ApplyRefusalReason`) when: the path is not in `reviewedPaths` (`not-reviewed`); the path or any segment is a repository control path (`.git` dir/file at any depth, `.gitmodules`, `.gitattributes`? — decide and document; at minimum `.git/**`) (`control-file`); the anchor fails `validateLineAnchor` from task 3 or exceeds the file's line count (`invalid-anchor`); the comment/suggestion is not one the session knows as actionable, if such binding is available (otherwise document why the anchor+original check is the binding).
+- [x] Empty `proposedCode` deletes the anchored lines (no blank line inserted); trailing-newline semantics are specified in JSDoc and tested (proposal with/without trailing `\n`, file with/without final newline). Probe: `before\nremove\nafter\n` with empty proposal on line 2 → `before\nafter\n`.
+- [x] Physical containment in the shared engine (`apply-suggestion.ts:156,169,214`): resolve the destination root with `realpath`; walk each ancestor segment with `lstat` refusing symlinks; open the target with `O_NOFOLLOW`; refuse non-regular files and hardlinked files (nlink > 1) (`unsafe-target`); record `dev/ino/size/mtime` from `fstat`.
+- [x] Transactional write: read original via the opened fd, compare original bytes (concurrency check), write the new content to a temp file in the same directory with the original mode (and ownership when possible), `fsync`, re-`lstat` the target to confirm identity (`dev/ino`) unchanged, then `rename` over it. Any failure removes the temp file and leaves the target byte-identical; the result is never `refused` after a mutation. Injected ENOSPC test proves the target is untouched.
+- [x] Electron (`src/main/ipc-handlers.ts:96`) and serve both rely on the core checks (no transport-only validation needed for correctness; serve's existing integer checks may remain as input validation).
+- [x] Tests with real temp repos: reviewed file applies; unreviewed sentinel and `.git/config` refused with bytes unchanged; resume-placeholder path refused; NaN/Infinity/0/fractional/reversed/both-sided anchors refused before I/O; leaf and ancestor symlink escapes refused with outside sentinel unchanged; identity change between read and commit refused; partial-write fault leaves target intact; deletion proposal. `npm run test:unit` passes.
+- [x] React: suggestions on files not in the reviewed diff (placeholders) do not show an active Apply control (check `ReviewContext.tsx:200`, `FileSectionBody.tsx:28`).
 
 Use your internal Todo tool to track these and keep on track.
 

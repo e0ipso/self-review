@@ -23,6 +23,39 @@ import type { DiffFile, LineRange, Reply, ReviewComment, Suggestion } from './ty
 export const REVIEW_LEVEL_FILE_PATH = '';
 
 /**
+ * How an anchor's line numbers relate to the reviewed head (R05).
+ *
+ * - `'outdated'`: the forge says so (`outdated: true`), or the anchor names a
+ *   head (`headSha`) other than the one reviewed. Its line numbers describe
+ *   a revision the reviewer is not looking at, so it degrades to file-level
+ *   and can never yield a suggestion: the `originalCode` the mapper would
+ *   read out of today's diff at those lines is not what the author proposed
+ *   to replace.
+ * - `'verified'`: the anchor names the reviewed head, or the forge re-anchored
+ *   it onto the current head and vouches for it (`outdated: false` with no
+ *   `headSha`). Only a verified anchor activates a suggestion.
+ * - `'unverified'`: nothing ties the anchor to a revision — it names none and
+ *   the forge reports no verdict, or it names one but the caller supplied no
+ *   reviewed head to compare with. The line placement is kept (there is no
+ *   evidence against it) but no suggestion is activated from it.
+ */
+type AnchorStatus = 'verified' | 'unverified' | 'outdated';
+
+function classifyAnchor(
+  anchor: ForgeThreadAnchor,
+  reviewedHeadSha: string | undefined
+): AnchorStatus {
+  if (anchor.outdated === true) {
+    return 'outdated';
+  }
+  if (anchor.headSha !== undefined) {
+    if (reviewedHeadSha === undefined) return 'unverified';
+    return anchor.headSha === reviewedHeadSha ? 'verified' : 'outdated';
+  }
+  return anchor.outdated === false ? 'verified' : 'unverified';
+}
+
+/**
  * Map an anchor to the model's line range, honoring the exactly-one-pair
  * rule: the single `LineRange.side` selects which pair the serializer
  * emits (`'new'` → `new-line-*`, `'old'` → `old-line-*`), so a comment can
@@ -34,8 +67,8 @@ export const REVIEW_LEVEL_FILE_PATH = '';
  * unserializable range). Reversed bounds are normalized rather than
  * rejected so a defective provider payload still maps deterministically.
  */
-function mapAnchorToLineRange(anchor: ForgeThreadAnchor): LineRange | null {
-  if (anchor.outdated) {
+function mapAnchorToLineRange(anchor: ForgeThreadAnchor, status: AnchorStatus): LineRange | null {
+  if (status === 'outdated') {
     return null;
   }
   const { startLine, endLine } = anchor;
@@ -169,16 +202,17 @@ function readAnchoredLines(
  *
  * `null` covers every uncertain case: no fence, more than one fence (the
  * model holds a single suggestion, and silently keeping the first would drop
- * the rest), a file-level or outdated anchor, and an anchor the reviewed
- * diff does not cover.
+ * the rest), a file-level, outdated or merely unverified anchor (see
+ * {@link AnchorStatus}), and an anchor the reviewed diff does not cover.
  */
 function extractSuggestion(
   body: string,
   filePath: string,
   range: LineRange | null,
+  status: AnchorStatus,
   diffFiles: DiffFile[]
 ): Suggestion | null {
-  if (!range) return null;
+  if (!range || status !== 'verified') return null;
   const blocks = findSuggestionBlocks(body);
   if (blocks.length !== 1) return null;
   const originalCode = readAnchoredLines(diffFiles, filePath, range);
@@ -211,26 +245,36 @@ function mapReply(turn: ForgeThreadTurn): Reply {
  *   `category` matches how the XML parser represents a missing category.
  * - A root body carrying a single ` ```suggestion ` fence becomes a
  *   `Suggestion` anchored to the thread's line range, with `originalCode`
- *   read out of `diffFiles` at that anchor. Without the reviewed diff there
- *   is nothing to anchor against, so the default leaves every
- *   `suggestion: null` exactly as before.
+ *   read out of `diffFiles` at that anchor — but only when the anchor is
+ *   verified against the reviewed revision (see {@link AnchorStatus}): an
+ *   anchor naming `reviewedHeadSha`, or one the forge vouches for. Without
+ *   the reviewed diff there is nothing to anchor against, so the default
+ *   leaves every `suggestion: null` exactly as before.
+ * - An anchor naming a head other than `reviewedHeadSha` is outdated and
+ *   degrades to file-level like a forge-reported one; its body is intact.
+ *
+ * `reviewedHeadSha` is the head the diff in `diffFiles` was taken against
+ * (the materialized PR/MR head). Omitting it leaves every revision-naming
+ * anchor unverifiable, which keeps its line placement but activates nothing.
  *
  * Output order is input order. The input is never mutated.
  */
 export function mapThreadsToReviewComments(
   threads: ForgeThread[],
-  diffFiles: DiffFile[] = []
+  diffFiles: DiffFile[] = [],
+  reviewedHeadSha?: string
 ): ReviewComment[] {
   return threads.map(thread => {
     const filePath = thread.anchor?.filePath ?? REVIEW_LEVEL_FILE_PATH;
-    const lineRange = thread.anchor ? mapAnchorToLineRange(thread.anchor) : null;
+    const status = thread.anchor ? classifyAnchor(thread.anchor, reviewedHeadSha) : 'unverified';
+    const lineRange = thread.anchor ? mapAnchorToLineRange(thread.anchor, status) : null;
     const comment: ReviewComment = {
       id: internalId(thread.root),
       filePath,
       lineRange,
       body: thread.root.body,
       category: '',
-      suggestion: extractSuggestion(thread.root.body, filePath, lineRange, diffFiles),
+      suggestion: extractSuggestion(thread.root.body, filePath, lineRange, status, diffFiles),
       author: thread.root.author,
       remoteId: thread.root.remoteId,
     };

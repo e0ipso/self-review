@@ -28,7 +28,9 @@ export default function CloseConfirmDialog() {
   }, [hasComments]);
 
   const handleSaveAndQuit = () => {
-    // Host-driven save: push state before triggering main-process save
+    // Host-driven save: push state before triggering main-process save. The
+    // dialog closes on click; if the save fails, main shows the error and the
+    // review stays exactly as it is, so the next close asks again.
     window.electronAPI.submitReview({
       timestamp: new Date().toISOString(),
       source: diffSource,
@@ -43,7 +45,7 @@ export default function CloseConfirmDialog() {
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogContent>
+      <AlertDialogContent data-testid='close-confirm-dialog'>
         <AlertDialogHeader>
           <AlertDialogTitle>Save your review?</AlertDialogTitle>
           <AlertDialogDescription>
@@ -51,14 +53,17 @@ export default function CloseConfirmDialog() {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel data-testid='close-confirm-cancel'>Cancel</AlertDialogCancel>
           <AlertDialogAction
             className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+            data-testid='close-confirm-discard'
             onClick={handleDiscard}
           >
             Discard
           </AlertDialogAction>
-          <AlertDialogAction onClick={handleSaveAndQuit}>Save & Quit</AlertDialogAction>
+          <AlertDialogAction data-testid='close-confirm-save' onClick={handleSaveAndQuit}>
+            Save & Quit
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

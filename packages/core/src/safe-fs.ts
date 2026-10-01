@@ -61,11 +61,14 @@ export interface FsLayer {
   writeSync(fd: number, buffer: Uint8Array): number;
   fsyncSync(fd: number): void;
   fchmodSync(fd: number, mode: number): void;
+  fchownSync(fd: number, uid: number, gid: number): void;
   closeSync(fd: number): void;
   renameSync(from: string, to: string): void;
   unlinkSync(path: string): void;
   lstatSync(path: string): nodeFs.Stats;
   fstatSync(fd: number): nodeFs.Stats;
+  /** Read everything from an already-open descriptor. */
+  readFileSync(fd: number): Buffer;
   mkdirSync(path: string, mode: number): void;
   realpathSync(path: string): string;
 }
@@ -75,11 +78,13 @@ export const nodeFsLayer: FsLayer = {
   writeSync: (fd, buffer) => nodeFs.writeSync(fd, buffer),
   fsyncSync: fd => nodeFs.fsyncSync(fd),
   fchmodSync: (fd, mode) => nodeFs.fchmodSync(fd, mode),
+  fchownSync: (fd, uid, gid) => nodeFs.fchownSync(fd, uid, gid),
   closeSync: fd => nodeFs.closeSync(fd),
   renameSync: (from, to) => nodeFs.renameSync(from, to),
   unlinkSync: p => nodeFs.unlinkSync(p),
   lstatSync: p => nodeFs.lstatSync(p),
   fstatSync: fd => nodeFs.fstatSync(fd),
+  readFileSync: fd => nodeFs.readFileSync(fd),
   mkdirSync: (p, mode) => {
     nodeFs.mkdirSync(p, { mode });
   },
@@ -88,21 +93,54 @@ export const nodeFsLayer: FsLayer = {
 
 const { O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_RDONLY } = nodeFs.constants;
 
-/** What `fstat` says a file is, enough to tell it from another file later. */
+/**
+ * What `stat` says a file is: enough to tell it from another file later
+ * (`dev`/`ino`), to tell whether it was rewritten in place meanwhile
+ * (`size`/`mtimeMs`), and to give its replacement the same mode and owner.
+ */
 export interface FileIdentity {
   dev: number;
   ino: number;
   /** Permission bits only (`mode & 0o7777`). */
   mode: number;
   nlink: number;
+  size: number;
+  mtimeMs: number;
+  uid: number;
+  gid: number;
 }
 
 export function snapshotIdentity(stats: nodeFs.Stats): FileIdentity {
-  return { dev: stats.dev, ino: stats.ino, mode: stats.mode & 0o7777, nlink: stats.nlink };
+  return {
+    dev: stats.dev,
+    ino: stats.ino,
+    mode: stats.mode & 0o7777,
+    nlink: stats.nlink,
+    size: stats.size,
+    mtimeMs: stats.mtimeMs,
+    uid: stats.uid,
+    gid: stats.gid,
+  };
 }
 
 export function sameFile(a: FileIdentity, b: FileIdentity): boolean {
   return a.dev === b.dev && a.ino === b.ino;
+}
+
+/**
+ * True when nothing suggests the file's bytes changed since `a` was taken:
+ * same size and same modification time. A rewrite that keeps both inside the
+ * filesystem's timestamp granularity is not detected; the caller's own
+ * content comparison is the second line of defence.
+ */
+export function sameStamp(a: FileIdentity, b: FileIdentity): boolean {
+  return a.size === b.size && a.mtimeMs === b.mtimeMs;
+}
+
+/** The effective owner this process creates files as; null where the platform has no notion of one. */
+function currentOwner(): { uid: number; gid: number } | null {
+  if (typeof process.geteuid !== 'function' || typeof process.getegid !== 'function') return null;
+  return { uid: process.geteuid(), gid: process.getegid() };
 }
 
 /** Map an errno to the code a host can act on; anything unknown is `io-error`. */
@@ -211,6 +249,12 @@ export interface WriteExclusiveOptions {
   mode?: number;
   /** Mode to apply exactly, after creation, bypassing the umask. */
   exactMode?: number;
+  /**
+   * Owner to give the new file, after creation. A failure to do so is
+   * `unsupported-target`: the file is removed again, since a file with the
+   * wrong owner is not the file the caller asked for.
+   */
+  exactOwner?: { uid: number; gid: number };
   fs?: FsLayer;
 }
 
@@ -255,6 +299,18 @@ export function writeExclusiveNoFollow(
       offset += written;
     }
     if (options.exactMode !== undefined) fs.fchmodSync(fd, options.exactMode);
+    if (options.exactOwner !== undefined) {
+      try {
+        fs.fchownSync(fd, options.exactOwner.uid, options.exactOwner.gid);
+      } catch (error) {
+        throw new SafeFsError(
+          'unsupported-target',
+          filePath,
+          `Cannot give ${filePath} its owner (uid ${options.exactOwner.uid}, gid ${options.exactOwner.gid})`,
+          error
+        );
+      }
+    }
     fs.fsyncSync(fd);
     const identity = snapshotIdentity(fs.fstatSync(fd));
     fs.closeSync(fd);
@@ -277,10 +333,26 @@ export interface AtomicReplaceOptions {
    */
   preserveMode?: boolean;
   /**
+   * Give the new file the owner of the one it replaces. `rename` swaps the
+   * inode, so without this the replacement belongs to this process. The
+   * policy: an owner that already matches needs nothing; a different owner
+   * is restored with `fchown` when this process may do so (it is root, or
+   * only the group differs), and otherwise refused as `unsupported-target`
+   * before anything is written, since silently changing who owns a file is
+   * not "replace its contents".
+   */
+  preserveOwner?: boolean;
+  /**
    * The file the caller inspected before deciding to write. Refused as
    * `identity-changed` when the target is no longer that file (dev/ino).
    */
   expectedIdentity?: FileIdentity;
+  /**
+   * With `expectedIdentity`: also refuse as `identity-changed` when the file
+   * is the same inode but its size or modification time moved, i.e. it was
+   * rewritten in place after the caller read it.
+   */
+  expectUnmodified?: boolean;
   fs?: FsLayer;
   /** Random component of the temp file name; injectable for tests. */
   randomName?: () => string;
@@ -306,7 +378,10 @@ export interface AtomicReplaceResult {
  * - a file with more than one hard link (`unsupported-target`): the rename
  *   would detach this name from the other, which is not what "replace the
  *   file" means to whoever created the link;
- * - a target that is not the `expectedIdentity` (`identity-changed`).
+ * - a target that is not the `expectedIdentity` (`identity-changed`), or
+ *   with `expectUnmodified`, one that was rewritten in place since;
+ * - with `preserveOwner`, a target whose owner this process cannot restore
+ *   on the replacement (`unsupported-target`).
  *
  * The temp file is created in the target's own directory (a rename across
  * filesystems is a copy), exclusively and no-follow, and is removed on any
@@ -328,6 +403,20 @@ export function atomicReplace(
       `Refusing to replace ${target}: it is no longer the file that was checked`
     );
   }
+  if (
+    options.expectedIdentity &&
+    options.expectUnmodified &&
+    existing &&
+    !sameStamp(existing, options.expectedIdentity)
+  ) {
+    throw new SafeFsError(
+      'identity-changed',
+      target,
+      `Refusing to replace ${target}: it was modified after it was checked`
+    );
+  }
+  const exactOwner =
+    options.preserveOwner && existing ? ownerToRestore(target, existing) : undefined;
 
   const dir = path.dirname(target);
   const random = options.randomName ?? defaultRandomName;
@@ -336,17 +425,49 @@ export function atomicReplace(
     writeExclusiveNoFollow(temp, bytes, {
       fs,
       exactMode: options.preserveMode && existing ? existing.mode : undefined,
+      exactOwner,
     });
   } catch (error) {
     // The temp name is an implementation detail; a reviewer acting on the
     // message needs the file they asked for. A link planted at the temp
     // name is the one case where the temp path is the point.
+    if (error instanceof SafeFsError && error.code === 'unsupported-target') {
+      throw new SafeFsError(
+        'unsupported-target',
+        target,
+        `Refusing to replace ${target}: its owner could not be preserved on the replacement`,
+        error.cause
+      );
+    }
     if (error instanceof SafeFsError && error.code !== 'unsafe-link' && error.cause !== undefined) {
       throw toSafeFsError(error.cause, target, 'write');
     }
     throw error;
   }
   return { identity: finishReplace(temp, target, fs), replaced: existing !== null };
+}
+
+/**
+ * The owner to put on a replacement for `existing`, or undefined when the
+ * file this process creates already has it. Refuses up front, before any
+ * write, when the owner differs in a way `fchown` would not be allowed to
+ * restore: only root may give a file to another user.
+ */
+function ownerToRestore(
+  target: string,
+  existing: FileIdentity
+): { uid: number; gid: number } | undefined {
+  const me = currentOwner();
+  if (!me) return undefined;
+  if (existing.uid === me.uid && existing.gid === me.gid) return undefined;
+  if (existing.uid !== me.uid && me.uid !== 0) {
+    throw new SafeFsError(
+      'unsupported-target',
+      target,
+      `Refusing to replace ${target}: it is owned by another user (uid ${existing.uid}), and replacing it would change its owner`
+    );
+  }
+  return { uid: existing.uid, gid: existing.gid };
 }
 
 function finishReplace(temp: string, target: string, fs: FsLayer): FileIdentity {

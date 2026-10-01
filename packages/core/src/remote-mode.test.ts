@@ -3,14 +3,17 @@
 // (providers, materializer, mapper) are injected mocks — no real git, gh,
 // or glab is ever spawned.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { ForgeProvider, ForgeThread, MaterializeResult } from './index';
 import { REVIEW_LEVEL_FILE_PATH } from './index';
-import type { DiffFile, ReviewComment, ReviewState } from './types';
+import type { AppConfig, DiffFile, ReviewComment, ReviewState } from './types';
 import { tokenizeGitDiffArgs } from './git-diff-args';
+import { createGitLabProvider } from './gitlab-provider';
+import { runFetchComments } from './fetch-comments';
+import { gitSync } from './test-support/git-env';
 import {
   startRemoteSession,
   bootstrapRemoteDiff,
@@ -174,14 +177,57 @@ describe('startRemoteSession', () => {
     expect(session.remote.remoteForge).toBe('gitlab');
   });
 
-  it('maps fetched threads into review comments', async () => {
+  // The reviewed diff does not exist yet here, so nothing is mapped: a
+  // mapping without files could never anchor a suggestion and was thrown
+  // away by the caller anyway. The threads travel verbatim instead.
+  it('carries the fetched threads verbatim and maps nothing before the diff exists', async () => {
     const session = await startRemoteSession(PR_URL, '/cwd', makeDeps());
-    expect(session.fetchedComments).toHaveLength(1);
-    expect(session.fetchedComments[0]).toMatchObject({
-      remoteId: 't1',
-      author: 'octocat',
-      filePath: 'src/a.ts',
+    expect(session.fetchedThreads).toEqual([makeThread('t1')]);
+    expect(session).not.toHaveProperty('fetchedComments');
+  });
+
+  it('forwards includeResolved to the provider', async () => {
+    const deps = makeDeps();
+    const provider = deps.createProvider('github', deps.runner);
+    await startRemoteSession(PR_URL, '/cwd', deps, { includeResolved: true });
+    expect(provider.fetchThreads).toHaveBeenCalledWith(expect.objectContaining({ number: 42 }), {
+      includeResolved: true,
     });
+  });
+
+  // The headless subcommand's policy: threads are its whole purpose, so a
+  // failed fetch is fatal — and the clone it just made must not leak.
+  it("fails and releases the clone when threads are 'required' and the fetch is unavailable", async () => {
+    const cleanup = vi.fn();
+    const provider: ForgeProvider = {
+      forge: 'github',
+      fetchBaseBranch: vi.fn(async () => 'main'),
+      fetchThreads: vi.fn(cliUnavailable),
+    };
+    const deps = makeDeps({
+      createProvider: vi.fn(() => provider),
+      materialize: vi.fn(async () => makeMaterializeResult({ cleanup })),
+    });
+
+    await expect(startRemoteSession(PR_URL, '/cwd', deps, { threads: 'required' })).rejects.toThrow(
+      /gh/
+    );
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it("still attempts the thread fetch under 'required' when only the base-branch lookup lacked the CLI", async () => {
+    const provider: ForgeProvider = {
+      forge: 'github',
+      fetchBaseBranch: vi.fn(cliUnavailable),
+      fetchThreads: vi.fn(async () => [makeThread('t1')]),
+    };
+    const deps = makeDeps({ createProvider: vi.fn(() => provider) });
+
+    const session = await startRemoteSession(PR_URL, '/cwd', deps, { threads: 'required' });
+
+    expect(provider.fetchThreads).toHaveBeenCalledTimes(1);
+    expect(session.fetchedThreads).toHaveLength(1);
+    expect(session.remote.threadSyncAvailable).toBe(true);
   });
 
   it('falls back to the git-only default branch when the forge CLI is unavailable', async () => {
@@ -208,7 +254,7 @@ describe('startRemoteSession', () => {
     );
     // Thread fetch is skipped entirely — the CLI is known unavailable.
     expect(provider.fetchThreads).not.toHaveBeenCalled();
-    expect(session.fetchedComments).toEqual([]);
+    expect(session.fetchedThreads).toEqual([]);
     expect(session.remote.threadSyncAvailable).toBe(false);
     // stderr note, no crash
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('thread sync unavailable'));
@@ -223,7 +269,7 @@ describe('startRemoteSession', () => {
     const deps = makeDeps({ createProvider: vi.fn(() => provider) });
     const session = await startRemoteSession(PR_URL, '/cwd', deps);
 
-    expect(session.fetchedComments).toEqual([]);
+    expect(session.fetchedThreads).toEqual([]);
     expect(session.remote.threadSyncAvailable).toBe(false);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('thread sync unavailable'));
   });
@@ -375,6 +421,182 @@ describe('bootstrapRemoteDiff', () => {
       'fatal: bad revision'
     );
     expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The app and the headless subcommand must produce the same suggestions for
+// the same PR/MR under the same effective configuration. One real git
+// repository stands in for the materialized clone, the real GitLab provider
+// reads one synthetic `glab` payload, the real diff loader runs over the
+// repository, and both entry points are driven end to end.
+describe('GUI bootstrap and headless fetch-comments agree', () => {
+  const MR = 'https://gitlab.com/group/proj/-/merge_requests/7';
+  const FENCE = (proposal: string) => `Tighten this.\n\n\`\`\`suggestion\n${proposal}\n\`\`\`\n`;
+
+  let repoPath: string;
+  let baseSha: string;
+  let headSha: string;
+
+  beforeAll(() => {
+    repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'self-review-remote-parity-'));
+    const git = (...args: string[]) => gitSync(args, { cwd: repoPath }).trim();
+    git('-c', 'init.defaultBranch=main', 'init', '-q');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'Test');
+    fs.mkdirSync(path.join(repoPath, 'src'));
+    fs.mkdirSync(path.join(repoPath, 'dist'));
+    fs.writeFileSync(path.join(repoPath, 'src/a.ts'), 'const a = 1;\nconst b = 2;\nconst c = 3;\n');
+    fs.writeFileSync(path.join(repoPath, 'dist/bundle.js'), 'var x = 1;\n');
+    git('add', '.');
+    git('commit', '-q', '-m', 'base');
+    baseSha = git('rev-parse', 'HEAD');
+    git('checkout', '-q', '-b', 'feature');
+    fs.writeFileSync(
+      path.join(repoPath, 'src/a.ts'),
+      'const a = 1;\nconst b = 20;\nconst c = 3;\n'
+    );
+    fs.writeFileSync(path.join(repoPath, 'dist/bundle.js'), 'var x = 10;\n');
+    git('commit', '-q', '-a', '-m', 'change');
+    headSha = git('rev-parse', 'HEAD');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterAll(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(repoPath, { recursive: true, force: true });
+  });
+
+  function position(filePath: string, newLine: number, positionHead: string) {
+    return {
+      position_type: 'text',
+      head_sha: positionHead,
+      old_path: filePath,
+      new_path: filePath,
+      old_line: null,
+      new_line: newLine,
+      line_range: null,
+    };
+  }
+
+  /** A `glab` stand-in answering the MR lookup and the discussions list. */
+  function glabRunner(discussions: unknown[]) {
+    return async (_command: string, args: string[]) => ({
+      stdout: JSON.stringify(
+        args[1].endsWith('/discussions') ? discussions : { target_branch: 'main' }
+      ),
+      stderr: '',
+      exitCode: 0,
+    });
+  }
+
+  function sharedDeps(discussions: unknown[]): Partial<RemoteSessionDeps> {
+    const runner = glabRunner(discussions);
+    return {
+      runner,
+      createProvider: () => createGitLabProvider(runner),
+      detectExistingClone: async () => null,
+      resolveRemoteDefaultBranch: async () => 'main',
+      materialize: async () => ({
+        repoPath,
+        baseSha,
+        headSha,
+        mode: 'existing-clone' as const,
+        cleanup: () => {},
+      }),
+      // loadDiff is left to the real default: git runs over the repository.
+    };
+  }
+
+  const shape = (c: ReviewComment) => ({
+    remoteId: c.remoteId,
+    filePath: c.filePath,
+    lineRange: c.lineRange,
+    suggestion: c.suggestion,
+  });
+
+  it('produces identical suggestions for the same forge payload, including for an ignored path', async () => {
+    const discussions = [
+      {
+        id: 'd-src',
+        notes: [
+          {
+            id: 101,
+            body: FENCE('const b = B;'),
+            author: { username: 'alice' },
+            position: position('src/a.ts', 2, headSha),
+          },
+        ],
+      },
+      {
+        id: 'd-dist',
+        notes: [
+          {
+            id: 102,
+            body: FENCE('var x = X;'),
+            author: { username: 'alice' },
+            position: position('dist/bundle.js', 1, headSha),
+          },
+        ],
+      },
+      {
+        id: 'd-stale',
+        notes: [
+          {
+            id: 103,
+            body: FENCE('const c = C;'),
+            author: { username: 'bob' },
+            position: position('src/a.ts', 3, baseSha),
+          },
+        ],
+      },
+    ];
+    const ignore = ['dist/**'];
+
+    const { session, payload } = await bootstrapRemoteDiff(
+      MR,
+      repoPath,
+      ignore,
+      sharedDeps(discussions)
+    );
+
+    let published: ReviewState | undefined;
+    await runFetchComments(MR, {
+      cwd: repoPath,
+      deps: {
+        ...sharedDeps(discussions),
+        publish: async (state, outputPath) => {
+          published = state;
+          return { outputPath, assetPaths: [] };
+        },
+        loadConfig: () => ({ outputFile: './review.xml', ignore }) as AppConfig,
+        now: () => new Date('2026-10-01T00:00:00.000Z'),
+      },
+    });
+
+    const gui = session.fetchedComments;
+    const headless = published!.files.flatMap(f => f.comments);
+    const byId = (comments: ReviewComment[]) =>
+      Object.fromEntries(comments.map(c => [c.remoteId, shape(c)]));
+    expect(byId(headless)).toEqual(byId(gui));
+
+    // The parity is not vacuous: the current-head thread on a reviewed file
+    // is live, with its original code read out of the real diff.
+    expect(byId(gui)['101'].suggestion).toEqual({
+      originalCode: 'const b = 20;',
+      proposedCode: 'const b = B;',
+    });
+    // The ignored path is absent from what the reviewer sees, so neither
+    // front end anchors a suggestion over code the review never shows.
+    expect(payload.files.map(f => f.newPath)).toEqual(['src/a.ts']);
+    expect(byId(gui)['102'].suggestion).toBeNull();
+    expect(gui.find(c => c.remoteId === '102')!.body).toContain('```suggestion');
+    // The thread whose position names the base commit is outdated in both.
+    expect(byId(gui)['103']).toEqual({
+      remoteId: '103',
+      filePath: 'src/a.ts',
+      lineRange: null,
+      suggestion: null,
+    });
   });
 });
 

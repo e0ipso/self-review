@@ -1,4 +1,4 @@
-// Eight JSON routes over one ReviewSession, each a thin wrapper over a function
+// Nine JSON routes over one ReviewSession, each a thin wrapper over a function
 // core already exports, plus static serving for the client bundle. node:http,
 // no framework.
 //
@@ -6,6 +6,10 @@
 // the listener both binds to loopback and refuses requests that name anything
 // else. Binding alone is not enough — a web page can reach a loopback port, and
 // DNS rebinding would make it same-origin. There is no authentication.
+//
+// One route does more than wrap: `POST /api/review` publishes the document
+// before it answers, so its 200 is a durable acknowledgement and its failure
+// is something the reviewer can fix and retry without losing the review.
 
 import * as fs from 'node:fs';
 import * as http from 'node:http';
@@ -22,23 +26,51 @@ import {
   expandContext,
   submitReviewState,
   applySuggestionForSession,
+  publishReview,
+  ReviewPublishError,
 } from '@self-review/core';
-import type { ReviewSession } from '@self-review/core';
+import type {
+  PublishReviewOptions,
+  ReviewPublishErrorCode,
+  ReviewSession,
+  ReviewState,
+} from '@self-review/core';
 import {
   containPath,
   parseExpandContextBody,
   parseReviewStateBody,
   parseSuggestionApplyBody,
 } from './validate';
+import { MAX_REVIEW_BODY_BYTES } from './protocol';
+import type { ReviewSubmitAck, ReviewSubmitFailure } from './protocol';
 
-/** `client/` next to this module, which is `dist/client/` once built. */
-export const CLIENT_DIR = fileURLToPath(new URL('./client/', import.meta.url));
+export { MAX_REVIEW_BODY_BYTES } from './protocol';
+
+/**
+ * `client/` next to this module, which is `dist/client/` once built.
+ *
+ * Resolved on demand rather than at import: `import.meta.url` is only a
+ * `file:` URL when this module runs in Node proper, and the client's own
+ * suite imports it under a browser-like environment with a fixture in hand.
+ */
+export function defaultClientDir(): string {
+  return fileURLToPath(new URL('./client/', import.meta.url));
+}
 
 /** Upper bound on a `POST /api/expand-context` body: a path and an integer. */
 export const MAX_EXPAND_CONTEXT_BODY_BYTES = 64 * 1024;
 
-/** Generous but finite: an unbounded read is a trivial denial of service. */
-export const MAX_REVIEW_BODY_BYTES = 32 * 1024 * 1024;
+/**
+ * Where a submitted review is published, fixed for the life of the process.
+ *
+ * The origin decides how far the publisher trusts the path: one the reviewer
+ * named (`--output`) may point anywhere; one inherited from project
+ * configuration or the default must stay inside `baseDir`, so a committed
+ * `.self-review.yaml` cannot redirect the save.
+ */
+export type ReviewOutputTarget =
+  | { path: string; origin: 'explicit' }
+  | { path: string; origin: 'inherited'; baseDir: string };
 
 export interface ReviewServerOptions {
   /** The session every route acts on; held for the process lifetime. */
@@ -48,7 +80,9 @@ export interface ReviewServerOptions {
    * resolves against, or containment guarantees nothing.
    */
   repositoryRoot: string;
-  /** Directory of the client bundle. Defaults to `CLIENT_DIR`; tests inject a fixture. */
+  /** Where `POST /api/review` publishes. No route changes it. */
+  output: ReviewOutputTarget;
+  /** Directory of the client bundle. Defaults to `defaultClientDir()`; tests inject a fixture. */
   clientDir?: string;
 }
 
@@ -58,6 +92,7 @@ interface RouteContext {
   url: URL;
   session: ReviewSession;
   repositoryRoot: string;
+  output: ReviewOutputTarget;
 }
 
 type RouteHandler = (ctx: RouteContext) => Promise<void>;
@@ -369,7 +404,11 @@ const routes: Record<string, RouteHandler> = {
     sendJson(res, 200, applySuggestionForSession(session, parsed.value));
   },
 
-  'POST /api/review': async ({ req, res, session }) => {
+  // The completion. The document is published before the response is
+  // written, so a 200 is a file on disk and a failure is a server that is
+  // still up, holding nothing: the review lives in the tab, and the same
+  // submission can be sent again once the reported problem is fixed.
+  'POST /api/review': async ({ req, res, session, output }) => {
     const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES);
     if (!body.ok) {
       sendError(res, body.status, body.error);
@@ -381,9 +420,53 @@ const routes: Record<string, RouteHandler> = {
       return;
     }
     submitReviewState(session, parsed.value);
-    sendJson(res, 200, null);
+    const outcome = await publishSubmittedReview(parsed.value, output);
+    if (outcome.ok) {
+      sendJson(res, 200, outcome);
+    } else {
+      sendJson(res, publishFailureStatus(outcome.code), outcome);
+    }
   },
 };
+
+/**
+ * Publish one submitted review. Every failure the publisher reports is
+ * returned, never thrown: the route answers with it and keeps serving.
+ */
+async function publishSubmittedReview(
+  state: ReviewState,
+  output: ReviewOutputTarget
+): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
+  const options: PublishReviewOptions =
+    output.origin === 'explicit'
+      ? { outputOrigin: 'explicit' }
+      : { outputOrigin: 'inherited', baseDir: output.baseDir };
+  try {
+    const { outputPath } = await publishReview(state, output.path, options);
+    console.error(`[serve] Review written to ${outputPath}`);
+    return { ok: true, outputPath };
+  } catch (error) {
+    if (!(error instanceof ReviewPublishError)) throw error;
+    console.error(`[serve] Review not saved (${error.code}): ${error.message}`);
+    for (const detail of error.details) {
+      console.error(`[serve]   ${detail}`);
+    }
+    console.error(
+      '[serve] The review is still open in the browser. Fix the problem and press Finish Review again.'
+    );
+    return { ok: false, code: error.code, message: error.message, details: [...error.details] };
+  }
+}
+
+/** The document is the client's to fix; the filesystem is the host's. */
+const DOCUMENT_ERROR_CODES: ReadonlySet<ReviewPublishErrorCode> = new Set([
+  'validation-failed',
+  'xml-illegal-character',
+]);
+
+function publishFailureStatus(code: ReviewPublishErrorCode): number {
+  return DOCUMENT_ERROR_CODES.has(code) ? 422 : 500;
+}
 
 const ROUTE_PATHS = new Set(Object.keys(routes).map(key => key.split(' ')[1]));
 
@@ -437,7 +520,7 @@ async function serveStatic(
  * listening: bind it with `listenLoopback`.
  */
 export function createReviewServer(options: ReviewServerOptions): http.Server {
-  const { session, repositoryRoot, clientDir = CLIENT_DIR } = options;
+  const { session, repositoryRoot, output, clientDir = defaultClientDir() } = options;
 
   return http.createServer(async (req, res) => {
     const method = req.method ?? 'GET';
@@ -458,7 +541,7 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
     try {
       const handler = routes[`${method} ${url.pathname}`];
       if (handler) {
-        await handler({ req, res, url, session, repositoryRoot });
+        await handler({ req, res, url, session, repositoryRoot, output });
       } else if (ROUTE_PATHS.has(url.pathname)) {
         sendError(res, 405, 'method not allowed');
       } else if (url.pathname.startsWith('/api/')) {

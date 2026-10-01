@@ -20,6 +20,7 @@
 
 import * as path from 'node:path';
 import { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
+import { checkWritability } from './fs-utils';
 import { ASSET_DIR_NAME, serializeReview } from './xml-serializer';
 import type { PlannedAsset } from './xml-serializer';
 import {
@@ -193,6 +194,40 @@ export async function publishReview(
     console.error(`[main] Wrote ${staged.length} attachment file(s) to ${assetDir}`);
   }
   return { outputPath: target, assetPaths: staged };
+}
+
+/**
+ * The publisher's read-only checks, for a host that wants to warn before the
+ * reviewer has anything to lose: the output leaf policy (directory, symlink,
+ * hard link), the inherited-path containment rule, and whether the output
+ * directory exists and is writable. Returns the error `publishReview` would
+ * throw for the path as it stands, or `null`.
+ *
+ * A `null` is advisory, not a promise: the disk can change between the probe
+ * and the save, so `publishReview` runs the same checks again and the host
+ * must still handle its errors. The directory check uses `access(2)` rather
+ * than the injectable layer because it is a probe, not a write.
+ */
+export function inspectOutputPath(
+  outputPath: string,
+  options: PublishReviewOptions
+): ReviewPublishError | null {
+  const fs = options.fs ?? nodeFsLayer;
+  const target = path.resolve(outputPath);
+  try {
+    checkOutputPolicy(target, options, fs);
+  } catch (error) {
+    return toPublishError(error, target);
+  }
+  if (!checkWritability(target)) {
+    const dir = path.dirname(target);
+    return new ReviewPublishError(
+      'permission-denied',
+      target,
+      `Cannot write ${target}: ${dir} does not exist or is not writable`
+    );
+  }
+  return null;
 }
 
 /**
