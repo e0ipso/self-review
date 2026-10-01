@@ -28,7 +28,14 @@ import { AttachmentImage } from './AttachmentImage';
 
 export interface CommentDisplayProps {
   comment: ReviewComment;
+  /** Code currently visible for the comment's range; replaces a recorded original when given. */
   originalCode?: string;
+  /**
+   * False when the comment's line range is placed in the diff but some of its
+   * lines are hidden (a gap between hunks). The recorded suggestion original is
+   * then kept for editing, and the comment is marked. Defaults to true.
+   */
+  anchorFullyVisible?: boolean;
 }
 
 /**
@@ -100,6 +107,7 @@ function SignalBadge({
 export default function CommentDisplay({
   comment,
   originalCode: originalCodeProp,
+  anchorFullyVisible = true,
 }: CommentDisplayProps) {
   const { deleteComment } = useReview();
   const { config } = useConfig();
@@ -239,6 +247,23 @@ export default function CommentDisplay({
             >
               Orphaned
             </Badge>
+          )}
+          {comment.lineRange && !anchorFullyVisible && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant='secondary'
+                  className='h-5 px-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                  data-testid='comment-anchor-partial'
+                >
+                  Partly hidden
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side='bottom'>
+                Some lines of this range are not in the loaded diff. The recorded original code is
+                kept for its suggestion.
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
         {!isCollapsed && (

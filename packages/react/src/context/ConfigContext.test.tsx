@@ -118,3 +118,24 @@ describe('ConfigProvider category fallback', () => {
     expect(errorSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ConfigProvider font size', () => {
+  function rootStyle(fontSize: number) {
+    const { container } = render(
+      <ConfigProvider initialConfig={{ fontSize }}>
+        <span />
+      </ConfigProvider>
+    );
+    return (container.querySelector('.self-review') as HTMLElement).style;
+  }
+
+  it('exposes the configured font-size as a CSS variable on the review root', () => {
+    expect(rootStyle(18).getPropertyValue('--sr-font-size')).toBe('18px');
+  });
+
+  it('falls back to the default size for a value that is not a positive finite number', () => {
+    const fallback = `${defaultConfig.fontSize}px`;
+    expect(rootStyle(0).getPropertyValue('--sr-font-size')).toBe(fallback);
+    expect(rootStyle(Number.NaN).getPropertyValue('--sr-font-size')).toBe(fallback);
+  });
+});

@@ -157,3 +157,16 @@ describe('RenderedMarkdownView', () => {
     expect(container.querySelector('script')).toBeNull();
   });
 });
+
+describe('RenderedMarkdownView front matter limits', () => {
+  it('renders the body of the 33-byte cyclic front matter document with a fallback notice', () => {
+    const source = '---\nloop: &loop [*loop]\n---\nhello';
+    expect(source.length).toBe(33);
+    const file = makeAddedFile('loop.md', source.split('\n'));
+
+    renderView(file, 'markdown');
+
+    expect(screen.getByTestId('front-matter-fallback')).toBeTruthy();
+    expect(screen.getByText('hello')).toBeTruthy();
+  });
+});

@@ -315,16 +315,20 @@ function BlockWrapper({
   const commentElements = (
     <>
       {/* Existing comments for this block */}
-      {blockComments.map(comment => (
-        <div key={comment.id} className='border-y border-border bg-muted/50 px-4 py-3 ml-16'>
-          <CommentDisplay
-            comment={comment}
-            originalCode={
-              comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
-            }
-          />
-        </div>
-      ))}
+      {blockComments.map(comment => {
+        const visibleCode = comment.lineRange
+          ? extractOriginalCode(file, comment.lineRange)
+          : undefined;
+        return (
+          <div key={comment.id} className='border-y border-border bg-muted/50 px-4 py-3 ml-16'>
+            <CommentDisplay
+              comment={comment}
+              originalCode={visibleCode}
+              anchorFullyVisible={comment.lineRange === null || visibleCode !== undefined}
+            />
+          </div>
+        );
+      })}
 
       {/* Comment input */}
       {showCommentInput && (

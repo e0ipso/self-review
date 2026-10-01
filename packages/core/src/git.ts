@@ -1,7 +1,8 @@
-// src/main/git.ts
-// Git command execution
+// packages/core/src/git.ts
+// Git command execution. Every helper here rejects or returns; none exits
+// the process, so a front end decides how a git failure is reported.
 
-import { execSync, execFile, execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { generateSyntheticDiffs } from './synthetic-diff';
 
@@ -17,79 +18,9 @@ export function stripTrailingNewline(text: string): string {
   return text.replace(/\r?\n$/, '');
 }
 
-export function runGitDiff(args: string[]): string {
-  try {
-    // Check if git is available
-    try {
-      execSync('git --version', { stdio: 'ignore' });
-    } catch {
-      console.error('Error: git is not installed or not in PATH');
-      process.exit(1);
-    }
-
-    // Check if we're in a git repository
-    try {
-      execSync('git rev-parse --git-dir', { stdio: 'ignore' });
-    } catch {
-      console.error('Error: not a git repository (or any parent up to mount point)');
-      process.exit(1);
-    }
-
-    // Run git diff with the provided arguments
-    const result = execFileSync('git', ['diff', ...args], {
-      encoding: 'utf-8',
-      maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large diffs
-    });
-
-    return result;
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error running git diff: ${error.message}`);
-    } else {
-      console.error('Error running git diff: unknown error');
-    }
-    process.exit(1);
-  }
-}
-
-export function getRepoRoot(): string {
-  try {
-    const result = execSync('git rev-parse --show-toplevel', {
-      encoding: 'utf-8',
-    });
-    return stripTrailingNewline(result);
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error getting repository root: ${error.message}`);
-    } else {
-      console.error('Error getting repository root: unknown error');
-    }
-    process.exit(1);
-  }
-}
-
 /**
- * Lightweight sync validation - checks if git is available and we're in a repo.
- * Called BEFORE Electron initialization for early exit path.
- */
-export function validateGitAvailable(): void {
-  try {
-    execSync('git --version', { stdio: 'ignore' });
-  } catch {
-    console.error('Error: git is not installed or not in PATH');
-    process.exit(1);
-  }
-
-  try {
-    execSync('git rev-parse --git-dir', { stdio: 'ignore' });
-  } catch {
-    console.error('Error: not a git repository (or any parent up to mount point)');
-    process.exit(1);
-  }
-}
-
-/**
- * Async version of getRepoRoot - called AFTER app.whenReady().
+ * Resolve the repository root of `cwd`. Rejects when git is missing or `cwd`
+ * is not inside a repository; callers decide how to report that.
  */
 export async function getRepoRootAsync(cwd?: string): Promise<string> {
   try {
@@ -109,16 +40,67 @@ export async function getRepoRootAsync(cwd?: string): Promise<string> {
 }
 
 /**
- * Async version of runGitDiff - called AFTER app.whenReady().
- * Uses timeout to prevent hanging in CI environments.
+ * Git-level configuration overrides that keep `git diff` output in the shape
+ * the parser reads, whatever the user's own config says. They precede the
+ * `diff` subcommand on the command line.
+ */
+export const PARSER_COMPATIBLE_GIT_CONFIG: readonly string[] = [
+  '-c',
+  'color.ui=never',
+  '-c',
+  'diff.noprefix=false',
+  '-c',
+  'diff.mnemonicPrefix=false',
+  // Paths must stay repository-relative: untracked enumeration, context
+  // expansion and suggestion application all resolve them against the root.
+  '-c',
+  'diff.relative=false',
+];
+
+/**
+ * `git diff` options that force parser-compatible output. They are appended
+ * after the user's options, so a user-supplied `--color=always` or
+ * `--no-prefix` is overridden rather than the other way round.
+ */
+export const PARSER_COMPATIBLE_DIFF_FLAGS: readonly string[] = [
+  '--no-color',
+  '--no-ext-diff',
+  '--no-textconv',
+  '--src-prefix=a/',
+  '--dst-prefix=b/',
+];
+
+/**
+ * Insert the parser-compatibility flags into pass-through `git diff`
+ * arguments: after every user option so they take precedence, and before
+ * the `--` separator so pathspecs and revisions stay untouched.
+ */
+export function withParserCompatibleDiffArgs(args: readonly string[]): string[] {
+  const separator = args.indexOf('--');
+  if (separator === -1) {
+    return [...args, ...PARSER_COMPATIBLE_DIFF_FLAGS];
+  }
+  return [...args.slice(0, separator), ...PARSER_COMPATIBLE_DIFF_FLAGS, ...args.slice(separator)];
+}
+
+/**
+ * Run `git diff` with pass-through arguments and return its output in the
+ * format `parseDiff` reads. Every diff invocation (initial load, context
+ * expansion, remote PR/MR diffs) goes through here, so the normalization in
+ * `PARSER_COMPATIBLE_GIT_CONFIG` and `PARSER_COMPATIBLE_DIFF_FLAGS` applies
+ * uniformly. Rejects when git fails; the caller reports the failure.
  */
 export async function runGitDiffAsync(args: string[], cwd?: string): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', ['diff', ...args], {
-      maxBuffer: 50 * 1024 * 1024, // 50MB buffer
-      timeout: 30000, // 30 second timeout
-      cwd,
-    });
+    const { stdout } = await execFileAsync(
+      'git',
+      [...PARSER_COMPATIBLE_GIT_CONFIG, 'diff', ...withParserCompatibleDiffArgs(args)],
+      {
+        maxBuffer: 50 * 1024 * 1024, // 50MB buffer
+        timeout: 30000, // 30 second timeout
+        cwd,
+      }
+    );
     return stdout;
   } catch (error) {
     if (error instanceof Error) {

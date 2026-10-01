@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import type { DiffFile, DiffLoadPayload, ResumeLoadPayload } from '@self-review/types';
 
 import { installBrowserApiStubs } from '../test-helpers';
@@ -166,7 +166,7 @@ describe('ReviewProvider pushed diff payloads (welcome → remote URL open)', ()
     });
 
     // Main pushes the remote session's diff after materialization.
-    pushDiff!(payload);
+    act(() => pushDiff!(payload));
 
     await waitFor(() => {
       expect(screen.getByTestId('source-probe').textContent).toBe('git');

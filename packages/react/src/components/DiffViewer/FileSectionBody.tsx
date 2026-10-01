@@ -3,6 +3,7 @@ import type { ReviewComment } from '@self-review/types';
 import CommentDisplay from '../Comments/CommentDisplay';
 import CommentInput from '../Comments/CommentInput';
 import { DiffContentArea, type DiffContentAreaProps } from './DiffContentArea';
+import PreviewErrorBoundary from './PreviewErrorBoundary';
 
 export interface FileSectionBodyProps {
   filePath: string;
@@ -62,8 +63,18 @@ export function FileSectionBody({
         </div>
       )}
 
-      {/* Diff content dispatcher */}
-      <DiffContentArea {...contentAreaProps} />
+      {/* Diff content dispatcher. A preview that throws is contained to this
+          file; switching view, or new content for the file, retries it. */}
+      <PreviewErrorBoundary
+        filePath={filePath}
+        resetKeys={[
+          contentAreaProps.file,
+          contentAreaProps.renderViewMode,
+          contentAreaProps.viewMode,
+        ]}
+      >
+        <DiffContentArea {...contentAreaProps} />
+      </PreviewErrorBoundary>
     </div>
   );
 }

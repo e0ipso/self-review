@@ -44,12 +44,13 @@ export function FileSectionHeader({
   onRenderViewModeChange,
 }: FileSectionHeaderProps) {
   const { additions, deletions } = getFileStats(file);
-  const displayPath =
-    file.changeType === 'renamed'
-      ? `${file.oldPath} → ${file.newPath}`
-      : // The empty path is the review-level sentinel: comments with no
-        // file association (fetched forge threads without an anchor).
-        filePath || 'Review-level comments';
+  // Renames and copies have two paths: show where the file came from.
+  const hasSourcePath = file.changeType === 'renamed' || file.changeType === 'copied';
+  const displayPath = hasSourcePath
+    ? `${file.oldPath} → ${file.newPath}`
+    : // The empty path is the review-level sentinel: comments with no
+      // file association (fetched forge threads without an anchor).
+      filePath || 'Review-level comments';
   const changeLabel = file.changeType.charAt(0).toUpperCase() + file.changeType.slice(1);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -57,7 +58,7 @@ export function FileSectionHeader({
   const [copied, setCopied] = useState(false);
 
   const copyPath = async () => {
-    const pathToCopy = file.changeType === 'renamed' ? file.newPath : filePath;
+    const pathToCopy = hasSourcePath ? file.newPath : filePath;
     try {
       await navigator.clipboard.writeText(pathToCopy);
       setCopied(true);

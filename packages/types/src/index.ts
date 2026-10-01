@@ -4,7 +4,7 @@
 
 // ===== Git Diff Types =====
 
-export type ChangeType = 'added' | 'modified' | 'deleted' | 'renamed';
+export type ChangeType = 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
 
 export type DiffLineType = 'context' | 'addition' | 'deletion';
 
@@ -329,6 +329,15 @@ export interface DiffLoadPayload {
   files: DiffFile[];
   source: DiffSource;
   isLargePayload?: boolean;
+  /**
+   * What the loader could not show faithfully, one message each: a
+   * `git diff` output format the parser does not consume (`--stat`,
+   * `--name-only`, ...), or output it cannot represent (combined
+   * merge-conflict sections, hunks whose counts do not add up). A review
+   * with diagnostics and no files is a failed load, not "no changes".
+   * Absent or empty for a clean load.
+   */
+  diagnostics?: string[];
   /**
    * Present only for a remote PR/MR session. After materialization, remote
    * mode is git mode: `source` stays `type: 'git'` with `repository` set to

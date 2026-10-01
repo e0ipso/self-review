@@ -175,7 +175,7 @@ export const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
     <xs:attribute name="change-type" type="sr:ChangeTypeEnum" use="required">
       <xs:annotation>
         <xs:documentation>
-          The type of change: added, modified, deleted, or renamed.
+          The type of change: added, modified, deleted, renamed, or copied.
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
@@ -517,6 +517,11 @@ export const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
       <xs:enumeration value="renamed">
         <xs:annotation>
           <xs:documentation>File was moved or renamed, with or without content changes.</xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
+      <xs:enumeration value="copied">
+        <xs:annotation>
+          <xs:documentation>File was copied from another path (git copy detection), with or without content changes.</xs:documentation>
         </xs:annotation>
       </xs:enumeration>
     </xs:restriction>

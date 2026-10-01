@@ -1,14 +1,37 @@
 import React from 'react';
 import type { DiffSource } from '@self-review/types';
+import { DiffDiagnostics } from './DiffDiagnostics';
 
 export interface EmptyDiffMessageProps {
   diffSource: DiffSource;
+  /**
+   * Why nothing loaded, when the loader knows. A non-empty list means the
+   * review failed to load, which must never read as "no changes found".
+   */
+  diagnostics?: string[];
 }
 
-export function EmptyDiffMessage({ diffSource }: EmptyDiffMessageProps) {
+export function EmptyDiffMessage({ diffSource, diagnostics = [] }: EmptyDiffMessageProps) {
   // Loading/welcome mode: don't render empty state (App.tsx handles these)
   if (diffSource.type === 'welcome' || diffSource.type === 'loading') {
     return null;
+  }
+
+  // A load with diagnostics and no files is a failed load, not an empty diff.
+  if (diagnostics.length > 0) {
+    return (
+      <div className='flex-1 flex items-center justify-center p-8' data-testid='empty-diff-help'>
+        <div className='max-w-lg w-full space-y-4'>
+          <h2 className='text-lg font-semibold text-foreground text-center'>
+            The review could not be loaded
+          </h2>
+          <DiffDiagnostics
+            diagnostics={diagnostics}
+            title='The diff could not be read in a form self-review can review'
+          />
+        </div>
+      </div>
+    );
   }
 
   // File mode: error message (shouldn't normally happen)

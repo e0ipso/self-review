@@ -133,6 +133,13 @@ async function launchAppWithRetry(
 
   try {
     appPage = await electronApp.firstWindow();
+    // Since Electron 44 the first window is handed over while it still shows
+    // its initial empty document (page.url() is ''), and the navigation to the
+    // app's index.html destroys that execution context a moment later. A
+    // scenario that evaluates against the page right away (Finish Review with
+    // no prior interaction) then throws "Execution context was destroyed".
+    // Waiting for the app's own root element survives that navigation.
+    await appPage.waitForSelector('#root', { state: 'attached', timeout: 15000 });
     await appPage.waitForLoadState('domcontentloaded');
     return appPage;
   } catch (error) {

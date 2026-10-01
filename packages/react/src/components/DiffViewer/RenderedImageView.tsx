@@ -7,6 +7,8 @@ interface RenderedImageViewProps {
   onLoadImage?: (filePath: string) => Promise<ImageLoadResult>;
 }
 
+const LOAD_FAILED = 'Failed to load image.';
+
 export default function RenderedImageView({ filePath, onLoadImage }: RenderedImageViewProps) {
   const [dataUri, setDataUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -26,15 +28,25 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
     setDataUri(null);
     setDimensions(null);
 
-    onLoadImage(filePath).then((result: ImageLoadResult) => {
-      if (cancelled) return;
-      if ('error' in result) {
-        setError(result.error);
-      } else {
-        setDataUri(result.dataUri);
+    // Core reports failures as an `{ error }` result, but a host adapter (the
+    // serve client's fetch, an embedder's own) may reject instead. Both settle
+    // into the error state rather than leaving the spinner up.
+    onLoadImage(filePath).then(
+      (result: ImageLoadResult) => {
+        if (cancelled) return;
+        if ('error' in result) {
+          setError(result.error);
+        } else {
+          setDataUri(result.dataUri);
+        }
+        setLoading(false);
+      },
+      () => {
+        if (cancelled) return;
+        setError(LOAD_FAILED);
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    );
 
     return () => {
       cancelled = true;
@@ -52,7 +64,7 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
   if (error || !dataUri) {
     return (
       <div className='flex justify-center items-center p-8 text-sm text-muted-foreground'>
-        {error ?? 'Failed to load image.'}
+        {error ?? LOAD_FAILED}
       </div>
     );
   }

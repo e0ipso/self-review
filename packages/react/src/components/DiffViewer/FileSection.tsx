@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
 import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import { useGuide } from '../../context/GuideContext';
+import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import {
   getRenderedTextMode,
   isPreviewableImage,
@@ -39,7 +40,10 @@ export default function FileSection({
     side: 'old' | 'new';
   } | null>(null);
   const [showingFileComment, setShowingFileComment] = useState(false);
-  const sectionRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLDivElement | null>(null);
+  const navigation = useOptionalDiffNavigation();
+  const registerFileElement = navigation?.registerFileElement;
+  const unregisterFileElement = navigation?.unregisterFileElement;
 
   const isAddedFile = file.changeType === 'added';
   const filePath_ = file.newPath || file.oldPath || '';
@@ -60,6 +64,19 @@ export default function FileSection({
   const orphanedComments = comments.filter(c => !hasAnchor(c));
   const fileState = files.find(f => f.path === filePath);
   const isViewed = fileState?.viewed || false;
+
+  // Register this section with the navigation provider (when there is one) so
+  // scroll-to-file and collapse compensation find it by path, never through a
+  // CSS selector built from the filename.
+  const setSectionElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      const previous = sectionRef.current;
+      sectionRef.current = element;
+      if (previous && previous !== element) unregisterFileElement?.(filePath, previous);
+      if (element) registerFileElement?.(filePath, element);
+    },
+    [filePath, registerFileElement, unregisterFileElement]
+  );
 
   // Lazy content loading state (for large-payload mode)
   const [contentLoading, setContentLoading] = useState(false);
@@ -139,7 +156,7 @@ export default function FileSection({
 
   return (
     <div
-      ref={sectionRef}
+      ref={setSectionElement}
       className={`mx-2 mt-2 border border-border rounded-lg shadow-sm${dragState ? ' select-none' : ''}`}
       data-file-path={filePath}
       data-testid={`file-section-${filePath}`}

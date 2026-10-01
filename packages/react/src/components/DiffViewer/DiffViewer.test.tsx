@@ -5,6 +5,7 @@ import type { DiffFile } from '@self-review/types';
 
 // Mock context hooks
 const mockDiffFiles: DiffFile[] = [];
+const mockDiagnostics: string[] = [];
 const mockDiffSource = { type: 'git' as const, gitDiffArgs: '', repository: '' };
 const mockConfig = { diffView: 'unified' as const };
 
@@ -12,6 +13,7 @@ vi.mock('../../context/ReviewContext', () => ({
   useReview: () => ({
     diffFiles: mockDiffFiles,
     diffSource: mockDiffSource,
+    diagnostics: mockDiagnostics,
   }),
 }));
 
@@ -91,6 +93,43 @@ describe('DiffViewer', () => {
       sections.forEach(section => {
         expect(section.getAttribute('data-expanded')).toBe('false');
       });
+    });
+  });
+
+  describe('load diagnostics', () => {
+    it('shows the diagnostics instead of an empty-state message when no file loaded', () => {
+      mockDiffFiles.length = 0;
+      mockDiagnostics.length = 0;
+      mockDiagnostics.push('conflict.txt: combined (merge conflict) diff output is not supported');
+
+      const { getByTestId, queryByText } = render(<DiffViewer />);
+
+      expect(getByTestId('diff-diagnostics').textContent).toContain('conflict.txt');
+      expect(queryByText('No changes found')).toBeNull();
+      mockDiagnostics.length = 0;
+    });
+
+    it('keeps the diagnostics visible above the files that did load', () => {
+      mockDiffFiles.length = 0;
+      mockDiffFiles.push(...makeDiffFiles(2));
+      mockDiagnostics.length = 0;
+      mockDiagnostics.push('conflict.txt: combined (merge conflict) diff output is not supported');
+
+      const { getByTestId, getAllByTestId } = render(<DiffViewer />);
+
+      expect(getByTestId('diff-diagnostics').textContent).toContain('conflict.txt');
+      expect(getAllByTestId(/^file-section-/)).toHaveLength(2);
+      mockDiagnostics.length = 0;
+    });
+
+    it('renders no diagnostics element for a clean load', () => {
+      mockDiffFiles.length = 0;
+      mockDiffFiles.push(...makeDiffFiles(1));
+      mockDiagnostics.length = 0;
+
+      const { queryByTestId } = render(<DiffViewer />);
+
+      expect(queryByTestId('diff-diagnostics')).toBeNull();
     });
   });
 });

@@ -4,12 +4,26 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
+  useRef,
   ReactNode,
 } from 'react';
 
 export interface DiffNavigationContextValue {
   activeFilePath: string | null;
   scrollToFile: (filePath: string) => void;
+  /**
+   * Records the root element of a file's diff section. File sections call
+   * this from a callback ref so navigation can reach them by path without
+   * building a CSS selector out of a filename: a quote, backslash or newline
+   * in a valid filename would otherwise make the selector throw or match the
+   * wrong element.
+   */
+  registerFileElement: (filePath: string, element: HTMLElement) => void;
+  /** Forgets `element` for `filePath`, unless another element replaced it. */
+  unregisterFileElement: (filePath: string, element: HTMLElement) => void;
+  /** The registered diff section element for `filePath`, if it is mounted. */
+  getFileElement: (filePath: string) => HTMLElement | null;
 }
 
 const DiffNavigationContext = createContext<DiffNavigationContextValue | null>(null);
@@ -33,14 +47,31 @@ export function useOptionalDiffNavigation(): DiffNavigationContextValue | null {
 
 export function DiffNavigationProvider({ children }: { children: ReactNode }) {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const fileElements = useRef(new Map<string, HTMLElement>());
 
-  const scrollToFile = useCallback((filePath: string) => {
-    const scrollContainer = document.querySelector('[data-scroll-container="diff"]');
-    const element = scrollContainer?.querySelector(`[data-file-path="${filePath}"]`);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const registerFileElement = useCallback((filePath: string, element: HTMLElement) => {
+    fileElements.current.set(filePath, element);
+  }, []);
+
+  const unregisterFileElement = useCallback((filePath: string, element: HTMLElement) => {
+    // Two sections can briefly share a path (a remount, or a diff that lists
+    // one path twice); only the element that is still registered may leave.
+    if (fileElements.current.get(filePath) === element) {
+      fileElements.current.delete(filePath);
     }
   }, []);
+
+  const getFileElement = useCallback(
+    (filePath: string) => fileElements.current.get(filePath) ?? null,
+    []
+  );
+
+  const scrollToFile = useCallback(
+    (filePath: string) => {
+      getFileElement(filePath)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    [getFileElement]
+  );
 
   useEffect(() => {
     // Set up IntersectionObserver to track which file section is visible
@@ -102,9 +133,16 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return (
-    <DiffNavigationContext.Provider value={{ activeFilePath, scrollToFile }}>
-      {children}
-    </DiffNavigationContext.Provider>
+  const value = useMemo(
+    () => ({
+      activeFilePath,
+      scrollToFile,
+      registerFileElement,
+      unregisterFileElement,
+      getFileElement,
+    }),
+    [activeFilePath, scrollToFile, registerFileElement, unregisterFileElement, getFileElement]
   );
+
+  return <DiffNavigationContext.Provider value={value}>{children}</DiffNavigationContext.Provider>;
 }

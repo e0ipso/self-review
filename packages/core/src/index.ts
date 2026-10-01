@@ -39,7 +39,8 @@ export type {
 } from './types';
 
 // Diff parsing
-export { parseDiff } from './diff-parser';
+export { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
+export type { DiffParseResult } from './diff-parser';
 
 // XML I/O
 export { serializeReview } from './xml-serializer';
@@ -54,13 +55,13 @@ export type { GuideParseResult } from './guide-parser';
 
 // Git operations
 export {
-  runGitDiff,
   runGitDiffAsync,
-  getRepoRoot,
   getRepoRootAsync,
   getUntrackedFilesAsync,
-  validateGitAvailable,
   generateUntrackedDiffs,
+  withParserCompatibleDiffArgs,
+  PARSER_COMPATIBLE_GIT_CONFIG,
+  PARSER_COMPATIBLE_DIFF_FLAGS,
 } from './git';
 
 // Forge providers (remote PR/MR conversation plane)
@@ -165,10 +166,10 @@ export { determineMode } from './startup-mode';
 export { deriveGuidePath, resolveGuidePath, loadGuide } from './guide-loader';
 
 // Git diff loading, staged/untracked defaulting, and argument normalisation
-export { loadGitDiffWithUntracked } from './git-diff-loader';
-export type { LoadGitDiffOptions } from './git-diff-loader';
+export { loadGitDiffWithUntracked, dedupeUntrackedByPath } from './git-diff-loader';
+export type { LoadGitDiffOptions, LoadGitDiffResult } from './git-diff-loader';
 export { applyStagedUntrackedDefault } from './staged-untracked';
-export { normalizeGitDiffArgs } from './git-diff-args';
+export { normalizeGitDiffArgs, findUnsupportedGitDiffOptions } from './git-diff-args';
 
 // Remote PR/MR session bootstrap (URL -> materialized git-mode inputs)
 export {

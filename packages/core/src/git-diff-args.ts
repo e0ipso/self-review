@@ -43,6 +43,86 @@ function consumesNextArgument(arg: string): boolean {
   return false;
 }
 
+// Output formats `parseDiff` cannot consume. Exact spellings, plus the
+// prefixes of the forms that carry an attached value (`--stat=120`).
+const UNSUPPORTED_OUTPUT_OPTIONS = new Set([
+  '--stat',
+  '--numstat',
+  '--shortstat',
+  '--dirstat',
+  '--dirstat-by-file',
+  '--cumulative',
+  '--summary',
+  '--name-only',
+  '--name-status',
+  '--raw',
+  '--patch-with-stat',
+  '--patch-with-raw',
+  '--compact-summary',
+  '--word-diff',
+  '--word-diff-regex',
+  '--color-words',
+  '--color-moved',
+  '--color-moved-ws',
+  '--no-patch',
+  '-s',
+  '--exit-code',
+  '--quiet',
+  '--output',
+  '--line-prefix',
+  '--output-indicator-new',
+  '--output-indicator-old',
+  '--output-indicator-context',
+  '--check',
+]);
+
+const UNSUPPORTED_OUTPUT_OPTION_PREFIXES = [
+  '--stat=',
+  '--stat-width=',
+  '--stat-name-width=',
+  '--stat-graph-width=',
+  '--stat-count=',
+  '--dirstat=',
+  '--dirstat-by-file=',
+  '--word-diff=',
+  '--word-diff-regex=',
+  '--color-words=',
+  '--color-moved=',
+  '--color-moved-ws=',
+  '--output=',
+  '--line-prefix=',
+  '--output-indicator-new=',
+  '--output-indicator-old=',
+  '--output-indicator-context=',
+];
+
+function isUnsupportedOutputOption(arg: string): boolean {
+  return (
+    UNSUPPORTED_OUTPUT_OPTIONS.has(arg) ||
+    UNSUPPORTED_OUTPUT_OPTION_PREFIXES.some(prefix => arg.startsWith(prefix))
+  );
+}
+
+/**
+ * The user-supplied options that select an output format the parser cannot
+ * consume (`--stat`, `--name-only`, `--word-diff`, ...), in argument order,
+ * each spelled as the user wrote it. Option values and pathspecs after `--`
+ * are never reported. An empty result means the arguments produce patch
+ * output.
+ */
+export function findUnsupportedGitDiffOptions(args: readonly string[]): string[] {
+  const offending: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') break;
+    if (isUnsupportedOutputOption(arg)) {
+      offending.push(arg);
+    }
+    if (consumesNextArgument(arg)) i++;
+  }
+  return offending;
+}
+
 /** Identify positional arguments without mistaking option values for paths. */
 export function classifyGitDiffArgs(args: string[]): {
   positionalIndices: number[];

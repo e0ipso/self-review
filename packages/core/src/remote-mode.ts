@@ -94,11 +94,15 @@ export interface RemoteSessionDeps {
     existing?: ExistingClone | null
   ) => Promise<string>;
   runner: ForgeCommandRunner;
-  /** Loads the diff from the clone. Untracked files are never included. */
+  /**
+   * Loads the diff from the clone. Untracked files are never included.
+   * `diagnostics` carries what could not be loaded faithfully (see
+   * `LoadGitDiffResult`); absent means a clean load.
+   */
   loadDiff: (
     gitDiffArgs: string[],
     cwd: string
-  ) => Promise<{ files: DiffFile[]; repository: string }>;
+  ) => Promise<{ files: DiffFile[]; repository: string; diagnostics?: string[] }>;
 }
 
 function defaultCreateProvider(forge: ForgeName, runner: ForgeCommandRunner): ForgeProvider {
@@ -226,11 +230,15 @@ export async function bootstrapRemoteDiff(
   // fails the caller never receives the cleanup handle, so release it here.
   let files: DiffFile[];
   let repository: string;
+  let diagnostics: string[] | undefined;
   try {
-    ({ files, repository } = await d.loadDiff(started.gitDiffArgs, started.repoPath));
+    ({ files, repository, diagnostics } = await d.loadDiff(started.gitDiffArgs, started.repoPath));
   } catch (error) {
     started.cleanup();
     throw error;
+  }
+  for (const diagnostic of diagnostics ?? []) {
+    console.error(`[remote] Diff diagnostic: ${diagnostic}`);
   }
   const shouldKeep = createIgnoreFilter(ignorePatterns);
   const filteredFiles = files.filter(f => shouldKeep(f.newPath || f.oldPath));
@@ -255,6 +263,9 @@ export async function bootstrapRemoteDiff(
         repository,
       },
       remote: session.remote,
+      // Carried only when something could not be loaded faithfully, so the
+      // renderer never mistakes a failed load for "no changes".
+      ...(diagnostics && diagnostics.length > 0 ? { diagnostics } : {}),
     },
   };
 }

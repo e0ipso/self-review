@@ -2,9 +2,12 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { useGuide } from '../../context/GuideContext';
+import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import { buildGuideDisplaySections } from '../../utils/guide-display';
 import FileSection from './FileSection';
+import PreviewErrorBoundary from './PreviewErrorBoundary';
 import { EmptyDiffMessage } from './EmptyDiffMessage';
+import { DiffDiagnostics } from './DiffDiagnostics';
 import GuideOverviewPanel from './GuideOverviewPanel';
 import GuideChapterDivider from './GuideChapterDivider';
 
@@ -12,10 +15,11 @@ import GuideChapterDivider from './GuideChapterDivider';
 export const COLLAPSE_THRESHOLD = 50;
 
 export default function DiffViewer() {
-  const { diffFiles, diffSource } = useReview();
+  const { diffFiles, diffSource, diagnostics = [] } = useReview();
   const { config } = useConfig();
   const { guide, mode: guideMode } = useGuide();
   const containerRef = useRef<HTMLDivElement>(null);
+  const navigation = useOptionalDiffNavigation();
 
   // In guided mode the diff stream follows the walkthrough: file sections
   // render in guide order, grouped into chapters. Flat mode (or no guide)
@@ -91,10 +95,9 @@ export default function DiffViewer() {
     // Compensate scroll position when collapsing a file above the viewport
     if (isCurrentlyExpanded) {
       const scrollContainer = document.querySelector<HTMLElement>('[data-scroll-container="diff"]');
-      // Scope query to scroll container to avoid matching FileTree elements
-      const sectionEl = scrollContainer?.querySelector<HTMLElement>(
-        `[data-file-path="${filePath}"]`
-      );
+      // The section registers itself by path; a selector built from the
+      // filename would throw or mismatch on quotes, backslashes or newlines.
+      const sectionEl = navigation?.getFileElement(filePath);
 
       if (scrollContainer && sectionEl) {
         const containerRect = scrollContainer.getBoundingClientRect();
@@ -119,7 +122,7 @@ export default function DiffViewer() {
   };
 
   if (diffFiles.length === 0) {
-    return <EmptyDiffMessage diffSource={diffSource} />;
+    return <EmptyDiffMessage diffSource={diffSource} diagnostics={diagnostics} />;
   }
 
   return (
@@ -130,6 +133,14 @@ export default function DiffViewer() {
       data-testid='diff-viewer'
       data-diff-viewer
     >
+      {diagnostics.length > 0 && (
+        <div className='px-4 pt-4'>
+          <DiffDiagnostics
+            diagnostics={diagnostics}
+            title='Part of this diff could not be reviewed'
+          />
+        </div>
+      )}
       <GuideOverviewPanel />
       {displaySections.map((section, sectionIndex) => (
         <React.Fragment key={`chapter-${sectionIndex}-${section.header?.name ?? 'flat'}`}>
@@ -144,14 +155,18 @@ export default function DiffViewer() {
           )}
           {section.entries.map(({ file }) => {
             const filePath = file.newPath || file.oldPath;
+            // FileSection contains preview failures itself and keeps its
+            // header usable; this outer boundary is the net for a failure
+            // anywhere else in the section, so it can't blank the review.
             return (
-              <FileSection
-                key={filePath}
-                file={file}
-                viewMode={config.diffView}
-                expanded={expandedState[filePath]}
-                onToggleExpanded={handleToggleExpanded}
-              />
+              <PreviewErrorBoundary key={filePath} filePath={filePath} resetKeys={[file]}>
+                <FileSection
+                  file={file}
+                  viewMode={config.diffView}
+                  expanded={expandedState[filePath]}
+                  onToggleExpanded={handleToggleExpanded}
+                />
+              </PreviewErrorBoundary>
             );
           })}
         </React.Fragment>

@@ -22,6 +22,24 @@ Reusable UI layer consumed by the Electron renderer and the webapp e2e test harn
   platform-specific operations (expand context, load images, change output path). The Electron app
   and webapp e2e harness each provide their own adapter implementation.
 
+## Review session semantics
+
+`ReviewProvider` (`src/context/ReviewContext.tsx`) exports exactly the session on screen. Its JSDoc
+is the contract; in short:
+
+- **Identity** is the adapter object plus `reviewSessionIdentity(source, remote)`: source kind,
+  repository and diff arguments or source path, and remote URL.
+- **Replacement.** A new adapter object (or a different static `initialSource`) remounts the session
+  through a React `key`, so the old state is discarded and the old adapter's late results and
+  subscriptions are dropped. A pushed payload with a different identity replaces the session in
+  place, including an empty one. Hosts must keep the adapter identity stable.
+- **Update.** A pushed payload with the same identity keeps comments and viewed flags by path.
+- `initialComments` hydrate once per session, after its files are known, and never again.
+- `SingleFileReview` keys its session on the file path and source, so a different file never
+  inherits the previous file's comments or source.
+- `sessionId` on the context changes on every replacement, for async work that must discard a stale
+  result.
+
 ## Structure
 
 ```

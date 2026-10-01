@@ -86,7 +86,7 @@ export function useKeyboardNavigation() {
           return;
         }
 
-        // Diff line: trigger comment and focus textarea
+        // Diff line: trigger comment
         const lineNumber = hint.element.getAttribute('data-line-number');
         const side = hint.element.getAttribute('data-line-side');
         let filePath: string | null = null;
@@ -102,6 +102,9 @@ export function useKeyboardNavigation() {
         }
 
         if (filePath && lineNumber && side) {
+          // The composer this opens focuses its own editor on mount
+          // (ComposerCore). No document-wide focus here: with another
+          // composer open higher up, it would steal focus from the new one.
           document.dispatchEvent(
             new CustomEvent('trigger-line-comment', {
               bubbles: true,
@@ -112,14 +115,6 @@ export function useKeyboardNavigation() {
               },
             })
           );
-
-          // Focus the comment textarea after React renders
-          requestAnimationFrame(() => {
-            const textarea = document.querySelector(
-              '[data-testid="comment-input"] textarea'
-            ) as HTMLElement | null;
-            textarea?.focus();
-          });
         }
       } else if (modeRef.current === 'hint-file') {
         const filePath = hint.element.getAttribute('data-file-path');

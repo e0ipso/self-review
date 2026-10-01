@@ -168,6 +168,14 @@
   line-height: 1.25rem !important;
 }
 
+/* Diff code text follows the configured `font-size`: ConfigProvider sets
+ * --sr-font-size on the .self-review root. The line height scales with it but
+ * never drops below the 22px diff row the gutters are laid out against. */
+.self-review .sr-diff-code {
+  font-size: var(--sr-font-size, 14px);
+  line-height: max(22px, calc(var(--sr-font-size, 14px) * 1.5));
+}
+
 /* Rendered markdown view: override prose margins */
 .self-review .rendered-markdown-view table {
   margin-top: 0.75em;

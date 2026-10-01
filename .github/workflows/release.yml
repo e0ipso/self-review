@@ -1,7 +1,22 @@
 # GitHub Actions Release Pipeline for self-review (Linux)
 #
 # Triggered when the CI workflow completes on main. Creates a GitHub Release
-# with semantic-release and uploads .deb and .rpm packages as release assets.
+# with semantic-release, publishes the workspace packages to npm, and uploads
+# .deb, .rpm and .zip packages as release assets.
+#
+# Trust boundary. A workflow_run job runs with this repository's secrets and
+# the permissions declared below whatever triggered the CI run, and the
+# `branches: [main]` filter also matches a fork pull request whose branch is
+# named main. So no job here checks out or executes the triggering commit
+# until `provenance` has shown, from the event payload and the GitHub API,
+# that the CI run was a successful push to this repository's main and that the
+# commit is still on main. The work is then split so that no job holds more
+# than it needs: `release` runs semantic-release with the permissions that
+# needs and installs with lifecycle scripts off, `build` runs the repository's
+# install and build scripts with read-only access, and `publish` holds the npm
+# OIDC and release-asset permissions but checks out nothing and runs no
+# repository code at all. docs/release-security.md lists the repository
+# settings this file cannot enforce on its own.
 
 name: Release (Linux)
 
@@ -11,6 +26,9 @@ on:
     branches: [main]
     types: [completed]
 
+# Nothing by default; each job declares exactly what it holds.
+permissions: {}
+
 concurrency:
   group: release-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
@@ -19,34 +37,84 @@ env:
   NO_COLOR: '1'
 
 jobs:
-  release:
-    name: Release
+  provenance:
+    name: Verify provenance
     runs-on: ubuntu-latest
+    # Saves a runner for the common failed-CI case. The gate below re-checks
+    # it and everything else; nothing relies on this expression.
     if: github.event.workflow_run.conclusion == 'success'
     permissions:
-      actions: write
-      contents: write
-      id-token: write
-      issues: write
-      pull-requests: write
+      contents: read
+    outputs:
+      head_sha: ${{ steps.gate.outputs.head_sha }}
     steps:
-      - uses: actions/checkout@v7
+      # The gate must not depend on the commit it is judging, so its script
+      # and that script's own regression suite come from the default branch,
+      # never from the triggering SHA.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Check the provenance gate
+        run: bash scripts/test/release-provenance.test.sh
+
+      # Every event field reaches the script through the environment; none is
+      # spliced into a command. GH_TOKEN is for the read-only compare API call.
+      - name: Verify the triggering run
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_REPOSITORY_ID: ${{ github.repository_id }}
+          EXPECTED_BRANCH: main
+          EXPECTED_WORKFLOW: CI
+        run: bash scripts/release/verify-provenance.sh
+
+  release:
+    name: Create the release
+    runs-on: ubuntu-latest
+    needs: provenance
+    permissions:
+      contents: write # push the release commit and tag, create the GitHub Release
+      issues: write # semantic-release comments on the issues a release closes
+      pull-requests: write # and on the pull requests it ships
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      release_sha: ${{ steps.tag.outputs.release_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.provenance.outputs.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
 
-      # workflow_run checkout by SHA creates detached HEAD.
-      # semantic-release requires a named branch to match its config.
+      - name: Confirm the checkout is the verified commit
+        env:
+          HEAD_SHA: ${{ needs.provenance.outputs.head_sha }}
+        run: |
+          actual=$(git rev-parse HEAD)
+          if [ "$actual" != "$HEAD_SHA" ]; then
+            echo "checked out $actual, expected the verified commit $HEAD_SHA" >&2
+            exit 1
+          fi
+
+      # Checkout by SHA leaves a detached HEAD, and semantic-release requires a
+      # named branch matching its config. The gate has established that the
+      # commit is on main, so the branch is main by construction.
       - name: Restore branch ref for semantic-release
-        run: git checkout -B ${{ github.event.workflow_run.head_branch }}
+        run: git checkout -B main
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
 
-      - run: npm ci
+      # semantic-release and its plugins come from the lockfile and need no
+      # dependency's install script, so none runs under this job's write
+      # permissions. The full install belongs to `build`, which has none.
+      - run: npm ci --ignore-scripts
 
       # Guards the resolver below, which decides whether this run publishes.
       # Runs before the tag is minted so a broken decision cannot strand a
@@ -54,6 +122,8 @@ jobs:
       - name: Check the release tag resolver
         run: bash scripts/test/resolve-release-tag.test.sh
 
+      # The token is the one credential this job uses, and only this step
+      # needs it: semantic-release pushes the release commit and tag with it.
       - name: Run semantic-release
         run: npx semantic-release
         env:
@@ -62,41 +132,64 @@ jobs:
 
       # Asks whether a release exists for this commit, not whether this run
       # created one, so re-running after an interrupted attempt resumes the
-      # packaging and upload work instead of skipping it.
+      # packaging and upload work instead of skipping it. The tag is checked
+      # against a strict version shape and resolved to a commit here, so the
+      # later jobs receive values they can use without interpretation.
       - name: Resolve release tag
         id: tag
         env:
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_SHA: ${{ needs.provenance.outputs.head_sha }}
         run: |
           git fetch --tags --force
           tag=$(bash scripts/resolve-release-tag.sh "$HEAD_SHA")
-          if [ -n "$tag" ]; then
-            echo "Publishing artifacts for $tag" >&2
-          else
+          if [ -z "$tag" ]; then
             echo "No release for $HEAD_SHA" >&2
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "release_sha=" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          if ! [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Refusing to publish '$tag': not a release version tag" >&2
+            exit 1
+          fi
+          release_sha=$(git rev-parse --verify "$tag^{commit}")
+          echo "Publishing artifacts for $tag ($release_sha)" >&2
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
 
-      # A resumed run reaches this step with the versions of an earlier
-      # attempt, and npm refuses to republish them. Skip what is already
-      # there rather than failing the retry before it reaches the artifacts.
-      - name: Publish workspace packages to npm
-        if: steps.tag.outputs.tag != ''
-        run: |
-          for pkg in packages/types packages/core packages/react packages/serve; do
-            name=$(jq -r .name "$pkg/package.json")
-            version=$(jq -r .version "$pkg/package.json")
-            if npm view "$name@$version" version >/dev/null 2>&1; then
-              echo "$name@$version is already published" >&2
-              continue
-            fi
-            (cd "$pkg" && npm run build && npm publish --provenance --access public)
-          done
+  build:
+    name: Build packages
+    runs-on: ubuntu-latest
+    needs: [provenance, release]
+    if: needs.release.outputs.tag != ''
+    permissions:
+      contents: read
+    steps:
+      # The release commit carries the versions semantic-release just wrote,
+      # which name every artifact below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.release_sha }}
+          persist-credentials: false
+
+      - name: Confirm the checkout is the release commit
         env:
-          NODE_AUTH_TOKEN: ''
+          RELEASE_SHA: ${{ needs.release.outputs.release_sha }}
+        run: |
+          actual=$(git rev-parse HEAD)
+          if [ "$actual" != "$RELEASE_SHA" ]; then
+            echo "checked out $actual, expected the release commit $RELEASE_SHA" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - run: npm ci
 
       - name: Install Linux maker dependencies
-        if: steps.tag.outputs.tag != ''
         run: sudo apt-get install -y dpkg-dev fakeroot rpm
 
       # Both architectures come out of one `make` run because the npm script
@@ -105,8 +198,27 @@ jobs:
       # the app ships no native modules, so an arm64 package is the webpack
       # bundle plus the arm64 Electron prebuilt that the packager downloads.
       - name: Build Linux packages
-        if: steps.tag.outputs.tag != ''
         run: npm run make -- --arch=x64,arm64
+
+      # Packed here, published by `publish`, so the registry credential never
+      # shares a job with the build. The manifest records each tarball's name
+      # and version for the publish step's already-published check. This runs
+      # after `make`, whose clean step would otherwise delete out/npm.
+      - name: Build and pack workspace packages
+        run: |
+          for pkg in packages/types packages/core packages/react packages/serve; do
+            (cd "$pkg" && npm run build)
+          done
+          mkdir -p out/npm
+          npm pack --workspaces --json --pack-destination out/npm > out/npm/manifest.json
+          jq -r '.[] | "\(.name)@\(.version) -> \(.filename)"' out/npm/manifest.json >&2
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-npm
+          path: out/npm/
+          if-no-files-found: error
+          retention-days: 1
 
       # Artifact naming contract, consumed by the Nix flake and by the external
       # Homebrew tap. Every asset below is uploaded under the name its maker
@@ -120,24 +232,94 @@ jobs:
       # The zip is the architecture-specific artifact the tap and the flake
       # select on; flake.nix maps a Nix system to the <x64|arm64> token and
       # pins one unpacked-source hash per architecture. Renaming an asset
-      # breaks both consumers, so upload by glob rather than by hand.
-      #
+      # breaks both consumers, so the files travel to `publish` under the
+      # names the makers gave them and are uploaded by glob rather than by hand.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-linux
+          path: |
+            out/make/deb/*/*.deb
+            out/make/rpm/*/*.rpm
+            out/make/zip/linux/*/*.zip
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs: [provenance, release, build]
+    permissions:
+      contents: write # upload the release assets
+      id-token: write # npm provenance
+      actions: write # dispatch the macOS and flake-hash workflows
+    steps:
+      # Deliberately no checkout: this job executes nothing from the
+      # repository. It publishes what `build` produced, and nothing else.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-npm
+          path: npm
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-linux
+          path: linux
+
+      # A resumed run reaches this step with the versions of an earlier
+      # attempt, and npm refuses to republish them. Skip what is already
+      # there rather than failing the retry before it reaches the artifacts.
+      # Dependents follow their dependencies so no published version ever
+      # names one that is not there yet.
+      - name: Publish workspace packages to npm
+        run: |
+          for name in @self-review/types @self-review/core @self-review/react @self-review/serve; do
+            entry=$(jq -c --arg name "$name" '.[] | select(.name == $name)' npm/manifest.json)
+            if [ -z "$entry" ]; then
+              echo "$name is missing from the packed manifest" >&2
+              exit 1
+            fi
+            version=$(jq -r .version <<<"$entry")
+            filename=$(jq -r .filename <<<"$entry")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published" >&2
+              continue
+            fi
+            npm publish "npm/$filename" --provenance --access public
+          done
+        env:
+          NODE_AUTH_TOKEN: ''
+
       # --clobber replaces assets a previous attempt uploaded, so a retry
       # lands one complete set on the existing release instead of a duplicate.
       - name: Upload release assets
-        if: steps.tag.outputs.tag != ''
-        run: gh release upload "${{ steps.tag.outputs.tag }}" out/make/deb/*/*.deb out/make/rpm/*/*.rpm out/make/zip/linux/*/*.zip --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          mapfile -t assets < <(find linux -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.zip' \) | sort)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No Linux packages to upload" >&2
+            exit 1
+          fi
+          printf 'Uploading %s\n' "${assets[@]}" >&2
+          gh release upload "$TAG" "${assets[@]}" --clobber
 
       - name: Trigger flake hash update
-        if: steps.tag.outputs.tag != ''
-        run: gh workflow run update-flake-hash.yml -f tag="${{ steps.tag.outputs.tag }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: gh workflow run update-flake-hash.yml -f tag="$TAG"
 
       - name: Trigger macOS build
-        if: steps.tag.outputs.tag != ''
-        run: gh workflow run release-darwin.yml -f tag="${{ steps.tag.outputs.tag }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: gh workflow run release-darwin.yml -f tag="$TAG"

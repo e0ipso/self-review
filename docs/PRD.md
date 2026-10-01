@@ -697,7 +697,7 @@ The raw unified diff output from `git diff` is parsed into a structured AST:
 interface DiffFile {
   oldPath: string;          // e.g., "a/src/auth.ts"
   newPath: string;          // e.g., "b/src/auth.ts"
-  changeType: 'added' | 'modified' | 'deleted' | 'renamed';
+  changeType: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
   hunks: DiffHunk[];
 }
 

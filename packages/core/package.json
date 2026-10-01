@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@self-review/types": "*",
-    "fast-xml-parser": "^5.3.5",
+    "fast-xml-parser": "^5.11.2",
     "ignore": "^7.0.5",
     "xmllint-wasm": "^5.1.0",
     "yaml": "^2.8.2"

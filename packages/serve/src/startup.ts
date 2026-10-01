@@ -50,11 +50,17 @@ async function loadDiffForMode(gitDiffArgs: string[], config: AppConfig): Promis
   console.error(`[serve] Startup mode: ${mode}`);
 
   if (mode === 'git') {
-    const { files, repository } = await loadGitDiffWithUntracked(gitDiffArgs);
+    const { files, repository, diagnostics } = await loadGitDiffWithUntracked(gitDiffArgs);
+    for (const diagnostic of diagnostics) {
+      console.error(`[serve] Diff diagnostic: ${diagnostic}`);
+    }
     const shouldKeep = createIgnoreFilter(config.ignore);
     return {
       files: files.filter(f => shouldKeep(f.newPath || f.oldPath)),
       source: { type: 'git', gitDiffArgs: gitDiffArgs.join(' '), repository },
+      // Carried only when something could not be loaded faithfully, so the
+      // browser never mistakes a failed load for "no changes".
+      ...(diagnostics.length > 0 ? { diagnostics } : {}),
     };
   }
 

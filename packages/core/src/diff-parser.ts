@@ -1,22 +1,90 @@
-// src/main/diff-parser.ts
+// packages/core/src/diff-parser.ts
 // Parse unified diff output into DiffFile[]
 
 import { DiffFile, DiffHunk, ChangeType } from './types';
 
+/**
+ * What a parse produced: the files it understood, and one diagnostic per
+ * piece of input it could not represent faithfully. A diagnostic never
+ * invents a line and never hides a file silently; it is the parser's way of
+ * saying "this input is not in the contract", so the caller can show it
+ * instead of an empty review.
+ */
+export interface DiffParseResult {
+  files: DiffFile[];
+  diagnostics: string[];
+}
+
+/** Parse a unified diff, discarding diagnostics. Prefer {@link parseDiffWithDiagnostics}. */
 export function parseDiff(rawDiff: string): DiffFile[] {
+  return parseDiffWithDiagnostics(rawDiff).files;
+}
+
+/**
+ * Parse `git diff` output (`--src-prefix=a/ --dst-prefix=b/`, no color) into
+ * structured files.
+ *
+ * The contract this enforces:
+ * - The trailing newline git appends is not a line of the last hunk.
+ * - Every hunk is checked against its `@@ -a,b +c,d @@` counts. A line that
+ *   exceeds them, a hunk that ends short of them, or a line inside a hunk that
+ *   carries no `+`/`-`/` ` prefix produces a diagnostic and is never recorded
+ *   as context. The one leniency is an empty line inside an open hunk, which
+ *   `git apply` also reads as an empty context line (mail and editors strip
+ *   the trailing space).
+ * - `GIT binary patch` (from `--binary`) is a binary change, like
+ *   `Binary files ... differ`.
+ * - `copy from` / `copy to` headers produce a `copied` file.
+ * - Combined output (`diff --cc`, `diff --combined`) cannot be represented and
+ *   is reported as a diagnostic naming the path; its lines are skipped until
+ *   the next file header.
+ */
+export function parseDiffWithDiagnostics(rawDiff: string): DiffParseResult {
+  const diagnostics: string[] = [];
   if (!rawDiff.trim()) {
-    return [];
+    return { files: [], diagnostics };
   }
 
   const lines = rawDiff.split('\n');
+  // Git ends its output with a newline; the empty element after the final
+  // split is the end of the input, not a line of the last hunk.
+  if (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+
   const files: DiffFile[] = [];
   let currentFile: Partial<DiffFile> | null = null;
   let currentHunk: Partial<DiffHunk> | null = null;
   let oldLineNumber = 0;
   let newLineNumber = 0;
+  let remainingOld = 0;
+  let remainingNew = 0;
   let hasModeChange = false;
+  // Set while the input is inside a section whose lines are not diff
+  // content: a binary patch body or an unsupported combined section.
+  let skippingSection = false;
+
+  function fileLabel(): string {
+    return currentFile?.newPath || currentFile?.oldPath || '<unknown file>';
+  }
+
+  function flushHunk(): void {
+    if (currentHunk && currentHunk.header && currentFile) {
+      if (remainingOld > 0 || remainingNew > 0) {
+        diagnostics.push(
+          `${fileLabel()}: hunk ${currentHunk.header} ended ${remainingOld} old and ` +
+            `${remainingNew} new lines short of its declared counts`
+        );
+      }
+      currentFile.hunks!.push(currentHunk as DiffHunk);
+    }
+    currentHunk = null;
+    remainingOld = 0;
+    remainingNew = 0;
+  }
 
   function flushFile(): void {
+    flushHunk();
     if (
       currentFile &&
       (currentFile.oldPath || currentFile.newPath) &&
@@ -27,6 +95,9 @@ export function parseDiff(rawDiff: string): DiffFile[] {
     ) {
       files.push(currentFile as DiffFile);
     }
+    currentFile = null;
+    hasModeChange = false;
+    skippingSection = false;
   }
 
   for (let i = 0; i < lines.length; i++) {
@@ -34,19 +105,12 @@ export function parseDiff(rawDiff: string): DiffFile[] {
 
     // Start of a new file
     if (line.startsWith('diff --git ')) {
-      // Flush the pending hunk into the current file before saving
-      if (currentHunk && currentHunk.header && currentFile) {
-        currentFile.hunks!.push(currentHunk as DiffHunk);
-        currentHunk = null;
-      }
-
       flushFile();
 
       // Extract paths from "diff --git a/<old> b/<new>" as fallback
       // for binary files that lack --- / +++ lines
       const gitPaths = parseGitDiffHeader(line);
 
-      // Initialize new file
       currentFile = {
         oldPath: gitPaths.oldPath,
         newPath: gitPaths.newPath,
@@ -54,12 +118,21 @@ export function parseDiff(rawDiff: string): DiffFile[] {
         isBinary: false,
         hunks: [],
       };
-      currentHunk = null;
-      hasModeChange = false;
       continue;
     }
 
-    if (!currentFile) continue;
+    // Combined output describes two parents against one result, which no
+    // DiffFile can carry. Report it and skip to the next file header.
+    const combined = line.match(/^diff --(?:cc|combined) (.*)$/);
+    if (combined) {
+      flushFile();
+      const path = stripPrefix(decodeGitPath(combined[1]));
+      diagnostics.push(`${path}: combined (merge conflict) diff output is not supported`);
+      skippingSection = true;
+      continue;
+    }
+
+    if (skippingSection || !currentFile) continue;
 
     // Detect file mode changes
     if (line.startsWith('new file mode')) {
@@ -90,6 +163,17 @@ export function parseDiff(rawDiff: string): DiffFile[] {
       continue;
     }
 
+    if (line.startsWith('copy from ')) {
+      currentFile.changeType = 'copied';
+      currentFile.oldPath = decodeGitPath(line.substring('copy from '.length));
+      continue;
+    }
+
+    if (line.startsWith('copy to ')) {
+      currentFile.newPath = decodeGitPath(line.substring('copy to '.length));
+      continue;
+    }
+
     // Parse old file path
     if (!currentHunk && line.startsWith('--- ')) {
       const path = decodeGitPath(line.substring(4).split('\t')[0]);
@@ -110,93 +194,114 @@ export function parseDiff(rawDiff: string): DiffFile[] {
       continue;
     }
 
-    // Parse hunk header
-    if (line.startsWith('@@')) {
-      // Save previous hunk if exists
-      if (currentHunk && currentHunk.header) {
-        currentFile.hunks!.push(currentHunk as DiffHunk);
-      }
-
-      // Parse hunk header: @@ -oldStart,oldLines +newStart,newLines @@ context
-      const match = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
-      if (match) {
-        const oldStart = parseInt(match[1], 10);
-        const oldLines = match[2] ? parseInt(match[2], 10) : 1;
-        const newStart = parseInt(match[3], 10);
-        const newLines = match[4] ? parseInt(match[4], 10) : 1;
-        const _context = match[5];
-
-        currentHunk = {
-          header: line,
-          oldStart,
-          oldLines,
-          newStart,
-          newLines,
-          lines: [],
-        };
-
-        oldLineNumber = oldStart;
-        newLineNumber = newStart;
-      }
+    // `--binary` emits the base85 patch body after this marker. The body is
+    // not diff content; skip it until the next file header.
+    if (line === 'GIT binary patch') {
+      currentFile.isBinary = true;
+      skippingSection = true;
       continue;
     }
 
-    // Parse diff lines (must have a current hunk)
-    if (currentHunk && currentHunk.lines) {
-      if (line.startsWith('+')) {
-        // Addition
-        currentHunk.lines.push({
-          type: 'addition',
-          oldLineNumber: null,
-          newLineNumber: newLineNumber,
-          content: line.substring(1),
-        });
-        newLineNumber++;
-      } else if (line.startsWith('-')) {
-        // Deletion
-        currentHunk.lines.push({
-          type: 'deletion',
-          oldLineNumber: oldLineNumber,
-          newLineNumber: null,
-          content: line.substring(1),
-        });
-        oldLineNumber++;
-      } else if (line.startsWith(' ')) {
-        // Context line
-        currentHunk.lines.push({
-          type: 'context',
-          oldLineNumber: oldLineNumber,
-          newLineNumber: newLineNumber,
-          content: line.substring(1),
-        });
-        oldLineNumber++;
-        newLineNumber++;
-      } else if (line.startsWith('\\')) {
-        // "\ No newline at end of file" - ignore
+    // Parse hunk header
+    if (line.startsWith('@@')) {
+      flushHunk();
+
+      // Parse hunk header: @@ -oldStart,oldLines +newStart,newLines @@ context
+      const match = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
+      if (!match) {
+        diagnostics.push(`${fileLabel()}: unrecognized hunk header "${line}"`);
         continue;
-      } else {
-        // Some other line (could be empty or malformed), treat as context
-        if (currentHunk.lines.length > 0) {
-          currentHunk.lines.push({
-            type: 'context',
-            oldLineNumber: oldLineNumber,
-            newLineNumber: newLineNumber,
-            content: line,
-          });
-          oldLineNumber++;
-          newLineNumber++;
-        }
       }
+      const oldStart = parseInt(match[1], 10);
+      const oldLines = match[2] ? parseInt(match[2], 10) : 1;
+      const newStart = parseInt(match[3], 10);
+      const newLines = match[4] ? parseInt(match[4], 10) : 1;
+
+      currentHunk = {
+        header: line,
+        oldStart,
+        oldLines,
+        newStart,
+        newLines,
+        lines: [],
+      };
+
+      oldLineNumber = oldStart;
+      newLineNumber = newStart;
+      remainingOld = oldLines;
+      remainingNew = newLines;
+      continue;
+    }
+
+    // Lines before the first hunk are file metadata (index, mode, similarity).
+    if (!currentHunk || !currentHunk.lines) continue;
+
+    if (line.startsWith('\\')) {
+      // "\ No newline at end of file" annotates the previous line.
+      continue;
+    }
+
+    const marker = line.length === 0 ? ' ' : line[0];
+    const content = line.length === 0 ? '' : line.substring(1);
+
+    if (marker === '+') {
+      if (remainingNew <= 0) {
+        diagnostics.push(
+          `${fileLabel()}: line beyond the counts of hunk ${currentHunk.header}: "${line}"`
+        );
+        continue;
+      }
+      currentHunk.lines.push({
+        type: 'addition',
+        oldLineNumber: null,
+        newLineNumber: newLineNumber,
+        content,
+      });
+      newLineNumber++;
+      remainingNew--;
+    } else if (marker === '-') {
+      if (remainingOld <= 0) {
+        diagnostics.push(
+          `${fileLabel()}: line beyond the counts of hunk ${currentHunk.header}: "${line}"`
+        );
+        continue;
+      }
+      currentHunk.lines.push({
+        type: 'deletion',
+        oldLineNumber: oldLineNumber,
+        newLineNumber: null,
+        content,
+      });
+      oldLineNumber++;
+      remainingOld--;
+    } else if (marker === ' ') {
+      if (remainingOld <= 0 || remainingNew <= 0) {
+        diagnostics.push(
+          `${fileLabel()}: line beyond the counts of hunk ${currentHunk.header}: "${line}"`
+        );
+        continue;
+      }
+      currentHunk.lines.push({
+        type: 'context',
+        oldLineNumber: oldLineNumber,
+        newLineNumber: newLineNumber,
+        content,
+      });
+      oldLineNumber++;
+      newLineNumber++;
+      remainingOld--;
+      remainingNew--;
+    } else {
+      diagnostics.push(
+        `${fileLabel()}: unrecognized line inside hunk ${currentHunk.header}: "${line}"`
+      );
     }
   }
 
   // Save the last hunk and file
-  if (currentHunk && currentHunk.header && currentFile) {
-    currentFile.hunks!.push(currentHunk as DiffHunk);
-  }
   flushFile();
 
-  return files;
+  return { files, diagnostics };
 }
 
 function stripPrefix(path: string): string {
@@ -260,7 +365,15 @@ function parseGitDiffHeader(line: string): {
         stripPrefix(paths.substring(0, match.index)) ===
         stripPrefix(paths.substring(match.index! + 1))
     ) || separators[0];
-  if (!boundary) return { oldPath: '', newPath: '' };
+  if (!boundary) {
+    // No prefix at all (diff.noprefix): the only unambiguous shape is two
+    // bare tokens naming the same path.
+    const bare = paths.split(' ');
+    if (bare.length === 2 && bare[0] === bare[1]) {
+      return { oldPath: bare[0], newPath: bare[1] };
+    }
+    return { oldPath: '', newPath: '' };
+  }
 
   return {
     oldPath: stripPrefix(paths.substring(0, boundary.index)),

@@ -220,8 +220,15 @@ async function initializeApp() {
       // Git mode: existing flow
       console.error('[main] Git diff args:', formatGitDiffArgs(gitDiffArgs));
 
-      const { files: allFiles, repository } = await loadGitDiffWithUntracked(gitDiffArgs);
+      const {
+        files: allFiles,
+        repository,
+        diagnostics,
+      } = await loadGitDiffWithUntracked(gitDiffArgs);
       console.error('[main] Loaded', allFiles.length, 'files from git diff');
+      for (const diagnostic of diagnostics) {
+        console.error('[main] Diff diagnostic:', diagnostic);
+      }
 
       const shouldKeep = createIgnoreFilter(appConfig.ignore);
       const filteredFiles = allFiles.filter(f => shouldKeep(f.newPath || f.oldPath));
@@ -235,6 +242,9 @@ async function initializeApp() {
           gitDiffArgs: formatGitDiffArgs(gitDiffArgs),
           repository,
         },
+        // Carried only when something could not be loaded faithfully, so the
+        // renderer never mistakes a failed load for "no changes".
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
       };
     } else if (mode === 'file') {
       // File mode: scan a single file as new addition

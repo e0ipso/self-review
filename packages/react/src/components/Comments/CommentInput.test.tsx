@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { CategoryDef } from '@self-review/types';
+import type { Attachment, CategoryDef, ReviewComment } from '@self-review/types';
 
 import { installBrowserApiStubs } from '../../test-helpers';
 
@@ -25,15 +25,20 @@ vi.mock('../../context/ReviewContext', () => ({
 // Swaps the MDEditor-based composer for a plain textarea so the tests can
 // drive the comment body without pulling in the full editor stack. The
 // actions bar (category selector + submit button) is the thing under test,
-// so it is passed through untouched via `children`.
+// so it is passed through untouched via `children`. Each attachment gets a
+// remove button wired the way the real thumbnail strip removes one.
 vi.mock('./ComposerCore', () => ({
   ComposerCore: ({
     body,
     onBodyChange,
+    attachments,
+    setAttachments,
     children,
   }: {
     body: string;
     onBodyChange: (body: string) => void;
+    attachments: Attachment[];
+    setAttachments: React.Dispatch<React.SetStateAction<Attachment[]>>;
     children: React.ReactNode;
   }) => (
     <div>
@@ -42,6 +47,13 @@ vi.mock('./ComposerCore', () => ({
         value={body}
         onChange={e => onBodyChange(e.target.value)}
       />
+      {attachments.map(att => (
+        <button
+          key={att.id}
+          data-testid={`remove-attachment-${att.id}`}
+          onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
+        />
+      ))}
       {children}
     </div>
   ),
@@ -135,5 +147,42 @@ describe('CommentInput category handling', () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('no usable categories'));
 
     errorSpy.mockRestore();
+  });
+});
+
+describe('CommentInput editing attachments', () => {
+  beforeEach(() => {
+    mocks.editComment.mockReset();
+  });
+
+  it('clears the stored attachments when the last one is removed before Update', () => {
+    const comment: ReviewComment = {
+      id: 'c1',
+      filePath: 'src/foo.ts',
+      lineRange: null,
+      body: 'See screenshot',
+      category: 'bug',
+      suggestion: null,
+      attachments: [{ id: 'att-1', fileName: 'shot.png', mediaType: 'image/png' }],
+    };
+    render(
+      <ConfigProvider>
+        <CommentInput
+          filePath='src/foo.ts'
+          lineRange={null}
+          existingComment={comment}
+          onCancel={vi.fn()}
+        />
+      </ConfigProvider>
+    );
+
+    fireEvent.click(screen.getByTestId('remove-attachment-att-1'));
+    fireEvent.click(screen.getByTestId('add-comment-btn'));
+
+    expect(mocks.editComment).toHaveBeenCalledTimes(1);
+    const updates = mocks.editComment.mock.calls[0][1] as Partial<ReviewComment>;
+    // The key must be present: editComment merges, so an omitted key keeps the old list.
+    expect(Object.prototype.hasOwnProperty.call(updates, 'attachments')).toBe(true);
+    expect({ ...comment, ...updates }.attachments ?? []).toHaveLength(0);
   });
 });

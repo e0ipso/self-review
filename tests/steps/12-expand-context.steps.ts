@@ -39,6 +39,9 @@ Then('I should see diff lines in the {string} file section', async ({}, filePath
   const page = getPage();
   const section = page.locator(`[data-testid="file-section-${filePath}"]`);
   const lines = section.locator('[data-line-number]');
+  // The diff arrives over IPC after the window is up; count only once the
+  // first line is rendered, otherwise a fast launch counts zero.
+  await lines.first().waitFor({ state: 'visible', timeout: 10000 });
   lineCountBefore = await lines.count();
   expect(lineCountBefore).toBeGreaterThan(0);
 });

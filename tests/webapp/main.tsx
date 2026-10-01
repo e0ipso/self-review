@@ -72,6 +72,10 @@ function getConfig(): Partial<AppConfig> {
   if (view === 'split' || view === 'unified') {
     config.diffView = view;
   }
+  const fontSize = Number(getUrlParam('fontSize'));
+  if (fontSize > 0) {
+    config.fontSize = fontSize;
+  }
   return config;
 }
 

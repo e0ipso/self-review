@@ -19,7 +19,7 @@ import {
 } from './materializer';
 import type { ExistingClone, MaterializeResult } from './materializer';
 import { mapThreadsToReviewComments, REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
-import { parseDiff } from './diff-parser';
+import { parseDiffWithDiagnostics } from './diff-parser';
 import { runGitDiffAsync } from './git';
 import { serializeReview } from './xml-serializer';
 import { loadConfig } from './config';
@@ -72,10 +72,17 @@ function defaultDeps(): FetchCommentsDeps {
     detectExistingClone,
     materialize,
     resolveRemoteDefaultBranch,
-    loadDiffFiles: async (repoPath, baseSha, headSha) =>
+    loadDiffFiles: async (repoPath, baseSha, headSha) => {
       // Triple-dot: diff from the merge base, matching how forges present a
       // PR/MR diff. Runs inside the materialized clone.
-      parseDiff(await runGitDiffAsync([`${baseSha}...${headSha}`], repoPath)),
+      const { files, diagnostics } = parseDiffWithDiagnostics(
+        await runGitDiffAsync([`${baseSha}...${headSha}`], repoPath)
+      );
+      for (const diagnostic of diagnostics) {
+        console.error(`[fetch-comments] Diff diagnostic: ${diagnostic}`);
+      }
+      return files;
+    },
     serialize: serializeReview,
     writeFile: (path, content) => writeFileSync(path, content, 'utf-8'),
     loadConfig,

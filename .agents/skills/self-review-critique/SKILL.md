@@ -20,7 +20,8 @@ Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-revie
   neither pair is present, it's a file-level comment.
 - **`viewed` attribute:** Set to `true` for all files (the AI "viewed" them all).
 - **`path` on renames:** For renamed files (`change-type="renamed"`), `path` is the **new** path.
-- **`change-type` values:** `added`, `modified`, `deleted`, `renamed`.
+- **`change-type` values:** `added`, `modified`, `deleted`, `renamed`, `copied`. For copied
+  files (`change-type="copied"`), `path` is the **new** path, like renames.
 - **`original-code`:** Must be the exact text at the referenced lines, copied verbatim from the
   file content. The applying agent uses text matching to locate the replacement target.
 - **`author`:** Set to your model name on every comment you generate (e.g., "Claude Sonnet 4.6").

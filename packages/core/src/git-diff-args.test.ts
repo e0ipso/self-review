@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { formatGitDiffArgs, normalizeGitDiffArgs, tokenizeGitDiffArgs } from './git-diff-args';
+import {
+  findUnsupportedGitDiffOptions,
+  formatGitDiffArgs,
+  normalizeGitDiffArgs,
+  tokenizeGitDiffArgs,
+} from './git-diff-args';
 
 describe('normalizeGitDiffArgs', () => {
   it('returns unchanged when no positional path args', () => {
@@ -125,5 +130,78 @@ describe('formatGitDiffArgs', () => {
     for (const args of cases) {
       expect(tokenizeGitDiffArgs(formatGitDiffArgs(args))).toEqual(args);
     }
+  });
+});
+
+// R06: output formats the parser cannot consume must be named, not turned
+// into an empty review.
+describe('findUnsupportedGitDiffOptions', () => {
+  it.each([
+    ['--stat'],
+    ['--stat=120'],
+    ['--numstat'],
+    ['--shortstat'],
+    ['--dirstat'],
+    ['--dirstat=lines'],
+    ['--summary'],
+    ['--name-only'],
+    ['--name-status'],
+    ['--raw'],
+    ['--patch-with-stat'],
+    ['--patch-with-raw'],
+    ['--compact-summary'],
+    ['--word-diff'],
+    ['--word-diff=porcelain'],
+    ['--color-words'],
+    ['--color-words=.'],
+    ['--color-moved'],
+    ['--no-patch'],
+    ['-s'],
+    ['--exit-code'],
+    ['--quiet'],
+    ['--output=out.patch'],
+    ['--line-prefix=> '],
+  ])('names %s', flag => {
+    expect(findUnsupportedGitDiffOptions(['--staged', flag, 'HEAD'])).toEqual([flag]);
+  });
+
+  it('names an option whose value is a separate argument by its spelling', () => {
+    expect(findUnsupportedGitDiffOptions(['--output', 'out.patch'])).toEqual(['--output']);
+    expect(findUnsupportedGitDiffOptions(['--word-diff-regex', '.'])).toEqual([
+      '--word-diff-regex',
+    ]);
+  });
+
+  it('accepts the options the parser consumes', () => {
+    expect(
+      findUnsupportedGitDiffOptions([
+        '--staged',
+        '-U5',
+        '-M',
+        '-C',
+        '--find-copies-harder',
+        '--binary',
+        '--no-renames',
+        '--diff-filter=AM',
+        '-S',
+        'needle',
+        'main..feature',
+      ])
+    ).toEqual([]);
+  });
+
+  it('does not read an option value as a flag', () => {
+    expect(findUnsupportedGitDiffOptions(['-S', '--stat', 'HEAD'])).toEqual([]);
+  });
+
+  it('does not read pathspecs after -- as flags', () => {
+    expect(findUnsupportedGitDiffOptions(['HEAD', '--', '--stat'])).toEqual([]);
+  });
+
+  it('reports every offending flag in argument order', () => {
+    expect(findUnsupportedGitDiffOptions(['--numstat', 'HEAD', '--name-only'])).toEqual([
+      '--numstat',
+      '--name-only',
+    ]);
   });
 });

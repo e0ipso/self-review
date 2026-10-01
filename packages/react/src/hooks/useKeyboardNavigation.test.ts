@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { generateLabels, isTextInputFocused } from './useKeyboardNavigation';
+import React from 'react';
+import { describe, it, expect, afterEach } from 'vitest';
+import { act, fireEvent, renderHook } from '@testing-library/react';
+import { generateLabels, isTextInputFocused, useKeyboardNavigation } from './useKeyboardNavigation';
+import { DiffNavigationProvider } from '../context/DiffNavigationContext';
+import { installBrowserApiStubs } from '../test-helpers';
+
+installBrowserApiStubs();
 
 describe('generateLabels', () => {
   it('returns empty array for zero count', () => {
@@ -82,5 +88,61 @@ describe('isTextInputFocused', () => {
     button.focus();
     expect(isTextInputFocused()).toBe(false);
     document.body.removeChild(button);
+  });
+});
+
+describe('useKeyboardNavigation f hint', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function composer(): HTMLTextAreaElement {
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-testid', 'comment-input');
+    const textarea = document.createElement('textarea');
+    wrapper.appendChild(textarea);
+    document.body.appendChild(wrapper);
+    return textarea;
+  }
+
+  it('leaves focus on the composer the hint opened, not the first one in the document', async () => {
+    // A composer already open higher up the page.
+    composer();
+
+    const section = document.createElement('div');
+    section.setAttribute('data-file-path', 'src/b.ts');
+    const line = document.createElement('div');
+    line.setAttribute('data-line-type', 'addition');
+    line.setAttribute('data-line-number', '7');
+    line.setAttribute('data-line-side', 'new');
+    line.getBoundingClientRect = () => new DOMRect(10, 10, 100, 20);
+    section.appendChild(line);
+    document.body.appendChild(section);
+
+    // Stands in for the line's composer mounting and focusing itself, as
+    // ComposerCore does on mount.
+    let opened: HTMLTextAreaElement | null = null;
+    const onTrigger = () => {
+      opened = composer();
+      opened.focus();
+    };
+    document.addEventListener('trigger-line-comment', onTrigger);
+
+    renderHook(() => useKeyboardNavigation(), {
+      wrapper: ({ children }) => React.createElement(DiffNavigationProvider, null, children),
+    });
+
+    act(() => {
+      fireEvent.keyDown(document, { key: 'f' });
+    });
+    act(() => {
+      fireEvent.keyDown(document, { key: 'a' });
+    });
+    // Let any animation-frame work scheduled by the hint run.
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)));
+
+    document.removeEventListener('trigger-line-comment', onTrigger);
+    expect(opened).not.toBeNull();
+    expect(document.activeElement).toBe(opened);
   });
 });

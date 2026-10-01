@@ -312,6 +312,18 @@ Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here
 | `suggestion:apply`              | Renderer → Main (invoke) | `SuggestionApplyRequest` / `SuggestionApplyOutcome` | Write one suggestion's proposal into the reviewed working file       |
 | `suggestion:choose-destination` | Renderer → Main (invoke) | (none) / `ApplyDestinationOutcome`                  | Ask the reviewer to name the directory applies write into            |
 
+Load diagnostics: `DiffLoadPayload.diagnostics` (optional `string[]`) carries what the git loader
+could not load faithfully — a user-supplied `git diff` output format the parser does not consume
+(`--stat`, `--name-only`, `--word-diff`, ... — rejected before git runs, naming the flag) or output
+the parser cannot represent (`diff --cc` merge-conflict sections, hunks whose lines do not match
+their `@@` counts). Every `git diff` invocation is forced into parser shape regardless of user
+config (`-c color.ui=never`, `--no-color`, `--no-ext-diff`, `--no-textconv`, explicit `a/`/`b/`
+prefixes; see `PARSER_COMPATIBLE_*` in `packages/core/src/git.ts`), `GIT binary patch` is a binary
+change, `copy from`/`copy to` yields the `'copied'` change type, and the loader keeps one entry per
+path when a tracked change and a synthetic untracked file collide (tracked wins). The renderer shows
+diagnostics instead of "No changes found" when nothing loaded, and as a banner above the files
+otherwise; the field is omitted on a clean load.
+
 Remote payload fields: `DiffLoadPayload.remote` (`RemoteSessionInfo`: URL, base/head SHAs, forge,
 thread-sync availability, and `temporaryClone`, true when the diff was materialized into a throwaway
 clone rather than one the user already had) is present only in a remote PR/MR session.

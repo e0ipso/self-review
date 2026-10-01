@@ -19,6 +19,8 @@ export default defineConfig([
       '**/.sift-worktrees/**',
       '**/build/**',
       '**/.webpack/**',
+      // Audit evidence (probe scripts) is a historical record, like Prettier's docs/ exemption.
+      'docs/**',
       'eslint.config.*',
     ],
   },

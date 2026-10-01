@@ -114,6 +114,19 @@ function mergeInitialConfig(initialConfig: Partial<AppConfig> | undefined): AppC
   return merged;
 }
 
+/**
+ * CSS custom property carrying the configured `font-size` (in px) on the
+ * `.self-review` root. Diff code text reads it (see `.sr-diff-code` in
+ * styles.css), so the name is part of the styling contract.
+ */
+export const FONT_SIZE_CSS_VAR = '--sr-font-size';
+
+// `font-size` arrives from YAML or an embedder prop unchecked beyond being a
+// number, which still admits 0, negatives, NaN and Infinity (`.nan`, `.inf`).
+function resolveFontSize(fontSize: number): number {
+  return Number.isFinite(fontSize) && fontSize > 0 ? fontSize : defaultConfig.fontSize;
+}
+
 export function ConfigProvider({
   children,
   initialConfig,
@@ -206,7 +219,16 @@ export function ConfigProvider({
         portalContainer,
       }}
     >
-      <div ref={wrapperCallbackRef} className='self-review' style={{ display: 'contents' }}>
+      <div
+        ref={wrapperCallbackRef}
+        className='self-review'
+        style={
+          {
+            display: 'contents',
+            [FONT_SIZE_CSS_VAR]: `${resolveFontSize(config.fontSize)}px`,
+          } as React.CSSProperties
+        }
+      >
         {children}
       </div>
     </ConfigContext.Provider>

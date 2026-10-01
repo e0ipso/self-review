@@ -61,7 +61,8 @@ export default function FileTree() {
   const filteredFiles = useMemo(() => {
     if (!searchQuery.trim()) return diffFiles;
     const query = searchQuery.toLowerCase();
-    return diffFiles.filter(file => file.newPath.toLowerCase().includes(query));
+    // A deleted file has an empty newPath; match on the path the tree displays.
+    return diffFiles.filter(file => (file.newPath || file.oldPath).toLowerCase().includes(query));
   }, [diffFiles, searchQuery]);
 
   // Ordering/annotation layer: flat mode (or no guide) yields a single

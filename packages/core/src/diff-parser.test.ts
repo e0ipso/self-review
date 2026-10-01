@@ -2,7 +2,7 @@
 // Comprehensive unit tests for diff-parser module
 
 import { describe, it, expect } from 'vitest';
-import { parseDiff } from './diff-parser';
+import { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
 import type { DiffFile, ChangeType } from './types';
 
 describe('parseDiff', () => {
@@ -569,5 +569,308 @@ index abc123..def456 100644
         true
       );
     });
+  });
+});
+
+// R06: the parser must neither invent lines nor silently drop supported Git
+// output. These fixtures are the shapes real `git diff` emits.
+describe('parseDiffWithDiagnostics', () => {
+  describe('trailing newline', () => {
+    it('does not turn the final newline of real git output into a context line', () => {
+      const diff = [
+        'diff --git a/f.txt b/f.txt',
+        'index 3367afd..3e75765 100644',
+        '--- a/f.txt',
+        '+++ b/f.txt',
+        '@@ -1 +1 @@',
+        '-old',
+        '+new',
+        '',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(diagnostics).toEqual([]);
+      expect(files).toHaveLength(1);
+      expect(files[0].hunks[0].lines).toEqual([
+        { type: 'deletion', oldLineNumber: 1, newLineNumber: null, content: 'old' },
+        { type: 'addition', oldLineNumber: null, newLineNumber: 1, content: 'new' },
+      ]);
+    });
+
+    it('keeps the no-newline marker working next to a trailing newline', () => {
+      const diff = [
+        'diff --git a/f.txt b/f.txt',
+        '--- a/f.txt',
+        '+++ b/f.txt',
+        '@@ -1 +1 @@',
+        '-old',
+        '\\ No newline at end of file',
+        '+new',
+        '',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(diagnostics).toEqual([]);
+      expect(files[0].hunks[0].lines).toHaveLength(2);
+    });
+  });
+
+  describe('hunk accounting', () => {
+    it('reports a hunk that ends before its declared counts are met', () => {
+      const diff = [
+        'diff --git a/f.txt b/f.txt',
+        '--- a/f.txt',
+        '+++ b/f.txt',
+        '@@ -1,2 +1,2 @@',
+        ' only one line',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(files).toHaveLength(1);
+      expect(files[0].hunks[0].lines).toHaveLength(1);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toContain('f.txt');
+      expect(diagnostics[0]).toContain('@@ -1,2 +1,2 @@');
+    });
+
+    it('does not treat an unrecognized line inside a hunk as context', () => {
+      const diff = [
+        'diff --git a/f.txt b/f.txt',
+        '--- a/f.txt',
+        '+++ b/f.txt',
+        '@@ -1,2 +1,2 @@',
+        ' one',
+        'garbage without a prefix',
+        ' two',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(files[0].hunks[0].lines.map(line => line.content)).toEqual(['one', 'two']);
+      expect(diagnostics.some(d => d.includes('garbage without a prefix'))).toBe(true);
+    });
+
+    it('does not treat lines beyond the declared counts as context', () => {
+      const diff = [
+        'diff --git a/f.txt b/f.txt',
+        '--- a/f.txt',
+        '+++ b/f.txt',
+        '@@ -1 +1 @@',
+        '-old',
+        '+new',
+        ' extra context the header never declared',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(files[0].hunks[0].lines).toHaveLength(2);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toContain('f.txt');
+    });
+
+    it('accepts an empty line inside an open hunk as an empty context line, as git apply does', () => {
+      const diff = [
+        'diff --git a/f.txt b/f.txt',
+        '--- a/f.txt',
+        '+++ b/f.txt',
+        '@@ -1,3 +1,3 @@',
+        ' one',
+        '',
+        '-three',
+        '+THREE',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(diagnostics).toEqual([]);
+      expect(files[0].hunks[0].lines.map(line => [line.type, line.content])).toEqual([
+        ['context', 'one'],
+        ['context', ''],
+        ['deletion', 'three'],
+        ['addition', 'THREE'],
+      ]);
+    });
+
+    it('reports a hunk header it cannot parse instead of silently dropping it', () => {
+      const diff = [
+        'diff --git a/f.txt b/f.txt',
+        '--- a/f.txt',
+        '+++ b/f.txt',
+        '@@ invalid hunk header',
+        '+added line',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(files).toEqual([]);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toContain('@@ invalid hunk header');
+    });
+  });
+
+  describe('binary patches', () => {
+    it('recognizes a GIT binary patch (--binary) as a binary modification', () => {
+      const diff = [
+        'diff --git a/image.png b/image.png',
+        'index 5f6c3b0..9a1e2d4 100644',
+        'GIT binary patch',
+        'literal 12',
+        'Tc${NkU}WL~0ssI2',
+        '',
+        'literal 11',
+        'Sc${NkU}WL~0RR91',
+        '',
+        'diff --git a/after.txt b/after.txt',
+        '--- a/after.txt',
+        '+++ b/after.txt',
+        '@@ -1 +1 @@',
+        '-a',
+        '+b',
+        '',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(diagnostics).toEqual([]);
+      expect(files.map(file => file.newPath)).toEqual(['image.png', 'after.txt']);
+      expect(files[0]).toMatchObject({ isBinary: true, changeType: 'modified', hunks: [] });
+      expect(files[1].hunks[0].lines).toHaveLength(2);
+    });
+  });
+
+  describe('copies', () => {
+    it('reports an exact copy as a copied file', () => {
+      const diff = [
+        'diff --git a/src/a.ts b/src/b.ts',
+        'similarity index 100%',
+        'copy from src/a.ts',
+        'copy to src/b.ts',
+        '',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(diagnostics).toEqual([]);
+      expect(files).toHaveLength(1);
+      expect(files[0]).toMatchObject({
+        changeType: 'copied',
+        oldPath: 'src/a.ts',
+        newPath: 'src/b.ts',
+        hunks: [],
+      });
+    });
+
+    it('labels an edited copy as copied and keeps its hunks', () => {
+      const diff = [
+        'diff --git a/src/a.ts b/src/b.ts',
+        'similarity index 80%',
+        'copy from src/a.ts',
+        'copy to src/b.ts',
+        'index 1111111..2222222 100644',
+        '--- a/src/a.ts',
+        '+++ b/src/b.ts',
+        '@@ -1,2 +1,2 @@',
+        ' same',
+        '-old',
+        '+new',
+        '',
+      ].join('\n');
+
+      const { files } = parseDiffWithDiagnostics(diff);
+
+      expect(files[0].changeType).toBe('copied');
+      expect(files[0].oldPath).toBe('src/a.ts');
+      expect(files[0].newPath).toBe('src/b.ts');
+      expect(files[0].hunks).toHaveLength(1);
+    });
+
+    it('decodes quoted copy paths', () => {
+      const diff = [
+        'diff --git "a/caf\\303\\251.ts" "b/copy caf\\303\\251.ts"',
+        'similarity index 100%',
+        'copy from "caf\\303\\251.ts"',
+        'copy to "copy caf\\303\\251.ts"',
+      ].join('\n');
+
+      const { files } = parseDiffWithDiagnostics(diff);
+
+      expect(files[0].oldPath).toBe('café.ts');
+      expect(files[0].newPath).toBe('copy café.ts');
+    });
+  });
+
+  describe('combined (merge conflict) output', () => {
+    const CONFLICT = [
+      'diff --cc conflict.txt',
+      'index 2e65efe,7898192..0000000',
+      '--- a/conflict.txt',
+      '+++ b/conflict.txt',
+      '@@@ -1,1 -1,1 +1,5 @@@',
+      '++<<<<<<< HEAD',
+      ' +ours',
+      '++=======',
+      '+ theirs',
+      '++>>>>>>> branch',
+    ];
+
+    it('reports a diff --cc section as unsupported instead of merging it into the previous file', () => {
+      const diff = [
+        'diff --git a/ok.txt b/ok.txt',
+        '--- a/ok.txt',
+        '+++ b/ok.txt',
+        '@@ -1 +1 @@',
+        '-a',
+        '+b',
+        ...CONFLICT,
+        '',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(files.map(file => file.newPath)).toEqual(['ok.txt']);
+      expect(files[0].hunks[0].lines).toHaveLength(2);
+      expect(diagnostics).toEqual([
+        'conflict.txt: combined (merge conflict) diff output is not supported',
+      ]);
+    });
+
+    it('reports a review made only of combined output rather than parsing it as empty', () => {
+      const { files, diagnostics } = parseDiffWithDiagnostics(
+        ['diff --combined conflict.txt', ...CONFLICT.slice(1), ''].join('\n')
+      );
+
+      expect(files).toEqual([]);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toContain('conflict.txt');
+    });
+
+    it('resumes normal parsing at the next diff --git header', () => {
+      const diff = [
+        ...CONFLICT,
+        'diff --git a/after.txt b/after.txt',
+        '--- a/after.txt',
+        '+++ b/after.txt',
+        '@@ -1 +1 @@',
+        '-a',
+        '+b',
+        '',
+      ].join('\n');
+
+      const { files, diagnostics } = parseDiffWithDiagnostics(diff);
+
+      expect(files.map(file => file.newPath)).toEqual(['after.txt']);
+      expect(diagnostics).toHaveLength(1);
+    });
+  });
+
+  it('parseDiff returns the same files and discards the diagnostics', () => {
+    const diff = ['diff --cc conflict.txt', '@@@ -1,1 -1,1 +1,5 @@@', '++<<<<<<< HEAD', ''].join(
+      '\n'
+    );
+
+    expect(parseDiff(diff)).toEqual(parseDiffWithDiagnostics(diff).files);
   });
 });
