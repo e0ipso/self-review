@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
+import { useLazyFileContent } from './useLazyFileContent';
 import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
-import { useAdapter } from '../../context/ReviewAdapterContext';
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import {
@@ -29,8 +29,7 @@ export default function FileSection({
   expanded: controlledExpanded,
   onToggleExpanded,
 }: FileSectionProps) {
-  const { toggleViewed, getCommentsForFile, files, diffSource, updateFileHunks } = useReview();
-  const adapter = useAdapter();
+  const { toggleViewed, getCommentsForFile, files, diffSource } = useReview();
   const { mode: guideMode, getFileDescription, getFileGroupIndex } = useGuide();
   const [internalExpanded, setInternalExpanded] = useState(true);
   const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
@@ -78,32 +77,13 @@ export default function FileSection({
     [filePath, registerFileElement, unregisterFileElement]
   );
 
-  // Lazy content loading state (for large-payload mode)
-  const [contentLoading, setContentLoading] = useState(false);
-  const [contentError, setContentError] = useState(false);
-
-  useEffect(() => {
-    if (!expanded || file.contentLoaded !== false || contentLoading) return;
-    if (!adapter?.loadFileContent) return;
-
-    setContentLoading(true);
-    setContentError(false);
-
-    adapter
-      .loadFileContent(filePath)
-      .then(hunks => {
-        if (hunks) {
-          updateFileHunks(filePath, hunks);
-        } else {
-          setContentError(true);
-        }
-        setContentLoading(false);
-      })
-      .catch(() => {
-        setContentError(true);
-        setContentLoading(false);
-      });
-  }, [expanded, file.contentLoaded, contentLoading, filePath, updateFileHunks, adapter]);
+  // On-demand content (large-payload mode): one request per expansion, a
+  // failure waits for Retry, and a stale answer is dropped.
+  const { state: contentLoad, retry: retryContentLoad } = useLazyFileContent({
+    file,
+    filePath,
+    expanded,
+  });
 
   // Expand context state
   const isExpandable = diffSource.type === 'git' && !file.isUntracked && !file.isBinary;
@@ -121,13 +101,17 @@ export default function FileSection({
       ? 'unified'
       : viewMode;
 
-  const handleCommentRange = (start: number, end: number, side: 'old' | 'new') => {
+  // Stable identities: the rendered Markdown/HTML view hands these to every
+  // block through context, so a new closure per render would re-render each
+  // block for nothing.
+  const handleCommentRange = useCallback((start: number, end: number, side: 'old' | 'new') => {
     setCommentRange({
       start: Math.min(start, end),
       end: Math.max(start, end),
       side,
     });
-  };
+  }, []);
+  const clearCommentRange = useCallback(() => setCommentRange(null), []);
 
   const { dragState, handleDragStart } = useDragSelection({
     sectionRef,
@@ -215,14 +199,13 @@ export default function FileSection({
             renderedTextMode,
             showImagePreview,
             showSvgPreview,
-            contentLoading,
-            contentError,
-            onRetry: () => setContentError(false),
+            contentLoad,
+            onRetry: retryContentLoad,
             commentRange,
             dragState,
             onDragStart: handleDragStart,
-            onCancelComment: () => setCommentRange(null),
-            onCommentSaved: () => setCommentRange(null),
+            onCancelComment: clearCommentRange,
+            onCommentSaved: clearCommentRange,
             onCommentRange: handleCommentRange,
             isExpandable,
             expandLoading,

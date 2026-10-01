@@ -14,6 +14,7 @@ import { FindBar } from './components/FindBar';
 import WelcomeScreen from './components/WelcomeScreen';
 import UpdateBanner from './components/UpdateBanner';
 import RemoteDriftBanner from '../../packages/react/src/components/RemoteDriftBanner';
+import ImportDiagnosticsBanner from '../../packages/react/src/components/ImportDiagnosticsBanner';
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
 import lightThemeCss from 'prismjs/themes/prism.css?raw';
@@ -143,6 +144,7 @@ function AppContent() {
         <div className='flex flex-col h-screen overflow-hidden bg-background text-foreground antialiased'>
           <UpdateBanner />
           <RemoteDriftBanner />
+          <ImportDiagnosticsBanner />
           <Toolbar onFinishReview={handleFinishReview} />
           <div className='flex-1 min-h-0'>
             <Layout />

@@ -2,7 +2,7 @@
 id: 3
 group: "xml-semantics"
 dependencies: [2]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - xml
@@ -20,14 +20,14 @@ Review XML roundtrips text byte-for-byte (numeric-looking strings, `false`/`0`, 
 XML parsing/serialization semantics (fast-xml-parser, XSD/xmllint) and TypeScript library design.
 
 ## Acceptance Criteria
-- [ ] `parseTagValue`/attribute value coercion is disabled; body `00123`, category `007`, reply `1e3`, original code `0`, proposed code `false` and empty strings survive save→parse unchanged (no `||` falsy fallbacks).
-- [ ] One bounded, single-pass encode/decode contract: the serializer emits CR, LF (in attributes) and TAB (in attributes) as numeric character references; the parser decodes exactly the five predefined entities plus decimal/hex numeric references in one pass, so literal text such as `&amp;#13;`, `&#13;` typed by a user, or `&lt;` survives a roundtrip exactly and nothing is decoded twice. Full HTML entity decoding is NOT enabled.
-- [ ] Output still validates against `self-review-v3.xsd` with xmllint, and a conformant parser (`xmllint --noout` plus a check with Python `xml.etree` or `xmllint --xpath`) recovers the same bytes for CRLF / lone CR / tab text and quote/backslash/newline filenames.
-- [ ] New `packages/core/src/anchor-validation.ts` exports a pure validator for line ranges (positive safe integers, start ≤ end, exactly one of old/new side, optional upper bound) used by the resume import here and by Apply in task 11.
-- [ ] Resume import rejects NaN/zero/negative/fractional/reversed/both-sided ranges and unsupported suggestion shapes: such comments are downgraded to file-level, non-actionable feedback (the suggestion's original/proposed text preserved in the body as fenced code, not as an actionable `Suggestion`), and a diagnostic is surfaced: written to stderr by hosts and carried in `ResumeLoadPayload` (new optional `importDiagnostics: string[]` in `@self-review/types`) and rendered by the React package as a non-blocking warning alongside the existing drift warning.
-- [ ] The serializer detects XML-illegal characters (C0 controls other than TAB/LF/CR, U+FFFE/U+FFFF, lone surrogates) in any text or attribute and throws a typed error identifying the comment/reply and field; it never strips them silently.
-- [ ] `xml-parser.ts` contains no `process.exit`; parse/validation failures throw a typed `ReviewXmlError` (with `.code` and human-readable message, never `[object Object]`). All callers (`src/main`, `packages/serve`, `packages/core` startup/fetch-comments) handle the error and keep their current user-visible behavior (stderr message + host decides exit). Schema diagnostics are formatted as readable strings.
-- [ ] Regression tests in `packages/core/src/xml-*.test.ts` cover every case above; `npm run test:unit` and `npm run typecheck:packages` pass. XSD files untouched unless an attribute change is unavoidable (if so, both copies stay byte-identical and `xsd-schema.test.ts` passes).
+- [x] `parseTagValue`/attribute value coercion is disabled; body `00123`, category `007`, reply `1e3`, original code `0`, proposed code `false` and empty strings survive save→parse unchanged (no `||` falsy fallbacks).
+- [x] One bounded, single-pass encode/decode contract: the serializer emits CR, LF (in attributes) and TAB (in attributes) as numeric character references; the parser decodes exactly the five predefined entities plus decimal/hex numeric references in one pass, so literal text such as `&amp;#13;`, `&#13;` typed by a user, or `&lt;` survives a roundtrip exactly and nothing is decoded twice. Full HTML entity decoding is NOT enabled.
+- [x] Output still validates against `self-review-v3.xsd` with xmllint, and a conformant parser (`xmllint --noout` plus a check with Python `xml.etree` or `xmllint --xpath`) recovers the same bytes for CRLF / lone CR / tab text and quote/backslash/newline filenames.
+- [x] New `packages/core/src/anchor-validation.ts` exports a pure validator for line ranges (positive safe integers, start ≤ end, exactly one of old/new side, optional upper bound) used by the resume import here and by Apply in task 11.
+- [x] Resume import rejects NaN/zero/negative/fractional/reversed/both-sided ranges and unsupported suggestion shapes: such comments are downgraded to file-level, non-actionable feedback (the suggestion's original/proposed text preserved in the body as fenced code, not as an actionable `Suggestion`), and a diagnostic is surfaced: written to stderr by hosts and carried in `ResumeLoadPayload` (new optional `importDiagnostics: string[]` in `@self-review/types`) and rendered by the React package as a non-blocking warning alongside the existing drift warning.
+- [x] The serializer detects XML-illegal characters (C0 controls other than TAB/LF/CR, U+FFFE/U+FFFF, lone surrogates) in any text or attribute and throws a typed error identifying the comment/reply and field; it never strips them silently.
+- [x] `xml-parser.ts` contains no `process.exit`; parse/validation failures throw a typed `ReviewXmlError` (with `.code` and human-readable message, never `[object Object]`). All callers (`src/main`, `packages/serve`, `packages/core` startup/fetch-comments) handle the error and keep their current user-visible behavior (stderr message + host decides exit). Schema diagnostics are formatted as readable strings.
+- [x] Regression tests in `packages/core/src/xml-*.test.ts` cover every case above; `npm run test:unit` and `npm run typecheck:packages` pass. XSD files untouched unless an attribute change is unavoidable (if so, both copies stay byte-identical and `xsd-schema.test.ts` passes).
 
 Use your internal Todo tool to track these and keep on track.
 

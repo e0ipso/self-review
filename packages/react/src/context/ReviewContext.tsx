@@ -64,6 +64,12 @@ export interface ReviewContextValue {
    */
   remoteDrift: RemoteDriftInfo | null;
   /**
+   * What the host's resume importer could not take as written, from
+   * `ResumeLoadPayload.importDiagnostics`: one line per comment downgraded
+   * to file-level feedback. Empty for a local review and a clean resume.
+   */
+  importDiagnostics: string[];
+  /**
    * Provenance of the remote PR/MR under review, or `null` for a local one.
    * Carries `temporaryClone`, which decides whether an apply has anywhere
    * to write (PRD Section 5.4.8).
@@ -76,6 +82,14 @@ export interface ReviewContextValue {
    * there are no files, and as a banner above the files otherwise.
    */
   diagnostics: string[];
+  /**
+   * Whether the host sent this session in large-payload mode
+   * (`DiffLoadPayload.isLargePayload`): files may arrive without hunks
+   * (`contentLoaded: false`) and are fetched one at a time on demand, so the
+   * viewer starts them collapsed. Exceeding either threshold (file count or
+   * total lines) sets it. `false` for static `initialFiles`.
+   */
+  isLargePayload: boolean;
   /**
    * Destination directory the reviewer named for this session's applies, as
    * the host reported it, or `null` while none has been named. Only a
@@ -356,6 +370,7 @@ function ReviewSessionProvider({
   const [resumedReview, setResumedReview] = useState<ResumeLoadPayload | null>(null);
   const [remote, setRemote] = useState<RemoteSessionInfo | null>(null);
   const [diagnostics, setDiagnostics] = useState<string[]>([]);
+  const [isLargePayload, setIsLargePayload] = useState(false);
   const [applyDestination, setApplyDestination] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState(() => nextSessionId++);
   const sessionIdRef = useRef(sessionId);
@@ -401,6 +416,7 @@ function ReviewSessionProvider({
       setDiffSource(payload.source);
       setRemote(payload.remote ?? null);
       setDiagnostics(payload.diagnostics ?? []);
+      setIsLargePayload(payload.isLargePayload === true);
       return;
     }
 
@@ -422,6 +438,7 @@ function ReviewSessionProvider({
     setDiffSource(payload.source);
     setRemote(payload.remote ?? null);
     setDiagnostics(payload.diagnostics ?? []);
+    setIsLargePayload(payload.isLargePayload === true);
     // A destination named for the previous session says nothing about
     // this review's files.
     setApplyDestination(null);
@@ -561,8 +578,10 @@ function ReviewSessionProvider({
         expandFileContext,
         updateFileHunks,
         remoteDrift: resumedReview?.remoteDrift ?? null,
+        importDiagnostics: resumedReview?.importDiagnostics ?? [],
         remote,
         diagnostics,
+        isLargePayload,
         applyDestination,
         setApplyDestination,
         sessionId,

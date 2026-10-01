@@ -357,11 +357,11 @@ The graph is acyclic. Task 24 depends on every other task; only its edges from l
 - ✔️ Task 06: React session initialization/update/replacement semantics (R17)
 - ✔️ Task 07: Comment editing integrity and small UI defects (R11 UI, R18, R19)
 
-### Phase 2: XML semantics and rendering foundations
+### ✅ Phase 2: XML semantics and rendering foundations
 **Parallel Tasks:**
-- Task 03: Lossless XML, anchor validation, library errors (R03) (depends on: 02)
-- Task 08: Stable Markdown components and parsed HTML positions (R08, R09) (depends on: 02)
-- Task 09: Explicit lazy-load states (R14 UI) (depends on: 05, 06)
+- ✔️ Task 03: Lossless XML, anchor validation, library errors (R03) (depends on: 02)
+- ✔️ Task 08: Stable Markdown components and parsed HTML positions (R08, R09) (depends on: 02)
+- ✔️ Task 09: Explicit lazy-load states (R14 UI) (depends on: 05, 06)
 
 ### Phase 3: Publication, isolation and budgets
 **Parallel Tasks:**

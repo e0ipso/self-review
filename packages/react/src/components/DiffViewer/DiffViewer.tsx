@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { useGuide } from '../../context/GuideContext';
@@ -11,11 +12,36 @@ import { DiffDiagnostics } from './DiffDiagnostics';
 import GuideOverviewPanel from './GuideOverviewPanel';
 import GuideChapterDivider from './GuideChapterDivider';
 
-/** When the file count exceeds this threshold, all sections start collapsed. */
+/**
+ * When the file count exceeds this threshold, all sections start collapsed.
+ * A large-payload session starts collapsed whatever its file count.
+ */
 export const COLLAPSE_THRESHOLD = 50;
 
+/** Record `defaultExpanded` for every path in `diffFiles` that `prev` lacks. */
+function withDefaultExpansion(
+  prev: Record<string, boolean>,
+  diffFiles: DiffFile[],
+  defaultExpanded: boolean
+): Record<string, boolean> {
+  let updated: Record<string, boolean> | null = null;
+  for (const file of diffFiles) {
+    const filePath = file.newPath || file.oldPath;
+    if (filePath in prev) continue;
+    updated ??= { ...prev };
+    updated[filePath] = defaultExpanded;
+  }
+  return updated ?? prev;
+}
+
 export default function DiffViewer() {
-  const { diffFiles, diffSource, diagnostics = [] } = useReview();
+  const {
+    diffFiles,
+    diffSource,
+    diagnostics = [],
+    isLargePayload = false,
+    sessionId,
+  } = useReview();
   const { config } = useConfig();
   const { guide, mode: guideMode } = useGuide();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,30 +57,36 @@ export default function DiffViewer() {
   const totalStops = displaySections.filter(section => section.header).length;
   const implicitLast = Boolean(displaySections[displaySections.length - 1]?.header?.implicit);
 
-  // Initialize files as expanded (small sets) or collapsed (large sets)
-  const [expandedState, setExpandedState] = useState<Record<string, boolean>>(() => {
-    const defaultExpanded = diffFiles.length <= COLLAPSE_THRESHOLD;
-    const initial: Record<string, boolean> = {};
-    diffFiles.forEach(file => {
-      initial[file.newPath || file.oldPath] = defaultExpanded;
-    });
-    return initial;
-  });
+  // Sections start expanded for a small review and collapsed for a large
+  // one. Large means the host sent the session in large-payload mode, which
+  // either threshold (file count or total lines) triggers: there every
+  // expanded section fetches its own content, so a handful of huge files
+  // must not all be opened and fetched at once. Too many files to show at
+  // once collapses them too.
+  const defaultExpanded = !isLargePayload && diffFiles.length <= COLLAPSE_THRESHOLD;
 
-  // Update expanded state when diffFiles changes
+  const [expandedState, setExpandedState] = useState<Record<string, boolean>>(() =>
+    withDefaultExpansion({}, diffFiles, defaultExpanded)
+  );
+
+  // A new session starts from its own payload mode, not from the expansion
+  // the previous review's files were left in. Reset during render so no
+  // section of the new session is ever committed (and fetched) expanded
+  // under the old state.
+  const [expansionSessionId, setExpansionSessionId] = useState(sessionId);
+  if (expansionSessionId !== sessionId) {
+    setExpansionSessionId(sessionId);
+    setExpandedState({});
+  }
+
+  // A path seen for the first time keeps the default it was shown with, so a
+  // later update that changes the default does not fold or unfold it.
   useEffect(() => {
-    setExpandedState(prev => {
-      const defaultExpanded = diffFiles.length <= COLLAPSE_THRESHOLD;
-      const updated = { ...prev };
-      diffFiles.forEach(file => {
-        const filePath = file.newPath || file.oldPath;
-        if (!(filePath in updated)) {
-          updated[filePath] = defaultExpanded;
-        }
-      });
-      return updated;
-    });
-  }, [diffFiles]);
+    setExpandedState(prev => withDefaultExpansion(prev, diffFiles, defaultExpanded));
+  }, [diffFiles, defaultExpanded]);
+
+  // Until that effect records it, a path is shown with the current default.
+  const isExpanded = (filePath: string) => expandedState[filePath] ?? defaultExpanded;
 
   // Listen for toggle-all-sections custom events
   useEffect(() => {
@@ -90,7 +122,7 @@ export default function DiffViewer() {
   }, [expandedState]);
 
   const handleToggleExpanded = (filePath: string) => {
-    const isCurrentlyExpanded = expandedState[filePath];
+    const isCurrentlyExpanded = isExpanded(filePath);
 
     // Compensate scroll position when collapsing a file above the viewport
     if (isCurrentlyExpanded) {
@@ -117,7 +149,7 @@ export default function DiffViewer() {
 
     setExpandedState(prev => ({
       ...prev,
-      [filePath]: !prev[filePath],
+      [filePath]: !(prev[filePath] ?? defaultExpanded),
     }));
   };
 
@@ -163,7 +195,7 @@ export default function DiffViewer() {
                 <FileSection
                   file={file}
                   viewMode={config.diffView}
-                  expanded={expandedState[filePath]}
+                  expanded={isExpanded(filePath)}
                   onToggleExpanded={handleToggleExpanded}
                 />
               </PreviewErrorBoundary>

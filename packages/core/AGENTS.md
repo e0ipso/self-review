@@ -29,8 +29,11 @@ src/
 ├── types.ts              # Re-exports from @self-review/types
 ├── diff-parser.ts        # Unified diff → DiffFile[]
 ├── git.ts                # child_process wrappers for git
-├── xml-serializer.ts     # ReviewState → XML (validates against XSD)
-├── xml-parser.ts         # XML → ReviewState
+├── xml-serializer.ts     # ReviewState → XML (validates against XSD; refuses XML-illegal chars)
+├── xml-parser.ts         # XML → ReviewState (lossless; downgrades bad anchors with diagnostics)
+├── xml-text.ts           # The one escape/decode contract (CR/LF/TAB as char refs, single pass)
+├── xml-errors.ts         # ReviewXmlError / XmlIllegalCharacterError (library never process.exits)
+├── anchor-validation.ts  # validateLineAnchor / validateLineRange, shared by resume import and Apply
 ├── config.ts             # YAML config loading & merging
 ├── synthetic-diff.ts     # Diffs for non-git directories
 ├── directory-scanner.ts  # File/directory scanning

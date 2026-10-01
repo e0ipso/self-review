@@ -2,7 +2,7 @@
 id: 9
 group: "react-loading"
 dependencies: [5, 6]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - react
@@ -19,11 +19,11 @@ Lazy file content uses explicit idle/loading/loaded/error states; a failed reque
 React hooks/effects and TypeScript.
 
 ## Acceptance Criteria
-- [ ] `FileSection.tsx:68–89` lazy-load effect guards on the error state; a rejected load sets `error` and makes no further request until user-directed Retry. Test: a persistently rejecting adapter is called exactly once until Retry is clicked, then once more.
-- [ ] Results arriving after unmount or after the session/file was replaced are ignored (generation token); test with a deferred promise resolved after unmount/replacement.
-- [ ] Initial expansion is based on payload mode (`isLargePayload`), not just file count (`DiffViewer.tsx:31`): in line-count-triggered large mode with ≤50 files, files start collapsed and no content requests are issued until a file is expanded/navigated to. Test with a large-mode payload of a few files.
-- [ ] Error UI shows a Retry button (shadcn `Button`) and an actionable message.
-- [ ] `npm run test:unit` and `npm run test:e2e` pass.
+- [x] `FileSection.tsx:68–89` lazy-load effect guards on the error state; a rejected load sets `error` and makes no further request until user-directed Retry. Test: a persistently rejecting adapter is called exactly once until Retry is clicked, then once more.
+- [x] Results arriving after unmount or after the session/file was replaced are ignored (generation token); test with a deferred promise resolved after unmount/replacement.
+- [x] Initial expansion is based on payload mode (`isLargePayload`), not just file count (`DiffViewer.tsx:31`): in line-count-triggered large mode with ≤50 files, files start collapsed and no content requests are issued until a file is expanded/navigated to. Test with a large-mode payload of a few files.
+- [x] Error UI shows a Retry button (shadcn `Button`) and an actionable message.
+- [x] `npm run test:unit` and `npm run test:e2e` pass.
 
 Use your internal Todo tool to track these and keep on track.
 

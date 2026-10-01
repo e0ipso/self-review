@@ -43,6 +43,8 @@ export interface ReviewSession {
   resumeComments: ReviewComment[];
   resumeViewedFiles: string[];
   resumeRemoteDrift: RemoteDriftInfo | null;
+  /** Import diagnostics from the resumed document; see `ResumeLoadPayload`. */
+  resumeImportDiagnostics: string[];
   /**
    * Destination directory the user named for this session's applies, or
    * null when none has been named. Only a temporary-clone remote review
@@ -62,6 +64,7 @@ export function createReviewSession(): ReviewSession {
     resumeComments: [],
     resumeViewedFiles: [],
     resumeRemoteDrift: null,
+    resumeImportDiagnostics: [],
     applyDestinationRoot: null,
   };
 }
@@ -402,7 +405,8 @@ export function getResumeLoad(session: ReviewSession): ResumeLoadPayload | null 
   if (
     session.resumeComments.length > 0 ||
     session.resumeViewedFiles.length > 0 ||
-    session.resumeRemoteDrift !== null
+    session.resumeRemoteDrift !== null ||
+    session.resumeImportDiagnostics.length > 0
   ) {
     const payload: ResumeLoadPayload = {
       comments: session.resumeComments,
@@ -410,6 +414,9 @@ export function getResumeLoad(session: ReviewSession): ResumeLoadPayload | null 
     };
     if (session.resumeRemoteDrift !== null) {
       payload.remoteDrift = session.resumeRemoteDrift;
+    }
+    if (session.resumeImportDiagnostics.length > 0) {
+      payload.importDiagnostics = session.resumeImportDiagnostics;
     }
     return payload;
   }

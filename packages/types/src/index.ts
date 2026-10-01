@@ -364,6 +364,17 @@ export interface ResumeLoadPayload {
    * `remote-head-sha` in a remote session. See {@link RemoteDriftInfo}.
    */
   remoteDrift?: RemoteDriftInfo;
+  /**
+   * What the resume importer could not take as written, one line per
+   * affected comment: a line range that is not a usable anchor (NaN, zero,
+   * negative, fractional, reversed, both-sided, incomplete) or a suggestion
+   * in a shape the app cannot apply. Each such comment is still in
+   * `comments`, downgraded to file-level feedback with its suggestion text
+   * folded into the body, so nothing is lost; the diagnostic names which
+   * comment and why. Absent or empty for a clean import. Rendered as a
+   * non-blocking warning, like `remoteDrift`.
+   */
+  importDiagnostics?: string[];
 }
 
 /**

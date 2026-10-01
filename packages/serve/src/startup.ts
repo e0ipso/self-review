@@ -150,10 +150,14 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
     }
     session.resumeComments = parsed.comments;
     session.resumeViewedFiles = parsed.viewedFiles;
+    session.resumeImportDiagnostics = parsed.importDiagnostics;
     console.error(
       `[serve] Resumed ${parsed.comments.length} comments and ` +
         `${parsed.viewedFiles.length} viewed files from ${resumePath}`
     );
+    for (const diagnostic of parsed.importDiagnostics) {
+      console.error(`[serve] Resume import: ${diagnostic}`);
+    }
   }
 
   // Phase 5b (main.ts:337) — the walkthrough guide sidecar, discovered next

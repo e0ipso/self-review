@@ -2,7 +2,7 @@
 id: 8
 group: "react-previews"
 dependencies: [2]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - react
@@ -20,12 +20,12 @@ Comment drafts in rendered Markdown survive unrelated review updates because blo
 React component identity/memoization and HTML parsing with source positions (hast/parse5).
 
 ## Acceptance Criteria
-- [ ] Markdown block components passed to `react-markdown` are module-level (or once-memoized) stable types; per-render data (line ranges, comment actions, active composer) flows through React context or `node.position` data, not new closures in a component factory (`RenderedMarkdownView.tsx:538`, `FileSection.tsx:207–208`, `DiffContentArea.tsx:118`).
-- [ ] Test: type `unsaved draft` in a rendered-Markdown comment composer, then mark another file viewed, add another comment elsewhere, and change theme — the draft text remains (jsdom).
-- [ ] The regex HTML tokenizer (`RenderedMarkdownView.tsx:182–219`) is deleted; positions come from a real parse (e.g. `hast-util-from-html`/`rehype-parse`/`parse5` with location info) declared as an explicit dependency of `@self-review/react` in its `package.json` (not relied on transitively).
-- [ ] Positions survive passive-content filtering (`packages/react/src/utils/passive-content.ts`) and rendering: comments on `<!-- <p>fake</p> -->\n<p>actual</p>` anchor to line 2; nested blocks/blockquotes, dropped `<form>`/`<script>`/`<template>` content, and repeated identical tags each anchor to their own source lines. Table-driven tests assert exact `newLineStart/newLineEnd`.
-- [ ] No active elements/event handlers are reintroduced, CSP is not widened, and existing passive-content tests pass.
-- [ ] `npm run test:unit`, `npm run typecheck:packages`, `npm run build:packages`, and `npm run test:e2e` pass.
+- [x] Markdown block components passed to `react-markdown` are module-level (or once-memoized) stable types; per-render data (line ranges, comment actions, active composer) flows through React context or `node.position` data, not new closures in a component factory (`RenderedMarkdownView.tsx:538`, `FileSection.tsx:207–208`, `DiffContentArea.tsx:118`).
+- [x] Test: type `unsaved draft` in a rendered-Markdown comment composer, then mark another file viewed, add another comment elsewhere, and change theme — the draft text remains (jsdom).
+- [x] The regex HTML tokenizer (`RenderedMarkdownView.tsx:182–219`) is deleted; positions come from a real parse (e.g. `hast-util-from-html`/`rehype-parse`/`parse5` with location info) declared as an explicit dependency of `@self-review/react` in its `package.json` (not relied on transitively).
+- [x] Positions survive passive-content filtering (`packages/react/src/utils/passive-content.ts`) and rendering: comments on `<!-- <p>fake</p> -->\n<p>actual</p>` anchor to line 2; nested blocks/blockquotes, dropped `<form>`/`<script>`/`<template>` content, and repeated identical tags each anchor to their own source lines. Table-driven tests assert exact `newLineStart/newLineEnd`.
+- [x] No active elements/event handlers are reintroduced, CSP is not widened, and existing passive-content tests pass.
+- [x] `npm run test:unit`, `npm run typecheck:packages`, `npm run build:packages`, and `npm run test:e2e` pass.
 
 Use your internal Todo tool to track these and keep on track.
 

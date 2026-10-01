@@ -314,13 +314,18 @@ async function initializeApp() {
 
     // Phase 5: Handle --resume-from if specified
     let resumeRemoteHeadSha: string | undefined;
+    let resumeImportDiagnostics: string[] = [];
     if (cliArgs.resumeFrom) {
+      // The parser reports; this host decides. A document that cannot be
+      // read is fatal here, with its message, exactly as before — the
+      // difference is that the decision is made in main, not in the library.
       try {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
         const parsed = parseReviewXml(cliArgs.resumeFrom);
         resumeComments = parsed.comments;
         resumeViewedFiles = parsed.viewedFiles;
         resumeRemoteHeadSha = parsed.remoteHeadSha;
+        resumeImportDiagnostics = parsed.importDiagnostics;
         console.error(
           '[main] Loaded',
           resumeComments.length,
@@ -328,8 +333,12 @@ async function initializeApp() {
           resumeViewedFiles.length,
           'viewed files from resume file'
         );
-      } catch {
-        console.error('[main] Error loading resume file');
+        for (const diagnostic of resumeImportDiagnostics) {
+          console.error(`[main] Resume import: ${diagnostic}`);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[main] Error loading resume file: ${message}`);
         clearTimeout(initTimeout);
         process.exit(1);
       }
@@ -369,8 +378,13 @@ async function initializeApp() {
     setDiffData(diffData);
     setConfigData(appConfig);
     setOutputPathInfo({ resolvedOutputPath: currentOutputPath, outputPathWritable });
-    if (resumeComments.length > 0 || resumeViewedFiles.length > 0 || remoteDrift !== null) {
-      setResumeData(resumeComments, resumeViewedFiles, remoteDrift);
+    if (
+      resumeComments.length > 0 ||
+      resumeViewedFiles.length > 0 ||
+      remoteDrift !== null ||
+      resumeImportDiagnostics.length > 0
+    ) {
+      setResumeData(resumeComments, resumeViewedFiles, remoteDrift, resumeImportDiagnostics);
     }
 
     // Phase 7: Register IPC handlers

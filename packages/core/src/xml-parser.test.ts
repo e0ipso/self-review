@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { parseReviewXmlString, parseReviewXml } from './xml-parser';
+import { ReviewXmlError } from './xml-errors';
 import { serializeReview } from './xml-serializer';
 import type { ReviewState, FileReviewState, ReviewComment } from './types';
 import { readFileSync } from 'fs';
@@ -374,16 +375,42 @@ describe('parseReviewXmlString', () => {
   });
 
   describe('error handling', () => {
-    it('exits on parsing errors for missing root element', () => {
+    it('throws a typed error, never exiting, when the root element is missing', () => {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <root>
   <file path="test.ts" />
 </root>`;
       const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      parseReviewXmlString(xml);
+      let caught: unknown;
+      try {
+        parseReviewXmlString(xml);
+      } catch (error) {
+        caught = error;
+      }
 
-      expect(mockExit).toHaveBeenCalledWith(1);
+      expect(caught).toBeInstanceOf(ReviewXmlError);
+      expect((caught as ReviewXmlError).code).toBe('missing-root');
+      expect((caught as ReviewXmlError).message).toMatch(/missing <review> root element/);
+      expect(mockExit).not.toHaveBeenCalled();
+      mockExit.mockRestore();
+    });
+
+    it('throws a typed error with a readable message when the document is not XML', () => {
+      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      let caught: unknown;
+      try {
+        parseReviewXmlString('<review><file path="a.ts"><comment></review>');
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(ReviewXmlError);
+      expect((caught as ReviewXmlError).code).toBe('parse-failed');
+      expect((caught as ReviewXmlError).message).not.toContain('[object Object]');
+      expect((caught as ReviewXmlError).message.length).toBeGreaterThan(20);
+      expect(mockExit).not.toHaveBeenCalled();
       mockExit.mockRestore();
     });
 
@@ -508,15 +535,24 @@ describe('parseReviewXmlString', () => {
       expect(result.comments).toEqual([]);
     });
 
-    it('exits with error code on file read failure', () => {
+    it('throws a typed read error naming the path, never exiting, when the file cannot be read', () => {
       const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
       vi.mocked(readFileSync).mockImplementationOnce(() => {
         throw new Error('File not found');
       });
 
-      parseReviewXml('/nonexistent.xml');
+      let caught: unknown;
+      try {
+        parseReviewXml('/nonexistent.xml');
+      } catch (error) {
+        caught = error;
+      }
 
-      expect(mockExit).toHaveBeenCalledWith(1);
+      expect(caught).toBeInstanceOf(ReviewXmlError);
+      expect((caught as ReviewXmlError).code).toBe('read-failed');
+      expect((caught as ReviewXmlError).message).toContain('/nonexistent.xml');
+      expect((caught as ReviewXmlError).message).toContain('File not found');
+      expect(mockExit).not.toHaveBeenCalled();
       mockExit.mockRestore();
     });
   });
@@ -754,7 +790,7 @@ describe('parseReviewXmlString', () => {
               {
                 id: 'special',
                 filePath: 'src/test.ts',
-                lineRange: null,
+                lineRange: { side: 'new', start: 1, end: 1 },
                 body: 'Use <Component> with & "quotes" and \'apostrophes\'',
                 category: 'note',
                 suggestion: {
@@ -1550,6 +1586,264 @@ ${files}
       };
 
       expect(await serializeReview(rebuilt, '/tmp/test-review.xml')).toBe(xml);
+    });
+  });
+
+  describe('lossless text import', () => {
+    const wrap = (inner: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3" timestamp="2026-01-01T00:00:00Z" git-diff-args="--staged" repository="/repo">
+  <file path="target.txt" change-type="modified" viewed="false">
+${inner}
+  </file>
+</review>`;
+
+    it('keeps numeric- and boolean-looking text verbatim (no value coercion, no falsy fallbacks)', () => {
+      const result = parseReviewXmlString(
+        wrap(`    <comment new-line-start="1" new-line-end="1" author="0" remote-id="007">
+      <body>00123</body>
+      <category>007</category>
+      <suggestion>
+        <original-code>0</original-code>
+        <proposed-code>false</proposed-code>
+      </suggestion>
+      <reply><body>1e3</body></reply>
+      <reply><body></body></reply>
+    </comment>`)
+      );
+
+      const [comment] = result.comments;
+      expect(comment.body).toBe('00123');
+      expect(comment.category).toBe('007');
+      expect(comment.suggestion).toEqual({ originalCode: '0', proposedCode: 'false' });
+      expect(comment.author).toBe('0');
+      expect(comment.remoteId).toBe('007');
+      expect(comment.replies?.map(r => r.body)).toEqual(['1e3', '']);
+      expect(result.importDiagnostics).toEqual([]);
+    });
+
+    it.each([
+      ['predefined entities', '&lt;a&gt; &amp; &quot;q&quot; &apos;s&apos;', `<a> & "q" 's'`],
+      ['numeric references for CR, LF and TAB', 'a&#13;&#10;b&#13;c&#9;d', 'a\r\nb\rc\td'],
+      ['hex references', '&#x41;&#x1F600;', 'A\u{1F600}'],
+      [
+        'a double-escaped literal, decoded exactly once',
+        '&amp;#13; &amp;lt; &amp;amp;',
+        '&#13; &lt; &amp;',
+      ],
+      ['an HTML named entity, left literal', '&nbsp;', '&nbsp;'],
+    ])('decodes %s in text and attributes', (_name, encoded, expected) => {
+      const result = parseReviewXmlString(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3" timestamp="t" git-diff-args="${encoded}" repository="/repo">
+  <file path="${encoded}" change-type="added" viewed="true">
+    <comment new-line-start="1" new-line-end="2" author="${encoded}" remote-id="${encoded}">
+      <body>${encoded}</body>
+      <category>${encoded}</category>
+      <suggestion>
+        <original-code>${encoded}</original-code>
+        <proposed-code>${encoded}</proposed-code>
+      </suggestion>
+      <attachment path="${encoded}" media-type="image/png" />
+      <reply author="${encoded}"><body>${encoded}</body></reply>
+    </comment>
+  </file>
+</review>`
+      );
+
+      const [comment] = result.comments;
+      expect(result.gitDiffArgs).toBe(expected);
+      expect(result.viewedFiles).toEqual([expected]);
+      expect(comment.filePath).toBe(expected);
+      expect(comment.body).toBe(expected);
+      expect(comment.category).toBe(expected);
+      expect(comment.author).toBe(expected);
+      expect(comment.remoteId).toBe(expected);
+      expect(comment.suggestion).toEqual({ originalCode: expected, proposedCode: expected });
+      expect(comment.attachments?.[0].fileName).toBe(expected);
+      expect(comment.replies?.[0]).toMatchObject({ author: expected, body: expected });
+    });
+  });
+
+  describe('anchor validation on import', () => {
+    const wrap = (comments: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3" timestamp="t" git-diff-args="" repository="/repo">
+  <file path="src/a.ts" change-type="modified" viewed="false">
+${comments}
+  </file>
+</review>`;
+
+    it.each([
+      ['NaN', 'new-line-start="abc" new-line-end="2"', /not a positive integer/],
+      ['zero', 'new-line-start="0" new-line-end="2"', /not a positive integer/],
+      ['negative', 'old-line-start="-1" old-line-end="2"', /not a positive integer/],
+      ['fractional', 'new-line-start="1.5" new-line-end="2"', /not a positive integer/],
+      ['reversed', 'new-line-start="9" new-line-end="4"', /reversed/],
+      [
+        'both-sided',
+        'old-line-start="1" old-line-end="2" new-line-start="1" new-line-end="2"',
+        /both old and new/,
+      ],
+      ['half-sided', 'new-line-start="3"', /incomplete/],
+    ])('downgrades a %s range to file-level and reports it', (_name, attrs, reason) => {
+      const result = parseReviewXmlString(
+        wrap(`    <comment ${attrs} author="bot" severity="major" confidence="high">
+      <body>Keep me</body>
+      <category>bug</category>
+      <reply author="me"><body>And me</body></reply>
+    </comment>`)
+      );
+
+      expect(result.comments).toHaveLength(1);
+      const [comment] = result.comments;
+      expect(comment.lineRange).toBeNull();
+      expect(comment.suggestion).toBeNull();
+      expect(comment).toMatchObject({
+        body: 'Keep me',
+        category: 'bug',
+        author: 'bot',
+        severity: 'major',
+        confidence: 'high',
+      });
+      expect(comment.replies?.map(r => r.body)).toEqual(['And me']);
+      expect(result.importDiagnostics).toHaveLength(1);
+      expect(result.importDiagnostics[0]).toMatch(/^src\/a\.ts: comment 1 anchor /);
+      expect(result.importDiagnostics[0]).toMatch(reason);
+      expect(result.importDiagnostics[0]).toMatch(/kept as file-level feedback$/);
+    });
+
+    it('folds the suggestion of an unanchorable comment into the body as fenced code, not an actionable Suggestion', () => {
+      const result = parseReviewXmlString(
+        wrap(`    <comment new-line-start="5" new-line-end="3">
+      <body>Swap these</body>
+      <category>bug</category>
+      <suggestion>
+        <original-code>const a = 1;
+const b = 2;</original-code>
+        <proposed-code>const b = 2;
+const a = 1;</proposed-code>
+      </suggestion>
+    </comment>`)
+      );
+
+      const [comment] = result.comments;
+      expect(comment.lineRange).toBeNull();
+      expect(comment.suggestion).toBeNull();
+      expect(comment.body).toBe(
+        [
+          'Swap these',
+          '',
+          '_Imported suggestion could not be anchored (new-line range is reversed (5 > 3))._',
+          'Original:',
+          '```',
+          'const a = 1;',
+          'const b = 2;',
+          '```',
+          'Proposed:',
+          '```',
+          'const b = 2;',
+          'const a = 1;',
+          '```',
+        ].join('\n')
+      );
+      expect(result.importDiagnostics).toEqual([
+        'src/a.ts: comment 1 anchor new-line range is reversed (5 > 3); kept as file-level feedback',
+      ]);
+    });
+
+    it('widens a fence that the code itself contains', () => {
+      const result = parseReviewXmlString(
+        wrap(`    <comment new-line-start="0" new-line-end="0">
+      <body>Docs</body>
+      <category>note</category>
+      <suggestion>
+        <original-code>\`\`\`js
+x
+\`\`\`</original-code>
+        <proposed-code>y</proposed-code>
+      </suggestion>
+    </comment>`)
+      );
+
+      const body = result.comments[0].body;
+      expect(body).toContain('\n````\n```js\nx\n```\n````\nProposed:\n```\ny\n```');
+    });
+
+    it.each([
+      [
+        'a suggestion without a line anchor',
+        '',
+        '<suggestion><original-code>a</original-code><proposed-code>b</proposed-code></suggestion>',
+        /suggestion has no line anchor/,
+      ],
+      [
+        'a suggestion missing proposed-code',
+        'new-line-start="1" new-line-end="1"',
+        '<suggestion><original-code>a</original-code></suggestion>',
+        /missing original-code or proposed-code/,
+      ],
+      [
+        'a suggestion missing original-code',
+        'new-line-start="1" new-line-end="1"',
+        '<suggestion><proposed-code>b</proposed-code></suggestion>',
+        /missing original-code or proposed-code/,
+      ],
+      [
+        'a suggestion whose code holds markup',
+        'new-line-start="1" new-line-end="1"',
+        '<suggestion><original-code>a<em>x</em></original-code><proposed-code>b</proposed-code></suggestion>',
+        /not plain text/,
+      ],
+    ])('downgrades %s, keeping its text in the body', (_name, attrs, suggestion, reason) => {
+      const result = parseReviewXmlString(
+        wrap(`    <comment ${attrs}>
+      <body>Hmm</body>
+      <category>note</category>
+      ${suggestion}
+    </comment>`)
+      );
+
+      const [comment] = result.comments;
+      expect(comment.suggestion).toBeNull();
+      expect(comment.body.startsWith('Hmm\n\n_Imported suggestion could not be anchored (')).toBe(
+        true
+      );
+      expect(result.importDiagnostics).toHaveLength(1);
+      expect(result.importDiagnostics[0]).toMatch(reason);
+    });
+
+    it('keeps valid anchors and suggestions untouched and numbers diagnostics per file', () => {
+      const result = parseReviewXmlString(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<review xmlns="urn:self-review:v3" timestamp="t" git-diff-args="" repository="/repo">
+  <file path="src/a.ts" change-type="modified" viewed="false">
+    <comment new-line-start="2" new-line-end="4">
+      <body>fine</body>
+      <category>note</category>
+      <suggestion><original-code>x</original-code><proposed-code>y</proposed-code></suggestion>
+    </comment>
+    <comment old-line-start="7" old-line-end="7" remote-id="t-42">
+      <body>also fine</body>
+      <category>note</category>
+    </comment>
+  </file>
+  <file path="src/b.ts" change-type="modified" viewed="false">
+    <comment><body>file-level</body><category>note</category></comment>
+    <comment new-line-start="x" new-line-end="2" remote-id="t-99"><body>bad</body><category>note</category></comment>
+  </file>
+</review>`
+      );
+
+      expect(result.comments.map(c => c.lineRange)).toEqual([
+        { side: 'new', start: 2, end: 4 },
+        { side: 'old', start: 7, end: 7 },
+        null,
+        null,
+      ]);
+      expect(result.comments[0].suggestion).toEqual({ originalCode: 'x', proposedCode: 'y' });
+      expect(result.comments[3].body).toBe('bad');
+      expect(result.importDiagnostics).toEqual([
+        'src/b.ts: comment 2 (remote-id t-99) anchor new-line-start is not a positive integer ("x"); kept as file-level feedback',
+      ]);
     });
   });
 

@@ -329,7 +329,11 @@ thread-sync availability, and `temporaryClone`, true when the diff was materiali
 clone rather than one the user already had) is present only in a remote PR/MR session.
 `ResumeLoadPayload.remoteDrift` (`RemoteDriftInfo`: recorded vs live head SHA, `drifted` flag) is
 present only when a resumed document recorded a `remote-head-sha` in a remote session; the renderer
-shows a non-blocking warning when `drifted` is true.
+shows a non-blocking warning when `drifted` is true. `ResumeLoadPayload.importDiagnostics` (one line
+per resumed comment whose line range was not a usable anchor or whose suggestion the app cannot
+apply) is present only when the resume importer downgraded something; such comments are kept as
+file-level feedback with the suggestion text folded into the body, the host prints each line to
+stderr, and the renderer shows them in a non-blocking banner beside the drift warning.
 
 ## Shared Types
 
@@ -488,6 +492,19 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   unit suite. `self-review-v1.xsd` and `self-review-v2.xsd` are both frozen for consumers of older
   documents, and must not be edited. The current version (v3) may gain optional attributes
   additively — every previously valid v3 document must remain valid against the amended XSD.
+- **Lossless text, one decoding pass.** `packages/core/src/xml-text.ts` is the only encode/decode
+  contract: the serializer writes CR as `&#13;` everywhere and LF/TAB as `&#10;`/`&#9;` in
+  attributes (a conformant parser would otherwise normalize them away), and the parser runs with
+  value coercion and library entity processing off and decodes exactly the five predefined entities
+  plus numeric references in a single pass. So `00123`, `007`, `1e3`, `0`, `false`, CRLF code,
+  tab-and-newline filenames and literal text like `&#13;` all round-trip byte for byte, and nothing
+  is decoded twice. Full HTML entity decoding is deliberately not enabled.
+- **Anchors are validated at import.** `packages/core/src/anchor-validation.ts` is the one
+  line-range validator (positive safe integers, exactly one side, start ≤ end, optional upper
+  bound), shared by the resume importer and Apply. A resumed comment with an unusable range, or a
+  suggestion the app cannot apply (no anchor, missing or non-text code elements), is downgraded to
+  file-level feedback rather than dropped or passed through: its suggestion text is folded into the
+  body as fenced code and a diagnostic is reported (see `ResumeLoadPayload.importDiagnostics`).
 - **Read any version, write v3.** The parser is namespace-blind, so `--resume-from` loads v1, v2 and
   v3 documents identically. The serializer always emits `urn:self-review:v3`, so a document that
   round-trips through the app is silently upgraded. This is deliberate: `self-review-v1.xsd` and
@@ -517,8 +534,13 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit / Discard
   / Cancel.
 - **XML must validate, with one stated exception.** The serializer validates output against the XSD
-  before writing. A schema violation writes the errors to stderr and exits 1, and no file is
-  written. A validator that fails to load is deliberately not fatal. `serializeReview` logs
+  before writing. A schema violation writes the errors to stderr and throws a `ReviewXmlError`
+  (`code: 'schema-invalid'`); the host exits 1 and no file is written. Library code in
+  `packages/core` never calls `process.exit`: `parseReviewXml` throws a `ReviewXmlError`
+  (`read-failed`, `parse-failed`, `missing-root`) and each host prints its message and decides. A
+  value holding a character XML 1.0 cannot represent throws `XmlIllegalCharacterError` naming the
+  comment and field before anything is written; it is never stripped silently. A validator that
+  fails to load is deliberately not fatal. `serializeReview` logs
   `[main] XML validation infrastructure failed: <message> - emitting XML without validation`, then
   returns the document, so `review.xml` is written unvalidated and the process exits 0. Losing a
   finished review to a broken xmllint build is the worse outcome. So a `review.xml` on disk proves

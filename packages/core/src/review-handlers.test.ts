@@ -327,6 +327,21 @@ describe('review-handlers', () => {
         drifted: true,
       });
     });
+
+    it('carries import diagnostics, and is worth sending for them alone', () => {
+      const session = createReviewSession();
+      session.resumeImportDiagnostics = [
+        'src/a.ts: comment 1 anchor new-line range is reversed (5 > 3); kept as file-level feedback',
+      ];
+
+      expect(getResumeLoad(session)).toEqual({
+        comments: [],
+        viewedFiles: [],
+        importDiagnostics: [
+          'src/a.ts: comment 1 anchor new-line range is reversed (5 > 3); kept as file-level feedback',
+        ],
+      });
+    });
   });
 
   describe('directory review start', () => {

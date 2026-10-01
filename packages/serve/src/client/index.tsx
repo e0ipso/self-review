@@ -5,7 +5,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ReviewPanel, Toolbar, useConfig } from '@self-review/react';
+import { ImportDiagnosticsBanner, ReviewPanel, Toolbar, useConfig } from '@self-review/react';
 import type { ReviewPanelHandle } from '@self-review/react';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
 import '@self-review/react/styles.css';
@@ -178,6 +178,7 @@ function App() {
         className='flex-1 flex flex-col overflow-hidden bg-background text-foreground'
       >
         <OutputPath info={outputPathInfo} />
+        <ImportDiagnosticsBanner />
         <Toolbar onFinishReview={() => void handleFinishReview()} />
       </ReviewPanel>
     </div>

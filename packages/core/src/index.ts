@@ -45,6 +45,13 @@ export type { DiffParseResult } from './diff-parser';
 // XML I/O
 export { serializeReview } from './xml-serializer';
 export { parseReviewXml, parseReviewXmlString } from './xml-parser';
+export type { ParsedReview } from './xml-parser';
+export { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
+export type { ReviewXmlErrorCode, XmlIllegalCharacterLocation } from './xml-errors';
+
+// Line-anchor validation (shared by the resume importer and Apply)
+export { validateLineAnchor, validateLineRange } from './anchor-validation';
+export type { AnchorCheck, AnchorFields, AnchorSide, LineAnchor } from './anchor-validation';
 
 // Walkthrough guide schema
 export { GUIDE_XSD_SCHEMA } from './guide-schema';

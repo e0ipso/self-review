@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import type { DiffFile } from '@self-review/types';
 import { Button } from '../ui/button';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import SplitView from './SplitView';
 import UnifiedView from './UnifiedView';
 import RenderedMarkdownView from './RenderedMarkdownView';
@@ -9,6 +9,7 @@ import RenderedImageView from './RenderedImageView';
 import RenderedSvgView from './RenderedSvgView';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
+import type { LazyLoadState } from './useLazyFileContent';
 
 export interface DiffContentAreaProps {
   file: DiffFile;
@@ -19,8 +20,9 @@ export interface DiffContentAreaProps {
   renderedTextMode: RenderedTextMode | null;
   showImagePreview: boolean;
   showSvgPreview: boolean;
-  contentLoading: boolean;
-  contentError: boolean;
+  /** On-demand content state; only meaningful while `file.contentLoaded === false`. */
+  contentLoad: LazyLoadState;
+  /** Ask for the file's content again after a failed load. */
   onRetry: () => void;
   commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
   dragState: { startLine: number; currentLine: number; side: 'old' | 'new' } | null;
@@ -47,8 +49,7 @@ export function DiffContentArea({
   renderedTextMode,
   showImagePreview,
   showSvgPreview,
-  contentLoading,
-  contentError,
+  contentLoad,
   onRetry,
   commentRange,
   dragState,
@@ -62,8 +63,20 @@ export function DiffContentArea({
   handleExpandContext,
 }: DiffContentAreaProps) {
   const adapter = useAdapter();
+  // Rendered Markdown/HTML blocks receive this through context; a stable
+  // identity keeps the context value memoized across unrelated renders.
+  const handleGutterMouseDown = useCallback(
+    (startLine: number, endLine: number) => {
+      onCommentRange(startLine, endLine, 'new');
+    },
+    [onCommentRange]
+  );
 
-  if (contentLoading) {
+  // An unloaded file that is not in error is about to be (or being) fetched.
+  if (
+    contentLoad.kind === 'loading' ||
+    (contentLoad.kind === 'idle' && file.contentLoaded === false)
+  ) {
     return (
       <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
         <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -72,10 +85,22 @@ export function DiffContentArea({
     );
   }
 
-  if (contentError) {
+  if (contentLoad.kind === 'error') {
     return (
-      <div className='flex flex-col items-center justify-center py-12 text-sm text-muted-foreground gap-2'>
-        <span>Failed to load file content</span>
+      <div
+        role='alert'
+        data-testid='content-load-error'
+        className='m-3 flex items-start gap-2 text-destructive text-sm p-3 border border-destructive/20 rounded'
+      >
+        <AlertTriangle className='h-4 w-4 mt-0.5 shrink-0' aria-hidden='true' />
+        <div className='min-w-0 flex-1 space-y-1'>
+          <p>The content of this file could not be loaded.</p>
+          <p className='text-xs text-muted-foreground break-words'>{contentLoad.message}</p>
+          <p className='text-xs text-muted-foreground'>
+            Nothing will be requested again until you retry. If the review host stopped, restart it
+            and then retry.
+          </p>
+        </div>
         <Button variant='outline' size='sm' onClick={onRetry}>
           Retry
         </Button>
@@ -115,9 +140,7 @@ export function DiffContentArea({
         commentRange={commentRange}
         onCancelComment={onCancelComment}
         onCommentSaved={onCommentSaved}
-        onGutterMouseDown={(startLine, endLine) => {
-          onCommentRange(startLine, endLine, 'new');
-        }}
+        onGutterMouseDown={handleGutterMouseDown}
       />
     );
   }

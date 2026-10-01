@@ -1,4 +1,5 @@
 import { defaultUrlTransform, type UrlTransform } from 'react-markdown';
+import { fromHtml } from 'hast-util-from-html';
 import type { Element, Root } from 'hast';
 
 // Reviewed HTML may format text, but cannot create browsing contexts, forms,
@@ -115,6 +116,36 @@ export function rehypePassiveContent() {
     }
     clean(tree);
   };
+}
+
+const URL_PROPERTIES = ['href', 'src'] as const;
+
+// react-markdown applies `urlTransform` to a tree after its rehype plugins
+// run. A tree rendered outside react-markdown gets the same policy here.
+function applyUrlPolicy(parent: Root | Element): void {
+  for (const node of parent.children) {
+    if (node.type !== 'element') continue;
+    for (const key of URL_PROPERTIES) {
+      if (!(key in node.properties)) continue;
+      node.properties[key] =
+        localContentUrlTransform(String(node.properties[key] ?? ''), key, node) ?? undefined;
+    }
+    applyUrlPolicy(node);
+  }
+}
+
+/**
+ * Parse a reviewed HTML document fragment into a passive hast tree. Every
+ * surviving element keeps the `position` the parser recorded for it, so
+ * comment anchors are the source lines of the markup the reviewer sees:
+ * dropped elements, comments and raw text (`<script>`, `<template>`) take no
+ * positions with them.
+ */
+export function parsePassiveHtml(html: string): Root {
+  const tree = fromHtml(html, { fragment: true });
+  rehypePassiveContent()(tree);
+  applyUrlPolicy(tree);
+  return tree;
 }
 
 /** Resource URLs never get the network privileges of ordinary user links. */

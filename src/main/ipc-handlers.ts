@@ -64,11 +64,13 @@ export function setOutputPathInfo(info: OutputPathInfo): void {
 export function setResumeData(
   comments: ReviewComment[],
   viewedFiles: string[] = [],
-  remoteDrift: RemoteDriftInfo | null = null
+  remoteDrift: RemoteDriftInfo | null = null,
+  importDiagnostics: string[] = []
 ): void {
   desktopSession.resumeComments = comments;
   desktopSession.resumeViewedFiles = viewedFiles;
   desktopSession.resumeRemoteDrift = remoteDrift;
+  desktopSession.resumeImportDiagnostics = importDiagnostics;
 }
 
 export function registerIpcHandlers(): void {

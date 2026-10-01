@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { serializeReview } from './xml-serializer';
+import { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
 import type { XMLFileInfo } from 'xmllint-wasm';
 import type { ReviewState, FileReviewState, ReviewComment } from './types';
 
@@ -1370,5 +1371,176 @@ describe('replies', () => {
 
     expect(actualFs.existsSync(path.join(outputDir, 'escaped-reply-0.png'))).toBe(false);
     expect(assetsIn(outputDir)).toEqual(['c1-r-_________escaped-reply-0.png']);
+  });
+});
+
+describe('lossless text encoding', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function reviewWith(comment: Partial<ReviewComment>, filePath = 'src/main.ts'): ReviewState {
+    return {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [
+        {
+          path: filePath,
+          changeType: 'modified',
+          viewed: true,
+          comments: [
+            {
+              id: 'c1',
+              filePath,
+              lineRange: { side: 'new', start: 5, end: 6 },
+              body: 'Root finding',
+              category: 'bug',
+              suggestion: null,
+              ...comment,
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('writes CR as a numeric reference in text, and LF/TAB as references only in attributes', async () => {
+    const xml = await serializeReview(
+      reviewWith(
+        {
+          body: 'line one\r\nline two\rline three\tend',
+          suggestion: { originalCode: 'a\r\nb', proposedCode: 'c\r\n' },
+          author: 'bot\tname',
+        },
+        'dir/with "quote"\nand\ttab\\back.ts'
+      ),
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain('<body>line one&#13;\nline two&#13;line three\tend</body>');
+    expect(xml).toContain('<original-code>a&#13;\nb</original-code>');
+    expect(xml).toContain('<proposed-code>c&#13;\n</proposed-code>');
+    expect(xml).toContain('author="bot&#9;name"');
+    expect(xml).toContain('path="dir/with &quot;quote&quot;&#10;and&#9;tab\\back.ts"');
+    // No raw CR anywhere: a conformant parser would have folded it into LF.
+    expect(xml).not.toContain('\r');
+  });
+
+  it('double-escapes entity-looking literal text so it decodes back to itself, once', async () => {
+    const xml = await serializeReview(
+      reviewWith({ body: '&#13; and &lt; and &amp;' }),
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain('<body>&amp;#13; and &amp;lt; and &amp;amp;</body>');
+  });
+
+  it.each([
+    ['body', { body: 'a\u0000b' }, 0x0000],
+    ['original-code', { suggestion: { originalCode: 'x\u001by', proposedCode: 'z' } }, 0x001b],
+    ['proposed-code', { suggestion: { originalCode: 'x', proposedCode: '￾' } }, 0xfffe],
+    ['author', { author: 'bot\uD800' }, 0xd800],
+    ['category', { category: 'c\u0007' }, 0x0007],
+  ])(
+    'refuses an XML-illegal character in %s with a typed error naming the comment and field',
+    async (field, overrides, codePoint) => {
+      let caught: unknown;
+      try {
+        await serializeReview(reviewWith(overrides as Partial<ReviewComment>), TEST_OUTPUT_PATH);
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(XmlIllegalCharacterError);
+      const err = caught as XmlIllegalCharacterError;
+      expect(err.code).toBe('xml-illegal-character');
+      expect(err).toMatchObject({ field, commentId: 'c1', filePath: 'src/main.ts', codePoint });
+      expect(err.message).toContain(field);
+      expect(err.message).toContain('c1');
+      expect(err.message).toContain(`U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}`);
+      expect(err.message).not.toContain('[object Object]');
+    }
+  );
+
+  it('names the reply when the illegal character sits in a reply body', async () => {
+    await expect(
+      serializeReview(
+        reviewWith({
+          replies: [
+            { id: 'r9', body: 'fine' },
+            { id: 'r10', body: 'bad\u0001' },
+          ],
+        }),
+        TEST_OUTPUT_PATH
+      )
+    ).rejects.toMatchObject({ field: 'body', commentId: 'c1', replyId: 'r10', codePoint: 1 });
+  });
+
+  it('names the file path field when the illegal character sits in a path attribute', async () => {
+    await expect(
+      serializeReview(reviewWith({}, 'src/\u0002.ts'), TEST_OUTPUT_PATH)
+    ).rejects.toMatchObject({ field: 'path', filePath: 'src/\u0002.ts', codePoint: 2 });
+  });
+
+  it('writes no attachment file when the document is refused', async () => {
+    vi.mocked(fs.writeFileSync).mockImplementation(() => undefined);
+    vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
+
+    await expect(
+      serializeReview(
+        reviewWith({
+          body: 'bad\u0000',
+          attachments: [
+            {
+              id: 'a1',
+              fileName: 'shot.png',
+              mediaType: 'image/png',
+              data: new Uint8Array([1]).buffer,
+            },
+          ],
+        }),
+        TEST_OUTPUT_PATH
+      )
+    ).rejects.toBeInstanceOf(XmlIllegalCharacterError);
+
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+    expect(fs.mkdirSync).not.toHaveBeenCalled();
+  });
+
+  it('reports schema diagnostics as readable strings in a typed error, never [object Object]', async () => {
+    const { validateXML } = await import('xmllint-wasm');
+    vi.mocked(validateXML).mockResolvedValueOnce({
+      valid: false,
+      errors: [
+        {
+          message: "Element 'comment': The attribute 'severity' is not allowed.",
+          loc: { lineNumber: 4 },
+        },
+        'a plain string error',
+      ],
+    } as any);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    let caught: unknown;
+    try {
+      await serializeReview(reviewWith({}), TEST_OUTPUT_PATH);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ReviewXmlError);
+    expect((caught as ReviewXmlError).code).toBe('schema-invalid');
+    expect((caught as ReviewXmlError).message).toContain(
+      'Generated XML does not conform to schema'
+    );
+    expect((caught as ReviewXmlError).message).toContain(
+      "The attribute 'severity' is not allowed."
+    );
+    expect((caught as ReviewXmlError).message).toContain('a plain string error');
+    expect((caught as ReviewXmlError).message).not.toContain('[object Object]');
+    const logged = errorSpy.mock.calls.map(call => call.join(' ')).join('\n');
+    expect(logged).toContain("The attribute 'severity' is not allowed.");
+    expect(logged).not.toContain('[object Object]');
+    errorSpy.mockRestore();
   });
 });

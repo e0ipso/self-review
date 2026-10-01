@@ -1,13 +1,14 @@
-import React, { useMemo, useCallback, createContext, useContext } from 'react';
-import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
+import React, { useMemo, createContext, useContext } from 'react';
+import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
+import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
+import type { Element } from 'hast';
 import {
   rehypePassiveContent,
   localContentUrlTransform,
-  PASSIVE_HTML_TAGS,
-  isPassiveHtmlAttribute,
-  isLocalImageUrl,
+  parsePassiveHtml,
 } from '../../utils/passive-content';
 import type { Components, ExtraProps } from 'react-markdown';
 import { MessageSquarePlus } from 'lucide-react';
@@ -27,6 +28,33 @@ import type { RenderedTextMode } from '../../utils/file-type-utils';
 // so nested elements (li inside ul, p inside blockquote) don't duplicate it.
 
 const GutterNestingContext = createContext(false);
+
+// ===== Rendered Block Context =====
+// Everything a block needs that changes between renders travels through this
+// context. The block component types themselves are created once at module
+// scope, so a parent re-render never gives react-markdown a new component
+// identity and never remounts the comment composer under a block.
+
+interface RenderedBlockContextValue {
+  file: DiffFile;
+  filePath: string;
+  commentRange: LineRange | null;
+  /** Maps a 1-based line of the rendered source text to its added line number. */
+  resolveLine: (sourceLine: number) => number;
+  onGutterMouseDown: (startLine: number, endLine: number) => void;
+  onCancelComment: () => void;
+  onCommentSaved: () => void;
+}
+
+const RenderedBlockContext = createContext<RenderedBlockContextValue | null>(null);
+
+function useRenderedBlockContext(): RenderedBlockContextValue {
+  const value = useContext(RenderedBlockContext);
+  if (!value) {
+    throw new Error('Rendered blocks must be rendered inside RenderedMarkdownView');
+  }
+  return value;
+}
 
 // ===== Content Extraction =====
 
@@ -54,6 +82,10 @@ function extractAddedFileLines(file: DiffFile): AddedFileLine[] {
 
 function extractFileContent(lines: AddedFileLine[]): string {
   return lines.map(line => line.content).join('\n');
+}
+
+function getAddedLineNumber(contentLineNumber: number, lines: AddedFileLine[]): number {
+  return lines[contentLineNumber - 1]?.lineNumber ?? contentLineNumber;
 }
 
 // Tags that accept phrasing (inline) content — the Tag itself can be the
@@ -91,20 +123,40 @@ const HTML_VOID_TAGS: ReadonlySet<string> = new Set([
   'wbr',
 ]);
 
-const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
+type BlockTag = keyof React.JSX.IntrinsicElements;
+
+// Block-level Markdown output that gets its own gutter row.
+const MARKDOWN_BLOCK_TAGS = [
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'pre',
+  'table',
+  'hr',
+  'details',
+] as const satisfies readonly BlockTag[];
+
+// Block-level HTML elements that get their own gutter row in a rendered HTML
+// file. Containers (see below) only do when they hold no block children.
+const HTML_BLOCK_TAGS = [
   'address',
   'article',
   'aside',
   'blockquote',
   'details',
-  'dialog',
   'div',
   'dl',
-  'fieldset',
   'figcaption',
   'figure',
   'footer',
-  'form',
   'h1',
   'h2',
   'h3',
@@ -122,7 +174,9 @@ const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
   'section',
   'table',
   'ul',
-]);
+] as const satisfies readonly BlockTag[];
+
+const HTML_BLOCK_TAG_SET: ReadonlySet<string> = new Set(HTML_BLOCK_TAGS);
 
 const HTML_CONTAINER_TAGS: ReadonlySet<string> = new Set([
   'article',
@@ -135,88 +189,10 @@ const HTML_CONTAINER_TAGS: ReadonlySet<string> = new Set([
   'section',
 ]);
 
-interface HtmlToken {
-  tagName: string;
-  line: number;
-  kind: 'open' | 'close';
-  selfClosing: boolean;
-}
-
-interface HtmlLinePosition {
-  startLine: number | undefined;
-  endLine: number | undefined;
-}
-
-function getLineNumberAtIndex(content: string, index: number): number {
-  let line = 1;
-  for (let i = 0; i < index; i++) {
-    if (content[i] === '\n') line++;
-  }
-  return line;
-}
-
-function getAddedLineNumber(contentLineNumber: number, lines: AddedFileLine[]): number {
-  return lines[contentLineNumber - 1]?.lineNumber ?? contentLineNumber;
-}
-
-function tokenizeHtml(content: string, lines: AddedFileLine[]): HtmlToken[] {
-  const tokens: HtmlToken[] = [];
-  const tagPattern = /<\s*(\/)?\s*([a-zA-Z][\w:-]*)([\s\S]*?)>/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = tagPattern.exec(content)) !== null) {
-    const [, closingSlash, rawTagName, rawRest] = match;
-    const tagName = rawTagName.toLowerCase();
-    const kind = closingSlash ? 'close' : 'open';
-    tokens.push({
-      tagName,
-      line: getAddedLineNumber(getLineNumberAtIndex(content, match.index), lines),
-      kind,
-      selfClosing: kind === 'open' && (HTML_VOID_TAGS.has(tagName) || /\/\s*$/.test(rawRest)),
-    });
-  }
-
-  return tokens;
-}
-
-function createHtmlLineResolver(content: string, lines: AddedFileLine[]) {
-  const tokens = tokenizeHtml(content, lines);
-  let tokenCursor = 0;
-
-  return (tagName: string): HtmlLinePosition => {
-    const normalizedTagName = tagName.toLowerCase();
-    const startTokenIndex = tokens.findIndex(
-      (token, index) =>
-        index >= tokenCursor && token.kind === 'open' && token.tagName === normalizedTagName
-    );
-
-    if (startTokenIndex === -1) {
-      return { startLine: undefined, endLine: undefined };
-    }
-
-    tokenCursor = startTokenIndex + 1;
-    const startToken = tokens[startTokenIndex];
-    let endLine = startToken.line;
-
-    if (!startToken.selfClosing) {
-      let depth = 0;
-      for (let i = startTokenIndex; i < tokens.length; i++) {
-        const token = tokens[i];
-        if (token.tagName !== normalizedTagName) continue;
-        if (token.kind === 'open' && !token.selfClosing) {
-          depth++;
-        } else if (token.kind === 'close') {
-          depth--;
-          if (depth === 0) {
-            endLine = token.line;
-            break;
-          }
-        }
-      }
-    }
-
-    return { startLine: startToken.line, endLine };
-  };
+function hasBlockElementChild(element: Element): boolean {
+  return element.children.some(
+    child => child.type === 'element' && HTML_BLOCK_TAG_SET.has(child.tagName)
+  );
 }
 
 // ===== Block Wrapper with Gutter =====
@@ -225,14 +201,8 @@ interface BlockWrapperProps {
   startLine: number | undefined;
   endLine: number | undefined;
   children: React.ReactNode;
-  tag: keyof React.JSX.IntrinsicElements;
+  tag: BlockTag;
   className?: string;
-  filePath: string;
-  file: DiffFile;
-  commentRange: LineRange | null;
-  onGutterMouseDown: (startLine: number, endLine: number) => void;
-  onCancelComment: () => void;
-  onCommentSaved: () => void;
   tagProps?: Record<string, unknown>;
 }
 
@@ -242,15 +212,11 @@ function BlockWrapper({
   children,
   tag: Tag,
   className,
-  filePath,
-  file,
-  commentRange,
-  onGutterMouseDown,
-  onCancelComment,
-  onCommentSaved,
   tagProps,
 }: BlockWrapperProps) {
   const { getCommentsForFile } = useReview();
+  const { file, filePath, commentRange, onGutterMouseDown, onCancelComment, onCommentSaved } =
+    useRenderedBlockContext();
   const isNested = useContext(GutterNestingContext);
 
   // If nested inside another gutter-wrapped block, or no position data,
@@ -388,6 +354,53 @@ function BlockWrapper({
   );
 }
 
+// ===== Stable Block Components =====
+// One component per tag, created once. Positions come from the hast node the
+// renderer passes in (`passNode`), and everything else from the context, so
+// these types are identical across renders and React keeps their subtrees.
+
+type RenderedBlockProps = React.HTMLAttributes<HTMLElement> & ExtraProps;
+
+function createRenderedBlock(tag: BlockTag, deferToBlockChildren = false) {
+  function RenderedBlock({ node, children, ...props }: RenderedBlockProps) {
+    const { resolveLine } = useRenderedBlockContext();
+    const position = node?.position;
+    const positioned =
+      position !== undefined && !(deferToBlockChildren && node && hasBlockElementChild(node));
+    const startLine = positioned ? resolveLine(position.start.line) : undefined;
+    const endLine = positioned ? resolveLine(position.end.line) : undefined;
+
+    return (
+      <BlockWrapper startLine={startLine} endLine={endLine} tag={tag} tagProps={props}>
+        {children}
+      </BlockWrapper>
+    );
+  }
+  RenderedBlock.displayName = `RenderedBlock(${tag})`;
+  return RenderedBlock;
+}
+
+function createBlockComponents(
+  tags: readonly BlockTag[],
+  deferToBlockChildren: ReadonlySet<string> = new Set()
+): Components {
+  const components: Record<string, React.ComponentType<RenderedBlockProps>> = {};
+  for (const tag of tags) {
+    components[tag] = createRenderedBlock(tag, deferToBlockChildren.has(tag));
+  }
+  return components as Components;
+}
+
+const MARKDOWN_COMPONENTS: Components = {
+  ...createBlockComponents(MARKDOWN_BLOCK_TAGS),
+  code: MarkdownCode,
+};
+
+const HTML_COMPONENTS: Components = createBlockComponents(HTML_BLOCK_TAGS, HTML_CONTAINER_TAGS);
+
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkEmoji];
+const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, rehypePassiveContent];
+
 // ===== Main Component =====
 
 export interface RenderedMarkdownViewProps {
@@ -399,126 +412,22 @@ export interface RenderedMarkdownViewProps {
   onGutterMouseDown: (startLine: number, endLine: number) => void;
 }
 
-interface HtmlRenderedContentProps {
-  content: string;
-  lines: AddedFileLine[];
-  file: DiffFile;
-  filePath: string;
-  lineRange: LineRange | null;
-  onGutterMouseDown: (startLine: number, endLine: number) => void;
-  onCancelComment: () => void;
-  onCommentSaved: () => void;
-}
-
-function getHtmlAttributeProps(element: Element): Record<string, unknown> {
-  const props: Record<string, unknown> = {};
-
-  const tagName = element.tagName.toLowerCase();
-  const attributeNames: Record<string, string> = {
-    class: 'className',
-    colspan: 'colSpan',
-    rowspan: 'rowSpan',
-    datetime: 'dateTime',
-  };
-  for (const attribute of Array.from(element.attributes)) {
-    const name = attributeNames[attribute.name] ?? attribute.name;
-    if (!isPassiveHtmlAttribute(tagName, name)) continue;
-    if (name === 'src' && !isLocalImageUrl(attribute.value)) continue;
-    props[name] = name === 'href' ? defaultUrlTransform(attribute.value) : attribute.value;
-  }
-  if (tagName === 'input') {
-    props.type = 'checkbox';
-    props.disabled = true;
-    props.checked = element.hasAttribute('checked');
-  }
-
-  return props;
-}
-
-function hasBlockElementChild(element: Element): boolean {
-  return Array.from(element.children).some(child =>
-    HTML_BLOCK_TAGS.has(child.tagName.toLowerCase())
+function HtmlRenderedContent({ content }: { content: string }) {
+  // The parsed, filtered tree carries the parser's own source positions, so
+  // every block anchors to the lines of the markup it came from.
+  return useMemo(
+    () =>
+      toJsxRuntime(parsePassiveHtml(content), {
+        Fragment,
+        jsx,
+        jsxs,
+        components: HTML_COMPONENTS,
+        ignoreInvalidStyle: true,
+        passKeys: true,
+        passNode: true,
+      }),
+    [content]
   );
-}
-
-function shouldWrapHtmlElement(element: Element): boolean {
-  const tagName = element.tagName.toLowerCase();
-  if (!HTML_BLOCK_TAGS.has(tagName)) return false;
-  if (HTML_CONTAINER_TAGS.has(tagName) && hasBlockElementChild(element)) return false;
-  return true;
-}
-
-function HtmlRenderedContent({
-  content,
-  lines,
-  file,
-  filePath,
-  lineRange,
-  onGutterMouseDown,
-  onCancelComment,
-  onCommentSaved,
-}: HtmlRenderedContentProps) {
-  const lineResolver = createHtmlLineResolver(content, lines);
-  const fragment = useMemo(() => {
-    // Template contents remain inert even before resource attributes are filtered.
-    const template = document.createElement('template');
-    template.innerHTML = content;
-    return template.content;
-  }, [content]);
-
-  const renderNode = useCallback(
-    (node: Node, key: React.Key, insideWrappedBlock = false): React.ReactNode => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        return node.textContent;
-      }
-
-      if (node.nodeType !== Node.ELEMENT_NODE) {
-        return null;
-      }
-
-      const element = node as Element;
-      const tagName = element.tagName.toLowerCase() as keyof React.JSX.IntrinsicElements;
-      if (!PASSIVE_HTML_TAGS.has(tagName)) {
-        return null;
-      }
-
-      const tagProps = getHtmlAttributeProps(element);
-      const shouldWrap = !insideWrappedBlock && shouldWrapHtmlElement(element);
-      const children = Array.from(element.childNodes).map((child, index) =>
-        renderNode(child, index, insideWrappedBlock || shouldWrap)
-      );
-
-      if (shouldWrap) {
-        const { startLine, endLine } = lineResolver(tagName);
-        return (
-          <BlockWrapper
-            key={key}
-            startLine={startLine}
-            endLine={endLine}
-            tag={tagName}
-            filePath={filePath}
-            file={file}
-            commentRange={lineRange}
-            onGutterMouseDown={onGutterMouseDown}
-            onCancelComment={onCancelComment}
-            onCommentSaved={onCommentSaved}
-            tagProps={tagProps}
-          >
-            {children}
-          </BlockWrapper>
-        );
-      }
-
-      return React.createElement(
-        tagName,
-        { key, ...tagProps },
-        HTML_VOID_TAGS.has(tagName) ? undefined : children
-      );
-    },
-    [file, filePath, lineRange, lineResolver, onCancelComment, onCommentSaved, onGutterMouseDown]
-  );
-
-  return <>{Array.from(fragment.childNodes).map((node, index) => renderNode(node, index))}</>;
 }
 
 export default function RenderedMarkdownView({
@@ -539,94 +448,44 @@ export default function RenderedMarkdownView({
   const lineOffset = frontMatter ? frontMatter.lineOffset : 0;
   const filePath = file.newPath || file.oldPath;
 
-  const lineRange: LineRange | null = commentRange
-    ? { side: commentRange.side, start: commentRange.start, end: commentRange.end }
-    : null;
-
-  // Factory for block-level renderers
-  const createBlockRenderer = useCallback(
-    (tag: keyof React.JSX.IntrinsicElements) => {
-      return function BlockRenderer({
-        node,
-        children,
-        ...props
-      }: React.HTMLAttributes<HTMLElement> & ExtraProps) {
-        const startLine =
-          node?.position?.start?.line !== undefined
-            ? node.position.start.line + lineOffset
-            : undefined;
-        const endLine =
-          node?.position?.end?.line !== undefined ? node.position.end.line + lineOffset : undefined;
-        return (
-          <BlockWrapper
-            startLine={startLine}
-            endLine={endLine}
-            tag={tag}
-            filePath={filePath}
-            file={file}
-            commentRange={lineRange}
-            onGutterMouseDown={onGutterMouseDown}
-            onCancelComment={onCancelComment}
-            onCommentSaved={onCommentSaved}
-            tagProps={props}
-          >
-            {children}
-          </BlockWrapper>
-        );
-      };
-    },
-    [filePath, file, lineRange, lineOffset, onGutterMouseDown, onCancelComment, onCommentSaved]
+  const resolveLine = useMemo(
+    () => (sourceLine: number) => getAddedLineNumber(sourceLine + lineOffset, addedLines),
+    [addedLines, lineOffset]
   );
 
-  const components: Components = useMemo(
+  const blockContext = useMemo<RenderedBlockContextValue>(
     () => ({
-      p: createBlockRenderer('p'),
-      h1: createBlockRenderer('h1'),
-      h2: createBlockRenderer('h2'),
-      h3: createBlockRenderer('h3'),
-      h4: createBlockRenderer('h4'),
-      h5: createBlockRenderer('h5'),
-      h6: createBlockRenderer('h6'),
-      ul: createBlockRenderer('ul'),
-      ol: createBlockRenderer('ol'),
-      li: createBlockRenderer('li'),
-      blockquote: createBlockRenderer('blockquote'),
-      pre: createBlockRenderer('pre'),
-      table: createBlockRenderer('table'),
-      hr: createBlockRenderer('hr'),
-      details: createBlockRenderer('details'),
-      code: MarkdownCode,
+      file,
+      filePath,
+      commentRange,
+      resolveLine,
+      onGutterMouseDown,
+      onCancelComment,
+      onCommentSaved,
     }),
-    [createBlockRenderer]
+    [file, filePath, commentRange, resolveLine, onGutterMouseDown, onCancelComment, onCommentSaved]
   );
 
   return (
-    <div
-      className='prose dark:prose-invert max-w-none p-4 rendered-markdown-view'
-      data-rendered-text-mode={contentMode}
-    >
-      {frontMatter && <FrontMatterTable metadata={frontMatter.metadata} />}
-      {contentMode === 'markdown' ? (
-        <ReactMarkdown
-          urlTransform={localContentUrlTransform}
-          remarkPlugins={[remarkGfm, remarkEmoji]}
-          rehypePlugins={[rehypeRaw, rehypePassiveContent]}
-          components={components}
-        >
-          {markdownBody}
-        </ReactMarkdown>
-      ) : (
-        <HtmlRenderedContent
-          content={content}
-          lines={addedLines}
-          file={file}
-          filePath={filePath}
-          lineRange={lineRange}
-          onGutterMouseDown={onGutterMouseDown}
-          onCancelComment={onCancelComment}
-          onCommentSaved={onCommentSaved}
-        />
-      )}
-    </div>
+    <RenderedBlockContext.Provider value={blockContext}>
+      <div
+        className='prose dark:prose-invert max-w-none p-4 rendered-markdown-view'
+        data-rendered-text-mode={contentMode}
+      >
+        {frontMatter && <FrontMatterTable metadata={frontMatter.metadata} />}
+        {contentMode === 'markdown' ? (
+          <ReactMarkdown
+            urlTransform={localContentUrlTransform}
+            remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+            rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+            components={MARKDOWN_COMPONENTS}
+          >
+            {markdownBody}
+          </ReactMarkdown>
+        ) : (
+          <HtmlRenderedContent content={content} />
+        )}
+      </div>
+    </RenderedBlockContext.Provider>
   );
 }
