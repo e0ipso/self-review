@@ -48,6 +48,19 @@ let session: ReviewSession;
 let server: ReturnType<typeof createReviewServer>;
 let base: string;
 
+/**
+ * The session capability. Fixed here rather than generated, so a test can
+ * also present one that is wrong by a single character; the real program
+ * draws 32 random bytes per process.
+ */
+const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
+const AUTH = { authorization: `Bearer ${CAPABILITY}` };
+
+/** `fetch` carrying the session capability, as the page's adapter does. */
+function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, headers: { ...AUTH, ...(init.headers as Record<string, string>) } });
+}
+
 const CORE_SPIES = [
   'getDiffLoad',
   'getConfigLoad',
@@ -113,9 +126,13 @@ function expectNoCoreCall() {
 async function postJson(route: string, body: unknown, init: RequestInit = {}) {
   return fetch(base + route, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
     ...init,
+    headers: {
+      'content-type': 'application/json',
+      ...AUTH,
+      ...(init.headers as Record<string, string>),
+    },
   });
 }
 
@@ -129,12 +146,14 @@ async function postJson(route: string, body: unknown, init: RequestInit = {}) {
  */
 function rawGet(
   routePath: string,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  { withCapability = true } = {}
 ): Promise<{ status: number; body: string }> {
   const { port } = server.address() as AddressInfo;
+  const sent = withCapability ? { ...AUTH, ...headers } : headers;
   return new Promise((resolve, reject) => {
     const req = http.request(
-      { host: '127.0.0.1', port, path: routePath, method: 'GET', headers },
+      { host: '127.0.0.1', port, path: routePath, method: 'GET', headers: sent },
       res => {
         let body = '';
         res.setEncoding('utf-8');
@@ -186,6 +205,7 @@ beforeAll(async () => {
     repositoryRoot: root,
     clientDir,
     output: { path: path.join(root, 'review.xml'), origin: 'explicit' },
+    capability: CAPABILITY,
   });
   const { port } = await listenLoopback(server, 0);
   base = `http://127.0.0.1:${port}`;
@@ -214,7 +234,7 @@ describe('listener', () => {
 
 describe('GET /api/diff', () => {
   it('returns the diff and the guide in one response', async () => {
-    const res = await fetch(`${base}/api/diff`);
+    const res = await apiFetch(`${base}/api/diff`);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
     const body = await res.json();
@@ -227,7 +247,7 @@ describe('GET /api/diff', () => {
 
 describe('GET /api/config', () => {
   it('returns the config and the output path info', async () => {
-    const res = await fetch(`${base}/api/config`);
+    const res = await apiFetch(`${base}/api/config`);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.config.theme).toBe('dark');
@@ -238,14 +258,14 @@ describe('GET /api/config', () => {
 
 describe('GET /api/resume', () => {
   it('returns null when there is nothing to resume', async () => {
-    const res = await fetch(`${base}/api/resume`);
+    const res = await apiFetch(`${base}/api/resume`);
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
   });
 
   it('returns the resumed comments and viewed files', async () => {
     session.resumeViewedFiles = ['src/index.ts'];
-    const res = await fetch(`${base}/api/resume`);
+    const res = await apiFetch(`${base}/api/resume`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ comments: [], viewedFiles: ['src/index.ts'] });
     expect(vi.mocked(core.getResumeLoad)).toHaveBeenCalledWith(session);
@@ -254,26 +274,28 @@ describe('GET /api/resume', () => {
 
 describe('GET /api/file', () => {
   it('returns the hunks of a file in the diff', async () => {
-    const res = await fetch(`${base}/api/file?path=${encodeURIComponent('src/index.ts')}`);
+    const res = await apiFetch(`${base}/api/file?path=${encodeURIComponent('src/index.ts')}`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([INDEX_HUNK]);
     expect(vi.mocked(core.getFileHunks)).toHaveBeenCalledWith(session, 'src/index.ts');
   });
 
   it('returns null for a contained path the diff does not know', async () => {
-    const res = await fetch(`${base}/api/file?path=src/other.ts`);
+    const res = await apiFetch(`${base}/api/file?path=src/other.ts`);
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
   });
 
   it('rejects a traversal path with 400 before reaching core', async () => {
-    const res = await fetch(`${base}/api/file?path=${encodeURIComponent('../outside/secret.txt')}`);
+    const res = await apiFetch(
+      `${base}/api/file?path=${encodeURIComponent('../outside/secret.txt')}`
+    );
     expect(res.status).toBe(400);
     expectNoCoreCall();
   });
 
   it('rejects a missing path parameter with 400 before reaching core', async () => {
-    const res = await fetch(`${base}/api/file`);
+    const res = await apiFetch(`${base}/api/file`);
     expect(res.status).toBe(400);
     expectNoCoreCall();
   });
@@ -281,7 +303,7 @@ describe('GET /api/file', () => {
 
 describe('GET /api/image', () => {
   it('returns the image as a data URI', async () => {
-    const res = await fetch(`${base}/api/image?path=img.png`);
+    const res = await apiFetch(`${base}/api/image?path=img.png`);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.dataUri).toBe(
@@ -291,7 +313,7 @@ describe('GET /api/image', () => {
   });
 
   it('rejects a traversal path with 400 before reaching core', async () => {
-    const res = await fetch(
+    const res = await apiFetch(
       `${base}/api/image?path=${encodeURIComponent('../outside/secret.txt')}`
     );
     expect(res.status).toBe(400);
@@ -301,7 +323,7 @@ describe('GET /api/image', () => {
   it('treats a whole-path-encoded traversal as a literal filename inside the root', async () => {
     // The query is decoded exactly once, so `%252E%252E%252F...` arrives as
     // the filename `%2E%2E%2Foutside%2Fsecret.txt` and stays inside the root.
-    const res = await fetch(`${base}/api/image?path=%252E%252E%252Foutside%252Fsecret.txt`);
+    const res = await apiFetch(`${base}/api/image?path=%252E%252E%252Foutside%252Fsecret.txt`);
     expect(res.status).toBe(200);
     expect(await res.json()).toHaveProperty('error');
     expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(
@@ -313,7 +335,7 @@ describe('GET /api/image', () => {
 
 describe('GET /api/attachment', () => {
   it('returns the attachment bytes', async () => {
-    const res = await fetch(`${base}/api/attachment?path=attach.bin`);
+    const res = await apiFetch(`${base}/api/attachment?path=attach.bin`);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/octet-stream');
     expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('attachment-bytes');
@@ -336,7 +358,7 @@ describe('GET /api/attachment', () => {
     };
 
     try {
-      const res = await fetch(`${base}/api/attachment?path=.self-review-assets%2Fshot.png`);
+      const res = await apiFetch(`${base}/api/attachment?path=.self-review-assets%2Fshot.png`);
       expect(res.status).toBe(200);
       expect(await res.text()).toBe('REAL-BYTES');
     } finally {
@@ -345,18 +367,18 @@ describe('GET /api/attachment', () => {
   });
 
   it('still refuses a traversal out of the output directory', async () => {
-    const res = await fetch(`${base}/api/attachment?path=..%2F..%2Foutside%2Fsecret.txt`);
+    const res = await apiFetch(`${base}/api/attachment?path=..%2F..%2Foutside%2Fsecret.txt`);
     expect(res.status).toBe(400);
     expect(await res.text()).not.toContain('secret');
   });
 
   it('returns 404 for a contained path that does not exist', async () => {
-    const res = await fetch(`${base}/api/attachment?path=missing.bin`);
+    const res = await apiFetch(`${base}/api/attachment?path=missing.bin`);
     expect(res.status).toBe(404);
   });
 
   it('rejects a traversal path with 400 before reaching core', async () => {
-    const res = await fetch(
+    const res = await apiFetch(
       `${base}/api/attachment?path=${encodeURIComponent('../outside/secret.txt')}`
     );
     expect(res.status).toBe(400);
@@ -660,13 +682,13 @@ describe('POST /api/apply-suggestion', () => {
 
 describe('routing', () => {
   it('returns 404 for an unknown API route', async () => {
-    const res = await fetch(`${base}/api/nope`);
+    const res = await apiFetch(`${base}/api/nope`);
     expect(res.status).toBe(404);
     expect(await res.json()).toHaveProperty('error');
   });
 
   it('returns 405 for a known path with the wrong method', async () => {
-    const res = await fetch(`${base}/api/diff`, { method: 'POST' });
+    const res = await apiFetch(`${base}/api/diff`, { method: 'POST' });
     expect(res.status).toBe(405);
     expectNoCoreCall();
   });
@@ -752,7 +774,8 @@ describe('host and origin', () => {
     // last would then be reading a different request from the approved one.
     const { port } = server.address() as AddressInfo;
     const res = await rawGetRaw(
-      `GET /api/diff HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nHost: evil.attacker.com\r\nConnection: close\r\n\r\n`
+      `GET /api/diff HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nHost: evil.attacker.com\r\n` +
+        `Authorization: Bearer ${CAPABILITY}\r\nConnection: close\r\n\r\n`
     );
     expect(res).toContain('403');
   });
@@ -823,22 +846,22 @@ describe('host and origin', () => {
   });
 
   it('rejects the opaque origin a sandboxed frame sends', async () => {
-    const res = await fetch(`${base}/api/diff`, { headers: { origin: 'null' } });
+    const res = await apiFetch(`${base}/api/diff`, { headers: { origin: 'null' } });
     expect(res.status).toBe(403);
     expectNoCoreCall();
   });
 
   it("accepts localhost and the listener's own origin", async () => {
     const port = (server.address() as AddressInfo).port;
-    const viaLocalhost = await fetch(`http://localhost:${port}/api/diff`);
+    const viaLocalhost = await apiFetch(`http://localhost:${port}/api/diff`);
     expect(viaLocalhost.status).toBe(200);
 
-    const withOrigin = await fetch(`${base}/api/diff`, { headers: { origin: base } });
+    const withOrigin = await apiFetch(`${base}/api/diff`, { headers: { origin: base } });
     expect(withOrigin.status).toBe(200);
   });
 
   it('accepts a request with no Origin at all, as curl sends', async () => {
-    const res = await fetch(`${base}/api/diff`);
+    const res = await apiFetch(`${base}/api/diff`);
     expect(res.status).toBe(200);
   });
 });
@@ -859,8 +882,173 @@ describe('security headers', () => {
   });
 
   it('sends them on API responses too', async () => {
-    const res = await fetch(`${base}/api/diff`);
+    const res = await apiFetch(`${base}/api/diff`);
     expect(res.headers.get('content-security-policy')).toBeTruthy();
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+});
+
+// Host, Origin and Fetch Metadata keep a web page out. They do not keep out
+// a local process: any client that names this listener in `Host` and sends
+// no browser headers passes all three, and loopback is shared by every
+// account on the machine. The capability is what identifies the reviewer:
+// a secret drawn per process and delivered only through the launch URL's
+// fragment, which the browser never sends to the server.
+describe('session capability', () => {
+  const SENSITIVE_GETS = ['/api/diff', '/api/config', '/api/resume', '/api/file', '/api/image'];
+  const SENSITIVE_POSTS = ['/api/expand-context', '/api/apply-suggestion', '/api/review'];
+
+  it.each(SENSITIVE_GETS)('refuses GET %s without the capability', async route => {
+    const res = await fetch(`${base}${route}?path=img.png`);
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: 'unauthorized' });
+    expectNoCoreCall();
+  });
+
+  it('refuses GET /api/attachment without the capability', async () => {
+    const res = await fetch(`${base}/api/attachment?path=attach.bin`);
+    expect(res.status).toBe(401);
+    expect(await res.text()).not.toContain('attachment-bytes');
+    expectNoCoreCall();
+  });
+
+  it.each(SENSITIVE_POSTS)('refuses POST %s without the capability', async route => {
+    const res = await fetch(`${base}${route}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(res.status).toBe(401);
+    expectNoCoreCall();
+    expect(session.reviewState).toBeNull();
+  });
+
+  it.each([
+    ['a wrong token of the same length', CAPABILITY.slice(0, -1) + '!'],
+    ['a prefix of the token', CAPABILITY.slice(0, -1)],
+    ['the token with a suffix', CAPABILITY + 'x'],
+    ['an empty bearer', ''],
+  ])('refuses %s', async (_label, presented) => {
+    const res = await fetch(`${base}/api/diff`, {
+      headers: { authorization: `Bearer ${presented}` },
+    });
+    expect(res.status).toBe(401);
+    expectNoCoreCall();
+  });
+
+  it('refuses a scheme other than Bearer, even carrying the token', async () => {
+    const res = await fetch(`${base}/api/diff`, {
+      headers: { authorization: `Basic ${CAPABILITY}` },
+    });
+    expect(res.status).toBe(401);
+    expectNoCoreCall();
+  });
+
+  it('refuses the token as a query parameter, which would land in logs and history', async () => {
+    const res = await fetch(`${base}/api/diff?cap=${CAPABILITY}`);
+    expect(res.status).toBe(401);
+    expectNoCoreCall();
+  });
+
+  it('never echoes the presented token in a refusal', async () => {
+    const res = await fetch(`${base}/api/diff`, {
+      headers: { authorization: `Bearer ${CAPABILITY}x` },
+    });
+    expect(res.status).toBe(401);
+    expect(await res.text()).not.toContain(CAPABILITY);
+    expect(res.headers.get('www-authenticate')).toBe('Bearer');
+  });
+
+  it('answers every sensitive route with the right token', async () => {
+    for (const route of [
+      '/api/diff',
+      '/api/config',
+      '/api/resume',
+      '/api/file?path=src/index.ts',
+    ]) {
+      expect((await apiFetch(`${base}${route}`)).status, route).toBe(200);
+    }
+    expect((await apiFetch(`${base}/api/image?path=img.png`)).status).toBe(200);
+    expect((await apiFetch(`${base}/api/attachment?path=attach.bin`)).status).toBe(200);
+    vi.mocked(core.expandContext).mockResolvedValueOnce({ hunks: [INDEX_HUNK], totalLines: 1 });
+    const expanded = await postJson('/api/expand-context', {
+      filePath: 'src/index.ts',
+      contextLines: 3,
+    });
+    expect(expanded.status).toBe(200);
+    expect(vi.mocked(core.expandContext)).toHaveBeenCalledTimes(1);
+  });
+
+  // The audit's reproduction: `curl -H 'Host: 127.0.0.1:<port>' http://127.0.0.1:<port>/api/diff`
+  // from another account on the same host passed every browser check, since
+  // none of them is about who is asking.
+  it('refuses a request that names this listener in Host but carries no browser headers and no token', async () => {
+    const { port } = server.address() as AddressInfo;
+    const res = await rawGet('/api/diff', { host: `127.0.0.1:${port}` }, { withCapability: false });
+    expect(res.status).toBe(401);
+    expect(res.body).not.toContain('index.ts');
+    expectNoCoreCall();
+  });
+
+  it('refuses an unknown or wrongly-methoded API path before saying which it is', async () => {
+    expect((await fetch(`${base}/api/nope`)).status).toBe(401);
+    expect((await fetch(`${base}/api/diff`, { method: 'POST' })).status).toBe(401);
+  });
+
+  it('checks the browser headers first, so a rebound page learns nothing from the status', async () => {
+    const res = await rawGet('/api/diff', { host: 'evil.attacker.com' }, { withCapability: false });
+    expect(res.status).toBe(403);
+  });
+
+  it('serves the page and its assets without the token, and neither contains it', async () => {
+    for (const asset of ['/', '/assets/app.js']) {
+      const res = await fetch(`${base}${asset}`);
+      expect(res.status, asset).toBe(200);
+      expect(await res.text()).not.toContain(CAPABILITY);
+    }
+  });
+
+  it('sets Referrer-Policy: no-referrer on every kind of response', async () => {
+    const page = await fetch(`${base}/`);
+    const api = await apiFetch(`${base}/api/diff`);
+    const refused = await fetch(`${base}/api/diff`);
+    const attachment = await apiFetch(`${base}/api/attachment?path=attach.bin`);
+    for (const res of [page, api, refused, attachment]) {
+      expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    }
+  });
+
+  // The way this program is reached from elsewhere: `ssh -L 9999:127.0.0.1:<port>`.
+  // The browser then addresses the forward, so `Host` carries the forward's
+  // port and the fragment-delivered token rides in the header as usual.
+  it('is reachable through a local port forward with the capability', async () => {
+    const { port } = server.address() as AddressInfo;
+    const sockets = new Set<net.Socket>();
+    const proxy = net.createServer(client => {
+      const upstream = net.connect(port, '127.0.0.1');
+      sockets.add(client).add(upstream);
+      client.pipe(upstream).pipe(client);
+      client.on('error', () => upstream.destroy());
+      upstream.on('error', () => client.destroy());
+    });
+    await new Promise<void>(resolve => proxy.listen(0, '127.0.0.1', resolve));
+    const forwardPort = (proxy.address() as AddressInfo).port;
+    try {
+      const forwarded = `http://127.0.0.1:${forwardPort}`;
+      // What a browser sends: the forward in Host, and in Origin for a fetch.
+      const res = await fetch(`${forwarded}/api/diff`, {
+        headers: { ...AUTH, origin: forwarded, 'sec-fetch-site': 'same-origin' },
+      });
+      expect(res.status).toBe(200);
+      expect((await res.json()).diff.files).toHaveLength(2);
+
+      // And the forward is no way around the capability.
+      const bare = await fetch(`${forwarded}/api/diff`);
+      expect(bare.status).toBe(401);
+    } finally {
+      // Keep-alive sockets would otherwise hold the proxy open for seconds.
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>(resolve => proxy.close(() => resolve()));
+    }
   });
 });

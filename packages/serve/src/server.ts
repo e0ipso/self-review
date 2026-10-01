@@ -2,10 +2,14 @@
 // core already exports, plus static serving for the client bundle. node:http,
 // no framework.
 //
-// Two properties are load-bearing: every route validates before core runs, and
+// Three properties are load-bearing: every route validates before core runs;
 // the listener both binds to loopback and refuses requests that name anything
-// else. Binding alone is not enough — a web page can reach a loopback port, and
-// DNS rebinding would make it same-origin. There is no authentication.
+// else, since binding alone is not enough — a web page can reach a loopback
+// port, and DNS rebinding would make it same-origin; and every API route
+// requires the session capability, since none of that tells the reviewer from
+// another account on the same machine. The page gets the capability through
+// the launch URL's fragment (see ./protocol.ts) and presents it as a bearer
+// token; the page and its assets are served to anyone and carry no token.
 //
 // One route does more than wrap: `POST /api/review` publishes the document
 // before it answers, so its 200 is a durable acknowledgement and its failure
@@ -41,7 +45,8 @@ import {
   parseReviewStateBody,
   parseSuggestionApplyBody,
 } from './validate';
-import { MAX_REVIEW_BODY_BYTES } from './protocol';
+import { capabilityMatches } from './capability';
+import { CAPABILITY_SCHEME, MAX_REVIEW_BODY_BYTES } from './protocol';
 import type { ReviewSubmitAck, ReviewSubmitFailure } from './protocol';
 
 export { MAX_REVIEW_BODY_BYTES } from './protocol';
@@ -82,6 +87,12 @@ export interface ReviewServerOptions {
   repositoryRoot: string;
   /** Where `POST /api/review` publishes. No route changes it. */
   output: ReviewOutputTarget;
+  /**
+   * The session capability every `/api/` request must present as a bearer
+   * token. Drawn once per process by `generateCapability()` and delivered
+   * only through the launch URL's fragment; the server never sends it.
+   */
+  capability: string;
   /** Directory of the client bundle. Defaults to `defaultClientDir()`; tests inject a fixture. */
   clientDir?: string;
 }
@@ -241,6 +252,26 @@ function sendError(res: http.ServerResponse, status: number, error: string): voi
   // A body that blew the cap is not read further; close the connection rather
   // than let the rest of it be reinterpreted as a next request.
   sendJson(res, status, { error }, status === 413 ? { connection: 'close' } : {});
+}
+
+/**
+ * Whether the request presents the session capability. The scheme is
+ * matched case-insensitively, as the header grammar says; the token is
+ * compared in constant time. Only the header is consulted: a token in the
+ * query string would land in history and logs, so it is never accepted there.
+ */
+function presentsCapability(req: http.IncomingMessage, capability: string): boolean {
+  const header = req.headers.authorization;
+  if (header === undefined) return false;
+  const space = header.indexOf(' ');
+  if (space === -1) return false;
+  if (header.slice(0, space).toLowerCase() !== CAPABILITY_SCHEME.toLowerCase()) return false;
+  return capabilityMatches(capability, header.slice(space + 1).trim());
+}
+
+/** 401, with nothing in the body a client did not already know. */
+function sendUnauthorized(res: http.ServerResponse): void {
+  sendJson(res, 401, { error: 'unauthorized' }, { 'www-authenticate': CAPABILITY_SCHEME });
 }
 
 /**
@@ -520,7 +551,7 @@ async function serveStatic(
  * listening: bind it with `listenLoopback`.
  */
 export function createReviewServer(options: ReviewServerOptions): http.Server {
-  const { session, repositoryRoot, output, clientDir = defaultClientDir() } = options;
+  const { session, repositoryRoot, output, capability, clientDir = defaultClientDir() } = options;
 
   return http.createServer(async (req, res) => {
     const method = req.method ?? 'GET';
@@ -535,6 +566,15 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
     // Before anything is routed: this listener answers only to itself.
     if (!hostIsLoopback(req) || !originMatchesHost(req) || !fetchSiteIsSelf(req)) {
       sendError(res, 403, 'forbidden');
+      return;
+    }
+
+    // Then, for the API, only to the reviewer. The page and its assets are
+    // served to anyone — they carry no token and reveal nothing — but every
+    // route under /api/ is refused before it is even looked up, so a client
+    // without the capability learns neither the data nor the route table.
+    if (url.pathname.startsWith('/api/') && !presentsCapability(req, capability)) {
+      sendUnauthorized(res);
       return;
     }
 

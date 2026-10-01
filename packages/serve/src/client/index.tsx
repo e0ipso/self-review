@@ -5,6 +5,11 @@
 //
 // `App` is exported for its own suite, which mounts it against a real
 // listener; the module mounts it into `#root` only when that element exists.
+//
+// The session capability arrives in the launch URL's fragment and is taken
+// from there exactly once, before React mounts: it is handed to `App` as a
+// prop, held in the adapter's closure, and erased from the address bar, so
+// a reload, a bookmark or a copied address does not carry it.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -13,7 +18,28 @@ import type { ReviewPanelHandle } from '@self-review/react';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
 import '@self-review/react/styles.css';
 import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
-import { REVIEW_TOO_LARGE_CODE } from '../protocol';
+import { REVIEW_TOO_LARGE_CODE, parseCapabilityFragment } from '../protocol';
+
+/**
+ * Take the session capability out of the page's URL.
+ *
+ * The fragment is read and then removed with `history.replaceState`, so the
+ * token is gone from the address bar, from the history entry and from
+ * anything that copies the URL — the only copy left is the one returned
+ * here. Null when the page was opened without one: a reload, a retyped
+ * address, a link without its fragment.
+ */
+export function takeCapabilityFromLocation(): string | null {
+  const capability = parseCapabilityFragment(window.location.hash);
+  if (window.location.hash !== '') {
+    window.history.replaceState(
+      window.history.state,
+      '',
+      window.location.pathname + window.location.search
+    );
+  }
+  return capability;
+}
 
 /**
  * `failed` is a reviewing state with a notice: the review is still in the
@@ -30,6 +56,42 @@ interface SubmitFailure {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** What stopped the config request: the message, and whether it was a 401. */
+interface ConfigFailure {
+  message: string;
+  unauthorized: boolean;
+}
+
+function configFailureOf(error: unknown): ConfigFailure {
+  return {
+    message: messageOf(error),
+    unauthorized: error instanceof ServeRequestError && error.status === 401,
+  };
+}
+
+/**
+ * The page was opened without this session's key, or with one the server
+ * does not recognise — a reloaded tab, a retyped address, a URL from an
+ * earlier start. Nothing here can recover it: the only copy the server ever
+ * gave out was in the URL it printed.
+ */
+function CapabilityNotice() {
+  return (
+    <Notice title='Open the URL printed in the terminal'>
+      <p data-testid='capability-notice'>
+        This page needs the exact URL <code>self-review-serve</code> printed when it started. The
+        part after <code>#</code> is this session&apos;s key, and a reloaded or retyped address does
+        not have it.
+      </p>
+      <p>
+        Copy the URL from the terminal again and open it in this tab. If the terminal is gone, or
+        the server has been restarted since, stop it and start it again: a fresh URL is printed
+        every time.
+      </p>
+    </Notice>
+  );
 }
 
 function failureOf(error: unknown): SubmitFailure {
@@ -140,14 +202,27 @@ function Notice({ title, children }: { title: string; children: React.ReactNode 
   );
 }
 
-export function App() {
-  // One adapter for the page: it holds the single shared GET /api/diff.
-  const adapter = useMemo(() => createFetchAdapter(), []);
+export interface AppProps {
+  /**
+   * The session capability from the launch URL, or null when the page was
+   * opened without one. Held in React state and the adapter's closure only.
+   */
+  capability: string | null;
+}
+
+export function App({ capability }: AppProps) {
+  // One adapter for the page: it holds the single shared GET /api/diff and
+  // the capability every request presents. None without a capability — a
+  // request that is certain to be refused is not worth sending.
+  const adapter = useMemo(
+    () => (capability === null ? null : createFetchAdapter(capability)),
+    [capability]
+  );
   const reviewRef = useRef<ReviewPanelHandle>(null);
 
   const [config, setConfig] = useState<Partial<AppConfig> | null>(null);
   const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo | null>(null);
-  const [configError, setConfigError] = useState<string | null>(null);
+  const [configError, setConfigError] = useState<ConfigFailure | null>(null);
   const [status, setStatus] = useState<Status>('reviewing');
   const [hasUnsavedWork, setHasUnsavedWork] = useState(false);
   const [failure, setFailure] = useState<SubmitFailure | null>(null);
@@ -155,20 +230,21 @@ export function App() {
   // Config first: the providers below are seeded with it, so mounting before
   // it lands would render the wrong theme and categories.
   useEffect(() => {
+    if (capability === null) return;
     let cancelled = false;
-    loadServeConfig()
+    loadServeConfig(capability)
       .then(loaded => {
         if (cancelled) return;
         setConfig(loaded?.config ?? {});
         setOutputPathInfo(loaded?.outputPathInfo ?? null);
       })
       .catch(error => {
-        if (!cancelled) setConfigError(messageOf(error));
+        if (!cancelled) setConfigError(configFailureOf(error));
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [capability]);
 
   // Warn before the tab closes with work that only exists in this page.
   //
@@ -191,7 +267,7 @@ export function App() {
   const handleFinishReview = useCallback(async () => {
     // One submission in flight at a time, and none after the one that was
     // acknowledged — the server stops on it. A refused one may be sent again.
-    if (status === 'submitting' || status === 'submitted') return;
+    if (status === 'submitting' || status === 'submitted' || adapter === null) return;
     const state = reviewRef.current?.getReviewState();
     if (!state) return;
     setStatus('submitting');
@@ -209,10 +285,16 @@ export function App() {
   // config notice once rendered ahead of an effect, and React threw on the
   // shorter hook list instead of showing it.
 
+  // No key, or a key the server refused: the same page either way, since
+  // the fix is the same — the printed URL — and a refused key says no more.
+  if (adapter === null || configError?.unauthorized) {
+    return <CapabilityNotice />;
+  }
+
   if (configError) {
     return (
       <Notice title='Could not reach the review server'>
-        <p>{configError}</p>
+        <p>{configError.message}</p>
         <p>The process that served this page may have exited.</p>
       </Notice>
     );
@@ -244,5 +326,7 @@ export function App() {
 
 const container = document.getElementById('root');
 if (container) {
-  createRoot(container).render(<App />);
+  // Taken before the first render, and only here: the module's one side
+  // effect on the document is removing the key from its URL.
+  createRoot(container).render(<App capability={takeCapabilityFromLocation()} />);
 }

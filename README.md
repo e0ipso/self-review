@@ -329,7 +329,8 @@ npx @self-review/serve --resume-from review.xml   # continue a previous review
 npx @self-review/serve -o my-review.xml --staged  # write somewhere other than ./review.xml
 ```
 
-The URL goes to stderr when the process starts. Open it in a browser.
+The URL goes to stderr when the process starts. Open it in a browser exactly as printed: the part
+after `#` is this session's key, and the page does not work without it.
 
 The output path is set once, at startup, by `--output`/`-o` or by `output-file` in
 `.self-review.yaml`. No control in the browser changes it afterward. Finishing the review writes
@@ -343,12 +344,14 @@ is auto-saved either way.
 Walkthrough guides work as they do in the desktop application. A `review.guide.xml` sitting next to
 your output path is picked up at startup and the file tree opens in guided mode.
 
-The listener binds to `127.0.0.1` and there is no authentication. Anything that can reach the port
-can read your diff and finish the review on your behalf, and on a shared host that means every local
-user, not only you. It will not answer a request that names anything but itself, so a web page you
-happen to be visiting cannot reach it. Reaching it over an `ssh -L` forward works as you would
-expect; anyone who can reach that forwarded port has the access you do, and securing it is yours to
-add.
+The listener binds to `127.0.0.1`, will not answer a request that names anything but itself (so a
+web page you happen to be visiting cannot reach it), and requires the session key on every API
+request (so another account on the same host cannot either). The key is drawn fresh each start and
+exists only in the printed URL's fragment: a reloaded or retyped address does not have it and gets a
+page saying so, and a lost URL means starting the process again. Reaching it over an `ssh -L`
+forward works as you would expect — open the printed URL against the forwarded port, fragment and
+all. Anyone who can reach that forwarded port and has the URL has the access you do, so treat the
+URL like a password.
 
 See [`packages/serve/README.md`](packages/serve/README.md) for the package itself.
 

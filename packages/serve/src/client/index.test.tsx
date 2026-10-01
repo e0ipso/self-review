@@ -17,7 +17,7 @@ import type { AppConfig, DiffFile, ReviewSession } from '@self-review/core';
 import { installBrowserApiStubs } from '../../../react/src/test-helpers';
 import { createReviewServer, listenLoopback } from '../server';
 import { completeReviewOnSubmit } from '../lifecycle';
-import { App } from './index';
+import { App, takeCapabilityFromLocation } from './index';
 
 installBrowserApiStubs();
 
@@ -33,6 +33,9 @@ class StubResizeObserver implements ResizeObserver {
 
 /** Generous: each case mounts the whole review tree over a real socket. */
 const CASE_TIMEOUT_MS = 30_000;
+
+/** The session capability, as the page would have taken it from its URL. */
+const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
 
 const CONFIG: AppConfig = {
   theme: 'dark',
@@ -108,6 +111,7 @@ beforeEach(async () => {
     session,
     repositoryRoot: tmp,
     output: { path: outputPath, origin: 'explicit' },
+    capability: CAPABILITY,
     // Never served here: the page is mounted by React Testing Library.
     clientDir: tmp,
   });
@@ -143,18 +147,63 @@ function closeIsGuarded(): boolean {
 }
 
 async function mountWithUnsavedWork() {
-  const view = render(<App />);
+  const view = render(<App capability={CAPABILITY} />);
   await view.findByTestId('finish-review-btn', {}, { timeout: 10_000 });
   // The resumed comment has landed once the close guard is up.
   await waitFor(() => expect(closeIsGuarded()).toBe(true), { timeout: 10_000 });
   return view;
 }
 
+describe('session capability', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('takes the key out of the fragment and erases it from the address bar', () => {
+    window.history.replaceState(null, '', `/?x=1#cap=${CAPABILITY}`);
+
+    expect(takeCapabilityFromLocation()).toBe(CAPABILITY);
+    expect(window.location.hash).toBe('');
+    expect(window.location.search).toBe('?x=1');
+    // Gone for good: a second read, as a reload would do, finds nothing.
+    expect(takeCapabilityFromLocation()).toBeNull();
+  });
+
+  it('returns null for a page opened without one', () => {
+    window.history.replaceState(null, '', '/');
+    expect(takeCapabilityFromLocation()).toBeNull();
+    window.history.replaceState(null, '', '/#other=1');
+    expect(takeCapabilityFromLocation()).toBeNull();
+    expect(window.location.hash).toBe('');
+  });
+
+  it('shows the terminal-URL notice, and sends nothing, when the page has no key', async () => {
+    const requests: string[] = [];
+    route = url => {
+      requests.push(url.pathname);
+      return realFetch(url);
+    };
+
+    const view = render(<App capability={null} />);
+
+    expect(await view.findByText('Open the URL printed in the terminal')).toBeTruthy();
+    expect(view.getByTestId('capability-notice').textContent).toContain('#');
+    expect(requests).toEqual([]);
+  });
+
+  it('shows the same notice, not a connection error, when the server refuses the key', async () => {
+    const view = render(<App capability={`${CAPABILITY}-stale`} />);
+
+    expect(await view.findByText('Open the URL printed in the terminal')).toBeTruthy();
+    expect(view.queryByText('Could not reach the review server')).toBeNull();
+  });
+});
+
 describe('serve client', () => {
   it('shows the connection notice, not a crash, when the config request fails', async () => {
     route = () => Promise.reject(new TypeError('Failed to fetch'));
 
-    const view = render(<App />);
+    const view = render(<App capability={CAPABILITY} />);
 
     expect(await view.findByText('Could not reach the review server')).toBeTruthy();
     expect(view.getByText('Failed to fetch')).toBeTruthy();

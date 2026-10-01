@@ -2,7 +2,7 @@
 id: 17
 group: "serve"
 dependencies: [15]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - node-http
@@ -20,14 +20,14 @@ execution_profile: "complex-architecture"
 Node HTTP authorization and secure-coding for local services.
 
 ## Acceptance Criteria
-- [ ] Token: `crypto.randomBytes(32)` base64url, generated per process; compared with `crypto.timingSafeEqual` on equal-length buffers.
-- [ ] Delivery: the launch URL printed to stderr (and opened in the browser if serve does that) is `http://127.0.0.1:<port>/#cap=<token>` — a URL fragment, so it is never sent to the server, never in `Referer`, never in server logs. The client reads it from `location.hash` at startup, keeps it in memory (React state/closure; no `localStorage`/`sessionStorage`), and immediately removes it from the address bar with `history.replaceState`.
-- [ ] The client adapter sends `Authorization: Bearer <token>` on every API request; the server rejects missing/incorrect tokens with 401 JSON (no body detail that echoes the token) before route handling; static assets and `index.html` are served without the token and contain no token. A reloaded tab without the fragment shows a clear "open the URL printed in the terminal" notice.
-- [ ] Existing protections stay: loopback binding, Host/Origin checks, Fetch Metadata. Apply/read membership checks in core remain authoritative after authentication.
-- [ ] `Referrer-Policy: no-referrer` is set on all responses; the server never logs request headers.
-- [ ] HTTP integration tests (real server, ephemeral port): each sensitive route returns 401 without a token and with a wrong token; succeeds with the right token; `GET /` and static JS contain no token; a request carrying `Host: 127.0.0.1:<port>` without browser headers but without the token is rejected (the audit's reproduction). A test simulates SSH forwarding by connecting through a local TCP proxy on a different port with the same `Host` header policy the README documents, and confirms authorized access still works (adjust Host allow-list docs if forwarding requires it).
-- [ ] Serve e2e (`npm run test:e2e:serve`) updated to open the capability URL and passes; `npm run test:unit` passes.
-- [ ] `packages/serve/README.md` documents the capability, how to open the printed URL (including over SSH forwarding), and that a lost URL requires restarting serve.
+- [x] Token: `crypto.randomBytes(32)` base64url, generated per process; compared with `crypto.timingSafeEqual` on equal-length buffers.
+- [x] Delivery: the launch URL printed to stderr (and opened in the browser if serve does that) is `http://127.0.0.1:<port>/#cap=<token>` — a URL fragment, so it is never sent to the server, never in `Referer`, never in server logs. The client reads it from `location.hash` at startup, keeps it in memory (React state/closure; no `localStorage`/`sessionStorage`), and immediately removes it from the address bar with `history.replaceState`.
+- [x] The client adapter sends `Authorization: Bearer <token>` on every API request; the server rejects missing/incorrect tokens with 401 JSON (no body detail that echoes the token) before route handling; static assets and `index.html` are served without the token and contain no token. A reloaded tab without the fragment shows a clear "open the URL printed in the terminal" notice.
+- [x] Existing protections stay: loopback binding, Host/Origin checks, Fetch Metadata. Apply/read membership checks in core remain authoritative after authentication.
+- [x] `Referrer-Policy: no-referrer` is set on all responses; the server never logs request headers.
+- [x] HTTP integration tests (real server, ephemeral port): each sensitive route returns 401 without a token and with a wrong token; succeeds with the right token; `GET /` and static JS contain no token; a request carrying `Host: 127.0.0.1:<port>` without browser headers but without the token is rejected (the audit's reproduction). A test simulates SSH forwarding by connecting through a local TCP proxy on a different port with the same `Host` header policy the README documents, and confirms authorized access still works (adjust Host allow-list docs if forwarding requires it).
+- [x] Serve e2e (`npm run test:e2e:serve`) updated to open the capability URL and passes; `npm run test:unit` passes.
+- [x] `packages/serve/README.md` documents the capability, how to open the printed URL (including over SSH forwarding), and that a lost URL requires restarting serve.
 
 Use your internal Todo tool to track these and keep on track.
 

@@ -19,6 +19,10 @@ let base: string;
 let outputPath: string;
 let exit: ReturnType<typeof vi.fn<(code: number) => void>>;
 
+/** The session capability every API request below presents. */
+const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
+const AUTH = { authorization: `Bearer ${CAPABILITY}` };
+
 function reviewState(overrides: Partial<ReviewState> = {}): ReviewState {
   return {
     timestamp: '2026-01-01T00:00:00.000Z',
@@ -47,7 +51,7 @@ function reviewState(overrides: Partial<ReviewState> = {}): ReviewState {
 function submit(state: unknown): Promise<Response> {
   return fetch(base + 'api/review', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...AUTH },
     body: JSON.stringify(state),
   });
 }
@@ -79,6 +83,7 @@ beforeEach(async () => {
     session,
     repositoryRoot: tmp,
     output: { path: outputPath, origin: 'explicit' },
+    capability: CAPABILITY,
   });
   // The process exit is injected so the test can observe the code the real
   // program would exit with — and that it is never called on a failure.
@@ -155,7 +160,7 @@ describe('submission protocol', () => {
       await settle();
       expect(exit).not.toHaveBeenCalled();
       expect(server.listening).toBe(true);
-      expect((await fetch(base + 'api/diff')).status).toBe(200);
+      expect((await fetch(base + 'api/diff', { headers: AUTH })).status).toBe(200);
 
       // The fix, then the same review again.
       fs.rmdirSync(outputPath);
@@ -196,7 +201,7 @@ describe('submission protocol', () => {
 
   it('does nothing for a rejected submission or any other request', async () => {
     expect((await submit({ nope: true })).status).toBe(400);
-    expect((await fetch(base + 'api/diff')).status).toBe(200);
+    expect((await fetch(base + 'api/diff', { headers: AUTH })).status).toBe(200);
 
     // Nothing completed: still listening, nothing written. Losing the tab
     // that made these requests would be no different.

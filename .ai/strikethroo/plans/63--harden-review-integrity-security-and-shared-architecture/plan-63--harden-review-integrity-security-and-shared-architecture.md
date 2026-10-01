@@ -376,9 +376,9 @@ The graph is acyclic. Task 24 depends on every other task; only its edges from l
 - ✔️ Task 15: Serve recoverable submission (R02) (depends on: 10)
 - ✔️ Task 16: Remote thread provenance and shared helpers (R05) (depends on: 10)
 
-### Phase 5: Serve authorization
+### ✅ Phase 5: Serve authorization
 **Parallel Tasks:**
-- Task 17: Serve per-session capability (A2) (depends on: 15)
+- ✔️ Task 17: Serve per-session capability (A2) (depends on: 15)
 
 ### Phase 6: Source identity
 **Parallel Tasks:**

@@ -1,15 +1,18 @@
 // A `ReviewAdapter` over `fetch`: transport only, since every component the
 // browser renders already lives in `@self-review/react`.
 //
-// Four deliberate properties. `changeOutputPath` is absent, not stubbed —
+// Five deliberate properties. `changeOutputPath` is absent, not stubbed —
 // `FileTree` renders its control on the property's presence, so a stub would
 // draw a dead button. `chooseApplyDestination` is absent for a stronger reason:
 // the UI only asks for a destination when the session is a temporary remote
 // clone, and serve mode has no remote mode, so the case cannot arise.
 // `GET /api/diff` is issued once and shared, carrying both the diff and the
-// guide, so there is no push transport. And `submitReview` resolving means
-// the review is on disk: the route publishes before it answers, and a 200
-// without that acknowledgement is treated as a failure rather than a save.
+// guide, so there is no push transport. `submitReview` resolving means the
+// review is on disk: the route publishes before it answers, and a 200 without
+// that acknowledgement is treated as a failure rather than a save. And every
+// request presents the session capability as a bearer token: the server
+// answers 401 to anything else, and the token lives only in this closure —
+// never in storage, never in a URL.
 
 // Type-only, erased at build time: no runtime dependency on either package.
 import type { ReviewAdapter, GuideLoadPayload } from '@self-review/react';
@@ -25,7 +28,12 @@ import type {
   ResumeLoadPayload,
   ReviewState,
 } from '@self-review/core';
-import { MAX_REVIEW_BODY_BYTES, REVIEW_TOO_LARGE_CODE, formatMegabytes } from '../protocol';
+import {
+  MAX_REVIEW_BODY_BYTES,
+  REVIEW_TOO_LARGE_CODE,
+  capabilityAuthorization,
+  formatMegabytes,
+} from '../protocol';
 import type { ReviewSubmitAck } from '../protocol';
 
 /** What `GET /api/diff` answers: both halves of the initial session. */
@@ -105,32 +113,56 @@ async function requestError(response: Response, what: string): Promise<ServeRequ
   });
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
-  if (!response.ok) {
-    throw await requestError(response, `GET ${path}`);
-  }
-  return (await response.json()) as T;
-}
-
 /**
- * Post an already-serialized JSON body. `content-type: application/json` is
- * not optional: the server answers 415 without it, on every POST route.
+ * The HTTP verbs, bound to one session's capability. Everything the adapter
+ * sends goes through here, which is what makes "every request presents the
+ * token" a property of one function rather than of every call site.
  */
-function postJsonText(path: string, text: string): Promise<Response> {
-  return fetch(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: text,
-  });
+interface ServeClient {
+  fetch(path: string, init?: RequestInit): Promise<Response>;
+  getJson<T>(path: string): Promise<T>;
+  postJsonText(path: string, text: string): Promise<Response>;
+  postJson<T>(path: string, body: unknown): Promise<T>;
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const response = await postJsonText(path, JSON.stringify(body));
-  if (!response.ok) {
-    throw await requestError(response, `POST ${path}`);
-  }
-  return (await response.json()) as T;
+function createClient(capability: string): ServeClient {
+  const authorization = capabilityAuthorization(capability);
+
+  const client: ServeClient = {
+    fetch: (path, init = {}) =>
+      fetch(path, {
+        ...init,
+        headers: { ...(init.headers as Record<string, string> | undefined), authorization },
+      }),
+
+    getJson: async <T>(path: string): Promise<T> => {
+      const response = await client.fetch(path);
+      if (!response.ok) {
+        throw await requestError(response, `GET ${path}`);
+      }
+      return (await response.json()) as T;
+    },
+
+    /**
+     * Post an already-serialized JSON body. `content-type: application/json`
+     * is not optional: the server answers 415 without it, on every POST route.
+     */
+    postJsonText: (path, text) =>
+      client.fetch(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: text,
+      }),
+
+    postJson: async <T>(path: string, body: unknown): Promise<T> => {
+      const response = await client.postJsonText(path, JSON.stringify(body));
+      if (!response.ok) {
+        throw await requestError(response, `POST ${path}`);
+      }
+      return (await response.json()) as T;
+    },
+  };
+  return client;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,18 +263,20 @@ function withPath(route: string, filePath: string): string {
 }
 
 /** Read the config and its output path info. Fetched before the UI mounts. */
-export async function loadServeConfig(): Promise<ConfigApiResponse | null> {
-  return getJson<ConfigApiResponse | null>('/api/config');
+export async function loadServeConfig(capability: string): Promise<ConfigApiResponse | null> {
+  return createClient(capability).getJson<ConfigApiResponse | null>('/api/config');
 }
 
 /**
- * Build the adapter for one page load.
+ * Build the adapter for one page load, bound to the session capability the
+ * page took from its launch URL.
  *
  * A factory rather than a module-level object because the shared
  * `GET /api/diff` promise is per-session state; a test gets a fresh one per
  * case, and the page creates exactly one.
  */
-export function createFetchAdapter(): ReviewAdapter {
+export function createFetchAdapter(capability: string): ReviewAdapter {
+  const { getJson, postJson, postJsonText, fetch: authorizedFetch } = createClient(capability);
   let diffRequest: Promise<DiffApiResponse> | null = null;
 
   /** The one `GET /api/diff`, shared by loadDiff and both subscriptions. */
@@ -334,7 +368,7 @@ export function createFetchAdapter(): ReviewAdapter {
       // Bytes, not JSON: this route answers octet-stream, and 404 for an
       // attachment whose file is gone — which the image component renders
       // as "Image not found" rather than treating as an error.
-      const response = await fetch(withPath('/api/attachment', filePath));
+      const response = await authorizedFetch(withPath('/api/attachment', filePath));
       if (!response.ok) return null;
       return response.arrayBuffer();
     },
