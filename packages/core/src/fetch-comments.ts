@@ -5,7 +5,6 @@
 // stderr. Every collaborator is injectable so the flow is unit-testable; the
 // CLI entry in main.ts stays thin.
 
-import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { ForgeCliUnavailableError, parseForgeUrl } from './forge-provider';
 import type { ForgeCommandRunner, ForgeName, ForgeProvider, ForgeUrl } from './forge-provider';
@@ -21,7 +20,8 @@ import type { ExistingClone, MaterializeResult } from './materializer';
 import { mapThreadsToReviewComments, REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 import { parseDiffWithDiagnostics } from './diff-parser';
 import { runGitDiffAsync } from './git';
-import { serializeReview } from './xml-serializer';
+import { publishReview } from './review-publisher';
+import type { PublishReviewOptions, PublishReviewResult } from './review-publisher';
 import { loadConfig } from './config';
 import type {
   AppConfig,
@@ -58,8 +58,12 @@ export interface FetchCommentsDeps {
     existing?: ExistingClone | null
   ) => Promise<string>;
   loadDiffFiles: (repoPath: string, baseSha: string, headSha: string) => Promise<DiffFile[]>;
-  serialize: (state: ReviewState, outputPath: string) => Promise<string>;
-  writeFile: (path: string, content: string) => void;
+  /** Validates, stages assets and atomically writes the document; see review-publisher.ts. */
+  publish: (
+    state: ReviewState,
+    outputPath: string,
+    options: PublishReviewOptions
+  ) => Promise<PublishReviewResult>;
   loadConfig: () => AppConfig;
   now: () => Date;
 }
@@ -83,8 +87,7 @@ function defaultDeps(): FetchCommentsDeps {
       }
       return files;
     },
-    serialize: serializeReview,
-    writeFile: (path, content) => writeFileSync(path, content, 'utf-8'),
+    publish: publishReview,
     loadConfig,
     now: () => new Date(),
   };
@@ -272,8 +275,10 @@ export async function runFetchComments(
 
     const config = deps.loadConfig();
     const outputPath = resolve(cwd, config.outputFile);
-    const xml = await deps.serialize(state, outputPath);
-    deps.writeFile(outputPath, xml + '\n');
+    // The output path comes from project configuration or the default, not
+    // from the reviewer, so it is published under the inherited policy: it
+    // must stay inside the launch directory and may not be a link.
+    await deps.publish(state, outputPath, { outputOrigin: 'inherited', baseDir: cwd });
     console.error(`[fetch-comments] ${comments.length} threads written to ${outputPath}`);
   } finally {
     materialized.cleanup();

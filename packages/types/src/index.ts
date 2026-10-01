@@ -32,6 +32,14 @@ export interface DiffFile {
   hunks: DiffHunk[];
   isUntracked?: boolean;
   contentLoaded?: boolean;
+  /**
+   * Set when the loader listed this file but deliberately did not read its
+   * content because a safety budget forbade it (a file over the per-file
+   * read budget, or one past the aggregate budget). `hunks` is then empty
+   * and this sentence, not "no changes", is what the viewer shows. The same
+   * condition is also reported in `DiffLoadPayload.diagnostics`.
+   */
+  omittedReason?: string;
 }
 
 // ===== Diff Source Types =====

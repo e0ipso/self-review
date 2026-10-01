@@ -527,7 +527,7 @@ describe('serializing an extracted suggestion', () => {
     };
 
     // serializeReview throws when the document fails XSD validation.
-    const xml = await serializeReview(state, join(outputDir, 'review.xml'));
+    const { xml } = await serializeReview(state, join(outputDir, 'review.xml'));
 
     expect(xml).toContain('<original-code>const b = 2 &amp; 3;</original-code>');
     expect(xml).toContain('<proposed-code>const b = (2 &amp; 3);</proposed-code>');

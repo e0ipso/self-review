@@ -12,14 +12,15 @@
 // DIFF_REQUEST handler, so the payload must be cached via setGuideData
 // before the renderer's first request arrives. When a guide exists, the
 // xmllint-wasm init and validation delay window paint by a few hundred ms;
-// when none exists the cost is a single failed stat.
+// when none exists the cost is a single failed open.
 //
 // Discovery is one-shot: the guide is resolved from the startup output
 // path. Changing the output path at runtime does not re-discover.
 
-import { readFile } from 'fs/promises';
 import { extname, resolve } from 'path';
+import { readFileWithinBudget } from './bounded-read';
 import { parseGuideXml, reconcileGuide } from './guide-parser';
+import { formatBytes, MAX_GUIDE_BYTES } from './input-budgets';
 import { AppConfig, GuideLoadPayload } from './types';
 
 /**
@@ -66,9 +67,23 @@ export async function loadGuide(
   }
 
   try {
+    // Bounded before anything is read: an oversized guide is refused on its
+    // fstat size, and a FIFO or device is refused without blocking on it.
     let content: string;
     try {
-      content = await readFile(guidePath, 'utf-8');
+      const read = await readFileWithinBudget(guidePath, MAX_GUIDE_BYTES);
+      if (read.kind === 'too-large') {
+        console.error(
+          `[guide] Ignoring guide at ${guidePath}: too large (${formatBytes(read.size)}, ` +
+            `over the ${formatBytes(MAX_GUIDE_BYTES)} guide budget)`
+        );
+        return null;
+      }
+      if (read.kind === 'not-regular') {
+        console.error(`[guide] Ignoring guide at ${guidePath}: unreadable (not a regular file)`);
+        return null;
+      }
+      content = read.content.toString('utf-8');
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {

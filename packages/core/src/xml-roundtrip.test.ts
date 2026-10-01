@@ -138,7 +138,7 @@ describe('review XML round-trip with the real validator', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const state = stateFor(fixture);
 
-      const xml = await serializeReview(state, path.join(dir, 'review.xml'));
+      const { xml } = await serializeReview(state, path.join(dir, 'review.xml'));
 
       // serializeReview throws on a schema violation and only *warns* when the
       // validator could not load; the absence of that warning is what proves
@@ -175,7 +175,7 @@ describe('review XML round-trip with the real validator', () => {
         },
         path.join(dir, 'review.xml')
       );
-      expect(again).toBe(xml);
+      expect(again.xml).toBe(xml);
     }
   );
 
@@ -186,7 +186,7 @@ describe('review XML round-trip with the real validator', () => {
       tmpDirs.push(dir);
       vi.spyOn(console, 'error').mockImplementation(() => {});
       const xmlPath = path.join(dir, 'review.xml');
-      fs.writeFileSync(xmlPath, await serializeReview(stateFor(fixture), xmlPath));
+      fs.writeFileSync(xmlPath, (await serializeReview(stateFor(fixture), xmlPath)).xml);
 
       const read = JSON.parse(
         execFileSync('python3', ['-c', PY_EXTRACT, xmlPath], { encoding: 'utf-8' })

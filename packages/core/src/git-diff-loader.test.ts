@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
@@ -178,5 +178,75 @@ describe('loadGitDiffWithUntracked diagnostics', () => {
 
     expect(diagnostics).toEqual([]);
     expect(files.map(file => file.newPath)).toEqual(['f.txt']);
+  });
+});
+
+describe('loadGitDiffWithUntracked input budgets', () => {
+  let root: string;
+  let outside: string;
+
+  beforeEach(() => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-loader-budget-')));
+    outside = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-loader-outside-')));
+    gitSync(['init', '-q', root]);
+    gitSync(['-C', root, 'config', 'user.email', 'test@example.com']);
+    gitSync(['-C', root, 'config', 'user.name', 'Test']);
+    writeFileSync(join(root, 'f.txt'), 'old\n');
+    gitSync(['-C', root, 'add', '-A']);
+    gitSync(['-C', root, 'commit', '-qm', 'init']);
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it('shows an untracked symlink as its link text, the way git would once it is added', async () => {
+    const sentinel = join(outside, 'secret.txt');
+    writeFileSync(sentinel, 'OUTSIDE-SENTINEL-CONTENT\n');
+    symlinkSync(sentinel, join(root, 'link'));
+
+    const { files, diagnostics } = await loadGitDiffWithUntracked([], root);
+
+    expect(diagnostics).toEqual([]);
+    expect(JSON.stringify(files)).not.toContain('OUTSIDE-SENTINEL');
+    const link = files.find(file => file.newPath === 'link');
+    expect(link?.isUntracked).toBe(true);
+    expect(link?.hunks[0].lines.map(line => line.content)).toEqual([sentinel]);
+
+    // Git's own rendering of the same symlink, once staged.
+    gitSync(['-C', root, 'add', 'link']);
+    const staged = await loadGitDiffWithUntracked(['--cached'], root);
+    expect(staged.files.find(file => file.newPath === 'link')?.hunks[0].lines).toEqual(
+      link?.hunks[0].lines
+    );
+  });
+
+  it('reports git diff output over the capture ceiling as a diagnostic, not a failure', async () => {
+    writeFileSync(join(root, 'f.txt'), `${'changed line\n'.repeat(200)}`);
+
+    const { files, diagnostics } = await loadGitDiffWithUntracked([], root, {
+      budgets: { maxGitDiffOutputBytes: 1024 },
+    });
+
+    expect(files).toEqual([]);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toContain('1 KiB');
+  });
+
+  it('refuses to synthesize more untracked files than the entry budget, and says so', async () => {
+    writeFileSync(join(root, 'f.txt'), 'new\n');
+    for (let i = 0; i < 5; i++) {
+      writeFileSync(join(root, `u${i}.txt`), `${i}\n`);
+    }
+
+    const { files, diagnostics } = await loadGitDiffWithUntracked([], root, {
+      budgets: { maxEntries: 3 },
+    });
+
+    // The tracked diff is still reviewed; untracked files are not silently dropped.
+    expect(files.map(file => file.newPath)).toEqual(['f.txt']);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toContain('5 untracked files');
   });
 });

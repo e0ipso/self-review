@@ -8,6 +8,7 @@ import { serializeReview } from './xml-serializer';
 import { parseReviewXmlString } from './xml-parser';
 import type { AppConfig, DiffFile } from './types';
 import { buildRemoteReviewState, runFetchComments, type FetchCommentsDeps } from './fetch-comments';
+import type { ReviewState } from './types';
 
 // Mock xmllint-wasm so the round-trip test does not load WASM. The
 // serializer's validation call is still asserted through the mock.
@@ -130,7 +131,7 @@ describe('buildRemoteReviewState', () => {
 });
 
 describe('runFetchComments', () => {
-  let written: Array<{ path: string; content: string }>;
+  let written: Array<{ path: string; content: string; state?: ReviewState }>;
   // A bare vi.fn() infers Mock<Procedure | Constructable>, which the field
   // does not accept, so this is pinned to the field's own signature.
   let cleanup: Mock<MaterializeResult['cleanup']>;
@@ -163,8 +164,10 @@ describe('runFetchComments', () => {
       materialize: vi.fn().mockResolvedValue(materializeResult()),
       resolveRemoteDefaultBranch: vi.fn().mockResolvedValue('trunk'),
       loadDiffFiles: vi.fn().mockResolvedValue([makeDiffFile('src/a.ts')]),
-      serialize: vi.fn().mockResolvedValue('<xml/>'),
-      writeFile: (path, content) => written.push({ path, content }),
+      publish: vi.fn().mockImplementation(async (state: ReviewState, outputPath: string) => {
+        written.push({ path: outputPath, content: '<xml/>\n', state });
+        return { outputPath, assetPaths: [] };
+      }),
       loadConfig: vi.fn().mockReturnValue({ outputFile: './review.xml' } as AppConfig),
       now: () => new Date('2026-08-04T10:00:00.000Z'),
     };
@@ -174,15 +177,19 @@ describe('runFetchComments', () => {
     vi.restoreAllMocks();
   });
 
-  it('writes the serialized review to the configured output path and cleans up', async () => {
+  it('publishes the review to the configured output path under the inherited policy', async () => {
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 
     expect(written).toHaveLength(1);
     expect(written[0].path).toBe('/work/review.xml');
-    expect(written[0].content).toBe('<xml/>\n');
     expect(cleanup).toHaveBeenCalled();
 
-    const serialized = (deps.serialize as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    // The output path came from configuration, not the reviewer, so the
+    // publisher is told to keep it inside the launch directory.
+    const [, , options] = (deps.publish as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(options).toEqual({ outputOrigin: 'inherited', baseDir: '/work' });
+
+    const serialized = written[0].state!;
     expect(serialized.remoteUrl).toBe(PR_URL);
     expect(serialized.remoteForge).toBe('github');
     expect(serialized.remoteBaseSha).toBe('aaa111');
@@ -227,8 +234,8 @@ describe('runFetchComments', () => {
     expect(written).toHaveLength(0);
   });
 
-  it('cleans up the clone when serialization fails', async () => {
-    deps.serialize = vi.fn().mockRejectedValue(new Error('validation failed'));
+  it('cleans up the clone when publication fails', async () => {
+    deps.publish = vi.fn().mockRejectedValue(new Error('validation failed'));
 
     await expect(runFetchComments(PR_URL, { cwd: '/work', deps })).rejects.toThrow(
       'validation failed'
@@ -275,8 +282,13 @@ describe('runFetchComments', () => {
       makeThread('rt-1', null),
     ] satisfies ForgeThread[]);
     // Use the REAL serializer so the round-trip exercises the production
-    // XML path (validation is mocked to valid at the module level).
-    deps.serialize = (state, outputPath) => serializeReview(state, outputPath);
+    // XML path (validation is mocked to valid at the module level); only the
+    // disk write is captured instead of performed.
+    deps.publish = async (state, outputPath) => {
+      const { xml } = await serializeReview(state, outputPath);
+      written.push({ path: outputPath, content: xml + '\n' });
+      return { outputPath, assetPaths: [] };
+    };
 
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 

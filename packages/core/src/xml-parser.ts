@@ -10,8 +10,9 @@
 // usable range, a suggestion it could not apply — keeps that comment as
 // file-level feedback and says so in `importDiagnostics`.
 
-import { readFileSync } from 'fs';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { readFileWithinBudgetSync } from './bounded-read';
+import { formatBytes, MAX_RESUME_ATTACHMENTS, MAX_RESUME_XML_BYTES } from './input-budgets';
 import {
   ReviewComment,
   Suggestion,
@@ -58,19 +59,34 @@ export interface ParsedReview {
 /**
  * Read and parse a review document from disk.
  *
- * @throws ReviewXmlError `read-failed` when the file cannot be read, or
- *   whatever {@link parseReviewXmlString} throws for its content.
+ * The file is sized before it is read: a document over
+ * `MAX_RESUME_XML_BYTES` is refused without being read or parsed, and a FIFO
+ * or device is refused without blocking on it.
+ *
+ * @throws ReviewXmlError `read-failed` when the file cannot be read or is
+ *   not a regular file, `input-too-large` when it exceeds the resume budget,
+ *   or whatever {@link parseReviewXmlString} throws for its content.
  */
 export function parseReviewXml(xmlPath: string): ParsedReview {
-  let xmlContent: string;
+  let read: ReturnType<typeof readFileWithinBudgetSync>;
   try {
-    xmlContent = readFileSync(xmlPath, 'utf-8');
+    read = readFileWithinBudgetSync(xmlPath, MAX_RESUME_XML_BYTES);
   } catch (error) {
     throw new ReviewXmlError('read-failed', `Could not read ${xmlPath}: ${messageOf(error)}`, {
       cause: error,
     });
   }
-  return parseReviewXmlString(xmlContent);
+  if (read.kind === 'not-regular') {
+    throw new ReviewXmlError('read-failed', `Could not read ${xmlPath}: not a regular file`);
+  }
+  if (read.kind === 'too-large') {
+    throw new ReviewXmlError(
+      'input-too-large',
+      `Could not read ${xmlPath}: it is ${formatBytes(read.size)}, over the ` +
+        `${formatBytes(MAX_RESUME_XML_BYTES)} limit for a review document`
+    );
+  }
+  return parseReviewXmlString(read.content.toString('utf-8'));
 }
 
 /**
@@ -79,7 +95,9 @@ export function parseReviewXml(xmlPath: string): ParsedReview {
  * Namespace-blind by design: v1, v2 and v3 documents read identically.
  *
  * @throws ReviewXmlError `parse-failed` when the content is not XML the
- *   parser can load, `missing-root` when there is no `<review>` element.
+ *   parser can load, `missing-root` when there is no `<review>` element,
+ *   `input-too-large` when it carries more than `MAX_RESUME_ATTACHMENTS`
+ *   attachment references.
  */
 export function parseReviewXmlString(xmlContent: string): ParsedReview {
   const parser = new XMLParser({
@@ -138,6 +156,18 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     toChildArray(file.comment).forEach((comment, index) => {
       comments.push(parseComment(comment, filePath, index + 1, importDiagnostics));
     });
+  }
+
+  // Each attachment is fetched on demand once the review is on screen, so
+  // the count bounds how many reads one document can ask for. Refuse the
+  // document rather than drop attachments the author wrote.
+  const attachmentCount = countAttachments(comments);
+  if (attachmentCount > MAX_RESUME_ATTACHMENTS) {
+    throw new ReviewXmlError(
+      'input-too-large',
+      `The review document carries ${attachmentCount} attachments, over the limit of ` +
+        `${MAX_RESUME_ATTACHMENTS} for a review document`
+    );
   }
 
   return {
@@ -425,6 +455,18 @@ function parseReplies(comment: Record<string, unknown>): Reply[] | undefined {
 
     return reply;
   });
+}
+
+/** Attachment references across every comment and reply. */
+function countAttachments(comments: ReviewComment[]): number {
+  let count = 0;
+  for (const comment of comments) {
+    count += comment.attachments?.length ?? 0;
+    for (const reply of comment.replies ?? []) {
+      count += reply.attachments?.length ?? 0;
+    }
+  }
+  return count;
 }
 
 function messageOf(error: unknown): string {

@@ -274,6 +274,25 @@ Raw/Rendered toggle in the file header:
   defaults to Rendered view; files over 10 MB show an error message
 - **SVG** (`.svg`): content extracted from addition lines and rendered via `<img>` with a
   `data:image/svg+xml;base64,...` URI (blocks script execution); defaults to Raw view
+- **Mermaid diagrams** (` ```mermaid ` fences in rendered Markdown and in the guide overview):
+  `MermaidBlock` renders into a hidden off-screen container that is removed afterwards and shows the
+  result through the same `<img src="data:image/svg+xml;base64,…">` boundary as SVG previews, so the
+  diagram's stylesheet and any markup it smuggles into its output stay inside the image document.
+  Mermaid runs with `securityLevel: 'strict'`, `htmlLabels: false` and a `secure` list
+  (`MERMAID_SECURE_KEYS`) under which `%%{init}%%` directives and YAML front matter cannot change
+  `securityLevel`, `themeCSS`, `fontFamily`, `altFontFamily`, `htmlLabels`, `maxTextSize`,
+  `maxEdges`, `dompurifyConfig`, `startOnLoad` or `suppressErrorRendering`. Source longer than
+  `MERMAID_MAX_SOURCE_CHARS` (50,000) is refused, output that is not well-formed SVG is refused, and
+  a render still pending after `MERMAID_RENDER_TIMEOUT_MS` (10 s) is abandoned; each shows a
+  contained error in place of the diagram.
+
+Reviewed HTML — raw HTML inside Markdown and `.html` files — passes through `rehypePassiveContent`
+(`packages/react/src/utils/passive-content.ts`), which keeps only passive tags and attributes:
+`style` is never kept and `class` keeps only `language-*` tokens, so content cannot borrow the app's
+positioning utilities. The rendered-text surfaces (`.rendered-markdown-view`,
+`.guide-overview-prose`) are also contained in `packages/react/src/styles.css`
+(`contain: layout paint; overflow: hidden; position: relative; isolation: isolate`), so nothing
+rendered inside them can cover review controls.
 
 File-level comments are available on all preview types. Line-level comments are available in the Raw
 diff view, and through the source-line-mapped gutter for Markdown and HTML rendered text views.
@@ -464,8 +483,24 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
 - **File writes.** The app writes the review XML output file at the configured `output-file` path
   (default `./review.xml`). The output path can be changed at runtime via the save dialog in the
   file tree footer. When comments include image attachments, it also creates a
-  `.self-review-assets/` directory alongside the output file containing the referenced images. In
-  remote mode, when no matching local clone exists, it additionally creates a temporary blobless
+  `.self-review-assets/` directory alongside the output file containing the referenced images. Every
+  host (desktop, serve, `fetch-comments`) writes both through one function, `publishReview` in
+  `packages/core/src/review-publisher.ts`: the whole document is built and XSD-validated before any
+  side effect; new attachment blobs are then staged under fresh unique names (`<id>-<random>.<ext>`,
+  created exclusively and without following links, never overwriting an asset the previous document
+  references); and the XML is written to a same-directory temp file, synced and renamed over the
+  output path, which is the commit point. A failure before the rename removes only what that attempt
+  staged and leaves the previous `review.xml` and its assets byte-identical; the error is a
+  `ReviewPublishError` with a `code` (`validation-failed`, `xml-illegal-character`,
+  `output-is-directory`, `permission-denied`, `no-space`, `unsafe-link`, `unsupported-target`,
+  `io-error`) and each validation problem rendered as text in `details`. The publisher refuses to
+  write through a symlinked output leaf, a symlinked `.self-review-assets`, or a link at a staged
+  asset name (`unsafe-link`), and refuses to replace a hard-linked output (`unsupported-target`); an
+  existing output file keeps its permission bits. Its `outputOrigin` option records where the path
+  came from: `inherited` (project config or the default, which a repository can commit) must also
+  resolve physically inside its `baseDir`, while `explicit` (a CLI flag or the save dialog) may
+  point anywhere. `serializeReview` is pure (`state → { xml, assets }`) and never touches the disk.
+  In remote mode, when no matching local clone exists, it additionally creates a temporary blobless
   clone in a uniquely named directory under the OS temp root, removed on exit (a leftover from a
   crash sits in the OS temp area, which the OS reclaims); when reusing an existing clone, it only
   fetches into namespaced refs (`refs/self-review/*`) — the working tree is never touched. No other
@@ -534,16 +569,17 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   Closing the window via X/Cmd+Q/Alt+F4 shows a three-way confirmation dialog: Save & Quit / Discard
   / Cancel.
 - **XML must validate, with one stated exception.** The serializer validates output against the XSD
-  before writing. A schema violation writes the errors to stderr and throws a `ReviewXmlError`
-  (`code: 'schema-invalid'`); the host exits 1 and no file is written. Library code in
-  `packages/core` never calls `process.exit`: `parseReviewXml` throws a `ReviewXmlError`
-  (`read-failed`, `parse-failed`, `missing-root`) and each host prints its message and decides. A
-  value holding a character XML 1.0 cannot represent throws `XmlIllegalCharacterError` naming the
-  comment and field before anything is written; it is never stripped silently. A validator that
-  fails to load is deliberately not fatal. `serializeReview` logs
-  `[main] XML validation infrastructure failed: <message> - emitting XML without validation`, then
-  returns the document, so `review.xml` is written unvalidated and the process exits 0. Losing a
-  finished review to a broken xmllint build is the worse outcome. So a `review.xml` on disk proves
+  before anything is written. A schema violation writes the errors to stderr and throws a
+  `ReviewXmlError` (`code: 'schema-invalid'`, each violation as a string in `details`), which
+  `publishReview` surfaces as `ReviewPublishError` `validation-failed`; the host exits 1 and no file
+  is written. Library code in `packages/core` never calls `process.exit`: `parseReviewXml` throws a
+  `ReviewXmlError` (`read-failed`, `parse-failed`, `missing-root`) and each host prints its message
+  and decides. A value holding a character XML 1.0 cannot represent throws
+  `XmlIllegalCharacterError` naming the comment and field before anything is written; it is never
+  stripped silently. A validator that fails to load is deliberately not fatal. `serializeReview`
+  logs `[main] XML validation infrastructure failed: <message> - emitting XML without validation`,
+  then returns the document, so `review.xml` is written unvalidated and the process exits 0. Losing
+  a finished review to a broken xmllint build is the worse outcome. So a `review.xml` on disk proves
   validation ran only when that warning is absent from stderr. Both branches are pinned in
   `packages/core/src/xml-serializer.test.ts`. The guide sidecar makes the opposite trade on purpose
   and folds a validator failure into the same `ok: false` as a schema violation

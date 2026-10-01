@@ -176,6 +176,20 @@
   line-height: max(22px, calc(var(--sr-font-size, 14px) * 1.5));
 }
 
+/* Rendered text previews are contained. Reviewed Markdown, HTML and guide
+ * prose keeps its `class`/`style` stripped (passive-content.ts), and the
+ * surface it renders into clips and isolates whatever is left: fixed or
+ * absolutely positioned content cannot escape the preview to cover the
+ * file tree, toolbar or Finish Review control, and no stacking order
+ * inside it competes with the app's own. */
+.self-review .rendered-markdown-view,
+.self-review .guide-overview-prose {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  contain: layout paint;
+}
+
 /* Rendered markdown view: override prose margins */
 .self-review .rendered-markdown-view table {
   margin-top: 0.75em;

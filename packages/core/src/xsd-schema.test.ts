@@ -432,7 +432,7 @@ describe('serializer output conforms to the schema', () => {
       ],
     };
 
-    const xml = await serializeReview(state, '/tmp/test-review.xml');
+    const { xml } = await serializeReview(state, '/tmp/test-review.xml');
 
     expect(xml).toContain('xmlns="urn:self-review:v3"');
     expect(xml).toContain('severity="critical" confidence="high"');
@@ -470,7 +470,7 @@ describe('serializer output conforms to the schema', () => {
       ],
     };
 
-    const xml = await serializeReview(state, '/tmp/test-review-replies.xml');
+    const { xml } = await serializeReview(state, '/tmp/test-review-replies.xml');
 
     expect((await validate(xml)).valid).toBe(true);
     // Document order is conversation order, and it is the only ordering signal.
@@ -515,7 +515,7 @@ describe('serializer output conforms to the schema', () => {
       ],
     };
 
-    const xml = await serializeReview(state, '/tmp/test-review-fenced-reply.xml');
+    const { xml } = await serializeReview(state, '/tmp/test-review-fenced-reply.xml');
 
     expect((await validate(xml)).valid).toBe(true);
     expect(xml).toContain('if (a &lt; b &amp;&amp; c &gt; d) emit(&quot;&lt;x&gt;&quot;);');

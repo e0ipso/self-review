@@ -2,7 +2,7 @@
 id: 12
 group: "react-previews"
 dependencies: [2, 8]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - react
@@ -19,13 +19,13 @@ Reviewed Mermaid source (rendered Markdown and guide overview) can no longer inj
 React rendering and HTML/SVG sanitization/isolation.
 
 ## Acceptance Criteria
-- [ ] `MermaidBlock.tsx` (`:24,:28,:61`) no longer uses `dangerouslySetInnerHTML` for generated SVG; it renders `<img src="data:image/svg+xml;base64,…" alt="…">` (as `RenderedSvgView` does). Mermaid's render container is detached/off-document and removed after render; rendering errors show a contained message (task 5's boundary also applies).
-- [ ] Content-controlled Mermaid configuration cannot alter global behavior: initialize with `securityLevel: 'strict'` (or stricter), and strip/ignore `%%{init}%%`/front-matter config keys that change `securityLevel`, `themeCSS`, `fontFamily`, `htmlLabels`, `maxTextSize` (document the list).
-- [ ] Render is bounded: a size limit on diagram source and a render timeout that shows a contained error (the cancellation flag alone doesn't interrupt rendering; the timeout must at least stop waiting and display the error).
-- [ ] Passive HTML (`packages/react/src/utils/passive-content.ts`): `class`/`className` and `style` attributes from reviewed content are dropped (or restricted to an allow-list that contains no app positioning utilities), and rendered text previews are contained (`contain: layout paint; overflow: hidden; position: relative; isolation: isolate`) so fixed/absolute content cannot cover review controls.
-- [ ] Tests (jsdom) reproduce the audit payloads (`docs/security-audit-2026-10-01/mermaid-probe.mjs`): after rendering, no `<style>` or foreign `DIV` from the diagram exists in the application document outside an `<img>`, and an app button's computed/inline state is untouched; passive HTML with `class="fixed inset-0"`/`style="position:fixed"` renders without those attributes.
-- [ ] Native browser evidence: run the webapp (`npm run test:e2e` harness or the Vite dev server) with a fixture containing the CSS-selector and `classDef` payloads and confirm (Playwright screenshot or assertion) that the review controls remain visible and clickable. Record the evidence path in the task output.
-- [ ] `npm run test:unit`, `npm run test:e2e` pass.
+- [x] `MermaidBlock.tsx` (`:24,:28,:61`) no longer uses `dangerouslySetInnerHTML` for generated SVG; it renders `<img src="data:image/svg+xml;base64,…" alt="…">` (as `RenderedSvgView` does). Mermaid's render container is detached/off-document and removed after render; rendering errors show a contained message (task 5's boundary also applies).
+- [x] Content-controlled Mermaid configuration cannot alter global behavior: initialize with `securityLevel: 'strict'` (or stricter), and strip/ignore `%%{init}%%`/front-matter config keys that change `securityLevel`, `themeCSS`, `fontFamily`, `htmlLabels`, `maxTextSize` (document the list).
+- [x] Render is bounded: a size limit on diagram source and a render timeout that shows a contained error (the cancellation flag alone doesn't interrupt rendering; the timeout must at least stop waiting and display the error).
+- [x] Passive HTML (`packages/react/src/utils/passive-content.ts`): `class`/`className` and `style` attributes from reviewed content are dropped (or restricted to an allow-list that contains no app positioning utilities), and rendered text previews are contained (`contain: layout paint; overflow: hidden; position: relative; isolation: isolate`) so fixed/absolute content cannot cover review controls.
+- [x] Tests (jsdom) reproduce the audit payloads (`docs/security-audit-2026-10-01/mermaid-probe.mjs`): after rendering, no `<style>` or foreign `DIV` from the diagram exists in the application document outside an `<img>`, and an app button's computed/inline state is untouched; passive HTML with `class="fixed inset-0"`/`style="position:fixed"` renders without those attributes.
+- [x] Native browser evidence: run the webapp (`npm run test:e2e` harness or the Vite dev server) with a fixture containing the CSS-selector and `classDef` payloads and confirm (Playwright screenshot or assertion) that the review controls remain visible and clickable. Record the evidence path in the task output.
+- [x] `npm run test:unit`, `npm run test:e2e` pass.
 
 Use your internal Todo tool to track these and keep on track.
 
@@ -50,3 +50,17 @@ Isolated Mermaid rendering and contained passive layout.
 
 Test philosophy: write a few tests, mostly integration (real Mermaid render in jsdom where feasible; mock only if Mermaid cannot run in jsdom, and then rely on the browser e2e evidence). Test the isolation boundary, not Mermaid itself.
 </details>
+
+## Task Output
+- Evidence (Playwright, headless Chromium, 1280x800):
+  `evidence/task-12-mermaid-isolation.png` and `evidence/task-12-passive-html-containment.png`
+  in this plan directory, captured by `tests/webapp-features/13-content-isolation.feature`
+  (`?fixture=hostile-content`, the audit's CSS-selector and `classDef` payloads plus raw HTML
+  with `class="fixed inset-0"`/`style="position:fixed"`). Both diagrams render as
+  `<img src="data:image/svg+xml;base64,…">`, the overlays are inert text inside the preview,
+  and Finish Review and the file tree are topmost at their centre and clickable.
+- Mermaid runs with `securityLevel: 'strict'`, `htmlLabels: false`, and `MERMAID_SECURE_KEYS`
+  (`MermaidBlock.tsx`) so directives/front matter cannot change `securityLevel`, `themeCSS`,
+  `fontFamily`, `altFontFamily`, `htmlLabels`, `maxTextSize`, `maxEdges`, `dompurifyConfig`,
+  `startOnLoad`, `suppressErrorRendering`. Source limit 50,000 chars; render timeout 10 s;
+  non-well-formed SVG output refused. All three show a contained error.

@@ -1,9 +1,8 @@
 // Process lifetime is review lifetime. Completing writes the file and stops the
 // process; nothing else does. A closed tab is not an event this program sees.
 
-import * as fs from 'node:fs';
 import type * as http from 'node:http';
-import { serializeReview, takeReviewState } from '@self-review/core';
+import { publishReview, takeReviewState } from '@self-review/core';
 import type { ReviewSession, ReviewState } from '@self-review/core';
 
 export interface CompletionOptions {
@@ -18,12 +17,13 @@ export interface CompletionOptions {
 }
 
 /**
- * The same two steps the desktop takes on Finish Review. A document that fails
- * XSD validation throws, and nothing is written.
+ * The same step the desktop takes on Finish Review. A document that fails
+ * XSD validation throws, and nothing is written; a failure after that leaves
+ * any previous output intact. The path is treated as reviewer-chosen until
+ * this host tracks whether it came from --output or from project configuration.
  */
 export async function writeReviewOutput(state: ReviewState, outputPath: string): Promise<void> {
-  const xml = await serializeReview(state, outputPath);
-  fs.writeFileSync(outputPath, xml + '\n', 'utf-8');
+  await publishReview(state, outputPath, { outputOrigin: 'explicit' });
 }
 
 /**

@@ -148,7 +148,7 @@ describe('resolveSession', () => {
         },
       ],
     };
-    fs.writeFileSync(priorPath, (await serializeReview(prior, priorPath)) + '\n');
+    fs.writeFileSync(priorPath, (await serializeReview(prior, priorPath)).xml + '\n');
 
     const { session } = await resolveSession(parseServeArgs(['--resume-from', 'prior.xml']));
 

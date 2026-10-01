@@ -2,7 +2,6 @@
 // Serialize ReviewState to XML and validate against XSD
 
 import * as path from 'path';
-import * as fs from 'fs';
 import { ReviewState, FileReviewState, ReviewComment, Reply, Attachment } from './types';
 import { validateXML } from 'xmllint-wasm';
 import {
@@ -674,15 +673,44 @@ function assetNameComponent(idPrefix: string): string {
   return String(idPrefix ?? '').replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
-/** One attachment blob with the on-disk location it will be written to. */
-interface PendingAssetWrite {
-  target: string;
+/** The on-disk name of the attachment directory beside the output file. */
+export const ASSET_DIR_NAME = '.self-review-assets';
+
+/** One attachment blob with the location the document now names for it. */
+export interface PlannedAsset {
+  /** As emitted in the document: `.self-review-assets/<name>`. */
+  relativePath: string;
+  /** Resolved against the output file's directory. */
+  absolutePath: string;
   data: ArrayBuffer;
 }
 
 /**
+ * Names the file an attachment blob will live under in the asset directory.
+ * `idPrefix` is already reduced to the URL-safe alphabet; the result must be
+ * a bare file name. The default reproduces the historical
+ * `<id>-<index>.<ext>` form; the publisher injects unique names so a new
+ * document never overwrites an asset the previous one references.
+ */
+export type AssetNamer = (idPrefix: string, index: number, ext: string) => string;
+
+export interface SerializeOptions {
+  assetName?: AssetNamer;
+}
+
+/** The pure outcome of serialization: the document and the writes it implies. */
+export interface SerializedReview {
+  /** The validated document, without a trailing newline. */
+  xml: string;
+  /** Every attachment blob the document references but nothing has written. */
+  assets: PlannedAsset[];
+}
+
+const defaultAssetName: AssetNamer = (idPrefix, index, ext) => `${idPrefix}-${index}.${ext}`;
+
+/**
  * Rewrites one attachment list's fileNames to their on-disk locations and
- * strips the data buffers, collecting each blob as a pending write instead
+ * strips the data buffers, collecting each blob as a planned asset instead
  * of writing it.
  *
  * Shared by the comment walk and the reply walk. Serialization emits the
@@ -699,7 +727,8 @@ function stageAttachmentList(
   attachments: Attachment[] | undefined,
   idPrefix: string,
   assetDir: string,
-  writes: PendingAssetWrite[]
+  assetName: AssetNamer,
+  assets: PlannedAsset[]
 ): Attachment[] | undefined {
   if (!attachments?.length) return attachments;
 
@@ -707,34 +736,35 @@ function stageAttachmentList(
     if (!att.data) return att;
 
     const ext = extFromMediaType(att.mediaType);
-    const fileName = `${assetNameComponent(idPrefix)}-${index}.${ext}`;
-    const relativePath = `.self-review-assets/${fileName}`;
-    const target = path.join(assetDir, fileName);
+    const fileName = assetName(assetNameComponent(idPrefix), index, ext);
+    const relativePath = `${ASSET_DIR_NAME}/${fileName}`;
+    const absolutePath = path.join(assetDir, fileName);
 
-    // `assetNameComponent` already makes this unreachable. It stays as a
-    // second, independent check rather than one clever regex, because an
-    // escape here would be a write onto an arbitrary path.
-    if (path.dirname(path.resolve(target)) !== path.resolve(assetDir)) {
+    // `assetNameComponent` already makes this unreachable for the default
+    // namer. It stays as a second, independent check rather than one clever
+    // regex, because an escape here would be a write onto an arbitrary path.
+    if (path.dirname(path.resolve(absolutePath)) !== path.resolve(assetDir)) {
       throw new Error(`Refusing to write an attachment outside ${assetDir}: ${fileName}`);
     }
 
-    writes.push({ target, data: att.data });
+    assets.push({ relativePath, absolutePath, data: att.data });
     return { ...att, fileName: relativePath, data: undefined };
   });
 }
 
 /**
  * Plan the attachment writes for a review without performing them, and
- * return the state the document is built from. The writes happen only after
- * the document has been built and validated (see {@link serializeReview}),
- * so a review the serializer refuses leaves nothing on disk.
+ * return the state the document is built from. Whether the writes ever
+ * happen is the publisher's decision, taken only after the document has
+ * been built and validated (see {@link serializeReview}).
  */
 function stageAttachments(
   state: ReviewState,
-  outputFilePath: string
-): { state: ReviewState; assetDir: string; writes: PendingAssetWrite[] } {
-  const assetDir = path.join(path.dirname(outputFilePath), '.self-review-assets');
-  const writes: PendingAssetWrite[] = [];
+  outputFilePath: string,
+  assetName: AssetNamer
+): { state: ReviewState; assets: PlannedAsset[] } {
+  const assetDir = path.join(path.dirname(outputFilePath), ASSET_DIR_NAME);
+  const assets: PlannedAsset[] = [];
 
   const updatedFiles = state.files.map(file => ({
     ...file,
@@ -743,7 +773,13 @@ function stageAttachments(
     // own list would drop those blobs without a word.
     comments: file.comments.map(comment => ({
       ...comment,
-      attachments: stageAttachmentList(comment.attachments, comment.id, assetDir, writes),
+      attachments: stageAttachmentList(
+        comment.attachments,
+        comment.id,
+        assetDir,
+        assetName,
+        assets
+      ),
       ...(comment.replies
         ? {
             replies: comment.replies.map(reply => ({
@@ -752,7 +788,8 @@ function stageAttachments(
                 reply.attachments,
                 `${comment.id}-r-${reply.id}`,
                 assetDir,
-                writes
+                assetName,
+                assets
               ),
             })),
           }
@@ -760,42 +797,35 @@ function stageAttachments(
     })),
   }));
 
-  return { state: { ...state, files: updatedFiles }, assetDir, writes };
-}
-
-function commitAttachmentWrites(writes: PendingAssetWrite[], assetDir: string): void {
-  if (writes.length === 0) return;
-
-  if (!fs.existsSync(assetDir)) {
-    fs.mkdirSync(assetDir, { recursive: true });
-  }
-  for (const write of writes) {
-    fs.writeFileSync(write.target, Buffer.from(write.data));
-  }
-  console.error(`[main] Wrote attachment files to ${assetDir}`);
+  return { state: { ...state, files: updatedFiles }, assets };
 }
 
 /**
- * Serialize a review to its XML document, validating it against the v3 XSD
- * and writing any attachment blobs beside the output path.
+ * Serialize a review to its XML document, validated against the v3 XSD,
+ * together with the attachment blobs the document references. Pure: nothing
+ * here touches the disk. Writing the document and its assets, in an order
+ * that cannot leave a half-published review behind, is `publishReview`'s
+ * job (review-publisher.ts).
  *
- * Order matters: the document is built first, so a value XML cannot carry
- * is refused before anything touches the disk; it is then validated; and
- * only then are attachments written. A refused review therefore leaves no
- * stray asset files behind.
+ * The document is built first, so a value XML cannot carry is refused before
+ * the caller gets anything to write; it is then validated.
  *
  * @throws XmlIllegalCharacterError when a text or attribute value holds a
  *   character XML 1.0 cannot represent; names the comment/reply and field.
- * @throws ReviewXmlError `schema-invalid` when the document fails the XSD.
- *   A validator that fails to load is deliberately not fatal: the document
- *   is returned unvalidated after a stderr warning.
+ * @throws ReviewXmlError `schema-invalid` when the document fails the XSD,
+ *   with each violation rendered in `details`. A validator that fails to
+ *   load is deliberately not fatal: the document is returned unvalidated
+ *   after a stderr warning.
  */
-export async function serializeReview(state: ReviewState, outputFilePath: string): Promise<string> {
-  const staged = stageAttachments(state, outputFilePath);
+export async function serializeReview(
+  state: ReviewState,
+  outputFilePath: string,
+  options: SerializeOptions = {}
+): Promise<SerializedReview> {
+  const staged = stageAttachments(state, outputFilePath, options.assetName ?? defaultAssetName);
   const xml = buildXml(staged.state);
   await validateAgainstSchema(xml);
-  commitAttachmentWrites(staged.writes, staged.assetDir);
-  return xml;
+  return { xml, assets: staged.assets };
 }
 
 async function validateAgainstSchema(xml: string): Promise<void> {
@@ -826,7 +856,8 @@ async function validateAgainstSchema(xml: string): Promise<void> {
     details.forEach(detail => console.error(`  ${detail}`));
     throw new ReviewXmlError(
       'schema-invalid',
-      `Generated XML does not conform to schema${details.length ? `: ${details.join('; ')}` : ''}`
+      `Generated XML does not conform to schema${details.length ? `: ${details.join('; ')}` : ''}`,
+      { details }
     );
   }
 }

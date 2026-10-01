@@ -1,18 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { parseReviewXmlString, parseReviewXml } from './xml-parser';
+import { parseReviewXmlString } from './xml-parser';
 import { ReviewXmlError } from './xml-errors';
 import { serializeReview } from './xml-serializer';
 import type { ReviewState, FileReviewState, ReviewComment } from './types';
-import { readFileSync } from 'fs';
 
 // Mock xmllint-wasm for serializer tests
 vi.mock('xmllint-wasm', () => ({
   validateXML: vi.fn(() => Promise.resolve({ valid: true, errors: [] })),
-}));
-
-// Mock fs for file reading tests
-vi.mock('fs', () => ({
-  readFileSync: vi.fn(),
 }));
 
 describe('parseReviewXmlString', () => {
@@ -518,45 +512,6 @@ describe('parseReviewXmlString', () => {
     });
   });
 
-  describe('parseReviewXml (file reading)', () => {
-    it('reads file and parses XML', () => {
-      const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<review xmlns="urn:self-review:v1"
-        timestamp="2024-01-15T10:30:00Z"
-        git-diff-args="--staged"
-        repository="/repo">
-</review>`;
-
-      vi.mocked(readFileSync).mockReturnValueOnce(xmlContent);
-
-      const result = parseReviewXml('/path/to/review.xml');
-
-      expect(readFileSync).toHaveBeenCalledWith('/path/to/review.xml', 'utf-8');
-      expect(result.comments).toEqual([]);
-    });
-
-    it('throws a typed read error naming the path, never exiting, when the file cannot be read', () => {
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      vi.mocked(readFileSync).mockImplementationOnce(() => {
-        throw new Error('File not found');
-      });
-
-      let caught: unknown;
-      try {
-        parseReviewXml('/nonexistent.xml');
-      } catch (error) {
-        caught = error;
-      }
-
-      expect(caught).toBeInstanceOf(ReviewXmlError);
-      expect((caught as ReviewXmlError).code).toBe('read-failed');
-      expect((caught as ReviewXmlError).message).toContain('/nonexistent.xml');
-      expect((caught as ReviewXmlError).message).toContain('File not found');
-      expect(mockExit).not.toHaveBeenCalled();
-      mockExit.mockRestore();
-    });
-  });
-
   describe('round-trip', () => {
     it('serialize then parse yields equivalent data', async () => {
       const original: ReviewState = {
@@ -584,7 +539,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(1);
@@ -624,7 +579,9 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const parsed = parseReviewXmlString(await serializeReview(original, '/tmp/test-review.xml'));
+      const parsed = parseReviewXmlString(
+        (await serializeReview(original, '/tmp/test-review.xml')).xml
+      );
 
       expect(parsed.comments[0].author).toBe('Claude Opus 5');
       expect(parsed.comments[0].severity).toBe('major');
@@ -656,7 +613,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(xml).not.toContain('severity=');
@@ -688,7 +645,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.source).toEqual({
@@ -707,7 +664,7 @@ describe('parseReviewXmlString', () => {
         files: [],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.source).toEqual({ type: 'welcome' });
@@ -736,7 +693,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(1);
@@ -767,7 +724,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments[0].lineRange).toEqual({
@@ -803,7 +760,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments[0].body).toBe('Use <Component> with & "quotes" and \'apostrophes\'');
@@ -863,7 +820,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.comments).toHaveLength(3);
@@ -1285,7 +1242,7 @@ describe('parseReviewXmlString', () => {
         ],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const result = parseReviewXmlString(xml);
 
       expect(result.comments[0].replies![0].body).toBe(replyBody);
@@ -1562,7 +1519,7 @@ ${files}
         ],
       };
 
-      const xml = await serializeReview(original, '/tmp/test-review.xml');
+      const { xml } = await serializeReview(original, '/tmp/test-review.xml');
       const parsed = parseReviewXmlString(xml);
 
       expect(parsed.remoteUrl).toBe(original.remoteUrl);
@@ -1585,7 +1542,7 @@ ${files}
         files: [{ ...original.files[0], comments: parsed.comments }],
       };
 
-      expect(await serializeReview(rebuilt, '/tmp/test-review.xml')).toBe(xml);
+      expect((await serializeReview(rebuilt, '/tmp/test-review.xml')).xml).toBe(xml);
     });
   });
 

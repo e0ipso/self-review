@@ -96,6 +96,19 @@ export function isPassiveHtmlAttribute(tag: string, name: string): boolean {
   return GLOBAL_ATTRIBUTES.has(name) || TAG_ATTRIBUTES[tag]?.has(name) === true;
 }
 
+// The only class tokens reviewed content keeps. `language-*` is what fenced
+// code carries for Prism highlighting and ```mermaid detection; it styles
+// nothing but code text. Every other token is dropped, so content cannot
+// borrow the app's own utilities (`fixed`, `inset-0`, `sr-only`, ...) to
+// position itself over review controls or hide from the reviewer. `style`
+// is never allowed, for the same reason.
+const PASSIVE_CLASS_TOKEN = /^language-[\w-]+$/;
+
+function passiveClassNames(value: unknown): string[] {
+  const tokens = Array.isArray(value) ? value : String(value ?? '').split(/\s+/);
+  return tokens.map(String).filter(token => PASSIVE_CLASS_TOKEN.test(token));
+}
+
 export function rehypePassiveContent() {
   return (tree: Root) => {
     function clean(parent: Root | Element): void {
@@ -104,6 +117,11 @@ export function rehypePassiveContent() {
         if (!PASSIVE_HTML_TAGS.has(node.tagName)) return false;
         for (const key of Object.keys(node.properties)) {
           if (!isPassiveHtmlAttribute(node.tagName, key)) delete node.properties[key];
+        }
+        if ('className' in node.properties) {
+          const classNames = passiveClassNames(node.properties.className);
+          if (classNames.length > 0) node.properties.className = classNames;
+          else delete node.properties.className;
         }
         // GFM task lists stay visible without allowing interactive form controls.
         if (node.tagName === 'input') {

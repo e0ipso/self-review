@@ -29,7 +29,9 @@ src/
 ├── types.ts              # Re-exports from @self-review/types
 ├── diff-parser.ts        # Unified diff → DiffFile[]
 ├── git.ts                # child_process wrappers for git
-├── xml-serializer.ts     # ReviewState → XML (validates against XSD; refuses XML-illegal chars)
+├── xml-serializer.ts     # ReviewState → { xml, assets } (pure; validates against XSD; refuses XML-illegal chars)
+├── review-publisher.ts   # publishReview: validate → stage assets (unique, exclusive, no-follow) → atomic rename
+├── safe-fs.ts            # No-follow primitives: writeExclusiveNoFollow, atomicReplace, assertNoSymlinkAncestors, FsLayer
 ├── xml-parser.ts         # XML → ReviewState (lossless; downgrades bad anchors with diagnostics)
 ├── xml-text.ts           # The one escape/decode contract (CR/LF/TAB as char refs, single pass)
 ├── xml-errors.ts         # ReviewXmlError / XmlIllegalCharacterError (library never process.exits)
@@ -39,7 +41,7 @@ src/
 ├── directory-scanner.ts  # File/directory scanning
 ├── payload-sizing.ts     # Large-payload threshold checks
 ├── ignore-filter.ts      # .gitignore-style filtering
-├── fs-utils.ts           # File system helpers
+├── fs-utils.ts           # checkWritability (startup hint only; hosts still call it until they adopt publisher errors)
 └── file-type-utils.ts    # File extension → language/preview detection
 ```
 

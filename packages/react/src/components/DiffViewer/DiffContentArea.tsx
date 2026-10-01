@@ -72,6 +72,21 @@ export function DiffContentArea({
     [onCommentRange]
   );
 
+  // Listed on purpose without content (a safety budget): there is nothing to
+  // load, and "No changes to display" would misstate why it is empty.
+  if (file.omittedReason) {
+    return (
+      <div
+        role='status'
+        data-testid='content-omitted'
+        className='m-3 flex items-start gap-2 text-sm text-muted-foreground p-3 border rounded'
+      >
+        <AlertTriangle className='h-4 w-4 mt-0.5 shrink-0' aria-hidden='true' />
+        <p className='min-w-0 flex-1 break-words'>{file.omittedReason}</p>
+      </div>
+    );
+  }
+
   // An unloaded file that is not in error is about to be (or being) fetched.
   if (
     contentLoad.kind === 'loading' ||

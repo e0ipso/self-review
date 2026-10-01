@@ -116,11 +116,13 @@ describe('completeReviewOnSubmit', () => {
     expect((await submit(encodeReviewStateForWire(state))).status).toBe(200);
     expect(await exited).toBe(0);
 
-    const asset = path.join(path.dirname(outputPath), '.self-review-assets', 'c1-0.png');
+    // The publisher gives each new asset a unique name; the document is the
+    // record of which one.
+    const xml = fs.readFileSync(outputPath, 'utf-8');
+    const relative = xml.match(/<attachment path="([^"]+)" media-type="image\/png" \/>/)?.[1];
+    expect(relative).toMatch(/^\.self-review-assets\/c1-[0-9a-f]+\.png$/);
+    const asset = path.join(path.dirname(outputPath), relative!);
     expect(fs.readFileSync(asset)).toEqual(Buffer.from(bytes));
-    expect(fs.readFileSync(outputPath, 'utf-8')).toContain(
-      '<attachment path=".self-review-assets/c1-0.png" media-type="image/png" />'
-    );
   });
 
   it('does nothing for a rejected submission or any other request', async () => {

@@ -29,6 +29,7 @@ import { scanDirectory, scanFile } from './directory-scanner';
 import { tokenizeGitDiffArgs } from './git-diff-args';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { applySuggestion } from './apply-suggestion';
+import { MAX_IMAGE_BYTES } from './input-budgets';
 
 /**
  * The state a single review session owns. One desktop application window is
@@ -141,7 +142,7 @@ export async function loadImage(
     '.bmp': 'image/bmp',
     '.svg': 'image/svg+xml',
   };
-  const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+  const MAX_SIZE = MAX_IMAGE_BYTES;
   const baseDir = resolveSourceBaseDir(session) ?? process.cwd();
   const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
   const ext = path.extname(filePath).toLowerCase();
@@ -547,22 +548,19 @@ export async function prepareDirectoryReview(
     // Failed to stat — proceed as directory
   }
 
-  let payload: DiffLoadPayload;
-  if (isFile) {
-    const files = await scanFile(directoryPath);
-    payload = {
-      files,
-      source: { type: 'file', sourcePath: directoryPath },
-    };
-  } else {
-    // Directory mode: scan all files as new additions
-    const ignorePatterns = session.config?.ignore ?? [];
-    const files = await scanDirectory(directoryPath, ignorePatterns);
-    payload = {
-      files,
-      source: { type: 'directory', sourcePath: directoryPath },
-    };
-  }
+  // Directory mode scans all files as new additions. Scan diagnostics (a
+  // budget hit, an unreadable source) ride on the payload so the review
+  // never presents a failed or partial load as an empty one.
+  const scan = isFile
+    ? await scanFile(directoryPath)
+    : await scanDirectory(directoryPath, session.config?.ignore ?? []);
+  const payload: DiffLoadPayload = {
+    files: scan.files,
+    source: isFile
+      ? { type: 'file', sourcePath: directoryPath }
+      : { type: 'directory', sourcePath: directoryPath },
+    ...(scan.diagnostics.length > 0 ? { diagnostics: scan.diagnostics } : {}),
+  };
 
   // Large payload guard — skipped entirely when there is no config.
   if (!session.config) {

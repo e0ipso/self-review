@@ -2,7 +2,6 @@
 // Electron main process entry point
 
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
-import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { checkWritability } from './fs-utils';
 import { parseCliArgs } from './cli';
@@ -18,7 +17,7 @@ import { applyStagedUntrackedDefault } from '../../packages/core/src/staged-untr
 import { determineMode } from '../../packages/core/src/startup-mode';
 import { createIgnoreFilter } from './ignore-filter';
 import { parseReviewXml } from './xml-parser';
-import { serializeReview } from './xml-serializer';
+import { publishReview } from '../../packages/core/src/review-publisher';
 import {
   registerIpcHandlers,
   registerFindInPageForWindow,
@@ -252,12 +251,16 @@ async function initializeApp() {
       const filePath = resolve(process.cwd(), fileArg);
       console.error('[main] Scanning file:', filePath);
 
-      const files = await scanFile(filePath);
+      const { files, diagnostics } = await scanFile(filePath);
       console.error('[main] File scan complete:', files.length, 'files');
+      for (const diagnostic of diagnostics) {
+        console.error('[main] Diff diagnostic:', diagnostic);
+      }
 
       diffData = {
         files,
         source: { type: 'file', sourcePath: filePath },
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
       };
     } else if (mode === 'directory') {
       // Directory mode: scan the specified directory
@@ -265,12 +268,17 @@ async function initializeApp() {
       const directoryPath = resolve(process.cwd(), dirArg);
       console.error('[main] Scanning directory:', directoryPath);
 
-      const files = await scanDirectory(directoryPath, appConfig.ignore);
+      const { files, diagnostics } = await scanDirectory(directoryPath, appConfig.ignore);
       console.error('[main] Directory scan complete:', files.length, 'files');
+      for (const diagnostic of diagnostics) {
+        console.error('[main] Diff diagnostic:', diagnostic);
+      }
 
       diffData = {
         files,
         source: { type: 'directory', sourcePath: directoryPath },
+        // A budget or read failure must never read as an empty directory.
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
       };
     } else {
       // Welcome mode: open window with no diff data
@@ -470,9 +478,11 @@ function createWindow(): void {
       const finalState = remoteSessionInfo
         ? applyRemoteProvenance(reviewState, remoteSessionInfo)
         : reviewState;
-      const xml = await serializeReview(finalState, currentOutputPath);
-
-      writeFileSync(currentOutputPath, xml + '\n', 'utf-8');
+      // Validated, attachments staged, then renamed into place: a failure
+      // leaves any previous review.xml intact. The path is treated as
+      // reviewer-chosen until this host tracks whether it came from the
+      // save dialog or from project configuration.
+      await publishReview(finalState, currentOutputPath, { outputOrigin: 'explicit' });
       console.error(`[main] Review written to ${currentOutputPath}`);
 
       mainWindow.destroy();

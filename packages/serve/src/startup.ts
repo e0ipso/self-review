@@ -67,22 +67,40 @@ async function loadDiffForMode(gitDiffArgs: string[], config: AppConfig): Promis
   if (mode === 'file') {
     const fileArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
     const sourcePath = resolve(process.cwd(), fileArg);
-    return { files: await scanFile(sourcePath), source: { type: 'file', sourcePath } };
+    return withScanDiagnostics(await scanFile(sourcePath), { type: 'file', sourcePath });
   }
 
   if (mode === 'directory') {
     const dirArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
     const sourcePath = resolve(process.cwd(), dirArg);
-    return {
-      files: await scanDirectory(sourcePath, config.ignore),
-      source: { type: 'directory', sourcePath },
-    };
+    return withScanDiagnostics(await scanDirectory(sourcePath, config.ignore), {
+      type: 'directory',
+      sourcePath,
+    });
   }
 
   throw new Error(
     'Nothing to review: this is not a git repository and no path was given. ' +
       'Run self-review-serve inside a git repository, or pass a directory or file to review.'
   );
+}
+
+/**
+ * A directory or file scan as a payload. Its diagnostics ride along so the
+ * browser shows a budget or read failure instead of an empty review.
+ */
+function withScanDiagnostics(
+  scan: { files: DiffLoadPayload['files']; diagnostics: string[] },
+  source: DiffLoadPayload['source']
+): DiffLoadPayload {
+  for (const diagnostic of scan.diagnostics) {
+    console.error(`[serve] Diff diagnostic: ${diagnostic}`);
+  }
+  return {
+    files: scan.files,
+    source,
+    ...(scan.diagnostics.length > 0 ? { diagnostics: scan.diagnostics } : {}),
+  };
 }
 
 /** The root core resolves a diff path against — see `ServeStartup.repositoryRoot`. */

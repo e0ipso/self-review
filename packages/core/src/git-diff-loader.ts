@@ -3,10 +3,12 @@ import {
   runGitDiffAsync,
   getRepoRootAsync,
   getUntrackedFilesAsync,
-  generateUntrackedDiffs,
+  isOutputLimitError,
 } from './git';
 import { parseDiffWithDiagnostics } from './diff-parser';
 import { findUnsupportedGitDiffOptions } from './git-diff-args';
+import { loadSyntheticFiles } from './synthetic-diff';
+import { formatBytes, resolveSourceBudgets, type SourceBudgets } from './input-budgets';
 
 export interface LoadGitDiffOptions {
   /**
@@ -15,6 +17,8 @@ export interface LoadGitDiffOptions {
    * of a PR/MR must never pick up unrelated local untracked files.
    */
   includeUntracked?: boolean;
+  /** Tighter budgets than the defaults; see `SourceBudgets`. */
+  budgets?: Partial<SourceBudgets>;
 }
 
 export interface LoadGitDiffResult {
@@ -54,6 +58,7 @@ export async function loadGitDiffWithUntracked(
   options: LoadGitDiffOptions = {}
 ): Promise<LoadGitDiffResult> {
   const { includeUntracked = true } = options;
+  const budgets = resolveSourceBudgets(options.budgets);
   const repository = await getRepoRootAsync(cwd);
 
   // An output format the parser cannot read would parse as an empty review.
@@ -71,7 +76,22 @@ export async function loadGitDiffWithUntracked(
     };
   }
 
-  const rawDiff = await runGitDiffAsync(gitDiffArgs, cwd);
+  let rawDiff: string;
+  try {
+    rawDiff = await runGitDiffAsync(gitDiffArgs, cwd, budgets.maxGitDiffOutputBytes);
+  } catch (error) {
+    if (!isOutputLimitError(error)) throw error;
+    // A capped capture is a truncated diff; never parse it as the review.
+    return {
+      files: [],
+      repository,
+      diagnostics: [
+        `git diff produced more than ${formatBytes(budgets.maxGitDiffOutputBytes)} of output, ` +
+          'the most self-review reads from one diff, so nothing was loaded. Narrow the ' +
+          'diff with a pathspec (for example `-- src/`) or a smaller revision range.',
+      ],
+    };
+  }
   const { files, diagnostics } = parseDiffWithDiagnostics(rawDiff);
 
   if (!includeUntracked) {
@@ -84,18 +104,30 @@ export async function loadGitDiffWithUntracked(
   // and a nested file resolves to its same-named root neighbour, or to
   // nothing at all.
   const untrackedPaths = await getUntrackedFilesAsync(repository);
+  if (untrackedPaths.length > budgets.maxEntries) {
+    // Too many to synthesize; review the tracked diff and say what is missing.
+    diagnostics.push(
+      `${untrackedPaths.length.toLocaleString('en-US')} untracked files exceed the ` +
+        `${budgets.maxEntries.toLocaleString('en-US')}-file limit, so none of them were ` +
+        'loaded; only tracked changes are shown. Ignore build output and dependency ' +
+        'folders in .gitignore, or stage the files you mean to review.'
+    );
+    return { files, repository, diagnostics };
+  }
+
   let allFiles = files;
   if (untrackedPaths.length > 0) {
-    const untrackedDiffStr = generateUntrackedDiffs(untrackedPaths, repository);
-    if (untrackedDiffStr.length > 0) {
-      const untracked = parseDiffWithDiagnostics(untrackedDiffStr);
-      diagnostics.push(...untracked.diagnostics);
-      const untrackedFiles = dedupeUntrackedByPath(files, untracked.files);
-      for (const file of untrackedFiles) {
-        file.isUntracked = true;
-      }
-      allFiles = [...files, ...untrackedFiles];
+    // Untracked symlinks are described by their link text, never followed.
+    const untracked = loadSyntheticFiles(untrackedPaths, repository, {
+      followSymlinks: false,
+      budgets: options.budgets,
+    });
+    diagnostics.push(...untracked.diagnostics);
+    const untrackedFiles = dedupeUntrackedByPath(files, untracked.files);
+    for (const file of untrackedFiles) {
+      file.isUntracked = true;
     }
+    allFiles = [...files, ...untrackedFiles];
   }
 
   return { files: allFiles, repository, diagnostics };

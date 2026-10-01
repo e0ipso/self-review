@@ -2,7 +2,7 @@
 id: 13
 group: "resource-budgets"
 dependencies: [3, 4]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - nodejs-filesystem
@@ -20,12 +20,12 @@ Directory walking prunes ignored directories before visiting them, binary detect
 Node.js filesystem streaming/bounded reads and TypeScript.
 
 ## Acceptance Criteria
-- [ ] `packages/core/src/directory-scanner.ts:42–72` applies ignore patterns to directories during traversal (an ignored `node_modules/` with 10k files is never `readdir`-ed — test with a spy/fs counter), skips symlinks/FIFOs/devices (as today), and stops enumeration at a documented file-count budget with an explicit "limit exceeded" result.
-- [ ] Binary detection reads at most a fixed prefix (e.g. 8 KiB) via an fd; file content for synthetic diffs is read only for files within a per-file byte budget; files over the budget are listed as too-large entries rather than read whole.
-- [ ] `packages/core/src/synthetic-diff.ts:68` does not follow untracked symlinks: an untracked symlink is represented by its link text (as Git does) and outside sentinel content never enters the diff (test).
-- [ ] Aggregate budgets (total bytes read for source, guide file size, resume XML file size, resume attachment count) are named constants in one module (e.g. `packages/core/src/input-budgets.ts`), documented, and checked before reading (via `stat` size) — reuse existing `max-files`/`max-total-lines` config thresholds for transport decisions and keep them distinct from safety budgets. Do not add new user config settings.
-- [ ] Limit failures surface through the existing diagnostics channel (`DiffLoadPayload.diagnostics` from task 4, guide warning on stderr, resume error via the typed XML error from task 3); the UI does not claim "no changes" when a limit was hit.
-- [ ] Tests with real temp directories: large ignored tree pruned; large binary sampled (bounded read verified by counting bytes read through an injected reader or by a sparse multi-GB file read time bound); oversized guide and resume rejected before parse; symlinked untracked file. `npm run test:unit` passes.
+- [x] `packages/core/src/directory-scanner.ts:42–72` applies ignore patterns to directories during traversal (an ignored `node_modules/` with 10k files is never `readdir`-ed — test with a spy/fs counter), skips symlinks/FIFOs/devices (as today), and stops enumeration at a documented file-count budget with an explicit "limit exceeded" result.
+- [x] Binary detection reads at most a fixed prefix (e.g. 8 KiB) via an fd; file content for synthetic diffs is read only for files within a per-file byte budget; files over the budget are listed as too-large entries rather than read whole.
+- [x] `packages/core/src/synthetic-diff.ts:68` does not follow untracked symlinks: an untracked symlink is represented by its link text (as Git does) and outside sentinel content never enters the diff (test).
+- [x] Aggregate budgets (total bytes read for source, guide file size, resume XML file size, resume attachment count) are named constants in one module (e.g. `packages/core/src/input-budgets.ts`), documented, and checked before reading (via `stat` size) — reuse existing `max-files`/`max-total-lines` config thresholds for transport decisions and keep them distinct from safety budgets. Do not add new user config settings.
+- [x] Limit failures surface through the existing diagnostics channel (`DiffLoadPayload.diagnostics` from task 4, guide warning on stderr, resume error via the typed XML error from task 3); the UI does not claim "no changes" when a limit was hit.
+- [x] Tests with real temp directories: large ignored tree pruned; large binary sampled (bounded read verified by counting bytes read through an injected reader or by a sparse multi-GB file read time bound); oversized guide and resume rejected before parse; symlinked untracked file. `npm run test:unit` passes.
 
 Use your internal Todo tool to track these and keep on track.
 

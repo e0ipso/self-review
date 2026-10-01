@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { DiffFile } from '@self-review/types';
+import { svgToDataUri } from '../../utils/svg-data-uri';
 
 interface RenderedSvgViewProps {
   file: DiffFile;
@@ -11,10 +12,6 @@ function extractSvgContent(file: DiffFile): string {
     .filter(line => line.type === 'addition')
     .map(line => line.content)
     .join('\n');
-}
-
-function svgToDataUri(svgContent: string): string {
-  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgContent)))}`;
 }
 
 export default function RenderedSvgView({ file }: RenderedSvgViewProps) {

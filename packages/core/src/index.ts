@@ -43,11 +43,48 @@ export { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
 export type { DiffParseResult } from './diff-parser';
 
 // XML I/O
-export { serializeReview } from './xml-serializer';
+export { serializeReview, ASSET_DIR_NAME } from './xml-serializer';
+export type {
+  SerializedReview,
+  SerializeOptions,
+  PlannedAsset,
+  AssetNamer,
+} from './xml-serializer';
 export { parseReviewXml, parseReviewXmlString } from './xml-parser';
 export type { ParsedReview } from './xml-parser';
 export { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
 export type { ReviewXmlErrorCode, XmlIllegalCharacterLocation } from './xml-errors';
+
+// Review output publication (the one way review XML and attachments reach disk)
+export { publishReview, ReviewPublishError } from './review-publisher';
+export type {
+  ReviewPublishErrorCode,
+  ReviewOutputOrigin,
+  PublishReviewOptions,
+  PublishReviewResult,
+} from './review-publisher';
+
+// No-follow filesystem primitives shared by every core writer
+export {
+  SafeFsError,
+  nodeFsLayer,
+  assertNoSymlinkAncestors,
+  openNoFollow,
+  writeExclusiveNoFollow,
+  atomicReplace,
+  inspectReplaceTarget,
+  snapshotIdentity,
+  sameFile,
+  classifyFsError,
+} from './safe-fs';
+export type {
+  SafeFsErrorCode,
+  FsLayer,
+  FileIdentity,
+  WriteExclusiveOptions,
+  AtomicReplaceOptions,
+  AtomicReplaceResult,
+} from './safe-fs';
 
 // Line-anchor validation (shared by the resume importer and Apply)
 export { validateLineAnchor, validateLineRange } from './anchor-validation';
@@ -87,10 +124,32 @@ export type {
 } from './forge-provider';
 
 // Synthetic diffs (for non-git files/directories)
-export { generateSyntheticDiffs } from './synthetic-diff';
+export { generateSyntheticDiffs, loadSyntheticFiles } from './synthetic-diff';
+export type { SyntheticDiffOptions, SyntheticDiffResult } from './synthetic-diff';
 
 // Directory/file scanning
 export { scanDirectory, scanFile } from './directory-scanner';
+export type { SourceScanOptions, SourceScanResult } from './directory-scanner';
+
+// Input safety budgets (checked before reading; distinct from the
+// max-files/max-total-lines transport thresholds)
+export {
+  MAX_SOURCE_ENTRIES,
+  BINARY_SNIFF_BYTES,
+  MAX_SOURCE_FILE_BYTES,
+  MAX_SOURCE_TOTAL_BYTES,
+  MAX_GIT_DIFF_OUTPUT_BYTES,
+  MAX_GUIDE_BYTES,
+  MAX_RESUME_XML_BYTES,
+  MAX_RESUME_ATTACHMENTS,
+  MAX_IMAGE_BYTES,
+  DEFAULT_SOURCE_BUDGETS,
+  resolveSourceBudgets,
+  formatBytes,
+} from './input-budgets';
+export type { SourceBudgets } from './input-budgets';
+export { readFileWithinBudget, readFileWithinBudgetSync } from './bounded-read';
+export type { BoundedReadResult } from './bounded-read';
 
 // Configuration
 export { loadConfig } from './config';

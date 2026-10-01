@@ -4,7 +4,12 @@
 
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { generateSyntheticDiffs } from './synthetic-diff';
+import {
+  generateSyntheticDiffs,
+  type SyntheticDiffOptions,
+  type SyntheticDiffResult,
+} from './synthetic-diff';
+import { MAX_GIT_DIFF_OUTPUT_BYTES } from './input-budgets';
 
 const execFileAsync = promisify(execFile);
 
@@ -88,15 +93,21 @@ export function withParserCompatibleDiffArgs(args: readonly string[]): string[] 
  * format `parseDiff` reads. Every diff invocation (initial load, context
  * expansion, remote PR/MR diffs) goes through here, so the normalization in
  * `PARSER_COMPATIBLE_GIT_CONFIG` and `PARSER_COMPATIBLE_DIFF_FLAGS` applies
- * uniformly. Rejects when git fails; the caller reports the failure.
+ * uniformly. Rejects when git fails; the caller reports the failure. Output
+ * past `maxOutputBytes` rejects with an error {@link isOutputLimitError}
+ * recognizes, so a caller can report the limit instead of a git failure.
  */
-export async function runGitDiffAsync(args: string[], cwd?: string): Promise<string> {
+export async function runGitDiffAsync(
+  args: string[],
+  cwd?: string,
+  maxOutputBytes: number = MAX_GIT_DIFF_OUTPUT_BYTES
+): Promise<string> {
   try {
     const { stdout } = await execFileAsync(
       'git',
       [...PARSER_COMPATIBLE_GIT_CONFIG, 'diff', ...withParserCompatibleDiffArgs(args)],
       {
-        maxBuffer: 50 * 1024 * 1024, // 50MB buffer
+        maxBuffer: maxOutputBytes,
         timeout: 30000, // 30 second timeout
         cwd,
       }
@@ -123,7 +134,7 @@ export async function readGitBlobAsync(repoPath: string, spec: string): Promise<
     execFile(
       'git',
       ['-C', repoPath, 'show', spec],
-      { encoding: 'buffer', maxBuffer: 50 * 1024 * 1024, timeout: 30000 },
+      { encoding: 'buffer', maxBuffer: MAX_GIT_DIFF_OUTPUT_BYTES, timeout: 30000 },
       (error, stdout) => {
         if (error) {
           reject(error);
@@ -171,11 +182,24 @@ export async function getUntrackedFilesAsync(repoRoot?: string): Promise<string[
 }
 
 /**
+ * True when a child process was stopped for writing more than its
+ * `maxBuffer` — a budget was hit, not a git failure.
+ */
+export function isOutputLimitError(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+}
+
+/**
  * Generate synthetic unified diffs for untracked files so they can be
- * parsed by the existing diff parser.
+ * parsed by the existing diff parser. Untracked symlinks are described by
+ * their link text, never followed.
  *
  * Delegates to the reusable generateSyntheticDiffs module.
  */
-export function generateUntrackedDiffs(paths: string[], repoRoot: string): string {
-  return generateSyntheticDiffs(paths, repoRoot);
+export function generateUntrackedDiffs(
+  paths: string[],
+  repoRoot: string,
+  options: SyntheticDiffOptions = {}
+): SyntheticDiffResult {
+  return generateSyntheticDiffs(paths, repoRoot, { ...options, followSymlinks: false });
 }

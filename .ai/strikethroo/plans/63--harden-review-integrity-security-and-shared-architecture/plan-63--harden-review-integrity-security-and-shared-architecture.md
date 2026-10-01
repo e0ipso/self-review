@@ -363,11 +363,11 @@ The graph is acyclic. Task 24 depends on every other task; only its edges from l
 - ✔️ Task 08: Stable Markdown components and parsed HTML positions (R08, R09) (depends on: 02)
 - ✔️ Task 09: Explicit lazy-load states (R14 UI) (depends on: 05, 06)
 
-### Phase 3: Publication, isolation and budgets
+### ✅ Phase 3: Publication, isolation and budgets
 **Parallel Tasks:**
-- Task 10: Safe review-output publisher (R01 core, R11, A5, A9) (depends on: 03)
-- Task 12: Isolate Mermaid and contain passive layout (A7) (depends on: 02, 08)
-- Task 13: Bound backend input work (R14 backend) (depends on: 03, 04)
+- ✔️ Task 10: Safe review-output publisher (R01 core, R11, A5, A9) (depends on: 03)
+- ✔️ Task 12: Isolate Mermaid and contain passive layout (A7) (depends on: 02, 08)
+- ✔️ Task 13: Bound backend input work (R14 backend) (depends on: 03, 04)
 
 ### Phase 4: Apply, hosts and forge provenance
 **Parallel Tasks:**

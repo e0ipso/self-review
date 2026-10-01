@@ -10,6 +10,11 @@
 export type ReviewXmlErrorCode =
   /** The resume file could not be read from disk. */
   | 'read-failed'
+  /**
+   * The resume document exceeds a safety budget (input-budgets.ts): its
+   * byte size, checked before it is read, or its attachment count.
+   */
+  | 'input-too-large'
   /** The document is not well-formed XML the parser could load. */
   | 'parse-failed'
   /** Well-formed, but with no `<review>` root element. */
@@ -23,13 +28,24 @@ export class ReviewXmlError extends Error {
   readonly code: ReviewXmlErrorCode;
   /** The underlying failure, when there is one (a read or parse exception). */
   readonly cause?: unknown;
+  /**
+   * One line per individual problem, already rendered as text (a schema
+   * violation with its line number, for instance). Empty when the message
+   * says everything there is to say.
+   */
+  readonly details: readonly string[];
 
-  constructor(code: ReviewXmlErrorCode, message: string, options?: { cause?: unknown }) {
+  constructor(
+    code: ReviewXmlErrorCode,
+    message: string,
+    options?: { cause?: unknown; details?: readonly string[] }
+  ) {
     // `cause` is assigned rather than passed to `super`: the app's tsconfig
     // targets a lib where `ErrorOptions` is not declared.
     super(message);
     this.name = 'ReviewXmlError';
     this.code = code;
+    this.details = options?.details ?? [];
     if (options?.cause !== undefined) this.cause = options.cause;
   }
 }

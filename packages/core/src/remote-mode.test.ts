@@ -524,7 +524,7 @@ describe('remote state assembly serializes to valid XML', () => {
 
     const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'self-review-test-'));
     try {
-      const xml = await serializeReview(state, path.join(outDir, 'review.xml'));
+      const { xml } = await serializeReview(state, path.join(outDir, 'review.xml'));
 
       expect(xml).toContain(`remote-url="${PR_URL}"`);
       // The three source shapes are mutually exclusive: a remote save must
