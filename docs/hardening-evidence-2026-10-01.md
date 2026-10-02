@@ -6,9 +6,7 @@ in #164. This file maps each finding to the code and tests that cover it.
 Every test listed here ran green in the final verification: `npm run test:unit`, the five typecheck
 scripts, `npm run lint`, `npm run format:check`, `npm run test:e2e` (webapp), `npm run test:e2e:serve`
 and the Electron e2e tier. This host has no `xvfb-run`, so the Electron tier ran with the X11 recipe
-in `AGENTS.md`. Evidence screenshots live in
-`.ai/strikethroo/plans/63--harden-review-integrity-security-and-shared-architecture/evidence/` until
-the plan is archived, then under `.ai/strikethroo/archive/` at the same relative path.
+in `AGENTS.md`.
 
 ## Reliability findings
 
@@ -44,7 +42,7 @@ the plan is archived, then under `.ai/strikethroo/archive/` at the same relative
 | A4 | `realpath`, an `lstat` walk over ancestors, `O_NOFOLLOW`, an identity check and atomic replace. | `apply-suggestion.test.ts`, `safe-fs.test.ts` |
 | A5 | Configuration provenance: project `output-file` is inherited and contained, project diff args with `--output`, `--ext-diff` or `--textconv` are refused, and the publisher refuses links. | `startup.test.ts` (sentinel probe), `packages/serve/src/startup.test.ts`, `review-publisher.test.ts` |
 | A6 | Serve authorizes paths through core's `authorizeReviewedPath` against the session source root. | `packages/serve/src/source-identity.test.ts` (real HTTP, symlink escape) |
-| A7 | Mermaid renders off-document into a data-URI `<img>` under a strict, secured config. Passive HTML drops `style` and non-language classes. | `MermaidBlock.test.tsx`, `passive-content.test.ts`, webapp `13-content-isolation.feature`, `evidence/task-12-*.png` |
+| A7 | Mermaid renders off-document into a data-URI `<img>` under a strict, secured config. Passive HTML drops `style` and non-language classes. | `MermaidBlock.test.tsx`, `passive-content.test.ts`, webapp `13-content-isolation.feature` |
 | A8 | Front matter display has cycle, depth and node limits. | `front-matter.test.ts`, `FrontMatterTable.test.tsx` |
 | A9 | Assets are written by exclusive no-follow creates under a verified asset directory. | `review-publisher.test.ts` |
 
@@ -57,7 +55,7 @@ the plan is archived, then under `.ai/strikethroo/archive/` at the same relative
 | 3 | One session boundary | `packages/react/src/context/ReviewContext.tsx` (`sessionId`, keyed replacement) |
 | 4 | Stable previews and parser positions | `RenderedMarkdownView.tsx`, `passive-content.ts` |
 | 5 | Shared remote helpers | `loadRemoteReview` in `remote-mode.ts`; the pre-diff mapping is removed |
-| 6 | Scoped Prism themes | `src/index.css` imports the package stylesheet; runtime injection and theme props are removed (`evidence/task-23-*.png`) |
+| 6 | Scoped Prism themes | `src/index.css` imports the package stylesheet; runtime injection and theme props are removed |
 | 7 | Canonical browser-safe defaults | `packages/react/src/config-defaults.ts`, read by core's config loader |
 | 8 | Process-exiting and dead paths retired | `git.ts` sync helpers, `xml-parser` exits, the `review:request` pull fallback, the `src/main` serializer and fs shims, and the root `prism-themes` dependency are removed |
 
