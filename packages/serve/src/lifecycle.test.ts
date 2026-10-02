@@ -81,7 +81,6 @@ beforeEach(async () => {
   };
   server = createReviewServer({
     session,
-    repositoryRoot: tmp,
     output: { path: outputPath, origin: 'explicit' },
     capability: CAPABILITY,
   });

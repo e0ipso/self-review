@@ -16,6 +16,7 @@ import {
   ImageLoadResult,
   AppInfo,
   RemoteDriftInfo,
+  ReviewSourceIdentity,
   SuggestionApplyRequest,
   SuggestionApplyOutcome,
   ApplyDestinationOutcome,
@@ -46,10 +47,12 @@ import {
 // passed explicitly to every extracted handler.
 const desktopSession = createReviewSession();
 
-export function setDiffData(data: DiffLoadPayload): void {
+export function setDiffData(data: DiffLoadPayload, identity: ReviewSourceIdentity | null): void {
   // Committing through core captures the session's reviewed paths, which
-  // authorize every later apply; a bare assignment would leave them empty.
-  commitDiffData(desktopSession, data);
+  // authorize every later apply, and records the source identity every read
+  // of reviewed content resolves against; a bare assignment would leave both
+  // empty. The identity is null only for a welcome payload.
+  commitDiffData(desktopSession, data, identity);
 }
 
 export function setGuideData(data: GuideLoadPayload | null): void {
@@ -225,7 +228,7 @@ export function registerIpcHandlers(): void {
 
   // Start a directory review from a picked path
   ipcMain.handle(IPC.REVIEW_START_DIRECTORY, async (event, directoryPath: string) => {
-    const { payload, stats, exceedsThresholds } = await prepareDirectoryReview(
+    const { payload, identity, stats, exceedsThresholds } = await prepareDirectoryReview(
       desktopSession,
       directoryPath
     );
@@ -257,7 +260,7 @@ export function registerIpcHandlers(): void {
     }
 
     // Update the cache and send to renderer
-    const outgoing = commitReviewStart(desktopSession, payload);
+    const outgoing = commitReviewStart(desktopSession, payload, identity);
     const window = BrowserWindow.fromWebContents(event.sender);
     if (window) {
       window.webContents.send(IPC.DIFF_LOAD, outgoing);

@@ -80,12 +80,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { session, repositoryRoot, output } = await resolveSession(args);
+  const { session, output } = await resolveSession(args);
 
   // One secret for the life of the process. It leaves here exactly once, in
   // the fragment of the URL printed below; the server never sends it.
   const capability = generateCapability();
-  const server = createReviewServer({ session, repositoryRoot, output, capability });
+  const server = createReviewServer({ session, output, capability });
   completeReviewOnSubmit({ server });
 
   const { url } = await listenLoopback(server);

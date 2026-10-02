@@ -124,29 +124,6 @@ export async function runGitDiffAsync(
 }
 
 /**
- * Read a blob from a git object spec (`<sha>:<path>`) as raw bytes.
- * Remote mode reads reviewed content at the fetched head SHA — a temporary
- * clone's working tree stays on the default branch and never reflects the
- * PR/MR head.
- */
-export async function readGitBlobAsync(repoPath: string, spec: string): Promise<Buffer> {
-  return await new Promise<Buffer>((resolve, reject) => {
-    execFile(
-      'git',
-      ['-C', repoPath, 'show', spec],
-      { encoding: 'buffer', maxBuffer: MAX_GIT_DIFF_OUTPUT_BYTES, timeout: 30000 },
-      (error, stdout) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(stdout);
-        }
-      }
-    );
-  });
-}
-
-/**
  * Get list of untracked files (respects .gitignore).
  *
  * Pass the repository root. `git ls-files` reports paths relative to the

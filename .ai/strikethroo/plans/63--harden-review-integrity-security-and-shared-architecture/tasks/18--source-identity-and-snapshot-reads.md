@@ -2,7 +2,7 @@
 id: 18
 group: "source-identity"
 dependencies: [4, 11, 13, 17]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - typescript-refactoring
@@ -20,13 +20,13 @@ The review session records an explicit source identity — mode (git/directory/f
 TypeScript refactoring of the session contract and Git object/index semantics.
 
 ## Acceptance Criteria
-- [ ] `@self-review/types` defines the shared contract (e.g. `ReviewSourceIdentity` with `mode`, `sourceRoot`, `invocationCwd`, `gitDiffArgv: string[]`, `oldSide`/`newSide` descriptors of kind `'working-tree' | 'index' | 'commit' | 'directory' | 'file' | 'none'` with commit SHAs resolved at load time); core stores it on `ReviewSession` at start (local git, directory, file, remote).
-- [ ] A core snapshot reader `readReviewedContent(session, path, side)` returns bytes from: `git show <sha>:<path>` for commits, `git show :<path>` for the index, the working tree file via the safe no-follow open (task 10 `safe-fs.ts`) for working tree/directory/file sources — always within the physical source root, rejecting symlink escapes.
-- [ ] `loadImage` (`review-handlers.ts:127–175`) requires `session.reviewedPaths` membership (task 11) and a previewable image type (`isPreviewableImage`); it reads the reviewed new side (or old side for deletions) via the snapshot reader. Probe regression: stage PNG ending `02`, modify working file to end `03`, staged session preview returns `…02`.
-- [ ] Expansion's total line count (`review-handlers.ts:474–484`) uses the snapshot reader for the relevant side; a remote session's count comes from the PR head commit, not the temp clone's checked-out default branch (test with a head file longer than the default-branch version).
-- [ ] `resolveSourceBaseDir` is replaced by/implemented on the source identity; serve's `validate.ts`/`server.ts` path checks (`startup.ts:83`, `server.ts:296,365`) no longer compute their own root from launch CWD — they delegate to core (authorization + I/O on the same resolved object). The audit's directory-mode escape (`link.txt` symlink, review launched from another CWD) returns an error over HTTP and the outside sentinel is not read or changed; absolute paths outside the reviewed source are rejected.
-- [ ] The read-only source root and the chosen Apply destination remain distinct (temp clones still require an explicit destination).
-- [ ] Tests: real Git fixtures with distinct HEAD/index/working-tree content for staged and commit-range sessions (image + line counts), directory and file sessions launched from a different CWD via real session handlers and real HTTP routes (with the capability from task 17). `npm run test:unit`, `npm run typecheck`, `npm run typecheck:packages` pass; `npm run test:e2e` and `npm run test:e2e:serve` pass.
+- [x] `@self-review/types` defines the shared contract (e.g. `ReviewSourceIdentity` with `mode`, `sourceRoot`, `invocationCwd`, `gitDiffArgv: string[]`, `oldSide`/`newSide` descriptors of kind `'working-tree' | 'index' | 'commit' | 'directory' | 'file' | 'none'` with commit SHAs resolved at load time); core stores it on `ReviewSession` at start (local git, directory, file, remote).
+- [x] A core snapshot reader `readReviewedContent(session, path, side)` returns bytes from: `git show <sha>:<path>` for commits, `git show :<path>` for the index, the working tree file via the safe no-follow open (task 10 `safe-fs.ts`) for working tree/directory/file sources — always within the physical source root, rejecting symlink escapes.
+- [x] `loadImage` (`review-handlers.ts:127–175`) requires `session.reviewedPaths` membership (task 11) and a previewable image type (`isPreviewableImage`); it reads the reviewed new side (or old side for deletions) via the snapshot reader. Probe regression: stage PNG ending `02`, modify working file to end `03`, staged session preview returns `…02`.
+- [x] Expansion's total line count (`review-handlers.ts:474–484`) uses the snapshot reader for the relevant side; a remote session's count comes from the PR head commit, not the temp clone's checked-out default branch (test with a head file longer than the default-branch version).
+- [x] `resolveSourceBaseDir` is replaced by/implemented on the source identity; serve's `validate.ts`/`server.ts` path checks (`startup.ts:83`, `server.ts:296,365`) no longer compute their own root from launch CWD — they delegate to core (authorization + I/O on the same resolved object). The audit's directory-mode escape (`link.txt` symlink, review launched from another CWD) returns an error over HTTP and the outside sentinel is not read or changed; absolute paths outside the reviewed source are rejected.
+- [x] The read-only source root and the chosen Apply destination remain distinct (temp clones still require an explicit destination).
+- [x] Tests: real Git fixtures with distinct HEAD/index/working-tree content for staged and commit-range sessions (image + line counts), directory and file sessions launched from a different CWD via real session handlers and real HTTP routes (with the capability from task 17). `npm run test:unit`, `npm run typecheck`, `npm run typecheck:packages` pass; `npm run test:e2e` and `npm run test:e2e:serve` pass.
 
 Use your internal Todo tool to track these and keep on track.
 

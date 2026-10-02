@@ -24,21 +24,27 @@ import {
   loadGuide,
   normalizeGitDiffArgs,
   parseReviewXml,
+  resolveLocalSourceIdentity,
   scanDirectory,
   scanFile,
 } from '@self-review/core';
-import type { AppConfig, DiffLoadPayload, ReviewSession } from '@self-review/core';
+import type {
+  AppConfig,
+  DiffLoadPayload,
+  ReviewSession,
+  ReviewSourceIdentity,
+} from '@self-review/core';
 import type { ServeArgs } from './args';
 import type { ReviewOutputTarget } from './server';
 
 export interface ServeStartup {
-  /** The resolved session, complete: diff, guide, config and resume state. */
-  session: ReviewSession;
   /**
-   * Root every request-supplied path is contained under: the same value core
-   * resolves against, since containment guarantees nothing unless they agree.
+   * The resolved session, complete: diff, guide, config, resume state and
+   * the source identity every path-taking route authorizes against. There
+   * is no separate containment root: the routes ask core, which checks the
+   * very root it reads from (audit A6).
    */
-  repositoryRoot: string;
+  session: ReviewSession;
   /**
    * Where the review is published, fixed for the lifetime of the process:
    * the absolute path, and whether `--output` named it (`explicit`) or the
@@ -48,42 +54,58 @@ export interface ServeStartup {
   output: ReviewOutputTarget;
 }
 
+/** A loaded diff and the identity of what it compared, committed together. */
+interface LoadedDiff {
+  payload: DiffLoadPayload;
+  identity: ReviewSourceIdentity;
+}
+
 /**
  * Mirrors main.ts phase 4. Welcome mode diverges: there is no directory picker
  * in a browser, so refusing beats serving an interface whose controls are dead.
  */
-async function loadDiffForMode(gitDiffArgs: string[], config: AppConfig): Promise<DiffLoadPayload> {
+async function loadDiffForMode(gitDiffArgs: string[], config: AppConfig): Promise<LoadedDiff> {
   const mode = determineMode(gitDiffArgs);
   console.error(`[serve] Startup mode: ${mode}`);
 
   if (mode === 'git') {
-    const { files, repository, diagnostics } = await loadGitDiffWithUntracked(gitDiffArgs);
+    const { files, repository, diagnostics, identity } =
+      await loadGitDiffWithUntracked(gitDiffArgs);
     for (const diagnostic of diagnostics) {
       console.error(`[serve] Diff diagnostic: ${diagnostic}`);
     }
     const shouldKeep = createIgnoreFilter(config.ignore);
     return {
-      files: files.filter(f => shouldKeep(f.newPath || f.oldPath)),
-      source: { type: 'git', gitDiffArgs: gitDiffArgs.join(' '), repository },
-      // Carried only when something could not be loaded faithfully, so the
-      // browser never mistakes a failed load for "no changes".
-      ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      payload: {
+        files: files.filter(f => shouldKeep(f.newPath || f.oldPath)),
+        source: { type: 'git', gitDiffArgs: gitDiffArgs.join(' '), repository },
+        // Carried only when something could not be loaded faithfully, so the
+        // browser never mistakes a failed load for "no changes".
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      },
+      identity,
     };
   }
 
   if (mode === 'file') {
     const fileArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
     const sourcePath = resolve(process.cwd(), fileArg);
-    return withScanDiagnostics(await scanFile(sourcePath), { type: 'file', sourcePath });
+    return {
+      payload: withScanDiagnostics(await scanFile(sourcePath), { type: 'file', sourcePath }),
+      identity: resolveLocalSourceIdentity({ type: 'file', sourcePath }),
+    };
   }
 
   if (mode === 'directory') {
     const dirArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
     const sourcePath = resolve(process.cwd(), dirArg);
-    return withScanDiagnostics(await scanDirectory(sourcePath, config.ignore), {
-      type: 'directory',
-      sourcePath,
-    });
+    return {
+      payload: withScanDiagnostics(await scanDirectory(sourcePath, config.ignore), {
+        type: 'directory',
+        sourcePath,
+      }),
+      identity: resolveLocalSourceIdentity({ type: 'directory', sourcePath }),
+    };
   }
 
   throw new Error(
@@ -108,11 +130,6 @@ function withScanDiagnostics(
     source,
     ...(scan.diagnostics.length > 0 ? { diagnostics: scan.diagnostics } : {}),
   };
-}
-
-/** The root core resolves a diff path against — see `ServeStartup.repositoryRoot`. */
-function containmentRoot(payload: DiffLoadPayload): string {
-  return payload.source.type === 'git' ? payload.source.repository : process.cwd();
 }
 
 /**
@@ -152,7 +169,7 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   config = applyStagedUntrackedDefault(config, gitDiffArgs);
 
   // Phase 4 (main.ts:189) — what to review.
-  const diffData = await loadDiffForMode(gitDiffArgs, config);
+  const { payload: diffData, identity } = await loadDiffForMode(gitDiffArgs, config);
   console.error(`[serve] Loaded ${diffData.files.length} files`);
 
   // Phase 4b (main.ts:264) — large payload. The desktop asks; there is
@@ -207,12 +224,13 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   // Phase 6 (main.ts:350) — assemble. Everything the routes read is on the
   // session before the caller opens the listener.
   // Committed through core so the session's reviewed paths, which authorize
-  // every apply, are captured from this diff.
-  commitDiffData(session, diffData);
+  // every apply, are captured from this diff, and its source identity, which
+  // every path-taking route authorizes against, is recorded with it.
+  commitDiffData(session, diffData, identity);
   session.guideData = guideData;
   session.config = config;
   // Writable as far as startup could tell: it refused above if it was not.
   session.outputPathInfo = { resolvedOutputPath: outputPath, outputPathWritable: true };
 
-  return { session, repositoryRoot: containmentRoot(diffData), output };
+  return { session, output };
 }

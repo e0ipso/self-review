@@ -25,7 +25,10 @@ function realpathDeepestExisting(absolute: string): string | null {
 }
 
 /**
- * Resolve `candidate` under `root`, or null if it escapes.
+ * Resolve `candidate` under `root`, or null if it escapes. Used for the
+ * static client bundle and for attachments, which live under the output
+ * directory; reviewed diff paths are authorized by core's
+ * `authorizeReviewedPath` against the session's source identity instead.
  *
  * Never decode here: callers pass a value `searchParams` already decoded once,
  * and decoding again turns `%2E%2E%2F` inside a filename into a real traversal.
@@ -68,7 +71,7 @@ const EXPAND_CONTEXT_KEYS: ReadonlySet<string> = new Set(['filePath', 'contextLi
 
 /**
  * Accepts exactly `{ filePath, contextLines }`. Unknown keys are rejected, not
- * ignored. The route contains `filePath` with `containPath` before git sees it.
+ * ignored. The route authorizes `filePath` as a reviewed path before git sees it.
  */
 export function parseExpandContextBody(body: unknown): ParseResult<ExpandContextRequest> {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {

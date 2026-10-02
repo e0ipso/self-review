@@ -380,9 +380,9 @@ The graph is acyclic. Task 24 depends on every other task; only its edges from l
 **Parallel Tasks:**
 - ✔️ Task 17: Serve per-session capability (A2) (depends on: 15)
 
-### Phase 6: Source identity
+### ✅ Phase 6: Source identity
 **Parallel Tasks:**
-- Task 18: Source identity and snapshot reads (R13, A6) (depends on: 04, 11, 13, 17)
+- ✔️ Task 18: Source identity and snapshot reads (R13, A6) (depends on: 04, 11, 13, 17)
 
 ### Phase 7: Expansion and attachments
 **Parallel Tasks:**

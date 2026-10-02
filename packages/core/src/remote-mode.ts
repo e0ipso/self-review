@@ -38,10 +38,12 @@ import type {
   RemoteDriftInfo,
   RemoteSessionInfo,
   ReviewComment,
+  ReviewSourceIdentity,
   ReviewState,
 } from './types';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { formatGitDiffArgs } from './git-diff-args';
+import { canonicalSourcePath } from './source-identity';
 
 /**
  * A materialized remote PR/MR session: the git-mode inputs plus the forge
@@ -104,12 +106,18 @@ export interface RemoteSessionDeps {
   /**
    * Loads the diff from the clone. Untracked files are never included.
    * `diagnostics` carries what could not be loaded faithfully (see
-   * `LoadGitDiffResult`); absent means a clean load.
+   * `LoadGitDiffResult`); absent means a clean load. `identity` is the
+   * loader's resolution of the compared snapshots; a stand-in may omit it.
    */
   loadDiff: (
     gitDiffArgs: string[],
     cwd: string
-  ) => Promise<{ files: DiffFile[]; repository: string; diagnostics?: string[] }>;
+  ) => Promise<{
+    files: DiffFile[];
+    repository: string;
+    diagnostics?: string[];
+    identity?: ReviewSourceIdentity;
+  }>;
 }
 
 function defaultCreateProvider(forge: ForgeName, runner: ForgeCommandRunner): ForgeProvider {
@@ -259,6 +267,8 @@ export interface RemoteReviewLoad {
   diagnostics: string[];
   /** `session.fetchedThreads` mapped against `files` and the materialized head. */
   comments: ReviewComment[];
+  /** The loader's identity of the compared snapshots, when it supplied one. */
+  identity?: ReviewSourceIdentity;
 }
 
 /**
@@ -278,7 +288,10 @@ export async function loadRemoteReview(
   ignorePatterns: string[],
   loadDiff: RemoteSessionDeps['loadDiff'] = defaultRemoteSessionDeps.loadDiff
 ): Promise<RemoteReviewLoad> {
-  const { files, repository, diagnostics } = await loadDiff(session.gitDiffArgs, session.repoPath);
+  const { files, repository, diagnostics, identity } = await loadDiff(
+    session.gitDiffArgs,
+    session.repoPath
+  );
   const shouldKeep = createIgnoreFilter(ignorePatterns);
   const filteredFiles = files.filter(f => shouldKeep(f.newPath || f.oldPath));
   return {
@@ -290,6 +303,7 @@ export async function loadRemoteReview(
       filteredFiles,
       session.remote.remoteHeadSha
     ),
+    ...(identity ? { identity } : {}),
   };
 }
 
@@ -297,6 +311,29 @@ export async function loadRemoteReview(
 export interface RemoteBootstrapResult {
   session: RemoteSession;
   payload: DiffLoadPayload;
+  /** The identity to commit with `payload`: mode `remote`, rooted at the clone. */
+  identity: ReviewSourceIdentity;
+}
+
+/**
+ * The identity of a remote session: the loader's resolution of
+ * `base...head` relabelled as remote and rooted at the clone, with the
+ * user's own launch directory rather than the clone the loader ran in. A
+ * loader stand-in that supplied none still yields the head commit, which
+ * materialization resolved; the merge base it did not is left unknown.
+ */
+function remoteSourceIdentity(
+  started: MaterializedRemoteSession,
+  loaded: RemoteReviewLoad,
+  cwd: string
+): ReviewSourceIdentity {
+  const resolved = loaded.identity ?? {
+    sourceRoot: canonicalSourcePath(loaded.repository),
+    gitDiffArgv: [...started.gitDiffArgs],
+    oldSide: { kind: 'unknown' as const, reason: 'the merge base was not resolved' },
+    newSide: { kind: 'commit' as const, sha: started.remote.remoteHeadSha },
+  };
+  return { ...resolved, mode: 'remote', invocationCwd: cwd };
 }
 
 /**
@@ -331,6 +368,7 @@ export async function bootstrapRemoteDiff(
   const session: RemoteSession = { ...started, fetchedComments: loaded.comments };
   return {
     session,
+    identity: remoteSourceIdentity(started, loaded, cwd),
     payload: {
       files: loaded.files,
       source: {

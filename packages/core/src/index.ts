@@ -31,6 +31,9 @@ export type {
   VersionUpdateInfo,
   PayloadStats,
   ImageLoadResult,
+  ReviewSourceIdentity,
+  ReviewSourceMode,
+  ReviewSourceSide,
   ReviewGuide,
   GuideGroup,
   GuideFileEntry,
@@ -149,7 +152,32 @@ export {
 } from './input-budgets';
 export type { SourceBudgets } from './input-budgets';
 export { readFileWithinBudget, readFileWithinBudgetSync } from './bounded-read';
-export type { BoundedReadResult } from './bounded-read';
+export type { BoundedReadOptions, BoundedReadResult } from './bounded-read';
+
+// Source identity (what a session reviews) and snapshot reads of reviewed
+// content: the one path authorization and the one content resolver every
+// front end delegates to
+export {
+  describeGitDiffSides,
+  resolveGitSourceIdentity,
+  resolveLocalSourceIdentity,
+  canonicalSourcePath,
+} from './source-identity';
+export type {
+  GitDiffSideSpec,
+  GitDiffSides,
+  GitSourceIdentityOptions,
+  LocalSourceIdentityOptions,
+} from './source-identity';
+export { authorizeReviewedPath, readReviewedContent } from './snapshot-reader';
+export type {
+  ReviewedSnapshot,
+  ReviewedPathRefusal,
+  ReviewedPathAuthorization,
+  SnapshotReadFailure,
+  SnapshotReadResult,
+  SnapshotReadOptions,
+} from './snapshot-reader';
 
 // Configuration
 export { loadConfig } from './config';
@@ -221,6 +249,7 @@ export {
   prepareDirectoryReview,
   commitReviewStart,
   commitDiffData,
+  locateReviewedFile,
   resolveSourceBaseDir,
   resolveApplyDestination,
   applySuggestionForSession,
@@ -237,7 +266,11 @@ export { deriveGuidePath, resolveGuidePath, loadGuide } from './guide-loader';
 export { loadGitDiffWithUntracked, dedupeUntrackedByPath } from './git-diff-loader';
 export type { LoadGitDiffOptions, LoadGitDiffResult } from './git-diff-loader';
 export { applyStagedUntrackedDefault } from './staged-untracked';
-export { normalizeGitDiffArgs, findUnsupportedGitDiffOptions } from './git-diff-args';
+export {
+  normalizeGitDiffArgs,
+  findUnsupportedGitDiffOptions,
+  consumesNextArgument,
+} from './git-diff-args';
 
 // Remote PR/MR session bootstrap (URL -> materialized git-mode inputs) and the
 // load/filter/map step the app and fetch-comments share

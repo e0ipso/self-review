@@ -23,6 +23,20 @@ export type BoundedReadResult =
 /** Read-only, and never blocking on a FIFO. O_NONBLOCK is absent on Windows. */
 const OPEN_FLAGS = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0);
 
+export interface BoundedReadOptions {
+  /**
+   * Open with `O_NOFOLLOW`, so a symlink at `path` fails with ELOOP instead
+   * of being followed. Only the leaf is covered; a caller that must not
+   * follow a link anywhere on the way checks the ancestors itself
+   * (`assertNoSymlinkAncestors`).
+   */
+  noFollow?: boolean;
+}
+
+function openFlags(options: BoundedReadOptions): number {
+  return options.noFollow ? OPEN_FLAGS | constants.O_NOFOLLOW : OPEN_FLAGS;
+}
+
 /**
  * Read `path` in full when it is a regular file of at most `maxBytes`.
  *
@@ -30,9 +44,10 @@ const OPEN_FLAGS = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0);
  */
 export async function readFileWithinBudget(
   path: string,
-  maxBytes: number
+  maxBytes: number,
+  options: BoundedReadOptions = {}
 ): Promise<BoundedReadResult> {
-  const handle = await open(path, OPEN_FLAGS);
+  const handle = await open(path, openFlags(options));
   try {
     const stats = await handle.stat();
     if (!stats.isFile()) return { kind: 'not-regular' };
@@ -58,8 +73,12 @@ export async function readFileWithinBudget(
 }
 
 /** Synchronous {@link readFileWithinBudget}, for callers that are synchronous. */
-export function readFileWithinBudgetSync(path: string, maxBytes: number): BoundedReadResult {
-  const fd = openSync(path, OPEN_FLAGS);
+export function readFileWithinBudgetSync(
+  path: string,
+  maxBytes: number,
+  options: BoundedReadOptions = {}
+): BoundedReadResult {
+  const fd = openSync(path, openFlags(options));
   try {
     const stats = fstatSync(fd);
     if (!stats.isFile()) return { kind: 'not-regular' };

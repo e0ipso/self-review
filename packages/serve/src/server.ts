@@ -21,12 +21,14 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import {
+  authorizeReviewedPath,
   getDiffLoad,
   getConfigLoad,
   getResumeLoad,
   getFileHunks,
   loadImage,
   readAttachment,
+  resolveSourceBaseDir,
   expandContext,
   submitReviewState,
   applySuggestionForSession,
@@ -78,13 +80,13 @@ export type ReviewOutputTarget =
   | { path: string; origin: 'inherited'; baseDir: string };
 
 export interface ReviewServerOptions {
-  /** The session every route acts on; held for the process lifetime. */
-  session: ReviewSession;
   /**
-   * Root every request-supplied path is contained under. Must match what core
-   * resolves against, or containment guarantees nothing.
+   * The session every route acts on; held for the process lifetime. Every
+   * request-supplied diff path is authorized against its source identity by
+   * core — the same object core reads from — so there is no separate root
+   * for the routes to get wrong (audit A6).
    */
-  repositoryRoot: string;
+  session: ReviewSession;
   /** Where `POST /api/review` publishes. No route changes it. */
   output: ReviewOutputTarget;
   /**
@@ -102,7 +104,6 @@ interface RouteContext {
   res: http.ServerResponse;
   url: URL;
   session: ReviewSession;
-  repositoryRoot: string;
   output: ReviewOutputTarget;
 }
 
@@ -274,19 +275,33 @@ function sendUnauthorized(res: http.ServerResponse): void {
   sendJson(res, 401, { error: 'unauthorized' }, { 'www-authenticate': CAPABILITY_SCHEME });
 }
 
+const REVIEWED_PATH_ERROR = 'path must name a file in the reviewed diff';
+
 /**
- * Contain the `path` parameter under the repository root. Returns it both as
- * sent (core interprets it relative to the repository) and resolved (for a
- * handler reading disk directly), or answers 400 and returns null.
+ * Whether `filePath` names a file this session reviewed, by core's own
+ * authorization: the path must be relative, stay inside the source root and
+ * be one the committed diff contained. Core then resolves exactly the path
+ * it authorized, so the check and the read cannot disagree. Answers 400 and
+ * returns false otherwise.
  */
-function requireContainedPath(ctx: RouteContext): { raw: string; resolved: string } | null {
+function requireReviewedPath(ctx: RouteContext, filePath: string, what = 'path'): boolean {
+  if (authorizeReviewedPath(ctx.session, filePath).ok) return true;
+  sendError(
+    ctx.res,
+    400,
+    what === 'path' ? REVIEWED_PATH_ERROR : `${what} must name a file in the reviewed diff`
+  );
+  return false;
+}
+
+/** The `path` query parameter, authorized as a reviewed path, or null after a 400. */
+function requireReviewedQueryPath(ctx: RouteContext): string | null {
   const raw = ctx.url.searchParams.get('path');
-  const resolved = raw ? containPath(ctx.repositoryRoot, raw) : null;
-  if (raw === null || resolved === null) {
-    sendError(ctx.res, 400, 'path must be a file under the repository root');
+  if (raw === null) {
+    sendError(ctx.res, 400, REVIEWED_PATH_ERROR);
     return null;
   }
-  return { raw, resolved };
+  return requireReviewedPath(ctx, raw) ? raw : null;
 }
 
 type BodyResult = { ok: true; value: unknown } | { ok: false; status: number; error: string };
@@ -353,17 +368,17 @@ const routes: Record<string, RouteHandler> = {
   },
 
   'GET /api/file': async ctx => {
-    const contained = requireContainedPath(ctx);
-    if (contained === null) return;
-    // Diff paths are repository-relative strings; core matches on them as sent.
-    sendJson(ctx.res, 200, getFileHunks(ctx.session, contained.raw));
+    const filePath = requireReviewedQueryPath(ctx);
+    if (filePath === null) return;
+    // Diff paths are source-relative strings; core matches on them as sent.
+    sendJson(ctx.res, 200, getFileHunks(ctx.session, filePath));
   },
 
   'GET /api/image': async ctx => {
-    const contained = requireContainedPath(ctx);
-    if (contained === null) return;
-    // Core resolves against the repository itself, so it gets the raw value.
-    sendJson(ctx.res, 200, await loadImage(ctx.session, contained.raw));
+    const filePath = requireReviewedQueryPath(ctx);
+    if (filePath === null) return;
+    // Core reads the reviewed snapshot under the same identity it just authorized.
+    sendJson(ctx.res, 200, await loadImage(ctx.session, filePath));
   },
 
   'GET /api/attachment': async ctx => {
@@ -372,9 +387,9 @@ const routes: Record<string, RouteHandler> = {
     // the repository 404s every resumed image when -o points elsewhere.
     const assetRoot = ctx.session.outputPathInfo
       ? path.dirname(ctx.session.outputPathInfo.resolvedOutputPath)
-      : ctx.repositoryRoot;
+      : resolveSourceBaseDir(ctx.session);
     const raw = ctx.url.searchParams.get('path');
-    const resolved = raw ? containPath(assetRoot, raw) : null;
+    const resolved = raw && assetRoot ? containPath(assetRoot, raw) : null;
     if (resolved === null) {
       sendError(ctx.res, 400, 'path must be a file under the output directory');
       return;
@@ -394,7 +409,8 @@ const routes: Record<string, RouteHandler> = {
     res.end(Buffer.from(data));
   },
 
-  'POST /api/expand-context': async ({ req, res, session, repositoryRoot }) => {
+  'POST /api/expand-context': async ctx => {
+    const { req, res, session } = ctx;
     const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES);
     if (!body.ok) {
       sendError(res, body.status, body.error);
@@ -405,19 +421,18 @@ const routes: Record<string, RouteHandler> = {
       sendError(res, 400, parsed.error);
       return;
     }
-    // Becomes a git pathspec; contain it, then pass it through as sent.
-    if (containPath(repositoryRoot, parsed.value.filePath) === null) {
-      sendError(res, 400, 'filePath must be a file under the repository root');
-      return;
-    }
+    // Becomes a git pathspec; authorized as a reviewed path, then passed through as sent.
+    if (!requireReviewedPath(ctx, parsed.value.filePath, 'filePath')) return;
     sendJson(res, 200, await expandContext(session, parsed.value));
   },
 
   // The one route that rewrites a file in the reviewed tree. Core refuses
   // unless the anchored lines still match the suggestion's recorded original
-  // byte for byte, and resolves the destination itself; the path is contained
-  // here so a request cannot even name a file outside the repository.
-  'POST /api/apply-suggestion': async ({ req, res, session, repositoryRoot }) => {
+  // byte for byte, and resolves the destination itself; the path is
+  // authorized here too, so a request cannot even name a file the review
+  // never contained.
+  'POST /api/apply-suggestion': async ctx => {
+    const { req, res, session } = ctx;
     const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES);
     if (!body.ok) {
       sendError(res, body.status, body.error);
@@ -428,10 +443,7 @@ const routes: Record<string, RouteHandler> = {
       sendError(res, 400, parsed.error);
       return;
     }
-    if (containPath(repositoryRoot, parsed.value.filePath) === null) {
-      sendError(res, 400, 'filePath must be a file under the repository root');
-      return;
-    }
+    if (!requireReviewedPath(ctx, parsed.value.filePath, 'filePath')) return;
     sendJson(res, 200, applySuggestionForSession(session, parsed.value));
   },
 
@@ -551,7 +563,7 @@ async function serveStatic(
  * listening: bind it with `listenLoopback`.
  */
 export function createReviewServer(options: ReviewServerOptions): http.Server {
-  const { session, repositoryRoot, output, capability, clientDir = defaultClientDir() } = options;
+  const { session, output, capability, clientDir = defaultClientDir() } = options;
 
   return http.createServer(async (req, res) => {
     const method = req.method ?? 'GET';
@@ -581,7 +593,7 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
     try {
       const handler = routes[`${method} ${url.pathname}`];
       if (handler) {
-        await handler({ req, res, url, session, repositoryRoot, output });
+        await handler({ req, res, url, session, output });
       } else if (ROUTE_PATHS.has(url.pathname)) {
         sendError(res, 405, 'method not allowed');
       } else if (url.pathname.startsWith('/api/')) {

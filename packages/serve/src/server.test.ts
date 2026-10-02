@@ -102,12 +102,28 @@ const CONFIG: AppConfig = {
   maxTotalLines: 50_000,
 };
 
+/** A file whose name is a percent-encoded traversal, kept literal on disk. */
+const LITERAL_NAME = '%2E%2E%2Fliteral.png';
+
 function freshSession(): ReviewSession {
   const s = core.createReviewSession();
-  s.diffData = {
-    source: { type: 'git', gitDiffArgs: '--staged', repository: root },
-    files: [diffFile('src/index.ts', [INDEX_HUNK]), diffFile('img.png')],
-  };
+  // Committed through core, as every front end does: that captures the
+  // reviewed paths and records the identity the routes authorize against.
+  core.commitDiffData(
+    s,
+    {
+      source: { type: 'git', gitDiffArgs: '', repository: root },
+      files: [diffFile('src/index.ts', [INDEX_HUNK]), diffFile('img.png'), diffFile(LITERAL_NAME)],
+    },
+    {
+      mode: 'git',
+      sourceRoot: root,
+      invocationCwd: root,
+      gitDiffArgv: [],
+      oldSide: { kind: 'index' },
+      newSide: { kind: 'working-tree' },
+    }
+  );
   s.guideData = { overview: 'Start with the entry point.', groups: [] };
   s.config = CONFIG;
   s.outputPathInfo = {
@@ -192,6 +208,7 @@ beforeAll(async () => {
   fs.mkdirSync(path.join(root, 'src'), { recursive: true });
   fs.writeFileSync(path.join(root, 'src', 'index.ts'), 'export {};\n');
   fs.writeFileSync(path.join(root, 'img.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  fs.writeFileSync(path.join(root, LITERAL_NAME), Buffer.from([0x4c, 0x49, 0x54]));
   fs.writeFileSync(path.join(root, 'attach.bin'), Buffer.from('attachment-bytes'));
   fs.mkdirSync(path.join(tmp, 'outside'));
   fs.writeFileSync(path.join(tmp, 'outside', 'secret.txt'), 'secret\n');
@@ -202,7 +219,6 @@ beforeAll(async () => {
   session = freshSession();
   server = createReviewServer({
     session,
-    repositoryRoot: root,
     clientDir,
     output: { path: path.join(root, 'review.xml'), origin: 'explicit' },
     capability: CAPABILITY,
@@ -238,7 +254,11 @@ describe('GET /api/diff', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
     const body = await res.json();
-    expect(body.diff.files.map((f: DiffFile) => f.newPath)).toEqual(['src/index.ts', 'img.png']);
+    expect(body.diff.files.map((f: DiffFile) => f.newPath)).toEqual([
+      'src/index.ts',
+      'img.png',
+      LITERAL_NAME,
+    ]);
     expect(body.diff.source).toEqual(session.diffData!.source);
     expect(body.guide).toEqual({ overview: 'Start with the entry point.', groups: [] });
     expect(vi.mocked(core.getDiffLoad)).toHaveBeenCalledWith(session);
@@ -280,10 +300,12 @@ describe('GET /api/file', () => {
     expect(vi.mocked(core.getFileHunks)).toHaveBeenCalledWith(session, 'src/index.ts');
   });
 
-  it('returns null for a contained path the diff does not know', async () => {
+  it('rejects a path the review does not contain with 400 before reaching core', async () => {
+    // Authorization is membership in the reviewed diff, by core's own check;
+    // a path the review never had is refused at the door, not looked up.
     const res = await apiFetch(`${base}/api/file?path=src/other.ts`);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toBeNull();
+    expect(res.status).toBe(400);
+    expectNoCoreCall();
   });
 
   it('rejects a traversal path with 400 before reaching core', async () => {
@@ -321,15 +343,21 @@ describe('GET /api/image', () => {
   });
 
   it('treats a whole-path-encoded traversal as a literal filename inside the root', async () => {
-    // The query is decoded exactly once, so `%252E%252E%252F...` arrives as
-    // the filename `%2E%2E%2Foutside%2Fsecret.txt` and stays inside the root.
-    const res = await apiFetch(`${base}/api/image?path=%252E%252E%252Foutside%252Fsecret.txt`);
+    // The query is decoded exactly once, so `%252E%252E%252Fliteral.png`
+    // arrives as the filename `%2E%2E%2Fliteral.png` — a reviewed file that
+    // really is called that — and is served from inside the root.
+    const res = await apiFetch(`${base}/api/image?path=%252E%252E%252Fliteral.png`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toHaveProperty('error');
-    expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(
-      session,
-      '%2E%2E%2Foutside%2Fsecret.txt'
+    expect((await res.json()).dataUri).toBe(
+      `data:image/png;base64,${Buffer.from([0x4c, 0x49, 0x54]).toString('base64')}`
     );
+    expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(session, LITERAL_NAME);
+  });
+
+  it('rejects a path the review does not contain with 400 before reaching core', async () => {
+    const res = await apiFetch(`${base}/api/image?path=src/index.png`);
+    expect(res.status).toBe(400);
+    expectNoCoreCall();
   });
 });
 
@@ -1040,7 +1068,7 @@ describe('session capability', () => {
         headers: { ...AUTH, origin: forwarded, 'sec-fetch-site': 'same-origin' },
       });
       expect(res.status).toBe(200);
-      expect((await res.json()).diff.files).toHaveLength(2);
+      expect((await res.json()).diff.files).toHaveLength(3);
 
       // And the forward is no way around the capability.
       const bare = await fetch(`${forwarded}/api/diff`);

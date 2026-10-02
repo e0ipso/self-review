@@ -136,8 +136,8 @@ self-review/
 │   │   │                        #   mirroring src/main/main.ts), server.ts (HTTP routes over
 │   │   │                        #   core's session handlers; binds 127.0.0.1 only),
 │   │   │                        #   lifecycle.ts (writes the output file and exits on a
-│   │   │                        #   completed submission), validate.ts (request body &
-│   │   │                        #   path-containment checks), client/ (browser entry point +
+│   │   │                        #   completed submission), validate.ts (request body checks;
+│   │   │                        #   diff paths are authorized by core), client/ (browser entry point +
 │   │   │                        #   fetch-based ReviewAdapter, built into dist/client/ and
 │   │   │                        #   served statically)
 │   └── types/                   # @self-review/types, shared TypeScript interfaces (zero runtime deps)
@@ -190,12 +190,23 @@ The preload script uses `contextBridge.exposeInMainWorld` to expose a typed `ele
 The renderer NEVER imports from `electron` directly.
 
 Review handler logic lives in `packages/core/src/review-handlers.ts`: each handler takes the
-`ReviewSession` it acts on as a parameter, returns a value, and reads no module-scope state. Each
-front end owns its own transport wiring over that same handler layer: `src/main/ipc-handlers.ts`
-registers the Electron app's `ipcMain` listeners, and `packages/serve/src/server.ts` registers the
-serve command's HTTP routes. A new handler's body belongs in `review-handlers.ts`; only its
-transport registration — an `ipcMain` listener or an HTTP route — belongs in the front end that
-needs it.
+`ReviewSession` it acts on as a parameter, returns a value, and reads no module-scope state. A
+session records what it reviews as a `ReviewSourceIdentity` (`@self-review/types`): mode
+(`git`/`directory`/`file`/`remote`), the physical source root, the launch directory, the structured
+`git diff` argv and the two snapshots compared (`working-tree`, `index`, `commit` with its SHA
+resolved at load time, `directory`, `file`, `none`, or `unknown`). The loader that produced the diff
+supplies it (`loadGitDiffWithUntracked`, `resolveLocalSourceIdentity`, `bootstrapRemoteDiff`) and
+`commitDiffData(session, payload, identity)` records it with the diff. Every read of reviewed
+content — image previews, expansion line counts — goes through `readReviewedContent` in
+`packages/core/src/snapshot-reader.ts`, which reads the reviewed side (the index blob of a staged
+review, the PR head commit of a remote one, the working or scanned file opened without following
+links) rather than the working tree, and every request-supplied diff path is authorized by
+`authorizeReviewedPath` against the same identity, in both front ends. An `unknown` side refuses
+visibly; nothing falls back to the working tree or to the process's working directory. Each front
+end owns its own transport wiring over that same handler layer: `src/main/ipc-handlers.ts` registers
+the Electron app's `ipcMain` listeners, and `packages/serve/src/server.ts` registers the serve
+command's HTTP routes. A new handler's body belongs in `review-handlers.ts`; only its transport
+registration — an `ipcMain` listener or an HTTP route — belongs in the front end that needs it.
 
 Everything that moved into `@self-review/core` was Node-only, with no Electron dependency;
 `src/main/` now holds Electron-bound code — window/menu/dialog wiring, IPC transport, and XML file

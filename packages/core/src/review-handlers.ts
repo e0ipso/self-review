@@ -19,6 +19,7 @@ import {
   PayloadStats,
   ReviewState,
   ReviewComment,
+  ReviewSourceIdentity,
   ExpandContextRequest,
   ImageLoadResult,
   RemoteDriftInfo,
@@ -30,7 +31,10 @@ import { scanDirectory, scanFile } from './directory-scanner';
 import { tokenizeGitDiffArgs } from './git-diff-args';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { applySuggestion } from './apply-suggestion';
-import { MAX_IMAGE_BYTES } from './input-budgets';
+import { MAX_GIT_DIFF_OUTPUT_BYTES, MAX_IMAGE_BYTES } from './input-budgets';
+import { isPreviewableImage } from './file-type-utils';
+import { readReviewedContent } from './snapshot-reader';
+import { resolveLocalSourceIdentity } from './source-identity';
 
 /**
  * The state a single review session owns. One desktop application window is
@@ -63,6 +67,15 @@ export interface ReviewSession {
    * and none of them reach this set.
    */
   reviewedPaths: ReadonlySet<string>;
+  /**
+   * What this session reviews — mode, physical source root, structured
+   * argv and the two snapshots compared — recorded by {@link commitDiffData}
+   * alongside the diff. Every read of reviewed content and every path
+   * authorization resolves against it; null until a diff is committed (and
+   * for a welcome session, which reviews nothing), when every such read
+   * refuses.
+   */
+  sourceIdentity: ReviewSourceIdentity | null;
 }
 
 /** Create an empty session. */
@@ -79,6 +92,7 @@ export function createReviewSession(): ReviewSession {
     resumeImportDiagnostics: [],
     applyDestinationRoot: null,
     reviewedPaths: emptyReviewedPaths(),
+    sourceIdentity: null,
   };
 }
 
@@ -113,13 +127,41 @@ function reviewedPathsOf(files: readonly DiffFile[]): ReadonlySet<string> {
  * Make `payload` the session's diff. This is the one place a diff is
  * committed to a session — every front end's startup, the welcome screen's
  * directory start and the remote bootstrap all land here — and the moment
- * {@link ReviewSession.reviewedPaths} is captured from it. Later edits to
- * `session.diffData` (expanded context writes hunks back) leave that set as
- * it was.
+ * {@link ReviewSession.reviewedPaths} is captured from it and
+ * {@link ReviewSession.sourceIdentity} is recorded. Later edits to
+ * `session.diffData` (expanded context writes hunks back) leave both as
+ * they were.
+ *
+ * The identity is the loader's to supply — it is the one that knows which
+ * snapshots the diff compared — and `null` only for a payload that reviews
+ * nothing (the welcome screen). A session without one refuses every read
+ * of reviewed content rather than guessing a root.
  */
-export function commitDiffData(session: ReviewSession, payload: DiffLoadPayload): void {
+export function commitDiffData(
+  session: ReviewSession,
+  payload: DiffLoadPayload,
+  identity: ReviewSourceIdentity | null
+): void {
   session.diffData = payload;
   session.reviewedPaths = reviewedPathsOf(payload.files);
+  session.sourceIdentity = identity;
+}
+
+/**
+ * The reviewed file `filePath` names and the side of the review its content
+ * is on: the new side, or the old side for a deletion or a rename's old
+ * name. Null when the diff has no such file.
+ */
+export function locateReviewedFile(
+  session: ReviewSession,
+  filePath: string
+): { file: DiffFile; side: 'old' | 'new' } | null {
+  const files = session.diffData?.files ?? [];
+  const byNewPath = files.find(f => f.newPath !== '' && f.newPath === filePath);
+  if (byNewPath) return { file: byNewPath, side: 'new' };
+  const byOldPath = files.find(f => f.oldPath !== '' && f.oldPath === filePath);
+  if (byOldPath) return { file: byOldPath, side: 'old' };
+  return null;
 }
 
 /**
@@ -161,77 +203,85 @@ export function getDiffLoad(
 }
 
 /**
- * The directory the session's reviewed paths are relative to, or null when the
- * session has no diff yet.
- *
- * Scanner paths are relative to the reviewed directory, or to the reviewed
- * file's parent. Git paths are relative to the repository, which in remote
- * mode is the materialized clone.
+ * The physical directory the session's reviewed paths are relative to —
+ * the repository root (in remote mode, the materialized clone), the
+ * reviewed directory, or the reviewed file's parent — or null when the
+ * session has no source identity yet. This is the read-only source root;
+ * {@link resolveApplyDestination} decides where applies may write.
  */
 export function resolveSourceBaseDir(session: ReviewSession): string | null {
-  const source = session.diffData?.source;
-  if (!source) return null;
-  if (source.type === 'git') return source.repository;
-  if (source.type === 'directory') return source.sourcePath;
-  if (source.type === 'file') return path.dirname(source.sourcePath);
-  return null;
+  return session.sourceIdentity?.sourceRoot ?? null;
 }
 
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.bmp': 'image/bmp',
+};
+
 /**
- * Load a binary image as a base64 data URI for the rendered preview.
+ * Load a reviewed image as a base64 data URI for the rendered preview.
+ *
+ * The bytes come from the snapshot the review compared — the index for a
+ * staged review, the commit for a range or a PR head, the working tree or
+ * scanned directory otherwise — never from wherever the working tree
+ * happens to be now. Only a path the committed diff contained, of a type
+ * the preview renders, is read at all; a deleted image is read from the
+ * old side, which is the only side that still has it.
  */
 export async function loadImage(
   session: ReviewSession,
   filePath: string
 ): Promise<ImageLoadResult> {
-  const MIME_MAP: Record<string, string> = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.ico': 'image/x-icon',
-    '.bmp': 'image/bmp',
-    '.svg': 'image/svg+xml',
-  };
-  const MAX_SIZE = MAX_IMAGE_BYTES;
-  const baseDir = resolveSourceBaseDir(session) ?? process.cwd();
-  const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
-  const ext = path.extname(filePath).toLowerCase();
-  const mimeType = MIME_MAP[ext] ?? 'application/octet-stream';
-
-  // In a remote session the reviewed content lives at the fetched head
-  // SHA, not in the clone's working tree (a temporary clone stays on the
-  // default branch), so read the blob through git instead of the fs.
-  const remote = session.diffData?.remote;
-  if (remote && session.diffData?.source.type === 'git') {
-    try {
-      const { readGitBlobAsync } = await import('./git');
-      const data = await readGitBlobAsync(
-        session.diffData.source.repository,
-        `${remote.remoteHeadSha}:${filePath}`
-      );
-      if (data.length > MAX_SIZE) {
-        return { error: 'File too large to preview (>10 MB)' };
-      }
-      return { dataUri: `data:${mimeType};base64,${data.toString('base64')}` };
-    } catch {
-      return {
-        error: 'Image preview unavailable — blob not found at the reviewed commit.',
-      };
-    }
+  if (!session.reviewedPaths.has(filePath)) {
+    return { error: 'Image preview unavailable — this file is not part of the reviewed diff.' };
   }
+  if (!isPreviewableImage(filePath)) {
+    return { error: 'Image preview unavailable — this file is not a previewable image.' };
+  }
+  const located = locateReviewedFile(session, filePath);
+  const side = located?.side ?? 'new';
 
-  try {
-    const stat = await fs.promises.stat(resolved);
-    if (stat.size > MAX_SIZE) {
+  const result = await readReviewedContent(session, filePath, side, { maxBytes: MAX_IMAGE_BYTES });
+  if (!result.ok) {
+    if (result.reason === 'too-large') {
       return { error: 'File too large to preview (>10 MB)' };
     }
-    const data = await fs.promises.readFile(resolved);
-    return { dataUri: `data:${mimeType};base64,${data.toString('base64')}` };
-  } catch {
-    return { error: 'Image preview unavailable — file not found on disk.' };
+    console.error(`[review] Image preview unavailable for ${filePath}: ${result.message}`);
+    return { error: `Image preview unavailable — ${result.message}` };
   }
+  const mimeType = IMAGE_MIME_TYPES[path.posix.extname(filePath).toLowerCase()];
+  return { dataUri: `data:${mimeType};base64,${result.content.toString('base64')}` };
+}
+
+/**
+ * The number of lines of `filePath` on the side of the review that has it
+ * (the new side, or the old side of a deletion), read from the reviewed
+ * snapshot. Zero when it cannot be read; the caller treats that as unknown.
+ */
+async function countReviewedLines(session: ReviewSession, filePath: string): Promise<number> {
+  const located = locateReviewedFile(session, filePath);
+  const result = await readReviewedContent(session, filePath, located?.side ?? 'new', {
+    maxBytes: MAX_GIT_DIFF_OUTPUT_BYTES,
+  });
+  if (!result.ok) {
+    console.error(`[review] Line count unavailable for ${filePath}: ${result.message}`);
+    return 0;
+  }
+  return countLines(result.content);
+}
+
+/** Lines in `content`, where a trailing newline ends the last line rather than starting one. */
+function countLines(content: Buffer): number {
+  let newlines = 0;
+  for (const byte of content) {
+    if (byte === 0x0a) newlines++;
+  }
+  return content.length > 0 && content[content.length - 1] === 0x0a ? newlines : newlines + 1;
 }
 
 /**
@@ -554,20 +604,11 @@ export async function expandContext(
 
     const expandedFile = parsedFiles[0];
 
-    // Count total lines in the working tree file for gap detection.
-    // Diff paths are repository-relative — resolve accordingly.
-    let totalLines = 0;
-    try {
-      const content = await fs.promises.readFile(
-        path.resolve(source.repository, request.filePath),
-        'utf-8'
-      );
-      totalLines = content.split('\n').length;
-      // If file ends with newline, last split element is empty — don't count it
-      if (content.endsWith('\n')) totalLines--;
-    } catch {
-      // Can't determine line count — leave as 0 (bars will stay visible)
-    }
+    // The file's length on the reviewed side, for gap detection: the index
+    // for a staged review, the PR head for a remote one — never the working
+    // tree a temporary clone left on its default branch. Zero when it cannot
+    // be read, which keeps the bars visible.
+    const totalLines = await countReviewedLines(session, request.filePath);
 
     // Update the session's diff data
     session.diffData = {
@@ -599,6 +640,8 @@ export async function expandContext(
  */
 export interface ReviewStartResult {
   payload: DiffLoadPayload;
+  /** The identity to commit with the payload; see {@link commitDiffData}. */
+  identity: ReviewSourceIdentity;
   stats: PayloadStats | null;
   exceedsThresholds: boolean;
 }
@@ -628,24 +671,24 @@ export async function prepareDirectoryReview(
   const scan = isFile
     ? await scanFile(directoryPath)
     : await scanDirectory(directoryPath, session.config?.ignore ?? []);
+  const type = isFile ? 'file' : 'directory';
   const payload: DiffLoadPayload = {
     files: scan.files,
-    source: isFile
-      ? { type: 'file', sourcePath: directoryPath }
-      : { type: 'directory', sourcePath: directoryPath },
+    source: { type, sourcePath: directoryPath },
     ...(scan.diagnostics.length > 0 ? { diagnostics: scan.diagnostics } : {}),
   };
+  const identity = resolveLocalSourceIdentity({ type, sourcePath: directoryPath });
 
   // Large payload guard — skipped entirely when there is no config.
   if (!session.config) {
-    return { payload, stats: null, exceedsThresholds: false };
+    return { payload, identity, stats: null, exceedsThresholds: false };
   }
   const stats = computePayloadStats(
     payload.files.length,
     countTotalLines(payload.files),
     session.config
   );
-  return { payload, stats, exceedsThresholds: stats.exceedsAny };
+  return { payload, identity, stats, exceedsThresholds: stats.exceedsAny };
 }
 
 /**
@@ -654,8 +697,9 @@ export async function prepareDirectoryReview(
  */
 export function commitReviewStart(
   session: ReviewSession,
-  payload: DiffLoadPayload
+  payload: DiffLoadPayload,
+  identity: ReviewSourceIdentity | null
 ): DiffLoadPayload {
-  commitDiffData(session, payload);
+  commitDiffData(session, payload, identity);
   return preparePayload(payload);
 }

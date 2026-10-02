@@ -14,6 +14,7 @@ import { scanDirectory, scanFile } from './directory-scanner';
 import { loadConfig } from './config';
 import { applyStagedUntrackedDefault } from '../../packages/core/src/staged-untracked';
 import { determineMode } from '../../packages/core/src/startup-mode';
+import { resolveLocalSourceIdentity } from '../../packages/core/src/source-identity';
 import { createIgnoreFilter } from './ignore-filter';
 import { parseReviewXml } from './xml-parser';
 import { inspectOutputPath, publishReview } from '../../packages/core/src/review-publisher';
@@ -58,6 +59,7 @@ import {
   RemoteOpenUrlResult,
   RemoteSessionInfo,
   ReviewComment,
+  ReviewSourceIdentity,
 } from '../shared/types';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
@@ -118,6 +120,8 @@ if (process.env.NODE_ENV === 'test' || process.env.DISPLAY === ':99') {
 
 let mainWindow: BrowserWindow | null = null;
 let diffData: DiffLoadPayload | null = null;
+// What diffData is a review of; committed with it. Null for the welcome screen.
+let diffIdentity: ReviewSourceIdentity | null = null;
 let resumeComments: ReviewComment[] = [];
 let resumeViewedFiles: string[] = [];
 let appConfig: AppConfig | null = null;
@@ -299,7 +303,7 @@ async function initializeApp() {
       // pipeline with the clone's repo path and the base...head range.
       // Materialization failures throw and are handled like any other
       // fatal startup git error by the catch below.
-      const { session, payload } = await bootstrapRemoteDiff(
+      const { session, payload, identity } = await bootstrapRemoteDiff(
         cliArgs.remoteUrl!,
         process.cwd(),
         appConfig.ignore
@@ -308,6 +312,7 @@ async function initializeApp() {
       remoteSessionInfo = session.remote;
       fetchedRemoteComments = session.fetchedComments;
       diffData = payload;
+      diffIdentity = identity;
       console.error(
         '[main] Remote diff loaded:',
         payload.files.length,
@@ -322,7 +327,9 @@ async function initializeApp() {
         files: allFiles,
         repository,
         diagnostics,
+        identity,
       } = await loadGitDiffWithUntracked(gitDiffArgs);
+      diffIdentity = identity;
       console.error('[main] Loaded', allFiles.length, 'files from git diff');
       for (const diagnostic of diagnostics) {
         console.error('[main] Diff diagnostic:', diagnostic);
@@ -361,6 +368,7 @@ async function initializeApp() {
         source: { type: 'file', sourcePath: filePath },
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       };
+      diffIdentity = resolveLocalSourceIdentity({ type: 'file', sourcePath: filePath });
     } else if (mode === 'directory') {
       // Directory mode: scan the specified directory
       const dirArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
@@ -379,6 +387,10 @@ async function initializeApp() {
         // A budget or read failure must never read as an empty directory.
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       };
+      diffIdentity = resolveLocalSourceIdentity({
+        type: 'directory',
+        sourcePath: directoryPath,
+      });
     } else {
       // Welcome mode: open window with no diff data
       console.error('[main] Welcome mode — no git repo or directory arg');
@@ -482,7 +494,7 @@ async function initializeApp() {
     }
 
     // Phase 6: Cache data for when renderer requests it
-    setDiffData(diffData);
+    setDiffData(diffData, diffIdentity);
     setConfigData(appConfig);
     setOutputPathInfo({ resolvedOutputPath: currentOutputPath, outputPathWritable });
     if (
@@ -612,7 +624,7 @@ function registerLifecycleHandlers(): void {
   ipcMain.handle(IPC.REMOTE_OPEN_URL, async (event, url: string): Promise<RemoteOpenUrlResult> => {
     try {
       console.error('[main] Remote URL open requested:', url);
-      const { session, payload } = await bootstrapRemoteDiff(
+      const { session, payload, identity } = await bootstrapRemoteDiff(
         url,
         process.cwd(),
         appConfig?.ignore ?? []
@@ -645,7 +657,7 @@ function registerLifecycleHandlers(): void {
 
       remoteCleanup = session.cleanup;
       remoteSessionInfo = session.remote;
-      setDiffData(payload);
+      setDiffData(payload, identity);
       setResumeData(session.fetchedComments, [], null);
 
       // Guide sidecar discovery for the welcome→remote path: startup

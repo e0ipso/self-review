@@ -33,6 +33,8 @@ src/
 ├── review-publisher.ts   # publishReview: validate → stage assets (unique, exclusive, no-follow) → atomic rename
 ├── safe-fs.ts            # No-follow primitives: writeExclusiveNoFollow, atomicReplace (mode/owner/identity-preserving), assertNoSymlinkAncestors, FsLayer
 ├── apply-suggestion.ts   # applySuggestion: anchor validated pre-I/O, .git refused, realpath root + lstat ancestors + O_NOFOLLOW, atomicReplace
+├── source-identity.ts    # ReviewSourceIdentity resolution: which two snapshots a git diff argv compares (SHAs pinned at load), directory/file roots
+├── snapshot-reader.ts    # authorizeReviewedPath + readReviewedContent: the one path authorization and content read (index/commit blob via git cat-file, working/scanned file no-follow)
 ├── xml-parser.ts         # XML → ReviewState (lossless; downgrades bad anchors with diagnostics)
 ├── xml-text.ts           # The one escape/decode contract (CR/LF/TAB as char refs, single pass)
 ├── xml-errors.ts         # ReviewXmlError / XmlIllegalCharacterError (library never process.exits)

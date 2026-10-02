@@ -50,12 +50,32 @@ vi.mock('../../packages/core/src/payload-sizing', () => ({
 
 vi.mock('../../packages/core/src/git', () => ({
   runGitDiffAsync: vi.fn(),
-  readGitBlobAsync: vi.fn(),
 }));
 
 import { BrowserWindow, dialog } from 'electron';
+import { execFileSync } from 'child_process';
+import type { ReviewSourceIdentity } from '../shared/types';
 import { IPC } from '../shared/ipc-channels';
 import { registerIpcHandlers, setDiffData } from './ipc-handlers';
+
+/** A remote identity rooted at `clonePath`; the sides do not matter to the apply tests. */
+function cloneIdentity(clonePath: string): ReviewSourceIdentity {
+  return {
+    mode: 'remote',
+    sourceRoot: clonePath,
+    invocationCwd: clonePath,
+    gitDiffArgv: ['aaa111...bbb222'],
+    oldSide: { kind: 'commit', sha: 'aaa111' },
+    newSide: { kind: 'commit', sha: 'bbb222' },
+  };
+}
+
+/** Git for a fixture, never against an inherited repository (SR-0055). */
+function git(cwd: string, ...args: string[]): string {
+  const env = { ...process.env };
+  for (const name of Object.keys(env)) if (name.startsWith('GIT_')) delete env[name];
+  return execFileSync('git', args, { cwd, encoding: 'utf-8', env }).trim();
+}
 
 function makeLine(type: DiffLine['type'] = 'addition'): DiffLine {
   return { type, oldLineNumber: null, newLineNumber: 1, content: '+ hello' };
@@ -98,7 +118,7 @@ describe('ipc-handlers', () => {
         files: [file],
         source: { type: 'directory', sourcePath: '/tmp' },
       };
-      setDiffData(payload);
+      setDiffData(payload, null);
 
       const handler = handlers[IPC.DIFF_LOAD_FILE];
       expect(handler).toBeDefined();
@@ -112,7 +132,7 @@ describe('ipc-handlers', () => {
         files: [makeFile('src/app.ts')],
         source: { type: 'directory', sourcePath: '/tmp' },
       };
-      setDiffData(payload);
+      setDiffData(payload, null);
 
       const handler = handlers[IPC.DIFF_LOAD_FILE];
       const result = await handler({}, 'src/nonexistent.ts');
@@ -128,7 +148,7 @@ describe('ipc-handlers', () => {
         files: [],
         source: { type: 'directory', sourcePath: '/tmp' },
       };
-      setDiffData(payload);
+      setDiffData(payload, null);
 
       const handler = handlers[IPC.DIFF_LOAD_FILE];
       const result = await handler({}, 'any-file.ts');
@@ -147,7 +167,7 @@ describe('ipc-handlers', () => {
         files: [file],
         source: { type: 'directory', sourcePath: '/tmp' },
       };
-      setDiffData(payload);
+      setDiffData(payload, null);
 
       const handler = handlers[IPC.DIFF_LOAD_FILE];
       const result = await handler({}, 'src/deleted.ts');
@@ -176,7 +196,7 @@ describe('ipc-handlers', () => {
         source: { type: 'directory', sourcePath: '/tmp' },
         isLargePayload: true,
       };
-      setDiffData(payload);
+      setDiffData(payload, null);
 
       const mockSend = vi.fn();
       const handler = onHandlers[IPC.DIFF_REQUEST];
@@ -203,7 +223,7 @@ describe('ipc-handlers', () => {
         files: [file],
         source: { type: 'directory', sourcePath: '/tmp' },
       };
-      setDiffData(payload);
+      setDiffData(payload, null);
 
       const mockSend = vi.fn();
       const handler = onHandlers[IPC.DIFF_REQUEST];
@@ -248,7 +268,7 @@ describe('ipc-handlers', () => {
           repository: '/tmp/self-review-clone',
         },
       };
-      setDiffData(payload);
+      setDiffData(payload, null);
 
       const handler = handlers[IPC.DIFF_EXPAND_CONTEXT];
       expect(handler).toBeDefined();
@@ -262,30 +282,36 @@ describe('ipc-handlers', () => {
     });
   });
 
-  describe('DIFF_LOAD_IMAGE handler (repo path threading)', () => {
-    it('resolves relative image paths against the git source repository', async () => {
+  describe('DIFF_LOAD_IMAGE handler (source identity threading)', () => {
+    // 1x1 transparent PNG
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      'base64'
+    );
+
+    it('reads a working-tree image under the session’s source root, not the process cwd', async () => {
       const os = await import('os');
       const fsMod = await import('fs');
       const pathMod = await import('path');
-      const repoDir = fsMod.mkdtempSync(pathMod.join(os.tmpdir(), 'self-review-clone-'));
+      const repoDir = fsMod.realpathSync(
+        fsMod.mkdtempSync(pathMod.join(os.tmpdir(), 'self-review-clone-'))
+      );
       try {
-        // 1x1 transparent PNG
-        const png = Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-          'base64'
-        );
         fsMod.mkdirSync(pathMod.join(repoDir, 'assets'));
         fsMod.writeFileSync(pathMod.join(repoDir, 'assets', 'pic.png'), png);
 
         const payload: DiffLoadPayload = {
           files: [makeFile('assets/pic.png')],
-          source: {
-            type: 'git',
-            gitDiffArgs: 'aaa111...bbb222',
-            repository: repoDir,
-          },
+          source: { type: 'git', gitDiffArgs: '', repository: repoDir },
         };
-        setDiffData(payload);
+        setDiffData(payload, {
+          mode: 'git',
+          sourceRoot: repoDir,
+          invocationCwd: repoDir,
+          gitDiffArgv: [],
+          oldSide: { kind: 'index' },
+          newSide: { kind: 'working-tree' },
+        });
 
         const handler = handlers[IPC.DIFF_LOAD_IMAGE];
         const result = (await handler({}, 'assets/pic.png')) as {
@@ -294,7 +320,7 @@ describe('ipc-handlers', () => {
         };
 
         // The file only exists inside repoDir, never under process.cwd(),
-        // so success proves resolution against the source repository.
+        // so success proves resolution against the source root.
         expect(result.error).toBeUndefined();
         expect(result.dataUri).toMatch(/^data:image\/png;base64,/);
       } finally {
@@ -302,47 +328,64 @@ describe('ipc-handlers', () => {
       }
     });
 
-    it('reads the blob at the reviewed head SHA in remote mode, not the working tree', async () => {
-      const { readGitBlobAsync } = await import('../../packages/core/src/git');
-      const png = Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-        'base64'
+    it('reads the blob at the reviewed head commit in remote mode, not the working tree', async () => {
+      const os = await import('os');
+      const fsMod = await import('fs');
+      const pathMod = await import('path');
+      const repoDir = fsMod.realpathSync(
+        fsMod.mkdtempSync(pathMod.join(os.tmpdir(), 'self-review-clone-'))
       );
-      vi.mocked(readGitBlobAsync).mockResolvedValueOnce(png);
+      try {
+        // The image exists only on the PR head; the working tree stays on
+        // the default branch, where it does not exist at all.
+        git(repoDir, 'init', '-q', '-b', 'main');
+        git(repoDir, 'config', 'user.email', 'test@example.com');
+        git(repoDir, 'config', 'user.name', 'Test');
+        fsMod.writeFileSync(pathMod.join(repoDir, 'README'), 'main\n');
+        git(repoDir, 'add', '-A');
+        git(repoDir, 'commit', '-qm', 'main');
+        const baseSha = git(repoDir, 'rev-parse', 'HEAD');
+        git(repoDir, 'checkout', '-qb', 'pr');
+        fsMod.mkdirSync(pathMod.join(repoDir, 'assets'));
+        fsMod.writeFileSync(pathMod.join(repoDir, 'assets', 'pic.png'), png);
+        git(repoDir, 'add', '-A');
+        git(repoDir, 'commit', '-qm', 'pr');
+        const headSha = git(repoDir, 'rev-parse', 'HEAD');
+        git(repoDir, 'checkout', '-q', 'main');
+        expect(fsMod.existsSync(pathMod.join(repoDir, 'assets', 'pic.png'))).toBe(false);
 
-      const payload: DiffLoadPayload = {
-        files: [makeFile('assets/pic.png')],
-        source: {
-          type: 'git',
-          gitDiffArgs: 'aaa111...bbb222',
-          repository: '/tmp/self-review-clone-does-not-exist',
-        },
-        remote: {
-          remoteUrl: 'https://github.com/owner/repo/pull/42',
-          remoteBaseSha: 'aaa111',
-          remoteHeadSha: 'bbb222',
-          remoteForge: 'github',
-          threadSyncAvailable: true,
-          temporaryClone: false,
-        },
-      };
-      setDiffData(payload);
+        const payload: DiffLoadPayload = {
+          files: [makeFile('assets/pic.png')],
+          source: { type: 'git', gitDiffArgs: `${baseSha}...${headSha}`, repository: repoDir },
+          remote: {
+            remoteUrl: 'https://github.com/owner/repo/pull/42',
+            remoteBaseSha: baseSha,
+            remoteHeadSha: headSha,
+            remoteForge: 'github',
+            threadSyncAvailable: true,
+            temporaryClone: true,
+          },
+        };
+        setDiffData(payload, {
+          mode: 'remote',
+          sourceRoot: repoDir,
+          invocationCwd: process.cwd(),
+          gitDiffArgv: [`${baseSha}...${headSha}`],
+          oldSide: { kind: 'commit', sha: baseSha },
+          newSide: { kind: 'commit', sha: headSha },
+        });
 
-      const handler = handlers[IPC.DIFF_LOAD_IMAGE];
-      const result = (await handler({}, 'assets/pic.png')) as {
-        dataUri?: string;
-        error?: string;
-      };
+        const handler = handlers[IPC.DIFF_LOAD_IMAGE];
+        const result = (await handler({}, 'assets/pic.png')) as {
+          dataUri?: string;
+          error?: string;
+        };
 
-      // A temp clone's working tree sits on the default branch, so the
-      // blob must come from git at the fetched head SHA. The repository
-      // path does not exist on disk, so success proves the git read.
-      expect(readGitBlobAsync).toHaveBeenCalledWith(
-        '/tmp/self-review-clone-does-not-exist',
-        'bbb222:assets/pic.png'
-      );
-      expect(result.error).toBeUndefined();
-      expect(result.dataUri).toMatch(/^data:image\/png;base64,/);
+        expect(result.error).toBeUndefined();
+        expect(result.dataUri).toBe(`data:image/png;base64,${png.toString('base64')}`);
+      } finally {
+        fsMod.rmSync(repoDir, { recursive: true, force: true });
+      }
     });
   });
   // The apply write boundary, through the registrations that carry it. What
@@ -392,7 +435,7 @@ describe('ipc-handlers', () => {
           fsMod.mkdirSync(pathMod.join(root, 'src'), { recursive: true });
           fsMod.writeFileSync(pathMod.join(root, 'src', 'app.ts'), ORIGINAL);
         }
-        setDiffData(temporaryClonePayload(clonePath));
+        setDiffData(temporaryClonePayload(clonePath), cloneIdentity(clonePath));
 
         const apply = handlers[IPC.SUGGESTION_APPLY];
         const choose = handlers[IPC.SUGGESTION_CHOOSE_DESTINATION];

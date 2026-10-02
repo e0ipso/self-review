@@ -10,6 +10,7 @@ import type {
   DiffLoadPayload,
   GuideLoadPayload,
   OutputPathInfo,
+  ReviewSourceIdentity,
   ReviewState,
   SuggestionApplyRequest,
 } from './types';
@@ -18,7 +19,6 @@ import type {
 // Nothing here mocks `electron` — the extracted handlers never touch it.
 vi.mock('./git', () => ({
   runGitDiffAsync: vi.fn(),
-  readGitBlobAsync: vi.fn(),
 }));
 
 import { runGitDiffAsync } from './git';
@@ -108,6 +108,26 @@ function makeConfig(outputFile: string): AppConfig {
     wordWrap: false,
     maxFiles: 100,
     maxTotalLines: 10000,
+  };
+}
+
+/**
+ * A hand-built identity rooted at `sourceRoot`, for sessions whose root need
+ * not exist on disk. Git sessions compare the index with the working tree;
+ * local ones have nothing on the old side.
+ */
+function makeIdentity(
+  mode: ReviewSourceIdentity['mode'],
+  sourceRoot: string
+): ReviewSourceIdentity {
+  const local = mode === 'directory' || mode === 'file';
+  return {
+    mode,
+    sourceRoot,
+    invocationCwd: sourceRoot,
+    gitDiffArgv: [],
+    oldSide: local ? { kind: 'none' } : { kind: 'index' },
+    newSide: local ? ({ kind: mode } as ReviewSourceIdentity['newSide']) : { kind: 'working-tree' },
   };
 }
 
@@ -399,12 +419,13 @@ describe('review-handlers', () => {
 
     it('commits the payload to the session and strips hunks for large mode', async () => {
       const session = createReviewSession();
-      const { payload } = await prepareDirectoryReview(session, makeTree());
+      const { payload, identity } = await prepareDirectoryReview(session, makeTree());
       payload.isLargePayload = true;
 
-      const outgoing = commitReviewStart(session, payload);
+      const outgoing = commitReviewStart(session, payload, identity);
 
       expect(session.diffData).toBe(payload);
+      expect(session.sourceIdentity).toBe(identity);
       expect(outgoing.files.every(f => f.hunks.length === 0 && f.contentLoaded === false)).toBe(
         true
       );
@@ -437,18 +458,22 @@ describe('review-handlers', () => {
   /** A remote session whose diff was materialized into `clonePath`. */
   function makeRemoteSession(clonePath: string, temporaryClone: boolean) {
     const session = createReviewSession();
-    commitDiffData(session, {
-      files: [makeFile('src/app.ts')],
-      source: { type: 'git', gitDiffArgs: 'base...head', repository: clonePath },
-      remote: {
-        remoteUrl: 'https://github.com/owner/repo/pull/1',
-        remoteBaseSha: 'aaaaaaa',
-        remoteHeadSha: 'bbbbbbb',
-        remoteForge: 'github',
-        threadSyncAvailable: true,
-        temporaryClone,
+    commitDiffData(
+      session,
+      {
+        files: [makeFile('src/app.ts')],
+        source: { type: 'git', gitDiffArgs: 'base...head', repository: clonePath },
+        remote: {
+          remoteUrl: 'https://github.com/owner/repo/pull/1',
+          remoteBaseSha: 'aaaaaaa',
+          remoteHeadSha: 'bbbbbbb',
+          remoteForge: 'github',
+          threadSyncAvailable: true,
+          temporaryClone,
+        },
       },
-    });
+      makeIdentity('remote', clonePath)
+    );
     return session;
   }
 
@@ -489,24 +514,34 @@ describe('review-handlers', () => {
       expect(isTemporaryCloneSession(empty)).toBe(false);
       expect(resolveApplyDestination(empty)).toBeNull();
 
+      // The destination is the identity's physical root, not the payload's
+      // source path: the identity is what every read resolves against.
       const git = createReviewSession();
-      git.diffData = makeGitPayload();
+      commitDiffData(git, makeGitPayload(), makeIdentity('git', '/repo'));
       expect(resolveApplyDestination(git)).toBe('/repo');
 
       const directory = createReviewSession();
-      directory.diffData = {
-        files: [makeFile('a.ts')],
-        source: { type: 'directory', sourcePath: '/scanned' },
-      };
+      commitDiffData(
+        directory,
+        { files: [makeFile('a.ts')], source: { type: 'directory', sourcePath: '/scanned' } },
+        makeIdentity('directory', '/scanned')
+      );
       expect(resolveApplyDestination(directory)).toBe('/scanned');
 
-      // A single-file review writes next to the file, not into it.
+      // A single-file review writes next to the file, not into it: its
+      // identity is rooted at the parent.
       const file = createReviewSession();
-      file.diffData = {
-        files: [makeFile('a.ts')],
-        source: { type: 'file', sourcePath: '/scanned/a.ts' },
-      };
+      commitDiffData(
+        file,
+        { files: [makeFile('a.ts')], source: { type: 'file', sourcePath: '/scanned/a.ts' } },
+        makeIdentity('file', '/scanned')
+      );
       expect(resolveApplyDestination(file)).toBe('/scanned');
+
+      // Without an identity there is no root to write into.
+      const uncommitted = createReviewSession();
+      uncommitted.diffData = makeGitPayload();
+      expect(resolveApplyDestination(uncommitted)).toBeNull();
 
       // A reused clone is the user's own working tree, so it needs no picker.
       const reused = makeRemoteSession(repoDir, false);
@@ -602,10 +637,11 @@ describe('review-handlers', () => {
 
     it('writes the proposal into the reviewed working file', () => {
       const session = createReviewSession();
-      commitDiffData(session, {
-        files: [makeFile('src/app.ts')],
-        source: { type: 'directory', sourcePath: repoDir },
-      });
+      commitDiffData(
+        session,
+        { files: [makeFile('src/app.ts')], source: { type: 'directory', sourcePath: repoDir } },
+        makeIdentity('directory', repoDir)
+      );
 
       const outcome = applySuggestionForSession(session, makeApplyRequest());
 
@@ -620,10 +656,11 @@ describe('review-handlers', () => {
 
     it('refuses a stale anchor and leaves the bytes untouched', () => {
       const session = createReviewSession();
-      commitDiffData(session, {
-        files: [makeFile('src/app.ts')],
-        source: { type: 'directory', sourcePath: repoDir },
-      });
+      commitDiffData(
+        session,
+        { files: [makeFile('src/app.ts')], source: { type: 'directory', sourcePath: repoDir } },
+        makeIdentity('directory', repoDir)
+      );
 
       const outcome = applySuggestionForSession(
         session,
@@ -679,10 +716,14 @@ describe('review-handlers', () => {
       const session = createReviewSession();
       // A crafted payload that lists the escaping path gets past membership;
       // the engine's own lexical check is what refuses it.
-      commitDiffData(session, {
-        files: [makeFile('src/app.ts'), makeFile('../escaped.ts')],
-        source: { type: 'directory', sourcePath: repoDir },
-      });
+      commitDiffData(
+        session,
+        {
+          files: [makeFile('src/app.ts'), makeFile('../escaped.ts')],
+          source: { type: 'directory', sourcePath: repoDir },
+        },
+        makeIdentity('directory', repoDir)
+      );
       fs.writeFileSync(nodePath.join(tmpRoot, 'escaped.ts'), ORIGINAL_FILE);
 
       const outcome = applySuggestionForSession(
@@ -707,14 +748,18 @@ describe('review-handlers', () => {
       const session = createReviewSession();
       expect(session.reviewedPaths.size).toBe(0);
 
-      commitDiffData(session, {
-        files: [
-          makeFile('src/app.ts'),
-          { ...makeFile('src/new.ts'), oldPath: 'src/old.ts', changeType: 'renamed' },
-          { ...makeFile(''), oldPath: 'src/gone.ts', changeType: 'deleted' },
-        ],
-        source: { type: 'directory', sourcePath: '/scanned' },
-      });
+      commitDiffData(
+        session,
+        {
+          files: [
+            makeFile('src/app.ts'),
+            { ...makeFile('src/new.ts'), oldPath: 'src/old.ts', changeType: 'renamed' },
+            { ...makeFile(''), oldPath: 'src/gone.ts', changeType: 'deleted' },
+          ],
+          source: { type: 'directory', sourcePath: '/scanned' },
+        },
+        makeIdentity('directory', '/scanned')
+      );
 
       expect([...session.reviewedPaths].sort()).toEqual([
         'src/app.ts',
@@ -726,7 +771,7 @@ describe('review-handlers', () => {
 
     it('is frozen: a later change to the diff data does not extend it', () => {
       const session = createReviewSession();
-      commitDiffData(session, makeGitPayload('src/app.ts'));
+      commitDiffData(session, makeGitPayload('src/app.ts'), makeIdentity('git', '/repo'));
 
       // The seam a resumed document or a pushed payload would use.
       session.diffData = {
@@ -752,11 +797,15 @@ describe('review-handlers', () => {
 
     it('is recaptured for the next committed diff, not accumulated across them', () => {
       const session = createReviewSession();
-      commitDiffData(session, makeGitPayload('src/first.ts'));
-      commitReviewStart(session, {
-        files: [makeFile('src/second.ts')],
-        source: { type: 'directory', sourcePath: '/scanned' },
-      });
+      commitDiffData(session, makeGitPayload('src/first.ts'), makeIdentity('git', '/repo'));
+      commitReviewStart(
+        session,
+        {
+          files: [makeFile('src/second.ts')],
+          source: { type: 'directory', sourcePath: '/scanned' },
+        },
+        makeIdentity('directory', '/scanned')
+      );
 
       expect([...session.reviewedPaths]).toEqual(['src/second.ts']);
     });
@@ -784,10 +833,14 @@ describe('review-handlers', () => {
     /** A session that reviewed exactly `src/app.ts` in the temp repository. */
     function sessionReviewing(paths: string[]) {
       const session = createReviewSession();
-      commitDiffData(session, {
-        files: paths.map(makeFile),
-        source: { type: 'git', gitDiffArgs: '', repository: repoDir },
-      });
+      commitDiffData(
+        session,
+        {
+          files: paths.map(makeFile),
+          source: { type: 'git', gitDiffArgs: '', repository: repoDir },
+        },
+        makeIdentity('git', repoDir)
+      );
       return session;
     }
 

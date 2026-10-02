@@ -62,18 +62,24 @@ afterAll(() => {
 });
 
 describe('resolveSession', () => {
-  it('resolves a git session and roots containment at the repository the diff came from', async () => {
+  it('resolves a git session and records the identity the routes authorize against', async () => {
     process.chdir(repo);
 
-    const { session, repositoryRoot, output } = await resolveSession(parseServeArgs([]));
+    const { session, output } = await resolveSession(parseServeArgs([]));
 
     expect(session.diffData?.source).toMatchObject({ type: 'git', repository: repo });
     expect(session.diffData?.files.map(f => f.newPath)).toContain('src/retry.ts');
-    // The root handed to the server must be the same value core resolves
-    // against, or containment guarantees nothing.
-    expect(repositoryRoot).toBe(
-      session.diffData?.source.type === 'git' ? session.diffData.source.repository : null
-    );
+    // There is no separate containment root: the routes ask core, and core
+    // authorizes against the identity it reads from — here, an unstaged
+    // review compares the index with the working tree at the repository.
+    expect(session.sourceIdentity).toEqual({
+      mode: 'git',
+      sourceRoot: repo,
+      invocationCwd: repo,
+      gitDiffArgv: [],
+      oldSide: { kind: 'index' },
+      newSide: { kind: 'working-tree' },
+    });
     // Nothing named the path, so it is inherited: the publisher keeps it
     // inside the launch directory, which a committed config cannot escape.
     expect(output).toEqual({
@@ -165,16 +171,24 @@ describe('resolveSession', () => {
     expect(getResumeLoad(session)?.viewedFiles).toEqual(['src/retry.ts']);
   });
 
-  it('roots containment at the working directory for a directory review, matching core', async () => {
+  it('roots a directory review at the reviewed directory, not the launch directory', async () => {
     process.chdir(plain);
 
-    const { session, repositoryRoot } = await resolveSession(parseServeArgs(['sub']));
+    const { session } = await resolveSession(parseServeArgs(['sub']));
 
     expect(session.diffData?.source).toMatchObject({
       type: 'directory',
       sourcePath: path.join(plain, 'sub'),
     });
-    expect(repositoryRoot).toBe(plain);
+    // Audit A6: the launch directory used to be the containment root while
+    // core read under the reviewed one. The identity names the reviewed one.
+    expect(session.sourceIdentity).toMatchObject({
+      mode: 'directory',
+      sourceRoot: path.join(plain, 'sub'),
+      invocationCwd: plain,
+      oldSide: { kind: 'none' },
+      newSide: { kind: 'directory' },
+    });
   });
 
   it('refuses to serve when there is no repository and no path to review', async () => {

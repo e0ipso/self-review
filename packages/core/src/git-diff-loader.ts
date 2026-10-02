@@ -1,4 +1,4 @@
-import type { DiffFile } from './types';
+import type { DiffFile, ReviewSourceIdentity } from './types';
 import {
   runGitDiffAsync,
   getRepoRootAsync,
@@ -9,6 +9,7 @@ import { parseDiffWithDiagnostics } from './diff-parser';
 import { findUnsupportedGitDiffOptions } from './git-diff-args';
 import { loadSyntheticFiles } from './synthetic-diff';
 import { formatBytes, resolveSourceBudgets, type SourceBudgets } from './input-budgets';
+import { resolveGitSourceIdentity } from './source-identity';
 
 export interface LoadGitDiffOptions {
   /**
@@ -24,6 +25,13 @@ export interface LoadGitDiffOptions {
 export interface LoadGitDiffResult {
   files: DiffFile[];
   repository: string;
+  /**
+   * What the diff compared, resolved against the repository as it was when
+   * the diff ran: the two snapshots (commit SHAs, index, working tree), the
+   * physical root and the argv. Committed with the payload so previews and
+   * line counts read the reviewed snapshot rather than the working tree.
+   */
+  identity: ReviewSourceIdentity;
   /**
    * Everything the review cannot show faithfully: an output format the
    * parser does not consume (in which case `files` is empty and git was not
@@ -60,6 +68,13 @@ export async function loadGitDiffWithUntracked(
   const { includeUntracked = true } = options;
   const budgets = resolveSourceBudgets(options.budgets);
   const repository = await getRepoRootAsync(cwd);
+  // Resolved before the diff runs, so the SHAs name what the diff is about
+  // to compare even if a ref moves while it does.
+  const identity = await resolveGitSourceIdentity({
+    repository,
+    gitDiffArgv: gitDiffArgs,
+    invocationCwd: cwd ?? process.cwd(),
+  });
 
   // An output format the parser cannot read would parse as an empty review.
   // Name the flag instead, and do not run git at all.
@@ -68,6 +83,7 @@ export async function loadGitDiffWithUntracked(
     return {
       files: [],
       repository,
+      identity,
       diagnostics: unsupported.map(
         flag =>
           `Unsupported git diff option ${flag}: self-review reads patch output only; ` +
@@ -85,6 +101,7 @@ export async function loadGitDiffWithUntracked(
     return {
       files: [],
       repository,
+      identity,
       diagnostics: [
         `git diff produced more than ${formatBytes(budgets.maxGitDiffOutputBytes)} of output, ` +
           'the most self-review reads from one diff, so nothing was loaded. Narrow the ' +
@@ -95,7 +112,7 @@ export async function loadGitDiffWithUntracked(
   const { files, diagnostics } = parseDiffWithDiagnostics(rawDiff);
 
   if (!includeUntracked) {
-    return { files, repository, diagnostics };
+    return { files, repository, identity, diagnostics };
   }
 
   // Enumerate at the repository root. `git diff` reports root-relative paths
@@ -112,7 +129,7 @@ export async function loadGitDiffWithUntracked(
         'loaded; only tracked changes are shown. Ignore build output and dependency ' +
         'folders in .gitignore, or stage the files you mean to review.'
     );
-    return { files, repository, diagnostics };
+    return { files, repository, identity, diagnostics };
   }
 
   let allFiles = files;
@@ -130,5 +147,5 @@ export async function loadGitDiffWithUntracked(
     allFiles = [...files, ...untrackedFiles];
   }
 
-  return { files: allFiles, repository, diagnostics };
+  return { files: allFiles, repository, identity, diagnostics };
 }

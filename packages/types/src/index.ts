@@ -51,6 +51,53 @@ export type DiffSource =
   | { type: 'welcome' }
   | { type: 'loading' };
 
+// ===== Review Source Identity =====
+
+/** How the content under review was obtained. */
+export type ReviewSourceMode = 'git' | 'directory' | 'file' | 'remote';
+
+/**
+ * One side of the comparison a review shows, as a snapshot the host can read
+ * again later: the working tree, the index, one commit (its SHA resolved
+ * when the review was loaded, so the branch moving afterwards changes
+ * nothing), the scanned directory or the one scanned file. `none` is a side
+ * with no content (everything in a directory review is an addition; a
+ * `--cached` review on an unborn branch compares against the empty tree).
+ * `unknown` is a shape the host could not identify; a read from it fails
+ * visibly rather than falling back to the working tree.
+ */
+export type ReviewSourceSide =
+  | { kind: 'working-tree' }
+  | { kind: 'index' }
+  | { kind: 'commit'; sha: string }
+  | { kind: 'directory' }
+  /** The physical file a single-file review scanned, resolved once. */
+  | { kind: 'file'; path: string }
+  | { kind: 'none' }
+  | { kind: 'unknown'; reason: string };
+
+/**
+ * What a review session is a review *of*, recorded once when its diff is
+ * committed. Every later read of reviewed content — an image preview, a
+ * line count for context expansion — and every path authorization resolves
+ * against this, never against the process's working directory.
+ */
+export interface ReviewSourceIdentity {
+  mode: ReviewSourceMode;
+  /**
+   * The physical directory (symlinks resolved) every reviewed path is
+   * relative to: the repository root, the materialized clone, the scanned
+   * directory, or the scanned file's parent.
+   */
+  sourceRoot: string;
+  /** The directory the review was launched from. Informational only. */
+  invocationCwd: string;
+  /** The `git diff` arguments as an argument list; empty outside git. */
+  gitDiffArgv: string[];
+  oldSide: ReviewSourceSide;
+  newSide: ReviewSourceSide;
+}
+
 // ===== Review State Types =====
 
 export interface Suggestion {

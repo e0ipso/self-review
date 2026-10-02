@@ -31,7 +31,11 @@ const OPTIONS_WITH_SEPARATE_VALUES = new Set([
   '--color-moved-ws',
 ]);
 
-function consumesNextArgument(arg: string): boolean {
+/**
+ * True when `arg` is an option whose value is the *next* argument, so that
+ * argument is neither a flag nor a positional.
+ */
+export function consumesNextArgument(arg: string): boolean {
   if (arg.startsWith('--')) return OPTIONS_WITH_SEPARATE_VALUES.has(arg);
   if (!arg.startsWith('-')) return false;
   // Git accepts short-option groups, such as -pS pattern. Once an option
