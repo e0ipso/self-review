@@ -1,6 +1,6 @@
 {
   "name": "@self-review/serve",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Serve the self-review interface over HTTP",
   "repository": {
     "type": "git",
@@ -25,8 +25,8 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
-    "@self-review/core": "^2.0.0",
-    "@self-review/react": "^2.0.0"
+    "@self-review/core": "^2.0.1",
+    "@self-review/react": "^2.0.1"
   },
   "devDependencies": {
     "tsup": "^8.0.0",
