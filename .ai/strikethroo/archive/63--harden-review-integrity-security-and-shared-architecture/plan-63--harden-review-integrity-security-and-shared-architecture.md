@@ -408,3 +408,34 @@ After each phase: run the POST_PHASE hook (lint/format where defined), update ta
 ### Execution Summary
 - Total Phases: 10
 - Total Tasks: 24
+
+## Execution Summary
+
+**Status**: ✅ Completed Successfully
+**Completed Date**: 2026-10-02
+
+### Results
+
+All 24 tasks across 10 phases are complete and committed on `feature/63--harden-review-integrity-security-and-shared-architecture`. Phase commits: `5500d97`, `d43bd32`, `ca15311`, `2c776fe`, `1376517`, `377ce45`, `19c406c`, `afd23b8`, `d7a073f`, `6d78da4` (base `d353218`). Findings R01–R19 and A1–A9 and the eight simplifications are mapped to tests in `docs/hardening-evidence-2026-10-01.md`. Final validation passed on 2026-10-02: `npm run lint`, `npm run format:check`, the five typecheck scripts, `npm run test:unit`, `npm run build:packages`, `npm run package`, Electron e2e 41/41, serve e2e 9/9, webapp e2e 75/75, and the release-provenance (90 checks), release-tag and flake-hash shell suites.
+
+### Noteworthy Events
+
+- Code review gate result (verbatim): `{"kind":"skipped","reason":"no-reviewer-candidate","detail":"No reviewer candidate; review gate skipped. claude is excluded as the current harness. codex: Harness readiness check timed out after 20000 ms. stderr: 2026-10-02T08:06:23.048970Z ERROR codex_core::session::session: failed to load skill /home/e0ipso/.agents/skills/canvas/SKILL.md: missing field `description`\nOpenAI Codex v0.159.3\n--------\nworkdir: /tmp/strikethroo-harness-probe-YM544g\nmodel: gpt-6.1-sol\nprovider: openai\napproval: never\nsandbox: workspace-write [workdir, /tmp, $TMPDIR]\nreasoning effort: none\nreasoning summaries: none\nsession id: 01a0fba6-6a5c-71e2-a053-101be0006238\n--------\nuser\nRun a shell command that creates strikethroo-readiness.txt in the current workspace with the exact UTF-8 content \"strikethroo-readiness:a4ac4018-43d3-4fd8-a4ea-aee8e4d90d1b\\n\". Do not use a file editing tool.\nSTRIKETHROO_READINESS={\"file\":\"strikethroo-readiness.txt\",\"content\":\"strikethroo-readiness:a4ac4018-43d3-4fd8-a4ea-aee8e4d90d1b\\n\"}\n\nwarning: Codex's Linux sandbox uses bubblewrap and needs access to create user namespaces.\ncodex\nI’ll create the file with a shell command and verify its exact contents. cursor: Harness readiness check exited 1. stderr: ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent usage, unlimited Tab, and more. gemini: Harness executable 'gemini' was not found on PATH. copilot: Harness executable 'copilot' was not found on PATH. opencode: Harness executable 'opencode' was not found on PATH.","action":"continue","codeReview":"Failed; No reviewer performed a certified review. No reviewer candidate; review gate skipped. claude is excluded as the current harness. codex: Harness readiness check timed out after 20000 ms. stderr: 2026-10-02T08:06:23.048970Z ERROR codex_core::session::session: failed to load skill /home/e0ipso/.agents/skills/canvas/SKILL.md: missing field `description` OpenAI Codex v0.159.3 -------- workdir: /tmp/strikethroo-harness-probe-YM544g model: gpt-6.1-sol provider: openai approval: never sandbox: workspace-write [workdir, /tmp, $TMPDIR] reasoning effort: none reasoning summaries: none session id: 01a0fba6-6a5c-71e2-a053-101be0006238 -------- user Run a shell command that creates strikethroo-readiness.txt in the current workspace with the exact UTF-8 content \"strikethroo-readiness:a4ac4018-43d3-4fd8-a4ea-aee8e4d90d1b\\n\". Do not use a file editing tool. STRIKETHROO_READINESS={\"file\":\"strikethroo-readiness.txt\",\"content\":\"strikethroo-readiness:a4ac4018-43d3-4fd8-a4ea-aee8e4d90d1b\\n\"} warning: Codex's Linux sandbox uses bubblewrap and needs access to create user namespaces. codex I’ll create the file with a shell command and verify its exact contents. cursor: Harness readiness check exited 1. stderr: ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent usage, unlimited Tab, and more. gemini: Harness executable 'gemini' was not found on PATH. copilot: Harness executable 'copilot' was not found on PATH. opencode: Harness executable 'opencode' was not found on PATH."}`
+- The review gate did not certify a review. No findings exist to act on, and the gate was not re-run, per the procedure.
+- Tasks and the blueprint were generated during execution because the plan had neither.
+- Feature-branch creation first failed on uncommitted changes outside `.ai/strikethroo`. With the user's approval they were committed on `main` as `ff3097a` (vendored tooling) and `d353218` (audit documents).
+- The host has no `xvfb-run`. The Electron tier ran under `env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 DISPLAY=:0`, a recipe now documented in `AGENTS.md`.
+- Phase 1's parser fix (R06) removed a phantom trailing line that two Electron expand-context tests had relied on. The `login.ts` fixture now has real hidden context, and the "show all" step waits for the diff to render.
+- Phase 4's inherited-output containment (A5) correctly refused the serve equivalence spec's project-config output path outside the repository. The spec now keeps that output inside the repository.
+- The repository's commitlint `no-ai-attribution` rule rejected the Co-Authored-By trailer from Phase 2 on. Later commits omit it; `ff3097a`, `d353218` and `5500d97` already carry it.
+- Several subagents hit the API session limit mid-task (tasks 10, 12, 13, 18, 24). They were resumed with their context intact, except task 24. Its partial docs were kept and the orchestrator wrote the evidence map.
+- Lint failures came from the audit probe files committed under `docs/`. `docs/**` is now ignored by ESLint, matching the Prettier exemption.
+- Additions beyond the original task text, both inside the plan's scope: user-level `output-file` is treated as explicit (A5), and `pathPrefix` maps `--relative` paths for Apply and image previews (R07).
+- The root `prism-themes` dependency became dead code after Phase 9 and was removed.
+
+### Necessary follow-ups
+
+- Run an independent second-harness review once Codex passes its readiness probe or Cursor usage resets. The plan's diff has had no certified review.
+- Owner-managed release settings listed in `docs/release-security.md` remain unverified: fork-PR approval policy, default token permissions, npm trusted-publisher binding, and stronger `main` branch protection.
+- Not exercised here: macOS filesystem behaviour, and serve access from a separate OS user (needs sudo).
+- Orphan `refs/self-review/<uuid>/*` pairs can remain after a crash, and older shared `refs/self-review/base|head` refs are not swept.
