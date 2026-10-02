@@ -248,6 +248,18 @@ The `self-review` command will be available system-wide.
 
 </details>
 
+### Upgrading from 1.x
+
+- Menu Quit (Cmd/Ctrl+Q) now asks Save & Quit / Discard / Cancel, like closing the window. A save
+  that fails keeps the window open and shows the error.
+- An `output-file` from a project's `.self-review.yaml` must stay inside the directory you launch
+  from. Put an output path elsewhere in `~/.config/self-review/config.yaml`, or pick it in the save
+  dialog. Project `default-diff-args` may not use `--output`, `--ext-diff` or `--textconv`.
+- `self-review-serve` prints a URL that carries a session key. Open that URL; API clients send the
+  key as `Authorization: Bearer <key>`.
+- `@self-review/core`, `@self-review/react` and `@self-review/serve` changed their APIs. The 2.0.0
+  release notes list every change.
+
 ## How it works
 
 Instead of seeing your changes with `git diff <arguments>` execute `self-review <arguments>`. This
