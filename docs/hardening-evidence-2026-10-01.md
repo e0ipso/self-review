@@ -1,9 +1,7 @@
 # Hardening evidence for the 2026-10-01 audits
 
-Plan 63 fixed the findings in the [codebase audit](codebase-audit-2026-10-01.md) and the
-[security audit](security-audit-2026-10-01.md). Those audits describe the baseline at `5fd7aea`
-and are left unchanged. This file maps each finding to the code and tests that cover it at the end
-of the plan.
+Plan 63 fixed the findings of the 2026-10-01 codebase and security audits of `5fd7aea`, summarized
+in #164. This file maps each finding to the code and tests that cover it.
 
 Every test listed here ran green in the final verification: `npm run test:unit`, the five typecheck
 scripts, `npm run lint`, `npm run format:check`, `npm run test:e2e` (webapp), `npm run test:e2e:serve`

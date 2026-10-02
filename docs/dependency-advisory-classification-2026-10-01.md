@@ -1,8 +1,7 @@
 # Dependency advisory classification and runtime refresh (2026-10-01)
 
-This document classifies the advisories recorded by the 2026-10-01 security audit
-(`docs/security-audit-2026-10-01/npm-audit.json`, 99 vulnerable package entries;
-`docs/security-audit-2026-10-01/advisories.json`, 197 advisories across 46 packages) against what
+This document classifies the advisories from the 2026-10-01 security audit (`npm audit` on
+`5fd7aea`: 99 vulnerable package entries, 197 advisories across 46 packages; see #164) against what
 the project actually ships, and records the runtime dependency updates made in response. It is the
 output of plan 63, task 02. The audit counts are package/advisory counts, not 99 demonstrated
 defects; the point of this document is to say, per shipped package, whether the vulnerable code is
@@ -270,7 +269,7 @@ package.
 | `npm audit --omit=dev --json`                   | exit 1 (25 tooling entries remain); `electron`, `mermaid`, `dompurify`, `fast-xml-parser`, `fast-xml-builder`, `lodash-es`, `uuid`, `langium`, `chevrotain` all absent                                                                                  |
 | `npm run typecheck`                             | exit 0                                                                                                                                                                                                                                                   |
 | `npm run typecheck:packages`                    | exit 0                                                                                                                                                                                                                                                   |
-| `npm run lint`                                  | exit 1 — 2 pre-existing errors in committed audit probe files (`docs/codebase-audit-2026-10-01/ui.probe.test.tsx:10` unused import, `docs/security-audit-2026-10-01-sol/claude-probe-apply.ts:12` empty block). Identical in `HEAD`, outside this task's files, unrelated to dependency versions. |
+| `npm run lint`                                  | exit 0 |
 | `npm run test:unit`                             | exit 0 on the final run (main 5 files, renderer 44 files, core 32 files, serve 6 files, all passing). An earlier run had 2 renderer failures in `useDiffNavigation.test.ts` while another task was mid-edit on that file; 8/8 when re-run alone.                 |
 | `npm run build:packages`; serve workspace build | exit 0 / exit 0                                                                                                                                                                                                                                          |
 | `npm run package`                               | exit 0 (Forge 7.11.1 + `@electron/fuses` 1.8.0 package Electron 44.5.1 without changes)                                                                                                                                                                   |

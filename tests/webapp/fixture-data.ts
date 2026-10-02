@@ -621,9 +621,8 @@ export function createRenderedHtmlPayload(): DiffLoadPayload {
 }
 
 // ── Hostile content fixture data ──
-// The payloads from docs/security-audit-2026-10-01/mermaid-probe.mjs, plus
-// raw HTML that borrows the app's own positioning utilities. Rendered, none
-// of it may reach outside its preview.
+// Mermaid CSS/HTML injection payloads (A7) and raw HTML using the app's
+// positioning utilities. None of it may escape its preview.
 
 function addedFile(path: string, lines: string[]): DiffFile {
   return {

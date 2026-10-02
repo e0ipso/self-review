@@ -7,10 +7,7 @@ vi.mock('../../context/ConfigContext', () => ({
   useConfig: () => ({ config: { theme: 'light' } }),
 }));
 
-// Mermaid measures text while it lays a diagram out. jsdom has no layout
-// engine, so the two geometry calls it needs return a fixed box, the same
-// way the audit probe (docs/security-audit-2026-10-01/mermaid-probe.mjs)
-// ran the library.
+// jsdom has no layout engine; give Mermaid's two geometry calls a fixed box.
 beforeAll(() => {
   const proto = SVGElement.prototype as unknown as Record<string, unknown>;
   proto.getBBox = () => ({ x: 0, y: 0, width: 100, height: 30 });
