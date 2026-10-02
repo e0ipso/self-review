@@ -139,7 +139,7 @@ check "main advanced: exit code" 0 "$code"
 check "main advanced: prints the verified sha" "$SHA" "$out"
 rm -rf "$dir"
 
-# The attack the branch filter lets through: a fork PR from a branch named main.
+# A pull_request run from another repository's main.
 dir=$(mktemp -d)
 event "$dir/event.json" pull_request success main "$FORK" "$FORK_ID" "$SHA"
 stub "$dir" ahead

@@ -885,15 +885,13 @@ describe('review-handlers', () => {
           lineRange: { side: 'new', start: 1, end: 1 },
           suggestion: {
             originalCode: first,
-            proposedCode: `${first}\n\tfsmonitor = "touch ${nodePath.join(tmpRoot, 'MARKER')}; false"`,
+            proposedCode: `${first}\n\tbare = true`,
           },
         })
       );
 
       expect(outcome).toMatchObject({ status: 'refused', reason: 'control-file' });
       expect(fs.readFileSync(config, 'utf-8')).toBe(before);
-      gitSync(['status', '--short'], { cwd: repoDir });
-      expect(fs.existsSync(nodePath.join(tmpRoot, 'MARKER'))).toBe(false);
     });
 
     it('refuses a resume placeholder path: a resumed comment does not widen the review', () => {

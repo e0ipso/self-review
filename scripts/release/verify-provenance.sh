@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #
 # Decide whether a workflow_run event is trusted enough to release from: a successful CI run of a push
-# to this repository's main (a fork PR branch named main also matches the workflow filter), with the
-# commit still on main per the GitHub API. Inputs come only from the environment, never spliced into a shell command:
+# to this repository's main, with the commit still on main per the GitHub API. Inputs come only from the environment, never spliced into a shell command:
 #   EVENT_PATH (default $GITHUB_EVENT_PATH), EXPECTED_REPOSITORY (default $GITHUB_REPOSITORY),
 #   EXPECTED_REPOSITORY_ID (default $GITHUB_REPOSITORY_ID), EXPECTED_BRANCH (main), EXPECTED_WORKFLOW (CI),
 #   PROVENANCE_COMPARE_COMMAND (`<command> <owner/name> <head-sha> <branch>` prints the compare status; defaults to `gh api`),

@@ -1,6 +1,6 @@
 # Dependency advisory classification and runtime refresh (2026-10-01)
 
-This document classifies the advisories from the 2026-10-01 security audit (`npm audit` on
+This document classifies the advisories from the 2026-10-01 review (`npm audit` on
 `5fd7aea`: 99 vulnerable package entries, 197 advisories across 46 packages; see #164) against what
 the project actually ships, and records the runtime dependency updates made in response. It is the
 output of plan 63, task 02. The audit counts are package/advisory counts, not 99 demonstrated

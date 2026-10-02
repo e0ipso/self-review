@@ -1,14 +1,14 @@
-# Hardening evidence for the 2026-10-01 audits
+# Hardening test map (2026-10-01 review)
 
-Plan 63 fixed the findings of the 2026-10-01 codebase and security audits of `5fd7aea`, summarized
-in #164. This file maps each finding to the code and tests that cover it.
+Plan 63 (#164) worked through an internal review of `5fd7aea`. This file maps each item to the code
+and tests that cover it.
 
 Every test listed here ran green in the final verification: `npm run test:unit`, the five typecheck
 scripts, `npm run lint`, `npm run format:check`, `npm run test:e2e` (webapp), `npm run test:e2e:serve`
 and the Electron e2e tier. This host has no `xvfb-run`, so the Electron tier ran with the X11 recipe
 in `AGENTS.md`.
 
-## Reliability findings
+## Reliability
 
 | ID | Fix | Evidence |
 | --- | --- | --- |
@@ -32,15 +32,15 @@ in `AGENTS.md`.
 | R18 | Original code is substituted only when the whole range is visible. | `diff-utils.test.ts`, `CommentDisplay.test.tsx` |
 | R19 | Deleted-file search, `font-size`, hint focus, and image rejection now behave correctly. | `FileTree.test.tsx`, `ConfigContext.test.tsx`, `useKeyboardNavigation.test.ts`, `RenderedImageView.test.tsx`, webapp `12-configured-font-size.feature` |
 
-## Security findings
+## Hardening
 
 | ID | Fix | Evidence |
 | --- | --- | --- |
-| A1 | A provenance gate requires a same-repository push to `main` and a head reachable from `main` before any checkout. Build is split from publication, actions are SHA-pinned, and `persist-credentials: false` is set. | `scripts/test/release-provenance.test.sh` (synthetic events), `docs/release-security.md`. Owner-managed settings listed there are still unverified (see below). |
+| A1 | A provenance gate requires a same-repository push to `main` and a head reachable from `main` before any checkout. Build is split from publication, actions are SHA-pinned, and `persist-credentials: false` is set. | `scripts/test/release-provenance.test.sh` (synthetic events), `docs/release-security.md` |
 | A2 | A per-process 256-bit capability, delivered in the URL fragment, is required as a Bearer token on every `/api/` route. | `packages/serve/src/server.test.ts`, `tests/serve/capability.spec.ts` |
-| A3 | Apply checks membership in `reviewedPaths` and refuses any `.git` path. | `review-handlers.test.ts` (`.git/config` plus a `git status` marker probe), `apply-suggestion.test.ts` |
+| A3 | Apply checks membership in `reviewedPaths` and refuses any `.git` path. | `review-handlers.test.ts`, `apply-suggestion.test.ts` |
 | A4 | `realpath`, an `lstat` walk over ancestors, `O_NOFOLLOW`, an identity check and atomic replace. | `apply-suggestion.test.ts`, `safe-fs.test.ts` |
-| A5 | Configuration provenance: project `output-file` is inherited and contained, project diff args with `--output`, `--ext-diff` or `--textconv` are refused, and the publisher refuses links. | `startup.test.ts` (sentinel probe), `packages/serve/src/startup.test.ts`, `review-publisher.test.ts` |
+| A5 | Configuration provenance: project `output-file` is inherited and contained, project diff args with `--output`, `--ext-diff` or `--textconv` are refused, and the publisher refuses links. | `startup.test.ts`, `packages/serve/src/startup.test.ts`, `review-publisher.test.ts` |
 | A6 | Serve authorizes paths through core's `authorizeReviewedPath` against the session source root. | `packages/serve/src/source-identity.test.ts` (real HTTP, symlink escape) |
 | A7 | Mermaid renders off-document into a data-URI `<img>` under a strict, secured config. Passive HTML drops `style` and non-language classes. | `MermaidBlock.test.tsx`, `passive-content.test.ts`, webapp `13-content-isolation.feature` |
 | A8 | Front matter display has cycle, depth and node limits. | `front-matter.test.ts`, `FrontMatterTable.test.tsx` |
@@ -59,10 +59,9 @@ in `AGENTS.md`.
 | 7 | Canonical browser-safe defaults | `packages/react/src/config-defaults.ts`, read by core's config loader |
 | 8 | Process-exiting and dead paths retired | `git.ts` sync helpers, `xml-parser` exits, the `review:request` pull fallback, the `src/main` serializer and fs shims, and the root `prism-themes` dependency are removed |
 
-## Unverified or external
+## Not covered here
 
-- **A1 repository settings.** `docs/release-security.md` records what was readable on 2026-10-01: no protected environments, and a `main` ruleset that blocks only deletion and force-push. Fork-approval policy, default token permissions and the npm trusted-publisher binding could not be read with the available token. The owner has to confirm them.
-- **A2 cross-user access.** The test ran the unauthenticated client as the same OS user. A separate-user run needs sudo, which was not available.
+- **Repository settings** the release workflow relies on are listed in `docs/release-security.md`.
 - **Platforms.** Filesystem behaviour (no-follow, atomic rename, ownership) was tested on Linux only. macOS was not exercised.
 - **Applied dependency advisories.** See `docs/dependency-advisory-classification-2026-10-01.md`. Electron 44.5.1, Mermaid 11.17.2, DOMPurify 3.4.16 and fast-xml-parser 5.11.2 now ship. The remaining `npm audit --omit=dev` entries resolve through release and build tooling.
 

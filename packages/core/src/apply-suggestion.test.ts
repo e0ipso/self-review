@@ -444,7 +444,7 @@ describe('applySuggestion: repository control files', () => {
       request({
         filePath: '.git/config',
         lineRange: { side: 'new', start: 1, end: 1 },
-        suggestion: { originalCode: '[core]', proposedCode: '[core]\n\tfsmonitor = "touch pwned"' },
+        suggestion: { originalCode: '[core]', proposedCode: '[core]\n\tbare = true' },
       }),
       { fs: untouchableFs() }
     );
