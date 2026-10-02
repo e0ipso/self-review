@@ -17,7 +17,11 @@ import { realpathSync } from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
 import type { ReviewSourceIdentity, ReviewSourceSide } from './types';
-import { classifyGitDiffArgs, consumesNextArgument } from './git-diff-args';
+import {
+  classifyGitDiffArgs,
+  consumesNextArgument,
+  describeDiffPathRelativity,
+} from './git-diff-args';
 
 const execFileAsync = promisify(execFile);
 
@@ -200,6 +204,52 @@ export function canonicalSourcePath(target: string): string {
   }
 }
 
+/**
+ * What the paths of `git diff argv` are relative to, as a directory under
+ * `sourceRoot` (see `ReviewSourceIdentity.pathPrefix`): empty for
+ * root-relative output; the `--relative=<dir>` directory as written, minus
+ * trailing slashes; or, for a bare `--relative`, the launch directory's
+ * place under the root. Git strips the prefix and one following `/` from
+ * each path, so `<prefix>/<path>` is the root-relative name again.
+ *
+ * A bare `--relative` from outside the work tree leaves git with no prefix
+ * and its paths root-relative, which is what an empty result says too.
+ */
+export function resolveReviewedPathPrefix(
+  gitDiffArgv: readonly string[],
+  sourceRoot: string,
+  invocationCwd: string
+): string {
+  const relative = describeDiffPathRelativity(gitDiffArgv);
+  switch (relative.kind) {
+    case 'root':
+      return '';
+    case 'directory':
+      return relative.directory.replace(/\/+$/, '');
+    case 'cwd': {
+      const fromRoot = path.relative(
+        canonicalSourcePath(sourceRoot),
+        canonicalSourcePath(invocationCwd)
+      );
+      if (fromRoot === '' || fromRoot.startsWith('..') || path.isAbsolute(fromRoot)) return '';
+      return fromRoot.split(path.sep).join('/');
+    }
+  }
+}
+
+/**
+ * A reviewed path restated from the source root: `filePath` itself for a
+ * root-relative review, `<pathPrefix>/<filePath>` otherwise. The one
+ * mapping every reader, Apply and re-diff of a reviewed path goes through,
+ * so they all name the same file.
+ */
+export function rootRelativeReviewedPath(
+  identity: Pick<ReviewSourceIdentity, 'pathPrefix'>,
+  filePath: string
+): string {
+  return identity.pathPrefix === '' ? filePath : `${identity.pathPrefix}/${filePath}`;
+}
+
 export interface GitSourceIdentityOptions {
   /** The repository root the diff was loaded from. */
   repository: string;
@@ -226,11 +276,14 @@ export async function resolveGitSourceIdentity(
     resolveSide(repository, sides.oldSide),
     resolveSide(repository, sides.newSide),
   ]);
+  const sourceRoot = canonicalSourcePath(repository);
+  const invocationCwd = options.invocationCwd ?? process.cwd();
   return {
     mode: options.mode ?? 'git',
-    sourceRoot: canonicalSourcePath(repository),
-    invocationCwd: options.invocationCwd ?? process.cwd(),
+    sourceRoot,
+    invocationCwd,
     gitDiffArgv: [...options.gitDiffArgv],
+    pathPrefix: resolveReviewedPathPrefix(options.gitDiffArgv, sourceRoot, invocationCwd),
     oldSide,
     newSide,
   };
@@ -262,6 +315,7 @@ export function resolveLocalSourceIdentity(
       sourceRoot: canonicalSourcePath(options.sourcePath),
       invocationCwd,
       gitDiffArgv: [],
+      pathPrefix: '',
       oldSide: { kind: 'none' },
       newSide: { kind: 'directory' },
     };
@@ -271,6 +325,7 @@ export function resolveLocalSourceIdentity(
     sourceRoot: canonicalSourcePath(path.dirname(options.sourcePath)),
     invocationCwd,
     gitDiffArgv: [],
+    pathPrefix: '',
     oldSide: { kind: 'none' },
     newSide: { kind: 'file', path: canonicalSourcePath(options.sourcePath) },
   };

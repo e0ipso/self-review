@@ -11,7 +11,17 @@ import type { DiffHunk } from './types';
 import { gitSync } from './test-support/git-env';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { formatGitDiffArgs, normalizeGitDiffArgs } from './git-diff-args';
-import { commitDiffData, createReviewSession, expandContext } from './review-handlers';
+import {
+  applySuggestionForSession,
+  commitDiffData,
+  createReviewSession,
+  expandContext,
+  loadImage,
+} from './review-handlers';
+
+// A minimal PNG whose last byte says which file it came from.
+const PNG_HEAD = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const png = (tail: number) => Buffer.concat([PNG_HEAD, Buffer.from([tail])]);
 
 /** `count` numbered lines, `prefix1` .. `prefixN`, newline-terminated. */
 function numbered(prefix: string, count: number): string[] {
@@ -170,6 +180,46 @@ describe('expandContext re-runs the reviewed comparison', () => {
 
     it('expands `--relative=<dir>` launched from the root into the nested file', async () => {
       await expectNestedExpansion(['--relative=sub'], repo);
+    });
+
+    // Audit R07: expansion learned to restate `--relative` paths from the root
+    // (above), but Apply and the image preview still resolved them there as
+    // given, so in a review of `sub/` they reached the root's same-named
+    // file. Every path-taking handler now maps through the identity's prefix.
+    it('applies a suggestion of a `--relative` review to the nested file, not the root one', async () => {
+      const cwd = path.join(repo, 'sub');
+      const session = await loadSession(['--relative'], cwd);
+      const rootBefore = fs.readFileSync(path.join(repo, 'x.txt'), 'utf-8');
+
+      const outcome = applySuggestionForSession(session, {
+        filePath: 'x.txt',
+        lineRange: { side: 'new', start: 15, end: 15 },
+        suggestion: { originalCode: 'nested-edit', proposedCode: 'nested-applied' },
+      });
+
+      expect(outcome).toEqual({ status: 'applied', filePath: 'x.txt', replacedLines: 1 });
+      expect(fs.readFileSync(path.join(repo, 'sub', 'x.txt'), 'utf-8')).toContain(
+        'nested-applied\n'
+      );
+      expect(fs.readFileSync(path.join(repo, 'x.txt'), 'utf-8')).toBe(rootBefore);
+    });
+
+    it('previews the image of a `--relative` review from the subdirectory, not the root', async () => {
+      fs.writeFileSync(path.join(repo, 'pic.png'), png(0x01));
+      fs.writeFileSync(path.join(repo, 'sub', 'pic.png'), png(0x02));
+      git('add', 'pic.png', 'sub/pic.png');
+      git('commit', '-qm', 'images');
+      fs.writeFileSync(path.join(repo, 'pic.png'), png(0x11));
+      fs.writeFileSync(path.join(repo, 'sub', 'pic.png'), png(0x12));
+
+      const session = await loadSession(['--relative'], path.join(repo, 'sub'));
+      expect(session.diffData!.files.map(f => f.newPath).sort()).toEqual(['pic.png', 'x.txt']);
+
+      const result = await loadImage(session, 'pic.png');
+
+      expect(result).toHaveProperty('dataUri');
+      const bytes = Buffer.from((result as { dataUri: string }).dataUri.split(',')[1], 'base64');
+      expect(bytes[bytes.length - 1]).toBe(0x12);
     });
 
     it('selects root and nested same-named files for a review launched from a subdirectory', async () => {

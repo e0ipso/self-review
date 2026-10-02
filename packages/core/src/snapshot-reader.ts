@@ -19,6 +19,7 @@ import type { ReviewSourceIdentity, ReviewSourceSide } from './types';
 import { readFileWithinBudget } from './bounded-read';
 import { MAX_SOURCE_FILE_BYTES } from './input-budgets';
 import { SafeFsError, assertNoSymlinkAncestors, errnoOf } from './safe-fs';
+import { rootRelativeReviewedPath } from './source-identity';
 
 /** What a reader needs of a session: its identity and the paths it reviewed. */
 export interface ReviewedSnapshot {
@@ -35,7 +36,12 @@ export type ReviewedPathRefusal =
   | 'invalid-path';
 
 export type ReviewedPathAuthorization =
-  | { ok: true; relativePath: string; sourceRoot: string }
+  | {
+      ok: true;
+      /** The file under `sourceRoot`: the reviewed path restated from the root, normalized. */
+      relativePath: string;
+      sourceRoot: string;
+    }
   | { ok: false; reason: ReviewedPathRefusal; message: string };
 
 /**
@@ -46,7 +52,10 @@ export type ReviewedPathAuthorization =
  *
  * The lexical checks run first, so an absolute path or a traversal is
  * refused as what it is whatever the set says; membership is then checked
- * on the path as sent, since the diff recorded it that way.
+ * on the path as sent, since the diff recorded it that way. The path handed
+ * back is restated from the source root through the identity's prefix
+ * (`rootRelativeReviewedPath`), so a `--relative` review of `sub/` reads
+ * `sub/<path>` and never the root's same-named file.
  */
 export function authorizeReviewedPath(
   source: ReviewedSnapshot,
@@ -56,14 +65,14 @@ export function authorizeReviewedPath(
   if (identity === null) {
     return { ok: false, reason: 'no-source', message: 'No review has been loaded.' };
   }
-  const relativePath = normalizeReviewedPath(filePath);
-  if (relativePath === null) {
-    return {
-      ok: false,
-      reason: 'invalid-path',
-      message: 'This path does not stay inside the reviewed source.',
-    };
-  }
+  const invalid: ReviewedPathAuthorization = {
+    ok: false,
+    reason: 'invalid-path',
+    message: 'This path does not stay inside the reviewed source.',
+  };
+  // The path as sent must be sound before a prefix is put in front of it:
+  // `<prefix>//etc/passwd` would normalize into a relative path.
+  if (normalizeReviewedPath(filePath) === null) return invalid;
   if (!source.reviewedPaths.has(filePath)) {
     return {
       ok: false,
@@ -71,6 +80,8 @@ export function authorizeReviewedPath(
       message: 'This file is not part of the reviewed diff.',
     };
   }
+  const relativePath = normalizeReviewedPath(rootRelativeReviewedPath(identity, filePath));
+  if (relativePath === null) return invalid;
   return { ok: true, relativePath, sourceRoot: identity.sourceRoot };
 }
 

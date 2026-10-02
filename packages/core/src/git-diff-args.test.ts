@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  describeDiffPathRelativity,
   findUnsupportedGitDiffOptions,
+  findWriteCapableGitDiffOptions,
   formatGitDiffArgs,
   normalizeGitDiffArgs,
   singleFileRediffArgs,
@@ -261,5 +263,55 @@ describe('singleFileRediffArgs', () => {
       kind: 'root',
     });
     expect(singleFileRediffArgs(['--', '--relative']).relative).toEqual({ kind: 'root' });
+  });
+});
+
+describe('describeDiffPathRelativity', () => {
+  it('reports the last relative option before --, skipping option values', () => {
+    expect(describeDiffPathRelativity(['HEAD'])).toEqual({ kind: 'root' });
+    expect(describeDiffPathRelativity(['--relative', 'HEAD'])).toEqual({ kind: 'cwd' });
+    expect(describeDiffPathRelativity(['--relative=sub/', '--relative'])).toEqual({ kind: 'cwd' });
+    expect(describeDiffPathRelativity(['--relative', '--relative=sub'])).toEqual({
+      kind: 'directory',
+      directory: 'sub',
+    });
+    expect(describeDiffPathRelativity(['--relative=sub', '--no-relative'])).toEqual({
+      kind: 'root',
+    });
+    expect(describeDiffPathRelativity(['-S', '--relative'])).toEqual({ kind: 'root' });
+    expect(describeDiffPathRelativity(['--', '--relative'])).toEqual({ kind: 'root' });
+  });
+});
+
+// Audit A5: the options a committed configuration must not hand to git. Git
+// accepts no abbreviations of its diff options, so these spellings are the set.
+describe('findWriteCapableGitDiffOptions', () => {
+  it('names --output in both forms and the external-program options, in order', () => {
+    expect(
+      findWriteCapableGitDiffOptions([
+        '--textconv',
+        '--output=../x',
+        '-p',
+        '--output',
+        'y',
+        '--ext-diff',
+      ])
+    ).toEqual(['--textconv', '--output=../x', '--output', '--ext-diff']);
+  });
+
+  it('accepts the negations, ordinary options, option values and pathspecs', () => {
+    expect(
+      findWriteCapableGitDiffOptions([
+        '--no-ext-diff',
+        '--no-textconv',
+        '--staged',
+        '-S',
+        '--output',
+        '-O',
+        '--ext-diff',
+        '--',
+        '--output',
+      ])
+    ).toEqual([]);
   });
 });

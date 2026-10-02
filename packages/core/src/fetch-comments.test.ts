@@ -7,6 +7,7 @@ import { mapThreadsToReviewComments } from './thread-mapper';
 import { serializeReview } from './xml-serializer';
 import { parseReviewXmlString } from './xml-parser';
 import type { AppConfig, DiffFile } from './types';
+import type { LoadedConfig } from './config';
 import { buildRemoteReviewState, runFetchComments, type FetchCommentsDeps } from './fetch-comments';
 import type { ReviewState } from './types';
 
@@ -170,7 +171,11 @@ describe('runFetchComments', () => {
         written.push({ path: outputPath, content: '<xml/>\n', state });
         return { outputPath, assetPaths: [] };
       }),
-      loadConfig: vi.fn().mockReturnValue({ outputFile: './review.xml' } as AppConfig),
+      loadConfig: vi.fn().mockReturnValue({
+        config: { outputFile: './review.xml' } as AppConfig,
+        provenance: { outputFile: 'default' } as LoadedConfig['provenance'],
+        sources: [],
+      }),
       now: () => new Date('2026-08-04T10:00:00.000Z'),
     };
   });

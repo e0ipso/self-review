@@ -111,6 +111,18 @@ export class ReviewPublishError extends Error {
  */
 export type ReviewOutputOrigin = 'explicit' | 'inherited';
 
+/**
+ * Where a session publishes its review, fixed by startup (and, on the
+ * desktop, replaced by the save dialog): the absolute path and the origin
+ * the publisher trusts it under. An inherited path carries the directory
+ * it must stay inside, which is the launch directory. Resolved by
+ * `resolveOutputTarget` in `startup.ts` from the same configuration
+ * provenance in every host.
+ */
+export type ReviewOutputTarget =
+  | { path: string; origin: 'explicit' }
+  | { path: string; origin: 'inherited'; baseDir: string };
+
 interface PublishReviewCommonOptions {
   /** Filesystem seam for fault injection; defaults to Node's `fs`. */
   fs?: FsLayer;

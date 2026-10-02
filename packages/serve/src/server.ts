@@ -32,11 +32,12 @@ import {
   expandContext,
   submitReviewState,
   applySuggestionForSession,
+  publishOptionsFor,
   publishReview,
   ReviewPublishError,
 } from '@self-review/core';
 import type {
-  PublishReviewOptions,
+  ReviewOutputTarget as CoreReviewOutputTarget,
   ReviewPublishErrorCode,
   ReviewSession,
   ReviewState,
@@ -69,15 +70,10 @@ export const MAX_EXPAND_CONTEXT_BODY_BYTES = 64 * 1024;
 
 /**
  * Where a submitted review is published, fixed for the life of the process.
- *
- * The origin decides how far the publisher trusts the path: one the reviewer
- * named (`--output`) may point anywhere; one inherited from project
- * configuration or the default must stay inside `baseDir`, so a committed
- * `.self-review.yaml` cannot redirect the save.
+ * Core's type: the origin decides how far the publisher trusts the path
+ * (see `resolveOutputTarget` in `@self-review/core`), and no route changes it.
  */
-export type ReviewOutputTarget =
-  | { path: string; origin: 'explicit' }
-  | { path: string; origin: 'inherited'; baseDir: string };
+export type ReviewOutputTarget = CoreReviewOutputTarget;
 
 export interface ReviewServerOptions {
   /**
@@ -480,11 +476,7 @@ async function publishSubmittedReview(
   session: ReviewSession
 ): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
   // Resumed attachments are copied beside an output in another directory.
-  const { attachmentOrigins } = session;
-  const options: PublishReviewOptions =
-    output.origin === 'explicit'
-      ? { outputOrigin: 'explicit', attachmentOrigins }
-      : { outputOrigin: 'inherited', baseDir: output.baseDir, attachmentOrigins };
+  const options = publishOptionsFor(output, session.attachmentOrigins);
   try {
     const { outputPath } = await publishReview(state, output.path, options);
     console.error(`[serve] Review written to ${outputPath}`);

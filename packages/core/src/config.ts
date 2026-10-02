@@ -79,32 +79,85 @@ const defaults: AppConfig = {
   maxTotalLines: 100000,
 };
 
-export function loadConfig(): AppConfig {
+/**
+ * Where a configuration value came from. The two files are trusted
+ * differently: `~/.config/self-review/config.yaml` is the reviewer's own
+ * (`user`), while `.self-review.yaml` in the launch directory is repository
+ * data a project can commit (`project`). Hosts read this to decide whether
+ * an `output-file` is the reviewer's explicit choice and whether
+ * `default-diff-args` may name write-capable git options.
+ */
+export type ConfigValueOrigin = 'default' | 'user' | 'project';
+
+export type ConfigProvenance = Readonly<Record<keyof AppConfig, ConfigValueOrigin>>;
+
+export interface ConfigSource {
+  origin: 'user' | 'project';
+  /** The file that was read. */
+  path: string;
+}
+
+export interface LoadedConfig {
+  config: AppConfig;
+  /** For each key, which of the two files set its value, or `default`. */
+  provenance: ConfigProvenance;
+  /** The files that were read and merged, in merge order. */
+  sources: ConfigSource[];
+}
+
+export interface LoadConfigOptions {
+  /** Where `.self-review.yaml` is looked for. Defaults to the process cwd. */
+  cwd?: string;
+  /** Where `.config/self-review/config.yaml` is looked for. Defaults to the home directory. */
+  homeDir?: string;
+}
+
+const CONFIG_KEYS = Object.keys(defaults) as (keyof AppConfig)[];
+
+/**
+ * Load the merged configuration together with the origin of every value.
+ * Project config overrides user config, which overrides the defaults; a
+ * value a file set invalidly is not attributed to it, since the default is
+ * what remains.
+ */
+export function loadConfigWithProvenance(options: LoadConfigOptions = {}): LoadedConfig {
   let config = { ...defaults };
+  const provenance = Object.fromEntries(CONFIG_KEYS.map(key => [key, 'default'])) as Record<
+    keyof AppConfig,
+    ConfigValueOrigin
+  >;
+  // `guideFile` has no default, so it is not among the defaults' keys.
+  provenance.guideFile = 'default';
+  const sources: ConfigSource[] = [];
 
-  // Load user-level config
-  const userConfigPath = join(homedir(), '.config', 'self-review', 'config.yaml');
-  if (existsSync(userConfigPath)) {
+  const files: ConfigSource[] = [
+    {
+      origin: 'user',
+      path: join(options.homeDir ?? homedir(), '.config', 'self-review', 'config.yaml'),
+    },
+    { origin: 'project', path: join(options.cwd ?? process.cwd(), '.self-review.yaml') },
+  ];
+  for (const source of files) {
+    if (!existsSync(source.path)) continue;
     try {
-      const userConfig = loadYamlConfig(userConfigPath);
-      config = mergeConfig(config, userConfig);
+      const override = loadYamlConfig(source.path);
+      config = mergeConfig(config, override);
+      for (const key of Object.keys(override) as (keyof AppConfig)[]) {
+        provenance[key] = source.origin;
+      }
+      sources.push(source);
     } catch (error) {
-      console.error(`Warning: Failed to load user config from ${userConfigPath}: ${error}`);
+      console.error(
+        `Warning: Failed to load ${source.origin} config from ${source.path}: ${error}`
+      );
     }
   }
 
-  // Load project-level config
-  const projectConfigPath = join(process.cwd(), '.self-review.yaml');
-  if (existsSync(projectConfigPath)) {
-    try {
-      const projectConfig = loadYamlConfig(projectConfigPath);
-      config = mergeConfig(config, projectConfig);
-    } catch (error) {
-      console.error(`Warning: Failed to load project config from ${projectConfigPath}: ${error}`);
-    }
-  }
+  return { config, provenance, sources };
+}
 
-  return config;
+export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
+  return loadConfigWithProvenance(options).config;
 }
 
 function loadYamlConfig(path: string): Partial<AppConfig> {

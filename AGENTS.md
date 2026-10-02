@@ -75,7 +75,10 @@ self-review/
 │   │                            #   gitlab-provider.ts (glab), materializer.ts (clone-aware
 │   │                            #   diff materialization), thread-mapper.ts (forge threads →
 │   │                            #   ReviewComments); and the Node-only review engine:
-│   │                            #   review-handlers.ts, startup-mode.ts, guide-loader.ts,
+│   │                            #   review-handlers.ts, startup-mode.ts, startup.ts (the startup
+│   │                            #   steps both front ends share: output target & its trust, diff
+│   │                            #   args with config provenance, local load, resume), cli-options.ts
+│   │                            #   (application-flag extraction both CLIs use), guide-loader.ts,
 │   │                            #   git-diff-loader.ts, staged-untracked.ts, remote-mode.ts,
 │   │                            #   fetch-comments.ts, git-diff-args.ts
 │   ├── react/                   # @self-review/react, the whole review UI, including
@@ -202,18 +205,47 @@ content — image previews, expansion line counts — goes through `readReviewed
 review, the PR head commit of a remote one, the working or scanned file opened without following
 links) rather than the working tree, and every request-supplied diff path is authorized by
 `authorizeReviewedPath` against the same identity, in both front ends. An `unknown` side refuses
-visibly; nothing falls back to the working tree or to the process's working directory. Each front
-end owns its own transport wiring over that same handler layer: `src/main/ipc-handlers.ts` registers
-the Electron app's `ipcMain` listeners, and `packages/serve/src/server.ts` registers the serve
-command's HTTP routes. A new handler's body belongs in `review-handlers.ts`; only its transport
-registration — an `ipcMain` listener or an HTTP route — belongs in the front end that needs it.
+visibly; nothing falls back to the working tree or to the process's working directory. The identity
+also carries `pathPrefix`, what a `--relative` / `--relative=<dir>` review's paths are relative to
+under the root (empty otherwise; every `git diff` the app runs forces `diff.relative=false`, so only
+the arguments decide), resolved once at load; `rootRelativeReviewedPath` in `source-identity.ts` is
+the one mapping from a session path to its root-relative file, used by the snapshot reader (and so
+image previews and expansion line counts), by Apply's destination path and by expansion's pathspecs,
+so a review of `sub/` never reaches the root's same-named file. Each front end owns its own
+transport wiring over that same handler layer: `src/main/ipc-handlers.ts` registers the Electron
+app's `ipcMain` listeners, and `packages/serve/src/server.ts` registers the serve command's HTTP
+routes. A new handler's body belongs in `review-handlers.ts`; only its transport registration — an
+`ipcMain` listener or an HTTP route — belongs in the front end that needs it.
 
 Everything that moved into `@self-review/core` was Node-only, with no Electron dependency;
 `src/main/` now holds Electron-bound code — window/menu/dialog wiring, IPC transport, and XML file
-I/O — plus two deliberate exceptions that stayed put: `cli.ts` (argument parsing; only its
-`normalizeGitDiffArgs` helper moved out, to `packages/core/src/git-diff-args.ts`) and
+I/O — plus two deliberate exceptions that stayed put: `cli.ts` (argument parsing; its primitives
+live in core — `extractApplicationOptions` in `packages/core/src/cli-options.ts` takes the
+application's own flags out of a git argument list, `classifyGitDiffArgs` picks positionals — and
+only the forge-URL / `fetch-comments` routing and Chromium-switch handling are desktop-specific) and
 `relaunch-guard.ts` (re-execs the app from its real bundle path, which is inherently
 desktop-specific).
+
+**Shared startup.** `src/main/main.ts` and `packages/serve/src/startup.ts` make the same startup
+decisions through `packages/core/src/startup.ts`, and only dialogs, the large-payload prompt and the
+welcome fallback differ: `loadConfigWithProvenance` (in `config.ts`) returns the merged `AppConfig`
+with the origin of every value (`user` for `~/.config/self-review/config.yaml`, `project` for the
+launch directory's `.self-review.yaml`, else `default`); `resolveOutputTarget` turns a CLI path, or
+the configured `output-file`, into a `ReviewOutputTarget` whose origin is `explicit` for a CLI path
+or a _user-level_ `output-file` (the reviewer's own intent, allowed outside the repository) and
+`inherited` with `baseDir` = launch cwd for a _project_ `output-file` or the default;
+`resolveStartupDiffArgs` takes the CLI's arguments or else `default-diff-args` tokenized with shell
+quoting (so `-S "a b"` is one argument), refuses `--output`, `--output=*`, `--ext-diff` and
+`--textconv` when a project file supplied them (`ConfiguredDiffArgsError`, before any git command;
+the reviewer's own arguments are not restricted), then normalizes and applies the staged/untracked
+default; `resolveStartupSource` (`startup-mode.ts`) picks the file or directory to review from the
+classifier's first positional, so an option value such as `-S src/x.ts` is never the source;
+`loadLocalReview` loads git (ignore-filtered, argv recorded with `formatGitDiffArgs`), directory,
+file or welcome; `loadResumeDocument` resumes a prior document into a session. The two command lines
+differ on purpose — the desktop has no `--output` (the save dialog changes the path) and alone
+accepts a forge URL and `fetch-comments`; both take `--resume-from <file>` and
+`--resume-from=<file>` and stop reading their own flags at `--` — and the table lives in
+`packages/core/src/startup.ts`. `fetch-comments` publishes through the same `resolveOutputTarget`.
 
 **Large-payload mode:** When the diff exceeds configurable thresholds (`max-files` or
 `max-total-lines`), the main process sends file metadata without hunks in the initial `diff:load`
@@ -509,32 +541,34 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   asset name (`unsafe-link`), and refuses to replace a hard-linked output (`unsupported-target`); an
   existing output file keeps its permission bits. Its `outputOrigin` option records where the path
   came from: `inherited` (project config or the default, which a repository can commit) must also
-  resolve physically inside its `baseDir`, while `explicit` (a CLI flag or the save dialog) may
-  point anywhere. `serializeReview` is pure (`state → { xml, assets }`) and never touches the disk.
-  Resumed attachments follow their document (`packages/core/src/attachment-origins.ts`): at resume,
-  each `.self-review-assets/<name>` reference is recorded in `ReviewSession.attachmentOrigins`
-  against the resumed document's directory (other reference shapes are never read and produce an
-  import diagnostic). `readAttachment(session, reference)` reads only those origins or the current
-  output's asset directory, through a real (non-symlink) asset directory, a no-follow open, regular
-  files only and `MAX_IMAGE_BYTES`. Publishing with the `attachmentOrigins` option copies an
-  imported attachment's bytes beside an output in another directory as a new asset; a save beside
-  the origin keeps its reference, and an origin that cannot be read refuses the save
-  (`attachment-unavailable`) rather than publish a reference to the wrong bytes. In remote mode,
-  when no matching local clone exists, it additionally creates a temporary blobless clone in a
-  uniquely named directory under the OS temp root, removed on exit (a leftover from a crash sits in
-  the OS temp area, which the OS reclaims); when reusing an existing clone, it only fetches into
-  namespaced refs (`refs/self-review/*`) — the working tree is never touched. No other files are
-  written by the app itself. There is now one sanctioned exception, the suggestion-apply path whose
-  boundaries PRD Section 5.4.8 records: `applySuggestion` in `packages/core/src/apply-suggestion.ts`
-  rewrites one reviewed working file when the caller names an explicit destination root and the
-  anchored lines still match the suggestion's recorded original code byte for byte. It refuses and
-  writes nothing otherwise, and it never consults the current working directory. The app reaches it
-  through the `suggestion:apply` channel, and only when the reviewer presses Apply on one
-  suggestion. `applySuggestionForSession` in `packages/core/src/review-handlers.ts` names the
-  destination, which is the git repository root, the reviewed directory, or the reviewed file's
-  parent, and refuses when the session has none. A remote review materialized into a temporary clone
-  is the one session with no destination of its own: the clone is deleted on exit, so applies are
-  refused with `destination-required` until the reviewer names a directory through
+  resolve physically inside its `baseDir`, while `explicit` (a CLI flag, the save dialog, or the
+  reviewer's own user-level `output-file`) may point anywhere; `resolveOutputTarget` in
+  `packages/core/src/startup.ts` decides this from configuration provenance for every host.
+  `serializeReview` is pure (`state → { xml, assets }`) and never touches the disk. Resumed
+  attachments follow their document (`packages/core/src/attachment-origins.ts`): at resume, each
+  `.self-review-assets/<name>` reference is recorded in `ReviewSession.attachmentOrigins` against
+  the resumed document's directory (other reference shapes are never read and produce an import
+  diagnostic). `readAttachment(session, reference)` reads only those origins or the current output's
+  asset directory, through a real (non-symlink) asset directory, a no-follow open, regular files
+  only and `MAX_IMAGE_BYTES`. Publishing with the `attachmentOrigins` option copies an imported
+  attachment's bytes beside an output in another directory as a new asset; a save beside the origin
+  keeps its reference, and an origin that cannot be read refuses the save (`attachment-unavailable`)
+  rather than publish a reference to the wrong bytes. In remote mode, when no matching local clone
+  exists, it additionally creates a temporary blobless clone in a uniquely named directory under the
+  OS temp root, removed on exit (a leftover from a crash sits in the OS temp area, which the OS
+  reclaims); when reusing an existing clone, it only fetches into namespaced refs
+  (`refs/self-review/*`) — the working tree is never touched. No other files are written by the app
+  itself. There is now one sanctioned exception, the suggestion-apply path whose boundaries PRD
+  Section 5.4.8 records: `applySuggestion` in `packages/core/src/apply-suggestion.ts` rewrites one
+  reviewed working file when the caller names an explicit destination root and the anchored lines
+  still match the suggestion's recorded original code byte for byte. It refuses and writes nothing
+  otherwise, and it never consults the current working directory. The app reaches it through the
+  `suggestion:apply` channel, and only when the reviewer presses Apply on one suggestion.
+  `applySuggestionForSession` in `packages/core/src/review-handlers.ts` names the destination, which
+  is the git repository root, the reviewed directory, or the reviewed file's parent, and refuses
+  when the session has none. A remote review materialized into a temporary clone is the one session
+  with no destination of its own: the clone is deleted on exit, so applies are refused with
+  `destination-required` until the reviewer names a directory through
   `suggestion:choose-destination`, and `setApplyDestination` rejects any directory inside the clone.
   The context match is a staleness check, not permission: the handler also refuses any path not in
   `session.reviewedPaths` (`not-reviewed`), a frozen set captured by `commitDiffData` from the

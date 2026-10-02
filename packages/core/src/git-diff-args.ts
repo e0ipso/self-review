@@ -103,6 +103,30 @@ function withoutDroppedShortOptions(arg: string): string | null {
 }
 
 /**
+ * What the paths in the output of `git diff argv` are relative to, read
+ * with the same arity rules as {@link consumesNextArgument}: the last of
+ * `--relative`, `--relative=<dir>` and `--no-relative` before `--` decides,
+ * and an option value spelled like one of them is never read as one.
+ *
+ * Only the arguments count. Every `git diff` this program runs forces
+ * `diff.relative=false` (see `PARSER_COMPATIBLE_GIT_CONFIG`), so a user's
+ * own `diff.relative` setting never reaches the output.
+ */
+export function describeDiffPathRelativity(args: readonly string[]): DiffPathRelativity {
+  let relative: DiffPathRelativity = { kind: 'root' };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') break;
+    if (arg === '--relative') relative = { kind: 'cwd' };
+    else if (arg.startsWith('--relative='))
+      relative = { kind: 'directory', directory: arg.slice('--relative='.length) };
+    else if (arg === '--no-relative') relative = { kind: 'root' };
+    else if (consumesNextArgument(arg)) i++;
+  }
+  return relative;
+}
+
+/**
  * The arguments for re-running a review's `git diff` over a single file
  * with a different amount of context, read with the same arity rules as
  * {@link consumesNextArgument}:
@@ -123,20 +147,10 @@ function withoutDroppedShortOptions(arg: string): string | null {
  */
 export function singleFileRediffArgs(args: readonly string[]): SingleFileRediff {
   const kept: string[] = [];
-  let relative: DiffPathRelativity = { kind: 'root' };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--') break;
-    if (arg === '--relative') {
-      relative = { kind: 'cwd' };
-      continue;
-    }
-    if (arg.startsWith('--relative=')) {
-      relative = { kind: 'directory', directory: arg.slice('--relative='.length) };
-      continue;
-    }
-    if (arg === '--no-relative') {
-      relative = { kind: 'root' };
+    if (arg === '--relative' || arg.startsWith('--relative=') || arg === '--no-relative') {
       continue;
     }
     // When an option takes the next argument, it is the last one in its
@@ -157,7 +171,34 @@ export function singleFileRediffArgs(args: readonly string[]): SingleFileRediff 
       if (keepValue) kept.push(args[i]);
     }
   }
-  return { args: kept, relative };
+  return { args: kept, relative: describeDiffPathRelativity(args) };
+}
+
+// Options a committed configuration must not be able to hand to git: the
+// one that writes (`--output` names a file git truncates and fills, even for
+// an empty diff, following a symlink there) and the two that run external
+// programs (`--ext-diff`, `--textconv` enable drivers git configuration may
+// define). Git accepts no abbreviations of its diff options, so exact
+// spellings are the whole set. Negations (`--no-ext-diff`) disable and are
+// allowed. `-o` is not a `git diff` option.
+const WRITE_CAPABLE_OPTIONS = new Set(['--output', '--ext-diff', '--textconv']);
+
+/**
+ * The options in `args` that make git write a file or run an external
+ * program, in argument order, each spelled as written. Option values and
+ * pathspecs after `--` are never reported. Used to refuse `default-diff-args`
+ * a repository committed; a reviewer's own arguments are not restricted.
+ */
+export function findWriteCapableGitDiffOptions(args: readonly string[]): string[] {
+  const offending: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') break;
+    const name = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg;
+    if (WRITE_CAPABLE_OPTIONS.has(name)) offending.push(arg);
+    if (consumesNextArgument(arg)) i++;
+  }
+  return offending;
 }
 
 // Output formats `parseDiff` cannot consume. Exact spellings, plus the

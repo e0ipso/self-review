@@ -389,9 +389,9 @@ The graph is acyclic. Task 24 depends on every other task; only its edges from l
 - ✔️ Task 19: Context expansion fidelity (R07) (depends on: 18)
 - ✔️ Task 20: Attachment provenance and relocation (R11 core) (depends on: 10, 13, 18)
 
-### Phase 8: Startup reuse and configuration provenance
+### ✅ Phase 8: Startup reuse and configuration provenance
 **Parallel Tasks:**
-- Task 21: Shared startup primitives and config provenance (R15, A5) (depends on: 10, 14, 19)
+- ✔️ Task 21: Shared startup primitives and config provenance (R15, A5) (depends on: 10, 14, 19)
 
 ### Phase 9: Remote lifetime and architecture cleanup
 **Parallel Tasks:**

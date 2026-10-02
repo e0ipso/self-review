@@ -2,7 +2,7 @@
 id: 21
 group: "startup"
 dependencies: [10, 14, 19]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - typescript-refactoring
@@ -20,13 +20,13 @@ Desktop and serve tokenize, format, classify and resolve startup input with the 
 TypeScript refactoring across CLI front ends and secure-coding for configuration trust levels.
 
 ## Acceptance Criteria
-- [ ] Serve (`packages/serve/src/startup.ts:57,62–83,110`) uses core's tokenize/format/classify helpers instead of splitting configured args on spaces and joining argv without quoting; configured `-S "a b"` and a CLI search value containing spaces work in serve startup, expansion (task 19) and XML metadata roundtrip.
-- [ ] Source path selection in both front ends (`src/main/main.ts:241,254`, serve startup) uses the classifier's positional indices; `self-review -S src/x.ts` (option value) is not treated as a file/directory source; `--` ends option parsing in both CLIs; a forge URL or `fetch-comments` appearing as an option value is not routed as remote/subcommand.
-- [ ] Equals-form application flags (`--output=path`, `--resume-from=path`) are accepted by both parsers where both support the flag; intentional CLI differences are listed in a comment/table in one place.
-- [ ] Shared config/guide/resume/load-mode primitives that are duplicated between `src/main/main.ts` and `packages/serve/src/startup.ts` move to core (`packages/core/src/startup-mode.ts` or similar) and are used by both; dialogs and lifecycle stay host-specific. No generic startup framework.
-- [ ] `packages/core/src/config.ts` (`:97,:177,:199`) returns values with provenance; `default-diff-args` from project config are validated by `git-diff-args.ts` and write-capable/external-execution options (`--output`, `--output=*`, `--ext-diff`, `--textconv`, `-o`? — verify Git's diff options list) are rejected with a visible error before any Git command runs. Probe regression: committed `.self-review.yaml` with `default-diff-args: --output=../sentinel` leaves the sentinel unchanged and reports an error.
-- [ ] Output path provenance flows to `publishReview`: CLI `--output`/dialog choice → `explicit`; project config or default `review.xml` → `inherited` (symlinked default `review.xml` committed in the repo is refused, not followed). Both hosts pass it.
-- [ ] Equivalent argument cases are tested through both front ends (table-driven: spaced search value, option value that looks like a path/URL, `--`, equals-form flags, project config default args). `npm run test:unit`, `npm run typecheck`, `npm run typecheck:packages`, `npm run test:e2e:serve` and `npm run test:e2e:electron` pass.
+- [x] Serve (`packages/serve/src/startup.ts:57,62–83,110`) uses core's tokenize/format/classify helpers instead of splitting configured args on spaces and joining argv without quoting; configured `-S "a b"` and a CLI search value containing spaces work in serve startup, expansion (task 19) and XML metadata roundtrip.
+- [x] Source path selection in both front ends (`src/main/main.ts:241,254`, serve startup) uses the classifier's positional indices; `self-review -S src/x.ts` (option value) is not treated as a file/directory source; `--` ends option parsing in both CLIs; a forge URL or `fetch-comments` appearing as an option value is not routed as remote/subcommand.
+- [x] Equals-form application flags (`--output=path`, `--resume-from=path`) are accepted by both parsers where both support the flag; intentional CLI differences are listed in a comment/table in one place.
+- [x] Shared config/guide/resume/load-mode primitives that are duplicated between `src/main/main.ts` and `packages/serve/src/startup.ts` move to core (`packages/core/src/startup-mode.ts` or similar) and are used by both; dialogs and lifecycle stay host-specific. No generic startup framework.
+- [x] `packages/core/src/config.ts` (`:97,:177,:199`) returns values with provenance; `default-diff-args` from project config are validated by `git-diff-args.ts` and write-capable/external-execution options (`--output`, `--output=*`, `--ext-diff`, `--textconv`, `-o`? — verify Git's diff options list) are rejected with a visible error before any Git command runs. Probe regression: committed `.self-review.yaml` with `default-diff-args: --output=../sentinel` leaves the sentinel unchanged and reports an error.
+- [x] Output path provenance flows to `publishReview`: CLI `--output`/dialog choice → `explicit`; project config or default `review.xml` → `inherited` (symlinked default `review.xml` committed in the repo is refused, not followed). Both hosts pass it.
+- [x] Equivalent argument cases are tested through both front ends (table-driven: spaced search value, option value that looks like a path/URL, `--`, equals-form flags, project config default args). `npm run test:unit`, `npm run typecheck`, `npm run typecheck:packages`, `npm run test:e2e:serve` and `npm run test:e2e:electron` pass.
 
 Use your internal Todo tool to track these and keep on track.
 

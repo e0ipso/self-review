@@ -4,23 +4,19 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
 import { resolve } from 'path';
 import { parseCliArgs } from './cli';
+import { formatGitDiffArgs } from '../../packages/core/src/git-diff-args';
+import { loadConfigWithProvenance } from '../../packages/core/src/config';
+import { resolveStartupSource } from '../../packages/core/src/startup-mode';
 import {
-  formatGitDiffArgs,
-  normalizeGitDiffArgs,
-  tokenizeGitDiffArgs,
-} from '../../packages/core/src/git-diff-args';
-import { loadGitDiffWithUntracked } from '../../packages/core/src/git-diff-loader';
-import { scanDirectory, scanFile } from './directory-scanner';
-import { loadConfig } from './config';
-import { applyStagedUntrackedDefault } from '../../packages/core/src/staged-untracked';
-import { determineMode } from '../../packages/core/src/startup-mode';
-import { resolveLocalSourceIdentity } from '../../packages/core/src/source-identity';
-import { createIgnoreFilter } from './ignore-filter';
-import { parseReviewXml } from './xml-parser';
+  loadLocalReview,
+  publishOptionsFor,
+  resolveOutputTarget,
+  resolveStartupDiffArgs,
+} from '../../packages/core/src/startup';
 import { inspectOutputPath, publishReview } from '../../packages/core/src/review-publisher';
 import type {
   PublishReviewOptions,
-  ReviewOutputOrigin,
+  ReviewOutputTarget,
 } from '../../packages/core/src/review-publisher';
 import { QuitController, saveAndQuit } from './quit-controller';
 import type { SaveFailure } from './quit-controller';
@@ -32,7 +28,7 @@ import {
   setConfigData,
   setOutputPathInfo,
   setResumeData,
-  setResumeDocument,
+  loadResumeFile,
   getAttachmentOrigins,
   takeSubmittedReviewState,
   isReviewOpen,
@@ -127,14 +123,19 @@ let diffIdentity: ReviewSourceIdentity | null = null;
 let resumeComments: ReviewComment[] = [];
 let resumeViewedFiles: string[] = [];
 let appConfig: AppConfig | null = null;
-let currentOutputPath: string = '';
 let outputPathWritable: boolean = false;
-// Where the output path came from, which decides how far the publisher
-// trusts it: project configuration or the default is `inherited` and must
-// stay inside the launch directory; a path the reviewer picked in the save
-// dialog is `explicit`. (The desktop CLI has no --output flag.)
-let outputOrigin: ReviewOutputOrigin = 'inherited';
 const launchCwd = process.cwd();
+// Where the review is published and how far the publisher trusts the path
+// (resolveOutputTarget): project configuration or the default is
+// `inherited` and must stay inside the launch directory; the reviewer's own
+// user-level output-file, or a path picked in the save dialog, is
+// `explicit`. (The desktop CLI has no --output flag.) Replaced whole on a
+// save-dialog pick; set for real in phase 2.
+let outputTarget: ReviewOutputTarget = {
+  path: resolve(launchCwd, 'review.xml'),
+  origin: 'inherited',
+  baseDir: launchCwd,
+};
 // Remote PR/MR session state. remoteSessionInfo is injected into the
 // submitted ReviewState on save so the serializer writes the remote-*
 // attributes; remoteCleanup removes a temporary clone when one was created.
@@ -196,10 +197,7 @@ function exitNow(code: number): void {
 
 function publishOptions(): PublishReviewOptions {
   // Resumed attachments are copied beside an output in another directory.
-  const attachmentOrigins = getAttachmentOrigins();
-  return outputOrigin === 'explicit'
-    ? { outputOrigin: 'explicit', attachmentOrigins }
-    : { outputOrigin: 'inherited', baseDir: launchCwd, attachmentOrigins };
+  return publishOptionsFor(outputTarget, getAttachmentOrigins());
 }
 
 /**
@@ -209,7 +207,7 @@ function publishOptions(): PublishReviewOptions {
  * the save re-checks and reports its own failure.
  */
 function probeOutputPath(): boolean {
-  const problem = inspectOutputPath(currentOutputPath, publishOptions());
+  const problem = inspectOutputPath(outputTarget.path, publishOptions());
   if (problem) {
     console.error(`[main] Output path check (${problem.code}): ${problem.message}`);
   }
@@ -266,50 +264,49 @@ async function initializeApp() {
     const cliArgs = parseCliArgs();
     console.error('[main] CLI args parsed:', JSON.stringify(cliArgs));
 
-    // Phase 2: Load configuration
-    appConfig = loadConfig();
-    currentOutputPath = resolve(launchCwd, appConfig.outputFile);
+    // Phase 2: Load configuration. Where each value came from decides its
+    // trust: the output path's origin (resolveOutputTarget) and whether the
+    // default diff arguments may name write-capable git options.
+    const loadedConfig = loadConfigWithProvenance({ cwd: launchCwd });
+    appConfig = loadedConfig.config;
+    outputTarget = resolveOutputTarget(null, loadedConfig, launchCwd);
     outputPathWritable = probeOutputPath();
     console.error(
       '[main] Config loaded, output path:',
-      currentOutputPath,
+      outputTarget.path,
+      `(${outputTarget.origin})`,
       'writable:',
       outputPathWritable
     );
 
-    // Phase 3: Determine git diff args
-    let gitDiffArgs = cliArgs.gitDiffArgs;
-    if (gitDiffArgs.length === 0 && appConfig.defaultDiffArgs) {
-      // Shell-style quoting, so a configured path or search string with a
-      // space stays one argument on the way to git.
-      gitDiffArgs = tokenizeGitDiffArgs(appConfig.defaultDiffArgs);
-    }
-
-    // Normalize: insert `--` before bare path args so expand-context
-    // never confuses them with revisions.
-    gitDiffArgs = normalizeGitDiffArgs(gitDiffArgs);
-
-    // In staged-mode (--staged / --cached), hide untracked files by default
-    // unless the user explicitly opted in via `show-untracked: true` in YAML.
-    // Must run before any code reads appConfig.showUntracked or sends config
-    // to the renderer via setConfigData.
-    appConfig = applyStagedUntrackedDefault(appConfig, gitDiffArgs);
+    // Phase 3: Determine git diff args: the command line's, or the
+    // configured default-diff-args split with shell quoting (a committed
+    // configuration may not use them to make git write or run programs;
+    // that throws here, before any git command, and is reported by the
+    // catch below), normalized so a path is never read as a revision, then
+    // the staged/untracked default, which must apply before any code reads
+    // appConfig.showUntracked or sends config to the renderer.
+    const resolvedArgs = resolveStartupDiffArgs(cliArgs.gitDiffArgs, loadedConfig, launchCwd);
+    const gitDiffArgs = resolvedArgs.gitDiffArgs;
+    appConfig = resolvedArgs.config;
 
     // Phase 4: Determine startup mode. A forge PR/MR URL bypasses local
     // mode detection: after materialization, remote mode is git mode
     // against the materialized clone.
-    const mode = cliArgs.remoteUrl ? 'remote' : determineMode(gitDiffArgs);
-    console.error('[main] Startup mode:', mode);
+    const source = cliArgs.remoteUrl
+      ? ({ mode: 'remote' } as const)
+      : resolveStartupSource(gitDiffArgs, launchCwd);
+    console.error('[main] Startup mode:', source.mode);
 
     let fetchedRemoteComments: ReviewComment[] = [];
-    if (mode === 'remote') {
+    if (source.mode === 'remote') {
       // Remote mode: materialize the PR/MR, then feed the git-mode
       // pipeline with the clone's repo path and the base...head range.
       // Materialization failures throw and are handled like any other
       // fatal startup git error by the catch below.
       const { session, payload, identity } = await bootstrapRemoteDiff(
         cliArgs.remoteUrl!,
-        process.cwd(),
+        launchCwd,
         appConfig.ignore
       );
       remoteCleanup = session.cleanup;
@@ -323,86 +320,26 @@ async function initializeApp() {
         'files at',
         session.repoPath
       );
-    } else if (mode === 'git') {
-      // Git mode: existing flow
-      console.error('[main] Git diff args:', formatGitDiffArgs(gitDiffArgs));
-
-      const {
-        files: allFiles,
-        repository,
-        diagnostics,
-        identity,
-      } = await loadGitDiffWithUntracked(gitDiffArgs);
-      diffIdentity = identity;
-      console.error('[main] Loaded', allFiles.length, 'files from git diff');
-      for (const diagnostic of diagnostics) {
-        console.error('[main] Diff diagnostic:', diagnostic);
-      }
-
-      const shouldKeep = createIgnoreFilter(appConfig.ignore);
-      const filteredFiles = allFiles.filter(f => shouldKeep(f.newPath || f.oldPath));
-
-      diffData = {
-        files: filteredFiles,
-        source: {
-          type: 'git',
-          // Quoted where a bare join would lose a boundary, so expand-context
-          // can recover this argv exactly.
-          gitDiffArgs: formatGitDiffArgs(gitDiffArgs),
-          repository,
-        },
-        // Carried only when something could not be loaded faithfully, so the
-        // renderer never mistakes a failed load for "no changes".
-        ...(diagnostics.length > 0 ? { diagnostics } : {}),
-      };
-    } else if (mode === 'file') {
-      // File mode: scan a single file as new addition
-      const fileArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
-      const filePath = resolve(process.cwd(), fileArg);
-      console.error('[main] Scanning file:', filePath);
-
-      const { files, diagnostics } = await scanFile(filePath);
-      console.error('[main] File scan complete:', files.length, 'files');
-      for (const diagnostic of diagnostics) {
-        console.error('[main] Diff diagnostic:', diagnostic);
-      }
-
-      diffData = {
-        files,
-        source: { type: 'file', sourcePath: filePath },
-        ...(diagnostics.length > 0 ? { diagnostics } : {}),
-      };
-      diffIdentity = resolveLocalSourceIdentity({ type: 'file', sourcePath: filePath });
-    } else if (mode === 'directory') {
-      // Directory mode: scan the specified directory
-      const dirArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
-      const directoryPath = resolve(process.cwd(), dirArg);
-      console.error('[main] Scanning directory:', directoryPath);
-
-      const { files, diagnostics } = await scanDirectory(directoryPath, appConfig.ignore);
-      console.error('[main] Directory scan complete:', files.length, 'files');
-      for (const diagnostic of diagnostics) {
-        console.error('[main] Diff diagnostic:', diagnostic);
-      }
-
-      diffData = {
-        files,
-        source: { type: 'directory', sourcePath: directoryPath },
-        // A budget or read failure must never read as an empty directory.
-        ...(diagnostics.length > 0 ? { diagnostics } : {}),
-      };
-      diffIdentity = resolveLocalSourceIdentity({
-        type: 'directory',
-        sourcePath: directoryPath,
-      });
     } else {
-      // Welcome mode: open window with no diff data
-      console.error('[main] Welcome mode — no git repo or directory arg');
-
-      diffData = {
-        files: [],
-        source: { type: 'welcome' },
-      };
+      // Local modes, loaded by the same core step serve uses: the git diff
+      // (ignore-filtered, argv recorded losslessly), a scanned directory or
+      // file, or the empty welcome payload with no identity, which opens the
+      // window with the directory picker.
+      if (source.mode === 'git') {
+        console.error('[main] Git diff args:', formatGitDiffArgs(gitDiffArgs));
+      } else if (source.mode === 'welcome') {
+        console.error('[main] Welcome mode — no git repo or directory arg');
+      } else {
+        console.error(`[main] Scanning ${source.mode}:`, source.sourcePath);
+      }
+      const loaded = await loadLocalReview(source, gitDiffArgs, appConfig, launchCwd, message =>
+        console.error(`[main] ${message}`)
+      );
+      diffData = loaded.payload;
+      diffIdentity = loaded.identity;
+      if (source.mode !== 'welcome') {
+        console.error('[main] Loaded', diffData.files.length, 'files');
+      }
     }
 
     // Phase 4b: Large payload guard
@@ -444,16 +381,17 @@ async function initializeApp() {
       // difference is that the decision is made in main, not in the library.
       try {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
-        const parsed = parseReviewXml(cliArgs.resumeFrom);
+        // The core resume step serve uses too: comments, viewed files and
+        // import diagnostics land on the desktop session, with attachments
+        // resolving beside the resumed document, not the launch directory
+        // or the output. Phase 5a may still merge remote threads into them.
+        const { parsed, importDiagnostics } = loadResumeFile(
+          resolve(launchCwd, cliArgs.resumeFrom)
+        );
         resumeComments = parsed.comments;
         resumeViewedFiles = parsed.viewedFiles;
         resumeRemoteHeadSha = parsed.remoteHeadSha;
-        // Attachments resolve beside the resumed document, not the launch
-        // directory or the output; references that cannot are reported.
-        resumeImportDiagnostics = [
-          ...parsed.importDiagnostics,
-          ...setResumeDocument(parsed.comments, resolve(launchCwd, cliArgs.resumeFrom)),
-        ];
+        resumeImportDiagnostics = importDiagnostics;
         console.error(
           '[main] Loaded',
           resumeComments.length,
@@ -492,7 +430,7 @@ async function initializeApp() {
     // is silent, a bad one logs one stderr warning and yields no guide.
     if (diffData && diffData.source.type !== 'welcome') {
       const guidePayload = await loadGuide(
-        currentOutputPath,
+        outputTarget.path,
         appConfig,
         diffData.files.map(f => f.newPath || f.oldPath)
       );
@@ -505,7 +443,7 @@ async function initializeApp() {
     // Phase 6: Cache data for when renderer requests it
     setDiffData(diffData, diffIdentity);
     setConfigData(appConfig);
-    setOutputPathInfo({ resolvedOutputPath: currentOutputPath, outputPathWritable });
+    setOutputPathInfo({ resolvedOutputPath: outputTarget.path, outputPathWritable });
     if (
       resumeComments.length > 0 ||
       resumeViewedFiles.length > 0 ||
@@ -610,8 +548,8 @@ function registerLifecycleHandlers(): void {
         const finalState = remoteSessionInfo
           ? applyRemoteProvenance(state, remoteSessionInfo)
           : state;
-        await publishReview(finalState, currentOutputPath, publishOptions());
-        console.error(`[main] Review written to ${currentOutputPath}`);
+        await publishReview(finalState, outputTarget.path, publishOptions());
+        console.error(`[main] Review written to ${outputTarget.path}`);
       },
       reportFailure: reportSaveFailure,
       quit: () => exitNow(0),
@@ -635,7 +573,7 @@ function registerLifecycleHandlers(): void {
       console.error('[main] Remote URL open requested:', url);
       const { session, payload, identity } = await bootstrapRemoteDiff(
         url,
-        process.cwd(),
+        launchCwd,
         appConfig?.ignore ?? []
       );
 
@@ -674,7 +612,7 @@ function registerLifecycleHandlers(): void {
       // now against the remote diff (same tolerant, never-fatal contract).
       const guidePayload = appConfig
         ? await loadGuide(
-            currentOutputPath,
+            outputTarget.path,
             appConfig,
             payload.files.map(f => f.newPath || f.oldPath)
           )
@@ -712,23 +650,22 @@ function registerLifecycleHandlers(): void {
 
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Save Review As',
-      defaultPath: currentOutputPath,
+      defaultPath: outputTarget.path,
       filters: [{ name: 'XML Files', extensions: ['xml'] }],
     });
 
     if (result.canceled || !result.filePath) return null;
 
-    currentOutputPath = resolve(result.filePath);
-    outputOrigin = 'explicit';
+    outputTarget = { path: resolve(result.filePath), origin: 'explicit' };
     outputPathWritable = probeOutputPath();
     console.error(
       '[main] Output path changed to:',
-      currentOutputPath,
+      outputTarget.path,
       'writable:',
       outputPathWritable
     );
 
-    const info: OutputPathInfo = { resolvedOutputPath: currentOutputPath, outputPathWritable };
+    const info: OutputPathInfo = { resolvedOutputPath: outputTarget.path, outputPathWritable };
     // The session's output decides which asset directory attachment reads fall back to.
     setOutputPathInfo(info);
     mainWindow.webContents.send(IPC.OUTPUT_PATH_CHANGED, info);

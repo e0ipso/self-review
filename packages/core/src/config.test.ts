@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { loadConfig } from './config';
+import { loadConfig, loadConfigWithProvenance } from './config';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -469,6 +469,71 @@ categories:
       const config = loadConfig();
 
       expect(config.guideFile).toBeUndefined();
+    });
+  });
+
+  // Audit A5: a committed `.self-review.yaml` is repository data, while the
+  // reviewer's own ~/.config file is their intent. The hosts tell them apart
+  // by where each value came from, so a project output path is contained
+  // and project diff arguments are restricted, while a user's are not.
+  describe('loadConfigWithProvenance', () => {
+    it('records where output-file and default-diff-args came from', () => {
+      const userYaml = `output-file: /home/user/reviews/out.xml\ntheme: dark\n`;
+      const projectYaml = `default-diff-args: "--staged"\n`;
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockImplementation(filepath =>
+        String(filepath).includes('.config/self-review') ? userYaml : projectYaml
+      );
+
+      const loaded = loadConfigWithProvenance();
+
+      expect(loaded.config.outputFile).toBe('/home/user/reviews/out.xml');
+      expect(loaded.provenance.outputFile).toBe('user');
+      expect(loaded.provenance.defaultDiffArgs).toBe('project');
+      expect(loaded.provenance.theme).toBe('user');
+      expect(loaded.provenance.diffView).toBe('default');
+      expect(loaded.sources).toEqual([
+        { origin: 'user', path: `${mockHomedir}/.config/self-review/config.yaml` },
+        { origin: 'project', path: `${mockCwd}/.self-review.yaml` },
+      ]);
+    });
+
+    it('attributes a value both files set to the project, which wins the merge', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockImplementation(filepath =>
+        String(filepath).includes('.config/self-review')
+          ? 'output-file: user.xml\n'
+          : 'output-file: project.xml\n'
+      );
+
+      const loaded = loadConfigWithProvenance();
+
+      expect(loaded.config.outputFile).toBe('project.xml');
+      expect(loaded.provenance.outputFile).toBe('project');
+    });
+
+    it('marks every value default when no file exists, and reads the given directories', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const loaded = loadConfigWithProvenance({ cwd: '/elsewhere', homeDir: '/other-home' });
+
+      expect(loaded.provenance.outputFile).toBe('default');
+      expect(loaded.provenance.defaultDiffArgs).toBe('default');
+      expect(loaded.sources).toEqual([]);
+      expect(fs.existsSync).toHaveBeenCalledWith('/other-home/.config/self-review/config.yaml');
+      expect(fs.existsSync).toHaveBeenCalledWith('/elsewhere/.self-review.yaml');
+    });
+
+    it('does not attribute a value a file set invalidly, which kept the default', () => {
+      vi.mocked(fs.existsSync).mockImplementation(filepath =>
+        String(filepath).endsWith('.self-review.yaml')
+      );
+      vi.mocked(fs.readFileSync).mockReturnValue(`theme: neon\noutput-file: ''\n`);
+
+      const loaded = loadConfigWithProvenance();
+
+      expect(loaded.provenance.theme).toBe('default');
+      expect(loaded.provenance.outputFile).toBe('default');
     });
   });
 });

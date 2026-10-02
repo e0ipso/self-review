@@ -9,21 +9,15 @@
 // collaborator is injectable so the flow is unit-testable; the CLI entry in
 // main.ts stays thin.
 
-import { resolve } from 'path';
 import { REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 import { publishReview } from './review-publisher';
 import type { PublishReviewOptions, PublishReviewResult } from './review-publisher';
-import { loadConfig } from './config';
+import { loadConfigWithProvenance } from './config';
+import type { LoadedConfig } from './config';
+import { publishOptionsFor, resolveOutputTarget } from './startup';
 import { defaultRemoteSessionDeps, loadRemoteReview, startRemoteSession } from './remote-mode';
 import type { RemoteSessionDeps } from './remote-mode';
-import type {
-  AppConfig,
-  DiffFile,
-  FileReviewState,
-  RemoteForge,
-  ReviewComment,
-  ReviewState,
-} from './types';
+import type { DiffFile, FileReviewState, RemoteForge, ReviewComment, ReviewState } from './types';
 
 /**
  * Injectable seams for the orchestration: the remote-session seams the app
@@ -38,7 +32,8 @@ export interface FetchCommentsDeps extends RemoteSessionDeps {
     outputPath: string,
     options: PublishReviewOptions
   ) => Promise<PublishReviewResult>;
-  loadConfig: () => AppConfig;
+  /** The merged configuration with the origin of each value; see `resolveOutputTarget`. */
+  loadConfig: () => LoadedConfig;
   now: () => Date;
 }
 
@@ -46,7 +41,7 @@ function defaultDeps(): FetchCommentsDeps {
   return {
     ...defaultRemoteSessionDeps,
     publish: publishReview,
-    loadConfig,
+    loadConfig: loadConfigWithProvenance,
     now: () => new Date(),
   };
 }
@@ -171,7 +166,8 @@ export async function runFetchComments(
 
     // The same effective configuration the app reviews under: the output
     // path and the ignore patterns both come from it.
-    const config = deps.loadConfig();
+    const loadedConfig = deps.loadConfig();
+    const config = loadedConfig.config;
     const loaded = await loadRemoteReview(session, config.ignore ?? [], deps.loadDiff);
     for (const diagnostic of loaded.diagnostics) {
       console.error(`[fetch-comments] Diff diagnostic: ${diagnostic}`);
@@ -187,12 +183,13 @@ export async function runFetchComments(
       timestamp: deps.now().toISOString(),
     });
 
-    const outputPath = resolve(cwd, config.outputFile);
-    // The output path comes from project configuration or the default, not
-    // from the reviewer, so it is published under the inherited policy: it
-    // must stay inside the launch directory and may not be a link.
-    await deps.publish(state, outputPath, { outputOrigin: 'inherited', baseDir: cwd });
-    console.error(`[fetch-comments] ${loaded.comments.length} threads written to ${outputPath}`);
+    // No flag names the output here, so the configuration's provenance
+    // decides its trust, exactly as in the app and serve: a reviewer's own
+    // user-level output-file is explicit; project configuration or the
+    // default is inherited and must stay inside the launch directory.
+    const target = resolveOutputTarget(null, loadedConfig, cwd);
+    await deps.publish(state, target.path, publishOptionsFor(target));
+    console.error(`[fetch-comments] ${loaded.comments.length} threads written to ${target.path}`);
   } finally {
     session.cleanup();
   }

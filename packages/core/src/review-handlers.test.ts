@@ -133,6 +133,7 @@ function makeIdentity(
     sourceRoot,
     invocationCwd: sourceRoot,
     gitDiffArgv: [],
+    pathPrefix: '',
     oldSide: local ? { kind: 'none' } : { kind: 'index' },
     newSide: local ? ({ kind: mode } as ReviewSourceIdentity['newSide']) : { kind: 'working-tree' },
   };

@@ -330,6 +330,7 @@ function remoteSourceIdentity(
   const resolved = loaded.identity ?? {
     sourceRoot: canonicalSourcePath(loaded.repository),
     gitDiffArgv: [...started.gitDiffArgs],
+    pathPrefix: '',
     oldSide: { kind: 'unknown' as const, reason: 'the merge base was not resolved' },
     newSide: { kind: 'commit' as const, sha: started.remote.remoteHeadSha },
   };

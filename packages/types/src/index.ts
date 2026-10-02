@@ -94,6 +94,16 @@ export interface ReviewSourceIdentity {
   invocationCwd: string;
   /** The `git diff` arguments as an argument list; empty outside git. */
   gitDiffArgv: string[];
+  /**
+   * The directory under `sourceRoot`, `/`-separated with no leading or
+   * trailing slash, that every reviewed path is relative to. Empty when the
+   * paths are root-relative, which is every review except a git review run
+   * with `--relative` (the launch directory) or `--relative=<dir>`. Resolved
+   * once at load time; every read, apply and re-diff of a reviewed path
+   * restates it from the root through this prefix, so a review of `sub/`
+   * never reaches the root's same-named file.
+   */
+  pathPrefix: string;
   oldSide: ReviewSourceSide;
   newSide: ReviewSourceSide;
 }

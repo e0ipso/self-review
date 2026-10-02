@@ -7,6 +7,8 @@ import {
   describeGitDiffSides,
   resolveGitSourceIdentity,
   resolveLocalSourceIdentity,
+  resolveReviewedPathPrefix,
+  rootRelativeReviewedPath,
 } from './source-identity';
 
 // The pure half: which two snapshots a `git diff` argv compares, before any
@@ -104,6 +106,7 @@ describe('resolveGitSourceIdentity', () => {
       sourceRoot: repo,
       invocationCwd: '/launched/from',
       gitDiffArgv: ['--staged'],
+      pathPrefix: '',
       oldSide: { kind: 'commit', sha: second },
       newSide: { kind: 'index' },
     });
@@ -150,6 +153,51 @@ describe('resolveGitSourceIdentity', () => {
     expect(identity.oldSide.kind).toBe('unknown');
     expect(identity.newSide.kind).toBe('unknown');
   });
+
+  // Audit R07: the prefix a `--relative` review's paths are relative to is
+  // resolved once, here, and every reader restates paths through it.
+  it('records what a --relative review launched from a subdirectory is relative to', async () => {
+    fs.mkdirSync(path.join(repo, 'sub', 'deeper'), { recursive: true });
+
+    const identity = await resolveGitSourceIdentity({
+      repository: repo,
+      gitDiffArgv: ['--relative', 'HEAD'],
+      invocationCwd: path.join(repo, 'sub', 'deeper'),
+    });
+
+    expect(identity.pathPrefix).toBe('sub/deeper');
+    expect(rootRelativeReviewedPath(identity, 'x.txt')).toBe('sub/deeper/x.txt');
+  });
+});
+
+describe('resolveReviewedPathPrefix', () => {
+  const root = '/repo';
+
+  it('is empty for a root-relative review, whatever the launch directory', () => {
+    expect(resolveReviewedPathPrefix(['HEAD'], root, '/repo/sub')).toBe('');
+    expect(resolveReviewedPathPrefix(['--relative', '--no-relative'], root, '/repo/sub')).toBe('');
+    // An option value spelled like the flag, and a pathspec after --, are not it.
+    expect(resolveReviewedPathPrefix(['-S', '--relative'], root, '/repo/sub')).toBe('');
+    expect(resolveReviewedPathPrefix(['--', '--relative'], root, '/repo/sub')).toBe('');
+  });
+
+  it('takes --relative=<dir> as written, minus trailing slashes', () => {
+    expect(resolveReviewedPathPrefix(['--relative=sub/'], root, root)).toBe('sub');
+    expect(resolveReviewedPathPrefix(['--relative=a/b'], root, '/elsewhere')).toBe('a/b');
+    expect(resolveReviewedPathPrefix(['--relative', '--relative=sub'], root, '/repo/x')).toBe(
+      'sub'
+    );
+  });
+
+  it('is empty for a bare --relative launched at or outside the root, as git leaves such paths', () => {
+    expect(resolveReviewedPathPrefix(['--relative'], root, root)).toBe('');
+    expect(resolveReviewedPathPrefix(['--relative'], root, '/other')).toBe('');
+  });
+
+  it('restates a reviewed path from the root through the prefix', () => {
+    expect(rootRelativeReviewedPath({ pathPrefix: '' }, 'a/b.txt')).toBe('a/b.txt');
+    expect(rootRelativeReviewedPath({ pathPrefix: 'sub' }, 'a/b.txt')).toBe('sub/a/b.txt');
+  });
 });
 
 describe('resolveLocalSourceIdentity', () => {
@@ -179,6 +227,7 @@ describe('resolveLocalSourceIdentity', () => {
       sourceRoot: path.join(tmp, 'real'),
       invocationCwd: '/elsewhere',
       gitDiffArgv: [],
+      pathPrefix: '',
       oldSide: { kind: 'none' },
       newSide: { kind: 'directory' },
     });
@@ -198,6 +247,7 @@ describe('resolveLocalSourceIdentity', () => {
       sourceRoot: tmp,
       invocationCwd: '/elsewhere',
       gitDiffArgv: [],
+      pathPrefix: '',
       oldSide: { kind: 'none' },
       newSide: { kind: 'file', path: path.join(tmp, 'real', 'note.txt') },
     });

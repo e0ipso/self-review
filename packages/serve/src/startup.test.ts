@@ -3,7 +3,13 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { getDiffLoad, getResumeLoad, serializeReview } from '@self-review/core';
+import {
+  expandContext,
+  getDiffLoad,
+  getResumeLoad,
+  serializeReview,
+  tokenizeGitDiffArgs,
+} from '@self-review/core';
 import type { ReviewState } from '@self-review/core';
 import { parseServeArgs } from './args';
 import { resolveSession } from './startup';
@@ -14,7 +20,9 @@ import { resolveSession } from './startup';
 let tmp: string;
 let repo: string;
 let plain: string;
+let home: string;
 const originalCwd = process.cwd();
+const originalHome = process.env.HOME;
 
 const GUIDE_XML = [
   '<?xml version="1.0" encoding="UTF-8"?>',
@@ -50,16 +58,31 @@ beforeAll(() => {
   plain = path.join(tmp, 'plain');
   fs.mkdirSync(path.join(plain, 'sub'), { recursive: true });
   fs.writeFileSync(path.join(plain, 'sub', 'note.txt'), 'hello\n');
+
+  // A home of its own, so the reviewer's real user-level config never
+  // reaches these sessions and the user-config cases can write one.
+  home = path.join(tmp, 'home');
+  fs.mkdirSync(home);
+  process.env.HOME = home;
 });
 
 afterEach(() => {
   process.chdir(originalCwd);
+  fs.rmSync(path.join(home, '.config'), { recursive: true, force: true });
+  fs.rmSync(path.join(repo, '.self-review.yaml'), { force: true });
 });
 
 afterAll(() => {
   process.chdir(originalCwd);
+  process.env.HOME = originalHome;
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+function writeUserConfig(yaml: string): void {
+  const dir = path.join(home, '.config', 'self-review');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'config.yaml'), yaml);
+}
 
 describe('resolveSession', () => {
   it('resolves a git session and records the identity the routes authorize against', async () => {
@@ -77,6 +100,7 @@ describe('resolveSession', () => {
       sourceRoot: repo,
       invocationCwd: repo,
       gitDiffArgv: [],
+      pathPrefix: '',
       oldSide: { kind: 'index' },
       newSide: { kind: 'working-tree' },
     });
@@ -188,6 +212,80 @@ describe('resolveSession', () => {
       invocationCwd: plain,
       oldSide: { kind: 'none' },
       newSide: { kind: 'directory' },
+    });
+  });
+
+  // Configuration provenance (audit A5). The three sources of an output path
+  // and of default diff arguments are trusted differently, and this is the
+  // same core decision the desktop makes.
+  describe('configuration provenance', () => {
+    it("treats the reviewer's user-level output-file as explicit, so it may point outside the launch directory", async () => {
+      const elsewhere = path.join(tmp, 'my-reviews');
+      fs.mkdirSync(elsewhere, { recursive: true });
+      writeUserConfig(`output-file: ${path.join(elsewhere, 'out.xml')}\n`);
+      process.chdir(repo);
+
+      const { output, session } = await resolveSession(parseServeArgs([]));
+
+      // Used to be inherited and refused by the publisher's containment at
+      // save time; a reviewer's own configuration is their explicit choice.
+      expect(output).toEqual({ path: path.join(elsewhere, 'out.xml'), origin: 'explicit' });
+      expect(session.outputPathInfo?.resolvedOutputPath).toBe(path.join(elsewhere, 'out.xml'));
+    });
+
+    it('contains a project output-file under the launch directory and refuses one that escapes it', async () => {
+      fs.writeFileSync(path.join(repo, '.self-review.yaml'), 'output-file: ../escaped.xml\n');
+      process.chdir(repo);
+
+      // Inherited and outside the launch directory: the publisher's check
+      // refuses it at startup, before a review is served that could never save.
+      await expect(resolveSession(parseServeArgs([]))).rejects.toThrow(/not writable.*outside/s);
+    });
+
+    it('refuses project default-diff-args that would make git write a file, before any git runs (audit A5 probe)', async () => {
+      const sentinel = path.join(tmp, 'sentinel.txt');
+      fs.writeFileSync(sentinel, 'untouched\n');
+      fs.writeFileSync(
+        path.join(repo, '.self-review.yaml'),
+        'default-diff-args: "--output=../sentinel.txt"\n'
+      );
+      process.chdir(repo);
+
+      await expect(resolveSession(parseServeArgs([]))).rejects.toThrow(
+        /Refusing default-diff-args from .*\.self-review\.yaml: --output=\.\.\/sentinel\.txt/
+      );
+      expect(fs.readFileSync(sentinel, 'utf-8')).toBe('untouched\n');
+    });
+
+    it('runs configured default-diff-args with shell quoting, through startup, expansion and the recorded argv', async () => {
+      fs.writeFileSync(
+        path.join(repo, '.self-review.yaml'),
+        `default-diff-args: '-S "retries = 3"'\n`
+      );
+      process.chdir(repo);
+
+      const { session } = await resolveSession(parseServeArgs([]));
+
+      // One argument, and the diff it selects.
+      expect(session.sourceIdentity?.gitDiffArgv).toEqual(['-S', 'retries = 3']);
+      expect(session.diffData?.files.filter(f => !f.isUntracked).map(f => f.newPath)).toEqual([
+        'src/retry.ts',
+      ]);
+      // The recorded argv (what the document's git-diff-args carries) round-trips.
+      const recorded = (session.diffData?.source as { gitDiffArgs: string }).gitDiffArgs;
+      expect(recorded).toBe("-S 'retries = 3'");
+      expect(tokenizeGitDiffArgs(recorded)).toEqual(['-S', 'retries = 3']);
+      // Expansion re-runs the same comparison with the boundary intact.
+      const expanded = await expandContext(session, { filePath: 'src/retry.ts', contextLines: 3 });
+      expect(expanded?.hunks.length).toBeGreaterThan(0);
+    });
+
+    it("does not treat a command-line option's value as the path to review", async () => {
+      process.chdir(plain);
+
+      // `-S sub` searches for text; outside a repository with no positional
+      // there is nothing to review, rather than a directory review of sub/.
+      await expect(resolveSession(parseServeArgs(['-S', 'sub']))).rejects.toThrow(/git repository/);
     });
   });
 

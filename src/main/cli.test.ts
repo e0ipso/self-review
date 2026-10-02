@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { parseCliArgs, checkEarlyExit } from './cli';
+import { SHARED_CLI_CASES } from '../../packages/core/src/test-support/cli-cases';
 
 describe('cli', () => {
   const originalArgv = process.argv;
@@ -122,6 +123,74 @@ describe('cli', () => {
 
       expect(args.resumeFrom).toBe('review.xml');
       expect(args.gitDiffArgs).toEqual(['--staged']);
+    });
+  });
+
+  // The cases both command lines must read the same way; serve runs the same
+  // table in packages/serve/src/args.test.ts.
+  describe('parseCliArgs shared cases', () => {
+    for (const shared of SHARED_CLI_CASES) {
+      it(shared.name, () => {
+        (process as any).defaultApp = false;
+        process.argv = ['/path/to/app', ...shared.argv];
+
+        const args = parseCliArgs();
+
+        expect(args.gitDiffArgs).toEqual(shared.gitDiffArgs);
+        expect(args.resumeFrom).toBe(shared.resumeFrom);
+        expect(args.remoteUrl).toBeNull();
+        expect(args.subcommand).toBeNull();
+        expect(process.exit).not.toHaveBeenCalled();
+      });
+    }
+
+    it('does not route a forge URL that is an option value as remote mode', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', '-S', 'https://github.com/owner/repo/pull/42', 'HEAD'];
+
+      const args = parseCliArgs();
+
+      expect(args.remoteUrl).toBeNull();
+      expect(args.gitDiffArgs).toEqual(['-S', 'https://github.com/owner/repo/pull/42', 'HEAD']);
+    });
+
+    it('does not read fetch-comments as a misplaced subcommand when it is an option value', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', '-S', 'fetch-comments'];
+
+      const args = parseCliArgs();
+
+      expect(args.gitDiffArgs).toEqual(['-S', 'fetch-comments']);
+      expect(process.exit).not.toHaveBeenCalled();
+    });
+
+    it('still routes a forge URL that follows an option and its value', () => {
+      (process as any).defaultApp = false;
+      process.argv = [
+        '/path/to/app',
+        '-S',
+        'needle',
+        'https://github.com/owner/repo/pull/42',
+        '--resume-from=prior.xml',
+      ];
+
+      const args = parseCliArgs();
+
+      expect(args.remoteUrl).toBe('https://github.com/owner/repo/pull/42');
+      expect(args.gitDiffArgs).toEqual(['-S', 'needle']);
+      expect(args.resumeFrom).toBe('prior.xml');
+    });
+
+    it('rejects an empty --resume-from= value', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', '--resume-from='];
+
+      parseCliArgs();
+
+      expect(console.error).toHaveBeenCalledWith(
+        'Error: --resume-from requires a file path argument'
+      );
+      expect(process.exit).toHaveBeenCalledWith(1);
     });
   });
 
@@ -432,6 +501,13 @@ describe('cli', () => {
 
       expect(result.shouldExit).toBe(true);
       expect(result.exitCode).toBe(0);
+    });
+
+    it('does not read --help after -- or as an option value as an early exit', () => {
+      (process as any).defaultApp = false;
+      process.argv = ['/path/to/app', '-S', '-h', '--', '--help'];
+
+      expect(checkEarlyExit().shouldExit).toBe(false);
     });
 
     it('returns false when no early exit flags', () => {

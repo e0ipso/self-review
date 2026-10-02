@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import type { ForgeProvider, ForgeThread, MaterializeResult } from './index';
 import { REVIEW_LEVEL_FILE_PATH } from './index';
 import type { AppConfig, DiffFile, ReviewComment, ReviewState } from './types';
+import type { LoadedConfig } from './config';
 import { tokenizeGitDiffArgs } from './git-diff-args';
 import { createGitLabProvider } from './gitlab-provider';
 import { runFetchComments } from './fetch-comments';
@@ -568,7 +569,11 @@ describe('GUI bootstrap and headless fetch-comments agree', () => {
           published = state;
           return { outputPath, assetPaths: [] };
         },
-        loadConfig: () => ({ outputFile: './review.xml', ignore }) as AppConfig,
+        loadConfig: () => ({
+          config: { outputFile: './review.xml', ignore } as AppConfig,
+          provenance: { outputFile: 'default' } as LoadedConfig['provenance'],
+          sources: [],
+        }),
         now: () => new Date('2026-10-01T00:00:00.000Z'),
       },
     });

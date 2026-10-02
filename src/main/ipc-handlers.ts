@@ -43,6 +43,8 @@ import {
   takeReviewState,
 } from '../../packages/core/src/review-handlers';
 import type { AttachmentOrigins } from '../../packages/core/src/attachment-origins';
+import { loadResumeDocument } from '../../packages/core/src/startup';
+import type { ParsedReview } from '../../packages/core/src/xml-parser';
 
 // The desktop application's own session. A single module-scope `const` holding
 // it is expected: the mutable state lives inside the session value, which is
@@ -92,6 +94,21 @@ export function setResumeDocument(
   resumeDocumentPath: string
 ): string[] {
   return recordResumedAttachments(desktopSession, comments, resumeDocumentPath);
+}
+
+/**
+ * Resume the review document at `resumePath` into the desktop session, the
+ * way serve startup does: comments, viewed files, import diagnostics and
+ * attachment origins beside the document. Throws when it cannot be read;
+ * main decides what that means.
+ */
+export function loadResumeFile(resumePath: string): {
+  parsed: ParsedReview;
+  /** The parser's diagnostics plus the attachment references that will never be read. */
+  importDiagnostics: string[];
+} {
+  const parsed = loadResumeDocument(desktopSession, resumePath);
+  return { parsed, importDiagnostics: desktopSession.resumeImportDiagnostics };
 }
 
 /** Where the resumed attachments live, for the publisher; see `PublishReviewOptions`. */

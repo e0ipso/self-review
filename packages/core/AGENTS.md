@@ -34,18 +34,21 @@ src/
 ├── attachment-origins.ts # Attachment provenance: resumed references resolve beside the resumed document; authorized, no-follow, bounded reads; relocation bytes for the publisher
 ├── safe-fs.ts            # No-follow primitives: writeExclusiveNoFollow, atomicReplace (mode/owner/identity-preserving), assertNoSymlinkAncestors, FsLayer
 ├── apply-suggestion.ts   # applySuggestion: anchor validated pre-I/O, .git refused, realpath root + lstat ancestors + O_NOFOLLOW, atomicReplace
-├── source-identity.ts    # ReviewSourceIdentity resolution: which two snapshots a git diff argv compares (SHAs pinned at load), directory/file roots
+├── source-identity.ts    # ReviewSourceIdentity resolution: which two snapshots a git diff argv compares (SHAs pinned at load), directory/file roots, the --relative pathPrefix; rootRelativeReviewedPath is the one session-path → root-path mapping
 ├── snapshot-reader.ts    # authorizeReviewedPath + readReviewedContent: the one path authorization and content read (index/commit blob via git cat-file, working/scanned file no-follow)
 ├── xml-parser.ts         # XML → ReviewState (lossless; downgrades bad anchors with diagnostics)
 ├── xml-text.ts           # The one escape/decode contract (CR/LF/TAB as char refs, single pass)
 ├── xml-errors.ts         # ReviewXmlError / XmlIllegalCharacterError (library never process.exits)
 ├── anchor-validation.ts  # validateLineAnchor / validateLineRange, shared by resume import and Apply
-├── config.ts             # YAML config loading & merging
+├── config.ts             # YAML config loading & merging; loadConfigWithProvenance records each value's origin (user file / project file / default)
+├── startup.ts            # The startup steps both front ends share: resolveOutputTarget (user output-file explicit, project/default inherited), resolveStartupDiffArgs (project default-diff-args may not name --output/--ext-diff/--textconv), loadLocalReview, loadResumeDocument; the two CLIs' intentional differences are tabled here
+├── startup-mode.ts       # resolveStartupSource / determineMode: git, directory, file or welcome, from the classifier's first positional
+├── cli-options.ts        # extractApplicationOptions: both CLIs' own flags out of a git argv (-- ends them, option values kept, --flag=value)
 ├── synthetic-diff.ts     # Diffs for non-git directories
 ├── directory-scanner.ts  # File/directory scanning
 ├── payload-sizing.ts     # Large-payload threshold checks
 ├── ignore-filter.ts      # .gitignore-style filtering
-├── fs-utils.ts           # checkWritability (startup hint only; hosts still call it until they adopt publisher errors)
+├── fs-utils.ts           # checkWritability, used by the publisher's inspectOutputPath (the startup hint every host probes through)
 └── file-type-utils.ts    # File extension → language/preview detection
 ```
 

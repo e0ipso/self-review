@@ -37,6 +37,11 @@ npx @self-review/serve --resume-from review.xml # continue a previous review
 | `-h, --help`           | Print usage                                                                                      |
 | `-v, --version`        | Print the version                                                                                |
 
+`--output` and `--resume-from` also take the `--flag=value` form. A `--` ends these flags:
+everything after it goes to `git diff` as written, and so does the value of a git option that takes
+one, so `-S --output` searches for the text `--output`. The same rules apply to the desktop command
+line.
+
 ## Run it from a checkout
 
 If you have this repository cloned and want to try a change, one script from the repository root

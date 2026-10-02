@@ -70,6 +70,7 @@ function cloneIdentity(clonePath: string): ReviewSourceIdentity {
     sourceRoot: clonePath,
     invocationCwd: clonePath,
     gitDiffArgv: ['aaa111...bbb222'],
+    pathPrefix: '',
     oldSide: { kind: 'commit', sha: 'aaa111' },
     newSide: { kind: 'commit', sha: 'bbb222' },
   };
@@ -281,6 +282,7 @@ describe('ipc-handlers', () => {
         sourceRoot: '/tmp/self-review-clone',
         invocationCwd: '/home/user/elsewhere',
         gitDiffArgv: ['aaa111...bbb222'],
+        pathPrefix: '',
         oldSide: { kind: 'commit', sha: 'a'.repeat(40) },
         newSide: { kind: 'commit', sha: 'b'.repeat(40) },
       });
@@ -324,6 +326,7 @@ describe('ipc-handlers', () => {
           sourceRoot: repoDir,
           invocationCwd: repoDir,
           gitDiffArgv: [],
+          pathPrefix: '',
           oldSide: { kind: 'index' },
           newSide: { kind: 'working-tree' },
         });
@@ -386,6 +389,7 @@ describe('ipc-handlers', () => {
           sourceRoot: repoDir,
           invocationCwd: process.cwd(),
           gitDiffArgv: [`${baseSha}...${headSha}`],
+          pathPrefix: '',
           oldSide: { kind: 'commit', sha: baseSha },
           newSide: { kind: 'commit', sha: headSha },
         });

@@ -63,6 +63,7 @@ export { publishReview, inspectOutputPath, ReviewPublishError } from './review-p
 export type {
   ReviewPublishErrorCode,
   ReviewOutputOrigin,
+  ReviewOutputTarget,
   PublishReviewOptions,
   PublishReviewResult,
 } from './review-publisher';
@@ -177,6 +178,8 @@ export {
   describeGitDiffSides,
   resolveGitSourceIdentity,
   resolveLocalSourceIdentity,
+  resolveReviewedPathPrefix,
+  rootRelativeReviewedPath,
   canonicalSourcePath,
 } from './source-identity';
 export type {
@@ -195,8 +198,15 @@ export type {
   SnapshotReadOptions,
 } from './snapshot-reader';
 
-// Configuration
-export { loadConfig } from './config';
+// Configuration, with the origin of every value (user file, project file, default)
+export { loadConfig, loadConfigWithProvenance } from './config';
+export type {
+  ConfigValueOrigin,
+  ConfigProvenance,
+  ConfigSource,
+  LoadedConfig,
+  LoadConfigOptions,
+} from './config';
 
 // Payload sizing
 export { computePayloadStats, countTotalLines, getGitDiffStats } from './payload-sizing';
@@ -274,7 +284,25 @@ export {
 export type { ReviewSession, ReviewStartResult } from './review-handlers';
 
 // Startup mode detection (git, directory, file, welcome)
-export { determineMode } from './startup-mode';
+export { determineMode, resolveStartupSource } from './startup-mode';
+export type { StartupSource } from './startup-mode';
+
+// The startup steps both front ends share: output target and its trust,
+// diff arguments with configuration provenance, local review loading,
+// resume into a session
+export {
+  resolveOutputTarget,
+  publishOptionsFor,
+  resolveStartupDiffArgs,
+  loadLocalReview,
+  loadResumeDocument,
+  ConfiguredDiffArgsError,
+} from './startup';
+export type { ResolvedDiffArgs, LoadedLocalReview } from './startup';
+
+// Application flag extraction shared by both command lines
+export { extractApplicationOptions, ApplicationOptionError } from './cli-options';
+export type { ApplicationOptionsSpec, ExtractedApplicationOptions } from './cli-options';
 
 // Walkthrough guide sidecar discovery and tolerant loading
 export { deriveGuidePath, resolveGuidePath, loadGuide } from './guide-loader';
@@ -285,9 +313,15 @@ export type { LoadGitDiffOptions, LoadGitDiffResult } from './git-diff-loader';
 export { applyStagedUntrackedDefault } from './staged-untracked';
 export {
   normalizeGitDiffArgs,
+  tokenizeGitDiffArgs,
+  formatGitDiffArgs,
+  classifyGitDiffArgs,
   findUnsupportedGitDiffOptions,
+  findWriteCapableGitDiffOptions,
+  describeDiffPathRelativity,
   consumesNextArgument,
 } from './git-diff-args';
+export type { DiffPathRelativity } from './git-diff-args';
 
 // Remote PR/MR session bootstrap (URL -> materialized git-mode inputs) and the
 // load/filter/map step the app and fetch-comments share

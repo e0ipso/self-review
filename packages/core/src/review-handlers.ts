@@ -28,13 +28,13 @@ import {
   ApplyDestinationOutcome,
 } from './types';
 import { scanDirectory, scanFile } from './directory-scanner';
-import { singleFileRediffArgs, type DiffPathRelativity } from './git-diff-args';
+import { singleFileRediffArgs } from './git-diff-args';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { applySuggestion } from './apply-suggestion';
 import { MAX_GIT_DIFF_OUTPUT_BYTES, MAX_IMAGE_BYTES } from './input-budgets';
 import { isPreviewableImage } from './file-type-utils';
 import { readReviewedContent } from './snapshot-reader';
-import { canonicalSourcePath, resolveLocalSourceIdentity } from './source-identity';
+import { resolveLocalSourceIdentity, rootRelativeReviewedPath } from './source-identity';
 import {
   authorizeAttachmentReference,
   readAssetFile,
@@ -279,24 +279,13 @@ export async function loadImage(
 /**
  * The number of lines of `file` on the side of the review that has it (the
  * new side, or the old side of a deletion), read from the reviewed
- * snapshot. `prefix` is what the review's paths are relative to under the
- * source root (`--relative`); empty for root-relative paths. Zero when it
- * cannot be read; the caller treats that as unknown.
+ * snapshot; the reader restates a `--relative` path from the root itself.
+ * Zero when it cannot be read; the caller treats that as unknown.
  */
-async function countReviewedLines(
-  session: ReviewSession,
-  file: DiffFile,
-  prefix: string
-): Promise<number> {
+async function countReviewedLines(session: ReviewSession, file: DiffFile): Promise<number> {
   const side = file.newPath ? 'new' : 'old';
   const filePath = side === 'new' ? file.newPath : file.oldPath;
-  if (!session.reviewedPaths.has(filePath)) return 0;
-  // The reader resolves paths against the source root, so a reviewed path
-  // relative to a subdirectory is restated from the root. It is the same
-  // file under its root-relative name, authorized by the check above.
-  const rootPath = rootRelativePath(prefix, filePath);
-  const snapshot = { sourceIdentity: session.sourceIdentity, reviewedPaths: new Set([rootPath]) };
-  const result = await readReviewedContent(snapshot, rootPath, side, {
+  const result = await readReviewedContent(session, filePath, side, {
     maxBytes: MAX_GIT_DIFF_OUTPUT_BYTES,
   });
   if (!result.ok) {
@@ -476,6 +465,12 @@ export function setApplyDestination(
  * checks before writing and which a request cannot satisfy for lines it
  * does not know.
  *
+ * The file is named to the engine from the destination root through the
+ * identity's prefix (`rootRelativeReviewedPath`): a `--relative` review of
+ * `sub/` writes `sub/<path>`, the same file the preview and the diff show,
+ * never the root's same-named one. The outcome names the path as the
+ * session knows it, which is what the front end asked about.
+ *
  * A refusal travels as a value, never as a thrown error. The front end
  * renders its `detail` next to the suggestion the attempt came from.
  */
@@ -484,7 +479,8 @@ export function applySuggestionForSession(
   request: SuggestionApplyRequest
 ): SuggestionApplyOutcome {
   const destinationRoot = resolveApplyDestination(session);
-  if (!destinationRoot) {
+  const identity = session.sourceIdentity;
+  if (!destinationRoot || identity === null) {
     const temporary = isTemporaryCloneSession(session);
     return {
       status: 'refused',
@@ -508,7 +504,7 @@ export function applySuggestionForSession(
 
   const result = applySuggestion({
     destinationRoot,
-    filePath: request.filePath,
+    filePath: rootRelativeReviewedPath(identity, request.filePath),
     lineRange: request.lineRange,
     suggestion: request.suggestion,
   });
@@ -522,17 +518,18 @@ export function applySuggestionForSession(
   // reports the resolved absolute path, which the front end has no use for
   // and should not be handed; naming the fields here keeps the wire shape
   // exactly what SuggestionApplyOutcome declares, today and after the engine
-  // grows a field.
+  // grows a field. The path is the one the request named, not the engine's
+  // root-relative restatement of it.
   if (result.status === 'applied') {
     return {
       status: 'applied',
-      filePath: result.filePath,
+      filePath: request.filePath,
       replacedLines: result.replacedLines,
     };
   }
   return {
     status: 'refused',
-    filePath: result.filePath,
+    filePath: request.filePath,
     reason: result.reason,
     detail: result.detail,
   };
@@ -622,39 +619,6 @@ export function getResumeLoad(session: ReviewSession): ResumeLoadPayload | null 
 }
 
 /**
- * What the reviewed paths are relative to, as a directory under the source
- * root with no leading slash: empty for root-relative paths, the
- * `--relative=<dir>` directory as given, or, for a bare `--relative`, the
- * directory the review was launched from. Null when that directory is not
- * inside the source root, so the paths cannot be restated.
- */
-function resolveRelativePrefix(
-  identity: ReviewSourceIdentity,
-  relative: DiffPathRelativity
-): string | null {
-  switch (relative.kind) {
-    case 'root':
-      return '';
-    case 'directory':
-      return relative.directory;
-    case 'cwd': {
-      const fromRoot = path.relative(
-        identity.sourceRoot,
-        canonicalSourcePath(identity.invocationCwd)
-      );
-      if (fromRoot.startsWith('..') || path.isAbsolute(fromRoot)) return null;
-      return fromRoot.split(path.sep).join('/');
-    }
-  }
-}
-
-/** `filePath`, relative to `prefix` (see {@link resolveRelativePrefix}), from the root. */
-function rootRelativePath(prefix: string, filePath: string): string {
-  if (prefix === '') return filePath;
-  return prefix.endsWith('/') ? `${prefix}${filePath}` : `${prefix}/${filePath}`;
-}
-
-/**
  * Expand the context of a single file by re-running the review's own git
  * diff over that file with more context lines.
  *
@@ -662,11 +626,11 @@ function rootRelativePath(prefix: string, filePath: string): string {
  * argv, with only its context options (and file-order options, which a
  * single file has no use for) taken out by {@link singleFileRediffArgs} —
  * so a revision after a bare `-U` stays a revision. Git runs at the source
- * root; a `--relative` review is restated as `--relative=<dir>` from there,
- * and the file's paths are passed as root-relative literal pathspecs, both
- * of a rename or copy so git pairs them again. The entry returned is the
- * one whose old and new paths are the requested file's, not whichever git
- * printed first.
+ * root; a `--relative` review is restated as `--relative=<prefix>` from
+ * there, with the prefix the identity resolved at load time, and the file's
+ * paths are passed as root-relative literal pathspecs, both of a rename or
+ * copy so git pairs them again. The entry returned is the one whose old and
+ * new paths are the requested file's, not whichever git printed first.
  *
  * The expanded hunks are written back to the session's diff data so a
  * later file load on the same session sees them. Returns null when the
@@ -701,20 +665,14 @@ export async function expandContext(
     const { parseDiff } = await import('./diff-parser');
 
     const rediff = singleFileRediffArgs(identity.gitDiffArgv);
-    const prefix = resolveRelativePrefix(identity, rediff.relative);
-    if (prefix === null) {
-      console.error(
-        `[review] Cannot expand ${request.filePath}: the review was launched outside its repository`
-      );
-      return null;
-    }
+    const prefix = identity.pathPrefix;
     const paths = [...new Set([target.oldPath, target.newPath].filter(p => p !== ''))];
     const expandArgs = [
       ...rediff.args,
       ...(prefix === '' ? [] : [`--relative=${prefix}`]),
       `-U${request.contextLines}`,
       '--',
-      ...paths.map(p => `:(top,literal)${rootRelativePath(prefix, p)}`),
+      ...paths.map(p => `:(top,literal)${rootRelativeReviewedPath(identity, p)}`),
     ];
 
     // The source root: the repository, or in remote mode the materialized
@@ -732,7 +690,7 @@ export async function expandContext(
     // for a staged review, the PR head for a remote one — never the working
     // tree a temporary clone left on its default branch. Zero when it cannot
     // be read, which keeps the bars visible.
-    const totalLines = await countReviewedLines(session, target, prefix);
+    const totalLines = await countReviewedLines(session, target);
 
     session.diffData = {
       ...diffData,

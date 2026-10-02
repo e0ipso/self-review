@@ -122,6 +122,7 @@ function freshSession(): ReviewSession {
       sourceRoot: root,
       invocationCwd: root,
       gitDiffArgv: [],
+      pathPrefix: '',
       oldSide: { kind: 'index' },
       newSide: { kind: 'working-tree' },
     }

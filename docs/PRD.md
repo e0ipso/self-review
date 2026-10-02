@@ -584,7 +584,9 @@ prism-theme: one-dark
 # Editor font size in pixels
 font-size: 14
 
-# Output file path for the review XML
+# Output file path for the review XML. From a project file (or by default)
+# it must stay inside the launch directory and may not be a symlink; from the
+# user-level config it is the reviewer's own choice and may point anywhere.
 output-file: ./review.xml
 
 # Default output format (reserved for future multi-format support)
@@ -635,6 +637,10 @@ categories:
 
 # Default git diff arguments for this project. Split with shell quoting
 # rules, so an argument with a space must be quoted to stay one argument.
+# A project file may not supply --output, --ext-diff or --textconv (git
+# options that write a file or run an external program); the app refuses to
+# start and names the option. The reviewer's own arguments and user-level
+# config are not restricted.
 default-diff-args: "--staged"
 
 # Show untracked files (new files not yet added to git): true or false.

@@ -416,6 +416,15 @@ Customize **self-review** with YAML configuration files:
 
 Project config overrides user config, which overrides built-in defaults.
 
+The two files are trusted differently, because a project file is committed by whoever owns the
+repository while the user file is yours. An `output-file` from your user config is treated like a
+path you typed and may point anywhere, such as a reviews directory outside the repository; an
+`output-file` from a project config, or the default `./review.xml`, must stay inside the directory
+you launched from and may not be a symlink, so a repository cannot redirect where the review is
+saved. Likewise `default-diff-args` from a project config may not contain `--output`, `--ext-diff`
+or `--textconv` (git options that write a file or run an external program); the app refuses to start
+and names the option and the file. Your own arguments and user config are not restricted.
+
 ### Available options
 
 - `theme`: light, dark, or system (default: system)
