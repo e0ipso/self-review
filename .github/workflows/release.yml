@@ -122,13 +122,21 @@ jobs:
       - name: Check the release tag resolver
         run: bash scripts/test/resolve-release-tag.test.sh
 
+      # Guards the plugin that keeps workspace dependency ranges on the
+      # release version, before it runs with this job's write permissions.
+      - name: Check the workspace version sync
+        run: node --test scripts/test/sync-workspace-versions.test.mjs
+
       # The token is the one credential this job uses, and only this step
       # needs it: semantic-release pushes the release commit and tag with it.
+      # `npm version` reinstalls the workspace while bumping it, so scripts
+      # stay off here as they do for `npm ci` above.
       - name: Run semantic-release
         run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HUSKY: '0'
+          npm_config_ignore_scripts: 'true'
 
       # Asks whether a release exists for this commit, not whether this run
       # created one, so re-running after an interrupted attempt resumes the
@@ -188,6 +196,16 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
+
+      # A sibling installed from the registry instead of linked means the
+      # builds below compile against that stale published copy.
+      - name: Confirm the workspace packages are linked
+        run: |
+          nested=$(jq -r '.packages | keys[] | select(test("^packages/[^/]+/node_modules/@self-review/"))' package-lock.json)
+          if [ -n "$nested" ]; then
+            printf 'Installed from the registry instead of linked:\n%s\n' "$nested" >&2
+            exit 1
+          fi
 
       - name: Install Linux maker dependencies
         run: sudo apt-get install -y dpkg-dev fakeroot rpm
