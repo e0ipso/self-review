@@ -398,9 +398,9 @@ The graph is acyclic. Task 24 depends on every other task; only its edges from l
 - ✔️ Task 22: Remote session lifetime ownership (R16) (depends on: 16, 21)
 - ✔️ Task 23: Scoped themes, canonical defaults, browser parser (depends on: 07, 21)
 
-### Phase 10: Documentation
+### ✅ Phase 10: Documentation
 **Parallel Tasks:**
-- Task 24: Documentation and evidence mapping (depends on: all)
+- ✔️ Task 24: Documentation and evidence mapping (depends on: all)
 
 ### Post-phase Actions
 After each phase: run the POST_PHASE hook (lint/format where defined), update task statuses, mark the phase ✅, and create a conventional commit.

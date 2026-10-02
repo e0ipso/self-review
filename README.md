@@ -260,6 +260,22 @@ You can continue your saved review if you didn't finish it:
 self-review --staged --resume-from review.xml
 ```
 
+Arguments that are not self-review's own go straight to `git diff`. `--resume-from <file>` also
+takes the `--resume-from=<file>` form, a `--` ends self-review's own options (everything after it,
+and the value of a git option such as `-S`, is passed to git as written), and options that change
+what git prints (`--stat`, `--name-only`, `--word-diff`, ...) are refused with the flag named,
+because the review needs a patch it can parse. Git output the app cannot show faithfully, such as a
+merge-conflict section, is reported in the window instead of being left out of the review.
+
+### Saving and quitting
+
+**Finish Review** writes the review and exits. Closing the window, or choosing Quit from the menu
+(Ctrl+Q / Cmd+Q), asks first: **Save & Quit**, **Discard** or **Cancel**. The app only exits after a
+successful save or an explicit Discard. If the save fails, for example because the output path is a
+directory, the disk is full or the file is not writable, the window stays open with all your
+comments, a dialog says why, and any earlier `review.xml` is left exactly as it was. Fix the cause
+or pick another path from the footer of the file tree and save again.
+
 ### Examples
 
 ```bash
@@ -433,7 +449,8 @@ and names the option and the file. Your own arguments and user config are not re
 
 - `theme`: light, dark, or system (default: system)
 - `diff-view`: split or unified (default: split)
-- `font-size`: editor font size in pixels (default: 14)
+- `font-size`: font size in pixels for diff code (default: 14; the row height grows with it, and a
+  value that is not a positive number falls back to the default)
 - `output-file`: path for the review XML output (default: `./review.xml`)
 - `guide-file`: path to the walkthrough guide sidecar (default: derived from `output-file` as
   `<output-basename>.guide.xml`, e.g. `review.guide.xml`)
@@ -450,8 +467,9 @@ and names the option and the file. Your own arguments and user config are not re
   100000). Set to `0` to disable.
 
 When either threshold is exceeded, a confirmation dialog appears. Cancelling exits the app;
-continuing enters large-payload mode with lazy content loading (file hunks are fetched on demand as
-you scroll).
+continuing enters large-payload mode with lazy content loading: every file starts collapsed, and a
+file's hunks are fetched when you open it. A fetch that fails shows its error with a Retry button
+and is not retried on its own.
 
 <details>
 <summary>Example: Custom comment categories</summary>

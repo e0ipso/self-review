@@ -2,7 +2,7 @@
 id: 24
 group: "documentation"
 dependencies: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - technical-writing
@@ -19,12 +19,12 @@ Documentation describes the final behavior and every deliberate contract break: 
 Technical writing in Markdown.
 
 ## Acceptance Criteria
-- [ ] `docs/hardening-evidence-2026-10-01.md` maps each of R01–R19, A1–A9 and simplifications 1–8 to concrete tests/files/commands (or a recorded external prerequisite), without rewriting the audit documents (they stay unchanged as historical evidence).
-- [ ] AGENTS.md: the "File writes", "No network access", "XML must validate", "Remote PR/MR mode" (parity claim), IPC channel table, Architecture and Testing sections reflect the implementation; new modules (`review-publisher.ts`, `safe-fs.ts`, `anchor-validation.ts`, `snapshot-reader.ts`, `input-budgets.ts`, etc.) appear in the project structure; type-only/browser-only rules are retained.
-- [ ] Package AGENTS.md/README files for core, react and serve updated where their contracts changed; serve README no longer claims there is no authentication.
-- [ ] `docs/PRD.md` updated where documented contracts changed (quit/save, serve acknowledgement, Apply refusal reasons, diff format support).
-- [ ] `npm run format:check` passes (docs/ is prettier-ignored; README/AGENTS files may not be).
-- [ ] No kenkeep curation, no vendored tooling edits, no unrelated docs.
+- [x] `docs/hardening-evidence-2026-10-01.md` maps each of R01–R19, A1–A9 and simplifications 1–8 to concrete tests/files/commands (or a recorded external prerequisite), without rewriting the audit documents (they stay unchanged as historical evidence).
+- [x] AGENTS.md: the "File writes", "No network access", "XML must validate", "Remote PR/MR mode" (parity claim), IPC channel table, Architecture and Testing sections reflect the implementation; new modules (`review-publisher.ts`, `safe-fs.ts`, `anchor-validation.ts`, `snapshot-reader.ts`, `input-budgets.ts`, etc.) appear in the project structure; type-only/browser-only rules are retained.
+- [x] Package AGENTS.md/README files for core, react and serve updated where their contracts changed; serve README no longer claims there is no authentication.
+- [x] `docs/PRD.md` updated where documented contracts changed (quit/save, serve acknowledgement, Apply refusal reasons, diff format support).
+- [x] `npm run format:check` passes (docs/ is prettier-ignored; README/AGENTS files may not be).
+- [x] No kenkeep curation, no vendored tooling edits, no unrelated docs.
 
 Use your internal Todo tool to track these and keep on track.
 
