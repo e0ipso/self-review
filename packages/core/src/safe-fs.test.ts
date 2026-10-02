@@ -105,7 +105,8 @@ describe('atomicReplace', () => {
     const target = path.join(tmp, 'file.txt');
     fs.writeFileSync(target, 'original');
     const identity = inspectReplaceTarget(target)!;
-    fs.unlinkSync(target);
+    // Rename rather than unlink: a freed inode number can be reused (ext4 on CI does).
+    fs.renameSync(target, `${target}.old`);
     fs.writeFileSync(target, 'swapped');
 
     expect(
