@@ -288,30 +288,6 @@ jobs:
           name: release-linux
           path: linux
 
-      # A resumed run reaches this step with the versions of an earlier
-      # attempt, and npm refuses to republish them. Skip what is already
-      # there rather than failing the retry before it reaches the artifacts.
-      # Dependents follow their dependencies so no published version ever
-      # names one that is not there yet.
-      - name: Publish workspace packages to npm
-        run: |
-          for name in @self-review/types @self-review/core @self-review/react @self-review/serve; do
-            entry=$(jq -c --arg name "$name" '.[] | select(.name == $name)' npm/manifest.json)
-            if [ -z "$entry" ]; then
-              echo "$name is missing from the packed manifest" >&2
-              exit 1
-            fi
-            version=$(jq -r .version <<<"$entry")
-            filename=$(jq -r .filename <<<"$entry")
-            if npm view "$name@$version" version >/dev/null 2>&1; then
-              echo "$name@$version is already published" >&2
-              continue
-            fi
-            npm publish "npm/$filename" --provenance --access public
-          done
-        env:
-          NODE_AUTH_TOKEN: ''
-
       # --clobber replaces assets a previous attempt uploaded, so a retry
       # lands one complete set on the existing release instead of a duplicate.
       - name: Upload release assets
@@ -341,3 +317,28 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.release.outputs.tag }}
         run: gh workflow run release-darwin.yml -f tag="$TAG"
+
+      # Last, so a registry failure cannot hold back the app release above. A
+      # re-run reaches this step with versions an earlier attempt may have
+      # published, and npm refuses to republish them, so those are skipped.
+      # Dependents follow their dependencies so no published version ever
+      # names one that is not there yet. The `./` makes npm read a file:
+      # `npm/<file>.tgz` is GitHub shorthand to it, which broke 2.0.1.
+      - name: Publish workspace packages to npm
+        run: |
+          for name in @self-review/types @self-review/core @self-review/react @self-review/serve; do
+            entry=$(jq -c --arg name "$name" '.[] | select(.name == $name)' npm/manifest.json)
+            if [ -z "$entry" ]; then
+              echo "$name is missing from the packed manifest" >&2
+              exit 1
+            fi
+            version=$(jq -r .version <<<"$entry")
+            filename=$(jq -r .filename <<<"$entry")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published" >&2
+              continue
+            fi
+            npm publish "./npm/$filename" --provenance --access public
+          done
+        env:
+          NODE_AUTH_TOKEN: ''
