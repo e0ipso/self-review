@@ -11,9 +11,8 @@ import { createReviewServer, listenLoopback } from './server';
 
 // Wrap every core function the routes call in a spy that passes through to
 // the real implementation. Success tests then exercise the real code; the
-// rejection tests assert the spy was never reached. `readAttachment` takes
-// no session, so a spy at the module boundary is the only seam that covers
-// all eight uniformly.
+// rejection tests assert the spy was never reached. A spy at the module
+// boundary is the one seam that covers every route uniformly.
 vi.mock('@self-review/core', async importOriginal => {
   const actual = await importOriginal<typeof import('@self-review/core')>();
   return {
@@ -37,7 +36,7 @@ vi.mock('@self-review/core', async importOriginal => {
 //     repo/
 //       src/index.ts
 //       img.png
-//       attach.bin
+//       .self-review-assets/attach.bin
 //     client/
 //       index.html
 //       assets/app.js
@@ -101,6 +100,9 @@ const CONFIG: AppConfig = {
   maxFiles: 500,
   maxTotalLines: 50_000,
 };
+
+/** The attachment fixture, as a review document references it, query-encoded. */
+const ATTACH = '.self-review-assets%2Fattach.bin';
 
 /** A file whose name is a percent-encoded traversal, kept literal on disk. */
 const LITERAL_NAME = '%2E%2E%2Fliteral.png';
@@ -209,7 +211,11 @@ beforeAll(async () => {
   fs.writeFileSync(path.join(root, 'src', 'index.ts'), 'export {};\n');
   fs.writeFileSync(path.join(root, 'img.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   fs.writeFileSync(path.join(root, LITERAL_NAME), Buffer.from([0x4c, 0x49, 0x54]));
-  fs.writeFileSync(path.join(root, 'attach.bin'), Buffer.from('attachment-bytes'));
+  fs.mkdirSync(path.join(root, '.self-review-assets'));
+  fs.writeFileSync(
+    path.join(root, '.self-review-assets', 'attach.bin'),
+    Buffer.from('attachment-bytes')
+  );
   fs.mkdirSync(path.join(tmp, 'outside'));
   fs.writeFileSync(path.join(tmp, 'outside', 'secret.txt'), 'secret\n');
   fs.mkdirSync(path.join(clientDir, 'assets'), { recursive: true });
@@ -238,6 +244,7 @@ beforeEach(() => {
   session.reviewState = null;
   session.resumeComments = [];
   session.resumeViewedFiles = [];
+  session.attachmentOrigins = new Map();
   session.resumeRemoteDrift = null;
 });
 
@@ -363,18 +370,21 @@ describe('GET /api/image', () => {
 
 describe('GET /api/attachment', () => {
   it('returns the attachment bytes', async () => {
-    const res = await apiFetch(`${base}/api/attachment?path=attach.bin`);
+    const res = await apiFetch(`${base}/api/attachment?path=${ATTACH}`);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/octet-stream');
     expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('attachment-bytes');
-    expect(vi.mocked(core.readAttachment)).toHaveBeenCalledWith(path.join(root, 'attach.bin'));
+    expect(vi.mocked(core.readAttachment)).toHaveBeenCalledWith(
+      session,
+      '.self-review-assets/attach.bin'
+    );
   });
 
   // Attachment paths are a different namespace from diff paths: review.xml
   // records `.self-review-assets/<name>` relative to the *output file's*
   // directory, which is only the repository root by coincidence. Rooting them
   // at the repository 404s every resumed image as soon as the review runs from
-  // a subdirectory or with -o elsewhere, which the desktop does not do.
+  // a subdirectory or with -o elsewhere.
   it('resolves an attachment against the output directory, not the repository', async () => {
     const outDir = path.join(root, 'out');
     fs.mkdirSync(path.join(outDir, '.self-review-assets'), { recursive: true });
@@ -394,22 +404,62 @@ describe('GET /api/attachment', () => {
     }
   });
 
-  it('still refuses a traversal out of the output directory', async () => {
-    const res = await apiFetch(`${base}/api/attachment?path=..%2F..%2Foutside%2Fsecret.txt`);
-    expect(res.status).toBe(400);
-    expect(await res.text()).not.toContain('secret');
+  // A resumed attachment lives beside the document it was resumed from,
+  // which need not be the output directory or the repository.
+  it('serves a resumed attachment from beside the resumed document', async () => {
+    const docDir = path.join(tmp, 'resumed-from');
+    fs.mkdirSync(path.join(docDir, '.self-review-assets'), { recursive: true });
+    fs.writeFileSync(path.join(docDir, '.self-review-assets', 'attach.bin'), 'RESUMED-BYTES');
+    core.recordResumedAttachments(
+      session,
+      [
+        {
+          id: 'c1',
+          filePath: 'src/index.ts',
+          lineRange: null,
+          body: 'see',
+          category: 'note',
+          suggestion: null,
+          attachments: [
+            { id: 'a', fileName: '.self-review-assets/attach.bin', mediaType: 'image/png' },
+          ],
+        },
+      ],
+      path.join(docDir, 'review.xml')
+    );
+
+    const res = await apiFetch(`${base}/api/attachment?path=${ATTACH}`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('RESUMED-BYTES');
   });
 
-  it('returns 404 for a contained path that does not exist', async () => {
-    const res = await apiFetch(`${base}/api/attachment?path=missing.bin`);
+  it('refuses a symlink in the asset directory', async () => {
+    const link = path.join(root, '.self-review-assets', 'link.png');
+    fs.symlinkSync(path.join(tmp, 'outside', 'secret.txt'), link);
+    try {
+      const res = await apiFetch(`${base}/api/attachment?path=.self-review-assets%2Flink.png`);
+      expect(res.status).toBe(404);
+      expect(await res.text()).not.toContain('secret');
+    } finally {
+      fs.unlinkSync(link);
+    }
+  });
+
+  it('returns 404 for an attachment that does not exist', async () => {
+    const res = await apiFetch(`${base}/api/attachment?path=.self-review-assets%2Fmissing.bin`);
     expect(res.status).toBe(404);
   });
 
-  it('rejects a traversal path with 400 before reaching core', async () => {
-    const res = await apiFetch(
-      `${base}/api/attachment?path=${encodeURIComponent('../outside/secret.txt')}`
-    );
+  it.each([
+    '../outside/secret.txt',
+    '..%2F..%2Foutside%2Fsecret.txt',
+    '/etc/passwd',
+    'attach.bin',
+    '.self-review-assets/../../outside/secret.txt',
+  ])('rejects %s with 400 before reaching core', async raw => {
+    const res = await apiFetch(`${base}/api/attachment?path=${encodeURIComponent(raw)}`);
     expect(res.status).toBe(400);
+    expect(await res.text()).not.toContain('secret');
     expectNoCoreCall();
   });
 });
@@ -513,6 +563,35 @@ describe('POST /api/review', () => {
     expect(session.reviewState).toEqual(state);
     // The acknowledgement is the file: ./lifecycle.test.ts has the failure half.
     expect(fs.readFileSync(outputPath, 'utf-8')).toContain('urn:self-review:v3');
+  });
+
+  it('copies a resumed attachment beside an output in another directory', async () => {
+    const outputPath = path.join(root, 'review.xml');
+    fs.rmSync(outputPath, { force: true });
+    const docDir = path.join(tmp, 'resumed-for-publish');
+    fs.mkdirSync(path.join(docDir, '.self-review-assets'), { recursive: true });
+    fs.writeFileSync(path.join(docDir, '.self-review-assets', 'r.png'), 'RESUMED-PNG');
+    const comment = {
+      id: 'c1',
+      filePath: 'src/index.ts',
+      lineRange: null,
+      body: 'see',
+      category: 'note',
+      suggestion: null,
+      attachments: [{ id: 'a', fileName: '.self-review-assets/r.png', mediaType: 'image/png' }],
+    };
+    core.recordResumedAttachments(session, [comment], path.join(docDir, 'review.xml'));
+
+    const res = await postJson('/api/review', {
+      ...state,
+      files: [{ ...state.files[0], comments: [comment] }],
+    });
+
+    expect(res.status).toBe(200);
+    const [published] = core.parseReviewXml(outputPath).comments;
+    const reference = published.attachments![0].fileName;
+    expect(reference).toMatch(/^\.self-review-assets\/c1-.+\.png$/);
+    expect(fs.readFileSync(path.join(root, reference), 'utf-8')).toBe('RESUMED-PNG');
   });
 
   it('rejects a malformed body with 400 before reaching core', async () => {
@@ -934,7 +1013,7 @@ describe('session capability', () => {
   });
 
   it('refuses GET /api/attachment without the capability', async () => {
-    const res = await fetch(`${base}/api/attachment?path=attach.bin`);
+    const res = await fetch(`${base}/api/attachment?path=${ATTACH}`);
     expect(res.status).toBe(401);
     expect(await res.text()).not.toContain('attachment-bytes');
     expectNoCoreCall();
@@ -997,7 +1076,7 @@ describe('session capability', () => {
       expect((await apiFetch(`${base}${route}`)).status, route).toBe(200);
     }
     expect((await apiFetch(`${base}/api/image?path=img.png`)).status).toBe(200);
-    expect((await apiFetch(`${base}/api/attachment?path=attach.bin`)).status).toBe(200);
+    expect((await apiFetch(`${base}/api/attachment?path=${ATTACH}`)).status).toBe(200);
     vi.mocked(core.expandContext).mockResolvedValueOnce({ hunks: [INDEX_HUNK], totalLines: 1 });
     const expanded = await postJson('/api/expand-context', {
       filePath: 'src/index.ts',
@@ -1040,7 +1119,7 @@ describe('session capability', () => {
     const page = await fetch(`${base}/`);
     const api = await apiFetch(`${base}/api/diff`);
     const refused = await fetch(`${base}/api/diff`);
-    const attachment = await apiFetch(`${base}/api/attachment?path=attach.bin`);
+    const attachment = await apiFetch(`${base}/api/attachment?path=${ATTACH}`);
     for (const res of [page, api, refused, attachment]) {
       expect(res.headers.get('referrer-policy')).toBe('no-referrer');
     }

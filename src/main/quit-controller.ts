@@ -153,6 +153,8 @@ const NEXT_STEP: Record<SaveFailureCode, string> = {
   'unsafe-link': 'Click Change... in the file tree to pick another output path, then save again.',
   'unsupported-target':
     'Click Change... in the file tree to pick another output path, then save again.',
+  'attachment-unavailable':
+    'Click Change... to save next to the resumed review, or remove that attachment, then save again.',
   'io-error': 'The review is still open. Try saving again, or click Change... to save elsewhere.',
   'no-review-state': 'The review is still open. Try saving again.',
 };

@@ -32,6 +32,8 @@ import {
   setConfigData,
   setOutputPathInfo,
   setResumeData,
+  setResumeDocument,
+  getAttachmentOrigins,
   takeSubmittedReviewState,
   isReviewOpen,
   sendDiffLoad,
@@ -193,9 +195,11 @@ function exitNow(code: number): void {
 }
 
 function publishOptions(): PublishReviewOptions {
+  // Resumed attachments are copied beside an output in another directory.
+  const attachmentOrigins = getAttachmentOrigins();
   return outputOrigin === 'explicit'
-    ? { outputOrigin: 'explicit' }
-    : { outputOrigin: 'inherited', baseDir: launchCwd };
+    ? { outputOrigin: 'explicit', attachmentOrigins }
+    : { outputOrigin: 'inherited', baseDir: launchCwd, attachmentOrigins };
 }
 
 /**
@@ -444,7 +448,12 @@ async function initializeApp() {
         resumeComments = parsed.comments;
         resumeViewedFiles = parsed.viewedFiles;
         resumeRemoteHeadSha = parsed.remoteHeadSha;
-        resumeImportDiagnostics = parsed.importDiagnostics;
+        // Attachments resolve beside the resumed document, not the launch
+        // directory or the output; references that cannot are reported.
+        resumeImportDiagnostics = [
+          ...parsed.importDiagnostics,
+          ...setResumeDocument(parsed.comments, resolve(launchCwd, cliArgs.resumeFrom)),
+        ];
         console.error(
           '[main] Loaded',
           resumeComments.length,
@@ -720,6 +729,8 @@ function registerLifecycleHandlers(): void {
     );
 
     const info: OutputPathInfo = { resolvedOutputPath: currentOutputPath, outputPathWritable };
+    // The session's output decides which asset directory attachment reads fall back to.
+    setOutputPathInfo(info);
     mainWindow.webContents.send(IPC.OUTPUT_PATH_CHANGED, info);
     return info;
   });

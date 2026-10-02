@@ -35,6 +35,8 @@ import {
   writeExclusiveNoFollow,
 } from './safe-fs';
 import type { FsLayer, SafeFsErrorCode } from './safe-fs';
+import { AttachmentRelocationError, relocateAttachments } from './attachment-origins';
+import type { AttachmentOrigins } from './attachment-origins';
 import type { ReviewState } from './types';
 
 export type ReviewPublishErrorCode =
@@ -60,6 +62,13 @@ export type ReviewPublishErrorCode =
    * directory.
    */
   | 'unsupported-target'
+  /**
+   * A resumed attachment has to be copied beside an output in another
+   * directory, and its bytes cannot be read where the resumed document put
+   * them. Publishing the old reference would point at nothing, or at an
+   * unrelated file of the same name, so nothing is written.
+   */
+  | 'attachment-unavailable'
   /** Any other filesystem failure; `cause` carries the original error. */
   | 'io-error';
 
@@ -107,6 +116,14 @@ interface PublishReviewCommonOptions {
   fs?: FsLayer;
   /** Random component of staged asset and temp file names; injectable for tests. */
   randomName?: () => string;
+  /**
+   * Where the session's resumed attachments live (`ReviewSession.attachmentOrigins`).
+   * An imported attachment whose origin is not the new output's asset
+   * directory has its bytes read from there and is staged as a new asset,
+   * so the published reference resolves; one already beside the output
+   * keeps its reference. Omitted or empty: every reference is kept as given.
+   */
+  attachmentOrigins?: AttachmentOrigins;
 }
 
 export type PublishReviewOptions = PublishReviewCommonOptions &
@@ -134,9 +151,11 @@ export interface PublishReviewResult {
  * pass it absolute. The document is written with a trailing newline, as
  * every host did before this existed, so output stays byte-identical.
  *
- * Attachments that carry `data` are written under fresh names; attachments
- * that only carry a `fileName` are referenced as they are, since their bytes
- * already live wherever the previous document put them.
+ * Attachments that carry `data` are written under fresh names. An attachment
+ * that only carries a `fileName` is referenced as it is when its bytes
+ * already sit beside the output, or when `attachmentOrigins` does not know
+ * it; an imported one whose origin is elsewhere is read from that origin
+ * and written under a fresh name, like a new one (see `attachmentOrigins`).
  *
  * @throws ReviewPublishError for every failure, document or filesystem.
  */
@@ -151,12 +170,16 @@ export async function publishReview(
   const outputDir = path.dirname(target);
   const assetDir = path.join(outputDir, ASSET_DIR_NAME);
 
-  // 1. The document, and the writes it implies. Nothing has touched the disk.
+  // 1. The document, and the writes it implies. Nothing has been written:
+  // relocation only reads the resumed attachments that must move.
   let xml: string;
   let assets: PlannedAsset[];
   try {
+    const publishable = options.attachmentOrigins
+      ? await relocateAttachments(state, options.attachmentOrigins, target)
+      : state;
     const namer = uniqueAssetNamer(assetDir, fs, randomName);
-    ({ xml, assets } = await serializeReview(state, target, { assetName: namer }));
+    ({ xml, assets } = await serializeReview(publishable, target, { assetName: namer }));
   } catch (error) {
     throw toPublishError(error, target);
   }
@@ -370,6 +393,12 @@ const SAFE_FS_TO_PUBLISH: Record<SafeFsErrorCode, ReviewPublishErrorCode> = {
 
 function toPublishError(error: unknown, target: string): ReviewPublishError {
   if (error instanceof ReviewPublishError) return error;
+  if (error instanceof AttachmentRelocationError) {
+    return new ReviewPublishError('attachment-unavailable', error.origin, error.message, {
+      details: [error.message],
+      cause: error,
+    });
+  }
   if (error instanceof XmlIllegalCharacterError) {
     return new ReviewPublishError('xml-illegal-character', target, error.message, {
       details: [error.message],

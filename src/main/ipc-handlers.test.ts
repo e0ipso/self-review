@@ -56,7 +56,12 @@ import { BrowserWindow, dialog } from 'electron';
 import { execFileSync } from 'child_process';
 import type { ReviewSourceIdentity } from '../shared/types';
 import { IPC } from '../shared/ipc-channels';
-import { registerIpcHandlers, setDiffData } from './ipc-handlers';
+import {
+  registerIpcHandlers,
+  setDiffData,
+  setOutputPathInfo,
+  setResumeDocument,
+} from './ipc-handlers';
 
 /** A remote identity rooted at `clonePath`; the sides do not matter to the apply tests. */
 function cloneIdentity(clonePath: string): ReviewSourceIdentity {
@@ -251,8 +256,9 @@ describe('ipc-handlers', () => {
       gitMock.mockResolvedValue(
         [
           'diff --git a/src/app.ts b/src/app.ts',
-          'index 0000000..1111111 100644',
-          '--- a/src/app.ts',
+          'new file mode 100644',
+          'index 0000000..1111111',
+          '--- /dev/null',
           '+++ b/src/app.ts',
           '@@ -0,0 +1,1 @@',
           '+ hello',
@@ -268,14 +274,23 @@ describe('ipc-handlers', () => {
           repository: '/tmp/self-review-clone',
         },
       };
-      setDiffData(payload, null);
+      // The command comes from the session's source identity: its argv and
+      // its root (the materialized clone), not the process cwd.
+      setDiffData(payload, {
+        mode: 'remote',
+        sourceRoot: '/tmp/self-review-clone',
+        invocationCwd: '/home/user/elsewhere',
+        gitDiffArgv: ['aaa111...bbb222'],
+        oldSide: { kind: 'commit', sha: 'a'.repeat(40) },
+        newSide: { kind: 'commit', sha: 'b'.repeat(40) },
+      });
 
       const handler = handlers[IPC.DIFF_EXPAND_CONTEXT];
       expect(handler).toBeDefined();
       const result = await handler({}, { filePath: 'src/app.ts', contextLines: 10 });
 
       expect(gitMock).toHaveBeenCalledWith(
-        ['aaa111...bbb222', '-U10', '--', 'src/app.ts'],
+        ['aaa111...bbb222', '-U10', '--', ':(top,literal)src/app.ts'],
         '/tmp/self-review-clone'
       );
       expect(result).toMatchObject({ hunks: expect.any(Array) });
@@ -520,6 +535,52 @@ describe('ipc-handlers', () => {
       await choose({ sender: {} });
 
       expect(calls[1][0]).toMatchObject(directoryPicker);
+    });
+  });
+
+  describe('ATTACHMENT_READ handler', () => {
+    it('reads a resumed attachment from beside its document and refuses anything else', async () => {
+      const fsMod = await import('fs');
+      const osMod = await import('os');
+      const pathMod = await import('path');
+      const tmp = fsMod.realpathSync(
+        fsMod.mkdtempSync(pathMod.join(osMod.tmpdir(), 'ipc-attachment-'))
+      );
+      try {
+        const docDir = pathMod.join(tmp, 'saved-reviews');
+        fsMod.mkdirSync(pathMod.join(docDir, '.self-review-assets'), { recursive: true });
+        fsMod.writeFileSync(pathMod.join(docDir, '.self-review-assets', 'a.png'), 'PNG-A');
+        setOutputPathInfo({
+          resolvedOutputPath: pathMod.join(tmp, 'elsewhere', 'review.xml'),
+          outputPathWritable: true,
+        });
+        const diagnostics = setResumeDocument(
+          [
+            {
+              id: 'c1',
+              filePath: 'a.ts',
+              lineRange: null,
+              body: 'see',
+              category: 'note',
+              suggestion: null,
+              attachments: [
+                { id: 'x', fileName: '.self-review-assets/a.png', mediaType: 'image/png' },
+                { id: 'y', fileName: '/etc/passwd', mediaType: 'image/png' },
+              ],
+            },
+          ],
+          pathMod.join(docDir, 'review.xml')
+        );
+        expect(diagnostics).toHaveLength(1);
+
+        const read = handlers[IPC.ATTACHMENT_READ];
+        const bytes = (await read({}, '.self-review-assets/a.png')) as ArrayBuffer;
+        expect(Buffer.from(bytes).toString()).toBe('PNG-A');
+        expect(await read({}, '/etc/passwd')).toBeNull();
+        expect(await read({}, '../../etc/passwd')).toBeNull();
+      } finally {
+        fsMod.rmSync(tmp, { recursive: true, force: true });
+      }
     });
   });
 });

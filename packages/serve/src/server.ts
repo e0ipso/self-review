@@ -27,8 +27,8 @@ import {
   getResumeLoad,
   getFileHunks,
   loadImage,
+  parseAttachmentReference,
   readAttachment,
-  resolveSourceBaseDir,
   expandContext,
   submitReviewState,
   applySuggestionForSession,
@@ -382,22 +382,20 @@ const routes: Record<string, RouteHandler> = {
   },
 
   'GET /api/attachment': async ctx => {
-    // A different namespace from diff paths, and a different root: review.xml
-    // records these relative to the output file's directory. Rooting them at
-    // the repository 404s every resumed image when -o points elsewhere.
-    const assetRoot = ctx.session.outputPathInfo
-      ? path.dirname(ctx.session.outputPathInfo.resolvedOutputPath)
-      : resolveSourceBaseDir(ctx.session);
+    // A different namespace from diff paths: the reference a review document
+    // wrote, `.self-review-assets/<name>`, which core resolves beside the
+    // resumed document it came from (or the output, for one it did not
+    // import). The shape is checked here so nothing else reaches core.
     const raw = ctx.url.searchParams.get('path');
-    const resolved = raw && assetRoot ? containPath(assetRoot, raw) : null;
-    if (resolved === null) {
-      sendError(ctx.res, 400, 'path must be a file under the output directory');
+    if (raw === null || parseAttachmentReference(raw) === null) {
+      sendError(ctx.res, 400, 'path must name a file in the .self-review-assets directory');
       return;
     }
-    // Core reads this path from disk directly, so it gets the contained real path.
-    const data = await readAttachment(resolved);
-    if (data === null) {
-      sendError(ctx.res, 404, 'attachment not found');
+    const result = await readAttachment(ctx.session, raw);
+    if (!result.ok) {
+      const status =
+        result.reason === 'not-authorized' ? 400 : result.reason === 'too-large' ? 413 : 404;
+      sendError(ctx.res, status, status === 404 ? 'attachment not found' : result.message);
       return;
     }
     const { res } = ctx;
@@ -406,7 +404,7 @@ const routes: Record<string, RouteHandler> = {
       'cache-control': 'no-store',
       ...SECURITY_HEADERS,
     });
-    res.end(Buffer.from(data));
+    res.end(Buffer.from(result.data));
   },
 
   'POST /api/expand-context': async ctx => {
@@ -463,7 +461,7 @@ const routes: Record<string, RouteHandler> = {
       return;
     }
     submitReviewState(session, parsed.value);
-    const outcome = await publishSubmittedReview(parsed.value, output);
+    const outcome = await publishSubmittedReview(parsed.value, output, session);
     if (outcome.ok) {
       sendJson(res, 200, outcome);
     } else {
@@ -478,12 +476,15 @@ const routes: Record<string, RouteHandler> = {
  */
 async function publishSubmittedReview(
   state: ReviewState,
-  output: ReviewOutputTarget
+  output: ReviewOutputTarget,
+  session: ReviewSession
 ): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
+  // Resumed attachments are copied beside an output in another directory.
+  const { attachmentOrigins } = session;
   const options: PublishReviewOptions =
     output.origin === 'explicit'
-      ? { outputOrigin: 'explicit' }
-      : { outputOrigin: 'inherited', baseDir: output.baseDir };
+      ? { outputOrigin: 'explicit', attachmentOrigins }
+      : { outputOrigin: 'inherited', baseDir: output.baseDir, attachmentOrigins };
   try {
     const { outputPath } = await publishReview(state, output.path, options);
     console.error(`[serve] Review written to ${outputPath}`);

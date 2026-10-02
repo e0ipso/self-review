@@ -28,13 +28,20 @@ import {
   ApplyDestinationOutcome,
 } from './types';
 import { scanDirectory, scanFile } from './directory-scanner';
-import { tokenizeGitDiffArgs } from './git-diff-args';
+import { singleFileRediffArgs, type DiffPathRelativity } from './git-diff-args';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { applySuggestion } from './apply-suggestion';
 import { MAX_GIT_DIFF_OUTPUT_BYTES, MAX_IMAGE_BYTES } from './input-budgets';
 import { isPreviewableImage } from './file-type-utils';
 import { readReviewedContent } from './snapshot-reader';
-import { resolveLocalSourceIdentity } from './source-identity';
+import { canonicalSourcePath, resolveLocalSourceIdentity } from './source-identity';
+import {
+  authorizeAttachmentReference,
+  readAssetFile,
+  resolveAttachmentOrigins,
+} from './attachment-origins';
+import type { AttachmentOrigins, AttachmentReadResult } from './attachment-origins';
+import { ASSET_DIR_NAME } from './xml-serializer';
 
 /**
  * The state a single review session owns. One desktop application window is
@@ -76,6 +83,16 @@ export interface ReviewSession {
    * refuses.
    */
   sourceIdentity: ReviewSourceIdentity | null;
+  /**
+   * Where each resumed attachment's bytes live: the reference the resumed
+   * document wrote, mapped to an absolute path beside *that document*.
+   * Recorded once by {@link recordResumedAttachments}; empty when nothing
+   * was resumed. It authorizes attachment reads and tells the publisher
+   * which bytes to carry when the review is saved somewhere else
+   * (`PublishReviewOptions.attachmentOrigins`). Never sent to the front end,
+   * which keeps the relative reference.
+   */
+  attachmentOrigins: AttachmentOrigins;
 }
 
 /** Create an empty session. */
@@ -93,6 +110,7 @@ export function createReviewSession(): ReviewSession {
     applyDestinationRoot: null,
     reviewedPaths: emptyReviewedPaths(),
     sourceIdentity: null,
+    attachmentOrigins: new Map(),
   };
 }
 
@@ -259,13 +277,26 @@ export async function loadImage(
 }
 
 /**
- * The number of lines of `filePath` on the side of the review that has it
- * (the new side, or the old side of a deletion), read from the reviewed
- * snapshot. Zero when it cannot be read; the caller treats that as unknown.
+ * The number of lines of `file` on the side of the review that has it (the
+ * new side, or the old side of a deletion), read from the reviewed
+ * snapshot. `prefix` is what the review's paths are relative to under the
+ * source root (`--relative`); empty for root-relative paths. Zero when it
+ * cannot be read; the caller treats that as unknown.
  */
-async function countReviewedLines(session: ReviewSession, filePath: string): Promise<number> {
-  const located = locateReviewedFile(session, filePath);
-  const result = await readReviewedContent(session, filePath, located?.side ?? 'new', {
+async function countReviewedLines(
+  session: ReviewSession,
+  file: DiffFile,
+  prefix: string
+): Promise<number> {
+  const side = file.newPath ? 'new' : 'old';
+  const filePath = side === 'new' ? file.newPath : file.oldPath;
+  if (!session.reviewedPaths.has(filePath)) return 0;
+  // The reader resolves paths against the source root, so a reviewed path
+  // relative to a subdirectory is restated from the root. It is the same
+  // file under its root-relative name, authorized by the check above.
+  const rootPath = rootRelativePath(prefix, filePath);
+  const snapshot = { sourceIdentity: session.sourceIdentity, reviewedPaths: new Set([rootPath]) };
+  const result = await readReviewedContent(snapshot, rootPath, side, {
     maxBytes: MAX_GIT_DIFF_OUTPUT_BYTES,
   });
   if (!result.ok) {
@@ -508,17 +539,59 @@ export function applySuggestionForSession(
 }
 
 /**
- * Read an attachment file from disk, as an ArrayBuffer the front end can use.
- * Returns null when the file cannot be read.
+ * Record where the attachments of a resumed review live: beside the resumed
+ * document (`resumeDocumentPath`), wherever the app was launched from and
+ * wherever the review will be saved. Replaces any origins recorded before.
+ *
+ * Returns one diagnostic line per attachment reference that is not
+ * `.self-review-assets/<name>` and will therefore never be read; the host
+ * adds them to the resume import diagnostics.
  */
-export async function readAttachment(filePath: string) {
-  try {
-    const buffer = await fs.promises.readFile(filePath);
-    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-  } catch {
-    console.error(`[attachment:read] Failed to read file: ${filePath}`);
-    return null;
+export function recordResumedAttachments(
+  session: ReviewSession,
+  comments: readonly ReviewComment[],
+  resumeDocumentPath: string
+): string[] {
+  const { origins, diagnostics } = resolveAttachmentOrigins(comments, resumeDocumentPath);
+  session.attachmentOrigins = origins;
+  return diagnostics;
+}
+
+/**
+ * Read one attachment the front end displays, by the reference the review
+ * names it with (`.self-review-assets/<name>`), never by a path.
+ *
+ * The reference is authorized against the session: an imported one reads
+ * from its recorded origin beside the resumed document; any other reads from
+ * the current output's asset directory. Anything else — an absolute path,
+ * traversal, a nested directory — is `not-authorized` and touches nothing.
+ * The asset directory must be a real directory, the file is opened without
+ * following links, and only a regular file within `MAX_IMAGE_BYTES` is read.
+ */
+export async function readAttachment(
+  session: ReviewSession,
+  reference: unknown
+): Promise<AttachmentReadResult> {
+  const outputPath = session.outputPathInfo?.resolvedOutputPath;
+  const currentAssetDir = outputPath ? path.join(path.dirname(outputPath), ASSET_DIR_NAME) : null;
+  const assetPath = authorizeAttachmentReference(
+    reference,
+    session.attachmentOrigins,
+    currentAssetDir
+  );
+  if (assetPath === null) {
+    console.error(`[attachment:read] Refused: ${JSON.stringify(reference)}`);
+    return {
+      ok: false,
+      reason: 'not-authorized',
+      message: `Attachments are read only from the review's ${ASSET_DIR_NAME} directory`,
+    };
   }
+  const result = await readAssetFile(assetPath);
+  if (!result.ok) {
+    console.error(`[attachment:read] ${result.reason}: ${result.message}`);
+  }
+  return result;
 }
 
 /**
@@ -549,17 +622,77 @@ export function getResumeLoad(session: ReviewSession): ResumeLoadPayload | null 
 }
 
 /**
- * Expand the context of a single file by re-running git diff with more context
- * lines. The expanded hunks are written back to the session's diff data so a
- * later file load on the same session sees them. Returns null when the session
- * has no git diff, when nothing parses, or when git fails.
+ * What the reviewed paths are relative to, as a directory under the source
+ * root with no leading slash: empty for root-relative paths, the
+ * `--relative=<dir>` directory as given, or, for a bare `--relative`, the
+ * directory the review was launched from. Null when that directory is not
+ * inside the source root, so the paths cannot be restated.
+ */
+function resolveRelativePrefix(
+  identity: ReviewSourceIdentity,
+  relative: DiffPathRelativity
+): string | null {
+  switch (relative.kind) {
+    case 'root':
+      return '';
+    case 'directory':
+      return relative.directory;
+    case 'cwd': {
+      const fromRoot = path.relative(
+        identity.sourceRoot,
+        canonicalSourcePath(identity.invocationCwd)
+      );
+      if (fromRoot.startsWith('..') || path.isAbsolute(fromRoot)) return null;
+      return fromRoot.split(path.sep).join('/');
+    }
+  }
+}
+
+/** `filePath`, relative to `prefix` (see {@link resolveRelativePrefix}), from the root. */
+function rootRelativePath(prefix: string, filePath: string): string {
+  if (prefix === '') return filePath;
+  return prefix.endsWith('/') ? `${prefix}${filePath}` : `${prefix}/${filePath}`;
+}
+
+/**
+ * Expand the context of a single file by re-running the review's own git
+ * diff over that file with more context lines.
+ *
+ * The comparison is the one the review loaded: the session's structured
+ * argv, with only its context options (and file-order options, which a
+ * single file has no use for) taken out by {@link singleFileRediffArgs} —
+ * so a revision after a bare `-U` stays a revision. Git runs at the source
+ * root; a `--relative` review is restated as `--relative=<dir>` from there,
+ * and the file's paths are passed as root-relative literal pathspecs, both
+ * of a rename or copy so git pairs them again. The entry returned is the
+ * one whose old and new paths are the requested file's, not whichever git
+ * printed first.
+ *
+ * The expanded hunks are written back to the session's diff data so a
+ * later file load on the same session sees them. Returns null when the
+ * session has no git diff, when the diff has no such tracked file, when
+ * git's output does not contain it, or when git fails.
  */
 export async function expandContext(
   session: ReviewSession,
   request: ExpandContextRequest
 ): Promise<{ hunks: DiffHunk[]; totalLines: number } | null> {
   const diffData = session.diffData;
-  if (!diffData || diffData.source.type !== 'git') {
+  const identity = session.sourceIdentity;
+  if (!diffData || diffData.source.type !== 'git' || identity === null) {
+    return null;
+  }
+  if (identity.mode !== 'git' && identity.mode !== 'remote') {
+    return null;
+  }
+  if (!Number.isSafeInteger(request.contextLines) || request.contextLines < 0) {
+    return null;
+  }
+  // Untracked files are synthetic additions git never compared.
+  const target = diffData.files.find(
+    f => !f.isUntracked && (f.newPath || f.oldPath) === request.filePath
+  );
+  if (!target) {
     return null;
   }
 
@@ -567,59 +700,43 @@ export async function expandContext(
     const { runGitDiffAsync } = await import('./git');
     const { parseDiff } = await import('./diff-parser');
 
-    const source = diffData.source;
-    // Shell-style tokenizing, the inverse of how the source string was
-    // written: a search string or path with a space comes back as one
-    // argument instead of several.
-    const originalArgs = tokenizeGitDiffArgs(source.gitDiffArgs);
-
-    // Strip -U/--unified flags. Stop at `--` — paths after it were the
-    // original path restriction; the specific file is supplied below.
-    const filteredArgs: string[] = [];
-    for (let i = 0; i < originalArgs.length; i++) {
-      const arg = originalArgs[i];
-      if (arg.match(/^-U\d+$/) || arg.match(/^--unified=\d+$/)) {
-        continue;
-      }
-      if (arg === '-U' || arg === '--unified') {
-        i++; // skip next arg (the number)
-        continue;
-      }
-      if (arg === '--') {
-        break;
-      }
-      filteredArgs.push(arg);
-    }
-
-    const expandArgs = [...filteredArgs, `-U${request.contextLines}`, '--', request.filePath];
-
-    // Run in the diff's repository root — in remote mode this is the
-    // materialized clone, not the process cwd.
-    const rawDiff = await runGitDiffAsync(expandArgs, source.repository);
-    const parsedFiles = parseDiff(rawDiff);
-
-    if (parsedFiles.length === 0) {
+    const rediff = singleFileRediffArgs(identity.gitDiffArgv);
+    const prefix = resolveRelativePrefix(identity, rediff.relative);
+    if (prefix === null) {
+      console.error(
+        `[review] Cannot expand ${request.filePath}: the review was launched outside its repository`
+      );
       return null;
     }
+    const paths = [...new Set([target.oldPath, target.newPath].filter(p => p !== ''))];
+    const expandArgs = [
+      ...rediff.args,
+      ...(prefix === '' ? [] : [`--relative=${prefix}`]),
+      `-U${request.contextLines}`,
+      '--',
+      ...paths.map(p => `:(top,literal)${rootRelativePath(prefix, p)}`),
+    ];
 
-    const expandedFile = parsedFiles[0];
+    // The source root: the repository, or in remote mode the materialized
+    // clone, never the process cwd.
+    const rawDiff = await runGitDiffAsync(expandArgs, identity.sourceRoot);
+    const expandedFile = parseDiff(rawDiff).find(
+      f => f.oldPath === target.oldPath && f.newPath === target.newPath
+    );
+    if (!expandedFile) {
+      console.error(`[review] Expanded diff for ${request.filePath} did not contain the file`);
+      return null;
+    }
 
     // The file's length on the reviewed side, for gap detection: the index
     // for a staged review, the PR head for a remote one — never the working
     // tree a temporary clone left on its default branch. Zero when it cannot
     // be read, which keeps the bars visible.
-    const totalLines = await countReviewedLines(session, request.filePath);
+    const totalLines = await countReviewedLines(session, target, prefix);
 
-    // Update the session's diff data
     session.diffData = {
       ...diffData,
-      files: diffData.files.map(f => {
-        const fPath = f.newPath || f.oldPath;
-        if (fPath === request.filePath) {
-          return { ...f, hunks: expandedFile.hunks };
-        }
-        return f;
-      }),
+      files: diffData.files.map(f => (f === target ? { ...f, hunks: expandedFile.hunks } : f)),
     };
 
     return { hunks: expandedFile.hunks, totalLines };

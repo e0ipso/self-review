@@ -67,6 +67,22 @@ export type {
   PublishReviewResult,
 } from './review-publisher';
 
+// Attachment provenance: where resumed attachment bytes live, which
+// references may be read, and how they follow a relocated output
+export {
+  parseAttachmentReference,
+  resolveAttachmentOrigins,
+  authorizeAttachmentReference,
+  readAssetFile,
+  relocateAttachments,
+  AttachmentRelocationError,
+} from './attachment-origins';
+export type {
+  AttachmentOrigins,
+  AttachmentReadResult,
+  AttachmentReadFailureReason,
+} from './attachment-origins';
+
 // No-follow filesystem primitives shared by every core writer
 export {
   SafeFsError,
@@ -244,6 +260,7 @@ export {
   submitReviewState,
   takeReviewState,
   readAttachment,
+  recordResumedAttachments,
   getResumeLoad,
   expandContext,
   prepareDirectoryReview,

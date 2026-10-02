@@ -68,6 +68,13 @@ function makeFile(path: string): DiffFile {
   };
 }
 
+/** A git payload whose one file is a modification, as git reports it. */
+function makeModifiedGitPayload(filePath: string): DiffLoadPayload {
+  const payload = makeGitPayload(filePath);
+  payload.files[0] = { ...payload.files[0], oldPath: filePath, changeType: 'modified' };
+  return payload;
+}
+
 function makeGitPayload(filePath = 'src/app.ts'): DiffLoadPayload {
   return {
     files: [makeFile(filePath)],
@@ -195,7 +202,10 @@ describe('review-handlers', () => {
 
       const sessionA = createReviewSession();
       const sessionB = createReviewSession();
-      sessionA.diffData = makeGitPayload();
+      commitDiffData(sessionA, makeModifiedGitPayload('src/app.ts'), {
+        ...makeIdentity('git', '/repo'),
+        gitDiffArgv: ['main..feature'],
+      });
       sessionB.diffData = makeGitPayload();
 
       const originalHunks = getFileHunks(sessionB, 'src/app.ts');
@@ -207,7 +217,7 @@ describe('review-handlers', () => {
       });
 
       expect(runGitDiffAsync).toHaveBeenCalledWith(
-        ['main..feature', '-U10', '--', 'src/app.ts'],
+        ['main..feature', '-U10', '--', ':(top,literal)src/app.ts'],
         '/repo'
       );
       expect(result?.hunks[0].header).toBe('@@ -1,3 +1,3 @@');
@@ -219,26 +229,24 @@ describe('review-handlers', () => {
       expect(getFileHunks(sessionB, 'src/app.ts')).toEqual([makeHunk()]);
     });
 
-    it('keeps a quoted search string and path as single arguments', async () => {
+    it('re-runs the session argv with its argument boundaries intact', async () => {
       vi.mocked(runGitDiffAsync).mockResolvedValue(EXPANDED_DIFF);
 
       const session = createReviewSession();
-      session.diffData = makeGitPayload();
-      session.diffData.source = {
-        type: 'git',
-        gitDiffArgs: `-S 'foo bar' main..feature -- 'src/my dir'`,
-        repository: '/repo',
-      };
+      commitDiffData(session, makeModifiedGitPayload('src/my dir/app.ts'), {
+        ...makeIdentity('git', '/repo'),
+        gitDiffArgv: ['-S', 'foo bar', 'main..feature', '--', 'src/my dir'],
+      });
 
       await expandContext(session, {
         filePath: 'src/my dir/app.ts',
         contextLines: 10,
       });
 
-      // A whitespace split would have handed git ["-S", "'foo", "bar'"] and
-      // an argument that is not a revision.
+      // The search string stays one argument and the original pathspec is
+      // replaced by the file's own, as a literal pathspec from the root.
       expect(runGitDiffAsync).toHaveBeenCalledWith(
-        ['-S', 'foo bar', 'main..feature', '-U10', '--', 'src/my dir/app.ts'],
+        ['-S', 'foo bar', 'main..feature', '-U10', '--', ':(top,literal)src/my dir/app.ts'],
         '/repo'
       );
     });

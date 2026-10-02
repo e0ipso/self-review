@@ -24,6 +24,7 @@ import {
   loadGuide,
   normalizeGitDiffArgs,
   parseReviewXml,
+  recordResumedAttachments,
   resolveLocalSourceIdentity,
   scanDirectory,
   scanFile,
@@ -200,12 +201,17 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
     }
     session.resumeComments = parsed.comments;
     session.resumeViewedFiles = parsed.viewedFiles;
-    session.resumeImportDiagnostics = parsed.importDiagnostics;
+    // Attachments resolve beside the resumed document, not the cwd or the
+    // output; references that cannot are reported with the other diagnostics.
+    session.resumeImportDiagnostics = [
+      ...parsed.importDiagnostics,
+      ...recordResumedAttachments(session, parsed.comments, resumePath),
+    ];
     console.error(
       `[serve] Resumed ${parsed.comments.length} comments and ` +
         `${parsed.viewedFiles.length} viewed files from ${resumePath}`
     );
-    for (const diagnostic of parsed.importDiagnostics) {
+    for (const diagnostic of session.resumeImportDiagnostics) {
       console.error(`[serve] Resume import: ${diagnostic}`);
     }
   }

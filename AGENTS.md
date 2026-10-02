@@ -511,39 +511,47 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   came from: `inherited` (project config or the default, which a repository can commit) must also
   resolve physically inside its `baseDir`, while `explicit` (a CLI flag or the save dialog) may
   point anywhere. `serializeReview` is pure (`state → { xml, assets }`) and never touches the disk.
-  In remote mode, when no matching local clone exists, it additionally creates a temporary blobless
-  clone in a uniquely named directory under the OS temp root, removed on exit (a leftover from a
-  crash sits in the OS temp area, which the OS reclaims); when reusing an existing clone, it only
-  fetches into namespaced refs (`refs/self-review/*`) — the working tree is never touched. No other
-  files are written by the app itself. There is now one sanctioned exception, the suggestion-apply
-  path whose boundaries PRD Section 5.4.8 records: `applySuggestion` in
-  `packages/core/src/apply-suggestion.ts` rewrites one reviewed working file when the caller names
-  an explicit destination root and the anchored lines still match the suggestion's recorded original
-  code byte for byte. It refuses and writes nothing otherwise, and it never consults the current
-  working directory. The app reaches it through the `suggestion:apply` channel, and only when the
-  reviewer presses Apply on one suggestion. `applySuggestionForSession` in
-  `packages/core/src/review-handlers.ts` names the destination, which is the git repository root,
-  the reviewed directory, or the reviewed file's parent, and refuses when the session has none. A
-  remote review materialized into a temporary clone is the one session with no destination of its
-  own: the clone is deleted on exit, so applies are refused with `destination-required` until the
-  reviewer names a directory through `suggestion:choose-destination`, and `setApplyDestination`
-  rejects any directory inside the clone. The context match is a staleness check, not permission:
-  the handler also refuses any path not in `session.reviewedPaths` (`not-reviewed`), a frozen set
-  captured by `commitDiffData` from the committed diff's old and new paths — every front end commits
-  its diff through it (`commitReviewStart`, Electron's `setDiffData`, serve startup), and resumed
-  comments, submitted state and the renderer's placeholder entries never reach it. The engine
-  refuses on its own any path with a `.git` segment (`control-file`; `.gitmodules` and
-  `.gitattributes` are reviewed content, gated by membership), validates the anchor with
-  `validateLineRange` before any I/O (`invalid-anchor`), deletes the anchored lines on an empty
-  proposal, resolves the destination with `realpath`, walks every ancestor with `lstat` and opens
-  the target `O_NOFOLLOW`, accepting only a regular file with one hard link (`unsafe-target`), and
-  writes through `atomicReplace` with the original's mode and owner, refusing (`file-changed`) if
-  the inode or its size/mtime moved between the read and the rename. A failure anywhere removes the
-  temp file and leaves the target byte for byte; `refused` is never reported after a mutation. The
-  React `SuggestionApplyControl` shows no Apply button for a path outside
-  `ReviewContext.reviewedPaths` (captured from payload files, never synthetic entries). Outside that
-  one function, code that writes anywhere except the output path and its `.self-review-assets/`
-  directory is out of policy.
+  Resumed attachments follow their document (`packages/core/src/attachment-origins.ts`): at resume,
+  each `.self-review-assets/<name>` reference is recorded in `ReviewSession.attachmentOrigins`
+  against the resumed document's directory (other reference shapes are never read and produce an
+  import diagnostic). `readAttachment(session, reference)` reads only those origins or the current
+  output's asset directory, through a real (non-symlink) asset directory, a no-follow open, regular
+  files only and `MAX_IMAGE_BYTES`. Publishing with the `attachmentOrigins` option copies an
+  imported attachment's bytes beside an output in another directory as a new asset; a save beside
+  the origin keeps its reference, and an origin that cannot be read refuses the save
+  (`attachment-unavailable`) rather than publish a reference to the wrong bytes. In remote mode,
+  when no matching local clone exists, it additionally creates a temporary blobless clone in a
+  uniquely named directory under the OS temp root, removed on exit (a leftover from a crash sits in
+  the OS temp area, which the OS reclaims); when reusing an existing clone, it only fetches into
+  namespaced refs (`refs/self-review/*`) — the working tree is never touched. No other files are
+  written by the app itself. There is now one sanctioned exception, the suggestion-apply path whose
+  boundaries PRD Section 5.4.8 records: `applySuggestion` in `packages/core/src/apply-suggestion.ts`
+  rewrites one reviewed working file when the caller names an explicit destination root and the
+  anchored lines still match the suggestion's recorded original code byte for byte. It refuses and
+  writes nothing otherwise, and it never consults the current working directory. The app reaches it
+  through the `suggestion:apply` channel, and only when the reviewer presses Apply on one
+  suggestion. `applySuggestionForSession` in `packages/core/src/review-handlers.ts` names the
+  destination, which is the git repository root, the reviewed directory, or the reviewed file's
+  parent, and refuses when the session has none. A remote review materialized into a temporary clone
+  is the one session with no destination of its own: the clone is deleted on exit, so applies are
+  refused with `destination-required` until the reviewer names a directory through
+  `suggestion:choose-destination`, and `setApplyDestination` rejects any directory inside the clone.
+  The context match is a staleness check, not permission: the handler also refuses any path not in
+  `session.reviewedPaths` (`not-reviewed`), a frozen set captured by `commitDiffData` from the
+  committed diff's old and new paths — every front end commits its diff through it
+  (`commitReviewStart`, Electron's `setDiffData`, serve startup), and resumed comments, submitted
+  state and the renderer's placeholder entries never reach it. The engine refuses on its own any
+  path with a `.git` segment (`control-file`; `.gitmodules` and `.gitattributes` are reviewed
+  content, gated by membership), validates the anchor with `validateLineRange` before any I/O
+  (`invalid-anchor`), deletes the anchored lines on an empty proposal, resolves the destination with
+  `realpath`, walks every ancestor with `lstat` and opens the target `O_NOFOLLOW`, accepting only a
+  regular file with one hard link (`unsafe-target`), and writes through `atomicReplace` with the
+  original's mode and owner, refusing (`file-changed`) if the inode or its size/mtime moved between
+  the read and the rename. A failure anywhere removes the temp file and leaves the target byte for
+  byte; `refused` is never reported after a mutation. The React `SuggestionApplyControl` shows no
+  Apply button for a path outside `ReviewContext.reviewedPaths` (captured from payload files, never
+  synthetic entries). Outside that one function, code that writes anywhere except the output path
+  and its `.self-review-assets/` directory is out of policy.
 - **XSD sync.** Each XSD schema exists in two places and both copies must be byte-identical:
   `.agents/skills/self-review-apply/assets/self-review-v3.xsd` pairs with the `XSD_SCHEMA` string
   embedded in `packages/core/src/xml-serializer.ts`, and

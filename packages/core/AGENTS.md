@@ -31,6 +31,7 @@ src/
 ├── git.ts                # child_process wrappers for git
 ├── xml-serializer.ts     # ReviewState → { xml, assets } (pure; validates against XSD; refuses XML-illegal chars)
 ├── review-publisher.ts   # publishReview: validate → stage assets (unique, exclusive, no-follow) → atomic rename
+├── attachment-origins.ts # Attachment provenance: resumed references resolve beside the resumed document; authorized, no-follow, bounded reads; relocation bytes for the publisher
 ├── safe-fs.ts            # No-follow primitives: writeExclusiveNoFollow, atomicReplace (mode/owner/identity-preserving), assertNoSymlinkAncestors, FsLayer
 ├── apply-suggestion.ts   # applySuggestion: anchor validated pre-I/O, .git refused, realpath root + lstat ancestors + O_NOFOLLOW, atomicReplace
 ├── source-identity.ts    # ReviewSourceIdentity resolution: which two snapshots a git diff argv compares (SHAs pinned at load), directory/file roots

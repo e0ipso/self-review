@@ -384,10 +384,10 @@ The graph is acyclic. Task 24 depends on every other task; only its edges from l
 **Parallel Tasks:**
 - ✔️ Task 18: Source identity and snapshot reads (R13, A6) (depends on: 04, 11, 13, 17)
 
-### Phase 7: Expansion and attachments
+### ✅ Phase 7: Expansion and attachments
 **Parallel Tasks:**
-- Task 19: Context expansion fidelity (R07) (depends on: 18)
-- Task 20: Attachment provenance and relocation (R11 core) (depends on: 10, 13, 18)
+- ✔️ Task 19: Context expansion fidelity (R07) (depends on: 18)
+- ✔️ Task 20: Attachment provenance and relocation (R11 core) (depends on: 10, 13, 18)
 
 ### Phase 8: Startup reuse and configuration provenance
 **Parallel Tasks:**

@@ -31,6 +31,11 @@ const OPTIONS_WITH_SEPARATE_VALUES = new Set([
   '--color-moved-ws',
 ]);
 
+// Short options that take a value: required (attached, or else the next
+// argument) and optional (attached only; `-U 5` is `-U` and then `5`).
+const SHORT_OPTIONS_WITH_REQUIRED_VALUES = 'SGOIl';
+const SHORT_OPTIONS_WITH_OPTIONAL_VALUES = 'UBMC';
+
 /**
  * True when `arg` is an option whose value is the *next* argument, so that
  * argument is neither a flag nor a positional.
@@ -41,10 +46,118 @@ export function consumesNextArgument(arg: string): boolean {
   // Git accepts short-option groups, such as -pS pattern. Once an option
   // takes a value, the rest of that token is its attached value, if present.
   for (let i = 1; i < arg.length; i++) {
-    if ('SGOIl'.includes(arg[i])) return i === arg.length - 1;
-    if ('UBMC'.includes(arg[i])) return false; // optional, attached values
+    if (SHORT_OPTIONS_WITH_REQUIRED_VALUES.includes(arg[i])) return i === arg.length - 1;
+    if (SHORT_OPTIONS_WITH_OPTIONAL_VALUES.includes(arg[i])) return false;
   }
   return false;
+}
+
+/** What the paths in `git diff` output are relative to. */
+export type DiffPathRelativity =
+  /** The repository root: no `--relative` in effect. */
+  | { kind: 'root' }
+  /** Bare `--relative`: the directory git runs in. */
+  | { kind: 'cwd' }
+  /** `--relative=<dir>`: `directory`, which git reads from the repository root. */
+  | { kind: 'directory'; directory: string };
+
+export interface SingleFileRediff {
+  /** The options and revisions to re-run, in order; no `--` and no pathspec. */
+  args: string[];
+  /** What the original output paths were relative to; its option is not in `args`. */
+  relative: DiffPathRelativity;
+}
+
+// Long options that decide only how much context surrounds a change.
+const CONTEXT_OPTIONS = new Set(['--unified', '--function-context', '--no-function-context']);
+// Long options that only order the files of a multi-file diff. `--rotate-to`
+// and `--skip-to` make git fail when their file is not in the diff.
+const FILE_ORDER_OPTIONS = new Set(['--rotate-to', '--skip-to']);
+
+function isDroppedLongOption(arg: string): boolean {
+  const name = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg;
+  return CONTEXT_OPTIONS.has(name) || FILE_ORDER_OPTIONS.has(name);
+}
+
+/**
+ * A short-option group without its context (`-U`, `-W`) and file-order
+ * (`-O`) options, or null when nothing of it remains. `-U` and `-O` end
+ * the group: what follows them in the token is their value.
+ */
+function withoutDroppedShortOptions(arg: string): string | null {
+  let kept = '';
+  for (let i = 1; i < arg.length; i++) {
+    const option = arg[i];
+    if (option === 'U' || option === 'O') break;
+    if (option === 'W') continue;
+    if (
+      SHORT_OPTIONS_WITH_REQUIRED_VALUES.includes(option) ||
+      SHORT_OPTIONS_WITH_OPTIONAL_VALUES.includes(option)
+    ) {
+      kept += arg.slice(i);
+      break;
+    }
+    kept += option;
+  }
+  return kept === '' ? null : `-${kept}`;
+}
+
+/**
+ * The arguments for re-running a review's `git diff` over a single file
+ * with a different amount of context, read with the same arity rules as
+ * {@link consumesNextArgument}:
+ *
+ * - context options are removed — `-U`, `-U<n>`, `--unified`,
+ *   `--unified=<n>`, `-W`, `--function-context` — and a bare `-U` or
+ *   `--unified` never takes the argument after it, so `-U HEAD` keeps
+ *   `HEAD` as the revision it is;
+ * - file-order options (`-O`, `--rotate-to`, `--skip-to`) are removed: one
+ *   file has no order, and the last two fail when their file is absent;
+ * - `--relative[=<dir>]` and `--no-relative` are removed and resolved into
+ *   `relative`, so the caller can restate them against the directory it
+ *   runs git in;
+ * - `--` and every pathspec after it are dropped; the caller supplies the
+ *   file's own paths.
+ *
+ * Everything else, revisions and option values included, is kept in order.
+ */
+export function singleFileRediffArgs(args: readonly string[]): SingleFileRediff {
+  const kept: string[] = [];
+  let relative: DiffPathRelativity = { kind: 'root' };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') break;
+    if (arg === '--relative') {
+      relative = { kind: 'cwd' };
+      continue;
+    }
+    if (arg.startsWith('--relative=')) {
+      relative = { kind: 'directory', directory: arg.slice('--relative='.length) };
+      continue;
+    }
+    if (arg === '--no-relative') {
+      relative = { kind: 'root' };
+      continue;
+    }
+    // When an option takes the next argument, it is the last one in its
+    // token; the value goes wherever that option goes.
+    const takesNext = consumesNextArgument(arg) && i + 1 < args.length;
+    let option: string | null = arg;
+    let keepValue = true;
+    if (arg.startsWith('--')) {
+      if (isDroppedLongOption(arg)) option = null;
+      keepValue = option !== null;
+    } else if (arg.startsWith('-') && arg.length > 1) {
+      option = withoutDroppedShortOptions(arg);
+      keepValue = !arg.endsWith('O');
+    }
+    if (option !== null) kept.push(option);
+    if (takesNext) {
+      i++;
+      if (keepValue) kept.push(args[i]);
+    }
+  }
+  return { args: kept, relative };
 }
 
 // Output formats `parseDiff` cannot consume. Exact spellings, plus the

@@ -3,6 +3,7 @@ import {
   findUnsupportedGitDiffOptions,
   formatGitDiffArgs,
   normalizeGitDiffArgs,
+  singleFileRediffArgs,
   tokenizeGitDiffArgs,
 } from './git-diff-args';
 
@@ -203,5 +204,62 @@ describe('findUnsupportedGitDiffOptions', () => {
       '--numstat',
       '--name-only',
     ]);
+  });
+});
+
+describe('singleFileRediffArgs', () => {
+  it('strips a bare -U without consuming the revision after it', () => {
+    expect(singleFileRediffArgs(['-U', 'HEAD']).args).toEqual(['HEAD']);
+    expect(singleFileRediffArgs(['--unified', 'HEAD']).args).toEqual(['HEAD']);
+  });
+
+  it('strips every spelling of the context size and function context', () => {
+    const args = [
+      '-U5',
+      '--unified',
+      '--unified=7',
+      '-W',
+      '--function-context',
+      '--no-function-context',
+      '--staged',
+    ];
+    expect(singleFileRediffArgs(args).args).toEqual(['--staged']);
+  });
+
+  it('strips context options out of short-option groups and keeps the rest', () => {
+    expect(singleFileRediffArgs(['-RW', '-pU5', '-M50%']).args).toEqual(['-R', '-p', '-M50%']);
+  });
+
+  it('keeps an option value that is spelled like a context flag', () => {
+    const args = ['-S', '-U', '-G', '--unified=3', '--staged'];
+    expect(singleFileRediffArgs(args).args).toEqual(args);
+  });
+
+  it('drops file-ordering options, which fail when their file is not in the re-diff', () => {
+    const args = ['-O', 'order.txt', '-ROorder', '--rotate-to', 'a', '--skip-to=b', 'HEAD'];
+    expect(singleFileRediffArgs(args).args).toEqual(['-R', 'HEAD']);
+  });
+
+  it('drops the separator and the original pathspecs, including flag-like ones', () => {
+    expect(singleFileRediffArgs(['main', 'feature', '--', 'src', '-U5']).args).toEqual([
+      'main',
+      'feature',
+    ]);
+  });
+
+  it('reports what the output paths were relative to, and removes the option', () => {
+    expect(singleFileRediffArgs(['HEAD'])).toEqual({ args: ['HEAD'], relative: { kind: 'root' } });
+    expect(singleFileRediffArgs(['--relative', 'HEAD'])).toEqual({
+      args: ['HEAD'],
+      relative: { kind: 'cwd' },
+    });
+    expect(singleFileRediffArgs(['--relative', '--relative=sub/']).relative).toEqual({
+      kind: 'directory',
+      directory: 'sub/',
+    });
+    expect(singleFileRediffArgs(['--relative=sub', '--no-relative']).relative).toEqual({
+      kind: 'root',
+    });
+    expect(singleFileRediffArgs(['--', '--relative']).relative).toEqual({ kind: 'root' });
   });
 });

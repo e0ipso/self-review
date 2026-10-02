@@ -2,7 +2,7 @@
 id: 20
 group: "output-publication"
 dependencies: [10, 13, 18]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - nodejs-filesystem
@@ -20,10 +20,10 @@ Imported attachments resolve relative to the resumed XML document (not CWD or th
 Node.js filesystem and TypeScript.
 
 ## Acceptance Criteria
-- [ ] Resume import records each attachment's origin (absolute path resolved against the resume document's directory) in session state (not in the XML); the renderer continues to see the relative reference.
-- [ ] `readAttachment` (`review-handlers.ts:386`) takes the session and an attachment reference, authorizes it against the recorded origins/current asset dir, opens with no-follow (`safe-fs.ts`), requires a regular file, and enforces the per-attachment byte budget from `input-budgets.ts` (reuse the 10 MB image limit if that is the existing constant). Arbitrary paths (e.g. `/etc/passwd`, outside sentinel) are refused. Desktop IPC and serve's attachment route both use it (serve currently contains reads under the output asset root — replace with the shared function).
-- [ ] On publication to an output directory different from the attachment's origin, the publisher input includes the bytes (loaded via the authorized reader) so `publishReview` stages them as new assets; references in the published XML resolve to the correct bytes. Unchanged-location saves keep existing references.
-- [ ] Tests: resume a review with attachments from a different CWD → images load; save into a new output directory → assets copied and references resolve; outside/arbitrary paths refused; FIFO/symlink/oversize refused. `npm run test:unit` passes; Electron resume e2e still passes (`npm run test:e2e:electron`).
+- [x] Resume import records each attachment's origin (absolute path resolved against the resume document's directory) in session state (not in the XML); the renderer continues to see the relative reference.
+- [x] `readAttachment` (`review-handlers.ts:386`) takes the session and an attachment reference, authorizes it against the recorded origins/current asset dir, opens with no-follow (`safe-fs.ts`), requires a regular file, and enforces the per-attachment byte budget from `input-budgets.ts` (reuse the 10 MB image limit if that is the existing constant). Arbitrary paths (e.g. `/etc/passwd`, outside sentinel) are refused. Desktop IPC and serve's attachment route both use it (serve currently contains reads under the output asset root — replace with the shared function).
+- [x] On publication to an output directory different from the attachment's origin, the publisher input includes the bytes (loaded via the authorized reader) so `publishReview` stages them as new assets; references in the published XML resolve to the correct bytes. Unchanged-location saves keep existing references.
+- [x] Tests: resume a review with attachments from a different CWD → images load; save into a new output directory → assets copied and references resolve; outside/arbitrary paths refused; FIFO/symlink/oversize refused. `npm run test:unit` passes; Electron resume e2e still passes (`npm run test:e2e:electron`).
 
 Use your internal Todo tool to track these and keep on track.
 

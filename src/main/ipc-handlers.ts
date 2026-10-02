@@ -37,10 +37,12 @@ import {
   prepareDirectoryReview,
   preparePayload,
   readAttachment,
+  recordResumedAttachments,
   setApplyDestination,
   submitReviewState,
   takeReviewState,
 } from '../../packages/core/src/review-handlers';
+import type { AttachmentOrigins } from '../../packages/core/src/attachment-origins';
 
 // The desktop application's own session. A single module-scope `const` holding
 // it is expected: the mutable state lives inside the session value, which is
@@ -77,6 +79,24 @@ export function setResumeData(
   desktopSession.resumeViewedFiles = viewedFiles;
   desktopSession.resumeRemoteDrift = remoteDrift;
   desktopSession.resumeImportDiagnostics = importDiagnostics;
+}
+
+/**
+ * Record that the resumed comments came from the document at
+ * `resumeDocumentPath`, so their attachments are read from beside it and
+ * carried along when the review is saved elsewhere. Returns the import
+ * diagnostics for attachment references that will never be read.
+ */
+export function setResumeDocument(
+  comments: readonly ReviewComment[],
+  resumeDocumentPath: string
+): string[] {
+  return recordResumedAttachments(desktopSession, comments, resumeDocumentPath);
+}
+
+/** Where the resumed attachments live, for the publisher; see `PublishReviewOptions`. */
+export function getAttachmentOrigins(): AttachmentOrigins {
+  return desktopSession.attachmentOrigins;
 }
 
 export function registerIpcHandlers(): void {
@@ -154,8 +174,16 @@ export function registerIpcHandlers(): void {
     submitReviewState(desktopSession, state);
   });
 
-  // Handle attachment file read from renderer
-  ipcMain.handle(IPC.ATTACHMENT_READ, async (_event, filePath: string) => readAttachment(filePath));
+  // Handle attachment read from renderer. The renderer names the reference
+  // the review wrote (`.self-review-assets/<name>`), and core authorizes it
+  // against the session; anything it refuses reads as missing.
+  ipcMain.handle(
+    IPC.ATTACHMENT_READ,
+    async (_event, reference: unknown): Promise<ArrayBuffer | null> => {
+      const result = await readAttachment(desktopSession, reference);
+      return result.ok ? result.data : null;
+    }
+  );
 
   // Send resumed comments and viewed files when the renderer is ready
   // (after diff data is loaded)

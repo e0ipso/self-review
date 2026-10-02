@@ -2,7 +2,7 @@
 id: 19
 group: "source-identity"
 dependencies: [18]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - git
@@ -19,11 +19,11 @@ Context expansion re-runs Git with the session's structured argv, strips only co
 Git diff argument semantics and TypeScript.
 
 ## Acceptance Criteria
-- [ ] `expandContext` (`review-handlers.ts:448–484`) builds its command from `session.source.gitDiffArgv` (task 18), not from a re-split string.
-- [ ] Context-flag stripping uses the shared classifier in `git-diff-args.ts`: `-U`, `-U5`, `--unified`, `--unified=5`, `-W/--function-context` are removed without consuming the following argument; `-U HEAD` keeps `HEAD` as the revision. Regression: staged/working-tree mismatch with `-U HEAD` keeps the old side at HEAD's content after expansion.
-- [ ] Renames/copies pass both old and new paths as pathspecs (with rename detection preserved), and the returned file is selected by matching `(oldPath, newPath)`; an edited staged rename expands into rename hunks, not a full addition.
-- [ ] `--relative[=<dir>]` sessions and sessions launched from a subdirectory expand correctly (paths interpreted as at load time — run from the same `invocationCwd` or translate paths consistently); root/nested same-name files select the right one.
-- [ ] Tests with real Git fixtures for each case above. `npm run test:unit` passes; `npm run test:e2e:electron` expand-context scenarios pass.
+- [x] `expandContext` (`review-handlers.ts:448–484`) builds its command from `session.source.gitDiffArgv` (task 18), not from a re-split string.
+- [x] Context-flag stripping uses the shared classifier in `git-diff-args.ts`: `-U`, `-U5`, `--unified`, `--unified=5`, `-W/--function-context` are removed without consuming the following argument; `-U HEAD` keeps `HEAD` as the revision. Regression: staged/working-tree mismatch with `-U HEAD` keeps the old side at HEAD's content after expansion.
+- [x] Renames/copies pass both old and new paths as pathspecs (with rename detection preserved), and the returned file is selected by matching `(oldPath, newPath)`; an edited staged rename expands into rename hunks, not a full addition.
+- [x] `--relative[=<dir>]` sessions and sessions launched from a subdirectory expand correctly (paths interpreted as at load time — run from the same `invocationCwd` or translate paths consistently); root/nested same-name files select the right one.
+- [x] Tests with real Git fixtures for each case above. `npm run test:unit` passes; `npm run test:e2e:electron` expand-context scenarios pass.
 
 Use your internal Todo tool to track these and keep on track.
 
