@@ -35,6 +35,7 @@ before the API is consulted.
 ```bash
 bash scripts/test/release-provenance.test.sh
 bash scripts/test/resolve-release-tag.test.sh
+node --test scripts/test/sync-workspace-versions.test.mjs
 bash scripts/test/update-flake-hash.test.sh
 ```
 
@@ -55,8 +56,14 @@ Every workflow declares `permissions: {}` at the top, so a job holds only what i
 Each downstream job is a hard `needs:` dependency of the gate, so a rejected run executes no
 checked-out install, build or publication step at all. The `release` job is the one that both
 writes and executes repository-controlled code, because semantic-release has to push the release
-commit and tag and create the GitHub Release; it installs with lifecycle scripts disabled so no
-dependency's install script runs under those permissions, and it holds no npm or OIDC permission.
+commit and tag and create the GitHub Release; it installs, and lets `npm version` reinstall, with
+lifecycle scripts disabled so no dependency's install script runs under those permissions, and it
+holds no npm or OIDC permission. Before `@semantic-release/npm` bumps anything,
+`scripts/release/sync-workspace-versions.mjs` gives every workspace the release version and moves
+each sibling range that names a version (`^2.0.0`, not `*`) to it. Otherwise a major release leaves
+a range the workspace no longer satisfies, and npm installs the sibling from the registry instead
+of linking it; 2.0.0 failed that way. The `build` job refuses a lockfile that installs a sibling
+from the registry.
 The npm OIDC permission exists only in `publish`, which never checks out the repository.
 
 Other properties of the files:

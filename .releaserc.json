@@ -3,6 +3,7 @@
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
+    "./scripts/release/sync-workspace-versions.mjs",
     ["@semantic-release/npm", { "npmPublish": false }],
     ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "packages/types" }],
     ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "packages/core" }],
