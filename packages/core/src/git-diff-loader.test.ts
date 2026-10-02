@@ -91,9 +91,8 @@ describe('loadGitDiffWithUntracked', () => {
   });
 });
 
-// R12: a path appears once. `git rm --cached` leaves the file on disk as an
-// untracked file while HEAD still tracks it, so a HEAD comparison carried a
-// tracked deletion and a synthetic untracked addition under one path.
+// R12: a path appears once; `git rm --cached` otherwise yields a tracked deletion and an untracked
+// addition under one path.
 describe('loadGitDiffWithUntracked gives each path one entry', () => {
   let root: string;
 

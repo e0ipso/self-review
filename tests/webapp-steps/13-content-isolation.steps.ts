@@ -1,10 +1,4 @@
-/**
- * Webapp step definitions for Feature 13: Reviewed content isolation.
- * Loads the hostile-content fixture (the audit's Mermaid payloads plus raw
- * HTML that borrows app positioning utilities) and checks that nothing in
- * it reaches outside its preview. Screenshots land in E2E_EVIDENCE_DIR, or
- * test-results/evidence when that is unset.
- */
+// Screenshots land in E2E_EVIDENCE_DIR, or test-results/evidence when unset.
 import * as fs from 'fs';
 import * as path from 'path';
 import { expect } from '@playwright/test';
@@ -15,20 +9,14 @@ const { Given, Then } = createBdd();
 
 const DIAGRAM_IMAGE = 'img[alt="Mermaid diagram"]';
 
-// ── Given ──
-
 Given('the webapp is loaded with hostile content fixture data', async () => {
   await launchWebapp({ fixture: 'hostile-content' });
 });
 
-// ── Then ──
-
 Then('every Mermaid block should settle as an isolated image or a contained error', async () => {
   const page = getPage();
   const view = page.locator('.rendered-markdown-view');
-  // The fixture holds two diagrams. Both must leave the loading state as
-  // either an image or an error; the overlay payload may legitimately be
-  // the latter, since a diagram that is not well-formed SVG is refused.
+  // Both diagrams must leave loading as an image or an error; the overlay payload may be refused as malformed SVG.
   await expect
     .poll(() => view.locator(`${DIAGRAM_IMAGE}, [data-testid="mermaid-error"]`).count(), {
       timeout: 15000,
@@ -74,12 +62,9 @@ Then(
     const page = getPage();
     const element = page.locator('.rendered-markdown-view').getByText(text, { exact: true });
     await expect(element).toBeVisible({ timeout: 10000 });
-    // Bring it into the viewport so the evidence screenshot shows it in flow.
     await element.scrollIntoViewIfNeeded();
     expect(await element.getAttribute('class')).toBeNull();
     expect(await element.getAttribute('style')).toBeNull();
-    // Stripped of its positioning, it flows inside the preview instead of
-    // covering the window.
     const position = await element.evaluate(el => getComputedStyle(el).position);
     expect(position).toBe('static');
   }
@@ -102,8 +87,7 @@ Then('the review controls should stay visible and clickable', async () => {
     });
     expect(covered).toBe(false);
   }
-  // Playwright refuses the click if another element intercepts pointer
-  // events, and the harness only writes #review-state when the click lands.
+  // Playwright refuses the click if another element intercepts it; #review-state is written only when it lands.
   await controls[0].click();
   await page.locator('#review-state').waitFor({ state: 'attached', timeout: 5000 });
 });

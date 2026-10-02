@@ -1,13 +1,4 @@
-/**
- * The session capability, end to end: the built executable prints a launch
- * URL whose fragment is the only copy of this session's key, the page takes
- * it from there and erases it from the address bar, and the API answers
- * nothing to a request without it — not from another local client, and not
- * from this very page once the key is gone.
- *
- * The other specs in this directory open `serve.url`, the URL as printed,
- * and so exercise the authorized path; this one is about everything else.
- */
+// The session capability end to end. The other serve specs open the printed URL; this one covers requests without the key.
 import { test, expect } from '@playwright/test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -111,9 +102,7 @@ test('a request from the review page itself is refused without the header', asyn
     timeout: 15_000,
   });
 
-  // Same origin, real browser headers, the page's own fetch: the capability
-  // is still what decides, which is what keeps a rebound page out even if
-  // the Host and Origin checks were ever wrong.
+  // Same origin and real browser headers: the capability alone decides, even if Host/Origin checks were wrong.
   const status = await page.evaluate(() => fetch('/api/diff').then(res => res.status));
   expect(status).toBe(401);
 });

@@ -1,5 +1,4 @@
-// The handlers that read reviewed content, against real git snapshots. No git
-// mock here: the point is that the bytes come from the reviewed side.
+// Reviewed-content handlers against real git snapshots, no mock.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'fs';

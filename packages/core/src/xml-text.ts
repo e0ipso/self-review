@@ -1,35 +1,17 @@
-// packages/core/src/xml-text.ts
-// The one encode/decode contract for text inside review XML.
-//
-// XML is not a transparent container for strings. A conformant parser
-// normalizes a raw CR or CRLF in content to LF (XML 1.0 §2.11) and turns a
-// raw LF or TAB inside an attribute value into a space (§3.3.3). The only
-// representation that survives every parser byte for byte is a character
-// reference, so the serializer writes those three characters as `&#13;`,
-// `&#10;` and `&#9;` where normalization would otherwise eat them, and the
-// parser decodes them back — once.
-//
-// "Once" is the whole point. The decoder below is a single regex pass that
-// knows exactly the five predefined entities and decimal/hex character
-// references, and nothing else: no HTML named entities, no re-scanning of
-// its own output. A user who types the literal text `&#13;` has it written
-// as `&amp;#13;` and gets `&#13;` back, not a carriage return. The library
-// parser's own entity processing is switched off so this is the only place
-// decoding ever happens.
+// The one encode/decode contract for review XML text. A conformant parser turns a raw CR(LF)
+// in content into LF (XML 1.0 s2.11) and a raw LF or TAB in an attribute into a space (s3.3.3),
+// so the serializer writes those as character references and the parser decodes them back,
+// once: a single pass over the five predefined entities and numeric references, never its own
+// output. Typed `&#13;` is written `&amp;#13;` and returns as `&#13;`. The library parser's
+// entity processing is off.
 
-/** A code point XML 1.0 forbids, and where it sits in the string. */
 export interface IllegalXmlCharacter {
   codePoint: number;
   /** UTF-16 index of the offending code unit. */
   index: number;
 }
 
-/**
- * XML 1.0 `Char`: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] |
- * [#x10000-#x10FFFF]. Everything else — the other C0 controls, U+FFFE,
- * U+FFFF and surrogate code points on their own — has no serialization at
- * all, escaped or not, and a document carrying one is not XML.
- */
+/** XML 1.0 `Char`; everything else has no serialization, escaped or not. */
 function isLegalXmlCodePoint(cp: number): boolean {
   return (
     cp === 0x9 ||
@@ -42,9 +24,8 @@ function isLegalXmlCodePoint(cp: number): boolean {
 }
 
 /**
- * Find the first character XML cannot carry, or `null` when the string is
- * clean. Lone surrogates are reported at the surrogate itself: a well-formed
- * pair is read as its supplementary code point and passes.
+ * The first character XML cannot carry, or `null`. A well-formed surrogate pair passes; a lone one
+ * is reported.
  */
 export function findIllegalXmlCharacter(str: string): IllegalXmlCharacter | null {
   for (let i = 0; i < str.length; i++) {
@@ -52,7 +33,7 @@ export function findIllegalXmlCharacter(str: string): IllegalXmlCharacter | null
     if (unit >= 0xd800 && unit <= 0xdbff) {
       const low = i + 1 < str.length ? str.charCodeAt(i + 1) : 0;
       if (low >= 0xdc00 && low <= 0xdfff) {
-        i++; // a well-formed pair: always a legal supplementary code point
+        i++;
         continue;
       }
       return { codePoint: unit, index: i };
@@ -64,11 +45,7 @@ export function findIllegalXmlCharacter(str: string): IllegalXmlCharacter | null
   return null;
 }
 
-/**
- * Escape a string for element content. The five markup characters become
- * their predefined entities and CR becomes `&#13;`; LF and TAB are left raw,
- * because content normalization preserves them.
- */
+/** LF and TAB stay raw: content normalization preserves them. */
 export function escapeXmlText(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -80,10 +57,8 @@ export function escapeXmlText(str: string): string {
 }
 
 /**
- * Escape a string for an attribute value: everything {@link escapeXmlText}
- * does, plus LF and TAB as references, because attribute-value normalization
- * turns the raw characters into spaces. Valid Git filenames can contain all
- * three.
+ * Also escapes LF and TAB, which attribute normalization turns into spaces (git filenames can
+ * contain them).
  */
 export function escapeXmlAttribute(str: string): string {
   return escapeXmlText(str).replace(/\n/g, '&#10;').replace(/\t/g, '&#9;');
@@ -97,11 +72,7 @@ const PREDEFINED: Record<string, string> = {
   apos: "'",
 };
 
-/**
- * Decode exactly the five predefined entities and decimal/hex character
- * references, in one pass over the raw text. A reference to a code point XML
- * forbids, or to nothing at all, is left as the literal text it was.
- */
+/** A reference to a forbidden code point stays literal. */
 export function decodeXmlEntities(raw: string): string {
   return raw.replace(
     /&(lt|gt|amp|quot|apos|#\d{1,8}|#x[0-9a-fA-F]{1,8});/g,

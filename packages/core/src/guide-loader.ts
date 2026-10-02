@@ -67,8 +67,7 @@ export async function loadGuide(
   }
 
   try {
-    // Bounded before anything is read: an oversized guide is refused on its
-    // fstat size, and a FIFO or device is refused without blocking on it.
+    // Refused on fstat size / non-regular file before any read, so a FIFO cannot block.
     let content: string;
     try {
       const read = await readFileWithinBudget(guidePath, MAX_GUIDE_BYTES);

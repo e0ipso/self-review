@@ -72,9 +72,7 @@ function AppContent() {
     });
   }, [setOutputPathInfo]);
 
-  // Host-driven finish: push state, then ask main to save. Main never pulls
-  // state from here; a save with no pushed state is reported as an error
-  // and writes nothing.
+  // Main never pulls state: a save with no pushed state is reported and writes nothing.
   const handleFinishReview = useCallback(() => {
     window.electronAPI.submitReview({
       timestamp: new Date().toISOString(),

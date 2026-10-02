@@ -113,12 +113,7 @@ export interface CliDispatchDeps {
     url: string,
     options: { includeResolved: boolean; signal: AbortSignal }
   ) => Promise<void>;
-  /**
-   * Subscribe `handler` to the process's termination signals (SIGINT,
-   * SIGTERM); returns the unsubscribe. The headless run is cancelled through
-   * its AbortSignal on either, so Ctrl+C removes the temporary clone it was
-   * making instead of stranding it.
-   */
+  /** Subscribes to SIGINT/SIGTERM and returns the unsubscribe; cancelling lets Ctrl+C remove the temporary clone. */
   onTerminationSignal: (handler: (signal: NodeJS.Signals) => void) => () => void;
   logError: (message: string) => void;
   exit: (code: number) => void;
@@ -170,11 +165,7 @@ export function dispatchCli(deps: CliDispatchDeps = defaultCliDispatchDeps): boo
     return true;
   }
 
-  // The run's lifetime: no deadline of its own (a large clone may take a
-  // while; each git command has the materializer's per-command timeout),
-  // but SIGINT/SIGTERM cancel it through the signal. The run kills the git
-  // in flight and releases its clone before rejecting, and the exit code
-  // reports the interruption the way a shell expects (128 + signal number).
+  // No overall deadline (each git command has its own timeout); SIGINT/SIGTERM cancel, and the exit code is 128 + signal.
   const controller = new AbortController();
   let interruptedBy: NodeJS.Signals | null = null;
   const unsubscribe = deps.onTerminationSignal(signal => {

@@ -572,8 +572,7 @@ index abc123..def456 100644
   });
 });
 
-// R06: the parser must neither invent lines nor silently drop supported Git
-// output. These fixtures are the shapes real `git diff` emits.
+// R06: the parser must neither invent lines nor silently drop supported Git output.
 describe('parseDiffWithDiagnostics', () => {
   describe('trailing newline', () => {
     it('does not turn the final newline of real git output into a context line', () => {
@@ -803,9 +802,8 @@ describe('parseDiffWithDiagnostics', () => {
   });
 
   describe('quoted path decoding without Node', () => {
-    // packages/core/src/browser.ts hands this parser to the webpack renderer
-    // and the webapp harness, where Node's `Buffer` does not exist. Git quotes
-    // non-ASCII path bytes as octal escapes, so decoding them must not need it.
+    // browser.ts runs this parser where `Buffer` does not exist; git quotes non-ASCII path bytes as
+    // octal escapes.
     it('decodes octal-escaped UTF-8 paths with Buffer unavailable', () => {
       const diff = [
         'diff --git "a/caf\\303\\251 \\342\\234\\223.ts" "b/caf\\303\\251 \\342\\234\\223.ts"',
@@ -828,8 +826,7 @@ describe('parseDiffWithDiagnostics', () => {
     });
 
     it('replaces malformed octal byte runs instead of throwing', () => {
-      // A lone continuation byte is not valid UTF-8; both Buffer and
-      // TextDecoder substitute U+FFFD, and the parser must keep that contract.
+      // A lone continuation byte becomes U+FFFD with both Buffer and TextDecoder.
       const diff = [
         'diff --git "a/x\\251.ts" "b/x\\251.ts"',
         '--- "a/x\\251.ts"',

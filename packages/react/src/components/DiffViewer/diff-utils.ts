@@ -2,12 +2,8 @@ import type { DiffFile, DiffHunk, LineRange } from '@self-review/types';
 import { collectVisibleRangeLines } from '../../utils/comment-anchors';
 
 /**
- * Extract the original code content for a given line range from a DiffFile.
- * Used to provide originalCode for the Suggest feature in both SplitView and UnifiedView.
- *
- * Returns `undefined` unless every line of the range on its side is visible in
- * the file's hunks, so a caller holding a recorded original (an imported
- * suggestion) keeps it instead of replacing it with partial visible code.
+ * Original code for a line range, or `undefined` unless every line of the range is visible,
+ * so an imported suggestion keeps its recorded original instead of partial visible code.
  */
 export function extractOriginalCode(file: DiffFile, lineRange: LineRange): string | undefined {
   const lines = collectVisibleRangeLines(file, lineRange);

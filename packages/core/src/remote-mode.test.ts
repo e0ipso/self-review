@@ -33,9 +33,7 @@ import {
   type RemoteSessionDeps,
 } from './remote-mode';
 
-// The filter and map stages run on pure code that does not fail on its own;
-// wrapping the real functions lets one test inject a failure into each stage
-// while every other test keeps the real behaviour.
+// Wrapped real functions let one test inject a failure into the filter or map stage.
 vi.mock('./ignore-filter', async importOriginal => {
   const actual = await importOriginal<typeof import('./ignore-filter')>();
   return { ...actual, createIgnoreFilter: vi.fn(actual.createIgnoreFilter) };
@@ -201,9 +199,7 @@ describe('startRemoteSession', () => {
     expect(session.remote.remoteForge).toBe('gitlab');
   });
 
-  // The reviewed diff does not exist yet here, so nothing is mapped: a
-  // mapping without files could never anchor a suggestion and was thrown
-  // away by the caller anyway. The threads travel verbatim instead.
+  // No diff exists yet, so nothing is mapped; threads travel verbatim.
   it('carries the fetched threads verbatim and maps nothing before the diff exists', async () => {
     const session = await startRemoteSession(PR_URL, '/cwd', makeDeps());
     expect(session.fetchedThreads).toEqual([makeThread('t1')]);
@@ -219,8 +215,7 @@ describe('startRemoteSession', () => {
     });
   });
 
-  // The headless subcommand's policy: threads are its whole purpose, so a
-  // failed fetch is fatal — and the clone it just made must not leak.
+  // fetch-comments policy: a failed fetch is fatal and must not leak the clone.
   it("fails and releases the clone when threads are 'required' and the fetch is unavailable", async () => {
     const cleanup = vi.fn();
     const provider: ForgeProvider = {
@@ -452,11 +447,8 @@ describe('bootstrapRemoteDiff', () => {
   });
 });
 
-// The app and the headless subcommand must produce the same suggestions for
-// the same PR/MR under the same effective configuration. One real git
-// repository stands in for the materialized clone, the real GitLab provider
-// reads one synthetic `glab` payload, the real diff loader runs over the
-// repository, and both entry points are driven end to end.
+// App and fetch-comments must produce the same suggestions; one real repo, the real GitLab provider
+// over a synthetic `glab` payload, both entry points end to end.
 describe('GUI bootstrap and headless fetch-comments agree', () => {
   const MR = 'https://gitlab.com/group/proj/-/merge_requests/7';
   const FENCE = (proposal: string) => `Tighten this.\n\n\`\`\`suggestion\n${proposal}\n\`\`\`\n`;
@@ -633,11 +625,8 @@ describe('GUI bootstrap and headless fetch-comments agree', () => {
   });
 });
 
-// One lifetime boundary spans clone, fetch, load, filter and map: whatever
-// stage fails, the temporary clone is gone and the session signal has been
-// honoured. These run the real materializer over a scripted git runner on
-// the temp-clone path, so a real directory is created and its removal is
-// observable; nothing is spawned.
+// Whatever stage fails, the temp clone is gone and the signal honoured; scripted git runner over a
+// real temp dir.
 describe('session lifetime', () => {
   const BASE = 'a'.repeat(40);
   const HEAD = 'b'.repeat(40);

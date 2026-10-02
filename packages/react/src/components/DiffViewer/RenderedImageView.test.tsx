@@ -15,7 +15,6 @@ describe('RenderedImageView', () => {
 
       expect(await screen.findByText('Failed to load image.')).toBeTruthy();
       expect(document.querySelector('.animate-spin')).toBeNull();
-      // Give an unhandled rejection a turn to surface before checking for one.
       await new Promise(resolve => setTimeout(resolve, 0));
       expect(unhandled).not.toHaveBeenCalled();
     } finally {

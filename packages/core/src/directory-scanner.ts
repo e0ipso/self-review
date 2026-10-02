@@ -1,15 +1,7 @@
-// packages/core/src/directory-scanner.ts
-// Scans a directory (or one file) and produces DiffFile[] treating every
-// file as a new addition.
-//
-// The walk is bounded before it does work (see input-budgets.ts). Ignore
-// patterns are applied to directories as they are met, so an ignored
-// `node_modules/` is never opened, let alone listed. Directories are read
-// one entry at a time, and the walk stops the moment it has examined
-// `maxEntries` entries; a stopped walk is reported as such, with no files,
-// rather than as a shorter review that looks complete. Symlinks, FIFOs,
-// sockets and devices are skipped: only regular files are reviewed, and a
-// link is never followed out of the tree.
+// Scans a directory (or one file) into DiffFile[], every file a new addition.
+// The walk is bounded (input-budgets.ts): ignored directories are never opened, and
+// hitting `maxEntries` yields no files rather than a shorter review that looks complete.
+// Only regular files are reviewed; links are never followed out of the tree.
 
 import { opendir, stat } from 'fs/promises';
 import { basename, dirname, join } from 'path';
@@ -19,33 +11,20 @@ import { createIgnoreFilter } from './ignore-filter';
 import { resolveSourceBudgets, type SourceBudgets } from './input-budgets';
 
 export interface SourceScanOptions {
-  /** Tighter budgets than the defaults; see `SourceBudgets`. */
   budgets?: Partial<SourceBudgets>;
 }
 
 export interface SourceScanResult {
-  /** The scanned files; empty when the scan failed or hit the entry budget. */
   files: DiffFile[];
-  /**
-   * Everything the scan could not show faithfully, for
-   * `DiffLoadPayload.diagnostics`: an unreadable source, the entry budget,
-   * files listed without content. Empty for a clean scan.
-   */
+  /** For `DiffLoadPayload.diagnostics`; empty for a clean scan. */
   diagnostics: string[];
-  /**
-   * True when enumeration stopped at `maxEntries`. `files` is then empty:
-   * a partial listing would read as the whole directory.
-   */
+  /** `files` is empty when this is true. */
   entryLimitExceeded: boolean;
 }
 
 /**
- * Recursively scan a directory and return every regular file in it as a new
- * addition (changeType: 'added').
- *
- * @param directoryPath - Absolute path to the directory to scan
- * @param ignorePatterns - Optional gitignore-compatible patterns; a matching
- *   directory is pruned without being opened
+ * Recursively scans `directoryPath`; a directory matching `ignorePatterns` is pruned without being
+ * opened.
  */
 export async function scanDirectory(
   directoryPath: string,
@@ -98,11 +77,8 @@ export async function scanDirectory(
 }
 
 /**
- * Scan a single file and return it as a new addition. The path was named
- * explicitly by the reviewer, so a symlink here is read through, but the
- * per-file read budget still applies.
- *
- * @param filePath - Absolute path to the file to scan
+ * The reviewer named this path explicitly, so a symlink is read through; the per-file budget still
+ * applies.
  */
 export async function scanFile(
   filePath: string,
@@ -125,15 +101,10 @@ export async function scanFile(
 }
 
 interface WalkResult {
-  /** Relative, `/`-separated paths of the regular files found. */
   files: string[];
   limitExceeded: boolean;
 }
 
-/**
- * Depth-first walk that opens only directories the ignore filter keeps and
- * counts every entry it reads against `maxEntries`.
- */
 async function walkDirectory(
   root: string,
   shouldKeep: (path: string) => boolean,
@@ -154,17 +125,15 @@ async function walkDirectory(
 
         const relativePath = relativeDir === '' ? entry.name : `${relativeDir}/${entry.name}`;
         if (entry.isDirectory()) {
-          // gitignore semantics: a trailing slash marks the path as a
-          // directory, so `node_modules/` and `build/` patterns match it.
+          // The trailing slash lets `node_modules/`-style patterns match.
           if (shouldKeep(`${relativePath}/`)) pending.push(relativePath);
         } else if (entry.isFile()) {
           if (shouldKeep(relativePath)) files.push(relativePath);
         }
-        // Symlinks, FIFOs, sockets and devices are not reviewed.
       }
     } finally {
-      // Breaking out of the iterator closes the handle; closing an
-      // exhausted one throws ERR_DIR_CLOSED, which is not a failure here.
+      // Breaking out of the iterator already closes the handle; a second close throws
+      // ERR_DIR_CLOSED.
       await dir.close().catch(() => {});
     }
   }

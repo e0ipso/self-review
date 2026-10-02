@@ -1,14 +1,7 @@
-// packages/core/src/xml-parser.ts
-// Parse an XML review file back into ReviewComment[].
-//
-// Two contracts hold here. Text is lossless: no value coercion, no falsy
-// fallbacks, and exactly one decoding pass over the raw entities (see
-// xml-text.ts), so what the serializer wrote is what comes back. And nothing
-// here ends the process: a document that cannot be read throws a
-// ReviewXmlError for the host to report, while a document that can be read
-// but carries a comment this app could not honour — an anchor that is not a
-// usable range, a suggestion it could not apply — keeps that comment as
-// file-level feedback and says so in `importDiagnostics`.
+// Parse an XML review file back into ReviewComment[]. Text is lossless (no coercion, one
+// decoding pass, see xml-text.ts). An unreadable document throws ReviewXmlError; a comment
+// with an unusable anchor or suggestion is kept as file-level feedback and reported in
+// `importDiagnostics`.
 
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { readFileWithinBudgetSync } from './bounded-read';
@@ -39,12 +32,8 @@ export interface ParsedReview {
   gitDiffArgs: string;
   source: DiffSource;
   /**
-   * One line per comment the importer could not take as written: an anchor
-   * that is not a usable line range, or a suggestion in a shape this app
-   * cannot apply. Each such comment is kept as file-level feedback with its
-   * suggestion text folded into the body, so nothing the author wrote is
-   * lost; the diagnostic says which comment and why. Empty for a clean
-   * import. Hosts print these to stderr and the UI shows them.
+   * One line per comment downgraded to file-level feedback, with its suggestion text folded into
+   * the body.
    */
   importDiagnostics: string[];
   // Remote provenance, read tolerantly off the review root. Undefined when
@@ -57,15 +46,10 @@ export interface ParsedReview {
 }
 
 /**
- * Read and parse a review document from disk.
+ * Sized before it is read, so an oversized document or a FIFO is refused unread.
  *
- * The file is sized before it is read: a document over
- * `MAX_RESUME_XML_BYTES` is refused without being read or parsed, and a FIFO
- * or device is refused without blocking on it.
- *
- * @throws ReviewXmlError `read-failed` when the file cannot be read or is
- *   not a regular file, `input-too-large` when it exceeds the resume budget,
- *   or whatever {@link parseReviewXmlString} throws for its content.
+ * @throws ReviewXmlError `read-failed`, `input-too-large`, or what
+ *   {@link parseReviewXmlString} throws.
  */
 export function parseReviewXml(xmlPath: string): ParsedReview {
   let read: ReturnType<typeof readFileWithinBudgetSync>;
@@ -90,14 +74,10 @@ export function parseReviewXml(xmlPath: string): ParsedReview {
 }
 
 /**
- * Parse a review document.
- *
  * Namespace-blind by design: v1, v2 and v3 documents read identically.
  *
- * @throws ReviewXmlError `parse-failed` when the content is not XML the
- *   parser can load, `missing-root` when there is no `<review>` element,
- *   `input-too-large` when it carries more than `MAX_RESUME_ATTACHMENTS`
- *   attachment references.
+ * @throws ReviewXmlError `parse-failed`, `missing-root`, or `input-too-large`
+ *   (over `MAX_RESUME_ATTACHMENTS`).
  */
 export function parseReviewXmlString(xmlContent: string): ParsedReview {
   const parser = new XMLParser({
@@ -105,18 +85,14 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     attributeNamePrefix: '@_',
     allowBooleanAttributes: true,
     trimValues: false,
-    // Lossless by construction. Values stay the strings the document holds,
-    // so `00123`, `007`, `1e3`, `0` and `false` are text, not numbers or
-    // booleans; and the library does no entity work at all, so the single
-    // bounded pass in decodeXmlEntities is the only decoding there is.
+    // Lossless: `00123`, `1e3` and `false` stay text, and decodeXmlEntities is the only decoding.
     parseTagValue: false,
     parseAttributeValue: false,
     processEntities: false,
   });
 
-  // The parser itself is lenient — an unclosed element or plain garbage
-  // still yields an object — so well-formedness is checked first, and the
-  // check's located message is what the host gets to print.
+  // The parser is lenient (garbage still yields an object), so check well-formedness first for a
+  // located message.
   const wellFormed = XMLValidator.validate(xmlContent);
   if (wellFormed !== true) {
     const { msg, line, col } = wellFormed.err;
@@ -143,9 +119,8 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
   const importDiagnostics: string[] = [];
 
   for (const file of toChildArray(review.file)) {
-    // Skip only when the attribute is genuinely absent: the empty string
-    // is the review-level sentinel path (REVIEW_LEVEL_FILE_PATH) used by
-    // fetch-comments for threads with no file anchor, and must round-trip.
+    // Only a missing attribute skips: the empty string is the review-level sentinel path and must
+    // round-trip.
     const filePath = attribute(file, '@_path');
     if (filePath === undefined) continue;
 
@@ -158,9 +133,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     });
   }
 
-  // Each attachment is fetched on demand once the review is on screen, so
-  // the count bounds how many reads one document can ask for. Refuse the
-  // document rather than drop attachments the author wrote.
+  // Bounds the reads one document can ask for; refuse rather than drop attachments.
   const attachmentCount = countAttachments(comments);
   if (attachmentCount > MAX_RESUME_ATTACHMENTS) {
     throw new ReviewXmlError(
@@ -184,16 +157,9 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
 }
 
 /**
- * Read one `<comment>`, validating its anchor and suggestion shape.
- *
- * A comment whose anchor or suggestion cannot be honoured is not dropped and
- * not passed through as-is either: it is downgraded to file-level feedback.
- * Everything the author wrote survives — body, category, author, severity,
- * confidence, replies, attachments — and the suggestion text, if any, is
- * folded into the body as fenced code so it stays readable without ever
- * becoming an Apply target. The diagnostic names the comment by its ordinal
- * within the file (and its remote-id when it has one) so the reviewer can
- * find it.
+ * A comment whose anchor or suggestion cannot be honoured is downgraded to file-level
+ * feedback, not dropped: its suggestion text is folded into the body so it is readable but
+ * never an Apply target. The diagnostic names it by ordinal (and remote-id) within the file.
  */
 function parseComment(
   comment: Record<string, unknown>,
@@ -251,20 +217,14 @@ type SuggestionRead =
   | { ok: true; suggestion: Suggestion; text: SuggestionText }
   | { ok: false; reason: string; text: SuggestionText };
 
-/** Whatever code text a `<suggestion>` carried, usable or not. */
 interface SuggestionText {
   original?: string;
   proposed?: string;
 }
 
 /**
- * Read a `<suggestion>`, or `null` when there is none.
- *
- * A usable suggestion has both code elements as plain text and sits on a
- * comment with a usable anchor: Apply replaces exactly the anchored lines
- * with the proposal, so a suggestion with no anchor, or on an anchor that
- * failed validation, has nowhere to go. Every other shape is reported with
- * whatever text it did carry, so the caller can keep that text visible.
+ * Usable only with both code elements as plain text and a valid anchor (Apply replaces the anchored
+ * lines). Other shapes report whatever text they carried.
  */
 function parseSuggestion(
   comment: Record<string, unknown>,
@@ -298,11 +258,8 @@ function parseSuggestion(
 }
 
 /**
- * Append a downgraded suggestion's code to the comment body as fenced
- * blocks, so the proposal stays readable in the UI and in the saved document
- * without being an actionable Suggestion. The fence is one backtick longer
- * than the longest run the code itself contains, so code that holds fences
- * renders intact.
+ * The fence is one backtick longer than the longest run in the code, so nested fences render
+ * intact.
  */
 function foldSuggestionIntoBody(body: string, code: SuggestionText, reason: string): string {
   const parts = [body, '', `_Imported suggestion could not be anchored (${reason})._`];
@@ -331,33 +288,22 @@ function parseEnumAttribute<T extends string>(raw: unknown, allowed: readonly T[
   return allowed.includes(value as T) ? (value as T) : undefined;
 }
 
-/**
- * Read an attribute as decoded text, or undefined when absent. Values are
- * taken as-is otherwise: the empty string is a value, not an absence.
- */
+/** Decoded text, or undefined when absent; the empty string is a value. */
 function attribute(node: Record<string, unknown>, key: string): string | undefined {
   const raw = node[key];
   if (raw === undefined || raw === null) return undefined;
-  // A boolean attribute (`<file viewed>`) parses as `true`; anything else is
-  // already a string because attribute value parsing is off.
+  // A boolean attribute (`<file viewed>`) parses as `true`.
   return decodeXmlEntities(typeof raw === 'string' ? raw : String(raw));
 }
 
-/**
- * Read a child element's text content, decoded, or undefined when the child
- * is absent or is not plain text (it holds child elements of its own, which
- * no element of this schema does).
- */
+/** Decoded child text, or undefined when absent or not plain text. */
 function text(node: Record<string, unknown>, key: string): string | undefined {
   const raw = node[key];
   if (typeof raw === 'string') return decodeXmlEntities(raw);
   return undefined;
 }
 
-/**
- * `author` is a display name and absent means human, so the empty string is
- * read as absent: the serializer never writes an empty author attribute.
- */
+/** Absent means human, so an empty author reads as absent. */
 function optionalAuthor(node: Record<string, unknown>): string | undefined {
   const author = attribute(node, '@_author');
   return author === undefined || author === '' ? undefined : author;

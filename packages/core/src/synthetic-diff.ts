@@ -2,12 +2,8 @@
 // Generates synthetic unified diffs for files that aren't tracked by git.
 // Reusable by both git untracked file handling and directory-based scanning.
 //
-// Every read here is bounded before it happens (see input-budgets.ts): a
-// file is opened once, sized with fstat, sniffed for binary content through
-// a fixed prefix, and read whole only when it fits both the per-file and the
-// aggregate budget. A file that does not fit is still listed — as an added
-// file with no content and an `omittedReason` — and the diagnostics say so,
-// so a budget never turns into a silently shorter review.
+// Reads are bounded first (input-budgets.ts). A file over budget is still listed, with no
+// content and an `omittedReason`, and named in the diagnostics.
 
 import { closeSync, constants, fstatSync, lstatSync, openSync, readlinkSync } from 'fs';
 import { join } from 'path';
@@ -67,40 +63,34 @@ export function quoteGitPath(path: string): string {
 
 export interface SyntheticDiffOptions {
   /**
-   * Read through a symlink instead of describing it. Only for a path the
-   * reviewer named explicitly (single-file review); enumerated paths never
-   * follow links. Defaults to false.
+   * Only for a path the reviewer named explicitly (single-file review); enumerated paths never
+   * follow links.
    */
   followSymlinks?: boolean;
-  /** Tighter budgets than the defaults; see `SourceBudgets`. */
   budgets?: Partial<SourceBudgets>;
 }
 
 export interface SyntheticDiffResult {
-  /** Unified diff text for every listed file, in input order. */
   diff: string;
   /**
-   * Files listed without content, keyed by their literal relative path,
-   * with the sentence the viewer shows in place of their content.
+   * Files listed without content, by literal relative path, with the sentence the viewer shows
+   * instead.
    */
   omitted: Map<string, string>;
-  /** What was not read, summarized for `DiffLoadPayload.diagnostics`. */
   diagnostics: string[];
 }
 
-/** What a bounded look at one source path found, and what it cost. */
+/**
+ * What a bounded look at one path found. `skip` is gone, a directory or a special file; `symlink`
+ * carries its own text, as git stores it.
+ */
 export type SyntheticSource =
-  /** Gone, a directory, a FIFO, a socket or a device: nothing to show. */
   | { kind: 'skip'; bytesRead: 0 }
-  /** Could not be opened or read; `code` is the errno code. */
   | { kind: 'unreadable'; code: string; bytesRead: number }
-  /** A symlink, described by its own text as git stores it. */
   | { kind: 'symlink'; content: Buffer; bytesRead: number }
   | { kind: 'binary'; bytesRead: number }
   | { kind: 'text'; content: Buffer; bytesRead: number }
-  /** Text, larger than the per-file budget: only the sniff prefix was read. */
   | { kind: 'too-large'; size: number; bytesRead: number }
-  /** Would overrun what is left of the aggregate budget. */
   | { kind: 'over-total'; size: number; bytesRead: number };
 
 /** Read-only, never following a final symlink, never blocking on a FIFO. */
@@ -109,9 +99,8 @@ const NO_FOLLOW_FLAGS =
 const FOLLOW_FLAGS = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0);
 
 /**
- * Look at one path within budget. Nothing past the binary sniff prefix is
- * read unless the file is text, fits `maxFileBytes`, and fits what is left
- * of the aggregate (`remainingBytes`). `bytesRead` is what was actually read.
+ * Nothing past the sniff prefix is read unless the file is text and fits `maxFileBytes` and
+ * `remainingBytes`.
  */
 export function readSyntheticSource(
   fullPath: string,
@@ -132,8 +121,7 @@ export function readSyntheticSource(
       return failure(error);
     }
     if (isLink) {
-      // Git stores a symlink as a blob of its target path; review that, and
-      // never what it points at — the target may be anywhere on disk.
+      // Git stores a link as its target path; never read what it points at.
       try {
         const content = readlinkSync(fullPath, { encoding: 'buffer' });
         return { kind: 'symlink', content, bytesRead: content.length };
@@ -151,8 +139,7 @@ export function readSyntheticSource(
   }
   let bytesRead = 0;
   try {
-    // Decide on the open descriptor, so a path swapped after lstat is
-    // still a regular file of the size measured here.
+    // Decide on the open descriptor, so a path swapped after lstat cannot differ.
     const stats = fstatSync(fd);
     if (!stats.isFile()) return { kind: 'skip', bytesRead: 0 };
     const size = stats.size;
@@ -166,8 +153,7 @@ export function readSyntheticSource(
     if (size > maxFileBytes) return { kind: 'too-large', size, bytesRead };
     if (size > remainingBytes) return { kind: 'over-total', size, bytesRead };
 
-    // Only now is the whole file worth its allocation. Read no more than
-    // the fstat size: a file still growing is reviewed as it was measured.
+    // Read no more than the fstat size: a growing file is reviewed as measured.
     const content = Buffer.alloc(size);
     sniff.copy(content, 0, 0, bytesRead);
     bytesRead += readInto(fd, content, bytesRead, size - bytesRead);
@@ -181,11 +167,10 @@ export function readSyntheticSource(
 
 function failure(error: unknown, bytesRead = 0): SyntheticSource {
   const code = (error as NodeJS.ErrnoException | undefined)?.code ?? 'unknown error';
-  // Gone between listing and reading (ENOENT), or a path through something
-  // that is no longer a directory (ENOTDIR): nothing to review.
-  if (code === 'ENOENT' || code === 'ENOTDIR') return { kind: 'skip', bytesRead: 0 };
-  // O_NOFOLLOW met a symlink swapped in after lstat; it is not read either way.
-  if (code === 'ELOOP') return { kind: 'skip', bytesRead: 0 };
+  // Gone or no longer a directory between listing and reading, or a link swapped in (O_NOFOLLOW).
+  if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP') {
+    return { kind: 'skip', bytesRead: 0 };
+  }
   return { kind: 'unreadable', code, bytesRead };
 }
 
@@ -197,7 +182,6 @@ function failure(error: unknown, bytesRead = 0): SyntheticSource {
  *   against rootDir and never git-quoted on the way in
  * @param rootDir - Absolute path to the root directory the paths are relative to
  * @returns The diff text, the files listed without content, and diagnostics
- *   for everything a budget or an error kept out
  */
 export function generateSyntheticDiffs(
   paths: string[],
@@ -220,8 +204,7 @@ export function generateSyntheticDiffs(
     const header = `diff --git ${oldHeaderPath} ${newHeaderPath}\n`;
 
     if (totalExhausted) {
-      // Once the aggregate is spent nothing more is read, even a file that
-      // would fit: the cut is one point in the list, not a scatter.
+      // Nothing more is read once the aggregate is spent: the cut is one point in the list.
       overTotal.push(filePath);
       omitted.set(filePath, overTotalReason(budgets.maxTotalBytes));
       diffs.push(`${header}new file mode 100644`);
@@ -295,11 +278,7 @@ export function generateSyntheticDiffs(
   return { diff: diffs.join('\n'), omitted, diagnostics };
 }
 
-/**
- * Build, parse and annotate synthetic diffs in one step: the parsed files,
- * with `omittedReason` set on every file listed without content, and every
- * diagnostic from both the reads and the parse.
- */
+/** Builds and parses in one step, setting `omittedReason` on files listed without content. */
 export function loadSyntheticFiles(
   paths: string[],
   rootDir: string,
@@ -353,7 +332,6 @@ function overTotalReason(maxTotalBytes: number): string {
   );
 }
 
-/** How many paths a diagnostic names before summarizing the rest. */
 const LISTED_PATHS = 10;
 
 function listPaths(paths: string[]): string {

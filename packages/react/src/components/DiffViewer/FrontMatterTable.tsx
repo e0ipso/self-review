@@ -17,8 +17,7 @@ const LIMIT_DESCRIPTIONS: Record<FrontMatterLimitReason, string> = {
   nodes: 'it has too many values',
 };
 
-// Recursion here is bounded: the display tree is acyclic and at most
-// FRONT_MATTER_MAX_DEPTH levels deep by construction.
+// Recursion is bounded: the display tree is acyclic and at most FRONT_MATTER_MAX_DEPTH deep.
 function renderValue(value: FrontMatterDisplayValue): React.ReactNode {
   switch (value.kind) {
     case 'null':

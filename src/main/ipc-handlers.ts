@@ -52,10 +52,7 @@ import type { ParsedReview } from '../../packages/core/src/xml-parser';
 const desktopSession = createReviewSession();
 
 export function setDiffData(data: DiffLoadPayload, identity: ReviewSourceIdentity | null): void {
-  // Committing through core captures the session's reviewed paths, which
-  // authorize every later apply, and records the source identity every read
-  // of reviewed content resolves against; a bare assignment would leave both
-  // empty. The identity is null only for a welcome payload.
+  // Must commit through core: a bare assignment would leave the reviewed paths and source identity empty.
   commitDiffData(desktopSession, data, identity);
 }
 
@@ -83,12 +80,7 @@ export function setResumeData(
   desktopSession.resumeImportDiagnostics = importDiagnostics;
 }
 
-/**
- * Record that the resumed comments came from the document at
- * `resumeDocumentPath`, so their attachments are read from beside it and
- * carried along when the review is saved elsewhere. Returns the import
- * diagnostics for attachment references that will never be read.
- */
+/** Attachments of the resumed comments are read from beside the document. Returns diagnostics for references that will never be read. */
 export function setResumeDocument(
   comments: readonly ReviewComment[],
   resumeDocumentPath: string
@@ -96,22 +88,15 @@ export function setResumeDocument(
   return recordResumedAttachments(desktopSession, comments, resumeDocumentPath);
 }
 
-/**
- * Resume the review document at `resumePath` into the desktop session, the
- * way serve startup does: comments, viewed files, import diagnostics and
- * attachment origins beside the document. Throws when it cannot be read;
- * main decides what that means.
- */
+/** Throws when the document cannot be read; main decides what that means. */
 export function loadResumeFile(resumePath: string): {
   parsed: ParsedReview;
-  /** The parser's diagnostics plus the attachment references that will never be read. */
   importDiagnostics: string[];
 } {
   const parsed = loadResumeDocument(desktopSession, resumePath);
   return { parsed, importDiagnostics: desktopSession.resumeImportDiagnostics };
 }
 
-/** Where the resumed attachments live, for the publisher; see `PublishReviewOptions`. */
 export function getAttachmentOrigins(): AttachmentOrigins {
   return desktopSession.attachmentOrigins;
 }
@@ -191,9 +176,7 @@ export function registerIpcHandlers(): void {
     submitReviewState(desktopSession, state);
   });
 
-  // Handle attachment read from renderer. The renderer names the reference
-  // the review wrote (`.self-review-assets/<name>`), and core authorizes it
-  // against the session; anything it refuses reads as missing.
+  // Core authorizes the reference; anything it refuses reads as missing.
   ipcMain.handle(
     IPC.ATTACHMENT_READ,
     async (_event, reference: unknown): Promise<ArrayBuffer | null> => {
@@ -355,13 +338,7 @@ export function registerFindInPageForWindow(window: BrowserWindow): void {
   });
 }
 
-/**
- * The review state the renderer pushed over `review:submit` ahead of a save,
- * consumed exactly once. Every save path (Finish Review, Save & Quit) pushes
- * first, so a `null` here means the renderer did not, and the caller treats
- * that as a failed save: main never pulls state from the renderer and never
- * substitutes an empty review.
- */
+/** Consumed once. `null` means the renderer never pushed, which the caller treats as a failed save (never an empty review). */
 export function takeSubmittedReviewState(): ReviewState | null {
   const state = takeReviewState(desktopSession);
   if (state) {
@@ -370,11 +347,6 @@ export function takeSubmittedReviewState(): ReviewState | null {
   return state;
 }
 
-/**
- * True while this session is reviewing something, as opposed to showing the
- * welcome screen. The close/quit flow asks the renderer only in that case;
- * a welcome screen has nothing to save and quits directly.
- */
 export function isReviewOpen(): boolean {
   const diff = desktopSession.diffData;
   return diff !== null && diff.source.type !== 'welcome';

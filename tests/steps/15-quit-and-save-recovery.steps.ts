@@ -1,12 +1,4 @@
-/**
- * Step definitions for Feature 15: Quit and save recovery.
- *
- * Native dialogs cannot be driven from the page, so the scenarios stub
- * `dialog.showMessageBox` and `dialog.showSaveDialog` inside the main
- * process through `electronApp.evaluate` and read back what was shown. Menu
- * Quit is exercised by clicking the real `quit` role item of the application
- * menu, which is what Ctrl+Q / Cmd+Q dispatch to.
- */
+// Native dialogs cannot be driven from the page, so the main-process dialog functions are stubbed through `electronApp.evaluate`.
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
@@ -37,7 +29,6 @@ const CLOSE_DIALOG_BUTTONS: Record<string, string> = {
   'Save & Quit': 'close-confirm-save',
 };
 
-/** Install the message-box recorder in the main process (idempotent). */
 async function captureMessageBoxes(): Promise<void> {
   await getElectronApp().evaluate(({ dialog }) => {
     const g = globalThis as { __srMessageBoxes?: unknown[] };
@@ -59,14 +50,10 @@ async function recordedMessageBoxes(): Promise<RecordedMessageBox[]> {
   });
 }
 
-// ── Given ──
-
 // Must follow the launch step: the stub lives in the launched main process.
 Given('native message boxes are captured instead of shown', async () => {
   await captureMessageBoxes();
 });
-
-// ── When ──
 
 When('I press the Finish Review button', async () => {
   const page = getPage();
@@ -102,9 +89,7 @@ When('I choose {string} in the close confirmation dialog', async ({}, choice: st
     await button.click();
     return;
   }
-  // Discard and a successful Save & Quit end the process at once, so the
-  // page can close before the click settles; that is the expected outcome,
-  // and the scenario's next step asserts the exit itself.
+  // The process may exit before the click settles; the next step asserts the exit.
   await button.waitFor({ state: 'visible' });
   try {
     await button.click({ timeout: 5000 });
@@ -137,8 +122,6 @@ When('I change the output path to {string}', async ({}, relativePath: string) =>
   expect(info?.outputPathWritable).toBe(true);
 });
 
-// ── Then ──
-
 Then('the close confirmation dialog should be visible', async () => {
   await expect(getPage().locator('[data-testid="close-confirm-dialog"]')).toBeVisible();
 });
@@ -148,11 +131,9 @@ Then('the close confirmation dialog should be closed', async () => {
 });
 
 Then('the app should still be running', async () => {
-  // Give a wrongly-exiting process a moment to do so before asserting.
   await getPage().waitForTimeout(1000);
   expect(getExitCode()).toBeNull();
   expect(getElectronApp().process().exitCode).toBeNull();
-  // The window is still live and answers.
   expect(await getPage().evaluate(() => document.readyState)).toBe('complete');
 });
 

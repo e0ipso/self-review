@@ -3,13 +3,7 @@ import { AlertTriangle, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { useReview } from '../context/ReviewContext';
 
-/**
- * Non-blocking warning listing what the resume importer could not take as
- * written (`ResumeLoadPayload.importDiagnostics`): each named comment is
- * still in the review, downgraded to file-level feedback with its suggestion
- * text folded into the body. Sits beside RemoteDriftBanner and follows its
- * rules: orientation only, dismissible, never gates any review interaction.
- */
+/** Dismissible, non-blocking list of resumed comments the importer downgraded to file-level feedback. */
 export default function ImportDiagnosticsBanner() {
   const { importDiagnostics } = useReview();
   const [dismissed, setDismissed] = useState(false);

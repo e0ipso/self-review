@@ -4,11 +4,8 @@
 import { DiffFile, DiffHunk, ChangeType } from './types';
 
 /**
- * What a parse produced: the files it understood, and one diagnostic per
- * piece of input it could not represent faithfully. A diagnostic never
- * invents a line and never hides a file silently; it is the parser's way of
- * saying "this input is not in the contract", so the caller can show it
- * instead of an empty review.
+ * The files parsed, plus one diagnostic per piece of input that could not be represented
+ * faithfully.
  */
 export interface DiffParseResult {
   files: DiffFile[];
@@ -21,23 +18,11 @@ export function parseDiff(rawDiff: string): DiffFile[] {
 }
 
 /**
- * Parse `git diff` output (`--src-prefix=a/ --dst-prefix=b/`, no color) into
- * structured files.
- *
- * The contract this enforces:
- * - The trailing newline git appends is not a line of the last hunk.
- * - Every hunk is checked against its `@@ -a,b +c,d @@` counts. A line that
- *   exceeds them, a hunk that ends short of them, or a line inside a hunk that
- *   carries no `+`/`-`/` ` prefix produces a diagnostic and is never recorded
- *   as context. The one leniency is an empty line inside an open hunk, which
- *   `git apply` also reads as an empty context line (mail and editors strip
- *   the trailing space).
- * - `GIT binary patch` (from `--binary`) is a binary change, like
- *   `Binary files ... differ`.
- * - `copy from` / `copy to` headers produce a `copied` file.
- * - Combined output (`diff --cc`, `diff --combined`) cannot be represented and
- *   is reported as a diagnostic naming the path; its lines are skipped until
- *   the next file header.
+ * Parse `git diff` output (a/ b/ prefixes, no color). Every hunk is checked
+ * against its `@@` counts; a line over them, a short hunk or an unprefixed line
+ * is a diagnostic, never context. Empty lines in an open hunk are the one
+ * leniency (`git apply` reads them as empty context). Combined output
+ * (`diff --cc`) is reported and skipped.
  */
 export function parseDiffWithDiagnostics(rawDiff: string): DiffParseResult {
   const diagnostics: string[] = [];
@@ -46,8 +31,7 @@ export function parseDiffWithDiagnostics(rawDiff: string): DiffParseResult {
   }
 
   const lines = rawDiff.split('\n');
-  // Git ends its output with a newline; the empty element after the final
-  // split is the end of the input, not a line of the last hunk.
+  // The empty element after git's final newline is not a line of the last hunk.
   if (lines.length > 0 && lines[lines.length - 1] === '') {
     lines.pop();
   }
@@ -60,8 +44,7 @@ export function parseDiffWithDiagnostics(rawDiff: string): DiffParseResult {
   let remainingOld = 0;
   let remainingNew = 0;
   let hasModeChange = false;
-  // Set while the input is inside a section whose lines are not diff
-  // content: a binary patch body or an unsupported combined section.
+  // Inside a binary patch body or an unsupported combined section.
   let skippingSection = false;
 
   function fileLabel(): string {
@@ -121,8 +104,7 @@ export function parseDiffWithDiagnostics(rawDiff: string): DiffParseResult {
       continue;
     }
 
-    // Combined output describes two parents against one result, which no
-    // DiffFile can carry. Report it and skip to the next file header.
+    // Two parents against one result: no DiffFile can carry it.
     const combined = line.match(/^diff --(?:cc|combined) (.*)$/);
     if (combined) {
       flushFile();
@@ -194,8 +176,7 @@ export function parseDiffWithDiagnostics(rawDiff: string): DiffParseResult {
       continue;
     }
 
-    // `--binary` emits the base85 patch body after this marker. The body is
-    // not diff content; skip it until the next file header.
+    // `--binary` emits a base85 body after this marker; skip it.
     if (line === 'GIT binary patch') {
       currentFile.isBinary = true;
       skippingSection = true;
@@ -233,11 +214,10 @@ export function parseDiffWithDiagnostics(rawDiff: string): DiffParseResult {
       continue;
     }
 
-    // Lines before the first hunk are file metadata (index, mode, similarity).
+    // Before the first hunk: file metadata.
     if (!currentHunk || !currentHunk.lines) continue;
 
     if (line.startsWith('\\')) {
-      // "\ No newline at end of file" annotates the previous line.
       continue;
     }
 
@@ -313,9 +293,7 @@ function stripPrefix(path: string): string {
   return path;
 }
 
-// `TextDecoder` rather than Node's `Buffer`: this parser is also handed to
-// browsers through browser.ts, and the two decoders agree on the one thing
-// that matters here — a malformed byte run becomes U+FFFD, never an error.
+// `TextDecoder`, not `Buffer`: this parser also runs in the browser (browser.ts).
 const OCTAL_PATH_DECODER = new TextDecoder('utf-8');
 
 function decodeGitPath(path: string): string {
@@ -371,8 +349,7 @@ function parseGitDiffHeader(line: string): {
         stripPrefix(paths.substring(match.index! + 1))
     ) || separators[0];
   if (!boundary) {
-    // No prefix at all (diff.noprefix): the only unambiguous shape is two
-    // bare tokens naming the same path.
+    // diff.noprefix: unambiguous only as two bare tokens naming the same path.
     const bare = paths.split(' ');
     if (bare.length === 2 && bare[0] === bare[1]) {
       return { oldPath: bare[0], newPath: bare[1] };

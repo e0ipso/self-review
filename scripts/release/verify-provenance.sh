@@ -1,39 +1,13 @@
 #!/usr/bin/env bash
 #
-# Decide whether a workflow_run event is trusted enough to release from.
-#
-# The release workflow listens for completed CI runs on main, but a
-# workflow_run job runs with this repository's secrets and permissions no
-# matter what triggered the CI run, and the branch filter also matches a fork
-# pull request whose branch happens to be called main. So before any job checks
-# out or executes the triggering commit, this script proves from the event
-# payload that the run was a successful CI run of a push to this repository's
-# main branch, and from the GitHub API that the commit is still on main. It
-# reads nothing from the commit it is judging; the workflow takes it from the
-# default branch.
-#
-# Inputs, all through the environment so that no event field is ever spliced
-# into a shell command:
-#
-#   EVENT_PATH                  workflow_run event payload
-#                               (default: $GITHUB_EVENT_PATH)
-#   EXPECTED_REPOSITORY         owner/name the run must belong to
-#                               (default: $GITHUB_REPOSITORY)
-#   EXPECTED_REPOSITORY_ID      its numeric id (default: $GITHUB_REPOSITORY_ID)
-#   EXPECTED_BRANCH             branch the push must target (default: main)
-#   EXPECTED_WORKFLOW           name of the workflow the run must be (default: CI)
-#   PROVENANCE_COMPARE_COMMAND  command run as
-#                                 <command> <owner/name> <head-sha> <branch>
-#                               that prints the compare API status of
-#                               <head-sha>...<branch>. Defaults to `gh api`;
-#                               the regression suite substitutes a stub.
-#   GITHUB_OUTPUT               when set, receives `head_sha=<sha>` on success
-#
-# On success the verified head sha is printed to stdout and the exit code is 0.
-# Any other outcome, including an API failure, exits non-zero and prints
-# nothing on stdout: an outage is not provenance.
-#
-# Usage: scripts/release/verify-provenance.sh
+# Decide whether a workflow_run event is trusted enough to release from: a successful CI run of a push
+# to this repository's main (a fork PR branch named main also matches the workflow filter), with the
+# commit still on main per the GitHub API. Inputs come only from the environment, never spliced into a shell command:
+#   EVENT_PATH (default $GITHUB_EVENT_PATH), EXPECTED_REPOSITORY (default $GITHUB_REPOSITORY),
+#   EXPECTED_REPOSITORY_ID (default $GITHUB_REPOSITORY_ID), EXPECTED_BRANCH (main), EXPECTED_WORKFLOW (CI),
+#   PROVENANCE_COMPARE_COMMAND (`<command> <owner/name> <head-sha> <branch>` prints the compare status; defaults to `gh api`),
+#   GITHUB_OUTPUT (receives `head_sha=<sha>` on success).
+# Success prints the verified head sha and exits 0; anything else, an API failure included, exits non-zero with nothing on stdout.
 
 set -uo pipefail
 
@@ -53,8 +27,7 @@ expected_workflow=${EXPECTED_WORKFLOW:-CI}
 [ -n "$event_path" ] || reject "no event payload: EVENT_PATH is not set"
 [ -f "$event_path" ] || reject "no event payload at $event_path"
 
-# One jq pass pulls every field the decision needs, as strings, with absent
-# fields rendered as "null" so they can never equal an expected value.
+# Absent fields render as "null" so they can never equal an expected value.
 fields=$(jq -r '
   [
     .workflow_run.name,
@@ -85,8 +58,7 @@ fields=$(jq -r '
   read -r repository_id
 } <<<"$fields"
 
-# The payload checks come first and cost nothing; the API is consulted only
-# for a run that already looks trusted.
+# Payload checks first; the API is consulted only for a run that already looks trusted.
 [ "$workflow_name" = "$expected_workflow" ] ||
   reject "workflow is '$workflow_name', expected '$expected_workflow'"
 [ "$conclusion" = "success" ] ||
@@ -110,12 +82,7 @@ fields=$(jq -r '
 [[ $head_sha =~ ^[0-9a-f]{40}$ ]] ||
   reject "head_sha '$head_sha' is not a full commit id"
 
-# The payload says the push targeted main; the API says whether main still
-# contains the commit. compare/<sha>...<branch> reports the branch's status
-# relative to the commit: `identical` when the branch still points at it,
-# `ahead` when later pushes landed on top of it. `behind` and `diverged` mean
-# the commit is not on the branch any more (a force-push or reset), and nothing
-# else is a known answer.
+# compare/<sha>...<branch>: `identical` or `ahead` mean the commit is still on the branch; `behind`/`diverged` mean a force-push or reset.
 compare_default() {
   gh api "repos/$1/compare/$2...$3" --jq .status
 }

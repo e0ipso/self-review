@@ -12,17 +12,9 @@ import React, {
 export interface DiffNavigationContextValue {
   activeFilePath: string | null;
   scrollToFile: (filePath: string) => void;
-  /**
-   * Records the root element of a file's diff section. File sections call
-   * this from a callback ref so navigation can reach them by path without
-   * building a CSS selector out of a filename: a quote, backslash or newline
-   * in a valid filename would otherwise make the selector throw or match the
-   * wrong element.
-   */
+  /** Lookup by path, never a CSS selector: quotes, backslashes and newlines break selectors. */
   registerFileElement: (filePath: string, element: HTMLElement) => void;
-  /** Forgets `element` for `filePath`, unless another element replaced it. */
   unregisterFileElement: (filePath: string, element: HTMLElement) => void;
-  /** The registered diff section element for `filePath`, if it is mounted. */
   getFileElement: (filePath: string) => HTMLElement | null;
 }
 
@@ -54,8 +46,7 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const unregisterFileElement = useCallback((filePath: string, element: HTMLElement) => {
-    // Two sections can briefly share a path (a remount, or a diff that lists
-    // one path twice); only the element that is still registered may leave.
+    // Two sections can briefly share a path; only the still-registered element may unregister.
     if (fileElements.current.get(filePath) === element) {
       fileElements.current.delete(filePath);
     }

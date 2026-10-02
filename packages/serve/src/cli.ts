@@ -82,8 +82,7 @@ async function main(): Promise<void> {
 
   const { session, output } = await resolveSession(args);
 
-  // One secret for the life of the process. It leaves here exactly once, in
-  // the fragment of the URL printed below; the server never sends it.
+  // Leaves only in the printed URL's fragment; the server never sends it.
   const capability = generateCapability();
   const server = createReviewServer({ session, output, capability });
   completeReviewOnSubmit({ server });

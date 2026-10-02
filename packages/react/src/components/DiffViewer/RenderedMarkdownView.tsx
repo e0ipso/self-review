@@ -29,11 +29,8 @@ import type { RenderedTextMode } from '../../utils/file-type-utils';
 
 const GutterNestingContext = createContext(false);
 
-// ===== Rendered Block Context =====
-// Everything a block needs that changes between renders travels through this
-// context. The block component types themselves are created once at module
-// scope, so a parent re-render never gives react-markdown a new component
-// identity and never remounts the comment composer under a block.
+// Per-render block state goes through this context; component types live at module scope so a
+// parent re-render never remounts the comment composer under a block.
 
 interface RenderedBlockContextValue {
   file: DiffFile;
@@ -354,10 +351,7 @@ function BlockWrapper({
   );
 }
 
-// ===== Stable Block Components =====
-// One component per tag, created once. Positions come from the hast node the
-// renderer passes in (`passNode`), and everything else from the context, so
-// these types are identical across renders and React keeps their subtrees.
+// One component per tag, created once, so identities are stable across renders.
 
 type RenderedBlockProps = React.HTMLAttributes<HTMLElement> & ExtraProps;
 
@@ -413,8 +407,6 @@ export interface RenderedMarkdownViewProps {
 }
 
 function HtmlRenderedContent({ content }: { content: string }) {
-  // The parsed, filtered tree carries the parser's own source positions, so
-  // every block anchors to the lines of the markup it came from.
   return useMemo(
     () =>
       toJsxRuntime(parsePassiveHtml(content), {

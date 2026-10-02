@@ -746,11 +746,6 @@ describe('review-handlers', () => {
   });
 
   // ===== Authorization against the reviewed diff (plan 63, task 11) =====
-  //
-  // The engine checks the file; the session checks that the reviewer ever
-  // looked at it. Resumed documents, pushed review state and the renderer's
-  // own placeholder entries can all name paths the diff never had, so the
-  // set is captured once, when the diff is committed, and nothing extends it.
 
   describe('reviewed paths', () => {
     it('captures every path of the committed diff, old and new, and nothing else', () => {

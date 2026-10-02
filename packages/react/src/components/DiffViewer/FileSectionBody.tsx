@@ -63,8 +63,7 @@ export function FileSectionBody({
         </div>
       )}
 
-      {/* Diff content dispatcher. A preview that throws is contained to this
-          file; switching view, or new content for the file, retries it. */}
+      {/* A preview that throws is contained to this file; a view or content change retries it. */}
       <PreviewErrorBoundary
         filePath={filePath}
         resetKeys={[

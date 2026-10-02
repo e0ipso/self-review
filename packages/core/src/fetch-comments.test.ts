@@ -192,8 +192,7 @@ describe('runFetchComments', () => {
     expect(written[0].path).toBe('/work/review.xml');
     expect(cleanup).toHaveBeenCalled();
 
-    // The output path came from configuration, not the reviewer, so the
-    // publisher is told to keep it inside the launch directory.
+    // Config-supplied output path: the publisher must keep it inside the launch directory.
     const [, , options] = (deps.publish as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(options).toEqual({ outputOrigin: 'inherited', baseDir: '/work' });
 
@@ -323,8 +322,7 @@ describe('runFetchComments', () => {
       makeThread('rt-1', null),
     ] satisfies ForgeThread[]);
     // Use the REAL serializer so the round-trip exercises the production
-    // XML path (validation is mocked to valid at the module level); only the
-    // disk write is captured instead of performed.
+    // Validation is mocked at module level; only the disk write is captured.
     deps.publish = async (state, outputPath) => {
       const { xml } = await serializeReview(state, outputPath);
       written.push({ path: outputPath, content: xml + '\n' });

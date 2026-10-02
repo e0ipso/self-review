@@ -8,10 +8,7 @@ import { nodeFsLayer } from './safe-fs';
 import type { FsLayer } from './safe-fs';
 import type { ReviewComment, ReviewState } from './types';
 
-// The real validator runs here: a publisher test that mocks validation away
-// would not prove that the document is checked before anything is written.
-// The module is still wrapped so individual tests can make the validator
-// fail to load (the documented non-fatal exception).
+// The real validator runs; the module is wrapped only so a test can make it fail to load.
 vi.mock('xmllint-wasm', async importOriginal => {
   const actual = await importOriginal<typeof import('xmllint-wasm')>();
   return { ...actual, validateXML: vi.fn(actual.validateXML) };
@@ -93,11 +90,7 @@ function assetPathsIn(xml: string): string[] {
   return [...xml.matchAll(/<attachment path="([^"]+)"/g)].map(m => m[1]);
 }
 
-/**
- * A filesystem whose writes succeed for `budget` bytes and then fail with
- * ENOSPC after a partial write, the way a full disk fails: some bytes land,
- * the rest do not, and the error carries the errno code.
- */
+/** ENOSPC after `budget` bytes, the way a full disk fails: some bytes land first. */
 function enospcAfter(budget: number): FsLayer {
   let remaining = budget;
   return {
@@ -143,7 +136,6 @@ describe('publishReview', () => {
     expect(fs.readFileSync(absolute)).toEqual(Buffer.from(PNG));
 
     expect(result).toEqual({ outputPath, assetPaths: [absolute] });
-    // No temp file is left behind on success.
     expect(listDir(tmp)).toEqual([ASSETS, 'review.xml']);
   });
 
@@ -224,8 +216,6 @@ describe('publishReview', () => {
       expect(listDir(path.join(tmp, ASSETS))).toEqual([previous.assetName]);
     });
 
-    // AGENTS.md "XML must validate, with one stated exception": a validator
-    // that cannot load is not fatal, and the warning is the only trace.
     it('still publishes when the validator itself fails to load', async () => {
       const { validateXML } = await import('xmllint-wasm');
       vi.mocked(validateXML).mockRejectedValueOnce(new Error('WASM load failed'));
@@ -422,8 +412,6 @@ describe('publishReview', () => {
 });
 
 describe('inspectOutputPath', () => {
-  // The desktop's startup hint. It must agree with what publishReview would
-  // refuse, and a clean probe is advisory: the save re-checks.
   it('returns null for a writable path with nothing in the way', () => {
     expect(inspectOutputPath(outputPath, explicit)).toBeNull();
   });

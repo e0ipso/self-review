@@ -1,52 +1,22 @@
 // packages/core/src/attachment-origins.ts
-// Where a review's attachment bytes come from, who may read them, and how
-// they follow the document when it is published somewhere else.
-//
-// A review document names each attachment by a reference relative to the
-// document itself — always `.self-review-assets/<name>`, the only shape the
-// serializer writes. Three rules follow from that:
-//
-// - Provenance. An attachment imported from a resumed document lives beside
-//   *that document*, not beside the launch directory or the current output.
-//   Its origin is recorded once, at import, as an absolute path in session
-//   state; the document and the renderer keep the relative reference.
-// - Authorization. A read names a reference, never a path. Only the
-//   `.self-review-assets/<name>` shape is accepted, and it resolves against
-//   the recorded origin or, for a reference the import did not record, the
-//   current output's asset directory. The asset directory must be a real
-//   directory, the leaf is opened without following links, and only a
-//   regular file within the image budget is read.
-// - Relocation. Publishing to a directory other than an attachment's origin
-//   carries the bytes (read through the same authorized reader) into the
-//   publisher, which stages them as new assets beside the new document, so
-//   every published reference resolves to the bytes it was imported with.
-//   A save to the origin's own directory keeps the reference as it was.
+// Where resumed attachment bytes live, which references may be read, and how they follow a relocated output.
 
-import * as fs from 'fs';
 import * as path from 'path';
-import { readFileWithinBudget } from './bounded-read';
-import { MAX_IMAGE_BYTES, formatBytes } from './input-budgets';
-import { errnoOf } from './safe-fs';
+import { MAX_IMAGE_BYTES } from './input-budgets';
+import { readContainedFile, toSafeFsError } from './safe-fs';
+import { canonicalSourcePath } from './source-identity';
+import type { SafeFsErrorCode } from './safe-fs';
 import { ASSET_DIR_NAME } from './xml-serializer';
 import type { Attachment, ReviewComment, ReviewState } from './types';
 
-/**
- * Attachment reference, exactly as the resumed document wrote it, to the
- * absolute path of its bytes beside that document. Session state only; it
- * never reaches the XML or the renderer.
- */
+/** Reference as the resumed document wrote it → absolute path beside that document. Session state only. */
 export type AttachmentOrigins = ReadonlyMap<string, string>;
 
 export type AttachmentReadFailureReason =
-  /** The reference is not one this session may read. */
   | 'not-authorized'
-  /** Nothing is there (or the asset directory is not a directory). */
   | 'not-found'
-  /** A directory, FIFO, socket or device: nothing was read. */
   | 'not-regular'
-  /** A symlink at the asset directory or at the attachment name. */
   | 'unsafe-link'
-  /** Larger than `MAX_IMAGE_BYTES`. */
   | 'too-large'
   | 'io-error';
 
@@ -54,11 +24,7 @@ export type AttachmentReadResult =
   | { ok: true; data: ArrayBuffer }
   | { ok: false; reason: AttachmentReadFailureReason; message: string };
 
-/**
- * The bare asset file name `reference` names, or null when it is not exactly
- * `.self-review-assets/<name>`: absolute paths, traversal, nested
- * directories, backslashes and NUL bytes are all refused.
- */
+/** The bare name in `.self-review-assets/<name>`; null for any other shape. */
 export function parseAttachmentReference(reference: unknown): string | null {
   if (typeof reference !== 'string') return null;
   const prefix = `${ASSET_DIR_NAME}/`;
@@ -69,17 +35,6 @@ export function parseAttachmentReference(reference: unknown): string | null {
   return name;
 }
 
-/** The physical form of `dir` when it exists, its absolute form otherwise. */
-function physicalDir(dir: string): string {
-  const absolute = path.resolve(dir);
-  try {
-    return fs.realpathSync(absolute);
-  } catch {
-    return absolute;
-  }
-}
-
-/** Every attachment list in a set of comments, replies included. */
 function* attachmentLists(comments: readonly ReviewComment[]) {
   for (const comment of comments) {
     if (comment.attachments) yield { comment, attachments: comment.attachments };
@@ -89,19 +44,13 @@ function* attachmentLists(comments: readonly ReviewComment[]) {
   }
 }
 
-/**
- * Resolve the origin of every attachment a resumed document references,
- * against the directory of the document itself (`resumeDocumentPath`,
- * resolved against the current directory if relative). A reference that is
- * not `.self-review-assets/<name>` is not recorded, so nothing will ever
- * read it; one diagnostic line per such reference says so.
- */
+/** Origins resolve against the resumed document's directory; an unrecorded reference is never read. */
 export function resolveAttachmentOrigins(
   comments: readonly ReviewComment[],
   resumeDocumentPath: string
 ): { origins: Map<string, string>; diagnostics: string[] } {
   const assetDir = path.join(
-    physicalDir(path.dirname(path.resolve(resumeDocumentPath))),
+    canonicalSourcePath(path.dirname(path.resolve(resumeDocumentPath))),
     ASSET_DIR_NAME
   );
   const origins = new Map<string, string>();
@@ -122,93 +71,33 @@ export function resolveAttachmentOrigins(
   return { origins, diagnostics };
 }
 
-function failure(
-  reason: AttachmentReadFailureReason,
-  message: string
-): { ok: false; reason: AttachmentReadFailureReason; message: string } {
-  return { ok: false, reason, message };
-}
+const READ_FAILURES: Partial<Record<SafeFsErrorCode, AttachmentReadFailureReason>> = {
+  'not-found': 'not-found',
+  'unsafe-link': 'unsafe-link',
+  'output-is-directory': 'not-regular',
+  'not-regular': 'not-regular',
+  'too-large': 'too-large',
+};
 
-/** lstat that reports a missing entry as null instead of throwing. */
-async function lstatOrNull(target: string): Promise<fs.Stats | null> {
-  try {
-    return await fs.promises.lstat(target);
-  } catch (error) {
-    if (errnoOf(error) === 'ENOENT' || errnoOf(error) === 'ENOTDIR') return null;
-    throw error;
-  }
-}
-
-/**
- * Read one asset file the caller has already authorized. The directory that
- * holds it must be a real directory (not a link to one) before and after the
- * read, with the same identity; the leaf is opened `O_NOFOLLOW` and
- * non-blocking, and only a regular file of at most `MAX_IMAGE_BYTES` is read.
- */
+/** Read one asset the caller authorized: the asset directory must not be a link, nor the leaf. */
 export async function readAssetFile(assetPath: string): Promise<AttachmentReadResult> {
   const assetDir = path.dirname(assetPath);
+  const rel = path.join(path.basename(assetDir), path.basename(assetPath));
   try {
-    const before = await lstatOrNull(assetDir);
-    if (before === null) {
-      return failure('not-found', `${assetPath} does not exist`);
-    }
-    if (before.isSymbolicLink()) {
-      return failure(
-        'unsafe-link',
-        `${assetDir} is a symbolic link; attachments are not read through it`
-      );
-    }
-    if (!before.isDirectory()) {
-      return failure('not-found', `${assetDir} is not a directory`);
-    }
-
-    let read: Awaited<ReturnType<typeof readFileWithinBudget>>;
-    try {
-      read = await readFileWithinBudget(assetPath, MAX_IMAGE_BYTES, { noFollow: true });
-    } catch (error) {
-      const code = errnoOf(error);
-      if (code === 'ENOENT' || code === 'ENOTDIR') {
-        return failure('not-found', `${assetPath} does not exist`);
-      }
-      if (code === 'ELOOP' || code === 'EMLINK') {
-        return failure('unsafe-link', `${assetPath} is a symbolic link; it is not followed`);
-      }
-      throw error;
-    }
-
-    const after = await lstatOrNull(assetDir);
-    if (
-      after === null ||
-      after.isSymbolicLink() ||
-      after.dev !== before.dev ||
-      after.ino !== before.ino
-    ) {
-      return failure('unsafe-link', `${assetDir} changed while ${assetPath} was being read`);
-    }
-
-    if (read.kind === 'not-regular') {
-      return failure('not-regular', `${assetPath} is not a regular file`);
-    }
-    if (read.kind === 'too-large') {
-      return failure(
-        'too-large',
-        `${assetPath} is ${formatBytes(read.size)}, over the ${formatBytes(MAX_IMAGE_BYTES)} attachment limit`
-      );
-    }
-    const { content } = read;
+    const content = await readContainedFile(path.dirname(assetDir), rel, MAX_IMAGE_BYTES);
     const data = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength);
     return { ok: true, data: data as ArrayBuffer };
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    return failure('io-error', `Could not read ${assetPath}: ${reason}`);
+    const fsError = toSafeFsError(error, assetPath, 'read');
+    return {
+      ok: false,
+      reason: READ_FAILURES[fsError.code] ?? 'io-error',
+      message: fsError.message,
+    };
   }
 }
 
-/**
- * The file an attachment reference authorizes, or null when it authorizes
- * none: the recorded origin of an imported reference, else the same name in
- * `currentAssetDir` (the current output's asset directory) when there is one.
- */
+/** The recorded origin of an imported reference, else the same name in `currentAssetDir`. */
 export function authorizeAttachmentReference(
   reference: unknown,
   origins: AttachmentOrigins,
@@ -221,11 +110,8 @@ export function authorizeAttachmentReference(
   return currentAssetDir ? path.join(currentAssetDir, name) : null;
 }
 
-/** An imported attachment that must be copied to the new output and cannot be read. */
 export class AttachmentRelocationError extends Error {
-  /** The reference as the resumed document wrote it. */
   readonly reference: string;
-  /** Where its bytes were expected. */
   readonly origin: string;
   readonly reason: AttachmentReadFailureReason;
 
@@ -247,17 +133,8 @@ export class AttachmentRelocationError extends Error {
 }
 
 /**
- * The state to publish at `outputPath`, with every imported attachment that
- * lives somewhere else carrying its bytes, so the publisher stages a copy
- * beside the new document. An attachment that already carries bytes, one
- * the import did not record, and one whose origin is the new output's own
- * asset directory are left exactly as they are.
- *
- * Reads only; the input state is not modified.
- *
- * @throws AttachmentRelocationError when an attachment that has to move
- *   cannot be read: publishing its old reference would point at nothing,
- *   or at whatever unrelated file has that name beside the new output.
+ * Give every imported attachment whose origin is not beside `outputPath` its bytes, so the
+ * publisher stages a copy. Unreadable ones throw: the old reference would resolve to the wrong file.
  */
 export async function relocateAttachments(
   state: ReviewState,
@@ -266,7 +143,7 @@ export async function relocateAttachments(
 ): Promise<ReviewState> {
   if (origins.size === 0) return state;
   const targetAssetDir = path.join(
-    physicalDir(path.dirname(path.resolve(outputPath))),
+    canonicalSourcePath(path.dirname(path.resolve(outputPath))),
     ASSET_DIR_NAME
   );
   const read = new Map<string, ArrayBuffer>();

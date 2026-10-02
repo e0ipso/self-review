@@ -14,7 +14,6 @@ vi.mock('../../context/ReviewContext', () => ({
     deleteComment: mocks.deleteComment,
     deleteReply: mocks.deleteReply,
   }),
-  // SuggestionBlock's apply control reads the review optionally; none here.
   useOptionalReview: () => null,
 }));
 

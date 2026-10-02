@@ -64,9 +64,7 @@ export default function FileSection({
   const fileState = files.find(f => f.path === filePath);
   const isViewed = fileState?.viewed || false;
 
-  // Register this section with the navigation provider (when there is one) so
-  // scroll-to-file and collapse compensation find it by path, never through a
-  // CSS selector built from the filename.
+  // Registered by path so navigation never builds a CSS selector from the filename.
   const setSectionElement = useCallback(
     (element: HTMLDivElement | null) => {
       const previous = sectionRef.current;
@@ -77,8 +75,6 @@ export default function FileSection({
     [filePath, registerFileElement, unregisterFileElement]
   );
 
-  // On-demand content (large-payload mode): one request per expansion, a
-  // failure waits for Retry, and a stale answer is dropped.
   const { state: contentLoad, retry: retryContentLoad } = useLazyFileContent({
     file,
     filePath,
@@ -101,9 +97,7 @@ export default function FileSection({
       ? 'unified'
       : viewMode;
 
-  // Stable identities: the rendered Markdown/HTML view hands these to every
-  // block through context, so a new closure per render would re-render each
-  // block for nothing.
+  // Stable identities: the rendered view hands these to every block through context.
   const handleCommentRange = useCallback((start: number, end: number, side: 'old' | 'new') => {
     setCommentRange({
       start: Math.min(start, end),

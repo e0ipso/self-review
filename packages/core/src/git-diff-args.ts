@@ -31,15 +31,12 @@ const OPTIONS_WITH_SEPARATE_VALUES = new Set([
   '--color-moved-ws',
 ]);
 
-// Short options that take a value: required (attached, or else the next
-// argument) and optional (attached only; `-U 5` is `-U` and then `5`).
+// Required values may be attached or the next argument; optional ones are attached only (`-U 5` is
+// `-U`, then `5`).
 const SHORT_OPTIONS_WITH_REQUIRED_VALUES = 'SGOIl';
 const SHORT_OPTIONS_WITH_OPTIONAL_VALUES = 'UBMC';
 
-/**
- * True when `arg` is an option whose value is the *next* argument, so that
- * argument is neither a flag nor a positional.
- */
+/** True when `arg`'s value is the next argument, which is then neither a flag nor a positional. */
 export function consumesNextArgument(arg: string): boolean {
   if (arg.startsWith('--')) return OPTIONS_WITH_SEPARATE_VALUES.has(arg);
   if (!arg.startsWith('-')) return false;
@@ -54,24 +51,20 @@ export function consumesNextArgument(arg: string): boolean {
 
 /** What the paths in `git diff` output are relative to. */
 export type DiffPathRelativity =
-  /** The repository root: no `--relative` in effect. */
   | { kind: 'root' }
-  /** Bare `--relative`: the directory git runs in. */
   | { kind: 'cwd' }
-  /** `--relative=<dir>`: `directory`, which git reads from the repository root. */
+  // `directory` is read by git from the repository root.
   | { kind: 'directory'; directory: string };
 
 export interface SingleFileRediff {
-  /** The options and revisions to re-run, in order; no `--` and no pathspec. */
   args: string[];
-  /** What the original output paths were relative to; its option is not in `args`. */
+  /** Resolved from the original arguments; its option is not in `args`. */
   relative: DiffPathRelativity;
 }
 
 // Long options that decide only how much context surrounds a change.
 const CONTEXT_OPTIONS = new Set(['--unified', '--function-context', '--no-function-context']);
-// Long options that only order the files of a multi-file diff. `--rotate-to`
-// and `--skip-to` make git fail when their file is not in the diff.
+// `--rotate-to` and `--skip-to` make git fail when their file is not in the diff.
 const FILE_ORDER_OPTIONS = new Set(['--rotate-to', '--skip-to']);
 
 function isDroppedLongOption(arg: string): boolean {
@@ -80,9 +73,8 @@ function isDroppedLongOption(arg: string): boolean {
 }
 
 /**
- * A short-option group without its context (`-U`, `-W`) and file-order
- * (`-O`) options, or null when nothing of it remains. `-U` and `-O` end
- * the group: what follows them in the token is their value.
+ * A short-option group minus `-U`, `-W` and `-O` (which end the group: the rest is their value), or
+ * null if empty.
  */
 function withoutDroppedShortOptions(arg: string): string | null {
   let kept = '';
@@ -103,14 +95,9 @@ function withoutDroppedShortOptions(arg: string): string | null {
 }
 
 /**
- * What the paths in the output of `git diff argv` are relative to, read
- * with the same arity rules as {@link consumesNextArgument}: the last of
- * `--relative`, `--relative=<dir>` and `--no-relative` before `--` decides,
- * and an option value spelled like one of them is never read as one.
- *
- * Only the arguments count. Every `git diff` this program runs forces
- * `diff.relative=false` (see `PARSER_COMPATIBLE_GIT_CONFIG`), so a user's
- * own `diff.relative` setting never reaches the output.
+ * The last of `--relative`, `--relative=<dir>` and `--no-relative` before `--` decides.
+ * Only arguments count: every git diff forces `diff.relative=false`
+ * (`PARSER_COMPATIBLE_GIT_CONFIG`).
  */
 export function describeDiffPathRelativity(args: readonly string[]): DiffPathRelativity {
   let relative: DiffPathRelativity = { kind: 'root' };
@@ -127,23 +114,10 @@ export function describeDiffPathRelativity(args: readonly string[]): DiffPathRel
 }
 
 /**
- * The arguments for re-running a review's `git diff` over a single file
- * with a different amount of context, read with the same arity rules as
- * {@link consumesNextArgument}:
- *
- * - context options are removed — `-U`, `-U<n>`, `--unified`,
- *   `--unified=<n>`, `-W`, `--function-context` — and a bare `-U` or
- *   `--unified` never takes the argument after it, so `-U HEAD` keeps
- *   `HEAD` as the revision it is;
- * - file-order options (`-O`, `--rotate-to`, `--skip-to`) are removed: one
- *   file has no order, and the last two fail when their file is absent;
- * - `--relative[=<dir>]` and `--no-relative` are removed and resolved into
- *   `relative`, so the caller can restate them against the directory it
- *   runs git in;
- * - `--` and every pathspec after it are dropped; the caller supplies the
- *   file's own paths.
- *
- * Everything else, revisions and option values included, is kept in order.
+ * Arguments for re-running a review's `git diff` over one file with other context.
+ * Removed: context options (a bare `-U` never takes the next argument, so `-U HEAD`
+ * keeps `HEAD`), file-order options, `--relative` forms (resolved into `relative`),
+ * and `--` with its pathspecs. Everything else is kept in order.
  */
 export function singleFileRediffArgs(args: readonly string[]): SingleFileRediff {
   const kept: string[] = [];
@@ -153,8 +127,7 @@ export function singleFileRediffArgs(args: readonly string[]): SingleFileRediff 
     if (arg === '--relative' || arg.startsWith('--relative=') || arg === '--no-relative') {
       continue;
     }
-    // When an option takes the next argument, it is the last one in its
-    // token; the value goes wherever that option goes.
+    // The value goes wherever its option goes.
     const takesNext = consumesNextArgument(arg) && i + 1 < args.length;
     let option: string | null = arg;
     let keepValue = true;
@@ -174,20 +147,14 @@ export function singleFileRediffArgs(args: readonly string[]): SingleFileRediff 
   return { args: kept, relative: describeDiffPathRelativity(args) };
 }
 
-// Options a committed configuration must not be able to hand to git: the
-// one that writes (`--output` names a file git truncates and fills, even for
-// an empty diff, following a symlink there) and the two that run external
-// programs (`--ext-diff`, `--textconv` enable drivers git configuration may
-// define). Git accepts no abbreviations of its diff options, so exact
-// spellings are the whole set. Negations (`--no-ext-diff`) disable and are
-// allowed. `-o` is not a `git diff` option.
+// Options a committed config must not hand to git: `--output` truncates and fills a file
+// (following symlinks, even for an empty diff); the others run external drivers.
+// Git accepts no abbreviations, and negations (`--no-ext-diff`) are allowed.
 const WRITE_CAPABLE_OPTIONS = new Set(['--output', '--ext-diff', '--textconv']);
 
 /**
- * The options in `args` that make git write a file or run an external
- * program, in argument order, each spelled as written. Option values and
- * pathspecs after `--` are never reported. Used to refuse `default-diff-args`
- * a repository committed; a reviewer's own arguments are not restricted.
+ * Options that make git write a file or run a program, as written. Used to refuse project
+ * `default-diff-args`; the reviewer's own arguments are unrestricted.
  */
 export function findWriteCapableGitDiffOptions(args: readonly string[]): string[] {
   const offending: string[] = [];
@@ -201,8 +168,8 @@ export function findWriteCapableGitDiffOptions(args: readonly string[]): string[
   return offending;
 }
 
-// Output formats `parseDiff` cannot consume. Exact spellings, plus the
-// prefixes of the forms that carry an attached value (`--stat=120`).
+// Output formats `parseDiff` cannot consume: exact spellings plus attached-value prefixes
+// (`--stat=120`).
 const UNSUPPORTED_OUTPUT_OPTIONS = new Set([
   '--stat',
   '--numstat',
@@ -261,13 +228,7 @@ function isUnsupportedOutputOption(arg: string): boolean {
   );
 }
 
-/**
- * The user-supplied options that select an output format the parser cannot
- * consume (`--stat`, `--name-only`, `--word-diff`, ...), in argument order,
- * each spelled as the user wrote it. Option values and pathspecs after `--`
- * are never reported. An empty result means the arguments produce patch
- * output.
- */
+/** Options selecting an output format the parser cannot consume, as the user wrote them. */
 export function findUnsupportedGitDiffOptions(args: readonly string[]): string[] {
   const offending: string[] = [];
   for (let i = 0; i < args.length; i++) {

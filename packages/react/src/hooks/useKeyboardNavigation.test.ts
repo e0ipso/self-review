@@ -119,8 +119,7 @@ describe('useKeyboardNavigation f hint', () => {
     section.appendChild(line);
     document.body.appendChild(section);
 
-    // Stands in for the line's composer mounting and focusing itself, as
-    // ComposerCore does on mount.
+    // Stands in for the composer focusing itself on mount, as ComposerCore does.
     let opened: HTMLTextAreaElement | null = null;
     const onTrigger = () => {
       opened = composer();
@@ -138,7 +137,6 @@ describe('useKeyboardNavigation f hint', () => {
     act(() => {
       fireEvent.keyDown(document, { key: 'a' });
     });
-    // Let any animation-frame work scheduled by the hint run.
     await act(() => new Promise(resolve => setTimeout(resolve, 50)));
 
     document.removeEventListener('trigger-line-comment', onTrigger);

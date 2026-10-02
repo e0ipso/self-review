@@ -24,15 +24,8 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     // Check if this is a new search or cycling through existing results
     const isNewSearch = query !== lastSearchedQueryRef.current;
 
-    // `findNext: true` begins a new find session; `false` advances the
-    // existing one (Electron's documented semantics). Chromium starts the
-    // search at the focused element, and the query text inside this very
-    // input is a match it reports with an active ordinal of 0. The previous
-    // double call (`false` then `true`, back to back) consumed that match on
-    // older Chromium; Chromium 152 (Electron 44) answers the pair with 0 and
-    // the counter read "0 of N". Blurring the input first starts the session
-    // in the document instead. Focus is lost to the highlight anyway (see the
-    // result subscription below), so nothing the user had is taken away.
+    // Chromium starts at the focused element and matches the query text in this very input (ordinal 0,
+    // counter "0 of N" on Chromium 152). Blurring first starts the session in the document.
     if (isNewSearch) inputRef.current?.blur();
     window.electronAPI.findInPage({ text: query, forward: true, findNext: isNewSearch });
 
@@ -46,7 +39,7 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     // Check if this is a new search or cycling through existing results
     const isNewSearch = query !== lastSearchedQueryRef.current;
 
-    // See findNext above for why this is a single request after a blur.
+    // Blur first, as above.
     if (isNewSearch) inputRef.current?.blur();
     window.electronAPI.findInPage({ text: query, forward: false, findNext: isNewSearch });
 

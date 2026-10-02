@@ -7,18 +7,11 @@ import { parse as parseYaml } from 'yaml';
 import { AppConfig } from './types';
 import { DEFAULT_CONFIG } from '../../react/src/config-defaults';
 
-// The defaults are shared with the renderer's ConfigProvider: one file, imported
-// by relative source path, bundled into each package. See the header of
-// packages/react/src/config-defaults.ts for why the file lives there.
+// Shared with the renderer's ConfigProvider; see packages/react/src/config-defaults.ts.
 const defaults: AppConfig = DEFAULT_CONFIG;
 
 /**
- * Where a configuration value came from. The two files are trusted
- * differently: `~/.config/self-review/config.yaml` is the reviewer's own
- * (`user`), while `.self-review.yaml` in the launch directory is repository
- * data a project can commit (`project`). Hosts read this to decide whether
- * an `output-file` is the reviewer's explicit choice and whether
- * `default-diff-args` may name write-capable git options.
+ * `project` config is repository data and is trusted less than the reviewer's own `user` config.
  */
 export type ConfigValueOrigin = 'default' | 'user' | 'project';
 
@@ -26,40 +19,30 @@ export type ConfigProvenance = Readonly<Record<keyof AppConfig, ConfigValueOrigi
 
 export interface ConfigSource {
   origin: 'user' | 'project';
-  /** The file that was read. */
   path: string;
 }
 
 export interface LoadedConfig {
   config: AppConfig;
-  /** For each key, which of the two files set its value, or `default`. */
   provenance: ConfigProvenance;
-  /** The files that were read and merged, in merge order. */
   sources: ConfigSource[];
 }
 
 export interface LoadConfigOptions {
-  /** Where `.self-review.yaml` is looked for. Defaults to the process cwd. */
   cwd?: string;
-  /** Where `.config/self-review/config.yaml` is looked for. Defaults to the home directory. */
   homeDir?: string;
 }
 
 const CONFIG_KEYS = Object.keys(defaults) as (keyof AppConfig)[];
 
-/**
- * Load the merged configuration together with the origin of every value.
- * Project config overrides user config, which overrides the defaults; a
- * value a file set invalidly is not attributed to it, since the default is
- * what remains.
- */
+/** Project overrides user overrides defaults; an invalid value is not attributed to its file. */
 export function loadConfigWithProvenance(options: LoadConfigOptions = {}): LoadedConfig {
   let config = { ...defaults };
   const provenance = Object.fromEntries(CONFIG_KEYS.map(key => [key, 'default'])) as Record<
     keyof AppConfig,
     ConfigValueOrigin
   >;
-  // `guideFile` has no default, so it is not among the defaults' keys.
+  // `guideFile` has no default, so it is missing from CONFIG_KEYS.
   provenance.guideFile = 'default';
   const sources: ConfigSource[] = [];
 

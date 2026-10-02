@@ -18,27 +18,15 @@ export interface LoadGitDiffOptions {
    * of a PR/MR must never pick up unrelated local untracked files.
    */
   includeUntracked?: boolean;
-  /** Tighter budgets than the defaults; see `SourceBudgets`. */
   budgets?: Partial<SourceBudgets>;
 }
 
 export interface LoadGitDiffResult {
   files: DiffFile[];
   repository: string;
-  /**
-   * What the diff compared, resolved against the repository as it was when
-   * the diff ran: the two snapshots (commit SHAs, index, working tree), the
-   * physical root and the argv. Committed with the payload so previews and
-   * line counts read the reviewed snapshot rather than the working tree.
-   */
+  /** What the diff compared; previews and line counts read this snapshot, not the working tree. */
   identity: ReviewSourceIdentity;
-  /**
-   * Everything the review cannot show faithfully: an output format the
-   * parser does not consume (in which case `files` is empty and git was not
-   * run), or input the parser could not represent (combined merge-conflict
-   * sections, hunks whose counts do not add up). Never empty-and-silent: a
-   * front end shows these instead of "no changes".
-   */
+  /** What could not be shown faithfully; front ends show these instead of "no changes". */
   diagnostics: string[];
 }
 
@@ -48,12 +36,8 @@ function entryPath(file: DiffFile): string {
 }
 
 /**
- * Drop synthetic untracked entries whose path the tracked diff already
- * reports. After `git rm --cached f`, a HEAD comparison carries a tracked
- * deletion of `f` while `f` is still on disk as an untracked file; two
- * entries under one path would share React keys, comment state and the
- * lazy-hunk lookup. The tracked entry is the one git itself reported, so it
- * wins.
+ * Tracked wins on a path collision (after `git rm --cached f`, `f` is both a
+ * deletion and untracked); two entries would share React keys and comment state.
  */
 export function dedupeUntrackedByPath(tracked: DiffFile[], untracked: DiffFile[]): DiffFile[] {
   const seen = new Set(tracked.map(entryPath));
@@ -68,16 +52,14 @@ export async function loadGitDiffWithUntracked(
   const { includeUntracked = true } = options;
   const budgets = resolveSourceBudgets(options.budgets);
   const repository = await getRepoRootAsync(cwd);
-  // Resolved before the diff runs, so the SHAs name what the diff is about
-  // to compare even if a ref moves while it does.
+  // Before the diff runs, so the SHAs hold even if a ref moves meanwhile.
   const identity = await resolveGitSourceIdentity({
     repository,
     gitDiffArgv: gitDiffArgs,
     invocationCwd: cwd ?? process.cwd(),
   });
 
-  // An output format the parser cannot read would parse as an empty review.
-  // Name the flag instead, and do not run git at all.
+  // Such output would parse as an empty review; name the flag and skip git.
   const unsupported = findUnsupportedGitDiffOptions(gitDiffArgs);
   if (unsupported.length > 0) {
     return {
@@ -97,7 +79,7 @@ export async function loadGitDiffWithUntracked(
     rawDiff = await runGitDiffAsync(gitDiffArgs, cwd, budgets.maxGitDiffOutputBytes);
   } catch (error) {
     if (!isOutputLimitError(error)) throw error;
-    // A capped capture is a truncated diff; never parse it as the review.
+    // A truncated diff must never be parsed as the review.
     return {
       files: [],
       repository,
@@ -122,7 +104,6 @@ export async function loadGitDiffWithUntracked(
   // nothing at all.
   const untrackedPaths = await getUntrackedFilesAsync(repository);
   if (untrackedPaths.length > budgets.maxEntries) {
-    // Too many to synthesize; review the tracked diff and say what is missing.
     diagnostics.push(
       `${untrackedPaths.length.toLocaleString('en-US')} untracked files exceed the ` +
         `${budgets.maxEntries.toLocaleString('en-US')}-file limit, so none of them were ` +
@@ -134,7 +115,6 @@ export async function loadGitDiffWithUntracked(
 
   let allFiles = files;
   if (untrackedPaths.length > 0) {
-    // Untracked symlinks are described by their link text, never followed.
     const untracked = loadSyntheticFiles(untrackedPaths, repository, {
       followSymlinks: false,
       budgets: options.budgets,

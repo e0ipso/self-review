@@ -28,9 +28,7 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
     setDataUri(null);
     setDimensions(null);
 
-    // Core reports failures as an `{ error }` result, but a host adapter (the
-    // serve client's fetch, an embedder's own) may reject instead. Both settle
-    // into the error state rather than leaving the spinner up.
+    // Hosts may reject instead of returning `{ error }`; both settle into the error state.
     onLoadImage(filePath).then(
       (result: ImageLoadResult) => {
         if (cancelled) return;

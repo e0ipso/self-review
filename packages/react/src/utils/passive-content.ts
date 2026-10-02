@@ -96,12 +96,8 @@ export function isPassiveHtmlAttribute(tag: string, name: string): boolean {
   return GLOBAL_ATTRIBUTES.has(name) || TAG_ATTRIBUTES[tag]?.has(name) === true;
 }
 
-// The only class tokens reviewed content keeps. `language-*` is what fenced
-// code carries for Prism highlighting and ```mermaid detection; it styles
-// nothing but code text. Every other token is dropped, so content cannot
-// borrow the app's own utilities (`fixed`, `inset-0`, `sr-only`, ...) to
-// position itself over review controls or hide from the reviewer. `style`
-// is never allowed, for the same reason.
+// `language-*` (Prism, ```mermaid detection) is the only class kept: any other token would let
+// content borrow the app's utilities (`fixed`, `inset-0`, `sr-only`) to cover review controls.
 const PASSIVE_CLASS_TOKEN = /^language-[\w-]+$/;
 
 function passiveClassNames(value: unknown): string[] {
@@ -138,8 +134,7 @@ export function rehypePassiveContent() {
 
 const URL_PROPERTIES = ['href', 'src'] as const;
 
-// react-markdown applies `urlTransform` to a tree after its rehype plugins
-// run. A tree rendered outside react-markdown gets the same policy here.
+// react-markdown applies `urlTransform` after its rehype plugins; trees outside it need the same.
 function applyUrlPolicy(parent: Root | Element): void {
   for (const node of parent.children) {
     if (node.type !== 'element') continue;
@@ -152,13 +147,7 @@ function applyUrlPolicy(parent: Root | Element): void {
   }
 }
 
-/**
- * Parse a reviewed HTML document fragment into a passive hast tree. Every
- * surviving element keeps the `position` the parser recorded for it, so
- * comment anchors are the source lines of the markup the reviewer sees:
- * dropped elements, comments and raw text (`<script>`, `<template>`) take no
- * positions with them.
- */
+/** Surviving elements keep the parser's `position`, so comment anchors are source lines. */
 export function parsePassiveHtml(html: string): Root {
   const tree = fromHtml(html, { fragment: true });
   rehypePassiveContent()(tree);

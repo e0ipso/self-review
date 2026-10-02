@@ -8,8 +8,7 @@ import { installBrowserApiStubs } from '../test-helpers';
 
 installBrowserApiStubs();
 
-// react-resizable-panels measures its panels through a ResizeObserver, which
-// jsdom does not implement.
+// jsdom has no ResizeObserver, which react-resizable-panels needs.
 class NoopResizeObserver {
   observe(): void {}
   unobserve(): void {}
@@ -19,9 +18,7 @@ class NoopResizeObserver {
 
 import { ReviewPanel } from '../ReviewPanel';
 
-// Every one of these is a valid filename, and each breaks a naive
-// `[data-file-path="${path}"]` selector: a quote or newline makes it throw a
-// SyntaxError, a backslash or bracket silently changes what it matches.
+// Valid filenames that each break a naive `[data-file-path="${path}"]` selector.
 const AWKWARD_PATHS = [
   'src/quote"name.ts',
   'src/back\\slash.ts',
@@ -73,14 +70,11 @@ afterEach(() => {
 async function renderPanel() {
   render(<ReviewPanel adapter={adapter} />);
   await screen.findByTestId(`file-section-${AWKWARD_PATHS[0]}`, { normalizer: text => text });
-  // findBy* can resolve between the commit that mounts the sections and
-  // the passive effect that seeds DiffViewer's expanded state; flush it so
-  // a header click toggles settled state.
+  // Flush the passive effect that seeds DiffViewer's expanded state before clicking headers.
   await act(async () => {});
 }
 
-// The default normalizer collapses whitespace, which would make the newline
-// path unmatchable by its own test id.
+// The default normalizer collapses whitespace, making the newline path unmatchable.
 function byTestId(id: string): HTMLElement {
   return screen.getByTestId(id, { normalizer: text => text });
 }

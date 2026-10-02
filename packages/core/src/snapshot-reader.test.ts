@@ -34,13 +34,8 @@ async function refusal(
   return result;
 }
 
-// One repository whose three snapshots disagree about every file, so a read
-// from the wrong one is visible in the bytes it returns:
-//
-//   src/a.txt   first commit "first", second commit "committed",
-//               index "staged", working tree "working"
-//   gone.txt    committed and staged, removed from the working tree
-//   link.txt    an untracked symlink to a sentinel outside the repository
+// src/a.txt differs in every snapshot (first, committed, staged, working), so a wrong-side read shows;
+// gone.txt is deleted from the working tree; link.txt is an untracked link to a sentinel outside.
 describe('readReviewedContent over git snapshots', () => {
   let tmp: string;
   let repo: string;

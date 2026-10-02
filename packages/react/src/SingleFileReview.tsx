@@ -18,19 +18,9 @@ import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
 export type SingleFileReviewHandle = ReviewHandle;
 
 export interface SingleFileReviewProps {
-  /**
-   * The diff file to review. Its path (`newPath || oldPath`) is part of the
-   * session identity: a file at a different path starts a fresh session, so
-   * comments, viewed state and the exported source always belong to the
-   * file on screen. A new object for the same path keeps the session and
-   * the reviewer's comments; the section renders the new object.
-   */
+  /** A different path starts a fresh session; a new object for the same path keeps it. */
   file: DiffFile;
-  /**
-   * Optional diff source metadata, defaulting to `{ type: 'file' }` at the
-   * file's path. Compared by value: a source naming a different review
-   * starts a fresh session, an equal inline literal does not.
-   */
+  /** Defaults to `{ type: 'file' }` at the file's path. Compared by value. */
   source?: DiffSource;
   /** Optional partial config (theme, categories, etc.). */
   config?: Partial<AppConfig>;
@@ -41,9 +31,8 @@ export interface SingleFileReviewProps {
    * such as `expandContext`, `loadFileContent`, `loadImage`, `readAttachment`,
    * `loadResumedReview`, `submitReview`, and `changeOutputPath`.
    *
-   * Note: a consumer-supplied `loadDiff` is intentionally ignored — `file` and `source`
-   * are the source of truth in single-file mode. Memoize this object on the consumer side:
-   * as with `ReviewPanel`, a new adapter object starts a new review session.
+   * A consumer-supplied `loadDiff` is ignored: `file` and `source` are the source of truth.
+   * Memoize this object, since a new adapter object starts a new session.
    */
   adapter?: Partial<ReviewAdapter>;
   /** CSS class applied to the root container. */
@@ -75,22 +64,14 @@ interface SingleFileSessionProps extends SingleFileReviewInnerProps {
   adapter?: Partial<ReviewAdapter>;
 }
 
-/**
- * One review session for one file. `SingleFileReview` keys it on the file
- * path and source identity, so a different file discards the previous
- * file's comments, viewed state and source instead of exporting them.
- */
+/** Keyed on path and source identity, so a different file never exports the previous one's state. */
 const SingleFileSession = forwardRef<ReviewHandle, SingleFileSessionProps>(
   function SingleFileSession({ file, source, adapter, ...inner }, ref) {
-    // Read at load time, so a same-path file update does not need a new
-    // adapter — a new adapter object would start a new session. The file on
-    // screen always comes from the prop; the session holds its review state.
+    // Read at load time: a new adapter object would start a new session on a same-path update.
     const payloadRef = useRef<DiffLoadPayload>({ files: [file], source });
     payloadRef.current = { files: [file], source };
 
-    // Merge consumer-supplied adapter under the internally-generated loadDiff.
-    // Spread order is load-bearing: the internal loadDiff must always win, since
-    // file/source are the source of truth in single-file mode.
+    // Spread order is load-bearing: the internal loadDiff must win.
     const mergedAdapter: ReviewAdapter = useMemo(
       () => ({
         ...adapter,

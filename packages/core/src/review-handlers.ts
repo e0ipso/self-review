@@ -56,7 +56,6 @@ export interface ReviewSession {
   resumeComments: ReviewComment[];
   resumeViewedFiles: string[];
   resumeRemoteDrift: RemoteDriftInfo | null;
-  /** Import diagnostics from the resumed document; see `ResumeLoadPayload`. */
   resumeImportDiagnostics: string[];
   /**
    * Destination directory the user named for this session's applies, or
@@ -65,32 +64,19 @@ export interface ReviewSession {
    */
   applyDestinationRoot: string | null;
   /**
-   * Every path the committed diff contained — `newPath` and `oldPath` of
-   * each file, so a rename's both names and a deletion's old name count —
-   * captured once by {@link commitDiffData} and frozen. This is the
-   * authorization set for anything that writes a reviewed file: the
-   * reviewer saw exactly these paths. Resumed comments, submitted review
-   * state and the renderer's placeholder entries can all name other paths,
-   * and none of them reach this set.
+   * Old and new path of every file in the committed diff, frozen by {@link commitDiffData}.
+   * The authorization set for writes; resumed comments, submitted state and placeholder
+   * entries can name other paths and never reach it.
    */
   reviewedPaths: ReadonlySet<string>;
   /**
-   * What this session reviews — mode, physical source root, structured
-   * argv and the two snapshots compared — recorded by {@link commitDiffData}
-   * alongside the diff. Every read of reviewed content and every path
-   * authorization resolves against it; null until a diff is committed (and
-   * for a welcome session, which reviews nothing), when every such read
-   * refuses.
+   * Recorded by {@link commitDiffData}; null until then (and for welcome), when every read of
+   * reviewed content refuses.
    */
   sourceIdentity: ReviewSourceIdentity | null;
   /**
-   * Where each resumed attachment's bytes live: the reference the resumed
-   * document wrote, mapped to an absolute path beside *that document*.
-   * Recorded once by {@link recordResumedAttachments}; empty when nothing
-   * was resumed. It authorizes attachment reads and tells the publisher
-   * which bytes to carry when the review is saved somewhere else
-   * (`PublishReviewOptions.attachmentOrigins`). Never sent to the front end,
-   * which keeps the relative reference.
+   * Resumed reference to absolute path beside *the resumed document*; authorizes reads and tells
+   * the publisher which bytes to carry. Never sent to the front end.
    */
   attachmentOrigins: AttachmentOrigins;
 }
@@ -118,7 +104,6 @@ function emptyReviewedPaths(): ReadonlySet<string> {
   return freezeSet(new Set<string>());
 }
 
-/** A set no later caller can grow: `add`/`delete`/`clear` throw. */
 function freezeSet(set: Set<string>): ReadonlySet<string> {
   const frozen = () => {
     throw new TypeError('reviewedPaths is captured when the diff is committed and cannot change');
@@ -131,7 +116,6 @@ function freezeSet(set: Set<string>): ReadonlySet<string> {
   return Object.freeze(set);
 }
 
-/** The paths of a diff's files, old and new, with no empty names. */
 function reviewedPathsOf(files: readonly DiffFile[]): ReadonlySet<string> {
   const paths = new Set<string>();
   for (const file of files) {
@@ -142,18 +126,10 @@ function reviewedPathsOf(files: readonly DiffFile[]): ReadonlySet<string> {
 }
 
 /**
- * Make `payload` the session's diff. This is the one place a diff is
- * committed to a session — every front end's startup, the welcome screen's
- * directory start and the remote bootstrap all land here — and the moment
- * {@link ReviewSession.reviewedPaths} is captured from it and
- * {@link ReviewSession.sourceIdentity} is recorded. Later edits to
- * `session.diffData` (expanded context writes hunks back) leave both as
- * they were.
- *
- * The identity is the loader's to supply — it is the one that knows which
- * snapshots the diff compared — and `null` only for a payload that reviews
- * nothing (the welcome screen). A session without one refuses every read
- * of reviewed content rather than guessing a root.
+ * The one place a diff is committed to a session: captures `reviewedPaths` and
+ * records `sourceIdentity`; later `diffData` edits (expanded hunks) leave both alone.
+ * The identity comes from the loader, and is `null` only for a payload that
+ * reviews nothing (welcome), so reads refuse rather than guess a root.
  */
 export function commitDiffData(
   session: ReviewSession,
@@ -166,9 +142,8 @@ export function commitDiffData(
 }
 
 /**
- * The reviewed file `filePath` names and the side of the review its content
- * is on: the new side, or the old side for a deletion or a rename's old
- * name. Null when the diff has no such file.
+ * The old side is where a deletion or a rename's old name lives. Null when the diff has no such
+ * file.
  */
 export function locateReviewedFile(
   session: ReviewSession,
@@ -220,13 +195,7 @@ export function getDiffLoad(
   };
 }
 
-/**
- * The physical directory the session's reviewed paths are relative to —
- * the repository root (in remote mode, the materialized clone), the
- * reviewed directory, or the reviewed file's parent — or null when the
- * session has no source identity yet. This is the read-only source root;
- * {@link resolveApplyDestination} decides where applies may write.
- */
+/** The read-only source root; {@link resolveApplyDestination} decides where applies write. */
 export function resolveSourceBaseDir(session: ReviewSession): string | null {
   return session.sourceIdentity?.sourceRoot ?? null;
 }
@@ -242,14 +211,8 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
 };
 
 /**
- * Load a reviewed image as a base64 data URI for the rendered preview.
- *
- * The bytes come from the snapshot the review compared — the index for a
- * staged review, the commit for a range or a PR head, the working tree or
- * scanned directory otherwise — never from wherever the working tree
- * happens to be now. Only a path the committed diff contained, of a type
- * the preview renders, is read at all; a deleted image is read from the
- * old side, which is the only side that still has it.
+ * Reads from the snapshot the review compared, never the current working tree; only reviewed,
+ * previewable paths are read.
  */
 export async function loadImage(
   session: ReviewSession,
@@ -276,12 +239,7 @@ export async function loadImage(
   return { dataUri: `data:${mimeType};base64,${result.content.toString('base64')}` };
 }
 
-/**
- * The number of lines of `file` on the side of the review that has it (the
- * new side, or the old side of a deletion), read from the reviewed
- * snapshot; the reader restates a `--relative` path from the root itself.
- * Zero when it cannot be read; the caller treats that as unknown.
- */
+/** Zero when unreadable; the caller treats that as unknown. */
 async function countReviewedLines(session: ReviewSession, file: DiffFile): Promise<number> {
   const side = file.newPath ? 'new' : 'old';
   const filePath = side === 'new' ? file.newPath : file.oldPath;
@@ -295,7 +253,6 @@ async function countReviewedLines(session: ReviewSession, file: DiffFile): Promi
   return countLines(result.content);
 }
 
-/** Lines in `content`, where a trailing newline ends the last line rather than starting one. */
 function countLines(content: Buffer): number {
   let newlines = 0;
   for (const byte of content) {
@@ -449,30 +406,19 @@ export function setApplyDestination(
 
 /**
  * Apply one suggestion to the reviewed working file, or refuse and write
- * nothing. The engine in `apply-suggestion.ts` does the work; this handler
- * names the destination the session reviews, which the engine never derives
- * for itself, and authorizes the target against the session.
+ * nothing. The engine does the work; this handler names the destination, which
+ * the engine never derives, and authorizes the target.
  *
- * Authorization is membership in {@link ReviewSession.reviewedPaths}: the
- * file must be one the committed diff contained (`not-reviewed` otherwise).
- * That is what stops a resumed document, or a client that can reach this
- * handler, from naming a file the reviewer never looked at. Repository
- * control files are refused by the engine even when a crafted payload lists
- * them. Beyond the path, the request is not bound to a particular comment:
- * the session holds no registry of live suggestions (the front end owns
- * review state until it is submitted), so the binding is the anchor plus the
- * byte-exact match of `originalCode` against the file, which the engine
- * checks before writing and which a request cannot satisfy for lines it
- * does not know.
+ * Authorization is membership in {@link ReviewSession.reviewedPaths}
+ * (`not-reviewed` otherwise), so a resumed document or a client reaching this
+ * handler cannot name an unreviewed file. The request is not bound to a
+ * comment (the session keeps no registry of live suggestions); the binding is
+ * the anchor plus the engine's byte-exact `originalCode` match.
  *
- * The file is named to the engine from the destination root through the
- * identity's prefix (`rootRelativeReviewedPath`): a `--relative` review of
- * `sub/` writes `sub/<path>`, the same file the preview and the diff show,
- * never the root's same-named one. The outcome names the path as the
- * session knows it, which is what the front end asked about.
+ * The engine gets the path through the identity's prefix, so a `--relative`
+ * review of `sub/` writes `sub/<path>`, never the root's same-named file.
  *
- * A refusal travels as a value, never as a thrown error. The front end
- * renders its `detail` next to the suggestion the attempt came from.
+ * A refusal travels as a value, never a thrown error.
  */
 export function applySuggestionForSession(
   session: ReviewSession,
@@ -518,8 +464,7 @@ export function applySuggestionForSession(
   // reports the resolved absolute path, which the front end has no use for
   // and should not be handed; naming the fields here keeps the wire shape
   // exactly what SuggestionApplyOutcome declares, today and after the engine
-  // grows a field. The path is the one the request named, not the engine's
-  // root-relative restatement of it.
+  // grows a field. The path is the request's, not the engine's root-relative one.
   if (result.status === 'applied') {
     return {
       status: 'applied',
@@ -536,13 +481,9 @@ export function applySuggestionForSession(
 }
 
 /**
- * Record where the attachments of a resumed review live: beside the resumed
- * document (`resumeDocumentPath`), wherever the app was launched from and
- * wherever the review will be saved. Replaces any origins recorded before.
- *
- * Returns one diagnostic line per attachment reference that is not
- * `.self-review-assets/<name>` and will therefore never be read; the host
- * adds them to the resume import diagnostics.
+ * Records that resumed attachments live beside the resumed document, whatever the
+ * launch directory or save location. Returns one diagnostic per reference that is
+ * not `.self-review-assets/<name>` and so will never be read.
  */
 export function recordResumedAttachments(
   session: ReviewSession,
@@ -555,15 +496,9 @@ export function recordResumedAttachments(
 }
 
 /**
- * Read one attachment the front end displays, by the reference the review
- * names it with (`.self-review-assets/<name>`), never by a path.
- *
- * The reference is authorized against the session: an imported one reads
- * from its recorded origin beside the resumed document; any other reads from
- * the current output's asset directory. Anything else — an absolute path,
- * traversal, a nested directory — is `not-authorized` and touches nothing.
- * The asset directory must be a real directory, the file is opened without
- * following links, and only a regular file within `MAX_IMAGE_BYTES` is read.
+ * Read one attachment by its `.self-review-assets/<name>` reference, never a path:
+ * an imported one from its recorded origin, any other from the current output's asset
+ * directory. Anything else is `not-authorized` and touches nothing.
  */
 export async function readAttachment(
   session: ReviewSession,
@@ -619,23 +554,14 @@ export function getResumeLoad(session: ReviewSession): ResumeLoadPayload | null 
 }
 
 /**
- * Expand the context of a single file by re-running the review's own git
- * diff over that file with more context lines.
+ * Re-run the review's own git diff over one file with more context, via
+ * {@link singleFileRediffArgs}. Git runs at the source root; a `--relative` review is
+ * restated with the prefix resolved at load time, and the file's paths (both, for a
+ * rename or copy, so git pairs them) are root-relative literal pathspecs. The entry
+ * returned is the one matching the file's old and new paths, not git's first.
  *
- * The comparison is the one the review loaded: the session's structured
- * argv, with only its context options (and file-order options, which a
- * single file has no use for) taken out by {@link singleFileRediffArgs} —
- * so a revision after a bare `-U` stays a revision. Git runs at the source
- * root; a `--relative` review is restated as `--relative=<prefix>` from
- * there, with the prefix the identity resolved at load time, and the file's
- * paths are passed as root-relative literal pathspecs, both of a rename or
- * copy so git pairs them again. The entry returned is the one whose old and
- * new paths are the requested file's, not whichever git printed first.
- *
- * The expanded hunks are written back to the session's diff data so a
- * later file load on the same session sees them. Returns null when the
- * session has no git diff, when the diff has no such tracked file, when
- * git's output does not contain it, or when git fails.
+ * Expanded hunks are written back to the session's diff data. Returns null when
+ * there is no git diff or tracked file, git's output lacks the file, or git fails.
  */
 export async function expandContext(
   session: ReviewSession,
@@ -675,8 +601,7 @@ export async function expandContext(
       ...paths.map(p => `:(top,literal)${rootRelativeReviewedPath(identity, p)}`),
     ];
 
-    // The source root: the repository, or in remote mode the materialized
-    // clone, never the process cwd.
+    // Never the process cwd.
     const rawDiff = await runGitDiffAsync(expandArgs, identity.sourceRoot);
     const expandedFile = parseDiff(rawDiff).find(
       f => f.oldPath === target.oldPath && f.newPath === target.newPath
@@ -686,10 +611,7 @@ export async function expandContext(
       return null;
     }
 
-    // The file's length on the reviewed side, for gap detection: the index
-    // for a staged review, the PR head for a remote one — never the working
-    // tree a temporary clone left on its default branch. Zero when it cannot
-    // be read, which keeps the bars visible.
+    // The reviewed side's length, for gap detection; zero keeps the bars visible.
     const totalLines = await countReviewedLines(session, target);
 
     session.diffData = {
@@ -715,7 +637,6 @@ export async function expandContext(
  */
 export interface ReviewStartResult {
   payload: DiffLoadPayload;
-  /** The identity to commit with the payload; see {@link commitDiffData}. */
   identity: ReviewSourceIdentity;
   stats: PayloadStats | null;
   exceedsThresholds: boolean;
@@ -740,9 +661,7 @@ export async function prepareDirectoryReview(
     // Failed to stat — proceed as directory
   }
 
-  // Directory mode scans all files as new additions. Scan diagnostics (a
-  // budget hit, an unreadable source) ride on the payload so the review
-  // never presents a failed or partial load as an empty one.
+  // Scan diagnostics ride on the payload so a failed load never looks empty.
   const scan = isFile
     ? await scanFile(directoryPath)
     : await scanDirectory(directoryPath, session.config?.ignore ?? []);

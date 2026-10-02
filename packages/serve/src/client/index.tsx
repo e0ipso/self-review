@@ -2,14 +2,7 @@
 //
 // The compiled stylesheet is imported explicitly because the package lists it
 // under `sideEffects`; without this import the UI renders unstyled.
-//
-// `App` is exported for its own suite, which mounts it against a real
-// listener; the module mounts it into `#root` only when that element exists.
-//
-// The session capability arrives in the launch URL's fragment and is taken
-// from there exactly once, before React mounts: it is handed to `App` as a
-// prop, held in the adapter's closure, and erased from the address bar, so
-// a reload, a bookmark or a copied address does not carry it.
+// The capability is taken from the launch URL once, before React mounts, then erased from the address bar.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -20,15 +13,7 @@ import '@self-review/react/styles.css';
 import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
 import { REVIEW_TOO_LARGE_CODE, parseCapabilityFragment } from '../protocol';
 
-/**
- * Take the session capability out of the page's URL.
- *
- * The fragment is read and then removed with `history.replaceState`, so the
- * token is gone from the address bar, from the history entry and from
- * anything that copies the URL — the only copy left is the one returned
- * here. Null when the page was opened without one: a reload, a retyped
- * address, a link without its fragment.
- */
+// Removed with `history.replaceState`, so it leaves the history entry too. Null after a reload or a retyped address.
 export function takeCapabilityFromLocation(): string | null {
   const capability = parseCapabilityFragment(window.location.hash);
   if (window.location.hash !== '') {
@@ -41,13 +26,9 @@ export function takeCapabilityFromLocation(): string | null {
   return capability;
 }
 
-/**
- * `failed` is a reviewing state with a notice: the review is still in the
- * page, the close guard is still up, and Finish Review sends it again.
- */
+// `failed` is `reviewing` with a notice: the close guard stays up and Finish Review resends.
 type Status = 'reviewing' | 'submitting' | 'submitted' | 'failed';
 
-/** What the page shows for a refused submission: enough to fix it. */
 interface SubmitFailure {
   code: string | null;
   message: string;
@@ -58,7 +39,6 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** What stopped the config request: the message, and whether it was a 401. */
 interface ConfigFailure {
   message: string;
   unauthorized: boolean;
@@ -71,12 +51,7 @@ function configFailureOf(error: unknown): ConfigFailure {
   };
 }
 
-/**
- * The page was opened without this session's key, or with one the server
- * does not recognise — a reloaded tab, a retyped address, a URL from an
- * earlier start. Nothing here can recover it: the only copy the server ever
- * gave out was in the URL it printed.
- */
+// Unrecoverable from the page: the only copy of the key was in the URL the server printed.
 function CapabilityNotice() {
   return (
     <Notice title='Open the URL printed in the terminal'>
@@ -117,14 +92,7 @@ function OutputPath({ info }: { info: OutputPathInfo | null }) {
   return null;
 }
 
-/**
- * What the page says once the review is on disk.
- *
- * This can claim a saved file because `POST /api/review` publishes before it
- * answers: the 200 the adapter resolved on was sent after the rename that
- * put the document in place. The server stops itself once that response has
- * been flushed, which is why there is no second attempt from here.
- */
+// The 200 follows the rename, so claiming a saved file is safe. The server stops after flushing it.
 function Saved({ outputPath }: { outputPath: string | null }) {
   return (
     <Notice title='Review saved'>
@@ -140,14 +108,7 @@ function Saved({ outputPath }: { outputPath: string | null }) {
   );
 }
 
-/**
- * A refused submission, above a review that is still entirely here.
- *
- * The message is the server's own, or the adapter's for a body it would not
- * send; the code names the publisher's refusal so a reader of the terminal
- * can match the two. The size message already says what to do, so only the
- * filesystem refusals get the generic advice.
- */
+// The size message already says what to do, so only filesystem refusals get the generic advice.
 function SubmitFailureNotice({ failure }: { failure: SubmitFailure }) {
   const fixable = failure.code !== REVIEW_TOO_LARGE_CODE;
   return (
@@ -203,17 +164,11 @@ function Notice({ title, children }: { title: string; children: React.ReactNode 
 }
 
 export interface AppProps {
-  /**
-   * The session capability from the launch URL, or null when the page was
-   * opened without one. Held in React state and the adapter's closure only.
-   */
   capability: string | null;
 }
 
 export function App({ capability }: AppProps) {
-  // One adapter for the page: it holds the single shared GET /api/diff and
-  // the capability every request presents. None without a capability — a
-  // request that is certain to be refused is not worth sending.
+  // One adapter per page; none without a capability, since every request would be refused.
   const adapter = useMemo(
     () => (capability === null ? null : createFetchAdapter(capability)),
     [capability]
@@ -254,9 +209,7 @@ export function App({ capability }: AppProps) {
   // able to offer the save. It is closer to the desktop than closing silently,
   // which is what happened before.
   //
-  // Up until the review is on disk: while a submission is in flight, and
-  // after one has been refused, the comments still live only here. The
-  // listener stays up either way; nothing tells the process the reviewer left.
+  // Active until the review is on disk, including after a refused submission.
   useEffect(() => {
     if (!hasUnsavedWork || status === 'submitted') return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -265,8 +218,7 @@ export function App({ capability }: AppProps) {
   }, [hasUnsavedWork, status]);
 
   const handleFinishReview = useCallback(async () => {
-    // One submission in flight at a time, and none after the one that was
-    // acknowledged — the server stops on it. A refused one may be sent again.
+    // One in flight at a time; none after an acknowledged one (the server stops). A refused one may be resent.
     if (status === 'submitting' || status === 'submitted' || adapter === null) return;
     const state = reviewRef.current?.getReviewState();
     if (!state) return;
@@ -281,12 +233,9 @@ export function App({ capability }: AppProps) {
     }
   }, [adapter, status]);
 
-  // Every hook is above this line and every early return below it: the
-  // config notice once rendered ahead of an effect, and React threw on the
-  // shorter hook list instead of showing it.
+  // All hooks stay above this line: an early return ahead of an effect made React throw on the shorter hook list.
 
-  // No key, or a key the server refused: the same page either way, since
-  // the fix is the same — the printed URL — and a refused key says no more.
+  // No key and a refused key get the same page: the fix is the printed URL either way.
   if (adapter === null || configError?.unauthorized) {
     return <CapabilityNotice />;
   }
@@ -326,7 +275,6 @@ export function App({ capability }: AppProps) {
 
 const container = document.getElementById('root');
 if (container) {
-  // Taken before the first render, and only here: the module's one side
-  // effect on the document is removing the key from its URL.
+  // Taken before the first render; removing the key from the URL is this module's one side effect.
   createRoot(container).render(<App capability={takeCapabilityFromLocation()} />);
 }

@@ -1,5 +1,5 @@
-// Guide sidecar budget, against the real filesystem: an oversized or
-// non-regular guide is refused before it is read whole or parsed.
+// Guide budget against the real filesystem: oversized or non-regular guides are refused before
+// parsing.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';

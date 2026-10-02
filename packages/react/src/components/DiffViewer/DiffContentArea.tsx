@@ -22,7 +22,6 @@ export interface DiffContentAreaProps {
   showSvgPreview: boolean;
   /** On-demand content state; only meaningful while `file.contentLoaded === false`. */
   contentLoad: LazyLoadState;
-  /** Ask for the file's content again after a failed load. */
   onRetry: () => void;
   commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
   dragState: { startLine: number; currentLine: number; side: 'old' | 'new' } | null;
@@ -63,8 +62,7 @@ export function DiffContentArea({
   handleExpandContext,
 }: DiffContentAreaProps) {
   const adapter = useAdapter();
-  // Rendered Markdown/HTML blocks receive this through context; a stable
-  // identity keeps the context value memoized across unrelated renders.
+  // Passed to rendered blocks through context; a stable identity keeps that value memoized.
   const handleGutterMouseDown = useCallback(
     (startLine: number, endLine: number) => {
       onCommentRange(startLine, endLine, 'new');
@@ -72,8 +70,7 @@ export function DiffContentArea({
     [onCommentRange]
   );
 
-  // Listed on purpose without content (a safety budget): there is nothing to
-  // load, and "No changes to display" would misstate why it is empty.
+  // Listed without content on purpose (a safety budget): "No changes" would misstate why.
   if (file.omittedReason) {
     return (
       <div
@@ -87,7 +84,6 @@ export function DiffContentArea({
     );
   }
 
-  // An unloaded file that is not in error is about to be (or being) fetched.
   if (
     contentLoad.kind === 'loading' ||
     (contentLoad.kind === 'idle' && file.contentLoaded === false)

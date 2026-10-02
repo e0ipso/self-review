@@ -30,15 +30,7 @@ import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
 export type ReviewPanelHandle = ReviewHandle;
 
 export interface ReviewPanelProps {
-  /**
-   * Platform adapter for data loading and lifecycle hooks.
-   *
-   * The adapter object is part of the review session's identity: passing a
-   * different object starts a new session (old comments, viewed flags and
-   * source are discarded and the new adapter is loaded and subscribed).
-   * Define it at module scope or memoize it unless that is the intent. See
-   * `ReviewProvider` for how pushed payloads update or replace a session.
-   */
+  /** A different adapter object starts a new session: define it at module scope or memoize it. */
   adapter: ReviewAdapter;
   /** Optional partial config to merge with defaults (theme, categories, etc.). */
   config?: Partial<AppConfig>;

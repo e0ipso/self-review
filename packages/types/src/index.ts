@@ -32,13 +32,7 @@ export interface DiffFile {
   hunks: DiffHunk[];
   isUntracked?: boolean;
   contentLoaded?: boolean;
-  /**
-   * Set when the loader listed this file but deliberately did not read its
-   * content because a safety budget forbade it (a file over the per-file
-   * read budget, or one past the aggregate budget). `hunks` is then empty
-   * and this sentence, not "no changes", is what the viewer shows. The same
-   * condition is also reported in `DiffLoadPayload.diagnostics`.
-   */
+  /** Set when a safety budget stopped the loader reading this file; `hunks` is then empty and this is shown instead. */
   omittedReason?: string;
 }
 
@@ -53,56 +47,29 @@ export type DiffSource =
 
 // ===== Review Source Identity =====
 
-/** How the content under review was obtained. */
 export type ReviewSourceMode = 'git' | 'directory' | 'file' | 'remote';
 
 /**
- * One side of the comparison a review shows, as a snapshot the host can read
- * again later: the working tree, the index, one commit (its SHA resolved
- * when the review was loaded, so the branch moving afterwards changes
- * nothing), the scanned directory or the one scanned file. `none` is a side
- * with no content (everything in a directory review is an addition; a
- * `--cached` review on an unborn branch compares against the empty tree).
- * `unknown` is a shape the host could not identify; a read from it fails
- * visibly rather than falling back to the working tree.
+ * One side of a review's comparison, readable again later. A commit's SHA is resolved at load time.
+ * `none` has no content; a read from `unknown` fails visibly rather than falling back to the working tree.
  */
 export type ReviewSourceSide =
   | { kind: 'working-tree' }
   | { kind: 'index' }
   | { kind: 'commit'; sha: string }
   | { kind: 'directory' }
-  /** The physical file a single-file review scanned, resolved once. */
   | { kind: 'file'; path: string }
   | { kind: 'none' }
   | { kind: 'unknown'; reason: string };
 
-/**
- * What a review session is a review *of*, recorded once when its diff is
- * committed. Every later read of reviewed content — an image preview, a
- * line count for context expansion — and every path authorization resolves
- * against this, never against the process's working directory.
- */
+/** What a session reviews, recorded once at commit. Reads and path authorization resolve against this, never the cwd. */
 export interface ReviewSourceIdentity {
   mode: ReviewSourceMode;
-  /**
-   * The physical directory (symlinks resolved) every reviewed path is
-   * relative to: the repository root, the materialized clone, the scanned
-   * directory, or the scanned file's parent.
-   */
+  /** Physical directory (symlinks resolved) every reviewed path is relative to. */
   sourceRoot: string;
-  /** The directory the review was launched from. Informational only. */
   invocationCwd: string;
-  /** The `git diff` arguments as an argument list; empty outside git. */
   gitDiffArgv: string[];
-  /**
-   * The directory under `sourceRoot`, `/`-separated with no leading or
-   * trailing slash, that every reviewed path is relative to. Empty when the
-   * paths are root-relative, which is every review except a git review run
-   * with `--relative` (the launch directory) or `--relative=<dir>`. Resolved
-   * once at load time; every read, apply and re-diff of a reviewed path
-   * restates it from the root through this prefix, so a review of `sub/`
-   * never reaches the root's same-named file.
-   */
+  /** `/`-separated directory under `sourceRoot` that reviewed paths are relative to; empty except for `--relative` git reviews. */
   pathPrefix: string;
   oldSide: ReviewSourceSide;
   newSide: ReviewSourceSide;
@@ -394,14 +361,7 @@ export interface DiffLoadPayload {
   files: DiffFile[];
   source: DiffSource;
   isLargePayload?: boolean;
-  /**
-   * What the loader could not show faithfully, one message each: a
-   * `git diff` output format the parser does not consume (`--stat`,
-   * `--name-only`, ...), or output it cannot represent (combined
-   * merge-conflict sections, hunks whose counts do not add up). A review
-   * with diagnostics and no files is a failed load, not "no changes".
-   * Absent or empty for a clean load.
-   */
+  /** What the loader could not show faithfully, one message each. Diagnostics with no files is a failed load, not "no changes". */
   diagnostics?: string[];
   /**
    * Present only for a remote PR/MR session. After materialization, remote
@@ -429,16 +389,7 @@ export interface ResumeLoadPayload {
    * `remote-head-sha` in a remote session. See {@link RemoteDriftInfo}.
    */
   remoteDrift?: RemoteDriftInfo;
-  /**
-   * What the resume importer could not take as written, one line per
-   * affected comment: a line range that is not a usable anchor (NaN, zero,
-   * negative, fractional, reversed, both-sided, incomplete) or a suggestion
-   * in a shape the app cannot apply. Each such comment is still in
-   * `comments`, downgraded to file-level feedback with its suggestion text
-   * folded into the body, so nothing is lost; the diagnostic names which
-   * comment and why. Absent or empty for a clean import. Rendered as a
-   * non-blocking warning, like `remoteDrift`.
-   */
+  /** One line per resumed comment downgraded to file-level feedback (unusable anchor or unappliable suggestion). */
   importDiagnostics?: string[];
 }
 

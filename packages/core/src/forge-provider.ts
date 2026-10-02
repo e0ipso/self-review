@@ -45,25 +45,14 @@ export type ForgeAnchorSide = 'old' | 'new';
  *   no usable line information (the mapper degrades to a file-level comment;
  *   `side` is meaningless in that case and providers should set `'new'`).
  *
- * Line numbers describe one revision, and the two fields below say which.
- * They are the anchor's revision provenance; the mapper, not the provider,
- * compares them with the reviewed head, so a provider only ever reports what
- * its forge actually told it:
- * - `headSha` is the head commit the line numbers were computed against,
- *   when the forge reports one per note (GitLab `position.head_sha`). An
- *   anchor is current when it equals the reviewed head and outdated when it
- *   does not; a suggestion is activated only on a match.
- * - `outdated` is the forge's own verdict, when the forge tracks one per
- *   note. `true` means the forge reports the anchor no longer applies to the
- *   current head (GitHub review comments with `line: null`); the line fields
- *   then hold the historic anchor and the mapper degrades to file-level.
- *   `false` means the forge re-anchored the comment onto the current head and
- *   vouches for it, which is what activates a suggestion when no `headSha` is
- *   available. Absent means the forge does not report staleness per note, so
- *   only `headSha` can establish it.
+ * Revision provenance (the mapper compares it with the reviewed head; providers
+ * report only what the forge told them):
+ * - `headSha`: head commit the line numbers were computed against, when the
+ *   forge reports one per note (GitLab). A suggestion activates only on a match.
+ * - `outdated`: the forge's own per-note verdict (GitHub `line: null`). `true`
+ *   degrades to file-level; `false` vouches for the anchor when no `headSha` exists.
  *
- * An anchor carrying neither is unverifiable: the mapper keeps its line
- * placement but never activates a suggestion from it.
+ * An anchor carrying neither is unverifiable: it never activates a suggestion.
  */
 export interface ForgeThreadAnchor {
   filePath: string;
@@ -118,31 +107,18 @@ export interface ForgeCommandResult {
 }
 
 /**
- * Lifetime bounds for one command run through a {@link ForgeCommandRunner}.
- * Both are optional; a runner that honours neither (a scripted test runner)
- * is still a valid runner.
+ * Optional lifetime bounds; either one kills the child and rejects with {@link
+ * CommandCancelledError}.
  */
 export interface ForgeCommandOptions {
-  /**
-   * Aborting the signal kills the child and rejects the run with a
-   * {@link CommandCancelledError} whose `reason` is `'aborted'`.
-   */
   signal?: AbortSignal;
-  /**
-   * The child is killed, and the run rejects with a
-   * {@link CommandCancelledError} whose `reason` is `'timeout'`, when it has
-   * not exited after this many milliseconds.
-   */
   timeoutMs?: number;
 }
 
 /**
- * Injectable command runner used by provider implementations and the
- * materializer, mirroring how `git.ts` keeps child-process execution
- * testable. Resolves with the exit code on any completed run (including
- * non-zero); rejects when the binary cannot be spawned at all (e.g. ENOENT
- * when the CLI is absent) and, with a {@link CommandCancelledError}, when
- * the run was cut short by its `options`.
+ * Injectable command runner for providers and the materializer. Resolves with
+ * the exit code on any completed run; rejects when the binary cannot be spawned
+ * and, with a {@link CommandCancelledError}, when cut short by `options`.
  */
 export type ForgeCommandRunner = (
   command: string,
@@ -154,13 +130,9 @@ export type ForgeCommandRunner = (
 export type CommandCancelReason = 'aborted' | 'timeout';
 
 /**
- * A command run that was ended by its caller's bounds rather than by the
- * child itself: the session's `AbortSignal` fired or the per-command
- * timeout elapsed. The child was killed before this is thrown. Providers
- * let it propagate instead of folding it into
- * {@link ForgeCliUnavailableError}: a cancelled `gh` is not a missing `gh`,
- * and a session that is being torn down must not degrade into a review
- * without threads.
+ * A run ended by its caller's bounds (abort or timeout) after the child was
+ * killed. Providers must not fold it into {@link ForgeCliUnavailableError}: a
+ * session being torn down must not degrade into a review without threads.
  */
 export class CommandCancelledError extends Error {
   readonly reason: CommandCancelReason;
@@ -180,7 +152,7 @@ export class CommandCancelledError extends Error {
   }
 }
 
-/** True when `error` is a {@link CommandCancelledError}, whatever module instance threw it. */
+/** Matches by name too, so it works across module instances. */
 export function isCommandCancelled(error: unknown): error is CommandCancelledError {
   return (
     error instanceof CommandCancelledError ||

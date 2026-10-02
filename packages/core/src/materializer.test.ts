@@ -1,8 +1,6 @@
 // materializer.test.ts
-// Tests for the clone-aware diff materializer. The scripted-runner suites
-// never spawn git; the session-ownership suite drives the real materializer
-// over a real local clone of a bare "forge" repository, because the ref
-// race it pins only exists against real refs.
+// Scripted-runner suites never spawn git; the session-ownership suite uses a real clone,
+// since the ref race needs real refs.
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'child_process';
@@ -424,9 +422,8 @@ describe('materialize', () => {
     });
   });
 
-  // The temp directory is owned from the moment it exists: whatever ends the
-  // run after that — a git that cannot be spawned, a failed fetch, a
-  // cancellation — the directory is gone before the error reaches the caller.
+  // Whatever ends the run after the temp dir exists, it is gone before the error reaches the
+  // caller.
   describe('temp-clone lifetime', () => {
     it('removes the temp dir when the clone command cannot be spawned', async () => {
       const handlers = tempCloneHandlers();
@@ -517,10 +514,8 @@ describe('materialize', () => {
   });
 });
 
-// Two sessions over one clone must never see each other's SHAs or delete
-// each other's refs. The audit (R16) reproduced the race by interleaving
-// one session's fetch between another's fetch and rev-parse; the same
-// interleaving runs here through the real materializer against real refs.
+// R16: two sessions over one clone never see each other's SHAs or delete each other's refs,
+// replayed here against real refs.
 describe('session-owned refs over a shared clone (real git)', () => {
   let fixtureRoot: string;
   let remoteDir: string;
@@ -671,8 +666,7 @@ describe('session-owned refs over a shared clone (real git)', () => {
   });
 });
 
-// The default runner is the one that actually spawns processes, so its
-// bounds are tested against real children.
+// The default runner spawns real processes, so its bounds are tested against real children.
 describe('defaultGitRunner', () => {
   const MARKER = '31337.25';
 

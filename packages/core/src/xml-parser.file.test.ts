@@ -1,5 +1,4 @@
-// parseReviewXml against the real filesystem: reading, typed read failures,
-// and the resume budgets that are enforced before the document is parsed.
+// parseReviewXml against the real filesystem, including the budgets enforced before parsing.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';

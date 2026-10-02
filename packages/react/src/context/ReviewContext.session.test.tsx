@@ -137,8 +137,7 @@ describe('ReviewProvider adapter replacement', () => {
     expect(b.adapter.loadDiff).toHaveBeenCalledTimes(1);
     expect(exported().source).toEqual(dir('/b'));
     expect(ctx().diffFiles.map(f => f.newPath)).toEqual(['b.txt']);
-    // The previous adapter's subscription is released, and a late push from
-    // it cannot reach the new session.
+    // The old subscription is released; a late push from it cannot reach the new session.
     expect(a.unsubscribe).toHaveBeenCalled();
     expect(a.listeners.size).toBe(0);
   });
@@ -235,8 +234,7 @@ describe('ReviewProvider pushed session replacement', () => {
 
     act(() => push({ files: [diffFile('new.txt')], source: dir('/a') }));
 
-    // Human feedback is never dropped silently: the thread survives on a
-    // synthetic entry, the way resumed comments on vanished paths do.
+    // Human feedback is never dropped: the thread survives on a synthetic entry.
     expect(summary(exported())).toEqual(['new.txt:false:', 'same.txt:true:old']);
   });
 
@@ -256,9 +254,8 @@ describe('ReviewProvider pushed session replacement', () => {
   });
 
   it('still resumes when the host delivers the initial payload as a push first', async () => {
-    // The Electron preload hands the one diff:load reply to every listener,
-    // so the subscription can see the initial payload before loadDiff's
-    // continuation runs. That is one session, not a replacement.
+    // Electron's preload hands one diff:load reply to every listener, so the subscription can
+    // see the initial payload before loadDiff resolves. One session, not a replacement.
     const payload: DiffLoadPayload = { files: [diffFile('a.txt')], source: dir('/a') };
     const gate = deferred<DiffLoadPayload>();
     const a = pushableAdapter(gate.promise);
@@ -279,9 +276,7 @@ describe('ReviewProvider pushed session replacement', () => {
 
 describe('ReviewProvider welcome placeholder', () => {
   it('hands a resume requested on the welcome screen to the session that replaces it', async () => {
-    // Electron: the resume request made for the welcome payload stays
-    // pending until main opens a remote PR/MR, then answers it with the
-    // fetched forge threads right after pushing the new diff.
+    // Electron answers the welcome payload's pending resume right after pushing the PR/MR diff.
     const resume = deferred<ResumeLoadPayload>();
     const a = pushableAdapter({ files: [], source: { type: 'welcome' } });
     a.adapter.loadResumedReview = () => resume.promise;

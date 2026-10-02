@@ -14,14 +14,11 @@ beforeAll(() => {
   proto.getComputedTextLength = () => 30;
 });
 
-// The audit's global-selector payload: a fontFamily directive whose value
-// closes the font declaration and opens a `:not(...)` rule that matches
-// every element in the document the diagram lands in.
+// Audit payload: a fontFamily directive that opens a `:not(...)` rule matching every element.
 const GLOBAL_CSS_PAYLOAD =
   '%%{init: {"fontFamily": "x;a{b} :not(&){background:green !important} c{d}"}}%%\nflowchart LR\n A --> B';
 
-// The audit's passive-HTML payload: a classDef that closes the diagram's
-// <style> and <svg> and opens a full-viewport overlay <div>.
+// Audit payload: a classDef that closes <style> and <svg> and opens a full-viewport overlay <div>.
 const OVERLAY_PAYLOAD = [
   'stateDiagram-v2',
   ' classDef overlay fill:red</style></svg><div style="position:fixed;inset:0;z-index:2147483647;background:black;color:white">AUDIT OVERLAY</div><svg><style>a:b',
@@ -49,8 +46,6 @@ describe('MermaidBlock isolation', () => {
     const img = await findDiagramImage();
     expect(img.tagName).toBe('IMG');
     expect(img.src).toMatch(/^data:image\/svg\+xml;base64,/);
-    // The encoded image is Mermaid's SVG, so the diagram still exists; it
-    // is just not part of the application document.
     const decoded = new TextDecoder().decode(
       Uint8Array.from(atob(img.src.split(',')[1]), c => c.charCodeAt(0))
     );
@@ -73,7 +68,6 @@ describe('MermaidBlock isolation', () => {
     renderWithSentinel(OVERLAY_PAYLOAD);
     await waitFor(
       () => {
-        // Either a contained image or a contained error; never a free DIV.
         expect(screen.queryByRole('img') ?? screen.queryByText(/Mermaid error/)).not.toBeNull();
       },
       { timeout: 15000 }

@@ -1,10 +1,4 @@
-// Mirrors the desktop's parser (src/main/cli.ts) over the same core
-// extractor: anything the program does not claim is passed to `git diff`
-// verbatim, `--` ends the program's own options, and a git option's value
-// is never read as one of them. The output path is fixed for the life of
-// the process — a browser has no equivalent of the native save dialog.
-// Which flags each front end takes, and why they differ, is tabled in
-// packages/core/src/startup.ts.
+// Mirrors src/main/cli.ts over core's extractor; the flag table is in packages/core/src/startup.ts.
 
 import { extractApplicationOptions } from '@self-review/core';
 
@@ -35,13 +29,8 @@ const BOOLEAN_FLAGS = {
   '-v': 'version',
 } as const;
 
-/**
- * Parse serve-mode arguments. Throws on a value-taking flag with no value or
- * an empty one (`ApplicationOptionError`): silently passing `--output` to
- * `git diff` would fail much further away from the mistake, with a message
- * about a revision, and `--output=` would resolve to the working directory,
- * pass the writability check and fail with EISDIR at submit.
- */
+// Throws ApplicationOptionError on a value flag with no or an empty value: `--output=` would otherwise
+// resolve to the working directory and fail with EISDIR only at submit.
 export function parseServeArgs(argv: string[]): ServeArgs {
   const { values, flags, rest } = extractApplicationOptions(argv, {
     valueFlags: VALUE_FLAGS,

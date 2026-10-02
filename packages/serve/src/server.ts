@@ -2,18 +2,10 @@
 // core already exports, plus static serving for the client bundle. node:http,
 // no framework.
 //
-// Three properties are load-bearing: every route validates before core runs;
-// the listener both binds to loopback and refuses requests that name anything
-// else, since binding alone is not enough — a web page can reach a loopback
-// port, and DNS rebinding would make it same-origin; and every API route
-// requires the session capability, since none of that tells the reviewer from
-// another account on the same machine. The page gets the capability through
-// the launch URL's fragment (see ./protocol.ts) and presents it as a bearer
-// token; the page and its assets are served to anyone and carry no token.
-//
-// One route does more than wrap: `POST /api/review` publishes the document
-// before it answers, so its 200 is a durable acknowledgement and its failure
-// is something the reviewer can fix and retry without losing the review.
+// Three properties are load-bearing: every route validates before core runs; the listener both binds
+// to loopback and refuses requests that name anything else (a web page can reach loopback, and DNS
+// rebinding would make it same-origin); and every API route requires the session capability (see ./protocol.ts).
+// `POST /api/review` publishes before it answers.
 
 import * as fs from 'node:fs';
 import * as http from 'node:http';
@@ -54,13 +46,7 @@ import type { ReviewSubmitAck, ReviewSubmitFailure } from './protocol';
 
 export { MAX_REVIEW_BODY_BYTES } from './protocol';
 
-/**
- * `client/` next to this module, which is `dist/client/` once built.
- *
- * Resolved on demand rather than at import: `import.meta.url` is only a
- * `file:` URL when this module runs in Node proper, and the client's own
- * suite imports it under a browser-like environment with a fixture in hand.
- */
+// Resolved on demand: `import.meta.url` is not a `file:` URL under the client suite's browser-like environment.
 export function defaultClientDir(): string {
   return fileURLToPath(new URL('./client/', import.meta.url));
 }
@@ -68,28 +54,13 @@ export function defaultClientDir(): string {
 /** Upper bound on a `POST /api/expand-context` body: a path and an integer. */
 export const MAX_EXPAND_CONTEXT_BODY_BYTES = 64 * 1024;
 
-/**
- * Where a submitted review is published, fixed for the life of the process.
- * Core's type: the origin decides how far the publisher trusts the path
- * (see `resolveOutputTarget` in `@self-review/core`), and no route changes it.
- */
 export type ReviewOutputTarget = CoreReviewOutputTarget;
 
 export interface ReviewServerOptions {
-  /**
-   * The session every route acts on; held for the process lifetime. Every
-   * request-supplied diff path is authorized against its source identity by
-   * core — the same object core reads from — so there is no separate root
-   * for the routes to get wrong (audit A6).
-   */
+  /** Every request-supplied diff path is authorized against this session's source identity by core (audit A6). */
   session: ReviewSession;
-  /** Where `POST /api/review` publishes. No route changes it. */
   output: ReviewOutputTarget;
-  /**
-   * The session capability every `/api/` request must present as a bearer
-   * token. Drawn once per process by `generateCapability()` and delivered
-   * only through the launch URL's fragment; the server never sends it.
-   */
+  /** Bearer token every `/api/` request must present; the server never sends it. */
   capability: string;
   /** Directory of the client bundle. Defaults to `defaultClientDir()`; tests inject a fixture. */
   clientDir?: string;
@@ -251,12 +222,7 @@ function sendError(res: http.ServerResponse, status: number, error: string): voi
   sendJson(res, status, { error }, status === 413 ? { connection: 'close' } : {});
 }
 
-/**
- * Whether the request presents the session capability. The scheme is
- * matched case-insensitively, as the header grammar says; the token is
- * compared in constant time. Only the header is consulted: a token in the
- * query string would land in history and logs, so it is never accepted there.
- */
+// Header only: a token in the query string would land in history and logs.
 function presentsCapability(req: http.IncomingMessage, capability: string): boolean {
   const header = req.headers.authorization;
   if (header === undefined) return false;
@@ -266,20 +232,13 @@ function presentsCapability(req: http.IncomingMessage, capability: string): bool
   return capabilityMatches(capability, header.slice(space + 1).trim());
 }
 
-/** 401, with nothing in the body a client did not already know. */
 function sendUnauthorized(res: http.ServerResponse): void {
   sendJson(res, 401, { error: 'unauthorized' }, { 'www-authenticate': CAPABILITY_SCHEME });
 }
 
 const REVIEWED_PATH_ERROR = 'path must name a file in the reviewed diff';
 
-/**
- * Whether `filePath` names a file this session reviewed, by core's own
- * authorization: the path must be relative, stay inside the source root and
- * be one the committed diff contained. Core then resolves exactly the path
- * it authorized, so the check and the read cannot disagree. Answers 400 and
- * returns false otherwise.
- */
+/** Core's authorization; answers 400 and returns false when `filePath` is not a reviewed path. */
 function requireReviewedPath(ctx: RouteContext, filePath: string, what = 'path'): boolean {
   if (authorizeReviewedPath(ctx.session, filePath).ok) return true;
   sendError(
@@ -290,7 +249,6 @@ function requireReviewedPath(ctx: RouteContext, filePath: string, what = 'path')
   return false;
 }
 
-/** The `path` query parameter, authorized as a reviewed path, or null after a 400. */
 function requireReviewedQueryPath(ctx: RouteContext): string | null {
   const raw = ctx.url.searchParams.get('path');
   if (raw === null) {
@@ -378,10 +336,7 @@ const routes: Record<string, RouteHandler> = {
   },
 
   'GET /api/attachment': async ctx => {
-    // A different namespace from diff paths: the reference a review document
-    // wrote, `.self-review-assets/<name>`, which core resolves beside the
-    // resumed document it came from (or the output, for one it did not
-    // import). The shape is checked here so nothing else reaches core.
+    // Not a diff path: a `.self-review-assets/<name>` reference core resolves itself; only its shape is checked here.
     const raw = ctx.url.searchParams.get('path');
     if (raw === null || parseAttachmentReference(raw) === null) {
       sendError(ctx.res, 400, 'path must name a file in the .self-review-assets directory');
@@ -420,11 +375,8 @@ const routes: Record<string, RouteHandler> = {
     sendJson(res, 200, await expandContext(session, parsed.value));
   },
 
-  // The one route that rewrites a file in the reviewed tree. Core refuses
-  // unless the anchored lines still match the suggestion's recorded original
-  // byte for byte, and resolves the destination itself; the path is
-  // authorized here too, so a request cannot even name a file the review
-  // never contained.
+  // The one route that rewrites a file in the reviewed tree. Core refuses unless the anchored lines still
+  // match the suggestion's recorded original byte for byte, and resolves the destination itself.
   'POST /api/apply-suggestion': async ctx => {
     const { req, res, session } = ctx;
     const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES);
@@ -441,10 +393,7 @@ const routes: Record<string, RouteHandler> = {
     sendJson(res, 200, applySuggestionForSession(session, parsed.value));
   },
 
-  // The completion. The document is published before the response is
-  // written, so a 200 is a file on disk and a failure is a server that is
-  // still up, holding nothing: the review lives in the tab, and the same
-  // submission can be sent again once the reported problem is fixed.
+  // The completion: a 200 means the file is on disk; a failure leaves the server up for a retry.
   'POST /api/review': async ({ req, res, session, output }) => {
     const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES);
     if (!body.ok) {
@@ -466,16 +415,12 @@ const routes: Record<string, RouteHandler> = {
   },
 };
 
-/**
- * Publish one submitted review. Every failure the publisher reports is
- * returned, never thrown: the route answers with it and keeps serving.
- */
+// Publisher failures are returned, not thrown, so the route answers and keeps serving.
 async function publishSubmittedReview(
   state: ReviewState,
   output: ReviewOutputTarget,
   session: ReviewSession
 ): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
-  // Resumed attachments are copied beside an output in another directory.
   const options = publishOptionsFor(output, session.attachmentOrigins);
   try {
     const { outputPath } = await publishReview(state, output.path, options);
@@ -494,7 +439,6 @@ async function publishSubmittedReview(
   }
 }
 
-/** The document is the client's to fix; the filesystem is the host's. */
 const DOCUMENT_ERROR_CODES: ReadonlySet<ReviewPublishErrorCode> = new Set([
   'validation-failed',
   'xml-illegal-character',
@@ -574,10 +518,7 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
       return;
     }
 
-    // Then, for the API, only to the reviewer. The page and its assets are
-    // served to anyone — they carry no token and reveal nothing — but every
-    // route under /api/ is refused before it is even looked up, so a client
-    // without the capability learns neither the data nor the route table.
+    // Assets are served to anyone; every /api/ route is refused before lookup, so the route table does not leak.
     if (url.pathname.startsWith('/api/') && !presentsCapability(req, capability)) {
       sendUnauthorized(res);
       return;

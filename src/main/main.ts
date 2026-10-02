@@ -120,19 +120,13 @@ if (process.env.NODE_ENV === 'test' || process.env.DISPLAY === ':99') {
 
 let mainWindow: BrowserWindow | null = null;
 let diffData: DiffLoadPayload | null = null;
-// What diffData is a review of; committed with it. Null for the welcome screen.
 let diffIdentity: ReviewSourceIdentity | null = null;
 let resumeComments: ReviewComment[] = [];
 let resumeViewedFiles: string[] = [];
 let appConfig: AppConfig | null = null;
 let outputPathWritable: boolean = false;
 const launchCwd = process.cwd();
-// Where the review is published and how far the publisher trusts the path
-// (resolveOutputTarget): project configuration or the default is
-// `inherited` and must stay inside the launch directory; the reviewer's own
-// user-level output-file, or a path picked in the save dialog, is
-// `explicit`. (The desktop CLI has no --output flag.) Replaced whole on a
-// save-dialog pick; set for real in phase 2.
+// `inherited` origin must stay inside launchCwd; `explicit` may point anywhere. Replaced whole on a save-dialog pick.
 let outputTarget: ReviewOutputTarget = {
   path: resolve(launchCwd, 'review.xml'),
   origin: 'inherited',
@@ -140,45 +134,20 @@ let outputTarget: ReviewOutputTarget = {
 };
 // Remote PR/MR session state. remoteSessionInfo is injected into the
 // submitted ReviewState on save so the serializer writes the remote-*
-// attributes. remoteCleanup releases what materialization acquired (a
-// temporary clone, or this session's refs in a reused clone); this process
-// owns it from the moment bootstrap returned it, and disposeRemoteSession is
-// the one place it is called. remoteInFlight is a bootstrap that has not
-// returned yet — the startup URL or a welcome-screen open — so a quit or a
-// deadline can cancel it through its signal and wait for its own cleanup.
+// attributes. remoteCleanup is only called through disposeRemoteSession; remoteInFlight lets a quit or
+// deadline cancel a bootstrap that has not returned.
 let remoteSessionInfo: RemoteSessionInfo | null = null;
 let remoteCleanup: (() => Promise<void>) | null = null;
 let remoteInFlight: { controller: AbortController; settled: Promise<void> } | null = null;
 
-/** The whole startup, remote materialization included, must finish within this. */
 const STARTUP_TIMEOUT_MS = 45_000;
-/**
- * After the startup deadline cancels a remote bootstrap, how long its
- * cleanup (killing git, removing the clone) may take before the process
- * exits regardless.
- */
 const STARTUP_CANCEL_GRACE_MS = 10_000;
-/**
- * A welcome-screen URL open has no other deadline: the reviewer is waiting
- * on a spinner they cannot cancel, so the open cancels itself and reports
- * back after this long. Generous because a blobless clone of a large
- * repository is legitimately slow.
- */
+// The welcome-screen spinner cannot be cancelled by the reviewer, so the open cancels itself after this.
 const REMOTE_OPEN_TIMEOUT_MS = 10 * 60_000;
-/** How long an exit waits for the remote session's release before leaving anyway. */
 const EXIT_CLEANUP_TIMEOUT_MS = 10_000;
 
-// The one close/quit/save state machine. The window's close button, menu
-// Quit, Cmd+Q/Ctrl+Q, Finish Review and the Save & Quit / Discard dialog all
-// consult it; only a successful save or an explicit discard lets the process
-// exit. See quit-controller.ts.
 const quitController = new QuitController();
 
-/**
- * Whether a review window with something to lose is on screen. A welcome
- * screen, a missing or destroyed window, or a renderer that has not loaded
- * yet has nothing to save, so closing it goes straight through.
- */
 function isReviewWindowOpen(): boolean {
   return (
     mainWindow !== null &&
@@ -188,12 +157,6 @@ function isReviewWindowOpen(): boolean {
   );
 }
 
-/**
- * Applies the controller's decision to a window close or an app quit:
- * either let it through, or stop it and hand the question to the renderer,
- * whose dialog answers over app:save-and-quit / app:discard-and-quit (Cancel
- * answers nothing and the review simply continues).
- */
 function handleCloseRequest(event: Electron.Event): void {
   const decision = quitController.closeRequested(isReviewWindowOpen());
   if (decision === 'allow') return;
@@ -203,14 +166,10 @@ function handleCloseRequest(event: Electron.Event): void {
   }
 }
 
-// Menu Quit, Cmd+Q/Ctrl+Q and any other app.quit() arrive here first. With a
-// review open they are intercepted and routed through the same confirmation
-// as the window's close button; the welcome screen quits directly. The
-// signal handlers above call process.exit() right after app.quit(), so a
-// SIGTERM/SIGINT is never held up by this.
+// Signal handlers call process.exit() right after app.quit(), so SIGTERM/SIGINT is never held up here.
 app.on('before-quit', handleCloseRequest);
 
-/** Resolve `work` or, after `ms`, log `what` and resolve anyway; the wait is bounded, the work is not interrupted. */
+// Bounded wait: the work is not interrupted when the deadline passes.
 function withinTimeout(work: Promise<unknown>, ms: number, what: string): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
   const deadline = new Promise<void>(resolve => {
@@ -222,12 +181,6 @@ function withinTimeout(work: Promise<unknown>, ms: number, what: string): Promis
   return Promise.race([work.then(() => undefined), deadline]).finally(() => clearTimeout(timer));
 }
 
-/**
- * Run one remote bootstrap as the in-flight session, so a quit or a
- * deadline can reach it through `controller` while it runs. Its own
- * try/finally releases whatever it acquired when it rejects; only a result
- * hands this process a cleanup to own.
- */
 async function runRemoteBootstrap(
   url: string,
   ignorePatterns: string[],
@@ -256,13 +209,7 @@ async function runRemoteBootstrap(
   }
 }
 
-/**
- * Release the remote session: cancel a bootstrap still in flight and wait
- * for it to settle (its own cleanup runs on the way out), then run the live
- * session's cleanup. Idempotent, bounded, never rejects. The temp clone's
- * removal is the synchronous first step of that cleanup, so even the
- * process `exit` handler, which cannot wait, gets that far.
- */
+// Idempotent, bounded, never rejects. Temp-clone removal is the synchronous first step, which the `exit` handler relies on.
 async function disposeRemoteSession(reason: string): Promise<void> {
   const inFlight = remoteInFlight;
   if (inFlight) {
@@ -277,11 +224,6 @@ async function disposeRemoteSession(reason: string): Promise<void> {
   }
 }
 
-/**
- * The only way the review flow ends the process. Called after the document
- * is on disk (Finish Review, Save & Quit) or after an explicit Discard. The
- * remote session, if any, is released first.
- */
 function exitNow(code: number): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.destroy();
@@ -290,16 +232,10 @@ function exitNow(code: number): void {
 }
 
 function publishOptions(): PublishReviewOptions {
-  // Resumed attachments are copied beside an output in another directory.
   return publishOptionsFor(outputTarget, getAttachmentOrigins());
 }
 
-/**
- * The startup hint behind the file tree's writability mark and the Finish
- * Review button: the publisher's own read-only checks against the current
- * output path, so the hint and the save-time error agree. Advisory only —
- * the save re-checks and reports its own failure.
- */
+// Advisory only: the save re-checks.
 function probeOutputPath(): boolean {
   const problem = inspectOutputPath(outputTarget.path, publishOptions());
   if (problem) {
@@ -308,11 +244,6 @@ function probeOutputPath(): boolean {
   return problem === null;
 }
 
-/**
- * A save that did not happen. Logged in full to stderr, then shown in a
- * native dialog over the review window, which stays open with every
- * comment in place.
- */
 async function reportSaveFailure(failure: SaveFailure): Promise<void> {
   console.error(`[main] Error saving review (${failure.code}): ${failure.message}`);
   for (const line of failure.detail.split('\n')) {
@@ -329,12 +260,7 @@ async function reportSaveFailure(failure: SaveFailure): Promise<void> {
   });
 }
 
-// The remote session is released on every exit path. exitNow and the
-// startup catch wait for it; app.quit() flows (window-all-closed, menu Quit
-// from the welcome screen) are held at 'will-quit' until it is done and then
-// resumed; and process 'exit' is the last resort for a direct process.exit()
-// — it cannot wait, so only the synchronous part of the cleanup (removing
-// the temp clone) runs there.
+// 'exit' cannot wait, so only the synchronous part of the cleanup runs there; 'will-quit' holds app.quit() until the release is done.
 process.on('exit', () => {
   void remoteCleanup?.();
 });
@@ -349,12 +275,7 @@ app.on('will-quit', event => {
  * This function is called from the app.whenReady() handler.
  */
 async function initializeApp() {
-  // The whole startup must finish within STARTUP_TIMEOUT_MS. A remote
-  // bootstrap still in flight at the deadline is cancelled through its
-  // signal — the git in flight is killed and the clone released — and
-  // rejects into the catch below, which exits; a forced exit follows if that
-  // takes longer than STARTUP_CANCEL_GRACE_MS. Anything else stuck at the
-  // deadline exits at once, as before.
+  // At the deadline an in-flight remote bootstrap is cancelled (the catch below exits); a forced exit follows after STARTUP_CANCEL_GRACE_MS.
   const startupController = new AbortController();
   let forcedExit: NodeJS.Timeout | undefined;
   const initTimeout = setTimeout(() => {
@@ -378,9 +299,7 @@ async function initializeApp() {
     const cliArgs = parseCliArgs();
     console.error('[main] CLI args parsed:', JSON.stringify(cliArgs));
 
-    // Phase 2: Load configuration. Where each value came from decides its
-    // trust: the output path's origin (resolveOutputTarget) and whether the
-    // default diff arguments may name write-capable git options.
+    // Phase 2: Load configuration (provenance decides output-path trust and default-diff-args trust)
     const loadedConfig = loadConfigWithProvenance({ cwd: launchCwd });
     appConfig = loadedConfig.config;
     outputTarget = resolveOutputTarget(null, loadedConfig, launchCwd);
@@ -393,12 +312,7 @@ async function initializeApp() {
       outputPathWritable
     );
 
-    // Phase 3: Determine git diff args: the command line's, or the
-    // configured default-diff-args split with shell quoting (a committed
-    // configuration may not use them to make git write or run programs;
-    // that throws here, before any git command, and is reported by the
-    // catch below), normalized so a path is never read as a revision, then
-    // the staged/untracked default, which must apply before any code reads
+    // Phase 3: Determine git diff args. The staged/untracked default must apply before anything reads
     // appConfig.showUntracked or sends config to the renderer.
     const resolvedArgs = resolveStartupDiffArgs(cliArgs.gitDiffArgs, loadedConfig, launchCwd);
     const gitDiffArgs = resolvedArgs.gitDiffArgs;
@@ -435,10 +349,6 @@ async function initializeApp() {
         session.repoPath
       );
     } else {
-      // Local modes, loaded by the same core step serve uses: the git diff
-      // (ignore-filtered, argv recorded losslessly), a scanned directory or
-      // file, or the empty welcome payload with no identity, which opens the
-      // window with the directory picker.
       if (source.mode === 'git') {
         console.error('[main] Git diff args:', formatGitDiffArgs(gitDiffArgs));
       } else if (source.mode === 'welcome') {
@@ -490,15 +400,10 @@ async function initializeApp() {
     let resumeRemoteHeadSha: string | undefined;
     let resumeImportDiagnostics: string[] = [];
     if (cliArgs.resumeFrom) {
-      // The parser reports; this host decides. A document that cannot be
-      // read is fatal here, with its message, exactly as before — the
-      // difference is that the decision is made in main, not in the library.
+      // The parser reports; this host decides: an unreadable document is fatal.
       try {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
-        // The core resume step serve uses too: comments, viewed files and
-        // import diagnostics land on the desktop session, with attachments
-        // resolving beside the resumed document, not the launch directory
-        // or the output. Phase 5a may still merge remote threads into them.
+        // Attachments resolve beside the resumed document, not the launch directory or the output.
         const { parsed, importDiagnostics } = loadResumeFile(
           resolve(launchCwd, cliArgs.resumeFrom)
         );
@@ -590,8 +495,7 @@ async function initializeApp() {
     clearTimeout(initTimeout);
     if (forcedExit) clearTimeout(forcedExit);
     if (isCommandCancelled(error)) {
-      // The deadline above cancelled the remote bootstrap; its cleanup has
-      // already run on the way out.
+      // The deadline cancelled the bootstrap; its cleanup already ran.
       console.error(`[main] Remote materialization cancelled: ${error.message}`);
     } else if (error instanceof Error) {
       console.error(`[main] Initialization error: ${error.message}`);
@@ -636,25 +540,15 @@ function createWindow(): void {
 
   // Data is sent when renderer requests it via IPC (see ipc-handlers.ts)
 
-  // The window's close button (and Cmd+W) go through the same decision as
-  // app quit: a review window asks the renderer, anything else closes.
   mainWindow.on('close', handleCloseRequest);
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
-/**
- * The IPC listeners that belong to the app's lifetime rather than to one
- * window. Registered once from initializeApp: createWindow can run again on
- * macOS (`activate`), and listeners registered there would stack.
- */
+// Registered once from initializeApp: createWindow can rerun on macOS `activate` and listeners would stack.
 function registerLifecycleHandlers(): void {
-  // Finish Review and the dialog's Save & Quit. The renderer has pushed its
-  // state over review:submit first; the document is validated, attachments
-  // staged, then renamed into place, so a failure leaves any previous
-  // review.xml intact — and leaves this window open with every comment in
-  // place, the failure shown in a dialog, and the output path changeable.
+  // Finish Review and Save & Quit; a failed publish leaves the window open.
   ipcMain.on(IPC.APP_SAVE_AND_QUIT, async () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     console.error('[main] Save and quit requested');
@@ -678,7 +572,6 @@ function registerLifecycleHandlers(): void {
     }
   });
 
-  // The dialog's Discard button: exit without writing anything.
   ipcMain.on(IPC.APP_DISCARD_AND_QUIT, () => {
     console.error('[main] Discard and quit requested');
     quitController.discard();
@@ -687,11 +580,7 @@ function registerLifecycleHandlers(): void {
 
   // Start a remote PR/MR session from a renderer-supplied URL (the welcome
   // screen's URL field). Shares the bootstrap with the CLI URL path.
-  //
-  // Lifetime: one open at a time. The open runs as the in-flight remote
-  // session, so a quit cancels it and waits; on its own it is bounded by
-  // REMOTE_OPEN_TIMEOUT_MS, after which it cancels itself, releases what it
-  // acquired and reports the timeout — the welcome screen stays usable.
+  // One open at a time; a quit cancels it, and REMOTE_OPEN_TIMEOUT_MS cancels it on its own.
   ipcMain.handle(IPC.REMOTE_OPEN_URL, async (event, url: string): Promise<RemoteOpenUrlResult> => {
     if (remoteInFlight) {
       return { ok: false, error: 'A remote review is already being opened.' };
@@ -788,8 +677,7 @@ function registerLifecycleHandlers(): void {
     }
   });
 
-  // Handle output path change via native save dialog. A path the reviewer
-  // picked here is explicit: it may be anywhere, inside the project or not.
+  // A path picked in the save dialog is explicit: it may be anywhere.
   ipcMain.handle(IPC.OUTPUT_PATH_CHANGE, async (): Promise<OutputPathInfo | null> => {
     if (!mainWindow || mainWindow.isDestroyed()) return null;
 
@@ -811,7 +699,6 @@ function registerLifecycleHandlers(): void {
     );
 
     const info: OutputPathInfo = { resolvedOutputPath: outputTarget.path, outputPathWritable };
-    // The session's output decides which asset directory attachment reads fall back to.
     setOutputPathInfo(info);
     mainWindow.webContents.send(IPC.OUTPUT_PATH_CHANGED, info);
     return info;

@@ -269,13 +269,6 @@ describe('applySuggestion', () => {
   });
 });
 
-// ===== Authorization and the transactional write (plan 63, task 11) =====
-//
-// The engine is the one place a reviewed file is rewritten, so the policy is
-// pinned here against real files: a refusal must leave the target byte for
-// byte as it was, and a symlink planted anywhere on the way to it must not
-// redirect the write outside the destination.
-
 function errno(code: string): NodeJS.ErrnoException {
   const error: NodeJS.ErrnoException = new Error(code);
   error.code = code;
@@ -304,10 +297,7 @@ function untouchableFs(): FsLayer {
   };
 }
 
-/**
- * ENOSPC after `budget` bytes, the way a full disk fails: some bytes land,
- * then the next write is refused.
- */
+/** ENOSPC after `budget` bytes, the way a full disk fails: some bytes land first. */
 function enospcAfter(budget: number): FsLayer {
   let remaining = budget;
   return {
@@ -557,8 +547,7 @@ describe('applySuggestion: physical containment', () => {
 describe('applySuggestion: the write is transactional', () => {
   it('refuses when the file was replaced between the read and the commit', () => {
     const absolute = seed(FILE, `${ORIGINAL.join('\n')}\n`);
-    // Read the original through the engine, then swap the inode out from
-    // under it before it commits: the swapped file must survive untouched.
+    // Swap the inode out between the engine's read and its commit.
     const swapping: FsLayer = {
       ...nodeFsLayer,
       readFileSync(fd) {

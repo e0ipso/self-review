@@ -44,12 +44,10 @@ export function FileSectionHeader({
   onRenderViewModeChange,
 }: FileSectionHeaderProps) {
   const { additions, deletions } = getFileStats(file);
-  // Renames and copies have two paths: show where the file came from.
   const hasSourcePath = file.changeType === 'renamed' || file.changeType === 'copied';
   const displayPath = hasSourcePath
     ? `${file.oldPath} → ${file.newPath}`
-    : // The empty path is the review-level sentinel: comments with no
-      // file association (fetched forge threads without an anchor).
+    : // The empty path is the review-level sentinel (forge threads without an anchor).
       filePath || 'Review-level comments';
   const changeLabel = file.changeType.charAt(0).toUpperCase() + file.changeType.slice(1);
 

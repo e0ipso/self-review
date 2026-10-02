@@ -1,11 +1,4 @@
-// packages/core/src/anchor-validation.ts
-// Pure, side-effect-free validation of a comment's line anchor.
-//
-// Every boundary that accepts an anchor it did not create goes through here:
-// the resume importer (a document is untrusted input, whatever wrote it) and
-// Apply (a request is untrusted input, whatever transport carried it). Both
-// need the same answer to the same question — is this a real, usable range? —
-// so the rules live in one place and neither side re-derives them.
+// Line-anchor validation shared by the resume importer and Apply, both untrusted input.
 
 import type { LineRange } from './types';
 
@@ -19,11 +12,7 @@ export interface LineAnchor {
 
 export type AnchorCheck = { ok: true; anchor: LineAnchor } | { ok: false; reason: string };
 
-/**
- * The four raw line fields of a comment, before anyone has decided what they
- * mean. `unknown` on purpose: XML hands over strings, a transport hands over
- * whatever JSON gave it, and an in-memory caller hands over numbers.
- */
+/** The four raw line fields; `unknown` because XML gives strings and JSON gives anything. */
 export interface AnchorFields {
   oldLineStart?: unknown;
   oldLineEnd?: unknown;
@@ -32,20 +21,9 @@ export interface AnchorFields {
 }
 
 /**
- * Validate a line anchor from its four raw fields.
- *
- * Returns `null` when no field is present — a file-level comment, which is a
- * valid shape and not an error. Otherwise returns `{ ok: true, anchor }` for a
- * usable range or `{ ok: false, reason }` naming the first rule it broke:
- *
- * - every present field is a positive safe integer (a decimal digit string is
- *   accepted, because that is what an XML attribute is);
- * - exactly one side is present, and that side is complete (start and end);
- * - start ≤ end;
- * - end ≤ `maxLine` when a bound is given.
- *
- * The reason is a short phrase meant to be embedded in a diagnostic, e.g.
- * `"new-line-end is not a positive integer (abc)"`.
+ * Returns `null` when no field is present (a file-level comment), else the first
+ * rule broken: positive safe integers (digit strings accepted), exactly one
+ * complete side, start <= end, end <= `maxLine`. `reason` is embedded in diagnostics.
  */
 export function validateLineAnchor(fields: AnchorFields, maxLine?: number): AnchorCheck | null {
   const old = sideFields('old', fields.oldLineStart, fields.oldLineEnd);
@@ -80,10 +58,8 @@ export function validateLineAnchor(fields: AnchorFields, maxLine?: number): Anch
 }
 
 /**
- * Validate an in-memory `LineRange` with the same rules as
- * {@link validateLineAnchor}. For callers that already hold a typed range
- * (Apply, the UI) and need to know whether it is actually usable: the type
- * says `number`, but `NaN`, `0`, `1.5` and `Infinity` are all numbers.
+ * Same rules as {@link validateLineAnchor} for a typed range; `NaN`, `0`, `1.5` and `Infinity` are
+ * still numbers.
  */
 export function validateLineRange(range: LineRange, maxLine?: number): AnchorCheck {
   const start = toPositiveSafeInteger(range.start);
@@ -137,9 +113,8 @@ function isAbsent(value: unknown): boolean {
 }
 
 /**
- * Read a positive safe integer out of a number or a decimal digit string.
- * Anything else — `NaN`, `0`, negatives, fractions, `Infinity`, `1e3`,
- * booleans, numbers past `MAX_SAFE_INTEGER` — yields `null`.
+ * A positive safe integer from a number or decimal digit string; anything else (`1e3`, `NaN`,
+ * booleans) is `null`.
  */
 function toPositiveSafeInteger(value: unknown): number | null {
   let n: number;

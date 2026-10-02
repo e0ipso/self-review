@@ -1,10 +1,6 @@
 /**
- * Test-only. Argument cases both command lines must read the same way
- * (audit R15), run through the desktop parser in src/main/cli.test.ts and the
- * serve parser in packages/serve/src/args.test.ts. Each case names the
- * arguments as typed and what both parsers must hand to git and take as
- * --resume-from; anything a front end adds on top (the desktop's forge URL
- * and subcommand, serve's --output) is tested in its own suite.
+ * Test-only. Cases both command lines must read identically (audit R15), run by
+ * src/main/cli.test.ts and packages/serve/src/args.test.ts.
  */
 export interface SharedCliCase {
   name: string;

@@ -9,8 +9,7 @@ import { join, sep } from 'path';
 import { tmpdir } from 'os';
 import { scanDirectory, scanFile } from './directory-scanner';
 
-// Pass-through spy: the scanner walks the real filesystem, and the test can
-// see every directory it opened.
+// Pass-through spy recording every directory the scanner opened.
 vi.mock('fs/promises', async importOriginal => {
   const actual = await importOriginal<typeof import('fs/promises')>();
   return { ...actual, opendir: vi.fn(actual.opendir) };

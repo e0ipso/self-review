@@ -1,36 +1,21 @@
 // packages/core/src/snapshot-reader.ts
-// Read the content of a reviewed file from the exact snapshot the review
-// compared, and authorize a request-supplied path against the same source.
-//
-// Two things used to go wrong here, and both came from resolving paths on
-// the fly. Previews and line counts read the working tree whatever the
-// review was of, so a staged image preview showed the unstaged bytes
-// (audit R13). And the serve front end contained paths under its launch
-// directory while core opened them under the reviewed one, so a symlink in
-// a directory review read a file outside it (audit A6). Now a session
-// carries a `ReviewSourceIdentity`, this module is the one place a reviewed
-// path turns into bytes, and every read names the side it wants: a commit
-// blob, the index blob, or the working file opened without following links.
+// The one place a reviewed path turns into bytes, read from the side the review compared (audit R13, A6).
 
 import { execFile } from 'child_process';
-import { constants, realpathSync } from 'fs';
 import * as path from 'path';
 import type { ReviewSourceIdentity, ReviewSourceSide } from './types';
-import { readFileWithinBudget } from './bounded-read';
 import { MAX_SOURCE_FILE_BYTES } from './input-budgets';
-import { SafeFsError, assertNoSymlinkAncestors, errnoOf } from './safe-fs';
+import { errnoOf, readContainedFile, toSafeFsError } from './safe-fs';
+import type { SafeFsErrorCode } from './safe-fs';
 import { rootRelativeReviewedPath } from './source-identity';
 
-/** What a reader needs of a session: its identity and the paths it reviewed. */
 export interface ReviewedSnapshot {
   sourceIdentity: ReviewSourceIdentity | null;
   reviewedPaths: ReadonlySet<string>;
 }
 
 export type ReviewedPathRefusal =
-  /** The session has no source identity: nothing has been loaded. */
   | 'no-source'
-  /** The committed diff never contained this path. */
   | 'not-reviewed'
   /** Absolute, empty, or leaving the source root. */
   | 'invalid-path';
@@ -38,25 +23,13 @@ export type ReviewedPathRefusal =
 export type ReviewedPathAuthorization =
   | {
       ok: true;
-      /** The file under `sourceRoot`: the reviewed path restated from the root, normalized. */
+      /** Restated from `sourceRoot` through the identity's prefix, normalized. */
       relativePath: string;
       sourceRoot: string;
     }
   | { ok: false; reason: ReviewedPathRefusal; message: string };
 
-/**
- * Decide whether `filePath` names a file this session reviewed, and under
- * which root. This is the one path check every front end delegates to: a
- * path that passes here is the path the readers below open, so what was
- * authorized and what is read cannot diverge.
- *
- * The lexical checks run first, so an absolute path or a traversal is
- * refused as what it is whatever the set says; membership is then checked
- * on the path as sent, since the diff recorded it that way. The path handed
- * back is restated from the source root through the identity's prefix
- * (`rootRelativeReviewedPath`), so a `--relative` review of `sub/` reads
- * `sub/<path>` and never the root's same-named file.
- */
+/** The one path check every front end delegates to; what passes is exactly what the readers open. */
 export function authorizeReviewedPath(
   source: ReviewedSnapshot,
   filePath: string
@@ -85,11 +58,7 @@ export function authorizeReviewedPath(
   return { ok: true, relativePath, sourceRoot: identity.sourceRoot };
 }
 
-/**
- * `filePath` as a normalized relative path under the root, or null when it
- * is empty, absolute, contains a NUL, or climbs out. Diff paths are
- * `/`-separated whatever the platform; a backslash is an ordinary character.
- */
+/** Diff paths are `/`-separated on every platform; a backslash is an ordinary character. */
 function normalizeReviewedPath(filePath: string): string | null {
   if (filePath === '' || filePath.includes('\0') || path.posix.isAbsolute(filePath)) return null;
   const normalized = path.posix.normalize(filePath);
@@ -102,15 +71,11 @@ export type SnapshotReadFailure =
   | ReviewedPathRefusal
   /** The side has no content (`none`) or could not be identified (`unknown`). */
   | 'side-unavailable'
-  /** No such file on that side. */
   | 'not-found'
   /** A directory, FIFO, socket or device. */
   | 'not-regular'
-  /** A symbolic link sits at the path or on the way to it. */
   | 'unsafe-link'
-  /** Larger than the byte budget. */
   | 'too-large'
-  /** Any other failure, with its message. */
   | 'read-failed';
 
 export type SnapshotReadResult =
@@ -118,7 +83,7 @@ export type SnapshotReadResult =
   | { ok: false; reason: SnapshotReadFailure; message: string };
 
 export interface SnapshotReadOptions {
-  /** Most bytes to read. Defaults to `MAX_SOURCE_FILE_BYTES`. */
+  /** Defaults to `MAX_SOURCE_FILE_BYTES`. */
   maxBytes?: number;
 }
 
@@ -126,13 +91,7 @@ function failure(reason: SnapshotReadFailure, message: string): SnapshotReadResu
   return { ok: false, reason, message };
 }
 
-/**
- * The bytes of `filePath` on one side of the review: `git cat-file` of the
- * commit or index blob, or the working, scanned or named file opened under
- * the physical source root without following a symbolic link anywhere on
- * the way. Authorization runs first, so a path the review never contained
- * is refused before any side is consulted.
- */
+/** A blob from the object store, or the file under the physical source root; authorized first. */
 export async function readReviewedContent(
   source: ReviewedSnapshot,
   filePath: string,
@@ -157,11 +116,13 @@ async function readSide(
     case 'working-tree':
     case 'directory':
       return readPhysicalFile(sourceRoot, relativePath, maxBytes);
-    case 'file':
-      return readNamedFile(descriptor.path, maxBytes);
+    case 'file': {
+      // Walked from the filesystem root: the path was physical at load, so any link now is new.
+      const fsRoot = path.parse(descriptor.path).root;
+      return readPhysicalFile(fsRoot, path.relative(fsRoot, descriptor.path), maxBytes);
+    }
     case 'index':
-      // Stage 0 explicitly: `:path` alone would read a leading `<n>:` in the
-      // path as a stage number.
+      // `:path` alone would read a leading `<n>:` in the path as a stage number.
       return readGitBlob(sourceRoot, `:0:${relativePath}`, maxBytes);
     case 'commit':
       return readGitBlob(sourceRoot, `${descriptor.sha}:${relativePath}`, maxBytes);
@@ -175,88 +136,30 @@ async function readSide(
   }
 }
 
-/** A regular file under `root`, with no symbolic link at the leaf or above it. */
 async function readPhysicalFile(
   root: string,
   relativePath: string,
   maxBytes: number
 ): Promise<SnapshotReadResult> {
   try {
-    assertNoSymlinkAncestors(root, relativePath);
+    return { ok: true, content: await readContainedFile(root, relativePath, maxBytes) };
   } catch (error) {
-    return fromFsError(error, relativePath);
-  }
-  return readFileNoFollow(path.join(root, relativePath), maxBytes);
-}
-
-/**
- * The one file of a single-file review. Its physical path was resolved
- * when the review was loaded; if resolving it again lands elsewhere, a link
- * has been planted on the way since, and the file is not the one reviewed.
- */
-async function readNamedFile(physicalPath: string, maxBytes: number): Promise<SnapshotReadResult> {
-  try {
-    if (realpathSync(physicalPath) !== physicalPath) {
-      return failure('unsafe-link', 'The reviewed file is no longer where it was.');
-    }
-  } catch (error) {
-    return fromFsError(error, physicalPath);
-  }
-  return readFileNoFollow(physicalPath, maxBytes);
-}
-
-async function readFileNoFollow(absolute: string, maxBytes: number): Promise<SnapshotReadResult> {
-  try {
-    const result = await readFileWithinBudget(absolute, maxBytes, { noFollow: true });
-    switch (result.kind) {
-      case 'ok':
-        return { ok: true, content: result.content };
-      case 'too-large':
-        return failure(
-          'too-large',
-          `The file is ${result.size} bytes, over the ${maxBytes}-byte limit.`
-        );
-      case 'not-regular':
-        return failure('not-regular', 'The path is not a regular file.');
-    }
-  } catch (error) {
-    return fromFsError(error, absolute);
+    const fsError = toSafeFsError(error, relativePath, 'read');
+    const [reason, message = fsError.message] = FS_FAILURES[fsError.code] ?? ['read-failed'];
+    return failure(reason, message);
   }
 }
 
-function fromFsError(error: unknown, about: string): SnapshotReadResult {
-  if (error instanceof SafeFsError) {
-    if (error.code === 'unsafe-link') {
-      return failure('unsafe-link', 'The path goes through a symbolic link.');
-    }
-    if (error.code === 'unsupported-target') {
-      return failure('invalid-path', 'This path does not stay inside the reviewed source.');
-    }
-    return failure('read-failed', error.message);
-  }
-  switch (errnoOf(error)) {
-    case 'ENOENT':
-    case 'ENOTDIR':
-      return failure('not-found', 'The file does not exist on this side of the review.');
-    case 'ELOOP':
-      return failure('unsafe-link', 'The path goes through a symbolic link.');
-    case 'EISDIR':
-      return failure('not-regular', 'The path is a directory.');
-    default:
-      return failure(
-        'read-failed',
-        `Cannot read ${about}: ${error instanceof Error ? error.message : String(error)}`
-      );
-  }
-}
+const FS_FAILURES: Partial<Record<SafeFsErrorCode, [SnapshotReadFailure, string?]>> = {
+  'not-found': ['not-found', 'The file does not exist on this side of the review.'],
+  'unsafe-link': ['unsafe-link', 'The path goes through a symbolic link.'],
+  'output-is-directory': ['not-regular', 'The path is a directory.'],
+  'not-regular': ['not-regular', 'The path is not a regular file.'],
+  'unsupported-target': ['invalid-path', 'This path does not stay inside the reviewed source.'],
+  'too-large': ['too-large'],
+};
 
-/**
- * One blob out of the object store, by `<sha>:<path>` or `:0:<path>`.
- * `cat-file blob` rather than `show`: it refuses a tree, and it never
- * applies a smudge filter, so the bytes are the ones git compared. Git runs
- * at the source root so a path is read relative to it, and `maxBuffer`
- * stops a blob past the budget before it is held in memory.
- */
+/** `cat-file blob`, not `show`: it refuses a tree and never smudges, so the bytes are the ones git compared. */
 function readGitBlob(root: string, spec: string, maxBytes: number): Promise<SnapshotReadResult> {
   return new Promise(resolve => {
     execFile(
@@ -288,6 +191,3 @@ function readGitBlob(root: string, spec: string, maxBytes: number): Promise<Snap
     );
   });
 }
-
-/** The `O_NOFOLLOW` flag, re-exported so a host can open the same way. */
-export const O_NOFOLLOW = constants.O_NOFOLLOW;

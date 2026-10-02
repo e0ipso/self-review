@@ -477,10 +477,8 @@ categories:
     });
   });
 
-  // Audit A5: a committed `.self-review.yaml` is repository data, while the
-  // reviewer's own ~/.config file is their intent. The hosts tell them apart
-  // by where each value came from, so a project output path is contained
-  // and project diff arguments are restricted, while a user's are not.
+  // Audit A5: project config is repository data, user config is the reviewer's intent; hosts tell
+  // them apart by provenance.
   describe('loadConfigWithProvenance', () => {
     it('records where output-file and default-diff-args came from', () => {
       const userYaml = `output-file: /home/user/reviews/out.xml\ntheme: dark\n`;

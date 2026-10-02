@@ -11,9 +11,7 @@ export default defineConfig({
     // `test:unit` script (pre-commit hook and CI) runs with no package build
     // step, so a runtime import of `@self-review/core` or `@self-review/react`
     // must not depend on `packages/*/dist` existing or being current.
-    //
-    // Ordered: a string `find` also matches as a prefix, so the stylesheet
-    // entry has to come before the package it is a subpath of.
+    // Ordered: a string `find` also matches as a prefix, so the stylesheet precedes its package.
     alias: [
       {
         find: '@self-review/react/styles.css',
@@ -24,8 +22,7 @@ export default defineConfig({
     ],
   },
   test: {
-    // The server suites run in Node; the browser client's suite opts into
-    // jsdom with a `@vitest-environment` docblock.
+    // Server suites run in Node; the client suite opts into jsdom with a docblock.
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],
   },

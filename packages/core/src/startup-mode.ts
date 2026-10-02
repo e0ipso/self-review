@@ -34,11 +34,8 @@ function isGitTracked(filePath: string, cwd: string): boolean {
 }
 
 /**
- * What a review starts from: the repository the launch directory is in
- * (`git`), or the one positional argument that names an existing directory
- * or file (`directory`, `file`), resolved against the launch directory. In
- * `welcome` there is nothing to review; the desktop shows its directory
- * picker and serve refuses to start.
+ * What a review starts from; `welcome` means nothing to review (desktop shows its picker, serve
+ * refuses).
  */
 export type StartupSource =
   | { mode: 'git' }
@@ -47,11 +44,8 @@ export type StartupSource =
   | { mode: 'welcome' };
 
 /**
- * Decide what the arguments review, from the launch directory `cwd`. The
- * candidate path is the first *positional* argument by the shared
- * classifier, so an option's value (`-S src/x.ts`) is never taken for the
- * file to review, and the path selected is the path the scanner is handed:
- * the two cannot disagree.
+ * The candidate is the first *positional* by the shared classifier, so `-S src/x.ts` never selects
+ * a file.
  */
 export function resolveStartupSource(
   gitDiffArgs: readonly string[],
@@ -62,7 +56,7 @@ export function resolveStartupSource(
     positionalIndices.length > 0 ? gitDiffArgs[positionalIndices[0]] : undefined;
   const candidate = firstPositional ? resolve(cwd, firstPositional) : null;
 
-  // An existing file: tracked files go through git diff, others are scanned.
+  // Tracked files go through git diff, others are scanned.
   if (candidate && firstPositional && isExisting(candidate, 'file')) {
     if (isInGitRepo(cwd)) {
       return isGitTracked(firstPositional, cwd)
@@ -76,7 +70,6 @@ export function resolveStartupSource(
     return { mode: 'git' };
   }
 
-  // Not in a git repo: an existing directory is scanned.
   if (candidate && isExisting(candidate, 'directory')) {
     return { mode: 'directory', sourcePath: candidate };
   }
@@ -94,11 +87,7 @@ function isExisting(candidate: string, kind: 'file' | 'directory'): boolean {
   }
 }
 
-/**
- * Determine the startup mode based on git availability and CLI arguments.
- * Returns the DiffSource type to use. See {@link resolveStartupSource} for
- * the source path that goes with it.
- */
+/** The mode alone; see {@link resolveStartupSource} for the source path. */
 export function determineMode(gitDiffArgs: string[]): 'git' | 'directory' | 'file' | 'welcome' {
   return resolveStartupSource(gitDiffArgs).mode;
 }

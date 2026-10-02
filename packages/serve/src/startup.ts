@@ -1,9 +1,5 @@
 // Resolve one review session the way the desktop does. Each phase below cites
-// the phase of `initializeApp` (src/main/main.ts) it mirrors, and the
-// decisions both have to make the same way — output target and its trust,
-// diff arguments and configuration provenance, what the arguments review,
-// resuming a prior document — are core's (`@self-review/core`'s startup
-// module), called from both.
+// the phase of `initializeApp` (src/main/main.ts) it mirrors; the shared decisions are core's startup module.
 //
 // Two orderings are load-bearing: everything resolves before the caller opens
 // the listener, so no request races a half-built session; and the guide lands
@@ -33,43 +29,21 @@ import type { ReviewOutputTarget, ReviewSession } from '@self-review/core';
 import type { ServeArgs } from './args';
 
 export interface ServeStartup {
-  /**
-   * The resolved session, complete: diff, guide, config, resume state and
-   * the source identity every path-taking route authorizes against. There
-   * is no separate containment root: the routes ask core, which checks the
-   * very root it reads from (audit A6).
-   */
+  /** Carries the source identity every path-taking route authorizes against (audit A6). */
   session: ReviewSession;
-  /**
-   * Where the review is published, fixed for the lifetime of the process:
-   * the absolute path, and whether the reviewer named it (`--output`, or
-   * their own user-level `output-file`: `explicit`) or the project
-   * configuration or default did (`inherited`, contained under the launch
-   * directory by the publisher).
-   */
+  /** Fixed for the process lifetime. */
   output: ReviewOutputTarget;
 }
 
 const log = (message: string) => console.error(`[serve] ${message}`);
 
-/**
- * Resolve the session to serve. Throws when there is nothing to review, the
- * output path cannot be written, a committed configuration supplies git
- * options the review refuses, or the resume file cannot be read; the caller
- * reports and exits.
- */
+/** Throws when startup cannot produce a servable session; the caller reports and exits. */
 export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
-  // Phase 2 (main.ts) — configuration and the output path. Fixed here and
-  // never again: no route changes it. Which of the three named it decides
-  // how far the publisher trusts it; see resolveOutputTarget.
+  // Phase 2 (main.ts): configuration and the output path.
   const cwd = process.cwd();
   const loadedConfig = loadConfigWithProvenance({ cwd });
   const output = resolveOutputTarget(args.outputPath, loadedConfig, cwd);
-  // The publisher's own read-only checks, so this hint and the save-time
-  // error agree: the leaf policy, the inherited-path containment and the
-  // directory's writability. Advisory — the publisher re-checks at submit
-  // and the browser keeps the review for a retry — but refusing an output
-  // that could never be written beats serving a review with no way out.
+  // Advisory (the publisher re-checks at submit), but refusing an output that can never be written beats serving a review with no way out.
   const problem = inspectOutputPath(output.path, publishOptionsFor(output));
   if (problem) {
     throw new Error(
@@ -79,14 +53,10 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   }
   log(`Output path: ${output.path} (${output.origin})`);
 
-  // Phase 3 (main.ts) — git diff arguments: the command line's, or the
-  // configured default-diff-args, which a committed configuration may not
-  // use to make git write or run programs; then the staged/untracked default.
+  // Phase 3 (main.ts): git diff arguments.
   const { gitDiffArgs, config } = resolveStartupDiffArgs(args.gitDiffArgs, loadedConfig, cwd);
 
-  // Phase 4 (main.ts) — what to review. Welcome mode diverges: there is no
-  // directory picker in a browser, so refusing beats serving an interface
-  // whose controls are dead.
+  // Phase 4 (main.ts): what to review. Welcome mode is refused: a browser has no directory picker.
   const source = resolveStartupSource(gitDiffArgs, cwd);
   log(`Startup mode: ${source.mode}`);
   if (source.mode === 'welcome') {
@@ -104,9 +74,7 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   );
   log(`Loaded ${diffData.files.length} files`);
 
-  // Phase 4b (main.ts) — large payload. The desktop asks; there is nobody
-  // to ask before the browser connects, so the threshold simply turns on
-  // lazy per-file loading (GET /api/file) and says so.
+  // Phase 4b (main.ts): large payload. Nobody to ask before the browser connects, so lazy loading just turns on.
   const stats = computePayloadStats(diffData.files.length, countTotalLines(diffData.files), config);
   if (stats.exceedsAny) {
     log(
@@ -117,8 +85,7 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
     diffData.isLargePayload = true;
   }
 
-  // Phase 5 (main.ts) — resume a prior review, attachments resolving beside
-  // the resumed document rather than the cwd or the output.
+  // Phase 5 (main.ts): resume.
   const session = createReviewSession();
   if (args.resumeFrom) {
     const resumePath = resolve(cwd, args.resumeFrom);
@@ -139,8 +106,7 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
     }
   }
 
-  // Phase 5b (main.ts) — the walkthrough guide sidecar, discovered next to
-  // the output path. Tolerant by contract: loadGuide never throws.
+  // Phase 5b (main.ts): guide sidecar. It must be on the session before listening; GET /api/diff answers from there.
   const guideData = await loadGuide(
     output.path,
     config,
@@ -152,13 +118,10 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
 
   // Phase 6 (main.ts) — assemble. Everything the routes read is on the
   // session before the caller opens the listener.
-  // Committed through core so the session's reviewed paths, which authorize
-  // every apply, are captured from this diff, and its source identity, which
-  // every path-taking route authorizes against, is recorded with it.
+  // commitDiffData captures the reviewed paths that authorize every apply, and the source identity.
   commitDiffData(session, diffData, identity);
   session.guideData = guideData;
   session.config = config;
-  // Writable as far as startup could tell: it refused above if it was not.
   session.outputPathInfo = { resolvedOutputPath: output.path, outputPathWritable: true };
 
   return { session, output };

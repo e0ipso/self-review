@@ -44,12 +44,8 @@ export default function SuggestionApplyControl({
 
   if (!applySuggestion) return null;
 
-  // A comment can sit on a path the reviewed diff never had: the review-level
-  // sentinel, a resumed comment on a file that left the diff, an outdated
-  // anchor. The session renders those as placeholder entries, but there is no
-  // reviewed file to write, and the host refuses them (`not-reviewed`). Say so
-  // instead of offering a button. While the session is still a placeholder
-  // itself there is nothing to compare against yet.
+  // The host refuses paths outside the reviewed diff (`not-reviewed`), so say so instead of
+  // offering a button. A placeholder session has nothing to compare against yet.
   const sessionLoaded =
     review !== null && review.diffSource.type !== 'loading' && review.diffSource.type !== 'welcome';
   if (sessionLoaded && !review.reviewedPaths.has(filePath)) {

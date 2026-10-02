@@ -380,10 +380,8 @@ describe('createGitLabProvider', () => {
     });
   });
 
-  // R05: a GitLab position carries the head it was computed against. Only a
-  // position on the reviewed head may become an actionable suggestion; the
-  // mapper would otherwise read `originalCode` out of today's diff at line
-  // numbers that described another revision.
+  // R05: only a position on the reviewed head may become a suggestion; other heads carry line
+  // numbers of another revision.
   describe('head-verified suggestions through the mapper', () => {
     const CURRENT_HEAD = 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00';
     const OLD_HEAD = '0ld0ld0ld0ld0ld0ld0ld0ld0ld0ld0ld0ld0ld0';
@@ -470,10 +468,7 @@ describe('createGitLabProvider', () => {
       expect(comment.suggestion).toBeNull();
       expect(comment.body).toBe(FENCE);
       expect(comment.filePath).toBe('src/app.ts');
-      // GitLab's own definition of an outdated note: its traced position
-      // still names a previous diff head. Treated like a GitHub outdated
-      // comment, it degrades to file-level rather than pointing at today's
-      // unrelated line 42.
+      // A position naming a previous head is outdated and degrades to file-level.
       expect(comment.lineRange).toBeNull();
     });
 

@@ -7,9 +7,7 @@ vi.mock('../../context/ConfigContext', () => ({
   useConfig: () => ({ config: { theme: 'light' } }),
 }));
 
-// The render bounds are about what the block does around Mermaid, not
-// inside it, so this file stands in for the library. MermaidBlock.test.tsx
-// runs the real one.
+// Stands in for the library; MermaidBlock.test.tsx runs the real one.
 const mermaidMock = vi.hoisted(() => ({
   initialize: vi.fn(),
   render: vi.fn(),
@@ -79,8 +77,7 @@ describe('MermaidBlock render bounds', () => {
         secure: expect.arrayContaining(['securityLevel', 'themeCSS', 'fontFamily', 'htmlLabels']),
       })
     );
-    // The render container is passed in, so nothing is appended to <body>
-    // on Mermaid's own initiative, and it is gone once rendering is done.
+    // Mermaid gets the container passed in; nothing is appended to <body> on its own.
     const container = mermaidMock.render.mock.calls[0][2] as HTMLElement;
     expect(container).toBeInstanceOf(HTMLElement);
     expect(container.isConnected).toBe(false);

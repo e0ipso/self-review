@@ -1,7 +1,5 @@
-// Save → parse round-trips against the real XSD validator, and against a
-// second, conformant XML parser. Nothing is mocked here: the point is that the
-// encoding contract in xml-text.ts holds for libxml2 (xmllint-wasm) and for
-// Python's expat-backed xml.etree, not just for fast-xml-parser.
+// Round-trips against the real XSD validator and Python's expat-backed parser, to prove the
+// xml-text.ts contract is not specific to fast-xml-parser.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { execFileSync, spawnSync } from 'child_process';
 import * as fs from 'fs';

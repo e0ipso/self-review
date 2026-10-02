@@ -1,6 +1,4 @@
-// The submission protocol end to end over a real listener: the route
-// publishes before it answers, a failed publication leaves the server up for
-// a retry, and the process exits only once a success has been acknowledged.
+// The route publishes before it answers; a failed publication leaves the server up; exit follows only an acknowledged success.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -19,7 +17,6 @@ let base: string;
 let outputPath: string;
 let exit: ReturnType<typeof vi.fn<(code: number) => void>>;
 
-/** The session capability every API request below presents. */
 const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
 const AUTH = { authorization: `Bearer ${CAPABILITY}` };
 
@@ -56,7 +53,7 @@ function submit(state: unknown): Promise<Response> {
   });
 }
 
-/** Give the response's `finish` event, and anything hooked on it, a turn. */
+// Gives the response's `finish` event a turn.
 function settle(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 50));
 }
@@ -70,8 +67,7 @@ afterAll(() => {
 });
 
 beforeEach(async () => {
-  // One directory per case: a case that leaves a directory at the output
-  // path, or assets beside it, must not leak into the next.
+  // One directory per case so a leftover directory or asset does not leak into the next.
   const caseDir = fs.mkdtempSync(path.join(tmp, 'case-'));
   outputPath = path.join(caseDir, 'review.xml');
   session = createReviewSession();
@@ -85,7 +81,7 @@ beforeEach(async () => {
     capability: CAPABILITY,
   });
   // The process exit is injected so the test can observe the code the real
-  // program would exit with — and that it is never called on a failure.
+  // program would exit with.
   exit = vi.fn<(code: number) => void>();
   completeReviewOnSubmit({ server, exit });
   base = (await listenLoopback(server)).url;
@@ -104,8 +100,7 @@ describe('submission protocol', () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, outputPath });
-    // Asserted before anything else gets a turn: the acknowledgement is only
-    // honest if the document already exists when the response was sent.
+    // The acknowledgement is honest only if the document already exists when the response was sent.
     const xml = fs.readFileSync(outputPath, 'utf-8');
     expect(xml).toContain('urn:self-review:v3');
     expect(xml).toContain('Needs a test.');
@@ -143,8 +138,6 @@ describe('submission protocol', () => {
   });
 
   it('reports a write failure, keeps serving, and lets a retry succeed once it is fixed', async () => {
-    // A directory where the file should go: the publisher refuses, and the
-    // reviewer can fix it without losing the review that is still in the tab.
     fs.mkdirSync(outputPath);
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -155,13 +148,11 @@ describe('submission protocol', () => {
       expect(body).toMatchObject({ ok: false, code: 'output-is-directory' });
       expect(body.message).toContain(outputPath);
 
-      // Not a completion: nothing exited, every route still answers.
       await settle();
       expect(exit).not.toHaveBeenCalled();
       expect(server.listening).toBe(true);
       expect((await fetch(base + 'api/diff', { headers: AUTH })).status).toBe(200);
 
-      // The fix, then the same review again.
       fs.rmdirSync(outputPath);
       const retried = await submit(reviewState());
       expect(retried.status).toBe(200);
@@ -189,8 +180,6 @@ describe('submission protocol', () => {
 
     expect((await submit(encodeReviewStateForWire(state))).status).toBe(200);
 
-    // The publisher gives each new asset a unique name; the document is the
-    // record of which one.
     const xml = fs.readFileSync(outputPath, 'utf-8');
     const relative = xml.match(/<attachment path="([^"]+)" media-type="image\/png" \/>/)?.[1];
     expect(relative).toMatch(/^\.self-review-assets\/c1-[0-9a-f]+\.png$/);

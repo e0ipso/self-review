@@ -673,24 +673,18 @@ function assetNameComponent(idPrefix: string): string {
   return String(idPrefix ?? '').replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
-/** The on-disk name of the attachment directory beside the output file. */
 export const ASSET_DIR_NAME = '.self-review-assets';
 
-/** One attachment blob with the location the document now names for it. */
 export interface PlannedAsset {
   /** As emitted in the document: `.self-review-assets/<name>`. */
   relativePath: string;
-  /** Resolved against the output file's directory. */
   absolutePath: string;
   data: ArrayBuffer;
 }
 
 /**
- * Names the file an attachment blob will live under in the asset directory.
- * `idPrefix` is already reduced to the URL-safe alphabet; the result must be
- * a bare file name. The default reproduces the historical
- * `<id>-<index>.<ext>` form; the publisher injects unique names so a new
- * document never overwrites an asset the previous one references.
+ * `idPrefix` is already URL-safe; the result must be a bare file name. The publisher injects unique
+ * names so a new document never overwrites an asset the previous one references.
  */
 export type AssetNamer = (idPrefix: string, index: number, ext: string) => string;
 
@@ -698,30 +692,20 @@ export interface SerializeOptions {
   assetName?: AssetNamer;
 }
 
-/** The pure outcome of serialization: the document and the writes it implies. */
 export interface SerializedReview {
-  /** The validated document, without a trailing newline. */
+  /** Validated, without a trailing newline. */
   xml: string;
-  /** Every attachment blob the document references but nothing has written. */
+  /** Blobs the document references that nothing has written yet. */
   assets: PlannedAsset[];
 }
 
 const defaultAssetName: AssetNamer = (idPrefix, index, ext) => `${idPrefix}-${index}.${ext}`;
 
 /**
- * Rewrites one attachment list's fileNames to their on-disk locations and
- * strips the data buffers, collecting each blob as a planned asset instead
- * of writing it.
- *
- * Shared by the comment walk and the reply walk. Serialization emits the
- * fileName it is given without checking that anything was written, so an
- * attachment list that misses this function produces a document that validates
- * against the schema while pointing at a file that does not exist. That failure
- * has no error surface, which is why both walks go through here.
- *
- * The idPrefix names the resulting files. Comments pass their own id, so
- * existing asset names are unchanged; replies pass a prefix that cannot collide
- * with a comment's.
+ * Rewrites fileNames to their on-disk locations, strips the data buffers and collects each
+ * blob as a planned asset. Both the comment and reply walks must go through here: a list that
+ * skips it validates against the schema while pointing at a file that does not exist.
+ * Replies pass an `idPrefix` that cannot collide with a comment's.
  */
 function stageAttachmentList(
   attachments: Attachment[] | undefined,
@@ -740,9 +724,8 @@ function stageAttachmentList(
     const relativePath = `${ASSET_DIR_NAME}/${fileName}`;
     const absolutePath = path.join(assetDir, fileName);
 
-    // `assetNameComponent` already makes this unreachable for the default
-    // namer. It stays as a second, independent check rather than one clever
-    // regex, because an escape here would be a write onto an arbitrary path.
+    // Unreachable for the default namer; an independent second check, since an escape is a write to
+    // an arbitrary path.
     if (path.dirname(path.resolve(absolutePath)) !== path.resolve(assetDir)) {
       throw new Error(`Refusing to write an attachment outside ${assetDir}: ${fileName}`);
     }
@@ -752,12 +735,7 @@ function stageAttachmentList(
   });
 }
 
-/**
- * Plan the attachment writes for a review without performing them, and
- * return the state the document is built from. Whether the writes ever
- * happen is the publisher's decision, taken only after the document has
- * been built and validated (see {@link serializeReview}).
- */
+/** Plans the writes without performing them; the publisher decides after validation. */
 function stageAttachments(
   state: ReviewState,
   outputFilePath: string,
@@ -801,21 +779,12 @@ function stageAttachments(
 }
 
 /**
- * Serialize a review to its XML document, validated against the v3 XSD,
- * together with the attachment blobs the document references. Pure: nothing
- * here touches the disk. Writing the document and its assets, in an order
- * that cannot leave a half-published review behind, is `publishReview`'s
- * job (review-publisher.ts).
+ * Pure: touches no disk (`publishReview` writes). Built before validation, so an
+ * unrepresentable value is refused first.
  *
- * The document is built first, so a value XML cannot carry is refused before
- * the caller gets anything to write; it is then validated.
- *
- * @throws XmlIllegalCharacterError when a text or attribute value holds a
- *   character XML 1.0 cannot represent; names the comment/reply and field.
- * @throws ReviewXmlError `schema-invalid` when the document fails the XSD,
- *   with each violation rendered in `details`. A validator that fails to
- *   load is deliberately not fatal: the document is returned unvalidated
- *   after a stderr warning.
+ * @throws XmlIllegalCharacterError naming the comment/reply and field.
+ * @throws ReviewXmlError `schema-invalid`, one violation per `details` line. A validator
+ *   that fails to load is deliberately not fatal: unvalidated XML after a stderr warning.
  */
 export async function serializeReview(
   state: ReviewState,
@@ -836,8 +805,7 @@ async function validateAgainstSchema(xml: string): Promise<void> {
       schema: [{ fileName: 'self-review-v3.xsd', contents: XSD_SCHEMA }],
     });
   } catch (error) {
-    // Infrastructure failure (e.g. WASM load): warn and let the document through.
-    // Losing a finished review to a broken validator build is the worse outcome.
+    // Infrastructure failure (e.g. WASM load): losing a finished review is the worse outcome.
     if (error instanceof Error) {
       console.error(
         `[main] XML validation infrastructure failed: ${error.message} - emitting XML without validation`
@@ -862,7 +830,6 @@ async function validateAgainstSchema(xml: string): Promise<void> {
   }
 }
 
-/** xmllint-wasm reports errors as objects with a message and a location. */
 function formatSchemaError(err: unknown): string {
   if (typeof err === 'string') return err;
   if (err && typeof err === 'object') {
@@ -1089,10 +1056,7 @@ function buildReplyXml(reply: Reply, filePath: string, commentId: string): strin
   ];
 }
 
-/**
- * Escape a value for element content, refusing one XML cannot carry.
- * See xml-text.ts for the encoding contract the parser mirrors.
- */
+/** Escapes for element content, refusing what XML cannot carry (contract in xml-text.ts). */
 function text(value: string, location: XmlIllegalCharacterLocation): string {
   return escapeXmlText(checked(value, location));
 }

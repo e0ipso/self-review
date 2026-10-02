@@ -12,7 +12,6 @@ import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapte
 import { parseReviewStateBody } from '../validate';
 import { MAX_REVIEW_BODY_BYTES, REVIEW_TOO_LARGE_CODE } from '../protocol';
 
-/** The session capability the page took from its launch URL. */
 const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>;
@@ -64,7 +63,6 @@ function headersOf(init: RequestInit | undefined): Record<string, string> {
   return (init?.headers ?? {}) as Record<string, string>;
 }
 
-/** The error a submission rejected with, typed as the adapter's own. */
 async function rejectionOf(work: Promise<void> | void): Promise<ServeRequestError> {
   try {
     await work;
@@ -79,10 +77,7 @@ afterEach(() => {
 });
 
 describe('createFetchAdapter', () => {
-  // The server answers 401 to any API request without it, so this is the
-  // one property every method has to share. The token goes in a header and
-  // nowhere else: never a query parameter, which would land in history and
-  // logs, and never storage, which would outlive the session.
+  // Header only: a query parameter would land in history and logs, storage would outlive the session.
   it('presents the capability as a bearer token on every request', async () => {
     const spy = stubFetch(url =>
       url.startsWith('/api/attachment')
@@ -110,7 +105,6 @@ describe('createFetchAdapter', () => {
       expect(headersOf(init).authorization, String(url)).toBe(`Bearer ${CAPABILITY}`);
       expect(String(url)).not.toContain(CAPABILITY);
     }
-    // The POST routes keep their content type beside the token.
     const posts = spy.mock.calls.filter(([, init]) => init?.method === 'POST');
     expect(posts).toHaveLength(3);
     for (const [, init] of posts) {
@@ -306,8 +300,6 @@ describe('createFetchAdapter', () => {
     expect(failure.message).toMatch(/files must be an array/);
   });
 
-  // The publisher's refusal, relayed: a 200 is a file on disk, so a failure
-  // is the one thing the page has to explain well enough to be fixed.
   it("surfaces the publisher's code, message and details from a failed publication", async () => {
     stubFetch(() =>
       json(
@@ -329,8 +321,7 @@ describe('createFetchAdapter', () => {
   });
 
   it('treats a 200 without an acknowledgement as a failure, never as a saved review', async () => {
-    // The old route answered `null` after merely storing the state. A client
-    // that accepted that would report a file the server never wrote.
+    // The old route answered `null` after only storing the state; accepting that would report an unwritten file.
     stubRoutes({ '/api/review': null });
     await expect(createFetchAdapter(CAPABILITY).submitReview!(REVIEW_STATE)).rejects.toThrow(
       /without acknowledging/i
@@ -349,9 +340,7 @@ describe('createFetchAdapter', () => {
 
   it('refuses to send a body over the limit, and says how big it was', async () => {
     const spy = stubRoutes({ '/api/review': ACK });
-    // 25 MiB of image bytes is about 33.3 MiB once base64-encoded: over the
-    // 32 MiB limit on the wire while well under it on disk, which is the
-    // case a reviewer cannot see coming.
+    // 25 MiB of image bytes is about 33.3 MiB base64-encoded: over the 32 MiB wire limit, well under it on disk.
     const blob = new Uint8Array(25 * 1024 * 1024).buffer;
     const state: ReviewState = {
       ...REVIEW_STATE,

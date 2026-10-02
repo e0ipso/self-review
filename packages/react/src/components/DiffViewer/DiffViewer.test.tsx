@@ -98,7 +98,6 @@ describe('DiffViewer', () => {
     });
 
     it('initializes files as collapsed in large-payload mode whatever the file count', () => {
-      // The line-count threshold alone can make a review large.
       mockDiffFiles.length = 0;
       mockDiffFiles.push(...makeDiffFiles(3));
       mockReview.isLargePayload = true;

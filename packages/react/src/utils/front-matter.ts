@@ -53,19 +53,9 @@ export function parseFrontMatter(content: string): FrontMatterResult | null {
 }
 
 /**
- * Display budgets for front matter metadata. YAML anchors and aliases let a
- * few bytes describe a cyclic or very large structure (`loop: &loop [*loop]`
- * parses into an array that contains itself), so the table never walks the
- * parsed value directly. `buildFrontMatterDisplay` copies it into an acyclic
- * display tree first and gives up when any of these limits is crossed.
- *
- * - Depth 16: a top-level value is at depth 1. Real-world front matter is
- *   rarely more than three or four levels deep; 16 leaves ample headroom while
- *   keeping the recursive copy (and the nested tables it renders) shallow.
- * - 2,000 nodes: every value, scalar or container, counts once. That is far
- *   beyond any hand-written metadata block and small enough to render
- *   instantly. It also bounds shared (non-cyclic) aliases, which are expanded
- *   once per reference.
+ * Display budgets. YAML aliases can describe cyclic or huge structures (`loop: &loop [*loop]`),
+ * so the table walks an acyclic copy and gives up past these limits. Depth counts a top-level
+ * value as 1; the node budget (every value counts once) also bounds shared aliases.
  */
 export const FRONT_MATTER_MAX_DEPTH = 16;
 export const FRONT_MATTER_MAX_NODES = 2000;
@@ -91,13 +81,8 @@ class FrontMatterLimitExceeded extends Error {
 }
 
 /**
- * Copies parsed front matter metadata into a bounded, acyclic display tree.
- *
- * Returns `{ ok: false }` instead of throwing when the metadata contains a
- * cycle or exceeds the depth or node budget, so callers can render a fallback
- * for this expected case. Cycle detection tracks the objects on the current
- * path only: a value reached twice through sibling aliases is legitimate and
- * is bounded by the node budget instead.
+ * Returns `{ ok: false }` on a cycle or an exceeded budget. Cycle detection tracks only the
+ * current path: a value reached twice through sibling aliases is legitimate.
  */
 export function buildFrontMatterDisplay(
   metadata: Record<string, unknown>

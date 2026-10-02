@@ -15,8 +15,7 @@ class NoopResizeObserver {
 }
 (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = NoopResizeObserver;
 
-// The rendered Markdown preview stands in for any preview that throws while
-// rendering (a parser bug, hostile input, a third-party renderer failing).
+// The Markdown preview stands in for any preview that throws while rendering.
 vi.mock('./RenderedMarkdownView', () => ({
   default: () => {
     throw new Error('preview exploded');
@@ -174,9 +173,7 @@ describe('a throwing file preview inside the review', () => {
       </ReviewPanel>
     );
     await screen.findByTestId(`file-section-${HEALTHY}`);
-    // findBy* can resolve between the commit that mounts the sections and
-    // the passive effect that seeds DiffViewer's expanded state; flush it so
-    // a header click toggles settled state.
+    // Flush the passive effect that seeds DiffViewer's expanded state before clicking headers.
     await act(async () => {});
   }
 

@@ -3,13 +3,7 @@ import type { DiffFile, DiffLine, LineRange, ReviewComment } from '@self-review/
 const lineNumberOn = (line: DiffLine, side: LineRange['side']): number | null =>
   side === 'old' ? line.oldLineNumber : line.newLineNumber;
 
-/**
- * Match recorded range endpoints exactly, without changing saved anchors.
- *
- * This decides only where a comment is placed (inline at its end line, or in
- * the "outside the current diff" list). Whether the whole range is visible is
- * a separate question, answered by `collectVisibleRangeLines`.
- */
+/** Decides only placement; whether the whole range is visible is `collectVisibleRangeLines`. */
 export function createCommentAnchorMatcher(file: DiffFile) {
   const lines = { old: new Set<number>(), new: new Set<number>() };
   for (const hunk of file.hunks) {
@@ -27,14 +21,9 @@ export function createCommentAnchorMatcher(file: DiffFile) {
 }
 
 /**
- * The diff lines of `range`, in diff order, but only when every line number
- * from `start` to `end` on the range's side is present in the file's hunks.
- * Returns `null` when any line is hidden (a gap between hunks, or an endpoint
- * outside every hunk) or the range is malformed.
- *
- * Endpoint matching alone accepts an imported range that spans a hidden gap;
- * code built from such a range is partial, and substituting it for a
- * suggestion's recorded original would corrupt the original.
+ * The range's diff lines, or `null` when any line is hidden (gap between hunks) or the range is
+ * malformed. Endpoint matching alone accepts a range spanning a gap, and partial code would
+ * corrupt a suggestion's recorded original.
  */
 export function collectVisibleRangeLines(file: DiffFile, range: LineRange): DiffLine[] | null {
   const { side, start, end } = range;

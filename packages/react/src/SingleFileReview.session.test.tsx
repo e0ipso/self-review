@@ -7,9 +7,7 @@ import { installBrowserApiStubs } from './test-helpers';
 
 installBrowserApiStubs();
 
-// The real FileSection is not under test here: the probe acts on the file it
-// is handed exactly the way the section header and gutter do, through the
-// review context.
+// The probe acts on its file through the review context, as the real section header does.
 vi.mock('./components/DiffViewer/FileSection', async () => {
   const { useReview } = await import('./context/ReviewContext');
   return {

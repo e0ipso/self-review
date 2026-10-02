@@ -12,11 +12,7 @@ export interface InlineCommentSlotProps {
   onCancel: () => void;
   onSaved: () => void;
   indentClass?: string;
-  /**
-   * Visible code for a comment's range. `undefined` for a line comment means
-   * the range is not fully visible (see `extractOriginalCode`), and the
-   * comment is shown with its recorded original and marked.
-   */
+  /** `undefined` for a line comment means the range is not fully visible (see `extractOriginalCode`). */
   getOriginalCodeForComment?: (comment: ReviewComment) => string | undefined;
 }
 

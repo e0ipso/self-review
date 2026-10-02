@@ -133,12 +133,8 @@ async function launchAppWithRetry(
 
   try {
     appPage = await electronApp.firstWindow();
-    // Since Electron 44 the first window is handed over while it still shows
-    // its initial empty document (page.url() is ''), and the navigation to the
-    // app's index.html destroys that execution context a moment later. A
-    // scenario that evaluates against the page right away (Finish Review with
-    // no prior interaction) then throws "Execution context was destroyed".
-    // Waiting for the app's own root element survives that navigation.
+    // Electron 44 hands over the first window on its empty initial document; the navigation to index.html
+    // then destroys that execution context. Waiting for #root survives it.
     await appPage.waitForSelector('#root', { state: 'attached', timeout: 15000 });
     await appPage.waitForLoadState('domcontentloaded');
     return appPage;
@@ -209,11 +205,8 @@ export async function launchAppExpectExit(
 }
 
 /**
- * Finish the review through the toolbar button, which pushes the renderer's
- * state over review:submit and then asks main to save and exit. Main never
- * pulls state from the renderer, so a bare `electronAPI.saveAndQuit()` would
- * be refused as a save with nothing to write; the button is the real path.
- * Use this only when the test needs to assert on the output file.
+ * Finish the review through the toolbar button; a bare `electronAPI.saveAndQuit()` is refused because main
+ * never pulls state from the renderer. Use this only when the test needs to assert on the output file.
  */
 export async function saveAndCloseApp(): Promise<void> {
   if (!electronApp) return;
@@ -223,8 +216,7 @@ export async function saveAndCloseApp(): Promise<void> {
 
   try {
     const page = await app.firstWindow();
-    // The click triggers process.exit(0) in main after writing the XML, so
-    // the page connection may close before the click settles.
+    // The page connection may close before the click settles (main exits after writing).
     await page.locator('[data-testid="finish-review-btn"]').click({ timeout: 5000 });
   } catch {
     // The click likely threw because the process exited (closing the
@@ -266,11 +258,7 @@ export async function closeAppWindow(): Promise<void> {
   }
 }
 
-/**
- * Wait for the running app to exit on its own (after a Save & Quit or Discard
- * the scenario triggered through the UI) and return its exit code; -1 if it
- * is still running after `timeoutMs`, in which case it is killed.
- */
+/** Returns the exit code; -1 (after killing it) if the app is still running after `timeoutMs`. */
 export async function waitForAppExit(timeoutMs = 15000): Promise<number> {
   if (!electronApp || !processExitPromise) {
     throw new Error('App not launched');

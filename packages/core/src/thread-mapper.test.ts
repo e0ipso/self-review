@@ -462,10 +462,8 @@ describe('suggestion extraction from thread bodies', () => {
   });
 });
 
-// R05: a position's line numbers describe one revision. An anchor that names
-// that revision (`headSha`) is actionable only against the same reviewed
-// head; an anchor that names none is actionable only when the forge itself
-// vouches for it (`outdated: false`, GitHub's re-anchored comments).
+// R05: an anchor naming a head is actionable only against that reviewed head; one naming none only
+// when the forge vouches (`outdated: false`).
 describe('head-verified suggestion activation', () => {
   const REVIEWED_HEAD = 'bbb222bbb222bbb222bbb222bbb222bbb222bbb2';
   const OLD_HEAD = 'aaa111aaa111aaa111aaa111aaa111aaa111aaa1';

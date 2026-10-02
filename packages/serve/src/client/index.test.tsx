@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 
-// The page against a real listener: the actual App, the actual adapter, the
-// actual `@self-review/react` tree, and `createReviewServer` on an ephemeral
-// port behind a `fetch` that resolves the page's relative URLs against it.
-// What is asserted is recovery — a failed request never leaves the reviewer
-// with a blank page or a review that cannot be submitted again.
+// The real App and adapter against `createReviewServer` on an ephemeral port. Asserts recovery: a failed request
+// never leaves a blank page or a review that cannot be resubmitted.
 
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -21,9 +18,7 @@ import { App, takeCapabilityFromLocation } from './index';
 
 installBrowserApiStubs();
 
-// The real Layout mounts resizable panels, which observe their own size in a
-// layout effect; jsdom has no ResizeObserver and the react package's stubs
-// do not cover it, since its own suites mock Layout out.
+// The real Layout's resizable panels need ResizeObserver, which jsdom lacks.
 class StubResizeObserver implements ResizeObserver {
   observe(): void {}
   unobserve(): void {}
@@ -31,10 +26,8 @@ class StubResizeObserver implements ResizeObserver {
 }
 (globalThis as { ResizeObserver: typeof ResizeObserver }).ResizeObserver = StubResizeObserver;
 
-/** Generous: each case mounts the whole review tree over a real socket. */
 const CASE_TIMEOUT_MS = 30_000;
 
-/** The session capability, as the page would have taken it from its URL. */
 const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
 
 const CONFIG: AppConfig = {
@@ -80,7 +73,6 @@ let errors: ReturnType<typeof vi.spyOn>;
 
 const realFetch: typeof fetch = globalThis.fetch;
 
-/** Resolve the page's relative URLs against the listener. Tests narrow it. */
 let route: (url: URL, init?: RequestInit) => Promise<Response>;
 
 beforeEach(async () => {
@@ -94,8 +86,7 @@ beforeEach(async () => {
   };
   session.config = CONFIG;
   session.outputPathInfo = { resolvedOutputPath: outputPath, outputPathWritable: true };
-  // A resumed comment is work that exists only in the page once loaded, and
-  // the way to have some without driving the comment editor in jsdom.
+  // A resumed comment is unsaved work without driving the comment editor in jsdom.
   session.resumeComments = [
     {
       id: 'c1',
@@ -111,7 +102,6 @@ beforeEach(async () => {
     session,
     output: { path: outputPath, origin: 'explicit' },
     capability: CAPABILITY,
-    // Never served here: the page is mounted by React Testing Library.
     clientDir: tmp,
   });
   exit = vi.fn<(code: number) => void>();
@@ -122,8 +112,6 @@ beforeEach(async () => {
   vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
     route(new URL(String(input), base), init)
   );
-  // The server reports every refusal on stderr; that is its job, not noise
-  // worth reading in a test run.
   errors = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -138,7 +126,6 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-/** Whether the page would currently prompt before the tab closes. */
 function closeIsGuarded(): boolean {
   const event = new Event('beforeunload', { cancelable: true });
   window.dispatchEvent(event);
@@ -148,7 +135,6 @@ function closeIsGuarded(): boolean {
 async function mountWithUnsavedWork() {
   const view = render(<App capability={CAPABILITY} />);
   await view.findByTestId('finish-review-btn', {}, { timeout: 10_000 });
-  // The resumed comment has landed once the close guard is up.
   await waitFor(() => expect(closeIsGuarded()).toBe(true), { timeout: 10_000 });
   return view;
 }
@@ -164,7 +150,6 @@ describe('session capability', () => {
     expect(takeCapabilityFromLocation()).toBe(CAPABILITY);
     expect(window.location.hash).toBe('');
     expect(window.location.search).toBe('?x=1');
-    // Gone for good: a second read, as a reload would do, finds nothing.
     expect(takeCapabilityFromLocation()).toBeNull();
   });
 
@@ -211,8 +196,7 @@ describe('serve client', () => {
   it(
     'keeps the review and its close guard after a failed publication, and retries to success',
     async () => {
-      // A directory where the file should go: the publisher refuses, the
-      // reviewer removes it, and the same review is submitted again.
+      // A directory at the output path makes the publisher refuse; removing it and resubmitting succeeds.
       fs.mkdirSync(outputPath);
       const view = await mountWithUnsavedWork();
 
@@ -222,7 +206,6 @@ describe('serve client', () => {
       expect(notice.textContent).toContain('output-is-directory');
       expect(notice.textContent).toContain('it is a directory');
       expect(notice.textContent).toMatch(/Finish Review again/);
-      // Still a review with unsaved work: closing the tab would lose it.
       expect(closeIsGuarded()).toBe(true);
       expect(view.getByTestId('finish-review-btn')).toBeTruthy();
       expect(exit).not.toHaveBeenCalled();
@@ -233,7 +216,6 @@ describe('serve client', () => {
       expect(await view.findByText('Review saved', {}, { timeout: 10_000 })).toBeTruthy();
       expect(fs.readFileSync(outputPath, 'utf-8')).toContain('Needs a test.');
       await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
-      // Nothing left to lose.
       expect(closeIsGuarded()).toBe(false);
     },
     CASE_TIMEOUT_MS

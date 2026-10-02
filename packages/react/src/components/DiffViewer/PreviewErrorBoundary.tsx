@@ -3,13 +3,8 @@ import { AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/button';
 
 export interface PreviewErrorBoundaryProps {
-  /** The file whose content is rendered below; named in the fallback. */
   filePath: string;
-  /**
-   * Values the rendered content depends on (the file object, the view mode).
-   * When any of them changes, a caught error is cleared and the children
-   * render again, so new content or a different view gets a fresh attempt.
-   */
+  /** When any of these changes, a caught error is cleared and the children render again. */
   resetKeys: ReadonlyArray<unknown>;
   children: React.ReactNode;
 }
@@ -22,13 +17,7 @@ function resetKeysChanged(previous: ReadonlyArray<unknown>, next: ReadonlyArray<
   return previous.length !== next.length || previous.some((key, i) => !Object.is(key, next[i]));
 }
 
-/**
- * Contains a render failure to one file's content. Without it, an exception
- * thrown while rendering any single preview (hostile Markdown, a renderer
- * bug) unmounts the whole review, taking the file tree, the toolbar and the
- * Finish Review control with it. The fallback names the file so the reviewer
- * knows which one could not be shown; the rest of the review stays usable.
- */
+/** Contains a preview's render failure to one file; otherwise it would unmount the whole review. */
 export default class PreviewErrorBoundary extends React.Component<
   PreviewErrorBoundaryProps,
   PreviewErrorBoundaryState

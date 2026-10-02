@@ -1,8 +1,3 @@
-// Attachment provenance across resume, read authorization and relocation,
-// exercised end to end on real temporary directories: a review document is
-// parsed, its attachments are recorded on a session, read back through the
-// session handler, and published to the same or another directory.
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
@@ -19,7 +14,6 @@ const PNG_A = Buffer.from('\x89PNG-bytes-of-image-a');
 const PNG_B = Buffer.from('\x89PNG-bytes-of-image-b');
 
 let tmp: string;
-/** Where the resumed document and its assets live. */
 let docDir: string;
 /** A directory that is neither the document's nor the output's, standing in for the launch cwd. */
 let elsewhere: string;
@@ -81,7 +75,6 @@ function stateOf(comments: ReviewComment[]): ReviewState {
   };
 }
 
-/** Every attachment reference in a published document, in document order. */
 function referencesIn(docPath: string): string[] {
   const parsed = parseReviewXml(docPath);
   return parsed.comments.flatMap(c => [
@@ -111,8 +104,7 @@ describe('resumed attachments resolve against the resumed document', () => {
   it('reads each attachment from the document directory, not the cwd or the output directory', async () => {
     writeAsset(docDir, 'a.png', PNG_A);
     writeAsset(docDir, 'b.png', PNG_B);
-    // Decoys with the same names where the old code looked: the launch cwd
-    // and the (different) output directory.
+    // Same-named decoys in the launch cwd, which is also the output directory here.
     writeAsset(elsewhere, 'a.png', Buffer.from('WRONG-cwd'));
     writeAsset(elsewhere, 'b.png', Buffer.from('WRONG-cwd'));
     const docPath = writeDoc(docDir, [
@@ -243,8 +235,7 @@ describe('publishing resumed attachments', () => {
     const { session } = resume(docPath);
     const outDir = path.join(tmp, 'published');
     fs.mkdirSync(outDir);
-    // A file already sitting at the old name in the new directory must not be
-    // what the published reference points at.
+    // A stale file at the old name must not be what the published reference resolves to.
     writeAsset(outDir, 'a.png', Buffer.from('STALE'));
     const outPath = path.join(outDir, 'review.xml');
 
@@ -258,7 +249,6 @@ describe('publishing resumed attachments', () => {
     expect(refs).not.toContain('.self-review-assets/a.png');
     expect(fs.readFileSync(path.join(outDir, refs[0]))).toEqual(PNG_A);
     expect(fs.readFileSync(path.join(outDir, refs[1]))).toEqual(PNG_B);
-    // The origin is read, never moved or changed.
     expect(fs.readFileSync(path.join(docDir, '.self-review-assets', 'a.png'))).toEqual(PNG_A);
   });
 

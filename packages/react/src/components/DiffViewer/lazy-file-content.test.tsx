@@ -17,9 +17,7 @@ class NoopResizeObserver {
 
 import { ReviewPanel } from '../../ReviewPanel';
 
-// Lazy file loading in large-payload mode, driven through the whole review
-// stack with a fake adapter: the host strips hunks (`contentLoaded: false`)
-// and the section asks for them when the reviewer opens it.
+// Large-payload lazy loading through the whole review stack with a fake adapter.
 
 const SOURCE: DiffSource = { type: 'git', gitDiffArgs: '', repository: '/repo' };
 
@@ -101,8 +99,7 @@ afterEach(() => {
 
 describe('large-payload mode initial expansion', () => {
   it('starts a line-count-triggered large review collapsed and fetches nothing', async () => {
-    // Three files are far below the file-count threshold: only the payload
-    // flag says this review is large.
+    // Three files are far below the file-count threshold: only the payload flag says large.
     const paths = ['a.txt', 'b.txt', 'c.txt'];
     const loadFileContent = vi.fn(async () => hunksWith('loaded line'));
     const adapter: ReviewAdapter = {

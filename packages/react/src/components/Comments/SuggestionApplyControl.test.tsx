@@ -233,7 +233,6 @@ describe('SuggestionApplyControl: reviewed-path gating', () => {
     replacedLines: 1,
   });
 
-  /** Mount inside a real session whose diff contains only FILE_PATH. */
   function renderForPath(filePath: string, adapter: ReviewAdapter) {
     return render(
       <ReviewAdapterProvider adapter={adapter}>
@@ -254,7 +253,6 @@ describe('SuggestionApplyControl: reviewed-path gating', () => {
     const applySuggestion = vi.fn(applied);
     renderForPath('src/not-in-diff.ts', { ...noopAdapter, applySuggestion });
 
-    // The session's diff has loaded once the control knows its path is off it.
     const control = await screen.findByTestId('suggestion-apply-unreviewed');
     expect(control.textContent).toContain('not in the reviewed diff');
     expect(screen.queryByTestId('suggestion-apply-button')).toBeNull();

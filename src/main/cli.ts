@@ -112,8 +112,7 @@ function getAppArgs(): string[] {
   return dropLeadingChromiumSwitches(appArgs);
 }
 
-// The desktop's own flags. Which flags each front end takes, and why they
-// differ, is tabled in packages/core/src/startup.ts.
+// The flag table for both front ends is in packages/core/src/startup.ts.
 const VALUE_FLAGS = { '--resume-from': 'resumeFrom' } as const;
 const EARLY_EXIT_FLAGS = {
   '--help': 'help',
@@ -155,8 +154,6 @@ export function parseCliArgs(): CliArgs {
     };
   }
 
-  // The shared extractor takes --resume-from out (either spelling), stops at
-  // `--`, and leaves a git option's value alone however it is spelled.
   let resumeFrom: string | null;
   let gitDiffArgs: string[];
   try {
@@ -167,7 +164,7 @@ export function parseCliArgs(): CliArgs {
     if (!(error instanceof ApplicationOptionError)) throw error;
     console.error(`Error: ${error.message}`);
     process.exit(1);
-    // Unreachable outside a test that stubs process.exit.
+    // Reached only when a test stubs process.exit.
     return {
       resumeFrom: null,
       gitDiffArgs: [],
@@ -177,10 +174,8 @@ export function parseCliArgs(): CliArgs {
     };
   }
 
-  // Remote GUI mode: only the FIRST positional argument may be a forge URL,
-  // by the shared classifier, so an option's value (`-S <url>`) is never
-  // one, and never after the `--` separator (everything after `--` is a
-  // pathspec by git convention). Non-URL positionals keep pass-through.
+  // Remote GUI mode: only the FIRST positional argument may be a forge URL, never an option's value
+  // (`-S <url>`) and never after `--`. Non-URL positionals keep pass-through.
   let remoteUrl: string | null = null;
   const { positionalIndices } = classifyGitDiffArgs(gitDiffArgs);
   const separator = gitDiffArgs.indexOf('--');
@@ -266,8 +261,7 @@ export interface EarlyExitInfo {
 export function checkEarlyExit(): EarlyExitInfo {
   const args = getAppArgs();
 
-  // Read with the same rules as the parser: a `--help` after `--` is a
-  // pathspec, and a `-h` that is an option's value is that option's.
+  // Same rules as the parser: `--help` after `--` is a pathspec.
   let flags: { help: boolean; version: boolean };
   try {
     flags = extractApplicationOptions(args, {
@@ -275,7 +269,6 @@ export function checkEarlyExit(): EarlyExitInfo {
       booleanFlags: EARLY_EXIT_FLAGS,
     }).flags;
   } catch {
-    // A missing value is parseCliArgs's error to report.
     return { shouldExit: false, exitCode: 0 };
   }
 

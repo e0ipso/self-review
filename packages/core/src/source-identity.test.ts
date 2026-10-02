@@ -11,8 +11,7 @@ import {
   rootRelativeReviewedPath,
 } from './source-identity';
 
-// The pure half: which two snapshots a `git diff` argv compares, before any
-// revision is resolved. Each row is one shape the CLI parsers can produce.
+// Pure half: the two snapshots an argv compares, one row per shape the CLI parsers produce.
 describe('describeGitDiffSides', () => {
   const index = { kind: 'index' } as const;
   const workingTree = { kind: 'working-tree' } as const;
@@ -53,8 +52,7 @@ describe('describeGitDiffSides', () => {
   });
 });
 
-// The resolving half, against a real repository: every revision becomes the
-// SHA it named at load time, so a later read cannot drift with the branch.
+// Resolving half, against a real repository: each revision becomes the SHA it named at load.
 describe('resolveGitSourceIdentity', () => {
   let tmp: string;
   let repo: string;
@@ -154,8 +152,7 @@ describe('resolveGitSourceIdentity', () => {
     expect(identity.newSide.kind).toBe('unknown');
   });
 
-  // Audit R07: the prefix a `--relative` review's paths are relative to is
-  // resolved once, here, and every reader restates paths through it.
+  // Audit R07: the `--relative` prefix is resolved once and every reader restates paths through it.
   it('records what a --relative review launched from a subdirectory is relative to', async () => {
     fs.mkdirSync(path.join(repo, 'sub', 'deeper'), { recursive: true });
 

@@ -1,30 +1,25 @@
-// packages/core/src/startup.ts
-// The startup steps the desktop (src/main/main.ts) and serve
-// (packages/serve/src/startup.ts) front ends share: which output path a
-// review publishes to and how far it is trusted, which `git diff` arguments
-// it runs and whether a committed configuration may supply them, what the
-// arguments review, and how a prior review is resumed into a session.
+// Startup decisions that must come out the same in desktop and serve (audit R15); each host
+// keeps its own transport and dialogs.
 //
-// Each host still owns its transport and its dialogs — the desktop asks
-// before a large review and offers a directory picker where serve refuses;
-// the desktop can change the output path from a save dialog where serve
-// fixes it for the life of the process — so what lives here is the handful
-// of decisions that have to come out the same way in both (audit R15), not
-// a startup framework.
+// The command lines differ on purpose. Both take `--resume-from <file>` (or `=<file>`), stop
+// reading their own flags at `--`, and pass everything else to `git diff`. Beyond that:
 //
-// The two command lines differ on purpose. Both take `--resume-from <file>`
-// (also `--resume-from=<file>`), stop reading their own flags at `--`, and
-// pass everything else to `git diff`, including an option's separate value
-// whatever it looks like. Beyond that:
-//
-// | Flag or input                         | Desktop (`self-review`)              | Serve (`self-review-serve`)        |
-// | ------------------------------------- | ------------------------------------ | ---------------------------------- |
-// | `--output <file>`, `-o`, `--output=`  | no (save dialog changes the path)    | yes (fixed for the process)        |
-// | `--help`/`-h`, `--version`/`-v`       | yes                                  | yes                                |
-// | forge PR/MR URL as first positional   | yes (remote GUI mode)                | no (passed to git)                 |
-// | `fetch-comments <url> [--all-threads]`| yes (headless subcommand, args[0])   | no                                 |
-// | leading Chromium switches             | dropped (the launcher's, not git's)  | n/a                                |
-// | nothing to review (`welcome`)         | directory picker                     | startup error                      |
+// | Flag or input                         | Desktop (`self-review`)              | Serve
+// (`self-review-serve`)        |
+// | ------------------------------------- | ------------------------------------ |
+// ---------------------------------- |
+// | `--output <file>`, `-o`, `--output=`  | no (save dialog changes the path)    | yes (fixed for
+// the process)        |
+// | `--help`/`-h`, `--version`/`-v`       | yes                                  | yes
+// |
+// | forge PR/MR URL as first positional   | yes (remote GUI mode)                | no (passed to
+// git)                 |
+// | `fetch-comments <url> [--all-threads]`| yes (headless subcommand, args[0])   | no
+// |
+// | leading Chromium switches             | dropped (the launcher's, not git's)  | n/a
+// |
+// | nothing to review (`welcome`)         | directory picker                     | startup error
+// |
 
 import { resolve } from 'path';
 import type { AppConfig, DiffLoadPayload, ReviewSourceIdentity } from './types';
@@ -49,15 +44,9 @@ import { recordResumedAttachments } from './review-handlers';
 import type { ReviewSession } from './review-handlers';
 
 /**
- * Where the review is published and how far the publisher trusts the path.
- *
- * A path the reviewer named — `explicitPath` from a CLI flag — is explicit
- * and may point anywhere. So is `output-file` from the reviewer's own
- * user-level configuration: it is their intent, and it commonly names a
- * directory outside the repository. Only `output-file` from the project's
- * committed `.self-review.yaml`, or the built-in default, is inherited and
- * contained under the launch directory `cwd`, since a repository could
- * otherwise redirect the save (audit A5).
+ * A CLI path or the reviewer's user-level `output-file` is explicit and may point anywhere.
+ * Project `output-file` or the default is inherited and contained under `cwd`, since a
+ * repository could otherwise redirect the save (audit A5).
  */
 export function resolveOutputTarget(
   explicitPath: string | null,
@@ -74,7 +63,6 @@ export function resolveOutputTarget(
   return { path, origin: 'inherited', baseDir: cwd };
 }
 
-/** The publisher options for `target`; see `PublishReviewOptions`. */
 export function publishOptionsFor(
   target: ReviewOutputTarget,
   attachmentOrigins?: AttachmentOrigins
@@ -85,14 +73,11 @@ export function publishOptionsFor(
 }
 
 /**
- * Project configuration supplied `default-diff-args` that would make git
- * write a file or run an external program. Thrown before any git command
- * runs; the host reports it and does not start the review.
+ * Project `default-diff-args` would make git write a file or run a program; thrown before any git
+ * command.
  */
 export class ConfiguredDiffArgsError extends Error {
-  /** The offending options, as written. */
   readonly options: readonly string[];
-  /** The configuration file they came from. */
   readonly configPath: string;
 
   constructor(options: readonly string[], configPath: string) {
@@ -108,22 +93,15 @@ export class ConfiguredDiffArgsError extends Error {
 }
 
 export interface ResolvedDiffArgs {
-  /** The arguments to run, normalized so a path is never read as a revision. */
   gitDiffArgs: string[];
-  /** Who supplied them: the command line, or the configuration file (or default) that did. */
   origin: 'cli' | ConfigValueOrigin;
-  /** The configuration with the staged/untracked default applied for these arguments. */
   config: AppConfig;
 }
 
 /**
- * The `git diff` arguments a review runs: the command line's when it gave
- * any, else the configured `default-diff-args` split with shell quoting so
- * `-S "a b"` stays one argument. Arguments a committed project
- * configuration supplies are checked for write-capable and
- * external-execution options first and refused with
- * {@link ConfiguredDiffArgsError}; the reviewer's own arguments, typed or
- * from their user-level configuration, are not restricted here.
+ * The CLI's arguments, else `default-diff-args` split with shell quoting. Project-supplied
+ * ones are refused with {@link ConfiguredDiffArgsError} if write-capable; the
+ * reviewer's own are not.
  */
 export function resolveStartupDiffArgs(
   cliGitDiffArgs: readonly string[],
@@ -153,18 +131,12 @@ export function resolveStartupDiffArgs(
 
 export interface LoadedLocalReview {
   payload: DiffLoadPayload;
-  /** What the payload reviews; null only for a welcome payload. */
   identity: ReviewSourceIdentity | null;
 }
 
 /**
- * Load what `source` names, from the launch directory `cwd`: the git diff
- * (filtered by the configured ignore patterns, with the argv recorded in a
- * form `tokenizeGitDiffArgs` recovers exactly), the scanned directory, or
- * the scanned file. Diagnostics ride on the payload and go to `log`, so a
- * failed or partial load never reads as an empty review. A welcome source
- * yields an empty payload with no identity; the host decides what that
- * means.
+ * Diagnostics ride on the payload and go to `log`, so a failed load never reads as empty. A welcome
+ * source yields no identity.
  */
 export async function loadLocalReview(
   source: StartupSource,
@@ -185,8 +157,7 @@ export async function loadLocalReview(
         files: files.filter(f => shouldKeep(f.newPath || f.oldPath)),
         source: {
           type: 'git',
-          // Quoted where a bare join would lose a boundary, so the argv can be
-          // recovered exactly from the document's git-diff-args attribute.
+          // Quoted so the argv is recoverable exactly from the document's git-diff-args.
           gitDiffArgs: formatGitDiffArgs([...gitDiffArgs]),
           repository,
         },
@@ -216,12 +187,8 @@ export async function loadLocalReview(
 }
 
 /**
- * Resume a prior review into `session`: its comments, viewed files and
- * import diagnostics, with the attachments recorded as living beside the
- * resumed document rather than the launch directory or the output. Throws
- * the parser's `ReviewXmlError` when the document cannot be read; the host
- * reports it. Returns the parsed document for what the host still needs
- * from it (the recorded remote head, for drift).
+ * Throws `ReviewXmlError` for an unreadable document. Returns it for what the host still needs (the
+ * remote head, for drift).
  */
 export function loadResumeDocument(session: ReviewSession, resumePath: string): ParsedReview {
   const parsed = parseReviewXml(resumePath);

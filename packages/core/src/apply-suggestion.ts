@@ -7,41 +7,21 @@
 // The engine is deliberately narrow. It performs a byte-for-byte context
 // check and a literal line replacement — no fuzzy matching, no force flag,
 // no staging, no git. Every outcome is reported: a refusal names its reason
-// and leaves the file untouched (PRD Section 5.4.8).
-//
-// Two properties are enforced here rather than in any transport, because
-// this is the one place the bytes move (security audit A3/A4, R04):
-//
-// - Physical containment. The destination root is resolved with `realpath`,
-//   every directory on the way to the file is `lstat`ed and refused if it is
-//   a symlink, the file itself is opened `O_NOFOLLOW`, and only a regular
-//   file with a single hard link is accepted. A path that names a repository
-//   control file (any `.git` segment) is refused before any of that.
-// - Transactional replacement. The original is read through the descriptor
-//   that was inspected, the new content goes to a same-directory temp file
-//   with the original's mode and owner, and `rename` swaps it in only after
-//   the target is confirmed to still be the inspected inode, unmodified. A
-//   failure at any point removes the temp file and leaves the target byte
-//   for byte as it was, so "refused" is never reported after a mutation.
-//
-// Authorization against the reviewed diff (is this a file the reviewer
-// looked at?) needs the session and lives in `review-handlers.ts`.
+// and leaves the file untouched (PRD Section 5.4.8). Containment and the
+// transactional write live here, not in a transport (audit A3/A4, R04).
 
 import * as path from 'path';
-import { constants as fsConstants } from 'fs';
 import type { LineRange, Suggestion } from './types';
 import { validateLineRange } from './anchor-validation';
 import {
-  SafeFsError,
-  assertNoSymlinkAncestors,
   atomicReplace,
   errnoOf,
   nodeFsLayer,
-  openNoFollow,
-  sameFile,
+  openContainedFile,
   snapshotIdentity,
+  toSafeFsError,
 } from './safe-fs';
-import type { FileIdentity, FsLayer } from './safe-fs';
+import type { FileIdentity, FsLayer, SafeFsErrorCode } from './safe-fs';
 
 /**
  * Why an apply was refused. Every value is a structural fact about the
@@ -57,27 +37,17 @@ export type ApplyRefusalReason =
    * target is undefined rather than merely missing.
    */
   | 'old-side-anchor'
-  /**
-   * The anchor is not a usable line range: an unknown side, or a start or
-   * end that is not a positive safe integer, or a reversed range. Checked
-   * before any I/O.
-   */
+  /** Unknown side, non-positive or non-integer bounds, or reversed; checked before any I/O. */
   | 'invalid-anchor'
   /** `destinationRoot` is relative; resolving it would consult the cwd. */
   | 'destination-not-absolute'
-  /** `destinationRoot` does not exist (or cannot be resolved). */
   | 'destination-missing'
-  /** `filePath` is absolute, empty, or has a `..` segment: it does not stay under `destinationRoot`. */
+  /** `filePath` resolves outside `destinationRoot`. */
   | 'path-escapes-destination'
-  /** `filePath` names repository metadata (`.git` at any depth); see {@link isRepositoryControlPath}. */
   | 'control-file'
-  /**
-   * The path does not lead to a plain file inside the destination: a symlink
-   * at the leaf or on an ancestor, a file with more than one hard link, a
-   * special file, or a file that was swapped while it was being opened.
-   */
+  /** A link on the way or at the leaf, a hard-linked or special file, or a swap during the open. */
   | 'unsafe-target'
-  /** The file exists but replacing it would change its owner, which this process cannot restore. */
+  /** Replacing the file would change its owner, which this process cannot restore. */
   | 'unsupported-target'
   /** No file at the resolved path. */
   | 'file-missing'
@@ -105,7 +75,7 @@ export interface ApplySuggestionRequest {
    * review. Never derived here.
    */
   destinationRoot: string;
-  /** Path of the file to modify, relative to `destinationRoot`, with `/` separators. */
+  /** Path of the file to modify, relative to `destinationRoot`. */
   filePath: string;
   /** The comment's anchor. `null` (file-level) is refused. */
   lineRange: LineRange | null;
@@ -113,9 +83,7 @@ export interface ApplySuggestionRequest {
 }
 
 export interface ApplySuggestionOptions {
-  /** Filesystem layer; injectable so a test can fail a write mid-way. */
   fs?: FsLayer;
-  /** Random component of the temp file name; injectable for tests. */
   randomName?: () => string;
 }
 
@@ -123,7 +91,6 @@ export interface ApplySuggestionApplied {
   status: 'applied';
   /** Echoed from the request, so a batch caller can attribute the result. */
   filePath: string;
-  /** The physical path that was rewritten (under the resolved destination root). */
   absolutePath: string;
   /** How many on-disk lines the proposal replaced. */
   replacedLines: number;
@@ -139,20 +106,9 @@ export interface ApplySuggestionRefused {
 
 export type ApplySuggestionResult = ApplySuggestionApplied | ApplySuggestionRefused;
 
-const { O_RDONLY } = fsConstants;
-
 /**
- * True when `filePath` names repository metadata rather than content: any
- * segment equal to `.git` (case-insensitively), at any depth. That covers
- * the repository's own `.git/` directory, a nested repository's, and the
- * `.git` *file* a linked worktree or submodule checkout carries, all of
- * which git acts on (`config` can name a command to run, `hooks/` are
- * executables) and none of which are ever part of a reviewed diff.
- *
- * Tracked files that merely influence git — `.gitmodules`, `.gitattributes`,
- * `.gitignore` — are content: they appear in diffs and are reviewed like any
- * other file, so they are not control paths here. Membership in the reviewed
- * diff (checked by the session handler) is what gates them.
+ * A `.git` segment at any depth, directory or worktree file: git executes what is in there. `.gitmodules`
+ * and the like are reviewed content, gated by diff membership in the session handler instead.
  */
 export function isRepositoryControlPath(filePath: string): boolean {
   return filePath.split(/[\\/]+/).some(segment => segment.toLowerCase() === '.git');
@@ -166,16 +122,38 @@ function refuse(
   return { status: 'refused', filePath, reason, detail };
 }
 
-/** The errno behind a failure, looking through a `SafeFsError` to its cause. */
-function underlyingErrno(error: unknown): string | undefined {
-  return error instanceof SafeFsError ? errnoOf(error.cause) : errnoOf(error);
+const FS_REFUSALS: Partial<Record<SafeFsErrorCode, [ApplyRefusalReason, string]>> = {
+  'not-found': ['file-missing', 'The file is not in the destination directory.'],
+  'unsafe-link': [
+    'unsafe-target',
+    'The path goes through a symbolic link, and this program does not write through links.',
+  ],
+  'not-regular': ['unsafe-target', 'The path is not a regular file.'],
+  'output-is-directory': ['file-unreadable', 'The path is a directory, not a file.'],
+  'unsupported-target': [
+    'unsupported-target',
+    'The file is owned by another user, and replacing it would change its owner.',
+  ],
+  'identity-changed': [
+    'file-changed',
+    'The file changed on disk after it was read, so nothing was written.',
+  ],
+};
+
+function refuseFsError(
+  filePath: string,
+  error: unknown,
+  fallback: 'file-unreadable' | 'write-failed'
+): ApplySuggestionRefused {
+  const fsError = toSafeFsError(error, filePath, 'access');
+  const [reason, detail] = FS_REFUSALS[fsError.code] ?? [
+    fallback,
+    `The file could not be ${fallback === 'write-failed' ? 'written' : 'read'} (${errnoOf(fsError.cause) ?? 'unknown'}).`,
+  ];
+  return refuse(filePath, reason, detail);
 }
 
-/**
- * The session-relative path in normalized POSIX form, or null when it is
- * not one: absolute, empty, or carrying a `..` segment. Purely lexical, so a
- * refusal here happens before the filesystem is consulted.
- */
+/** Purely lexical, so an escape is refused before the filesystem is consulted. */
 function relativeWithinRoot(filePath: string): string | null {
   if (filePath === '' || path.posix.isAbsolute(filePath) || path.win32.isAbsolute(filePath)) {
     return null;
@@ -184,12 +162,6 @@ function relativeWithinRoot(filePath: string): string | null {
   const normalized = path.posix.normalize(filePath);
   if (normalized === '.' || normalized === '..' || normalized.startsWith('../')) return null;
   return normalized;
-}
-
-/** True when `candidate` sits strictly beneath `root` (both already real paths). */
-function isBeneath(root: string, candidate: string): boolean {
-  const rel = path.relative(root, candidate);
-  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
 /**
@@ -208,14 +180,7 @@ function splitLines(content: string): string[] {
   return lines;
 }
 
-/**
- * The lines a proposal stands for. `proposedCode` is lines joined by `\n`,
- * the same shape as `originalCode`; one trailing line terminator (`\n` or
- * `\r\n`) is a terminator rather than an extra empty line, so `'x'` and
- * `'x\n'` are both one line while `'x\n\n'` is `x` followed by an empty
- * line. The empty string is zero lines: the anchored lines are deleted and
- * nothing is put in their place.
- */
+/** One trailing `\n` or `\r\n` terminates rather than adds a line; `''` is zero lines (a deletion). */
 function proposalLines(proposedCode: string): string[] {
   if (proposedCode === '') return [];
   const body = proposedCode.endsWith('\r\n')
@@ -240,47 +205,21 @@ interface OpenedTarget {
   buffer: Buffer;
 }
 
-/**
- * Open the target no-follow, confirm it is a plain file inside `realRoot`,
- * and read it through that same descriptor, so the bytes compared are the
- * bytes of the inode whose identity is recorded.
- */
+/** Read through the descriptor that was checked, so the bytes compared are the recorded inode's. */
 function openAndRead(
   realRoot: string,
-  absolutePath: string,
+  rel: string,
   filePath: string,
   fs: FsLayer
 ): OpenedTarget | ApplySuggestionRefused {
-  let fd: number;
+  let opened: ReturnType<typeof openContainedFile>;
   try {
-    fd = openNoFollow(absolutePath, O_RDONLY, 0, fs);
+    opened = openContainedFile(realRoot, rel, fs);
   } catch (error) {
-    if (error instanceof SafeFsError && error.code === 'unsafe-link') {
-      return refuse(
-        filePath,
-        'unsafe-target',
-        'The file is a symbolic link, and this program does not write through links.'
-      );
-    }
-    const code = underlyingErrno(error);
-    if (code === 'ENOENT' || code === 'ENOTDIR') {
-      return refuse(filePath, 'file-missing', 'The file is not in the destination directory.');
-    }
-    return refuse(
-      filePath,
-      'file-unreadable',
-      `The file could not be opened (${code ?? 'unknown'}).`
-    );
+    return refuseFsError(filePath, error, 'file-unreadable');
   }
-
+  const { fd, stats } = opened;
   try {
-    const stats = fs.fstatSync(fd);
-    if (stats.isDirectory()) {
-      return refuse(filePath, 'file-unreadable', 'The path is a directory, not a file.');
-    }
-    if (!stats.isFile()) {
-      return refuse(filePath, 'unsafe-target', 'The path is not a regular file.');
-    }
     if (stats.nlink > 1) {
       return refuse(
         filePath,
@@ -288,32 +227,14 @@ function openAndRead(
         `The file has ${stats.nlink} hard links, and replacing it would silently detach the others.`
       );
     }
-    const identity = snapshotIdentity(stats);
-    // The name must still refer to the file that was opened, and its real
-    // location must be beneath the real root: this closes the window in
-    // which a directory on the way could have been swapped for a link.
-    if (!sameFile(snapshotIdentity(fs.lstatSync(absolutePath)), identity)) {
-      return refuse(filePath, 'unsafe-target', 'The file changed while it was being opened.');
-    }
-    if (!isBeneath(realRoot, fs.realpathSync(absolutePath))) {
-      return refuse(
-        filePath,
-        'unsafe-target',
-        'The file resolves outside the destination directory.'
-      );
-    }
-    return { identity, buffer: fs.readFileSync(fd) };
+    return { identity: snapshotIdentity(stats), buffer: fs.readFileSync(fd) };
   } catch (error) {
-    return refuse(
-      filePath,
-      'file-unreadable',
-      `The file could not be read (${underlyingErrno(error) ?? 'unknown'}).`
-    );
+    return refuseFsError(filePath, error, 'file-unreadable');
   } finally {
     try {
       fs.closeSync(fd);
     } catch {
-      // The descriptor is only for reading; nothing depends on the close.
+      // Read-only descriptor; nothing depends on the close.
     }
   }
 }
@@ -322,19 +243,11 @@ function openAndRead(
  * Apply one anchored suggestion to one file under `destinationRoot`.
  *
  * On a byte-for-byte match between the anchored lines and
- * `suggestion.originalCode`, the anchored lines are replaced with the lines
- * of `suggestion.proposedCode` (see `proposalLines`: an empty proposal
- * deletes the anchored lines; one trailing newline is a terminator) and the
- * file is rewritten in one `rename`. Lines outside the anchor keep their
- * exact bytes, including their line terminators; the file's trailing-newline
- * state is preserved, except that a file left with no lines at all is
- * empty. Any other outcome refuses with a reason and writes nothing.
- *
- * Order of checks: the anchor and the path are validated lexically before
- * the filesystem is consulted; then the destination is resolved and the
- * target opened under the containment policy described at the top of this
- * file; then the content is compared; and only then is the replacement
- * written, under the identity the open recorded.
+ * `suggestion.originalCode`, the anchored lines are replaced with
+ * `suggestion.proposedCode` and the file is rewritten. Lines outside the
+ * anchor keep their exact bytes, including their line terminators, and the
+ * file's trailing-newline state is preserved either way. Any other outcome
+ * refuses with a reason and writes nothing.
  */
 export function applySuggestion(
   request: ApplySuggestionRequest,
@@ -400,35 +313,12 @@ export function applySuggestion(
     return refuse(
       filePath,
       'destination-missing',
-      `The destination directory could not be resolved (${underlyingErrno(error) ?? 'unknown'}).`
-    );
-  }
-  try {
-    assertNoSymlinkAncestors(realRoot, rel, fs);
-  } catch (error) {
-    if (error instanceof SafeFsError && error.code === 'unsafe-link') {
-      return refuse(
-        filePath,
-        'unsafe-target',
-        'A directory on the way to the file is a symbolic link, and this program does not write through links.'
-      );
-    }
-    if (error instanceof SafeFsError && error.code === 'unsupported-target') {
-      return refuse(
-        filePath,
-        'path-escapes-destination',
-        'The file path resolves outside the destination directory.'
-      );
-    }
-    return refuse(
-      filePath,
-      'file-unreadable',
-      `The path could not be inspected (${underlyingErrno(error) ?? 'unknown'}).`
+      `The destination directory could not be resolved (${errnoOf(error) ?? 'unknown'}).`
     );
   }
   const absolutePath = path.join(realRoot, rel);
 
-  const opened = openAndRead(realRoot, absolutePath, filePath, fs);
+  const opened = openAndRead(realRoot, rel, filePath, fs);
   if ('status' in opened) return opened;
   const { identity, buffer } = opened;
 
@@ -473,36 +363,7 @@ export function applySuggestion(
       randomName: options.randomName,
     });
   } catch (error) {
-    if (error instanceof SafeFsError) {
-      switch (error.code) {
-        case 'identity-changed':
-          return refuse(
-            filePath,
-            'file-changed',
-            'The file changed on disk after it was read, so nothing was written.'
-          );
-        case 'unsafe-link':
-        case 'output-is-directory':
-          return refuse(
-            filePath,
-            'unsafe-target',
-            'The path no longer leads to a plain file, so nothing was written.'
-          );
-        case 'unsupported-target':
-          return refuse(
-            filePath,
-            'unsupported-target',
-            'The file is owned by another user, and replacing it would change its owner.'
-          );
-        default:
-          break;
-      }
-    }
-    return refuse(
-      filePath,
-      'write-failed',
-      `The file could not be written (${underlyingErrno(error) ?? 'unknown'}).`
-    );
+    return refuseFsError(filePath, error, 'write-failed');
   }
 
   return { status: 'applied', filePath, absolutePath, replacedLines: anchored.length };

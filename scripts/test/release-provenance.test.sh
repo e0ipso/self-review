@@ -1,15 +1,7 @@
 #!/usr/bin/env bash
 #
-# Regression checks for scripts/release/verify-provenance.sh.
-#
-# Feeds the gate synthetic workflow_run event payloads and a stub in place of
-# the GitHub compare API, so the trust decision the release workflow makes is
-# checked offline: no GitHub, no live fork, no release. Only the trusted case
-# (a successful CI run for a same-repository push to main whose commit is still
-# on main) may be accepted; every other shape must be refused, and the ones the
-# payload alone already rules out must be refused before the API is consulted.
-#
-# Usage: scripts/test/release-provenance.test.sh
+# Regression checks for scripts/release/verify-provenance.sh, offline: synthetic event payloads and a stub
+# compare API. Only the trusted case may be accepted; payload-level rejections must not consult the API.
 
 set -uo pipefail
 
@@ -44,7 +36,6 @@ check() {
   fi
 }
 
-# check_grep <name> <pattern> <file>: the file mentions the pattern.
 check_grep() {
   local name=$1 pattern=$2 file=$3
   if grep -q -- "$pattern" "$file" 2>/dev/null; then
@@ -54,9 +45,7 @@ check_grep() {
   fi
 }
 
-# Writes a workflow_run event payload with the shape GitHub delivers, varying
-# only the fields the gate decides on.
-#   event <path> <event> <conclusion> <head_branch> <head_repo> <head_repo_id> <head_sha> [workflow_name]
+# event <path> <event> <conclusion> <head_branch> <head_repo> <head_repo_id> <head_sha> [workflow_name]
 event() {
   local path=$1 event=$2 conclusion=$3 branch=$4 head_repo=$5 head_repo_id=$6 sha=$7
   local name=${8:-CI}
@@ -81,8 +70,7 @@ event() {
     }' >"$path"
 }
 
-# A stand-in for the compare API call. Records the arguments it was called
-# with, prints the configured status and exits with the configured code.
+# Stand-in for the compare API; records its arguments.
 #   stub <dir> <status> [exit-code]
 stub() {
   local dir=$1 status=$2 code=${3:-0}
@@ -95,10 +83,7 @@ EOF
   chmod +x "$dir/compare"
 }
 
-# Runs the gate against <dir>/event.json with <dir>/compare as the API, the
-# way the workflow does: every input through the environment. Captures stdout
-# in $out, the exit code in $code, stderr in <dir>/stderr and anything the
-# gate hands to later jobs in <dir>/output.
+# Captures stdout in $out, the exit code in $code, stderr in <dir>/stderr and GITHUB_OUTPUT in <dir>/output.
 run_subject() {
   local dir=$1
   shift
@@ -117,8 +102,6 @@ run_subject() {
   code=$?
 }
 
-# Every rejection has the same shape: non-zero exit, nothing on stdout, nothing
-# handed to later jobs, and a stderr line naming the field that failed.
 #   expect_rejected <name> <dir> <reason-pattern>
 expect_rejected() {
   local name=$1 dir=$2 reason=$3
@@ -137,8 +120,6 @@ expect_api_not_consulted() {
   fi
 }
 
-# 1. The trusted shape: successful CI for a push to this repository's main,
-#    and main still points at that commit.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" identical
@@ -150,8 +131,6 @@ check "trusted push: asks the API about this repo, sha and branch" \
   "$(printf '%s\n%s\n%s' "$REPO" "$SHA" main)" "$(cat "$dir/compare.args")"
 rm -rf "$dir"
 
-# 2. main moved on after CI finished (another push landed). The commit is
-#    still an ancestor of main, which is what the compare API calls "ahead".
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" ahead
@@ -160,9 +139,7 @@ check "main advanced: exit code" 0 "$code"
 check "main advanced: prints the verified sha" "$SHA" "$out"
 rm -rf "$dir"
 
-# 3. The attack the branch filter lets through: a fork pull request from a
-#    branch named main. Its CI run is a pull_request event whose head lives in
-#    the fork.
+# The attack the branch filter lets through: a fork PR from a branch named main.
 dir=$(mktemp -d)
 event "$dir/event.json" pull_request success main "$FORK" "$FORK_ID" "$SHA"
 stub "$dir" ahead
@@ -171,8 +148,7 @@ expect_rejected "fork PR from a branch named main" "$dir" "event"
 expect_api_not_consulted "fork PR from a branch named main" "$dir"
 rm -rf "$dir"
 
-# 4. A failed CI run, even for the trusted source. The workflow's own `if:`
-#    also covers this, but the gate must not rely on it.
+# The gate must not rely on the workflow's own `if:`.
 dir=$(mktemp -d)
 event "$dir/event.json" push failure main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" identical
@@ -181,8 +157,7 @@ expect_rejected "failed CI" "$dir" "conclusion"
 expect_api_not_consulted "failed CI" "$dir"
 rm -rf "$dir"
 
-# 5. A conclusion that is missing altogether, which is what an in-progress run
-#    carries. Null is not success.
+# An in-progress run carries no conclusion; null is not success.
 dir=$(mktemp -d)
 event "$dir/event.json" push null main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" identical
@@ -190,9 +165,6 @@ run_subject "$dir"
 expect_rejected "missing conclusion" "$dir" "conclusion"
 rm -rf "$dir"
 
-# 6. A pull_request event from this very repository. Only a push is accepted,
-#    so a same-repository PR branch (which can also be called main in a PR
-#    from a fork that was later transferred) never reaches the release.
 dir=$(mktemp -d)
 event "$dir/event.json" pull_request success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" identical
@@ -201,8 +173,7 @@ expect_rejected "same-repo pull_request event" "$dir" "event"
 expect_api_not_consulted "same-repo pull_request event" "$dir"
 rm -rf "$dir"
 
-# 7. A workflow_dispatch run on main. CI accepts manual dispatch so the
-#    Electron tier can be exercised on a branch; a dispatch is not a release.
+# CI accepts manual dispatch for the Electron tier; a dispatch is not a release.
 dir=$(mktemp -d)
 event "$dir/event.json" workflow_dispatch success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" identical
@@ -210,7 +181,6 @@ run_subject "$dir"
 expect_rejected "workflow_dispatch event" "$dir" "event"
 rm -rf "$dir"
 
-# 8. A push to some other branch of this repository.
 dir=$(mktemp -d)
 event "$dir/event.json" push success release-candidate "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" identical
@@ -219,7 +189,6 @@ expect_rejected "wrong branch" "$dir" "head_branch"
 expect_api_not_consulted "wrong branch" "$dir"
 rm -rf "$dir"
 
-# 9. A push whose head lives in another repository.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$FORK" "$FORK_ID" "$SHA"
 stub "$dir" identical
@@ -228,8 +197,7 @@ expect_rejected "wrong repository" "$dir" "head_repository"
 expect_api_not_consulted "wrong repository" "$dir"
 rm -rf "$dir"
 
-# 10. The right name on the wrong repository: names can be reused after a
-#     transfer or rename, ids cannot.
+# Names can be reused after a transfer or rename, ids cannot.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$FORK_ID" "$SHA"
 stub "$dir" identical
@@ -238,8 +206,6 @@ expect_rejected "repository id mismatch" "$dir" "head_repository"
 expect_api_not_consulted "repository id mismatch" "$dir"
 rm -rf "$dir"
 
-# 11. The commit is no longer on main: the branch was force-pushed or reset
-#     after CI ran, so main and the commit have diverged.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" diverged
@@ -247,7 +213,6 @@ run_subject "$dir"
 expect_rejected "head sha diverged from main" "$dir" "reachable"
 rm -rf "$dir"
 
-# 12. main is behind the commit: the commit is a descendant of main, not on it.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" behind
@@ -255,7 +220,7 @@ run_subject "$dir"
 expect_rejected "head sha ahead of main" "$dir" "reachable"
 rm -rf "$dir"
 
-# 13. The API call fails. Fail closed: an outage is not provenance.
+# Fail closed: an outage is not provenance.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" "" 1
@@ -263,7 +228,6 @@ run_subject "$dir"
 expect_rejected "API error" "$dir" "compare"
 rm -rf "$dir"
 
-# 14. The API answers something the gate does not understand.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" '<html>rate limited</html>'
@@ -271,8 +235,7 @@ run_subject "$dir"
 expect_rejected "unexpected API answer" "$dir" "compare"
 rm -rf "$dir"
 
-# 15. A head_sha that is not a full commit id cannot be checked out exactly
-#     and is never passed to the API or to later jobs.
+# Never passed to the API or later jobs.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" main
 stub "$dir" identical
@@ -281,7 +244,6 @@ expect_rejected "malformed head sha" "$dir" "head_sha"
 expect_api_not_consulted "malformed head sha" "$dir"
 rm -rf "$dir"
 
-# 16. The run belongs to a different workflow than CI.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" "$SHA" 'Release (macOS)'
 stub "$dir" identical
@@ -290,7 +252,6 @@ expect_rejected "wrong workflow" "$dir" "workflow"
 expect_api_not_consulted "wrong workflow" "$dir"
 rm -rf "$dir"
 
-# 17. No event payload at all.
 dir=$(mktemp -d)
 stub "$dir" identical
 run_subject "$dir"
@@ -298,7 +259,6 @@ expect_rejected "missing event file" "$dir" "event"
 expect_api_not_consulted "missing event file" "$dir"
 rm -rf "$dir"
 
-# 18. A payload that is not JSON.
 dir=$(mktemp -d)
 echo 'not json' >"$dir/event.json"
 stub "$dir" identical
@@ -307,8 +267,7 @@ expect_rejected "malformed event file" "$dir" "event"
 expect_api_not_consulted "malformed event file" "$dir"
 rm -rf "$dir"
 
-# 19. The workflow forgot to say which repository it expects. Without the
-#     expectation there is nothing to compare against, so refuse.
+# Without an expectation there is nothing to compare against.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" identical
@@ -317,7 +276,6 @@ expect_rejected "missing expected repository" "$dir" "EXPECTED_REPOSITORY"
 expect_api_not_consulted "missing expected repository" "$dir"
 rm -rf "$dir"
 
-# 20. Likewise for the repository id.
 dir=$(mktemp -d)
 event "$dir/event.json" push success main "$REPO" "$REPO_ID" "$SHA"
 stub "$dir" identical

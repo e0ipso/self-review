@@ -7,12 +7,8 @@
 // the UI only asks for a destination when the session is a temporary remote
 // clone, and serve mode has no remote mode, so the case cannot arise.
 // `GET /api/diff` is issued once and shared, carrying both the diff and the
-// guide, so there is no push transport. `submitReview` resolving means the
-// review is on disk: the route publishes before it answers, and a 200 without
-// that acknowledgement is treated as a failure rather than a save. And every
-// request presents the session capability as a bearer token: the server
-// answers 401 to anything else, and the token lives only in this closure —
-// never in storage, never in a URL.
+// guide, so there is no push transport. `submitReview` resolving means the review is on disk. The
+// capability token lives only in this closure, never in storage or a URL.
 
 // Type-only, erased at build time: no runtime dependency on either package.
 import type { ReviewAdapter, GuideLoadPayload } from '@self-review/react';
@@ -48,19 +44,12 @@ export interface ConfigApiResponse {
   outputPathInfo: OutputPathInfo | null;
 }
 
-/**
- * A request the server refused, or one this adapter refused to send. The
- * message is what the page shows; the code is what it acts on.
- */
+/** A request the server refused, or one this adapter refused to send. */
 export class ServeRequestError extends Error {
-  /** The HTTP status of the refusal, or null when the request was never sent. */
+  /** Null when the request was never sent. */
   readonly status: number | null;
-  /**
-   * The publisher's `ReviewPublishError.code` when the server sent one,
-   * `REVIEW_TOO_LARGE_CODE` for a body over the limit, otherwise null.
-   */
+  /** The publisher's code, `REVIEW_TOO_LARGE_CODE` for an oversized body, otherwise null. */
   readonly code: string | null;
-  /** One rendered line per individual problem, when the server listed them. */
   readonly details: readonly string[];
 
   constructor(
@@ -79,12 +68,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Read the server's refusal into an error. Two shapes exist: the publisher's
- * `{ ok: false, code, message, details }`, whose message stands on its own,
- * and the validation routes' `{ error }`, which is prefixed with the request
- * it answers since callers only log what they get.
- */
+// Two refusal shapes: the publisher's `{ ok: false, code, message, details }` and the validation routes' `{ error }`.
 async function requestError(response: Response, what: string): Promise<ServeRequestError> {
   let body: unknown = null;
   try {
@@ -113,11 +97,7 @@ async function requestError(response: Response, what: string): Promise<ServeRequ
   });
 }
 
-/**
- * The HTTP verbs, bound to one session's capability. Everything the adapter
- * sends goes through here, which is what makes "every request presents the
- * token" a property of one function rather than of every call site.
- */
+// Everything the adapter sends goes through here, so every request presents the token.
 interface ServeClient {
   fetch(path: string, init?: RequestInit): Promise<Response>;
   getJson<T>(path: string): Promise<T>;
@@ -143,10 +123,7 @@ function createClient(capability: string): ServeClient {
       return (await response.json()) as T;
     },
 
-    /**
-     * Post an already-serialized JSON body. `content-type: application/json`
-     * is not optional: the server answers 415 without it, on every POST route.
-     */
+    // The server answers 415 on any POST without `content-type: application/json`.
     postJsonText: (path, text) =>
       client.fetch(path, {
         method: 'POST',
@@ -230,18 +207,8 @@ export function encodeReviewStateForWire(state: ReviewState): unknown {
   };
 }
 
-// ---------------------------------------------------------------------------
-// The body limit.
-//
-// The server caps `POST /api/review` at MAX_REVIEW_BODY_BYTES and closes the
-// connection on anything over it. Attachments are base64-encoded on the wire,
-// so a review can be over the limit as sent while well under it on disk —
-// a reviewer cannot see that coming, and the server's 413 arrives after the
-// socket has been closed on the body. So the size is measured here, before
-// anything is sent, and both refusals carry the same message: what the
-// review weighs, what the limit is, and what to do about it.
-// ---------------------------------------------------------------------------
-
+// The size is measured before sending: base64 can push a review over the limit while it is well under on disk,
+// and the server's 413 arrives after it closed the socket.
 function tooLarge(bytes: number, status: number | null): ServeRequestError {
   return new ServeRequestError(
     `This review is ${formatMegabytes(bytes)} MB as sent, over the server's ` +
@@ -252,7 +219,6 @@ function tooLarge(bytes: number, status: number | null): ServeRequestError {
   );
 }
 
-/** The byte length of a string as UTF-8, which is what the server counts. */
 function byteLength(text: string): number {
   return new Blob([text]).size;
 }
@@ -268,8 +234,7 @@ export async function loadServeConfig(capability: string): Promise<ConfigApiResp
 }
 
 /**
- * Build the adapter for one page load, bound to the session capability the
- * page took from its launch URL.
+ * Build the adapter for one page load.
  *
  * A factory rather than a module-level object because the shared
  * `GET /api/diff` promise is per-session state; a test gets a fresh one per
@@ -327,12 +292,6 @@ export function createFetchAdapter(capability: string): ReviewAdapter {
 
     applySuggestion: request => postJson('/api/apply-suggestion', request),
 
-    /**
-     * Resolves once the review is on disk. The route publishes the document
-     * before it answers, so the 200 is the acknowledgement; every refusal is
-     * a `ServeRequestError` whose message says what to fix, and the review
-     * stays in the page for the retry.
-     */
     submitReview: async (state: ReviewState): Promise<void> => {
       const text = JSON.stringify(encodeReviewStateForWire(state));
       const bytes = byteLength(text);

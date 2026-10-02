@@ -85,16 +85,9 @@ function parseGhJson(stdout: string, context: string): unknown {
  * the comment no longer applies to the head diff (outdated); the
  * `original_*` fields then retain the historic anchor.
  *
- * Revision provenance: GitHub re-anchors every review comment onto the
- * current head on each push and reports the result in `line` — a number
- * when the comment still applies, `null` when it does not — so `outdated`
- * is the forge's own per-comment verdict, and `outdated: false` is what
- * vouches for the anchor (and activates a suggestion in the mapper). No
- * `headSha` is carried: the payload's `commit_id` tracks the re-anchoring
- * and `original_commit_id` the creation commit, but the provider cannot
- * verify offline that `commit_id` is updated on every re-anchor, and a SHA
- * that lagged behind would wrongly disable every suggestion after a push.
- * The `line` verdict is the signal GitHub documents; it is the one used.
+ * GitHub re-anchors comments on each push, so `line: null` is the forge's own
+ * outdated verdict. No `headSha` is carried: `commit_id` cannot be verified to
+ * follow re-anchoring, and a lagging SHA would disable every suggestion.
  */
 function toAnchor(comment: GitHubReviewComment): ForgeThreadAnchor {
   const outdated = comment.line === null || comment.line === undefined;

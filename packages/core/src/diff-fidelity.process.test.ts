@@ -6,9 +6,8 @@ import { parseDiffWithDiagnostics } from './diff-parser';
 import { runGitDiffAsync, withParserCompatibleDiffArgs } from './git';
 import { gitSync } from './test-support/git-env';
 
-// R06: what reaches the parser is real `git diff` output, so these fixtures
-// are produced by git in a disposable repository rather than typed by hand.
-// Each scenario is one shape the parser used to misread or drop.
+// R06: fixtures are real `git diff` output from a disposable repository, one per shape the parser
+// used to misread.
 
 const PNG_V1 = Buffer.from(
   '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489',

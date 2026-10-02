@@ -102,9 +102,7 @@ export function useKeyboardNavigation() {
         }
 
         if (filePath && lineNumber && side) {
-          // The composer this opens focuses its own editor on mount
-          // (ComposerCore). No document-wide focus here: with another
-          // composer open higher up, it would steal focus from the new one.
+          // ComposerCore focuses its own editor on mount; a document-wide focus here would steal it.
           document.dispatchEvent(
             new CustomEvent('trigger-line-comment', {
               bubbles: true,

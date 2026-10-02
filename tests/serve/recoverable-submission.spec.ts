@@ -1,14 +1,5 @@
-/**
- * A submission the server cannot publish, end to end: the built executable,
- * a real browser, and a filesystem that refuses the write between the two.
- *
- * The output directory loses its write bit after the server has started
- * (startup refuses an unwritable path outright, so the failure has to arrive
- * later, as it does in life). The claim under test is the recovery contract:
- * the page reports the server's own refusal, keeps the review, and the
- * process keeps running; once the directory is writable again the same
- * review is finished, written, and the process stops.
- */
+// The output directory loses its write bit after startup (startup refuses an unwritable path). The page must
+// report the refusal and keep the review, the process must keep running, and a retry once writable must finish.
 import { test, expect } from '@playwright/test';
 import { chmodSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -64,8 +55,6 @@ test('a refused write keeps the review and the server, and a retry writes the fi
   await page.locator('[data-testid="add-comment-btn"]').click();
   await expect(page.locator('[data-testid="comment-input"]')).toHaveCount(0);
 
-  // ── The refusal ──
-
   chmodSync(outputDir, 0o500);
   await page.locator('[data-testid="finish-review-btn"]').click();
 
@@ -73,14 +62,10 @@ test('a refused write keeps the review and the server, and a retry writes the fi
   await expect(notice).toBeVisible({ timeout: 15_000 });
   await expect(notice).toContainText('permission-denied');
   await expect(notice).toContainText('Finish Review again');
-  // Not a completion: the review is still on screen, with its comment, and
-  // the process that would write it is still there to ask again.
   await expect(page.locator('[data-testid="finish-review-btn"]')).toBeVisible();
   expect(serve.hasExited()).toBe(false);
   expect(existsSync(outputPath)).toBe(false);
   expect(serve.stderr()).toContain('Review not saved (permission-denied)');
-
-  // ── The fix, and the retry ──
 
   chmodSync(outputDir, 0o700);
   await page.locator('[data-testid="finish-review-btn"]').click();

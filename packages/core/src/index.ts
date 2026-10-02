@@ -68,8 +68,7 @@ export type {
   PublishReviewResult,
 } from './review-publisher';
 
-// Attachment provenance: where resumed attachment bytes live, which
-// references may be read, and how they follow a relocated output
+// Attachment provenance
 export {
   parseAttachmentReference,
   resolveAttachmentOrigins,
@@ -89,7 +88,6 @@ export {
   SafeFsError,
   nodeFsLayer,
   assertNoSymlinkAncestors,
-  openNoFollow,
   writeExclusiveNoFollow,
   atomicReplace,
   inspectReplaceTarget,
@@ -158,8 +156,7 @@ export type { SyntheticDiffOptions, SyntheticDiffResult } from './synthetic-diff
 export { scanDirectory, scanFile } from './directory-scanner';
 export type { SourceScanOptions, SourceScanResult } from './directory-scanner';
 
-// Input safety budgets (checked before reading; distinct from the
-// max-files/max-total-lines transport thresholds)
+// Input safety budgets
 export {
   MAX_SOURCE_ENTRIES,
   BINARY_SNIFF_BYTES,
@@ -178,9 +175,7 @@ export type { SourceBudgets } from './input-budgets';
 export { readFileWithinBudget, readFileWithinBudgetSync } from './bounded-read';
 export type { BoundedReadOptions, BoundedReadResult } from './bounded-read';
 
-// Source identity (what a session reviews) and snapshot reads of reviewed
-// content: the one path authorization and the one content resolver every
-// front end delegates to
+// Source identity and snapshot reads of reviewed content
 export {
   describeGitDiffSides,
   resolveGitSourceIdentity,
@@ -205,7 +200,7 @@ export type {
   SnapshotReadOptions,
 } from './snapshot-reader';
 
-// Configuration, with the origin of every value (user file, project file, default)
+// Configuration, with provenance
 export { loadConfig, loadConfigWithProvenance } from './config';
 export type {
   ConfigValueOrigin,
@@ -300,9 +295,7 @@ export type { ReviewSession, ReviewStartResult } from './review-handlers';
 export { determineMode, resolveStartupSource } from './startup-mode';
 export type { StartupSource } from './startup-mode';
 
-// The startup steps both front ends share: output target and its trust,
-// diff arguments with configuration provenance, local review loading,
-// resume into a session
+// Startup steps both front ends share
 export {
   resolveOutputTarget,
   publishOptionsFor,
@@ -336,8 +329,7 @@ export {
 } from './git-diff-args';
 export type { DiffPathRelativity } from './git-diff-args';
 
-// Remote PR/MR session bootstrap (URL -> materialized git-mode inputs) and the
-// load/filter/map step the app and fetch-comments share
+// Remote PR/MR session bootstrap and the load/filter/map step shared with fetch-comments
 export {
   startRemoteSession,
   loadRemoteReview,

@@ -30,11 +30,7 @@ export interface CommentDisplayProps {
   comment: ReviewComment;
   /** Code currently visible for the comment's range; replaces a recorded original when given. */
   originalCode?: string;
-  /**
-   * False when the comment's line range is placed in the diff but some of its
-   * lines are hidden (a gap between hunks). The recorded suggestion original is
-   * then kept for editing, and the comment is marked. Defaults to true.
-   */
+  /** False when part of the range is in a gap between hunks: keeps the recorded original, marks it. */
   anchorFullyVisible?: boolean;
 }
 

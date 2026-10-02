@@ -4,10 +4,7 @@ import { DiffDiagnostics } from './DiffDiagnostics';
 
 export interface EmptyDiffMessageProps {
   diffSource: DiffSource;
-  /**
-   * Why nothing loaded, when the loader knows. A non-empty list means the
-   * review failed to load, which must never read as "no changes found".
-   */
+  /** Why nothing loaded; a non-empty list is a failed load, never "no changes". */
   diagnostics?: string[];
 }
 
@@ -17,7 +14,6 @@ export function EmptyDiffMessage({ diffSource, diagnostics = [] }: EmptyDiffMess
     return null;
   }
 
-  // A load with diagnostics and no files is a failed load, not an empty diff.
   if (diagnostics.length > 0) {
     return (
       <div className='flex-1 flex items-center justify-center p-8' data-testid='empty-diff-help'>

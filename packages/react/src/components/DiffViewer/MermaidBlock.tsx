@@ -2,30 +2,16 @@ import { useState, useEffect } from 'react';
 import { useConfig } from '../../context/ConfigContext';
 import { svgToDataUri } from '../../utils/svg-data-uri';
 
-/**
- * Reviewed diagram source longer than this is not handed to Mermaid at all.
- * It is also Mermaid's own `maxTextSize`, pinned here so content cannot
- * raise it.
- */
+/** Longer diagram source is never handed to Mermaid; also pinned as its `maxTextSize`. */
 export const MERMAID_MAX_SOURCE_CHARS = 50_000;
 
-/**
- * How long the block waits for Mermaid before it shows an error instead.
- * Layout runs synchronously on the main thread, so this cannot interrupt a
- * pathological diagram mid-render; it bounds the wait and keeps the block
- * from spinning forever when rendering stalls.
- */
+/** Layout is synchronous and cannot be interrupted; this only bounds the wait on a stall. */
 export const MERMAID_RENDER_TIMEOUT_MS = 10_000;
 
 /**
- * Configuration keys reviewed content cannot change through an
- * `%%{init: …}%%` directive or YAML front matter. Mermaid folds both into
- * the same directive path and drops every key listed in `secure` before it
- * is applied, so the values `initialize` sets below are the only ones a
- * diagram ever renders with. The first six are Mermaid's own defaults,
- * restated so the policy does not depend on them; the rest are the keys a
- * diagram could use to inject CSS or HTML, change text measurement, or
- * weaken label sanitization.
+ * Keys reviewed content cannot change via `%%{init}%%` or front matter: Mermaid drops every
+ * `secure` key from directives. The first six restate its defaults; the rest could inject
+ * CSS or HTML, change text measurement, or weaken label sanitization.
  */
 export const MERMAID_SECURE_KEYS: readonly string[] = [
   'secure',
@@ -52,26 +38,17 @@ function resolveIsDark(theme: 'light' | 'dark' | 'system'): boolean {
   return theme === 'dark';
 }
 
-/**
- * Render diagram source to an SVG string inside a hidden, off-screen
- * container that exists only for the duration of the call. Mermaid needs
- * a live element to measure text against, so the container is attached to
- * the document, but it is invisible, outside the `.self-review` subtree,
- * and removed again whether rendering succeeds or fails. Nothing Mermaid
- * produces stays in the application document.
- */
+/** Renders in a hidden off-screen container (outside `.self-review`) removed on success or failure. */
 async function renderMermaidSvg(code: string, isDark: boolean): Promise<string> {
   const mermaid = (await import('mermaid')).default;
 
-  // Re-initialize on every render so diagrams pick up the current palette
-  // and so a previous diagram's directives never carry over.
+  // Re-initialize per render: current palette, and no directives carried over.
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
     secure: [...MERMAID_SECURE_KEYS],
     theme: isDark ? 'dark' : 'default',
-    // Labels as SVG text rather than <foreignObject> HTML: the output is a
-    // self-contained SVG document that renders identically through <img>.
+    // SVG text instead of <foreignObject>, so the output renders identically through <img>.
     htmlLabels: false,
     maxTextSize: MERMAID_MAX_SOURCE_CHARS,
     // Throw on a parse failure instead of drawing Mermaid's error diagram.
@@ -86,8 +63,7 @@ async function renderMermaidSvg(code: string, isDark: boolean): Promise<string> 
     'visibility:hidden;pointer-events:none;';
   document.body.appendChild(sandbox);
   try {
-    // mermaid.render requires a unique ID per call; bump the counter so
-    // re-renders after theme changes don't collide.
+    // mermaid.render needs a unique ID per call.
     const { svg } = await mermaid.render(`mermaid-${mermaidIdCounter++}`, code, sandbox);
     return svg;
   } finally {
@@ -102,11 +78,8 @@ interface DiagramImage {
 }
 
 /**
- * Turn Mermaid's SVG string into the attributes of an isolated `<img>`.
- * The markup is parsed as XML first, with scripting disabled, because an
- * `<img>` shows a malformed SVG as a broken image with no explanation; a
- * contained error message is better. The viewBox gives the image its
- * intrinsic size, which a percentage-width SVG otherwise lacks.
+ * Parsed as XML first (scripting off) because `<img>` shows malformed SVG as a bare broken
+ * image. The viewBox gives the image the intrinsic size a percentage-width SVG lacks.
  */
 function toDiagramImage(svg: string): DiagramImage {
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
@@ -140,11 +113,8 @@ type BlockState =
   | { status: 'error'; message: string };
 
 /**
- * Renders a ```mermaid fence as an image. The generated SVG never joins the
- * application document: it is encoded into a `data:` URI and shown through
- * `<img>`, the same boundary `RenderedSvgView` uses for reviewed SVG files,
- * so stylesheets or markup a diagram smuggles into its output stay inside
- * the image and cannot style or cover review controls.
+ * Renders a ```mermaid fence through `<img>` and a `data:` URI, like `RenderedSvgView`, so
+ * markup a diagram smuggles into its output cannot style or cover review controls.
  */
 export default function MermaidBlock({ code }: { code: string }) {
   const [state, setState] = useState<BlockState>({ status: 'pending' });

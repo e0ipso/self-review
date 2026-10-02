@@ -5,22 +5,13 @@
 // module turns a forge URL into the inputs the existing git-mode pipeline
 // already understands — a repo path and a `baseSha...headSha` range — plus
 // the fetched discussion threads and the remote provenance the serializer
-// records. `loadRemoteReview` then loads that diff, applies the ignore
-// configuration and maps the threads against what was loaded, so the app
-// (CLI URL startup, the splash-screen `remote:open-url` handler) and the
-// headless `fetch-comments` subcommand produce the same comments and the
-// same suggestions for the same PR/MR under the same effective
-// configuration. Every external effect goes through an injectable
-// dependency so unit tests never spawn git/gh/glab.
+// records. `loadRemoteReview` then loads the diff and maps the threads against it,
+// so the app and `fetch-comments` produce the same comments. Every external effect
+// is injectable so unit tests never spawn git/gh/glab.
 //
-// Lifetime: one session, one `AbortSignal`, one owner. Every git, gh and
-// glab command of a session runs under the caller's signal and the
-// materializer's per-command timeout; aborting kills the command in flight
-// and the session rejects with a `CommandCancelledError`. Whatever the
-// session acquired by then — a temporary clone, session refs in a reused
-// clone — is released before that rejection reaches the caller, at every
-// stage from clone to thread mapping. A session that is returned hands its
-// `cleanup` to the caller, who owns it from then on.
+// Lifetime: one session, one `AbortSignal`. Aborting kills the command in flight
+// and rejects with `CommandCancelledError`; whatever the session acquired is
+// released first. A returned session hands its `cleanup` to the caller.
 
 import {
   CommandCancelledError,
@@ -66,10 +57,8 @@ import { formatGitDiffArgs } from './git-diff-args';
 import { canonicalSourcePath } from './source-identity';
 
 /**
- * A materialized remote PR/MR session: the git-mode inputs plus the forge
- * threads, before any diff has been loaded. Nothing here is mapped against
- * files — there are none yet — so there is nothing to anchor a suggestion
- * to; {@link loadRemoteReview} does that once the diff exists.
+ * The git-mode inputs plus the forge threads, before any diff is loaded (so nothing to anchor
+ * suggestions to yet).
  */
 export interface MaterializedRemoteSession {
   forgeUrl: ForgeUrl;
@@ -78,31 +67,17 @@ export interface MaterializedRemoteSession {
   /** Arguments for the existing git-diff machinery: `[base...head]`. */
   gitDiffArgs: string[];
   mode: MaterializeMode;
-  /**
-   * Releases what materialization acquired: the temp clone when one was
-   * created, the session's refs in a reused clone otherwise. Idempotent,
-   * never rejects; the caller that received this session owns calling it.
-   */
+  /** Idempotent, never rejects; the receiver of the session must call it. */
   cleanup: () => Promise<void>;
   /** Provenance + thread-sync status for payloads and the saved review. */
   remote: RemoteSessionInfo;
-  /**
-   * Forge discussion threads, verbatim. Empty when thread sync is
-   * unavailable (see {@link StartRemoteSessionOptions.threads}).
-   */
+  /** Verbatim; empty when thread sync is unavailable. */
   fetchedThreads: ForgeThread[];
 }
 
-/**
- * A remote session whose diff has been loaded and whose threads have been
- * mapped against it: what the app's front ends consume.
- */
+/** A session whose diff is loaded and whose threads are mapped against it. */
 export interface RemoteSession extends MaterializedRemoteSession {
-  /**
-   * `fetchedThreads` mapped against the reviewed (ignore-filtered) diff and
-   * verified against the materialized head. Review-level threads keep the
-   * mapper's sentinel `filePath: ''` (REVIEW_LEVEL_FILE_PATH).
-   */
+  /** Review-level threads keep the sentinel `filePath: ''` (REVIEW_LEVEL_FILE_PATH). */
   fetchedComments: ReviewComment[];
 }
 
@@ -130,12 +105,7 @@ export interface RemoteSessionDeps {
     options?: MaterializeOptions
   ) => Promise<string>;
   runner: ForgeCommandRunner;
-  /**
-   * Loads the diff from the clone. Untracked files are never included.
-   * `diagnostics` carries what could not be loaded faithfully (see
-   * `LoadGitDiffResult`); absent means a clean load. `identity` is the
-   * loader's resolution of the compared snapshots; a stand-in may omit it.
-   */
+  /** Untracked files are never included. A stand-in may omit `diagnostics` and `identity`. */
   loadDiff: (
     gitDiffArgs: string[],
     cwd: string
@@ -151,11 +121,7 @@ function defaultCreateProvider(forge: ForgeName, runner: ForgeCommandRunner): Fo
   return forge === 'github' ? createGitHubProvider(runner) : createGitLabProvider(runner);
 }
 
-/**
- * A runner that runs every command under the session's bounds, for the
- * forge provider: `gh`/`glab` are part of the session too, and a startup
- * deadline that could not reach them would wait on them.
- */
+/** Puts `gh`/`glab` under the session's bounds too, so a startup deadline can reach them. */
 function bindSessionRunner(runner: ForgeCommandRunner, signal?: AbortSignal): ForgeCommandRunner {
   return (command, args, options) => {
     if (signal?.aborted) {
@@ -169,14 +135,12 @@ function bindSessionRunner(runner: ForgeCommandRunner, signal?: AbortSignal): Fo
   };
 }
 
-/** Reject with the session's cancellation once `signal` has fired. */
 function throwIfAborted(signal: AbortSignal | undefined, stage: string): void {
   if (signal?.aborted) {
     throw new CommandCancelledError('aborted', 'self-review', [stage]);
   }
 }
 
-/** The real dependencies: shared by every caller that does not inject its own. */
 export const defaultRemoteSessionDeps: RemoteSessionDeps = {
   createProvider: defaultCreateProvider,
   detectExistingClone,
@@ -189,31 +153,16 @@ export const defaultRemoteSessionDeps: RemoteSessionDeps = {
     loadGitDiffWithUntracked(gitDiffArgs, cwd, { includeUntracked: false }),
 };
 
-/** The lifetime bound a caller hands a remote session. */
 export interface RemoteLifetimeOptions {
-  /**
-   * The session's signal. Aborting it kills the git/forge command in
-   * flight; the session releases what it acquired and rejects with a
-   * {@link CommandCancelledError}. An already-aborted signal rejects before
-   * anything runs. Without one the session is bounded only by the
-   * per-command timeout.
-   */
+  /** Without one, the session is bounded only by the per-command timeout. */
   signal?: AbortSignal;
 }
 
-/** Per-call choices for {@link startRemoteSession}. */
 export interface StartRemoteSessionOptions extends RemoteLifetimeOptions {
-  /** Forwarded to the provider: include threads the forge marks resolved. */
   includeResolved?: boolean;
   /**
-   * What a failed thread fetch means.
-   *
-   * - `'optional'` (default; the app): the review proceeds without forge
-   *   threads. A forge CLI already found missing is not asked again; any
-   *   other failure is one stderr note and `threadSyncAvailable: false`.
-   * - `'required'` (`fetch-comments`): the threads are the whole point, so
-   *   the fetch is always attempted and a failure is fatal. The clone this
-   *   call materialized is released before the error propagates.
+   * `'optional'` (default, the app): a failed fetch degrades to no threads.
+   * `'required'` (`fetch-comments`): always attempted, and a failure is fatal.
    */
   threads?: 'optional' | 'required';
 }
@@ -225,8 +174,7 @@ export interface StartRemoteSessionOptions extends RemoteLifetimeOptions {
  * Fatal failures (unrecognizable URL, materialization errors, base-branch
  * lookup failures other than a missing CLI) throw — callers surface them
  * like any other startup git error. Forge-CLI unavailability is never
- * fatal for the base branch, which falls back to the git-only
- * default-branch lookup; for the threads it is governed by
+ * fatal for the base branch (git-only fallback); for threads see
  * {@link StartRemoteSessionOptions.threads}.
  */
 export async function startRemoteSession(
@@ -279,9 +227,8 @@ export async function startRemoteSession(
     lifetime
   );
 
-  // From here on the session owns a temporary clone or session refs; the
-  // caller receives the cleanup handle only with a session, so anything that
-  // ends the call before that releases them here.
+  // The caller gets the cleanup handle only with a session, so anything ending the call before that
+  // releases here.
   let fetchedThreads: ForgeThread[] = [];
   let threadSyncAvailable = false;
   if (cliAvailable || threadsRequired) {
@@ -291,8 +238,7 @@ export async function startRemoteSession(
       });
       threadSyncAvailable = true;
     } catch (error) {
-      // A session being torn down is not a review without threads: a
-      // cancelled fetch ends the session under either policy.
+      // A cancelled fetch ends the session under either policy.
       if (threadsRequired || isCommandCancelled(error)) {
         await materialized.cleanup();
         if (error instanceof ForgeCliUnavailableError) {
@@ -338,33 +284,22 @@ export async function startRemoteSession(
   };
 }
 
-/** The reviewed diff of a remote session and the threads mapped against it. */
 export interface RemoteReviewLoad {
-  /** The diff after the ignore configuration; what the reviewer sees. */
+  /** After the ignore configuration. */
   files: DiffFile[];
-  /** Repository root the loader resolved (the clone). */
   repository: string;
-  /** What the loader could not load faithfully; empty on a clean load. */
   diagnostics: string[];
   /** `session.fetchedThreads` mapped against `files` and the materialized head. */
   comments: ReviewComment[];
-  /** The loader's identity of the compared snapshots, when it supplied one. */
   identity?: ReviewSourceIdentity;
 }
 
 /**
- * Load a materialized session's diff, apply the ignore configuration and
- * map its threads against the result — the one place this happens, so the
- * app and `fetch-comments` cannot drift apart.
- *
- * Mapping against the filtered files, with the materialized head as the
- * reviewed revision, is what makes the output honest: a `suggestion` fence
- * on an ignored path stays plain text rather than a proposal over code the
- * review never shows, and one on a position computed for another head is
- * never activated (R05). Does not release the session on failure; the
- * caller owns the clone's lifetime. An abort that lands during the load is
- * honoured once it returns: the result is discarded and the session's
- * cancellation is thrown instead.
+ * Load the diff, apply the ignore configuration and map the threads: the one place
+ * this happens, so the app and `fetch-comments` cannot drift. Mapping against the
+ * filtered files and the materialized head keeps a suggestion on an ignored path
+ * or another head plain text (R05). Does not release the session on failure. An
+ * abort during the load discards the result and throws.
  */
 export async function loadRemoteReview(
   session: MaterializedRemoteSession,
@@ -397,16 +332,12 @@ export async function loadRemoteReview(
 export interface RemoteBootstrapResult {
   session: RemoteSession;
   payload: DiffLoadPayload;
-  /** The identity to commit with `payload`: mode `remote`, rooted at the clone. */
   identity: ReviewSourceIdentity;
 }
 
 /**
- * The identity of a remote session: the loader's resolution of
- * `base...head` relabelled as remote and rooted at the clone, with the
- * user's own launch directory rather than the clone the loader ran in. A
- * loader stand-in that supplied none still yields the head commit, which
- * materialization resolved; the merge base it did not is left unknown.
+ * The loader's identity relabelled as remote, with the user's launch directory rather than the
+ * clone's; a stand-in loader still yields the head, with the merge base unknown.
  */
 function remoteSourceIdentity(
   started: MaterializedRemoteSession,
@@ -424,11 +355,8 @@ function remoteSourceIdentity(
 }
 
 /**
- * Full remote bootstrap for the app: materialize the session, run
- * {@link loadRemoteReview} over it, and shape the git-mode `DiffLoadPayload`
- * (with `remote` provenance attached). Shared by the CLI URL startup path
- * and the splash-screen `remote:open-url` handler. Thread sync degrades
- * rather than failing: the review proceeds without forge threads.
+ * Full remote bootstrap for the app: materialize, {@link loadRemoteReview}, and shape
+ * the git-mode `DiffLoadPayload`. Thread sync degrades rather than failing.
  */
 export async function bootstrapRemoteDiff(
   url: string,
@@ -440,10 +368,8 @@ export async function bootstrapRemoteDiff(
   const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
   const started = await startRemoteSession(url, cwd, d, { signal: options.signal });
 
-  // One boundary from here to the return: the session owns a temporary
-  // clone or session refs, and the caller receives the cleanup handle only
-  // with the result, so anything that ends the call before that — the
-  // load, the filter, the mapping, an abort — releases them here.
+  // The caller gets the cleanup handle only with the result, so any failure before that releases
+  // here.
   try {
     const loaded = await loadRemoteReview(started, ignorePatterns, d.loadDiff, options);
     for (const diagnostic of loaded.diagnostics) {
@@ -464,8 +390,7 @@ export async function bootstrapRemoteDiff(
           repository: loaded.repository,
         },
         remote: session.remote,
-        // Carried only when something could not be loaded faithfully, so the
-        // renderer never mistakes a failed load for "no changes".
+        // So the renderer never mistakes a failed load for "no changes".
         ...(loaded.diagnostics.length > 0 ? { diagnostics: loaded.diagnostics } : {}),
       },
     };

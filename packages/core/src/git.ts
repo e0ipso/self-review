@@ -1,6 +1,4 @@
-// packages/core/src/git.ts
-// Git command execution. Every helper here rejects or returns; none exits
-// the process, so a front end decides how a git failure is reported.
+// Git command execution. Helpers reject rather than exit; front ends report failures.
 
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -23,10 +21,7 @@ export function stripTrailingNewline(text: string): string {
   return text.replace(/\r?\n$/, '');
 }
 
-/**
- * Resolve the repository root of `cwd`. Rejects when git is missing or `cwd`
- * is not inside a repository; callers decide how to report that.
- */
+/** Rejects when git is missing or `cwd` is not inside a repository. */
 export async function getRepoRootAsync(cwd?: string): Promise<string> {
   try {
     const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], {
@@ -45,9 +40,8 @@ export async function getRepoRootAsync(cwd?: string): Promise<string> {
 }
 
 /**
- * Git-level configuration overrides that keep `git diff` output in the shape
- * the parser reads, whatever the user's own config says. They precede the
- * `diff` subcommand on the command line.
+ * Config overrides, placed before `diff`, that keep output parseable whatever the user's config
+ * says.
  */
 export const PARSER_COMPATIBLE_GIT_CONFIG: readonly string[] = [
   '-c',
@@ -56,17 +50,12 @@ export const PARSER_COMPATIBLE_GIT_CONFIG: readonly string[] = [
   'diff.noprefix=false',
   '-c',
   'diff.mnemonicPrefix=false',
-  // Paths must stay repository-relative: untracked enumeration, context
-  // expansion and suggestion application all resolve them against the root.
+  // Untracked enumeration, context expansion and Apply all resolve paths against the root.
   '-c',
   'diff.relative=false',
 ];
 
-/**
- * `git diff` options that force parser-compatible output. They are appended
- * after the user's options, so a user-supplied `--color=always` or
- * `--no-prefix` is overridden rather than the other way round.
- */
+/** Appended after the user's options so a user `--color=always` or `--no-prefix` loses. */
 export const PARSER_COMPATIBLE_DIFF_FLAGS: readonly string[] = [
   '--no-color',
   '--no-ext-diff',
@@ -75,11 +64,7 @@ export const PARSER_COMPATIBLE_DIFF_FLAGS: readonly string[] = [
   '--dst-prefix=b/',
 ];
 
-/**
- * Insert the parser-compatibility flags into pass-through `git diff`
- * arguments: after every user option so they take precedence, and before
- * the `--` separator so pathspecs and revisions stay untouched.
- */
+/** Inserts the flags after every user option and before `--`. */
 export function withParserCompatibleDiffArgs(args: readonly string[]): string[] {
   const separator = args.indexOf('--');
   if (separator === -1) {
@@ -89,13 +74,9 @@ export function withParserCompatibleDiffArgs(args: readonly string[]): string[] 
 }
 
 /**
- * Run `git diff` with pass-through arguments and return its output in the
- * format `parseDiff` reads. Every diff invocation (initial load, context
- * expansion, remote PR/MR diffs) goes through here, so the normalization in
- * `PARSER_COMPATIBLE_GIT_CONFIG` and `PARSER_COMPATIBLE_DIFF_FLAGS` applies
- * uniformly. Rejects when git fails; the caller reports the failure. Output
- * past `maxOutputBytes` rejects with an error {@link isOutputLimitError}
- * recognizes, so a caller can report the limit instead of a git failure.
+ * The one entry point for every `git diff` (load, expansion, remote), so the
+ * parser-compatible normalization applies uniformly. Output past `maxOutputBytes`
+ * rejects with an error {@link isOutputLimitError} recognizes.
  */
 export async function runGitDiffAsync(
   args: string[],
@@ -158,10 +139,7 @@ export async function getUntrackedFilesAsync(repoRoot?: string): Promise<string[
   }
 }
 
-/**
- * True when a child process was stopped for writing more than its
- * `maxBuffer` — a budget was hit, not a git failure.
- */
+/** True when a child process exceeded `maxBuffer`: a budget hit, not a git failure. */
 export function isOutputLimitError(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | undefined)?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
 }
@@ -170,8 +148,6 @@ export function isOutputLimitError(error: unknown): boolean {
  * Generate synthetic unified diffs for untracked files so they can be
  * parsed by the existing diff parser. Untracked symlinks are described by
  * their link text, never followed.
- *
- * Delegates to the reusable generateSyntheticDiffs module.
  */
 export function generateUntrackedDiffs(
   paths: string[],

@@ -10,11 +10,7 @@ import type { AppConfig, OutputPathInfo } from '@self-review/types';
 import { hasUsableCategory } from '../utils/category-utils';
 import { DEFAULT_CONFIG } from '../config-defaults';
 
-/**
- * The default configuration, shared with the Node-only loader in
- * `@self-review/core` (see `../config-defaults.ts`). Kept under this name for
- * the package's public API.
- */
+/** Kept under this name for the package's public API. */
 export const defaultConfig: AppConfig = DEFAULT_CONFIG;
 
 export interface ConfigContextValue {
@@ -70,15 +66,10 @@ function mergeInitialConfig(initialConfig: Partial<AppConfig> | undefined): AppC
   return merged;
 }
 
-/**
- * CSS custom property carrying the configured `font-size` (in px) on the
- * `.self-review` root. Diff code text reads it (see `.sr-diff-code` in
- * styles.css), so the name is part of the styling contract.
- */
+/** Carries the configured `font-size` (px); `.sr-diff-code` in styles.css reads it. */
 export const FONT_SIZE_CSS_VAR = '--sr-font-size';
 
-// `font-size` arrives from YAML or an embedder prop unchecked beyond being a
-// number, which still admits 0, negatives, NaN and Infinity (`.nan`, `.inf`).
+// `font-size` is only known to be a number, which admits 0, negatives, NaN and Infinity.
 function resolveFontSize(fontSize: number): number {
   return Number.isFinite(fontSize) && fontSize > 0 ? fontSize : defaultConfig.fontSize;
 }
@@ -109,10 +100,7 @@ export function ConfigProvider({
     setConfig(prev => ({ ...prev, ...updates }));
   };
 
-  // Theme: toggle `dark` on the .self-review wrapper. That class is the whole
-  // theme switch — the package stylesheet carries both Prism themes already
-  // scoped to `.self-review:not(.dark)` and `.self-review.dark` (src/vendor/),
-  // so nothing is injected at runtime and the host's document is never styled.
+  // Toggling `dark` is the whole theme switch: both Prism themes are pre-scoped in the stylesheet.
   useEffect(() => {
     const applyTheme = (isDark: boolean) => {
       if (portalContainer) {

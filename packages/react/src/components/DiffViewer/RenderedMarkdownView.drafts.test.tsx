@@ -9,10 +9,8 @@ import type { ReviewAdapter } from '../../adapter';
 import FileSection from './FileSection';
 import { installBrowserApiStubs } from '../../test-helpers';
 
-// Renders the real provider stack around FileSection so the composer under
-// test is the real CommentInput, not a mock. The draft lives in CommentInput's
-// own state, so it survives only while the rendered block it hangs off keeps
-// its React identity across unrelated updates.
+// Real provider stack and CommentInput: the draft lives in its state and survives only while
+// the rendered block keeps its React identity.
 
 const DRAFT_PLACEHOLDER = /add your review comment/i;
 

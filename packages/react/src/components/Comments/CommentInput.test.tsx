@@ -137,7 +137,6 @@ describe('CommentInput category handling', () => {
     expect(submitBtn.disabled).toBe(false);
 
     fireEvent.click(submitBtn);
-    // The first built-in category, whatever the shared defaults order first.
     expect(mocks.addComment).toHaveBeenCalledWith(
       'src/foo.ts',
       null,

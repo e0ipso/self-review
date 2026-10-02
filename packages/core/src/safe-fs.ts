@@ -1,44 +1,34 @@
 // packages/core/src/safe-fs.ts
-// Small no-follow filesystem primitives shared by every core writer: the
-// review publisher today, suggestion apply and attachment relocation next.
-//
-// The threat these answer is filesystem indirection, not lexical traversal:
-// a symlink planted where this program expects to create a file, so an
-// ordinary `writeFileSync` lands its bytes somewhere else. Every create here
-// is exclusive and no-follow, every replace goes through a same-directory
-// temp file and `rename`, and every failure is reported as a `SafeFsError`
-// with a code a host can act on. Node's `fs` is behind a small interface so a
-// test can fail a write after N bytes and prove what the caller leaves behind.
-//
-// Linux and macOS only: `O_NOFOLLOW` is the whole point, and Node does not
-// define it on Windows, which this application does not support.
+// No-follow filesystem primitives every core reader and writer goes through. Linux and macOS only:
+// Node does not define `O_NOFOLLOW` on Windows.
 
 import * as nodeFs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
+import { READ_FLAGS, readDescriptorWithinBudget } from './bounded-read';
+import { formatBytes } from './input-budgets';
 
 export type SafeFsErrorCode =
-  /** The target of a replace is a directory. */
   | 'output-is-directory'
-  /** EACCES, EPERM or EROFS from the operating system. */
+  /** EACCES, EPERM or EROFS. */
   | 'permission-denied'
-  /** ENOSPC or EDQUOT: the write cannot complete for lack of room. */
+  /** ENOSPC or EDQUOT. */
   | 'no-space'
-  /** A symlink sits where this writer would create or replace a file. */
+  /** A symlink sits where this module would read, create or replace a file, or on the way to it. */
   | 'unsafe-link'
-  /**
-   * The target exists but cannot be replaced without changing semantics:
-   * more than one hard link, not a regular file, or not owned by this user.
-   */
+  /** Exists, but replacing it would change semantics: hard-linked, not a regular file, or foreign-owned. */
   | 'unsupported-target'
   /** The file at the target is not the one the caller checked. */
   | 'identity-changed'
-  /** Any other filesystem failure; `cause` carries the original error. */
+  /** ENOENT or ENOTDIR. */
+  | 'not-found'
+  /** A FIFO, socket or device. */
+  | 'not-regular'
+  | 'too-large'
   | 'io-error';
 
 export class SafeFsError extends Error {
   readonly code: SafeFsErrorCode;
-  /** The path the failed operation was about. */
   readonly path: string;
   readonly cause?: unknown;
 
@@ -51,13 +41,10 @@ export class SafeFsError extends Error {
   }
 }
 
-/**
- * The subset of `fs` these primitives use, synchronous throughout so a
- * sequence of operations has no interleaving a test cannot reproduce.
- * `writeSync` may write fewer bytes than given, as the real one may.
- */
+/** The subset of `fs` used here, synchronous so a test can inject a failure at an exact step. */
 export interface FsLayer {
   openSync(path: string, flags: number, mode?: number): number;
+  /** May write fewer bytes than given, as the real one may. */
   writeSync(fd: number, buffer: Uint8Array): number;
   fsyncSync(fd: number): void;
   fchmodSync(fd: number, mode: number): void;
@@ -67,7 +54,6 @@ export interface FsLayer {
   unlinkSync(path: string): void;
   lstatSync(path: string): nodeFs.Stats;
   fstatSync(fd: number): nodeFs.Stats;
-  /** Read everything from an already-open descriptor. */
   readFileSync(fd: number): Buffer;
   mkdirSync(path: string, mode: number): void;
   realpathSync(path: string): string;
@@ -93,11 +79,6 @@ export const nodeFsLayer: FsLayer = {
 
 const { O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_RDONLY } = nodeFs.constants;
 
-/**
- * What `stat` says a file is: enough to tell it from another file later
- * (`dev`/`ino`), to tell whether it was rewritten in place meanwhile
- * (`size`/`mtimeMs`), and to give its replacement the same mode and owner.
- */
 export interface FileIdentity {
   dev: number;
   ino: number;
@@ -127,40 +108,26 @@ export function sameFile(a: FileIdentity, b: FileIdentity): boolean {
   return a.dev === b.dev && a.ino === b.ino;
 }
 
-/**
- * True when nothing suggests the file's bytes changed since `a` was taken:
- * same size and same modification time. A rewrite that keeps both inside the
- * filesystem's timestamp granularity is not detected; the caller's own
- * content comparison is the second line of defence.
- */
+/** A rewrite within the filesystem's timestamp granularity passes; callers compare content too. */
 export function sameStamp(a: FileIdentity, b: FileIdentity): boolean {
   return a.size === b.size && a.mtimeMs === b.mtimeMs;
 }
 
-/** The effective owner this process creates files as; null where the platform has no notion of one. */
-function currentOwner(): { uid: number; gid: number } | null {
-  if (typeof process.geteuid !== 'function' || typeof process.getegid !== 'function') return null;
-  return { uid: process.geteuid(), gid: process.getegid() };
-}
+const ERRNO_CODES = new Map<string, SafeFsErrorCode>([
+  ['ENOENT', 'not-found'],
+  ['ENOTDIR', 'not-found'],
+  ['EISDIR', 'output-is-directory'],
+  ['EACCES', 'permission-denied'],
+  ['EPERM', 'permission-denied'],
+  ['EROFS', 'permission-denied'],
+  ['ENOSPC', 'no-space'],
+  ['EDQUOT', 'no-space'],
+  ['ELOOP', 'unsafe-link'],
+]);
 
-/** Map an errno to the code a host can act on; anything unknown is `io-error`. */
+/** The code a caller maps to its own reason; anything unknown is `io-error`. */
 export function classifyFsError(error: unknown): SafeFsErrorCode {
-  const code = errnoOf(error);
-  switch (code) {
-    case 'EISDIR':
-      return 'output-is-directory';
-    case 'EACCES':
-    case 'EPERM':
-    case 'EROFS':
-      return 'permission-denied';
-    case 'ENOSPC':
-    case 'EDQUOT':
-      return 'no-space';
-    case 'ELOOP':
-      return 'unsafe-link';
-    default:
-      return 'io-error';
-  }
+  return ERRNO_CODES.get(errnoOf(error) ?? '') ?? 'io-error';
 }
 
 export function errnoOf(error: unknown): string | undefined {
@@ -174,21 +141,44 @@ export function errnoOf(error: unknown): string | undefined {
 /** Wrap a raw fs failure, passing a `SafeFsError` through untouched. */
 export function toSafeFsError(error: unknown, filePath: string, action: string): SafeFsError {
   if (error instanceof SafeFsError) return error;
-  const code = classifyFsError(error);
   const reason = error instanceof Error ? error.message : String(error);
-  return new SafeFsError(code, filePath, `Cannot ${action} ${filePath}: ${reason}`, error);
+  return new SafeFsError(
+    classifyFsError(error),
+    filePath,
+    `Cannot ${action} ${filePath}: ${reason}`,
+    error
+  );
+}
+
+export function guarded<T>(filePath: string, action: string, fn: () => T): T {
+  try {
+    return fn();
+  } catch (error) {
+    throw toSafeFsError(error, filePath, action);
+  }
+}
+
+/** Best effort: a failure here is not worth reporting over the one in flight. */
+function quietly(fn: () => void): void {
+  try {
+    fn();
+  } catch {
+    // Ignored.
+  }
+}
+
+export function lstatOrNull(filePath: string, fs: FsLayer = nodeFsLayer): nodeFs.Stats | null {
+  try {
+    return fs.lstatSync(filePath);
+  } catch (error) {
+    if (errnoOf(error) === 'ENOENT') return null;
+    throw toSafeFsError(error, filePath, 'inspect');
+  }
 }
 
 /**
- * Refuse a relative path whose directory components, resolved under `root`,
- * include a symlink. The leaf is not checked: creating it no-follow is the
- * caller's job (`writeExclusiveNoFollow`), and an existing leaf is a policy
- * decision the caller makes with `lstat`. Components that do not exist yet
- * end the walk, since nothing can be linked where nothing is.
- *
- * `rel` must stay under `root` lexically; `..` is refused as
- * `unsupported-target` because it is not a link problem but still not a path
- * this function can vouch for.
+ * Refuse a `rel` whose directories under `root` include a symlink. The leaf is the caller's
+ * policy, and a missing component ends the walk: nothing can be linked where nothing is.
  */
 export function assertNoSymlinkAncestors(root: string, rel: string, fs: FsLayer = nodeFsLayer) {
   const normalized = path.normalize(rel);
@@ -203,67 +193,91 @@ export function assertNoSymlinkAncestors(root: string, rel: string, fs: FsLayer 
       `Refusing ${rel}: it does not stay under ${root}`
     );
   }
-  const segments = path
-    .dirname(normalized)
-    .split(path.sep)
-    .filter(s => s && s !== '.');
   let current = root;
-  for (const segment of segments) {
+  for (const segment of path.dirname(normalized).split(path.sep)) {
+    if (!segment || segment === '.') continue;
     current = path.join(current, segment);
-    let stats: nodeFs.Stats;
-    try {
-      stats = fs.lstatSync(current);
-    } catch (error) {
-      if (errnoOf(error) === 'ENOENT') return;
-      throw toSafeFsError(error, current, 'inspect');
-    }
+    const stats = lstatOrNull(current, fs);
+    if (stats === null) return;
     if (stats.isSymbolicLink()) {
       throw new SafeFsError(
         'unsafe-link',
         current,
-        `Refusing to write through ${current}: it is a symbolic link`
+        `Refusing to go through ${current}: it is a symbolic link`
       );
     }
   }
 }
 
 /**
- * `open` with `O_NOFOLLOW` added, so a symlink at `filePath` fails (ELOOP)
- * instead of being followed. Returns the descriptor; the caller closes it.
+ * No link on the way or at the leaf, no FIFO blocking, regular files only. The walk and the open are
+ * separate syscalls, so afterwards the name must still resolve under `root` to the opened inode.
  */
-export function openNoFollow(
-  filePath: string,
-  flags: number,
-  mode: number,
+export function openContainedFile(
+  root: string,
+  rel: string,
   fs: FsLayer = nodeFsLayer
-): number {
+): { fd: number; stats: nodeFs.Stats } {
+  assertNoSymlinkAncestors(root, rel, fs);
+  const target = path.join(root, rel);
+  const fd = guarded(target, 'open', () => fs.openSync(target, READ_FLAGS | O_NOFOLLOW));
   try {
-    return fs.openSync(filePath, flags | O_NOFOLLOW, mode);
+    const stats = fs.fstatSync(fd);
+    if (stats.isDirectory()) {
+      throw new SafeFsError('output-is-directory', target, `${target} is a directory`);
+    }
+    if (!stats.isFile()) {
+      throw new SafeFsError('not-regular', target, `${target} is not a regular file`);
+    }
+    if (
+      !sameFile(fs.lstatSync(target), stats) ||
+      fs.realpathSync(target) !== path.join(fs.realpathSync(root), rel)
+    ) {
+      throw new SafeFsError('unsafe-link', target, `${target} changed while it was being opened`);
+    }
+    return { fd, stats };
   } catch (error) {
-    throw toSafeFsError(error, filePath, 'open');
+    quietly(() => fs.closeSync(fd));
+    throw toSafeFsError(error, target, 'open');
+  }
+}
+
+/** Read the whole of a file {@link openContainedFile} accepts, if it fits `maxBytes`. */
+export async function readContainedFile(
+  root: string,
+  rel: string,
+  maxBytes: number
+): Promise<Buffer> {
+  const { fd, stats } = openContainedFile(root, rel);
+  const target = path.join(root, rel);
+  try {
+    const read = await readDescriptorWithinBudget(fd, stats, maxBytes);
+    if (read.kind === 'ok') return read.content;
+    throw new SafeFsError(
+      'too-large',
+      target,
+      `The file is ${formatBytes(read.size)}, over the ${formatBytes(maxBytes)} limit`
+    );
+  } catch (error) {
+    throw toSafeFsError(error, target, 'read');
+  } finally {
+    nodeFs.closeSync(fd);
   }
 }
 
 export interface WriteExclusiveOptions {
-  /** Mode for the new file, masked by the umask. Default 0o666. */
+  /** Masked by the umask. Default 0o666. */
   mode?: number;
-  /** Mode to apply exactly, after creation, bypassing the umask. */
+  /** Applied after creation, bypassing the umask. */
   exactMode?: number;
-  /**
-   * Owner to give the new file, after creation. A failure to do so is
-   * `unsupported-target`: the file is removed again, since a file with the
-   * wrong owner is not the file the caller asked for.
-   */
+  /** Applied after creation; failing to is `unsupported-target` and removes the file. */
   exactOwner?: { uid: number; gid: number };
   fs?: FsLayer;
 }
 
 /**
- * Create `filePath`, which must not exist, and write every byte into it,
- * synced to disk. A symlink at the path, dangling or not, is refused as
- * `unsafe-link`: `O_EXCL` fails on the link itself. Any failure after
- * creation removes the file again, so a caller that sees an error owns
- * nothing new on disk.
+ * Create `filePath`, which must not exist, write every byte and sync. A symlink at the path,
+ * dangling or not, is `unsafe-link`. Any failure after creation removes the file again.
  */
 export function writeExclusiveNoFollow(
   filePath: string,
@@ -300,13 +314,14 @@ export function writeExclusiveNoFollow(
     }
     if (options.exactMode !== undefined) fs.fchmodSync(fd, options.exactMode);
     if (options.exactOwner !== undefined) {
+      const { uid, gid } = options.exactOwner;
       try {
-        fs.fchownSync(fd, options.exactOwner.uid, options.exactOwner.gid);
+        fs.fchownSync(fd, uid, gid);
       } catch (error) {
         throw new SafeFsError(
           'unsupported-target',
           filePath,
-          `Cannot give ${filePath} its owner (uid ${options.exactOwner.uid}, gid ${options.exactOwner.gid})`,
+          `Cannot give ${filePath} its owner (uid ${uid}, gid ${gid})`,
           error
         );
       }
@@ -316,78 +331,37 @@ export function writeExclusiveNoFollow(
     fs.closeSync(fd);
     return identity;
   } catch (error) {
-    try {
-      fs.closeSync(fd);
-    } catch {
-      // Already failing; the unlink below is what matters.
-    }
+    quietly(() => fs.closeSync(fd));
     unlinkQuietly(filePath, fs);
     throw toSafeFsError(error, filePath, 'write');
   }
 }
 
 export interface AtomicReplaceOptions {
-  /**
-   * Give the new file the permission bits of the one it replaces. A target
-   * that does not exist yet gets the umask default either way.
-   */
+  /** Give the replacement the replaced file's permission bits. */
   preserveMode?: boolean;
   /**
-   * Give the new file the owner of the one it replaces. `rename` swaps the
-   * inode, so without this the replacement belongs to this process. The
-   * policy: an owner that already matches needs nothing; a different owner
-   * is restored with `fchown` when this process may do so (it is root, or
-   * only the group differs), and otherwise refused as `unsupported-target`
-   * before anything is written, since silently changing who owns a file is
-   * not "replace its contents".
+   * Give the replacement the replaced file's owner (`rename` swaps the inode). An owner this
+   * process may not restore with `fchown` is refused as `unsupported-target` before any write.
    */
   preserveOwner?: boolean;
-  /**
-   * The file the caller inspected before deciding to write. Refused as
-   * `identity-changed` when the target is no longer that file (dev/ino).
-   */
+  /** Refused as `identity-changed` when the target is no longer this file (dev/ino). */
   expectedIdentity?: FileIdentity;
-  /**
-   * With `expectedIdentity`: also refuse as `identity-changed` when the file
-   * is the same inode but its size or modification time moved, i.e. it was
-   * rewritten in place after the caller read it.
-   */
+  /** With `expectedIdentity`: also refuse a same-inode rewrite (size or mtime moved). */
   expectUnmodified?: boolean;
   fs?: FsLayer;
-  /** Random component of the temp file name; injectable for tests. */
   randomName?: () => string;
 }
 
 export interface AtomicReplaceResult {
-  /** The identity of the file now at `target`. */
   identity: FileIdentity;
-  /** Whether a file existed at `target` before the replace. */
+  /** Whether a file existed at `target` before. */
   replaced: boolean;
 }
 
 /**
- * Replace the file at `target` with `bytes`, or create it, in one `rename`:
- * readers see either the old content or the new, never a truncated file,
- * and a failure anywhere before the rename leaves the old file untouched.
- *
- * Refused, writing nothing:
- * - a symlink at `target` (`unsafe-link`): it is replaced by `rename` rather
- *   than followed, but a policy that replaces a link silently is still one a
- *   planted link can exploit, so it is reported instead;
- * - a directory (`output-is-directory`);
- * - a file with more than one hard link (`unsupported-target`): the rename
- *   would detach this name from the other, which is not what "replace the
- *   file" means to whoever created the link;
- * - a target that is not the `expectedIdentity` (`identity-changed`), or
- *   with `expectUnmodified`, one that was rewritten in place since;
- * - with `preserveOwner`, a target whose owner this process cannot restore
- *   on the replacement (`unsupported-target`).
- *
- * The temp file is created in the target's own directory (a rename across
- * filesystems is a copy), exclusively and no-follow, and is removed on any
- * failure. Between `lstat` and `rename` there is a window a concurrent
- * process could use; it is accepted, since `rename` never follows a link and
- * the primitives before it never create through one.
+ * Replace or create `target` in one `rename` from a same-directory temp file. The `lstat`→`rename`
+ * window is accepted: `rename` never follows a link and nothing before it creates through one.
  */
 export function atomicReplace(
   target: string,
@@ -396,19 +370,15 @@ export function atomicReplace(
 ): AtomicReplaceResult {
   const fs = options.fs ?? nodeFsLayer;
   const existing = inspectReplaceTarget(target, fs);
-  if (options.expectedIdentity && (!existing || !sameFile(existing, options.expectedIdentity))) {
+  const expected = options.expectedIdentity;
+  if (expected && (!existing || !sameFile(existing, expected))) {
     throw new SafeFsError(
       'identity-changed',
       target,
       `Refusing to replace ${target}: it is no longer the file that was checked`
     );
   }
-  if (
-    options.expectedIdentity &&
-    options.expectUnmodified &&
-    existing &&
-    !sameStamp(existing, options.expectedIdentity)
-  ) {
+  if (expected && options.expectUnmodified && existing && !sameStamp(existing, expected)) {
     throw new SafeFsError(
       'identity-changed',
       target,
@@ -418,9 +388,8 @@ export function atomicReplace(
   const exactOwner =
     options.preserveOwner && existing ? ownerToRestore(target, existing) : undefined;
 
-  const dir = path.dirname(target);
   const random = options.randomName ?? defaultRandomName;
-  const temp = path.join(dir, `.${path.basename(target)}.${random()}.tmp`);
+  const temp = path.join(path.dirname(target), `.${path.basename(target)}.${random()}.tmp`);
   try {
     writeExclusiveNoFollow(temp, bytes, {
       fs,
@@ -428,9 +397,7 @@ export function atomicReplace(
       exactOwner,
     });
   } catch (error) {
-    // The temp name is an implementation detail; a reviewer acting on the
-    // message needs the file they asked for. A link planted at the temp
-    // name is the one case where the temp path is the point.
+    // Report the target, not the temp name, unless a link was planted at the temp name.
     if (error instanceof SafeFsError && error.code === 'unsupported-target') {
       throw new SafeFsError(
         'unsupported-target',
@@ -447,18 +414,14 @@ export function atomicReplace(
   return { identity: finishReplace(temp, target, fs), replaced: existing !== null };
 }
 
-/**
- * The owner to put on a replacement for `existing`, or undefined when the
- * file this process creates already has it. Refuses up front, before any
- * write, when the owner differs in a way `fchown` would not be allowed to
- * restore: only root may give a file to another user.
- */
+/** Undefined when the new file already gets the right owner; only root may give one away. */
 function ownerToRestore(
   target: string,
   existing: FileIdentity
 ): { uid: number; gid: number } | undefined {
-  const me = currentOwner();
-  if (!me) return undefined;
+  if (typeof process.geteuid !== 'function' || typeof process.getegid !== 'function')
+    return undefined;
+  const me = { uid: process.geteuid(), gid: process.getegid() };
   if (existing.uid === me.uid && existing.gid === me.gid) return undefined;
   if (existing.uid !== me.uid && me.uid !== 0) {
     throw new SafeFsError(
@@ -478,28 +441,16 @@ function finishReplace(temp: string, target: string, fs: FsLayer): FileIdentity 
     throw toSafeFsError(error, target, 'replace');
   }
   syncDirectoryQuietly(path.dirname(target), fs);
-  try {
-    return snapshotIdentity(fs.lstatSync(target));
-  } catch (error) {
-    throw toSafeFsError(error, target, 'inspect');
-  }
+  return guarded(target, 'inspect', () => snapshotIdentity(fs.lstatSync(target)));
 }
 
-/**
- * `lstat` the target of a replace and apply the refusal policy documented on
- * {@link atomicReplace}. Returns `null` when nothing exists there yet.
- */
+/** `lstat` a replace target under the policy of {@link atomicReplace}; null when absent. */
 export function inspectReplaceTarget(
   target: string,
   fs: FsLayer = nodeFsLayer
 ): FileIdentity | null {
-  let stats: nodeFs.Stats;
-  try {
-    stats = fs.lstatSync(target);
-  } catch (error) {
-    if (errnoOf(error) === 'ENOENT') return null;
-    throw toSafeFsError(error, target, 'inspect');
-  }
+  const stats = lstatOrNull(target, fs);
+  if (stats === null) return null;
   if (stats.isSymbolicLink()) {
     throw new SafeFsError(
       'unsafe-link',
@@ -521,6 +472,7 @@ export function inspectReplaceTarget(
       `Cannot write ${target}: it exists but is not a regular file`
     );
   }
+  // A rename would detach this name from the other links.
   if (stats.nlink > 1) {
     throw new SafeFsError(
       'unsupported-target',
@@ -543,36 +495,18 @@ function isSymlink(filePath: string, fs: FsLayer): boolean {
   }
 }
 
-/** Remove a file this process created; a failure here is not worth reporting over the one in flight. */
 export function unlinkQuietly(filePath: string, fs: FsLayer = nodeFsLayer): void {
-  try {
-    fs.unlinkSync(filePath);
-  } catch {
-    // Best effort.
-  }
+  quietly(() => fs.unlinkSync(filePath));
 }
 
-/**
- * Make the rename durable. Linux needs an fsync on the directory for the new
- * name to survive a crash; where that is not permitted (macOS returns EINVAL
- * on some filesystems) the rename itself has still happened.
- */
+/** Linux needs a directory fsync for a rename to survive a crash; macOS may refuse it (EINVAL). */
 function syncDirectoryQuietly(dir: string, fs: FsLayer): void {
-  let fd: number;
-  try {
-    fd = fs.openSync(dir, O_RDONLY);
-  } catch {
-    return;
-  }
-  try {
-    fs.fsyncSync(fd);
-  } catch {
-    // Best effort.
-  } finally {
+  quietly(() => {
+    const fd = fs.openSync(dir, O_RDONLY);
     try {
-      fs.closeSync(fd);
-    } catch {
-      // Best effort.
+      fs.fsyncSync(fd);
+    } finally {
+      quietly(() => fs.closeSync(fd));
     }
-  }
+  });
 }

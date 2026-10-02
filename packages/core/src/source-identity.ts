@@ -1,16 +1,6 @@
-// packages/core/src/source-identity.ts
-// What a review is a review *of*, resolved once when the diff is loaded.
-//
-// `git diff` compares two snapshots, and which two is decided by its
-// arguments: nothing compares the index with the working tree, `--cached`
-// the HEAD commit with the index, `A...B` the merge base with B, and so on.
-// Everything that later reads reviewed content needs those two snapshots by
-// name — an image preview must show the staged bytes of a staged review,
-// not whatever is in the working tree now — so they are resolved here, to
-// commit SHAs where they are commits, and recorded on the session as a
-// `ReviewSourceIdentity`. A shape this module cannot vouch for is marked
-// `unknown`, and a read from it fails visibly rather than falling back to
-// the working tree.
+// Resolves the two snapshots a `git diff` compares, once at load, so later reads (an image
+// preview of a staged review) use those bytes and not the working tree. A shape this
+// module cannot vouch for is `unknown`, and a read from it fails visibly.
 
 import { execFile } from 'child_process';
 import { realpathSync } from 'fs';
@@ -25,11 +15,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-/**
- * One side of a `git diff`, as its arguments describe it and before any
- * revision is resolved. `revision` with `implicit: true` is the HEAD git
- * assumes when an argument leaves it out.
- */
+/** One side as the arguments describe it, before resolution; `implicit` is the HEAD git assumes. */
 export type GitDiffSideSpec =
   | { kind: 'working-tree' }
   | { kind: 'index' }
@@ -59,14 +45,9 @@ function unknownSides(reason: string): GitDiffSides {
 }
 
 /**
- * The two snapshots a `git diff` argv compares. Pure: no git is run, and no
- * revision is checked to exist. Options are read with the same arity rules
- * the argument classifier uses, so an option value spelled like a flag
- * (`-S --cached`) or a pathspec after `--` is never mistaken for one.
- *
- * Shapes git documents are mapped; anything else is `unknown`: `--no-index`
- * compares paths outside the repository, three or more revisions are a
- * combined diff, and `--cached` with a range is not something git accepts.
+ * The two snapshots a `git diff` argv compares. Pure: runs no git and checks no revision.
+ * Uses the classifier's arity rules, so `-S --cached` is not a flag. `--no-index`, three
+ * or more revisions and `--cached` with a range are `unknown`.
  */
 export function describeGitDiffSides(argv: readonly string[]): GitDiffSides {
   const separator = argv.indexOf('--');
@@ -138,7 +119,6 @@ function describeRevisionSides(
   return unknownSides(`a combined diff of ${revs.length} revisions has no single old side`);
 }
 
-/** Run git in `repository` and return its trimmed stdout, or null on any failure. */
 async function gitOutput(repository: string, args: string[]): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync('git', args, {
@@ -154,12 +134,9 @@ async function gitOutput(repository: string, args: string[]): Promise<string | n
 
 const SHA_PATTERN = /^[0-9a-f]{40,64}$/;
 
-/** The commit `rev` names in `repository`, or null when it names none. */
 async function resolveCommit(repository: string, rev: string): Promise<string | null> {
-  // `--end-of-options` keeps a revision that happens to start with `-` from
-  // being read as an option; the classifier never hands one over, but the
-  // guard costs nothing. `^{commit}` refuses a blob or tree: a side that is
-  // not a commit is not a snapshot this program can read a path out of.
+  // `--end-of-options` keeps a leading `-` from being an option; `^{commit}` refuses a blob or
+  // tree.
   const sha = await gitOutput(repository, [
     'rev-parse',
     '--verify',
@@ -179,8 +156,7 @@ async function resolveSide(repository: string, spec: GitDiffSideSpec): Promise<R
     case 'revision': {
       const sha = await resolveCommit(repository, spec.rev);
       if (sha !== null) return { kind: 'commit', sha };
-      // An implicit HEAD that resolves to nothing is an unborn branch: git
-      // compares against the empty tree, which has no content at any path.
+      // An implicit HEAD resolving to nothing is an unborn branch: the empty tree.
       if (spec.implicit) return { kind: 'none' };
       return { kind: 'unknown', reason: `${spec.rev} does not name a commit` };
     }
@@ -195,7 +171,6 @@ async function resolveSide(repository: string, spec: GitDiffSideSpec): Promise<R
   }
 }
 
-/** The physical path of `target`, or the path as resolved when it does not exist. */
 export function canonicalSourcePath(target: string): string {
   try {
     return realpathSync(target);
@@ -205,15 +180,9 @@ export function canonicalSourcePath(target: string): string {
 }
 
 /**
- * What the paths of `git diff argv` are relative to, as a directory under
- * `sourceRoot` (see `ReviewSourceIdentity.pathPrefix`): empty for
- * root-relative output; the `--relative=<dir>` directory as written, minus
- * trailing slashes; or, for a bare `--relative`, the launch directory's
- * place under the root. Git strips the prefix and one following `/` from
- * each path, so `<prefix>/<path>` is the root-relative name again.
- *
- * A bare `--relative` from outside the work tree leaves git with no prefix
- * and its paths root-relative, which is what an empty result says too.
+ * `ReviewSourceIdentity.pathPrefix`: empty for root-relative output, the
+ * `--relative=<dir>` directory without trailing slashes, or for bare `--relative`
+ * the launch directory under the root (empty when outside the work tree, as in git).
  */
 export function resolveReviewedPathPrefix(
   gitDiffArgv: readonly string[],
@@ -237,12 +206,7 @@ export function resolveReviewedPathPrefix(
   }
 }
 
-/**
- * A reviewed path restated from the source root: `filePath` itself for a
- * root-relative review, `<pathPrefix>/<filePath>` otherwise. The one
- * mapping every reader, Apply and re-diff of a reviewed path goes through,
- * so they all name the same file.
- */
+/** The one mapping every reader, Apply and re-diff uses, so they all name the same file. */
 export function rootRelativeReviewedPath(
   identity: Pick<ReviewSourceIdentity, 'pathPrefix'>,
   filePath: string
@@ -251,9 +215,7 @@ export function rootRelativeReviewedPath(
 }
 
 export interface GitSourceIdentityOptions {
-  /** The repository root the diff was loaded from. */
   repository: string;
-  /** The `git diff` arguments, after normalization. */
   gitDiffArgv: readonly string[];
   /** Defaults to the process's working directory. */
   invocationCwd?: string;
@@ -261,12 +223,7 @@ export interface GitSourceIdentityOptions {
   mode?: 'git' | 'remote';
 }
 
-/**
- * The identity of a git-mode review: the sides its arguments compare,
- * resolved to commit SHAs against the repository as it is now. Never
- * throws; a side that cannot be resolved is `unknown` and a repository git
- * cannot read leaves both sides so.
- */
+/** Resolves the compared sides to commit SHAs. Never throws; an unresolvable side is `unknown`. */
 export async function resolveGitSourceIdentity(
   options: GitSourceIdentityOptions
 ): Promise<ReviewSourceIdentity> {
@@ -291,19 +248,14 @@ export async function resolveGitSourceIdentity(
 
 export interface LocalSourceIdentityOptions {
   type: 'directory' | 'file';
-  /** The directory or file the scanner was given. */
   sourcePath: string;
   /** Defaults to the process's working directory. */
   invocationCwd?: string;
 }
 
 /**
- * The identity of a directory or single-file review. Everything in such a
- * review is an addition, so the old side is `none`. A single-file review
- * follows a symlink the user named on purpose, as the scanner does, and the
- * identity records where that led once so every later read opens the same
- * file; its root is the parent of the path as given, which is what the
- * scanned path is relative to.
+ * Everything is an addition, so the old side is `none`. A single-file review follows a
+ * symlink the user named, recording its target once; its root is the parent of the path as given.
  */
 export function resolveLocalSourceIdentity(
   options: LocalSourceIdentityOptions

@@ -2,19 +2,11 @@ import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 export interface DiffDiagnosticsProps {
-  /** One message per thing the host could not load faithfully. */
   diagnostics: string[];
-  /** Headline above the list. */
   title: string;
 }
 
-/**
- * What the loader could not show faithfully (`DiffLoadPayload.diagnostics`):
- * an unsupported `git diff` output format, or output the parser could not
- * represent, such as a merge conflict's combined section. Rendered instead of
- * "no changes" when nothing loaded, and as a banner above the files otherwise,
- * so a partial or failed load is never mistaken for a clean, empty review.
- */
+/** Shown instead of "no changes" or as a banner, so a failed load never reads as an empty review. */
 export function DiffDiagnostics({ diagnostics, title }: DiffDiagnosticsProps) {
   if (diagnostics.length === 0) return null;
   return (

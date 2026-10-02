@@ -2,20 +2,11 @@
 // Headless orchestrator for `self-review fetch-comments <URL>`: materialize
 // the PR/MR, fetch and map its discussion threads, and write a v3 review.xml
 // with remote provenance — no window, nothing on stdout, all logging on
-// stderr. The materialize → load → filter → map steps are the same ones the
-// app runs (remote-mode.ts), so both produce the same suggestions for the
-// same PR/MR under the same effective configuration; only the thread-fetch
-// policy differs (the app degrades, this subcommand fails). Every
-// collaborator is injectable so the flow is unit-testable; the CLI entry in
-// main.ts stays thin.
+// stderr. Shares its load/filter/map steps with the app (remote-mode.ts); only the
+// thread-fetch policy differs (the app degrades, this fails).
 //
-// Lifetime: the run has no overall deadline of its own — a headless
-// consumer may legitimately wait on a large clone — so it is bounded by the
-// materializer's per-command timeout (DEFAULT_GIT_COMMAND_TIMEOUT_MS) and by
-// the caller's `signal`, which the CLI entry wires to SIGINT/SIGTERM.
-// Either way the run ends the same: the git or forge command in flight is
-// killed, the temporary clone is removed and the run rejects; nothing is
-// written. One try/finally owns the session from the moment it exists.
+// No overall deadline: bounded by the per-command timeout and the caller's `signal`.
+// Either way the in-flight command is killed, the clone removed and nothing written.
 
 import { REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 import { publishReview } from './review-publisher';
@@ -27,20 +18,13 @@ import { defaultRemoteSessionDeps, loadRemoteReview, startRemoteSession } from '
 import type { RemoteLifetimeOptions, RemoteSessionDeps } from './remote-mode';
 import type { DiffFile, FileReviewState, RemoteForge, ReviewComment, ReviewState } from './types';
 
-/**
- * Injectable seams for the orchestration: the remote-session seams the app
- * shares (provider, materializer, diff loader) plus this subcommand's own
- * output concerns. Defaults spawn real processes and touch the real
- * filesystem; tests replace them wholesale.
- */
+/** Injectable seams: the app's remote-session seams plus this subcommand's output. */
 export interface FetchCommentsDeps extends RemoteSessionDeps {
-  /** Validates, stages assets and atomically writes the document; see review-publisher.ts. */
   publish: (
     state: ReviewState,
     outputPath: string,
     options: PublishReviewOptions
   ) => Promise<PublishReviewResult>;
-  /** The merged configuration with the origin of each value; see `resolveOutputTarget`. */
   loadConfig: () => LoadedConfig;
   now: () => Date;
 }
@@ -155,10 +139,8 @@ export interface FetchCommentsOptions extends RemoteLifetimeOptions {
  * clone, when one was created, is removed on both success and failure, and
  * the removal has completed by the time the promise settles.
  *
- * Fetching comments is this subcommand's entire purpose, so the thread
- * fetch runs under the `'required'` policy: a missing or unauthenticated
- * forge CLI is a clear error, not a degraded review. `options.signal`
- * bounds the whole run; see the module comment.
+ * Fetching comments is the whole point, so threads run under the `'required'`
+ * policy: an unavailable forge CLI is an error, not a degraded review.
  */
 export async function runFetchComments(
   url: string,
@@ -168,8 +150,8 @@ export async function runFetchComments(
   const cwd = options.cwd ?? process.cwd();
   const lifetime: RemoteLifetimeOptions = { signal: options.signal };
 
-  // startRemoteSession releases what it acquired itself when it fails;
-  // from the moment a session exists, this try/finally owns it.
+  // startRemoteSession cleans up after its own failure; once it returns, this try/finally owns the
+  // session.
   const session = await startRemoteSession(url, cwd, deps, {
     ...lifetime,
     includeResolved: options.includeResolved ?? false,
@@ -178,8 +160,6 @@ export async function runFetchComments(
   try {
     console.error(`[fetch-comments] Fetched ${session.fetchedThreads.length} threads`);
 
-    // The same effective configuration the app reviews under: the output
-    // path and the ignore patterns both come from it.
     const loadedConfig = deps.loadConfig();
     const config = loadedConfig.config;
     const loaded = await loadRemoteReview(session, config.ignore ?? [], deps.loadDiff, lifetime);
@@ -197,10 +177,7 @@ export async function runFetchComments(
       timestamp: deps.now().toISOString(),
     });
 
-    // No flag names the output here, so the configuration's provenance
-    // decides its trust, exactly as in the app and serve: a reviewer's own
-    // user-level output-file is explicit; project configuration or the
-    // default is inherited and must stay inside the launch directory.
+    // No flag names the output, so config provenance decides its trust (as in the app and serve).
     const target = resolveOutputTarget(null, loadedConfig, cwd);
     await deps.publish(state, target.path, publishOptionsFor(target));
     console.error(`[fetch-comments] ${loaded.comments.length} threads written to ${target.path}`);

@@ -24,20 +24,11 @@ export const REVIEW_LEVEL_FILE_PATH = '';
 
 /**
  * How an anchor's line numbers relate to the reviewed head (R05).
- *
- * - `'outdated'`: the forge says so (`outdated: true`), or the anchor names a
- *   head (`headSha`) other than the one reviewed. Its line numbers describe
- *   a revision the reviewer is not looking at, so it degrades to file-level
- *   and can never yield a suggestion: the `originalCode` the mapper would
- *   read out of today's diff at those lines is not what the author proposed
- *   to replace.
- * - `'verified'`: the anchor names the reviewed head, or the forge re-anchored
- *   it onto the current head and vouches for it (`outdated: false` with no
- *   `headSha`). Only a verified anchor activates a suggestion.
- * - `'unverified'`: nothing ties the anchor to a revision — it names none and
- *   the forge reports no verdict, or it names one but the caller supplied no
- *   reviewed head to compare with. The line placement is kept (there is no
- *   evidence against it) but no suggestion is activated from it.
+ * - `outdated`: forge says so, or `headSha` differs from the reviewed head. Degrades to
+ *   file-level, since lines of another revision would yield the wrong `originalCode`.
+ * - `verified`: names the reviewed head, or the forge vouches for it. The only
+ *   status that activates a suggestion.
+ * - `unverified`: nothing ties it to a revision. Line placement kept, no suggestion.
  */
 type AnchorStatus = 'verified' | 'unverified' | 'outdated';
 
@@ -200,10 +191,9 @@ function readAnchoredLines(
  * Turn a `suggestion` fence in a thread's root body into an anchored
  * {@link Suggestion}, or `null` when there is nothing safe to anchor.
  *
- * `null` covers every uncertain case: no fence, more than one fence (the
- * model holds a single suggestion, and silently keeping the first would drop
- * the rest), a file-level, outdated or merely unverified anchor (see
- * {@link AnchorStatus}), and an anchor the reviewed diff does not cover.
+ * `null` covers every uncertain case: no fence, more than one fence (keeping
+ * the first would drop the rest), a file-level, outdated or unverified anchor
+ * (see {@link AnchorStatus}), and an anchor the reviewed diff does not cover.
  */
 function extractSuggestion(
   body: string,
@@ -245,17 +235,13 @@ function mapReply(turn: ForgeThreadTurn): Reply {
  *   `category` matches how the XML parser represents a missing category.
  * - A root body carrying a single ` ```suggestion ` fence becomes a
  *   `Suggestion` anchored to the thread's line range, with `originalCode`
- *   read out of `diffFiles` at that anchor — but only when the anchor is
- *   verified against the reviewed revision (see {@link AnchorStatus}): an
- *   anchor naming `reviewedHeadSha`, or one the forge vouches for. Without
- *   the reviewed diff there is nothing to anchor against, so the default
- *   leaves every `suggestion: null` exactly as before.
+ *   read out of `diffFiles` at that anchor, only when the anchor is verified
+ *   (see {@link AnchorStatus}). Without the diff, every `suggestion` is `null`.
  * - An anchor naming a head other than `reviewedHeadSha` is outdated and
- *   degrades to file-level like a forge-reported one; its body is intact.
+ *   degrades to file-level; its body is intact.
  *
- * `reviewedHeadSha` is the head the diff in `diffFiles` was taken against
- * (the materialized PR/MR head). Omitting it leaves every revision-naming
- * anchor unverifiable, which keeps its line placement but activates nothing.
+ * `reviewedHeadSha` is the head `diffFiles` was taken against; omitted, every
+ * revision-naming anchor is unverified.
  *
  * Output order is input order. The input is never mutated.
  */

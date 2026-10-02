@@ -1,7 +1,5 @@
-// The startup decisions both front ends share, against real files: a real
-// repository, real configuration files in a temporary home and project, and
-// the audit's own probe (a committed .self-review.yaml that hands git
-// --output) with a sentinel file to prove nothing was written.
+// Shared startup decisions against real files, including the audit A5 probe (a committed config
+// handing git `--output`).
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import * as fs from 'fs';
@@ -158,10 +156,7 @@ describe('resolveStartupDiffArgs', () => {
     expect(resolved.origin).toBe('user');
   });
 
-  // Audit A5's probe: a committed .self-review.yaml hands git --output, and
-  // starting a review overwrote a file outside the repository with diff text
-  // before the window opened. Now the arguments are refused before any git
-  // command runs, naming the option and the file it came from.
+  // Audit A5: refused before any git command runs, naming the option and its file.
   it('refuses project default-diff-args that would make git write a file (audit A5 probe)', async () => {
     const sentinel = path.join(tmp, 'sentinel.txt');
     fs.writeFileSync(sentinel, 'untouched\n');

@@ -13,9 +13,7 @@ export function AttachmentImage({ attachment }: AttachmentImageProps) {
   const adapter = useAdapter();
 
   useEffect(() => {
-    // `active` goes false in cleanup, so a read that settles after unmount or
-    // after a newer attachment replaced this one creates no blob URL at all:
-    // nothing is left for the (already run) cleanup to miss.
+    // `active` goes false in cleanup, so a late read creates no blob URL the cleanup would miss.
     let active = true;
     let url: string | null = null;
     setImageUrl(null);

@@ -28,9 +28,7 @@ export default function CloseConfirmDialog() {
   }, [hasComments]);
 
   const handleSaveAndQuit = () => {
-    // Host-driven save: push state before triggering main-process save. The
-    // dialog closes on click; if the save fails, main shows the error and the
-    // review stays exactly as it is, so the next close asks again.
+    // Push state before main saves; a failed save leaves the review as it is.
     window.electronAPI.submitReview({
       timestamp: new Date().toISOString(),
       source: diffSource,

@@ -5,14 +5,10 @@
 // then reports the resolved base/head SHAs so downstream code can run the
 // existing local git-mode pipeline over `baseSha...headSha`.
 //
-// Every run owns its snapshot. The base and head are fetched into refs named
-// after the session (`refs/self-review/<session>/base|head`), and the SHAs
-// are read from exactly those refs, so two sessions over one clone — the
-// same PR or different ones, interleaved however the scheduler likes — never
-// read each other's SHAs, and a session's cleanup deletes only the refs it
-// created (R16). Every git command runs under the session's `AbortSignal`
-// and a per-command timeout, and a temporary clone is owned from the moment
-// its directory exists: whatever ends the run after that point removes it.
+// Every run owns its snapshot: base and head are fetched into
+// `refs/self-review/<session>/base|head` and the SHAs read from exactly those refs,
+// so concurrent sessions never see each other's SHAs (R16). Every git command runs
+// under the session's `AbortSignal` and a per-command timeout.
 //
 // All git interaction goes through an injectable command runner (the same
 // shape providers use) so unit tests never spawn real git. This module never
@@ -47,18 +43,13 @@ export interface MaterializeResult {
   headSha: string;
   mode: MaterializeMode;
   /**
-   * The refs this session created in a reused clone and will delete on
-   * cleanup — `refs/self-review/<session>/base` and `.../head`. Empty for a
-   * temporary clone, which is removed whole.
+   * Refs this session created in a reused clone and deletes on cleanup; empty for a temp clone.
    */
   ownedRefs: readonly string[];
   /**
-   * Releases what this run acquired: removes the temp clone directory when
-   * one was created (synchronously, before the first await, so a process
-   * `exit` handler that cannot wait still gets that far), and deletes the
-   * session's refs from a reused clone. Idempotent and never rejects; a
-   * failed ref deletion is reported on stderr. Only ever touches what this
-   * materializer created.
+   * Removes the temp clone (synchronously, before the first await, so an `exit`
+   * handler that cannot wait still gets that far) and deletes the session's refs
+   * from a reused clone. Idempotent, never rejects; a failed deletion goes to stderr.
    */
   cleanup: () => Promise<void>;
 }
@@ -69,38 +60,26 @@ export interface ExistingClone {
   remoteName: string;
 }
 
-/** Lifetime bounds for one materialization. */
 export interface MaterializeOptions {
   /**
-   * The session's signal. Aborting it kills the git command in flight and
-   * rejects with a {@link CommandCancelledError}; the temp clone, if any,
-   * is removed before the rejection propagates. A signal that is already
-   * aborted rejects before anything is created or spawned.
+   * Aborting kills the command in flight and rejects with {@link CommandCancelledError}; the temp
+   * clone is removed first.
    */
   signal?: AbortSignal;
-  /**
-   * Per-command timeout; {@link DEFAULT_GIT_COMMAND_TIMEOUT_MS} when
-   * omitted. A command that outlives it is killed and the run rejects with
-   * a {@link CommandCancelledError} whose `reason` is `'timeout'`.
-   */
+  /** Defaults to {@link DEFAULT_GIT_COMMAND_TIMEOUT_MS}. */
   commandTimeoutMs?: number;
 }
 
 /**
- * How long one git command may run before it is killed. Generous because a
- * blobless clone of a large repository on a slow link is legitimately slow;
- * hosts with a tighter budget (the desktop's startup deadline) abort through
- * the signal instead.
+ * Generous because a blobless clone over a slow link is legitimately slow; tighter hosts abort via
+ * the signal.
  */
 export const DEFAULT_GIT_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
-/** Ref deletion on cleanup is local and quick; this is only a safety net. */
 const CLEANUP_COMMAND_TIMEOUT_MS = 15_000;
 
-/** Time between SIGTERM and SIGKILL for a child that will not stop. */
 const KILL_GRACE_MS = 2_000;
 
-/** Same cap `execFile`'s `maxBuffer` imposed before. */
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 
 const AUTH_HINT =
@@ -109,20 +88,12 @@ const AUTH_HINT =
   'wire your CLI credentials into git.';
 
 /**
- * Default runner: spawns the real binary. Resolves with the exit code on any
- * completed run (including non-zero); rejects when the binary cannot be
- * spawned at all (e.g. ENOENT), when the output exceeds the buffer cap, and
- * with a {@link CommandCancelledError} when `options.signal` aborts or
- * `options.timeoutMs` elapses — in both of those the child is sent SIGTERM,
- * then SIGKILL after {@link KILL_GRACE_MS}, and the promise settles only
- * once it has exited.
+ * Default runner: spawns the real binary. Rejects on spawn failure, on output over
+ * the buffer cap, and with {@link CommandCancelledError} on abort or timeout (SIGTERM,
+ * then SIGKILL after {@link KILL_GRACE_MS}; settles once the child exited).
  *
- * The child is deliberately not started in its own process group: that
- * would detach it from the controlling terminal and silently disable git's
- * and ssh's credential prompts, which this runner leaves exactly as the
- * environment configures them (no `GIT_TERMINAL_PROMPT`, no askpass). Git's
- * helpers (remote helpers, ssh, credential helpers) end when the git they
- * serve dies and their pipes close.
+ * Deliberately not in its own process group: that would detach the controlling
+ * terminal and silently disable git's and ssh's credential prompts.
  */
 export const defaultGitRunner: ForgeCommandRunner = (command, args, options = {}) =>
   new Promise<ForgeCommandResult>((resolve, reject) => {
@@ -182,12 +153,10 @@ export const defaultGitRunner: ForgeCommandRunner = (command, args, options = {}
     child.stdout?.on('data', collect(stdout));
     child.stderr?.on('data', collect(stderr));
 
-    // Spawn failure (ENOENT and friends): the only rejection that is not ours.
     child.on('error', error => settle(() => reject(error)));
 
-    // A cancelled child may leave a helper holding our pipes (an ssh waiting
-    // on the terminal, say); closing our ends makes `close` follow `exit`
-    // instead of waiting on that helper.
+    // A helper (ssh waiting on the terminal) may hold our pipes; closing them lets `close` follow
+    // `exit`.
     child.on('exit', () => {
       if (cancelled !== null || overflowed) {
         child.stdout?.destroy();
@@ -253,8 +222,7 @@ function bindGit(runner: ForgeCommandRunner, options: MaterializeOptions): Sessi
     timeoutMs: options.commandTimeoutMs ?? DEFAULT_GIT_COMMAND_TIMEOUT_MS,
   };
   return args => {
-    // A scripted runner may not look at the signal; the session's answer
-    // must not depend on which runner it got.
+    // A scripted runner may ignore the signal; the answer must not depend on the runner.
     if (options.signal?.aborted) {
       return Promise.reject(new CommandCancelledError('aborted', 'git', args));
     }
@@ -332,12 +300,7 @@ async function revParse(git: SessionGit, repoPath: string, ref: string): Promise
   return result.stdout.trim();
 }
 
-/**
- * Fetch the base branch and the PR/MR head into this session's refs and
- * read the SHAs back from exactly those refs. One fetch, one snapshot:
- * nothing another session does to its own refs can change what this one
- * reads.
- */
+/** One fetch into this session's refs, SHAs read back from exactly those refs. */
 async function fetchSnapshot(
   git: SessionGit,
   repoPath: string,
@@ -347,7 +310,7 @@ async function fetchSnapshot(
   refs: { base: string; head: string },
   failureLabel: string
 ): Promise<{ baseSha: string; headSha: string }> {
-  // Forced refspecs are fine — these refs are ours alone.
+  // Forced refspecs are fine: these refs are ours alone.
   const fetch = await git([
     '-C',
     repoPath,
@@ -405,8 +368,7 @@ async function materializeIntoExistingClone(
   const refs = sessionRefs();
   const ownedRefs = [refs.base, refs.head];
 
-  // Deletion runs under its own bound and never under the session signal:
-  // an aborted session must still be able to release its refs.
+  // Not under the session signal: an aborted session must still release its refs.
   let released = false;
   const cleanup = async (): Promise<void> => {
     if (released) return;
@@ -428,9 +390,8 @@ async function materializeIntoExistingClone(
     }
   };
 
-  // Fetch into namespaced local refs only: no checkout, no branch creation,
-  // no working-tree change. A failure part-way may have created one of the
-  // refs; release them before the error leaves.
+  // Namespaced refs only: no checkout, branch or working-tree change. A part-way
+  // failure may have created one ref, so release them before rethrowing.
   try {
     const { baseSha, headSha } = await fetchSnapshot(
       git,
@@ -455,9 +416,8 @@ async function materializeIntoTempClone(
   baseBranch: string
 ): Promise<MaterializeResult> {
   const git = bindGit(runner, options);
-  // This run creates the directory, so cleanup may only ever remove it — and
-  // it owns the directory from this line on: the removal is registered
-  // before any git runs, and happens synchronously at the top of cleanup.
+  // This run creates the directory, so cleanup may only ever remove it; it is owned
+  // from here on, before any git runs.
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'self-review-'));
   let removed = false;
   const cleanup = async (): Promise<void> => {
@@ -483,8 +443,6 @@ async function materializeIntoTempClone(
       sessionRefs(),
       `fetch of ${headRefFor(url)}`
     );
-    // The clone is private to this session and goes away whole, so there
-    // are no refs to account for individually.
     return { repoPath: tempDir, baseSha, headSha, mode: 'temp-clone', ownedRefs: [], cleanup };
   } catch (error) {
     await cleanup();
@@ -498,11 +456,10 @@ async function materializeIntoTempClone(
  * When `cwd` is inside a git repository with a remote matching the forge
  * URL (SSH and HTTPS forms recognized, `.git` suffix tolerated), the base
  * branch and PR/MR head refs are fetched into that clone under
- * `refs/self-review/<session>/` — read-only for the working tree, and
- * `cleanup()` deletes exactly those two refs. Otherwise a blobless clone is
- * created in a unique directory under the OS temp root and `cleanup()`
- * removes exactly that directory. Callers that already detected a clone may
- * pass it to avoid repeating the git probes.
+ * `refs/self-review/<session>/` (read-only for the working tree; `cleanup()`
+ * deletes exactly those two refs). Otherwise a blobless clone is created in a
+ * unique directory under the OS temp root and `cleanup()` removes it. Callers
+ * that already detected a clone may pass it to skip the git probes.
  *
  * The returned `headSha` is the live remote head, so callers can compare it
  * against a recorded `remote-head-sha` for drift detection.

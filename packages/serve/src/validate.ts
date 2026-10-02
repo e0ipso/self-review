@@ -25,10 +25,8 @@ function realpathDeepestExisting(absolute: string): string | null {
 }
 
 /**
- * Resolve `candidate` under `root`, or null if it escapes. Used for the
- * static client bundle and for attachments, which live under the output
- * directory; reviewed diff paths are authorized by core's
- * `authorizeReviewedPath` against the session's source identity instead.
+ * Resolve `candidate` under `root`, or null if it escapes. For the client bundle and attachments only;
+ * reviewed diff paths go through core's `authorizeReviewedPath`.
  *
  * Never decode here: callers pass a value `searchParams` already decoded once,
  * and decoding again turns `%2E%2E%2F` inside a filename into a real traversal.

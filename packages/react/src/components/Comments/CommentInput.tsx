@@ -67,9 +67,7 @@ export default function CommentInput({
         : null;
 
     if (existingComment) {
-      // `attachments` is always sent: editComment merges, so omitting the key
-      // when the last attachment was removed would keep the old list. Same
-      // shape as ReplyInput's edit path.
+      // Always send `attachments`: editComment merges, so omitting it would keep the old list.
       editComment(existingComment.id, {
         body,
         category,

@@ -3,12 +3,8 @@
 // Electron's built-in role submenus so they match the platform defaults
 // automatically; only the Help menu is customized.
 //
-// Quit is deliberately the built-in role: File > Quit / Ctrl+Q on Linux and
-// Windows, the app menu's Quit / Cmd+Q on macOS. The role calls `app.quit()`,
-// which main.ts intercepts in `before-quit` and routes through the same
-// Save & Quit / Discard / Cancel flow as the window's close button, so no
-// menu-level handler is needed and none should be added here: a custom
-// click that exited directly would reopen the data-loss path.
+// Quit stays the built-in role: main.ts intercepts its `app.quit()` in `before-quit`. A custom click that
+// exited directly would reopen the data-loss path.
 
 import { Menu, shell, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 import { IPC } from '../shared/ipc-channels';

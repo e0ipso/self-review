@@ -11,8 +11,7 @@ import { createReviewServer, listenLoopback } from './server';
 
 // Wrap every core function the routes call in a spy that passes through to
 // the real implementation. Success tests then exercise the real code; the
-// rejection tests assert the spy was never reached. A spy at the module
-// boundary is the one seam that covers every route uniformly.
+// rejection tests assert the spy was never reached.
 vi.mock('@self-review/core', async importOriginal => {
   const actual = await importOriginal<typeof import('@self-review/core')>();
   return {
@@ -47,15 +46,10 @@ let session: ReviewSession;
 let server: ReturnType<typeof createReviewServer>;
 let base: string;
 
-/**
- * The session capability. Fixed here rather than generated, so a test can
- * also present one that is wrong by a single character; the real program
- * draws 32 random bytes per process.
- */
+// Fixed so a test can also present one that is wrong by a single character.
 const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
 const AUTH = { authorization: `Bearer ${CAPABILITY}` };
 
-/** `fetch` carrying the session capability, as the page's adapter does. */
 function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
   return fetch(url, { ...init, headers: { ...AUTH, ...(init.headers as Record<string, string>) } });
 }
@@ -101,16 +95,13 @@ const CONFIG: AppConfig = {
   maxTotalLines: 50_000,
 };
 
-/** The attachment fixture, as a review document references it, query-encoded. */
 const ATTACH = '.self-review-assets%2Fattach.bin';
 
-/** A file whose name is a percent-encoded traversal, kept literal on disk. */
 const LITERAL_NAME = '%2E%2E%2Fliteral.png';
 
 function freshSession(): ReviewSession {
   const s = core.createReviewSession();
-  // Committed through core, as every front end does: that captures the
-  // reviewed paths and records the identity the routes authorize against.
+  // Committed through core to capture the reviewed paths and identity the routes authorize against.
   core.commitDiffData(
     s,
     {
@@ -309,8 +300,6 @@ describe('GET /api/file', () => {
   });
 
   it('rejects a path the review does not contain with 400 before reaching core', async () => {
-    // Authorization is membership in the reviewed diff, by core's own check;
-    // a path the review never had is refused at the door, not looked up.
     const res = await apiFetch(`${base}/api/file?path=src/other.ts`);
     expect(res.status).toBe(400);
     expectNoCoreCall();
@@ -351,9 +340,7 @@ describe('GET /api/image', () => {
   });
 
   it('treats a whole-path-encoded traversal as a literal filename inside the root', async () => {
-    // The query is decoded exactly once, so `%252E%252E%252Fliteral.png`
-    // arrives as the filename `%2E%2E%2Fliteral.png` — a reviewed file that
-    // really is called that — and is served from inside the root.
+    // Decoded exactly once: `%252E%252E%252Fliteral.png` arrives as the literal filename `%2E%2E%2Fliteral.png`.
     const res = await apiFetch(`${base}/api/image?path=%252E%252E%252Fliteral.png`);
     expect(res.status).toBe(200);
     expect((await res.json()).dataUri).toBe(
@@ -405,8 +392,6 @@ describe('GET /api/attachment', () => {
     }
   });
 
-  // A resumed attachment lives beside the document it was resumed from,
-  // which need not be the output directory or the repository.
   it('serves a resumed attachment from beside the resumed document', async () => {
     const docDir = path.join(tmp, 'resumed-from');
     fs.mkdirSync(path.join(docDir, '.self-review-assets'), { recursive: true });
@@ -562,7 +547,6 @@ describe('POST /api/review', () => {
     expect(await res.json()).toEqual({ ok: true, outputPath });
     expect(vi.mocked(core.submitReviewState)).toHaveBeenCalledWith(session, state);
     expect(session.reviewState).toEqual(state);
-    // The acknowledgement is the file: ./lifecycle.test.ts has the failure half.
     expect(fs.readFileSync(outputPath, 'utf-8')).toContain('urn:self-review:v3');
   });
 
@@ -996,12 +980,7 @@ describe('security headers', () => {
   });
 });
 
-// Host, Origin and Fetch Metadata keep a web page out. They do not keep out
-// a local process: any client that names this listener in `Host` and sends
-// no browser headers passes all three, and loopback is shared by every
-// account on the machine. The capability is what identifies the reviewer:
-// a secret drawn per process and delivered only through the launch URL's
-// fragment, which the browser never sends to the server.
+// Host/Origin/Fetch Metadata keep a web page out, not another local process; the capability does.
 describe('session capability', () => {
   const SENSITIVE_GETS = ['/api/diff', '/api/config', '/api/resume', '/api/file', '/api/image'];
   const SENSITIVE_POSTS = ['/api/expand-context', '/api/apply-suggestion', '/api/review'];
@@ -1087,9 +1066,7 @@ describe('session capability', () => {
     expect(vi.mocked(core.expandContext)).toHaveBeenCalledTimes(1);
   });
 
-  // The audit's reproduction: `curl -H 'Host: 127.0.0.1:<port>' http://127.0.0.1:<port>/api/diff`
-  // from another account on the same host passed every browser check, since
-  // none of them is about who is asking.
+  // The audit's reproduction: `curl -H 'Host: 127.0.0.1:<port>' http://127.0.0.1:<port>/api/diff` from another account.
   it('refuses a request that names this listener in Host but carries no browser headers and no token', async () => {
     const { port } = server.address() as AddressInfo;
     const res = await rawGet('/api/diff', { host: `127.0.0.1:${port}` }, { withCapability: false });
@@ -1126,9 +1103,7 @@ describe('session capability', () => {
     }
   });
 
-  // The way this program is reached from elsewhere: `ssh -L 9999:127.0.0.1:<port>`.
-  // The browser then addresses the forward, so `Host` carries the forward's
-  // port and the fragment-delivered token rides in the header as usual.
+  // `ssh -L 9999:127.0.0.1:<port>`: Host carries the forward's port.
   it('is reachable through a local port forward with the capability', async () => {
     const { port } = server.address() as AddressInfo;
     const sockets = new Set<net.Socket>();
@@ -1143,18 +1118,16 @@ describe('session capability', () => {
     const forwardPort = (proxy.address() as AddressInfo).port;
     try {
       const forwarded = `http://127.0.0.1:${forwardPort}`;
-      // What a browser sends: the forward in Host, and in Origin for a fetch.
       const res = await fetch(`${forwarded}/api/diff`, {
         headers: { ...AUTH, origin: forwarded, 'sec-fetch-site': 'same-origin' },
       });
       expect(res.status).toBe(200);
       expect((await res.json()).diff.files).toHaveLength(3);
 
-      // And the forward is no way around the capability.
       const bare = await fetch(`${forwarded}/api/diff`);
       expect(bare.status).toBe(401);
     } finally {
-      // Keep-alive sockets would otherwise hold the proxy open for seconds.
+      // Keep-alive sockets would hold the proxy open for seconds.
       for (const socket of sockets) socket.destroy();
       await new Promise<void>(resolve => proxy.close(() => resolve()));
     }

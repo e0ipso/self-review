@@ -3,10 +3,7 @@ import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 
-/**
- * Where a file's on-demand content stands. Only `idle` starts a request, so a
- * failure stays put until the reviewer asks again.
- */
+/** Only `idle` starts a request, so a failure stays until the reviewer retries. */
 export type LazyLoadState =
   | { kind: 'idle' }
   | { kind: 'loading' }
@@ -15,7 +12,6 @@ export type LazyLoadState =
 
 const IDLE: LazyLoadState = { kind: 'idle' };
 
-/** The load state together with the file and session it describes. */
 interface OwnedLoadState {
   file: DiffFile;
   sessionId: number;
@@ -25,13 +21,11 @@ interface OwnedLoadState {
 export interface UseLazyFileContentOptions {
   file: DiffFile;
   filePath: string;
-  /** Only an expanded section asks for its content. */
   expanded: boolean;
 }
 
 export interface UseLazyFileContentResult {
   state: LazyLoadState;
-  /** Ask again after a failure. Does nothing in any other state. */
   retry: () => void;
 }
 
@@ -42,16 +36,10 @@ function describeFailure(error: unknown): string {
 }
 
 /**
- * Loads the hunks of a file the host sent without them (large-payload mode,
- * `contentLoaded: false`) when its section is expanded.
- *
- * - A request starts only from `idle`: one per expansion, never a loop. A
- *   rejection or an empty answer settles in `error` and stays there until
- *   {@link UseLazyFileContentResult.retry} is called.
- * - The state belongs to one file object in one session. When either is
- *   replaced (a new payload for the same path, a different review) the state
- *   reads as `idle` again, and any answer still in flight for the old one is
- *   dropped; so is one that arrives after the section unmounted.
+ * Loads the hunks of a file sent without them (`contentLoaded: false`) when its section expands.
+ * A request starts only from `idle`; a rejection or empty answer settles in `error` until
+ * `retry`. State belongs to one file object in one session: replacing either resets it to
+ * `idle` and drops any answer in flight, as does unmounting.
  */
 export function useLazyFileContent({
   file,
@@ -63,9 +51,7 @@ export function useLazyFileContent({
   const [owned, setOwned] = useState<OwnedLoadState>({ file, sessionId, state: IDLE });
   const state = owned.file === file && owned.sessionId === sessionId ? owned.state : IDLE;
 
-  // Bumped whenever an answer in flight stops being wanted. A request
-  // remembers the value it started under and applies its answer only if
-  // nothing has bumped it since.
+  // Bumped when an in-flight answer stops being wanted; a request applies it only if unchanged.
   const generationRef = useRef(0);
   useEffect(() => {
     return () => {

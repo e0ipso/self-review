@@ -136,8 +136,7 @@ describe('formatGitDiffArgs', () => {
   });
 });
 
-// R06: output formats the parser cannot consume must be named, not turned
-// into an empty review.
+// R06: unsupported output formats are named, not turned into an empty review.
 describe('findUnsupportedGitDiffOptions', () => {
   it.each([
     ['--stat'],
@@ -283,8 +282,7 @@ describe('describeDiffPathRelativity', () => {
   });
 });
 
-// Audit A5: the options a committed configuration must not hand to git. Git
-// accepts no abbreviations of its diff options, so these spellings are the set.
+// Audit A5: options a committed configuration must not hand to git (git accepts no abbreviations).
 describe('findWriteCapableGitDiffOptions', () => {
   it('names --output in both forms and the external-program options, in order', () => {
     expect(

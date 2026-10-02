@@ -24,7 +24,6 @@ describe('passive content layout attributes', () => {
     expect(div.properties).not.toHaveProperty('style');
     expect(p.properties).not.toHaveProperty('className');
     expect(p.properties).not.toHaveProperty('style');
-    // The content itself survives; only the layout hooks are gone.
     expect(div.children[0]).toMatchObject({ type: 'text', value: 'cover' });
   });
 

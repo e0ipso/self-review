@@ -1,7 +1,5 @@
-// Context expansion against real git (audit R07). Expansion re-runs the
-// review's own `git diff` over one file with more context; these cases are
-// the ones where re-running it naively changed what was being compared or
-// which file came back.
+// Context expansion against real git (audit R07): cases where naive re-running changed the
+// comparison or the file returned.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
@@ -182,10 +180,8 @@ describe('expandContext re-runs the reviewed comparison', () => {
       await expectNestedExpansion(['--relative=sub'], repo);
     });
 
-    // Audit R07: expansion learned to restate `--relative` paths from the root
-    // (above), but Apply and the image preview still resolved them there as
-    // given, so in a review of `sub/` they reached the root's same-named
-    // file. Every path-taking handler now maps through the identity's prefix.
+    // Audit R07: Apply and image preview must map `--relative` paths through the identity prefix
+    // too.
     it('applies a suggestion of a `--relative` review to the nested file, not the root one', async () => {
       const cwd = path.join(repo, 'sub');
       const session = await loadSession(['--relative'], cwd);
