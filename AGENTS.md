@@ -487,10 +487,6 @@ The app has two testing layers:
 2. **E2E tests** (Playwright; Cucumber BDD for the webapp and Electron projects, plain specs for
    serve), Slow, comprehensive tests for user workflows
 
-`docs/hardening-evidence-2026-10-01.md` maps each audited defect fixed by plan 63 to the test files
-and commands that prove it; consult it before changing the behavior of the integrity layer
-(publisher, Apply, snapshot reads, quit/save, serve capability).
-
 ### Unit Tests
 
 Unit tests use Vitest with separate configurations for main and renderer processes:
