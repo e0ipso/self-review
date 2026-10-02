@@ -7,6 +7,7 @@
 
 import {
   ForgeCliUnavailableError,
+  isCommandCancelled,
   type FetchThreadsOptions,
   type ForgeAnchorSide,
   type ForgeCommandRunner,
@@ -81,6 +82,8 @@ async function runGlabApi(
   try {
     result = await runCommand(GLAB_CLI, args);
   } catch (error) {
+    // A run cut short by the session's own bounds is not a missing CLI.
+    if (isCommandCancelled(error)) throw error;
     const detail = error instanceof Error ? error.message : String(error);
     throw unavailable(`glab CLI could not be spawned: ${detail}`);
   }

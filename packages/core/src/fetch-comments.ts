@@ -8,6 +8,14 @@
 // policy differs (the app degrades, this subcommand fails). Every
 // collaborator is injectable so the flow is unit-testable; the CLI entry in
 // main.ts stays thin.
+//
+// Lifetime: the run has no overall deadline of its own — a headless
+// consumer may legitimately wait on a large clone — so it is bounded by the
+// materializer's per-command timeout (DEFAULT_GIT_COMMAND_TIMEOUT_MS) and by
+// the caller's `signal`, which the CLI entry wires to SIGINT/SIGTERM.
+// Either way the run ends the same: the git or forge command in flight is
+// killed, the temporary clone is removed and the run rejects; nothing is
+// written. One try/finally owns the session from the moment it exists.
 
 import { REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 import { publishReview } from './review-publisher';
@@ -16,7 +24,7 @@ import { loadConfigWithProvenance } from './config';
 import type { LoadedConfig } from './config';
 import { publishOptionsFor, resolveOutputTarget } from './startup';
 import { defaultRemoteSessionDeps, loadRemoteReview, startRemoteSession } from './remote-mode';
-import type { RemoteSessionDeps } from './remote-mode';
+import type { RemoteLifetimeOptions, RemoteSessionDeps } from './remote-mode';
 import type { DiffFile, FileReviewState, RemoteForge, ReviewComment, ReviewState } from './types';
 
 /**
@@ -132,7 +140,7 @@ export function buildRemoteReviewState(args: BuildRemoteReviewStateArgs): Review
   };
 }
 
-export interface FetchCommentsOptions {
+export interface FetchCommentsOptions extends RemoteLifetimeOptions {
   /** Include threads the forge marks resolved (GitLab). Default false. */
   includeResolved?: boolean;
   /** Working directory for clone detection and output resolution. */
@@ -144,11 +152,13 @@ export interface FetchCommentsOptions {
 /**
  * Run the headless fetch-comments flow end to end. Throws on any failure
  * (the caller prints the message to stderr and exits 1); the temporary
- * clone, when one was created, is removed on both success and failure.
+ * clone, when one was created, is removed on both success and failure, and
+ * the removal has completed by the time the promise settles.
  *
  * Fetching comments is this subcommand's entire purpose, so the thread
  * fetch runs under the `'required'` policy: a missing or unauthenticated
- * forge CLI is a clear error, not a degraded review.
+ * forge CLI is a clear error, not a degraded review. `options.signal`
+ * bounds the whole run; see the module comment.
  */
 export async function runFetchComments(
   url: string,
@@ -156,8 +166,12 @@ export async function runFetchComments(
 ): Promise<void> {
   const deps: FetchCommentsDeps = { ...defaultDeps(), ...options.deps };
   const cwd = options.cwd ?? process.cwd();
+  const lifetime: RemoteLifetimeOptions = { signal: options.signal };
 
+  // startRemoteSession releases what it acquired itself when it fails;
+  // from the moment a session exists, this try/finally owns it.
   const session = await startRemoteSession(url, cwd, deps, {
+    ...lifetime,
     includeResolved: options.includeResolved ?? false,
     threads: 'required',
   });
@@ -168,7 +182,7 @@ export async function runFetchComments(
     // path and the ignore patterns both come from it.
     const loadedConfig = deps.loadConfig();
     const config = loadedConfig.config;
-    const loaded = await loadRemoteReview(session, config.ignore ?? [], deps.loadDiff);
+    const loaded = await loadRemoteReview(session, config.ignore ?? [], deps.loadDiff, lifetime);
     for (const diagnostic of loaded.diagnostics) {
       console.error(`[fetch-comments] Diff diagnostic: ${diagnostic}`);
     }
@@ -191,6 +205,6 @@ export async function runFetchComments(
     await deps.publish(state, target.path, publishOptionsFor(target));
     console.error(`[fetch-comments] ${loaded.comments.length} threads written to ${target.path}`);
   } finally {
-    session.cleanup();
+    await session.cleanup();
   }
 }

@@ -8,6 +8,13 @@ import { installBrowserApiStubs } from '../test-helpers';
 installBrowserApiStubs();
 
 import { ConfigProvider, useConfig, defaultConfig } from './ConfigContext';
+import { DEFAULT_CONFIG } from '../config-defaults';
+
+describe('ConfigProvider defaults', () => {
+  it('uses the shared default configuration, the same one the Node loader merges over', () => {
+    expect(defaultConfig).toBe(DEFAULT_CONFIG);
+  });
+});
 
 function CategoriesProbe() {
   const { config } = useConfig();

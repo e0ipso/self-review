@@ -50,10 +50,6 @@ export interface SingleFileReviewProps {
   className?: string;
   /** Default view mode for markdown files: 'raw' shows diff, 'rendered' shows rendered markdown. */
   defaultViewMode?: 'split' | 'unified';
-  /** Prism CSS string for light theme. */
-  prismLightCss?: string;
-  /** Prism CSS string for dark theme. */
-  prismDarkCss?: string;
 }
 
 interface SingleFileReviewInnerProps {
@@ -133,17 +129,7 @@ const SingleFileSession = forwardRef<ReviewHandle, SingleFileSessionProps>(
  */
 export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
   function SingleFileReview(
-    {
-      file,
-      source,
-      config,
-      onReviewChange,
-      adapter,
-      className,
-      defaultViewMode = 'unified',
-      prismLightCss,
-      prismDarkCss,
-    },
+    { file, source, config, onReviewChange, adapter, className, defaultViewMode = 'unified' },
     ref
   ) {
     const resolvedSource: DiffSource = source || {
@@ -156,11 +142,7 @@ export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
     ]);
 
     return (
-      <ConfigProvider
-        initialConfig={{ ...config, diffView: defaultViewMode }}
-        prismLightCss={prismLightCss}
-        prismDarkCss={prismDarkCss}
-      >
+      <ConfigProvider initialConfig={{ ...config, diffView: defaultViewMode }}>
         <SingleFileSession
           key={sessionKey}
           ref={ref}

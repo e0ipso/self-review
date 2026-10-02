@@ -10,6 +10,7 @@
 
 import {
   ForgeCliUnavailableError,
+  isCommandCancelled,
   type FetchThreadsOptions,
   type ForgeCommandResult,
   type ForgeCommandRunner,
@@ -47,6 +48,8 @@ async function runGh(runCommand: ForgeCommandRunner, args: string[]): Promise<st
   try {
     result = await runCommand(GH_CLI, args);
   } catch (error) {
+    // A run cut short by the session's own bounds is not a missing CLI.
+    if (isCommandCancelled(error)) throw error;
     const detail = error instanceof Error ? error.message : String(error);
     throw new ForgeCliUnavailableError('github', GH_CLI, `Failed to run the gh CLI: ${detail}`);
   }

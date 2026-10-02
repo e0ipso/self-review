@@ -7,8 +7,17 @@ import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } 
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { ForgeProvider, ForgeThread, MaterializeResult } from './index';
-import { REVIEW_LEVEL_FILE_PATH } from './index';
+import type {
+  ForgeCommandResult,
+  ForgeCommandRunner,
+  ForgeProvider,
+  ForgeThread,
+  MaterializeResult,
+} from './index';
+import { CommandCancelledError, REVIEW_LEVEL_FILE_PATH } from './index';
+import { DEFAULT_GIT_COMMAND_TIMEOUT_MS, materialize } from './materializer';
+import { createIgnoreFilter } from './ignore-filter';
+import { mapThreadsToReviewComments } from './thread-mapper';
 import type { AppConfig, DiffFile, ReviewComment, ReviewState } from './types';
 import type { LoadedConfig } from './config';
 import { tokenizeGitDiffArgs } from './git-diff-args';
@@ -23,6 +32,18 @@ import {
   computeRemoteDrift,
   type RemoteSessionDeps,
 } from './remote-mode';
+
+// The filter and map stages run on pure code that does not fail on its own;
+// wrapping the real functions lets one test inject a failure into each stage
+// while every other test keeps the real behaviour.
+vi.mock('./ignore-filter', async importOriginal => {
+  const actual = await importOriginal<typeof import('./ignore-filter')>();
+  return { ...actual, createIgnoreFilter: vi.fn(actual.createIgnoreFilter) };
+});
+vi.mock('./thread-mapper', async importOriginal => {
+  const actual = await importOriginal<typeof import('./thread-mapper')>();
+  return { ...actual, mapThreadsToReviewComments: vi.fn(actual.mapThreadsToReviewComments) };
+});
 
 const PR_URL = 'https://github.com/octo/repo/pull/42';
 const MR_URL = 'https://gitlab.com/group/proj/-/merge_requests/7';
@@ -47,7 +68,8 @@ function makeMaterializeResult(overrides: Partial<MaterializeResult> = {}): Mate
     baseSha: 'aaa111',
     headSha: 'bbb222',
     mode: 'temp-clone',
-    cleanup: vi.fn(),
+    ownedRefs: [],
+    cleanup: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -150,13 +172,14 @@ describe('startRemoteSession', () => {
     const deps = makeDeps();
     const session = await startRemoteSession(PR_URL, '/cwd', deps);
 
-    expect(deps.createProvider).toHaveBeenCalledWith('github', deps.runner);
+    expect(deps.createProvider).toHaveBeenCalledWith('github', expect.any(Function));
     expect(deps.materialize).toHaveBeenCalledWith(
       expect.objectContaining({ forge: 'github', owner: 'octo', repo: 'repo', number: 42 }),
       'main',
       '/cwd',
       deps.runner,
-      undefined
+      undefined,
+      { signal: undefined }
     );
     expect(session.repoPath).toBe('/tmp/self-review-clone');
     expect(session.gitDiffArgs).toEqual(['aaa111...bbb222']);
@@ -174,7 +197,7 @@ describe('startRemoteSession', () => {
   it('selects the gitlab provider for merge request URLs', async () => {
     const deps = makeDeps();
     const session = await startRemoteSession(MR_URL, '/cwd', deps);
-    expect(deps.createProvider).toHaveBeenCalledWith('gitlab', deps.runner);
+    expect(deps.createProvider).toHaveBeenCalledWith('gitlab', expect.any(Function));
     expect(session.remote.remoteForge).toBe('gitlab');
   });
 
@@ -240,18 +263,22 @@ describe('startRemoteSession', () => {
     const deps = makeDeps({ createProvider: vi.fn(() => provider) });
     const session = await startRemoteSession(PR_URL, '/cwd', deps);
 
-    expect(deps.detectExistingClone).toHaveBeenCalledWith(expect.anything(), '/cwd', deps.runner);
+    expect(deps.detectExistingClone).toHaveBeenCalledWith(expect.anything(), '/cwd', deps.runner, {
+      signal: undefined,
+    });
     expect(deps.resolveRemoteDefaultBranch).toHaveBeenCalledWith(
       expect.anything(),
       deps.runner,
-      null
+      null,
+      { signal: undefined }
     );
     expect(deps.materialize).toHaveBeenCalledWith(
       expect.anything(),
       'trunk',
       '/cwd',
       deps.runner,
-      null
+      null,
+      { signal: undefined }
     );
     // Thread fetch is skipped entirely — the CLI is known unavailable.
     expect(provider.fetchThreads).not.toHaveBeenCalled();
@@ -502,7 +529,8 @@ describe('GUI bootstrap and headless fetch-comments agree', () => {
         baseSha,
         headSha,
         mode: 'existing-clone' as const,
-        cleanup: () => {},
+        ownedRefs: [],
+        cleanup: async () => {},
       }),
       // loadDiff is left to the real default: git runs over the repository.
     };
@@ -602,6 +630,225 @@ describe('GUI bootstrap and headless fetch-comments agree', () => {
       lineRange: null,
       suggestion: null,
     });
+  });
+});
+
+// One lifetime boundary spans clone, fetch, load, filter and map: whatever
+// stage fails, the temporary clone is gone and the session signal has been
+// honoured. These run the real materializer over a scripted git runner on
+// the temp-clone path, so a real directory is created and its removal is
+// observable; nothing is spawned.
+describe('session lifetime', () => {
+  const BASE = 'a'.repeat(40);
+  const HEAD = 'b'.repeat(40);
+
+  function ok(stdout = ''): ForgeCommandResult {
+    return { stdout, stderr: '', exitCode: 0 };
+  }
+
+  /** A git stand-in for the temp-clone path that can fail at one stage. */
+  function scriptedGit(failAt?: 'clone' | 'fetch'): {
+    runner: ForgeCommandRunner;
+    tempDirs: string[];
+    options: Array<Parameters<ForgeCommandRunner>[2]>;
+  } {
+    const tempDirs: string[] = [];
+    const options: Array<Parameters<ForgeCommandRunner>[2]> = [];
+    const runner: ForgeCommandRunner = async (_command, args, commandOptions) => {
+      options.push(commandOptions);
+      const sub = args[0] === '-C' ? args[2] : args[0];
+      switch (sub) {
+        case 'rev-parse': {
+          const ref = args[args.length - 1];
+          if (ref === '--show-toplevel') return { stdout: '', stderr: 'fatal: no', exitCode: 128 };
+          if (ref.endsWith('/base')) return ok(`${BASE}\n`);
+          if (ref.endsWith('/head')) return ok(`${HEAD}\n`);
+          return { stdout: '', stderr: `fatal: unknown ${ref}`, exitCode: 128 };
+        }
+        case 'clone':
+          tempDirs.push(args[args.length - 1]);
+          if (failAt === 'clone') throw new Error('clone exploded');
+          return ok();
+        case 'fetch':
+          if (failAt === 'fetch') throw new Error('fetch exploded');
+          return ok();
+        default:
+          throw new Error(`unexpected git invocation: ${args.join(' ')}`);
+      }
+    };
+    return { runner, tempDirs, options };
+  }
+
+  function lifetimeDeps(
+    runner: ForgeCommandRunner,
+    overrides: Partial<RemoteSessionDeps> = {}
+  ): RemoteSessionDeps {
+    return makeDeps({ runner, materialize, detectExistingClone: async () => null, ...overrides });
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each(['clone', 'fetch'] as const)(
+    'leaves no temp clone behind when the %s stage throws',
+    async stage => {
+      const git = scriptedGit(stage);
+
+      await expect(
+        bootstrapRemoteDiff(PR_URL, '/cwd', [], lifetimeDeps(git.runner))
+      ).rejects.toThrow(`${stage} exploded`);
+
+      expect(git.tempDirs).toHaveLength(1);
+      expect(fs.existsSync(git.tempDirs[0])).toBe(false);
+    }
+  );
+
+  it('leaves no temp clone behind when the load stage throws', async () => {
+    const git = scriptedGit();
+    const deps = lifetimeDeps(git.runner, {
+      loadDiff: vi.fn(async () => {
+        throw new Error('load exploded');
+      }),
+    });
+
+    await expect(bootstrapRemoteDiff(PR_URL, '/cwd', [], deps)).rejects.toThrow('load exploded');
+
+    expect(fs.existsSync(git.tempDirs[0])).toBe(false);
+  });
+
+  it('leaves no temp clone behind when the filter stage throws', async () => {
+    const git = scriptedGit();
+    vi.mocked(createIgnoreFilter).mockImplementationOnce(() => {
+      throw new Error('filter exploded');
+    });
+
+    await expect(
+      bootstrapRemoteDiff(PR_URL, '/cwd', ['dist/**'], lifetimeDeps(git.runner))
+    ).rejects.toThrow('filter exploded');
+
+    expect(fs.existsSync(git.tempDirs[0])).toBe(false);
+  });
+
+  it('leaves no temp clone behind when the map stage throws', async () => {
+    const git = scriptedGit();
+    vi.mocked(mapThreadsToReviewComments).mockImplementationOnce(() => {
+      throw new Error('map exploded');
+    });
+
+    await expect(bootstrapRemoteDiff(PR_URL, '/cwd', [], lifetimeDeps(git.runner))).rejects.toThrow(
+      'map exploded'
+    );
+
+    expect(fs.existsSync(git.tempDirs[0])).toBe(false);
+  });
+
+  it('runs every git command under the session signal and the per-command timeout', async () => {
+    const git = scriptedGit();
+    const controller = new AbortController();
+
+    const { session } = await bootstrapRemoteDiff(PR_URL, '/cwd', [], lifetimeDeps(git.runner), {
+      signal: controller.signal,
+    });
+    await session.cleanup();
+
+    expect(git.options.length).toBeGreaterThan(0);
+    for (const options of git.options) {
+      expect(options).toEqual({
+        signal: controller.signal,
+        timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+      });
+    }
+  });
+
+  it('hands the provider a runner bound to the same signal', async () => {
+    const underlying = vi.fn(async () => ok('{}'));
+    let providerRunner: ForgeCommandRunner | undefined;
+    const provider = providerFor([]);
+    const deps = makeDeps({
+      runner: underlying,
+      createProvider: vi.fn((_forge, runner) => {
+        providerRunner = runner;
+        return provider;
+      }),
+    });
+    const controller = new AbortController();
+
+    await startRemoteSession(PR_URL, '/cwd', deps, { signal: controller.signal });
+    await providerRunner!('gh', ['api', 'x']);
+
+    expect(underlying).toHaveBeenCalledWith('gh', ['api', 'x'], {
+      signal: controller.signal,
+      timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+    });
+  });
+
+  it('does nothing when the signal is already aborted', async () => {
+    const deps = makeDeps();
+
+    await expect(
+      startRemoteSession(PR_URL, '/cwd', deps, { signal: AbortSignal.abort() })
+    ).rejects.toBeInstanceOf(CommandCancelledError);
+
+    expect(deps.createProvider).not.toHaveBeenCalled();
+    expect(deps.materialize).not.toHaveBeenCalled();
+  });
+
+  it("does not degrade a cancelled thread fetch under 'optional'; it releases the clone and rejects", async () => {
+    const git = scriptedGit();
+    const provider: ForgeProvider = {
+      forge: 'github',
+      fetchBaseBranch: vi.fn(async () => 'main'),
+      fetchThreads: vi.fn(async () => {
+        throw new CommandCancelledError('aborted', 'gh', ['api']);
+      }),
+    };
+    const deps = lifetimeDeps(git.runner, { createProvider: vi.fn(() => provider) });
+
+    await expect(startRemoteSession(PR_URL, '/cwd', deps)).rejects.toMatchObject({
+      name: 'CommandCancelledError',
+    });
+
+    expect(fs.existsSync(git.tempDirs[0])).toBe(false);
+  });
+
+  it('honours an abort that lands during the diff load: no payload, no temp clone', async () => {
+    const git = scriptedGit();
+    const controller = new AbortController();
+    const deps = lifetimeDeps(git.runner, {
+      loadDiff: vi.fn(async (_args: string[], cwd: string) => {
+        controller.abort();
+        return { files: [makeDiffFile('src/a.ts')], repository: cwd };
+      }),
+    });
+
+    await expect(
+      bootstrapRemoteDiff(PR_URL, '/cwd', [], deps, { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+
+    expect(fs.existsSync(git.tempDirs[0])).toBe(false);
+  });
+
+  it('awaits an asynchronous cleanup before a failure propagates', async () => {
+    let released = false;
+    const cleanup = vi.fn(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      released = true;
+    });
+    const deps = makeDeps({
+      materialize: vi.fn(async () => makeMaterializeResult({ cleanup })),
+      loadDiff: vi.fn(async () => {
+        throw new Error('load exploded');
+      }),
+    });
+
+    await expect(bootstrapRemoteDiff(PR_URL, '/cwd', [], deps)).rejects.toThrow('load exploded');
+
+    expect(released).toBe(true);
   });
 });
 

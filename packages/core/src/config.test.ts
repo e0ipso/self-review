@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { loadConfig, loadConfigWithProvenance } from './config';
+import { DEFAULT_CONFIG } from '../../react/src/config-defaults';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -26,10 +27,14 @@ describe('config', () => {
   });
 
   describe('loadConfig', () => {
-    it('returns default config when no config files exist', () => {
+    it('returns the shared default configuration when no config files exist', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
 
       const config = loadConfig();
+
+      // The same values the renderer's ConfigProvider starts from
+      // (packages/react/src/config-defaults.ts): one source, no drift.
+      expect(config).toEqual(DEFAULT_CONFIG);
 
       expect(config.theme).toBe('system');
       expect(config.diffView).toBe('split');

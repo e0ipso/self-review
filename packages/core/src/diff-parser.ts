@@ -313,6 +313,11 @@ function stripPrefix(path: string): string {
   return path;
 }
 
+// `TextDecoder` rather than Node's `Buffer`: this parser is also handed to
+// browsers through browser.ts, and the two decoders agree on the one thing
+// that matters here — a malformed byte run becomes U+FFFD, never an error.
+const OCTAL_PATH_DECODER = new TextDecoder('utf-8');
+
 function decodeGitPath(path: string): string {
   if (!path.startsWith('"') || !path.endsWith('"')) return path;
 
@@ -334,7 +339,7 @@ function decodeGitPath(path: string): string {
         .slice(1)
         .split('\\')
         .map(byte => parseInt(byte, 8));
-      return Buffer.from(bytes).toString('utf8');
+      return OCTAL_PATH_DECODER.decode(Uint8Array.from(bytes));
     }
     return escapes[escape[1]];
   });

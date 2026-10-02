@@ -9,6 +9,7 @@ installBrowserApiStubs();
 
 import CommentInput from './CommentInput';
 import { ConfigProvider } from '../../context/ConfigContext';
+import { DEFAULT_CATEGORIES } from '../../config-defaults';
 
 const mocks = vi.hoisted(() => ({
   addComment: vi.fn(),
@@ -136,11 +137,12 @@ describe('CommentInput category handling', () => {
     expect(submitBtn.disabled).toBe(false);
 
     fireEvent.click(submitBtn);
+    // The first built-in category, whatever the shared defaults order first.
     expect(mocks.addComment).toHaveBeenCalledWith(
       'src/foo.ts',
       null,
       'Anything',
-      'bug',
+      DEFAULT_CATEGORIES[0].name,
       null,
       undefined
     );

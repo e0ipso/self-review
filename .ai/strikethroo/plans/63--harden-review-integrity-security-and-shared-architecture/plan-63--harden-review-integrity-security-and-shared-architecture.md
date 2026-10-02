@@ -393,10 +393,10 @@ The graph is acyclic. Task 24 depends on every other task; only its edges from l
 **Parallel Tasks:**
 - ✔️ Task 21: Shared startup primitives and config provenance (R15, A5) (depends on: 10, 14, 19)
 
-### Phase 9: Remote lifetime and architecture cleanup
+### ✅ Phase 9: Remote lifetime and architecture cleanup
 **Parallel Tasks:**
-- Task 22: Remote session lifetime ownership (R16) (depends on: 16, 21)
-- Task 23: Scoped themes, canonical defaults, browser parser (depends on: 07, 21)
+- ✔️ Task 22: Remote session lifetime ownership (R16) (depends on: 16, 21)
+- ✔️ Task 23: Scoped themes, canonical defaults, browser parser (depends on: 07, 21)
 
 ### Phase 10: Documentation
 **Parallel Tasks:**

@@ -1,4 +1,3 @@
-// src/main/config.ts
 // YAML configuration loading and merging
 
 import { readFileSync, existsSync } from 'fs';
@@ -6,78 +5,12 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import { AppConfig } from './types';
+import { DEFAULT_CONFIG } from '../../react/src/config-defaults';
 
-const defaults: AppConfig = {
-  theme: 'system',
-  diffView: 'split',
-  fontSize: 14,
-  outputFormat: 'xml',
-  outputFile: './review.xml',
-  ignore: [
-    '.git',
-    'node_modules',
-    'vendor',
-    '.vendor',
-    '__pycache__',
-    '.venv',
-    'venv',
-    '.env',
-    'dist',
-    'build',
-    '.next',
-    '.nuxt',
-    '.svelte-kit',
-    'target',
-    '*.min.js',
-    '*.min.css',
-    'package-lock.json',
-    'yarn.lock',
-    'pnpm-lock.yaml',
-    'composer.lock',
-    'Gemfile.lock',
-    'Cargo.lock',
-    'poetry.lock',
-    'go.sum',
-  ],
-  categories: [
-    {
-      name: 'question',
-      description: 'Clarification needed — not necessarily a problem',
-      color: '#805ad5',
-    },
-    {
-      name: 'bug',
-      description: 'Likely defect or incorrect behavior',
-      color: '#e53e3e',
-    },
-    {
-      name: 'security',
-      description: 'Security vulnerability or concern',
-      color: '#dd6b20',
-    },
-    {
-      name: 'style',
-      description: 'Code style, naming, or formatting issue',
-      color: '#3182ce',
-    },
-    {
-      name: 'task',
-      description: 'Action item or follow-up task',
-      color: '#38a169',
-    },
-    {
-      name: 'nit',
-      description: 'Minor nitpick, low priority',
-      color: '#718096',
-    },
-  ],
-  defaultDiffArgs: '',
-  showUntracked: true,
-  showUntrackedExplicit: false,
-  wordWrap: true,
-  maxFiles: 500,
-  maxTotalLines: 100000,
-};
+// The defaults are shared with the renderer's ConfigProvider: one file, imported
+// by relative source path, bundled into each package. See the header of
+// packages/react/src/config-defaults.ts for why the file lives there.
+const defaults: AppConfig = DEFAULT_CONFIG;
 
 /**
  * Where a configuration value came from. The two files are trusted

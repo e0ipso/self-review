@@ -118,12 +118,75 @@ export interface ForgeCommandResult {
 }
 
 /**
- * Injectable command runner used by provider implementations, mirroring how
- * `git.ts` keeps child-process execution testable. Resolves with the exit
- * code on any completed run (including non-zero); rejects only when the
- * binary cannot be spawned at all (e.g. ENOENT when the CLI is absent).
+ * Lifetime bounds for one command run through a {@link ForgeCommandRunner}.
+ * Both are optional; a runner that honours neither (a scripted test runner)
+ * is still a valid runner.
  */
-export type ForgeCommandRunner = (command: string, args: string[]) => Promise<ForgeCommandResult>;
+export interface ForgeCommandOptions {
+  /**
+   * Aborting the signal kills the child and rejects the run with a
+   * {@link CommandCancelledError} whose `reason` is `'aborted'`.
+   */
+  signal?: AbortSignal;
+  /**
+   * The child is killed, and the run rejects with a
+   * {@link CommandCancelledError} whose `reason` is `'timeout'`, when it has
+   * not exited after this many milliseconds.
+   */
+  timeoutMs?: number;
+}
+
+/**
+ * Injectable command runner used by provider implementations and the
+ * materializer, mirroring how `git.ts` keeps child-process execution
+ * testable. Resolves with the exit code on any completed run (including
+ * non-zero); rejects when the binary cannot be spawned at all (e.g. ENOENT
+ * when the CLI is absent) and, with a {@link CommandCancelledError}, when
+ * the run was cut short by its `options`.
+ */
+export type ForgeCommandRunner = (
+  command: string,
+  args: string[],
+  options?: ForgeCommandOptions
+) => Promise<ForgeCommandResult>;
+
+/** Why a command run was cut short. */
+export type CommandCancelReason = 'aborted' | 'timeout';
+
+/**
+ * A command run that was ended by its caller's bounds rather than by the
+ * child itself: the session's `AbortSignal` fired or the per-command
+ * timeout elapsed. The child was killed before this is thrown. Providers
+ * let it propagate instead of folding it into
+ * {@link ForgeCliUnavailableError}: a cancelled `gh` is not a missing `gh`,
+ * and a session that is being torn down must not degrade into a review
+ * without threads.
+ */
+export class CommandCancelledError extends Error {
+  readonly reason: CommandCancelReason;
+  readonly command: string;
+  readonly args: readonly string[];
+
+  constructor(reason: CommandCancelReason, command: string, args: readonly string[]) {
+    super(
+      reason === 'timeout'
+        ? `${command} ${args.join(' ')} timed out and was killed`
+        : `${command} ${args.join(' ')} was cancelled`
+    );
+    this.name = 'CommandCancelledError';
+    this.reason = reason;
+    this.command = command;
+    this.args = args;
+  }
+}
+
+/** True when `error` is a {@link CommandCancelledError}, whatever module instance threw it. */
+export function isCommandCancelled(error: unknown): error is CommandCancelledError {
+  return (
+    error instanceof CommandCancelledError ||
+    (error instanceof Error && error.name === 'CommandCancelledError')
+  );
+}
 
 /**
  * The conversation plane of a forge. Exactly two capabilities: base-branch

@@ -129,7 +129,12 @@ export {
 } from './git';
 
 // Forge providers (remote PR/MR conversation plane)
-export { parseForgeUrl, ForgeCliUnavailableError } from './forge-provider';
+export {
+  parseForgeUrl,
+  ForgeCliUnavailableError,
+  CommandCancelledError,
+  isCommandCancelled,
+} from './forge-provider';
 export type {
   ForgeName,
   ForgeUrl,
@@ -139,7 +144,9 @@ export type {
   ForgeThread,
   FetchThreadsOptions,
   ForgeCommandResult,
+  ForgeCommandOptions,
   ForgeCommandRunner,
+  CommandCancelReason,
   ForgeProvider,
 } from './forge-provider';
 
@@ -255,8 +262,14 @@ export {
   materialize,
   resolveRemoteDefaultBranch,
   defaultGitRunner,
+  DEFAULT_GIT_COMMAND_TIMEOUT_MS,
 } from './materializer';
-export type { ExistingClone, MaterializeMode, MaterializeResult } from './materializer';
+export type {
+  ExistingClone,
+  MaterializeMode,
+  MaterializeOptions,
+  MaterializeResult,
+} from './materializer';
 
 // Review session orchestration (transport agnostic; each handler takes the
 // session it acts on and reads no module-scope state)
@@ -338,6 +351,7 @@ export type {
   MaterializedRemoteSession,
   RemoteSession,
   RemoteSessionDeps,
+  RemoteLifetimeOptions,
   StartRemoteSessionOptions,
   RemoteReviewLoad,
   RemoteBootstrapResult,

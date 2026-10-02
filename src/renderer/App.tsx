@@ -17,8 +17,6 @@ import RemoteDriftBanner from '../../packages/react/src/components/RemoteDriftBa
 import ImportDiagnosticsBanner from '../../packages/react/src/components/ImportDiagnosticsBanner';
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
-import lightThemeCss from 'prismjs/themes/prism.css?raw';
-import darkThemeCss from 'prism-themes/themes/prism-one-dark.css?raw';
 
 // Electron platform adapter — wraps window.electronAPI for the package context.
 const electronAdapter: ReviewAdapter = {
@@ -155,12 +153,7 @@ export default function App() {
 
   return (
     <ReviewAdapterProvider adapter={electronAdapter}>
-      <ConfigProvider
-        initialConfig={config}
-        initialOutputPath={outputPathInfo ?? undefined}
-        prismLightCss={lightThemeCss}
-        prismDarkCss={darkThemeCss}
-      >
+      <ConfigProvider initialConfig={config} initialOutputPath={outputPathInfo ?? undefined}>
         <GuideProvider>
           <ReviewProvider>
             <AppContent />

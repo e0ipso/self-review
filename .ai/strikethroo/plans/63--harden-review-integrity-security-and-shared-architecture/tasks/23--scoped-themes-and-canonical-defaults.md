@@ -2,7 +2,7 @@
 id: 23
 group: "architecture-cleanup"
 dependencies: [7, 21]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - build-tooling
@@ -19,10 +19,10 @@ Desktop consumes the same scoped compiled Prism theme assets serve already uses;
 Build tooling (webpack/tsup/CSS bundling) and React.
 
 ## Acceptance Criteria
-- [ ] Desktop renderer imports the scoped Prism CSS (`packages/react/src/vendor/prism-light-scoped.css`, `prism-dark-scoped.css` or their built equivalents) the same way serve does; the runtime `<style>` injection code and any theme-CSS props it needed are deleted (breaking prop removal allowed; update exported types and callers). Light/dark syntax highlighting still switches correctly in both desktop and serve (verify via `npm run test:e2e` theme scenario or a Playwright screenshot of each theme).
-- [ ] One pure defaults module (e.g. `packages/react/src/config-defaults.ts` consumed by React, and imported by core via relative source path or duplicated-by-design only if the package boundary forbids — prefer a single file imported by both since core may import browser-safe code) defines overlapping defaults (categories, theme, view mode, font size, ignore patterns, thresholds); `packages/core/src/config.ts` and `packages/react/src/context/ConfigContext.tsx` both use it. The types package stays type-only; React has no Node imports (verify with `grep -rn "from 'fs'\|from 'path'\|from 'child_process'" packages/react/src` and a bundle inspection of `packages/react/dist`).
-- [ ] `packages/core/src/browser.ts`: replace `Buffer` octal path decoding with `TextDecoder`-based decoding (shared with the Node parser so there is one implementation) and add a test that runs the parser with `Buffer` unavailable — or delete the export and its claim if unused (decide by checking `package.json` exports and callers).
-- [ ] `npm run build:packages`, serve build, `npm run package`, `npm run typecheck:packages`, `npm run test:unit`, `npm run test:e2e` pass.
+- [x] Desktop renderer imports the scoped Prism CSS (`packages/react/src/vendor/prism-light-scoped.css`, `prism-dark-scoped.css` or their built equivalents) the same way serve does; the runtime `<style>` injection code and any theme-CSS props it needed are deleted (breaking prop removal allowed; update exported types and callers). Light/dark syntax highlighting still switches correctly in both desktop and serve (verify via `npm run test:e2e` theme scenario or a Playwright screenshot of each theme).
+- [x] One pure defaults module (e.g. `packages/react/src/config-defaults.ts` consumed by React, and imported by core via relative source path or duplicated-by-design only if the package boundary forbids — prefer a single file imported by both since core may import browser-safe code) defines overlapping defaults (categories, theme, view mode, font size, ignore patterns, thresholds); `packages/core/src/config.ts` and `packages/react/src/context/ConfigContext.tsx` both use it. The types package stays type-only; React has no Node imports (verify with `grep -rn "from 'fs'\|from 'path'\|from 'child_process'" packages/react/src` and a bundle inspection of `packages/react/dist`).
+- [x] `packages/core/src/browser.ts`: replace `Buffer` octal path decoding with `TextDecoder`-based decoding (shared with the Node parser so there is one implementation) and add a test that runs the parser with `Buffer` unavailable — or delete the export and its claim if unused (decide by checking `package.json` exports and callers).
+- [x] `npm run build:packages`, serve build, `npm run package`, `npm run typecheck:packages`, `npm run test:unit`, `npm run test:e2e` pass.
 
 Use your internal Todo tool to track these and keep on track.
 

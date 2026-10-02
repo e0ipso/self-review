@@ -1,7 +1,7 @@
 // src/main/diff-parser.test.ts
 // Comprehensive unit tests for diff-parser module
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
 import type { DiffFile, ChangeType } from './types';
 
@@ -799,6 +799,47 @@ describe('parseDiffWithDiagnostics', () => {
 
       expect(files[0].oldPath).toBe('café.ts');
       expect(files[0].newPath).toBe('copy café.ts');
+    });
+  });
+
+  describe('quoted path decoding without Node', () => {
+    // packages/core/src/browser.ts hands this parser to the webpack renderer
+    // and the webapp harness, where Node's `Buffer` does not exist. Git quotes
+    // non-ASCII path bytes as octal escapes, so decoding them must not need it.
+    it('decodes octal-escaped UTF-8 paths with Buffer unavailable', () => {
+      const diff = [
+        'diff --git "a/caf\\303\\251 \\342\\234\\223.ts" "b/caf\\303\\251 \\342\\234\\223.ts"',
+        '--- "a/caf\\303\\251 \\342\\234\\223.ts"',
+        '+++ "b/caf\\303\\251 \\342\\234\\223.ts"',
+        '@@ -1 +1 @@',
+        '-a',
+        '+b',
+      ].join('\n');
+
+      vi.stubGlobal('Buffer', undefined);
+      try {
+        expect(globalThis.Buffer).toBeUndefined();
+        const files = parseDiff(diff);
+        expect(files[0].oldPath).toBe('café ✓.ts');
+        expect(files[0].newPath).toBe('café ✓.ts');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('replaces malformed octal byte runs instead of throwing', () => {
+      // A lone continuation byte is not valid UTF-8; both Buffer and
+      // TextDecoder substitute U+FFFD, and the parser must keep that contract.
+      const diff = [
+        'diff --git "a/x\\251.ts" "b/x\\251.ts"',
+        '--- "a/x\\251.ts"',
+        '+++ "b/x\\251.ts"',
+        '@@ -1 +1 @@',
+        '-a',
+        '+b',
+      ].join('\n');
+      const files = parseDiff(diff);
+      expect(files[0].newPath).toBe('x\uFFFD.ts');
     });
   });
 

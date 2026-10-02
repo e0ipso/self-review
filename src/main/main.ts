@@ -42,6 +42,8 @@ import {
   applyRemoteProvenance,
   computeRemoteDrift,
 } from '../../packages/core/src/remote-mode';
+import type { RemoteBootstrapResult } from '../../packages/core/src/remote-mode';
+import { isCommandCancelled } from '../../packages/core/src/forge-provider';
 import { loadGuide } from '../../packages/core/src/guide-loader';
 import { checkForUpdate } from './version-checker';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
@@ -138,9 +140,33 @@ let outputTarget: ReviewOutputTarget = {
 };
 // Remote PR/MR session state. remoteSessionInfo is injected into the
 // submitted ReviewState on save so the serializer writes the remote-*
-// attributes; remoteCleanup removes a temporary clone when one was created.
+// attributes. remoteCleanup releases what materialization acquired (a
+// temporary clone, or this session's refs in a reused clone); this process
+// owns it from the moment bootstrap returned it, and disposeRemoteSession is
+// the one place it is called. remoteInFlight is a bootstrap that has not
+// returned yet — the startup URL or a welcome-screen open — so a quit or a
+// deadline can cancel it through its signal and wait for its own cleanup.
 let remoteSessionInfo: RemoteSessionInfo | null = null;
-let remoteCleanup: (() => void) | null = null;
+let remoteCleanup: (() => Promise<void>) | null = null;
+let remoteInFlight: { controller: AbortController; settled: Promise<void> } | null = null;
+
+/** The whole startup, remote materialization included, must finish within this. */
+const STARTUP_TIMEOUT_MS = 45_000;
+/**
+ * After the startup deadline cancels a remote bootstrap, how long its
+ * cleanup (killing git, removing the clone) may take before the process
+ * exits regardless.
+ */
+const STARTUP_CANCEL_GRACE_MS = 10_000;
+/**
+ * A welcome-screen URL open has no other deadline: the reviewer is waiting
+ * on a spinner they cannot cancel, so the open cancels itself and reports
+ * back after this long. Generous because a blobless clone of a large
+ * repository is legitimately slow.
+ */
+const REMOTE_OPEN_TIMEOUT_MS = 10 * 60_000;
+/** How long an exit waits for the remote session's release before leaving anyway. */
+const EXIT_CLEANUP_TIMEOUT_MS = 10_000;
 
 // The one close/quit/save state machine. The window's close button, menu
 // Quit, Cmd+Q/Ctrl+Q, Finish Review and the Save & Quit / Discard dialog all
@@ -184,15 +210,83 @@ function handleCloseRequest(event: Electron.Event): void {
 // SIGTERM/SIGINT is never held up by this.
 app.on('before-quit', handleCloseRequest);
 
+/** Resolve `work` or, after `ms`, log `what` and resolve anyway; the wait is bounded, the work is not interrupted. */
+function withinTimeout(work: Promise<unknown>, ms: number, what: string): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<void>(resolve => {
+    timer = setTimeout(() => {
+      console.error(`[main] ${what} did not finish within ${ms / 1000}s; continuing`);
+      resolve();
+    }, ms);
+  });
+  return Promise.race([work.then(() => undefined), deadline]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Run one remote bootstrap as the in-flight session, so a quit or a
+ * deadline can reach it through `controller` while it runs. Its own
+ * try/finally releases whatever it acquired when it rejects; only a result
+ * hands this process a cleanup to own.
+ */
+async function runRemoteBootstrap(
+  url: string,
+  ignorePatterns: string[],
+  controller: AbortController
+): Promise<RemoteBootstrapResult> {
+  const bootstrap = bootstrapRemoteDiff(
+    url,
+    launchCwd,
+    ignorePatterns,
+    {},
+    {
+      signal: controller.signal,
+    }
+  );
+  remoteInFlight = {
+    controller,
+    settled: bootstrap.then(
+      () => undefined,
+      () => undefined
+    ),
+  };
+  try {
+    return await bootstrap;
+  } finally {
+    remoteInFlight = null;
+  }
+}
+
+/**
+ * Release the remote session: cancel a bootstrap still in flight and wait
+ * for it to settle (its own cleanup runs on the way out), then run the live
+ * session's cleanup. Idempotent, bounded, never rejects. The temp clone's
+ * removal is the synchronous first step of that cleanup, so even the
+ * process `exit` handler, which cannot wait, gets that far.
+ */
+async function disposeRemoteSession(reason: string): Promise<void> {
+  const inFlight = remoteInFlight;
+  if (inFlight) {
+    console.error(`[main] Cancelling the remote materialization in flight (${reason})`);
+    inFlight.controller.abort(new Error(reason));
+    await withinTimeout(inFlight.settled, EXIT_CLEANUP_TIMEOUT_MS, 'Remote cancellation');
+  }
+  const cleanup = remoteCleanup;
+  remoteCleanup = null;
+  if (cleanup) {
+    await withinTimeout(cleanup(), EXIT_CLEANUP_TIMEOUT_MS, 'Remote session cleanup');
+  }
+}
+
 /**
  * The only way the review flow ends the process. Called after the document
- * is on disk (Finish Review, Save & Quit) or after an explicit Discard.
+ * is on disk (Finish Review, Save & Quit) or after an explicit Discard. The
+ * remote session, if any, is released first.
  */
 function exitNow(code: number): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.destroy();
   }
-  process.exit(code);
+  void disposeRemoteSession('exit').finally(() => process.exit(code));
 }
 
 function publishOptions(): PublishReviewOptions {
@@ -235,15 +329,19 @@ async function reportSaveFailure(failure: SaveFailure): Promise<void> {
   });
 }
 
-// Temporary remote clones are removed on every exit path. The materializer's
-// cleanup is idempotent: process 'exit' covers the direct process.exit()
-// paths (Finish Review, Save & Quit, Discard, fatal errors) and 'will-quit'
-// covers app.quit() flows.
+// The remote session is released on every exit path. exitNow and the
+// startup catch wait for it; app.quit() flows (window-all-closed, menu Quit
+// from the welcome screen) are held at 'will-quit' until it is done and then
+// resumed; and process 'exit' is the last resort for a direct process.exit()
+// — it cannot wait, so only the synchronous part of the cleanup (removing
+// the temp clone) runs there.
 process.on('exit', () => {
-  remoteCleanup?.();
+  void remoteCleanup?.();
 });
-app.on('will-quit', () => {
-  remoteCleanup?.();
+app.on('will-quit', event => {
+  if (!remoteCleanup && !remoteInFlight) return;
+  event.preventDefault();
+  void disposeRemoteSession('quit').finally(() => app.quit());
 });
 
 /**
@@ -251,11 +349,27 @@ app.on('will-quit', () => {
  * This function is called from the app.whenReady() handler.
  */
 async function initializeApp() {
-  // Add overall initialization timeout
+  // The whole startup must finish within STARTUP_TIMEOUT_MS. A remote
+  // bootstrap still in flight at the deadline is cancelled through its
+  // signal — the git in flight is killed and the clone released — and
+  // rejects into the catch below, which exits; a forced exit follows if that
+  // takes longer than STARTUP_CANCEL_GRACE_MS. Anything else stuck at the
+  // deadline exits at once, as before.
+  const startupController = new AbortController();
+  let forcedExit: NodeJS.Timeout | undefined;
   const initTimeout = setTimeout(() => {
-    console.error('[main] Initialization timeout after 45 seconds');
-    process.exit(1);
-  }, 45000);
+    console.error(`[main] Initialization timeout after ${STARTUP_TIMEOUT_MS / 1000} seconds`);
+    if (!remoteInFlight) {
+      process.exit(1);
+      return;
+    }
+    console.error('[main] Cancelling the remote materialization and waiting for its cleanup');
+    startupController.abort(new Error('initialization timeout'));
+    forcedExit = setTimeout(() => {
+      console.error('[main] Remote cleanup did not finish in time; exiting');
+      process.exit(1);
+    }, STARTUP_CANCEL_GRACE_MS);
+  }, STARTUP_TIMEOUT_MS);
 
   try {
     console.error('[main] Starting initialization');
@@ -304,10 +418,10 @@ async function initializeApp() {
       // pipeline with the clone's repo path and the base...head range.
       // Materialization failures throw and are handled like any other
       // fatal startup git error by the catch below.
-      const { session, payload, identity } = await bootstrapRemoteDiff(
+      const { session, payload, identity } = await runRemoteBootstrap(
         cliArgs.remoteUrl!,
-        launchCwd,
-        appConfig.ignore
+        appConfig.ignore,
+        startupController
       );
       remoteCleanup = session.cleanup;
       remoteSessionInfo = session.remote;
@@ -474,7 +588,12 @@ async function initializeApp() {
     console.error('[main] Initialization complete');
   } catch (error) {
     clearTimeout(initTimeout);
-    if (error instanceof Error) {
+    if (forcedExit) clearTimeout(forcedExit);
+    if (isCommandCancelled(error)) {
+      // The deadline above cancelled the remote bootstrap; its cleanup has
+      // already run on the way out.
+      console.error(`[main] Remote materialization cancelled: ${error.message}`);
+    } else if (error instanceof Error) {
       console.error(`[main] Initialization error: ${error.message}`);
       console.error(`[main] Stack trace: ${error.stack}`);
     } else {
@@ -568,13 +687,32 @@ function registerLifecycleHandlers(): void {
 
   // Start a remote PR/MR session from a renderer-supplied URL (the welcome
   // screen's URL field). Shares the bootstrap with the CLI URL path.
+  //
+  // Lifetime: one open at a time. The open runs as the in-flight remote
+  // session, so a quit cancels it and waits; on its own it is bounded by
+  // REMOTE_OPEN_TIMEOUT_MS, after which it cancels itself, releases what it
+  // acquired and reports the timeout — the welcome screen stays usable.
   ipcMain.handle(IPC.REMOTE_OPEN_URL, async (event, url: string): Promise<RemoteOpenUrlResult> => {
+    if (remoteInFlight) {
+      return { ok: false, error: 'A remote review is already being opened.' };
+    }
+    if (remoteCleanup) {
+      return { ok: false, error: 'A remote review is already open in this window.' };
+    }
+    const controller = new AbortController();
+    const deadline = setTimeout(
+      () =>
+        controller.abort(
+          new Error(`opening the PR/MR took longer than ${REMOTE_OPEN_TIMEOUT_MS / 60_000} minutes`)
+        ),
+      REMOTE_OPEN_TIMEOUT_MS
+    );
     try {
       console.error('[main] Remote URL open requested:', url);
-      const { session, payload, identity } = await bootstrapRemoteDiff(
+      const { session, payload, identity } = await runRemoteBootstrap(
         url,
-        launchCwd,
-        appConfig?.ignore ?? []
+        appConfig?.ignore ?? [],
+        controller
       );
 
       // Large payload guard, matching the startup path.
@@ -595,7 +733,7 @@ function registerLifecycleHandlers(): void {
           });
           if (result === 1) {
             console.error('[main] User cancelled large remote review');
-            session.cleanup();
+            await session.cleanup();
             return { ok: false, error: 'Review cancelled.' };
           }
           payload.isLargePayload = true;
@@ -639,7 +777,14 @@ function registerLifecycleHandlers(): void {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error('[main] Failed to open remote URL:', message);
+      if (isCommandCancelled(error)) {
+        const reason = controller.signal.reason;
+        const why = reason instanceof Error ? reason.message : message;
+        return { ok: false, error: `Opening the PR/MR was cancelled: ${why}` };
+      }
       return { ok: false, error: message };
+    } finally {
+      clearTimeout(deadline);
     }
   });
 

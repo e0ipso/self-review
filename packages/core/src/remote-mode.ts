@@ -12,8 +12,22 @@
 // same suggestions for the same PR/MR under the same effective
 // configuration. Every external effect goes through an injectable
 // dependency so unit tests never spawn git/gh/glab.
+//
+// Lifetime: one session, one `AbortSignal`, one owner. Every git, gh and
+// glab command of a session runs under the caller's signal and the
+// materializer's per-command timeout; aborting kills the command in flight
+// and the session rejects with a `CommandCancelledError`. Whatever the
+// session acquired by then — a temporary clone, session refs in a reused
+// clone — is released before that rejection reaches the caller, at every
+// stage from clone to thread mapping. A session that is returned hands its
+// `cleanup` to the caller, who owns it from then on.
 
-import { parseForgeUrl, ForgeCliUnavailableError } from './forge-provider';
+import {
+  CommandCancelledError,
+  ForgeCliUnavailableError,
+  isCommandCancelled,
+  parseForgeUrl,
+} from './forge-provider';
 import type {
   ForgeCommandRunner,
   ForgeName,
@@ -24,12 +38,18 @@ import type {
 import { createGitHubProvider } from './github-provider';
 import { createGitLabProvider } from './gitlab-provider';
 import {
+  DEFAULT_GIT_COMMAND_TIMEOUT_MS,
   defaultGitRunner,
   detectExistingClone,
   materialize,
   resolveRemoteDefaultBranch,
 } from './materializer';
-import type { ExistingClone, MaterializeMode, MaterializeResult } from './materializer';
+import type {
+  ExistingClone,
+  MaterializeMode,
+  MaterializeOptions,
+  MaterializeResult,
+} from './materializer';
 import { mapThreadsToReviewComments } from './thread-mapper';
 import { createIgnoreFilter } from './ignore-filter';
 import type {
@@ -58,8 +78,12 @@ export interface MaterializedRemoteSession {
   /** Arguments for the existing git-diff machinery: `[base...head]`. */
   gitDiffArgs: string[];
   mode: MaterializeMode;
-  /** Removes the temp clone when one was created; idempotent no-op otherwise. */
-  cleanup: () => void;
+  /**
+   * Releases what materialization acquired: the temp clone when one was
+   * created, the session's refs in a reused clone otherwise. Idempotent,
+   * never rejects; the caller that received this session owns calling it.
+   */
+  cleanup: () => Promise<void>;
   /** Provenance + thread-sync status for payloads and the saved review. */
   remote: RemoteSessionInfo;
   /**
@@ -90,17 +114,20 @@ export interface RemoteSessionDeps {
     baseBranch: string,
     cwd: string,
     runner: ForgeCommandRunner,
-    existingClone?: ExistingClone | null
+    existingClone?: ExistingClone | null,
+    options?: MaterializeOptions
   ) => Promise<MaterializeResult>;
   detectExistingClone: (
     url: ForgeUrl,
     cwd: string,
-    runner: ForgeCommandRunner
+    runner: ForgeCommandRunner,
+    options?: MaterializeOptions
   ) => Promise<ExistingClone | null>;
   resolveRemoteDefaultBranch: (
     url: ForgeUrl,
     runner: ForgeCommandRunner,
-    existing?: ExistingClone | null
+    existing?: ExistingClone | null,
+    options?: MaterializeOptions
   ) => Promise<string>;
   runner: ForgeCommandRunner;
   /**
@@ -124,6 +151,31 @@ function defaultCreateProvider(forge: ForgeName, runner: ForgeCommandRunner): Fo
   return forge === 'github' ? createGitHubProvider(runner) : createGitLabProvider(runner);
 }
 
+/**
+ * A runner that runs every command under the session's bounds, for the
+ * forge provider: `gh`/`glab` are part of the session too, and a startup
+ * deadline that could not reach them would wait on them.
+ */
+function bindSessionRunner(runner: ForgeCommandRunner, signal?: AbortSignal): ForgeCommandRunner {
+  return (command, args, options) => {
+    if (signal?.aborted) {
+      return Promise.reject(new CommandCancelledError('aborted', command, args));
+    }
+    return runner(command, args, {
+      signal,
+      timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+      ...options,
+    });
+  };
+}
+
+/** Reject with the session's cancellation once `signal` has fired. */
+function throwIfAborted(signal: AbortSignal | undefined, stage: string): void {
+  if (signal?.aborted) {
+    throw new CommandCancelledError('aborted', 'self-review', [stage]);
+  }
+}
+
 /** The real dependencies: shared by every caller that does not inject its own. */
 export const defaultRemoteSessionDeps: RemoteSessionDeps = {
   createProvider: defaultCreateProvider,
@@ -137,8 +189,20 @@ export const defaultRemoteSessionDeps: RemoteSessionDeps = {
     loadGitDiffWithUntracked(gitDiffArgs, cwd, { includeUntracked: false }),
 };
 
+/** The lifetime bound a caller hands a remote session. */
+export interface RemoteLifetimeOptions {
+  /**
+   * The session's signal. Aborting it kills the git/forge command in
+   * flight; the session releases what it acquired and rejects with a
+   * {@link CommandCancelledError}. An already-aborted signal rejects before
+   * anything runs. Without one the session is bounded only by the
+   * per-command timeout.
+   */
+  signal?: AbortSignal;
+}
+
 /** Per-call choices for {@link startRemoteSession}. */
-export interface StartRemoteSessionOptions {
+export interface StartRemoteSessionOptions extends RemoteLifetimeOptions {
   /** Forwarded to the provider: include threads the forge marks resolved. */
   includeResolved?: boolean;
   /**
@@ -173,6 +237,9 @@ export async function startRemoteSession(
 ): Promise<MaterializedRemoteSession> {
   const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
   const threadsRequired = options.threads === 'required';
+  const { signal } = options;
+  const lifetime: MaterializeOptions = { signal };
+  throwIfAborted(signal, 'start');
 
   const forgeUrl = parseForgeUrl(url);
   if (!forgeUrl) {
@@ -182,7 +249,7 @@ export async function startRemoteSession(
     );
   }
 
-  const provider = d.createProvider(forgeUrl.forge, d.runner);
+  const provider = d.createProvider(forgeUrl.forge, bindSessionRunner(d.runner, signal));
 
   let cliAvailable = true;
   let baseBranch: string;
@@ -198,13 +265,23 @@ export async function startRemoteSession(
       `[remote] Forge CLI unavailable (${error.cli}): ${error.message} — ` +
         'falling back to the remote default branch via git.'
     );
-    existingClone = await d.detectExistingClone(forgeUrl, cwd, d.runner);
-    baseBranch = await d.resolveRemoteDefaultBranch(forgeUrl, d.runner, existingClone);
+    existingClone = await d.detectExistingClone(forgeUrl, cwd, d.runner, lifetime);
+    baseBranch = await d.resolveRemoteDefaultBranch(forgeUrl, d.runner, existingClone, lifetime);
   }
   console.error(`[remote] Base branch: ${baseBranch}`);
 
-  const materialized = await d.materialize(forgeUrl, baseBranch, cwd, d.runner, existingClone);
+  const materialized = await d.materialize(
+    forgeUrl,
+    baseBranch,
+    cwd,
+    d.runner,
+    existingClone,
+    lifetime
+  );
 
+  // From here on the session owns a temporary clone or session refs; the
+  // caller receives the cleanup handle only with a session, so anything that
+  // ends the call before that releases them here.
   let fetchedThreads: ForgeThread[] = [];
   let threadSyncAvailable = false;
   if (cliAvailable || threadsRequired) {
@@ -214,10 +291,10 @@ export async function startRemoteSession(
       });
       threadSyncAvailable = true;
     } catch (error) {
-      if (threadsRequired) {
-        // From here on the session may own a temporary clone; the caller
-        // never receives the cleanup handle, so release it here.
-        materialized.cleanup();
+      // A session being torn down is not a review without threads: a
+      // cancelled fetch ends the session under either policy.
+      if (threadsRequired || isCommandCancelled(error)) {
+        await materialized.cleanup();
         if (error instanceof ForgeCliUnavailableError) {
           throw new Error(
             `Cannot fetch discussion threads: ${error.message}\n` +
@@ -235,6 +312,10 @@ export async function startRemoteSession(
     console.error(
       '[remote] thread sync unavailable — forge CLI missing, continuing without forge threads.'
     );
+  }
+  if (signal?.aborted) {
+    await materialized.cleanup();
+    throwIfAborted(signal, 'threads');
   }
 
   return {
@@ -281,17 +362,22 @@ export interface RemoteReviewLoad {
  * on an ignored path stays plain text rather than a proposal over code the
  * review never shows, and one on a position computed for another head is
  * never activated (R05). Does not release the session on failure; the
- * caller owns the clone's lifetime.
+ * caller owns the clone's lifetime. An abort that lands during the load is
+ * honoured once it returns: the result is discarded and the session's
+ * cancellation is thrown instead.
  */
 export async function loadRemoteReview(
   session: MaterializedRemoteSession,
   ignorePatterns: string[],
-  loadDiff: RemoteSessionDeps['loadDiff'] = defaultRemoteSessionDeps.loadDiff
+  loadDiff: RemoteSessionDeps['loadDiff'] = defaultRemoteSessionDeps.loadDiff,
+  options: RemoteLifetimeOptions = {}
 ): Promise<RemoteReviewLoad> {
+  throwIfAborted(options.signal, 'load');
   const { files, repository, diagnostics, identity } = await loadDiff(
     session.gitDiffArgs,
     session.repoPath
   );
+  throwIfAborted(options.signal, 'load');
   const shouldKeep = createIgnoreFilter(ignorePatterns);
   const filteredFiles = files.filter(f => shouldKeep(f.newPath || f.oldPath));
   return {
@@ -348,43 +434,45 @@ export async function bootstrapRemoteDiff(
   url: string,
   cwd: string,
   ignorePatterns: string[],
-  deps: Partial<RemoteSessionDeps> = {}
+  deps: Partial<RemoteSessionDeps> = {},
+  options: RemoteLifetimeOptions = {}
 ): Promise<RemoteBootstrapResult> {
   const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
-  const started = await startRemoteSession(url, cwd, d);
+  const started = await startRemoteSession(url, cwd, d, { signal: options.signal });
 
-  // From here on the session may own a temporary clone; if anything below
-  // fails the caller never receives the cleanup handle, so release it here.
-  let loaded: RemoteReviewLoad;
+  // One boundary from here to the return: the session owns a temporary
+  // clone or session refs, and the caller receives the cleanup handle only
+  // with the result, so anything that ends the call before that — the
+  // load, the filter, the mapping, an abort — releases them here.
   try {
-    loaded = await loadRemoteReview(started, ignorePatterns, d.loadDiff);
+    const loaded = await loadRemoteReview(started, ignorePatterns, d.loadDiff, options);
+    for (const diagnostic of loaded.diagnostics) {
+      console.error(`[remote] Diff diagnostic: ${diagnostic}`);
+    }
+
+    const session: RemoteSession = { ...started, fetchedComments: loaded.comments };
+    return {
+      session,
+      identity: remoteSourceIdentity(started, loaded, cwd),
+      payload: {
+        files: loaded.files,
+        source: {
+          type: 'git',
+          // Same renderer the git-mode path uses, so expand-context can
+          // tokenize this string back into the exact argv.
+          gitDiffArgs: formatGitDiffArgs(session.gitDiffArgs),
+          repository: loaded.repository,
+        },
+        remote: session.remote,
+        // Carried only when something could not be loaded faithfully, so the
+        // renderer never mistakes a failed load for "no changes".
+        ...(loaded.diagnostics.length > 0 ? { diagnostics: loaded.diagnostics } : {}),
+      },
+    };
   } catch (error) {
-    started.cleanup();
+    await started.cleanup();
     throw error;
   }
-  for (const diagnostic of loaded.diagnostics) {
-    console.error(`[remote] Diff diagnostic: ${diagnostic}`);
-  }
-
-  const session: RemoteSession = { ...started, fetchedComments: loaded.comments };
-  return {
-    session,
-    identity: remoteSourceIdentity(started, loaded, cwd),
-    payload: {
-      files: loaded.files,
-      source: {
-        type: 'git',
-        // Same renderer the git-mode path uses, so expand-context can
-        // tokenize this string back into the exact argv.
-        gitDiffArgs: formatGitDiffArgs(session.gitDiffArgs),
-        repository: loaded.repository,
-      },
-      remote: session.remote,
-      // Carried only when something could not be loaded faithfully, so the
-      // renderer never mistakes a failed load for "no changes".
-      ...(loaded.diagnostics.length > 0 ? { diagnostics: loaded.diagnostics } : {}),
-    },
-  };
 }
 
 /**

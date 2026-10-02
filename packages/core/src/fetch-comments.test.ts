@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import type { ForgeThread, ForgeUrl, ForgeProvider } from './forge-provider';
-import { ForgeCliUnavailableError } from './forge-provider';
+import { CommandCancelledError, ForgeCliUnavailableError } from './forge-provider';
 import type { MaterializeResult } from './materializer';
 import { REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 import { mapThreadsToReviewComments } from './thread-mapper';
@@ -144,6 +144,7 @@ describe('runFetchComments', () => {
     baseSha: 'aaa111',
     headSha: 'bbb222',
     mode: 'temp-clone',
+    ownedRefs: [],
     cleanup,
   });
 
@@ -219,11 +220,14 @@ describe('runFetchComments', () => {
 
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 
-    expect(deps.detectExistingClone).toHaveBeenCalledWith(expect.anything(), '/work', deps.runner);
+    expect(deps.detectExistingClone).toHaveBeenCalledWith(expect.anything(), '/work', deps.runner, {
+      signal: undefined,
+    });
     expect(deps.resolveRemoteDefaultBranch).toHaveBeenCalledWith(
       expect.anything(),
       deps.runner,
-      null
+      null,
+      { signal: undefined }
     );
     const materializeMock = deps.materialize as ReturnType<typeof vi.fn>;
     expect(materializeMock.mock.calls[0][1]).toBe('trunk');
@@ -248,6 +252,36 @@ describe('runFetchComments', () => {
       'validation failed'
     );
     expect(cleanup).toHaveBeenCalled();
+  });
+
+  it('runs materialization under the caller signal and waits for the clone to be released', async () => {
+    const controller = new AbortController();
+    let released = false;
+    cleanup.mockImplementation(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      released = true;
+    });
+
+    await runFetchComments(PR_URL, { cwd: '/work', deps, signal: controller.signal });
+
+    const materializeMock = deps.materialize as ReturnType<typeof vi.fn>;
+    expect(materializeMock.mock.calls[0][5]).toEqual({ signal: controller.signal });
+    expect(released).toBe(true);
+  });
+
+  it('writes nothing and releases the clone when the run is cancelled during the diff load', async () => {
+    const controller = new AbortController();
+    deps.loadDiff = vi.fn().mockImplementation(async () => {
+      controller.abort();
+      return { files: [makeDiffFile('src/a.ts')], repository: '/tmp/clone' };
+    });
+
+    await expect(
+      runFetchComments(PR_URL, { cwd: '/work', deps, signal: controller.signal })
+    ).rejects.toBeInstanceOf(CommandCancelledError);
+
+    expect(written).toHaveLength(0);
+    expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('rejects URLs that are not PR/MR URLs', async () => {

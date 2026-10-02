@@ -44,10 +44,6 @@ export interface ReviewPanelProps {
   config?: Partial<AppConfig>;
   /** CSS class applied to the root container. */
   className?: string;
-  /** Prism CSS string for light theme (for non-webpack environments). */
-  prismLightCss?: string;
-  /** Prism CSS string for dark theme (for non-webpack environments). */
-  prismDarkCss?: string;
   /**
    * Optional children rendered inside the provider tree, above the
    * diff viewer. Use this to slot in host-owned chrome like a Toolbar.
@@ -88,16 +84,12 @@ export interface ReviewPanelProps {
  * ```
  */
 export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(function ReviewPanel(
-  { adapter, config, className, prismLightCss, prismDarkCss, children, onReviewChange },
+  { adapter, config, className, children, onReviewChange },
   ref
 ) {
   return (
     <ReviewAdapterProvider adapter={adapter}>
-      <ConfigProvider
-        initialConfig={config}
-        prismLightCss={prismLightCss}
-        prismDarkCss={prismDarkCss}
-      >
+      <ConfigProvider initialConfig={config}>
         <GuideProvider>
           <ReviewProvider>
             <DiffNavigationProvider>

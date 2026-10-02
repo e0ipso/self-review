@@ -14,7 +14,11 @@ CLI args → git diff → parsed AST → XML output.
   (`xmllint-wasm`, `fast-xml-parser`, `yaml`, `ignore`). It cannot be imported in browser or
   renderer code.
 - **No imports from `@self-review/react`.** Dependency flows one way: `core` depends on `types`,
-  never on `react`.
+  never on `react`. The one sanctioned exception is `src/config.ts` importing
+  `packages/react/src/config-defaults.ts` by relative source path: a pure-data module (type-only
+  import, no React, no DOM) that both packages bundle, so the YAML loader and the renderer's
+  `ConfigProvider` merge over the same defaults. tsup inlines it; the published package has no
+  runtime dependency on `@self-review/react`. Its header records why it lives there.
 - **`file-type-utils.ts` is duplicated in `@self-review/react`.** The functions in this file
   (`getLanguageFromPath`, `isPreviewableImage`, `isPreviewableSvg`) are pure string utilities with
   no Node dependencies. They are intentionally duplicated in
@@ -40,7 +44,7 @@ src/
 ├── xml-text.ts           # The one escape/decode contract (CR/LF/TAB as char refs, single pass)
 ├── xml-errors.ts         # ReviewXmlError / XmlIllegalCharacterError (library never process.exits)
 ├── anchor-validation.ts  # validateLineAnchor / validateLineRange, shared by resume import and Apply
-├── config.ts             # YAML config loading & merging; loadConfigWithProvenance records each value's origin (user file / project file / default)
+├── config.ts             # YAML config loading & merging over the shared defaults (packages/react/src/config-defaults.ts); loadConfigWithProvenance records each value's origin (user file / project file / default)
 ├── startup.ts            # The startup steps both front ends share: resolveOutputTarget (user output-file explicit, project/default inherited), resolveStartupDiffArgs (project default-diff-args may not name --output/--ext-diff/--textconv), loadLocalReview, loadResumeDocument; the two CLIs' intentional differences are tabled here
 ├── startup-mode.ts       # resolveStartupSource / determineMode: git, directory, file or welcome, from the classifier's first positional
 ├── cli-options.ts        # extractApplicationOptions: both CLIs' own flags out of a git argv (-- ends them, option values kept, --flag=value)

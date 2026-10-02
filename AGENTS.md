@@ -275,24 +275,44 @@ welcome/splash screen (the `remote:open-url` IPC channel). Forge detection is by
 zero configuration. The diff is always **materialized through local git**
 (`packages/core/src/materializer.ts`): if CWD is inside a clone whose remote matches the URL, the
 base branch and PR/MR head ref (`refs/pull/N/head` / `refs/merge-requests/N/head`) are fetched into
-namespaced local refs (`refs/self-review/*` — no checkout, no working-tree changes); otherwise a
-temporary blobless clone (`--filter=blob:none`, never shallow) is created under the OS temp
-directory and removed on exit. After materialization, remote mode _is_ git mode: the existing
-pipeline runs against the clone path and the `baseSha...headSha` range
+refs that session alone owns (`refs/self-review/<session-uuid>/base|head` — no checkout, no
+working-tree changes; the SHAs are read from exactly those refs, so two sessions over one clone,
+same PR or not, never see each other's snapshot, and each `cleanup()` deletes only its own two
+refs); otherwise a temporary blobless clone (`--filter=blob:none`, never shallow) is created under
+the OS temp directory and removed on exit. After materialization, remote mode _is_ git mode: the
+existing pipeline runs against the clone path and the `baseSha...headSha` range
 (`packages/core/src/remote-mode.ts`). Git's own credential machinery handles all clone/fetch
-transport. The **conversation plane** (base-branch lookup, discussion-thread fetch) lives behind the
-`ForgeProvider` interface in `packages/core/src/forge-provider.ts`, implemented by
-`github-provider.ts` (`gh` CLI) and `gitlab-provider.ts` (`glab` CLI; unresolved threads only by
-default). When the forge CLI is absent or unauthenticated, the review itself proceeds untouched
-(base branch falls back to `git ls-remote --symref` via `resolveRemoteDefaultBranch`) and thread
-sync reports as unavailable on stderr. Fetched threads are mapped deterministically to
-`ReviewComment` threads by `packages/core/src/thread-mapper.ts` (pure code, no LLM); threads with no
-file association land on the sentinel path `''` (`REVIEW_LEVEL_FILE_PATH`). A root body carrying one
-top-level ` ```suggestion ` fence also yields a `Suggestion` anchored at the thread's line range,
-with `originalCode` read out of the reviewed diff rather than out of the body — which is what makes
-it anchored rather than quoted. Anything the mapper cannot verify stays `null`: no fence, more than
-one fence, a fence nested in another code block, GitLab's `suggestion:-1+2` range form (it widens
-the anchor by an amount the diff cannot confirm), a file-level or outdated anchor, and an anchor the
+transport, and the runner leaves prompting as the environment configures it (no
+`GIT_TERMINAL_PROMPT`, no process-group detach — that would sever the controlling terminal and
+silently disable git's and ssh's prompts). **Session lifetime:** every git/`gh`/`glab` command of a
+remote session runs under one `AbortSignal` (`RemoteLifetimeOptions.signal`, threaded through
+`startRemoteSession` → `materialize` and the provider's runner) and the materializer's per-command
+timeout (`DEFAULT_GIT_COMMAND_TIMEOUT_MS`, 10 minutes); aborting or timing out kills the child
+(SIGTERM, then SIGKILL after 2 s) and rejects with a `CommandCancelledError`, which the providers
+never fold into "CLI unavailable" and which the `'optional'` thread policy never degrades. A
+temporary clone is owned from the moment its directory exists (cleanup registered before `git clone`
+runs), and one try/finally in `bootstrapRemoteDiff` / `runFetchComments` spans clone, fetch, load,
+filter and map: whatever stage fails, the clone or the session refs are released before the error
+reaches the caller, and `cleanup()` (async, idempotent, never rejects; its temp-dir removal is its
+synchronous first step) is handed over only with a result. Each host owns that handle with its own
+limit: desktop startup aborts the in-flight bootstrap at its 45 s deadline and waits up to 10 s for
+the cleanup before exiting, a welcome-screen `remote:open-url` runs one open at a time and cancels
+itself after 10 minutes (the welcome screen stays usable), every desktop exit path (`exitNow`,
+`will-quit`) disposes the session first, and headless `fetch-comments` has no overall deadline but
+cancels on SIGINT/SIGTERM and exits 128 + signal after releasing the clone. The **conversation
+plane** (base-branch lookup, discussion-thread fetch) lives behind the `ForgeProvider` interface in
+`packages/core/src/forge-provider.ts`, implemented by `github-provider.ts` (`gh` CLI) and
+`gitlab-provider.ts` (`glab` CLI; unresolved threads only by default). When the forge CLI is absent
+or unauthenticated, the review itself proceeds untouched (base branch falls back to
+`git ls-remote --symref` via `resolveRemoteDefaultBranch`) and thread sync reports as unavailable on
+stderr. Fetched threads are mapped deterministically to `ReviewComment` threads by
+`packages/core/src/thread-mapper.ts` (pure code, no LLM); threads with no file association land on
+the sentinel path `''` (`REVIEW_LEVEL_FILE_PATH`). A root body carrying one top-level
+` ```suggestion ` fence also yields a `Suggestion` anchored at the thread's line range, with
+`originalCode` read out of the reviewed diff rather than out of the body — which is what makes it
+anchored rather than quoted. Anything the mapper cannot verify stays `null`: no fence, more than one
+fence, a fence nested in another code block, GitLab's `suggestion:-1+2` range form (it widens the
+anchor by an amount the diff cannot confirm), a file-level or outdated anchor, and an anchor the
 diff does not cover end to end. Mapping needs the diff, so both entry points map after loading it.
 `bootstrapRemoteDiff` re-maps the threads it fetched before the diff existed, and `fetch-comments`
 maps once against the diff it just loaded, so the app and the subcommand produce the same
@@ -556,14 +576,15 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   rather than publish a reference to the wrong bytes. In remote mode, when no matching local clone
   exists, it additionally creates a temporary blobless clone in a uniquely named directory under the
   OS temp root, removed on exit (a leftover from a crash sits in the OS temp area, which the OS
-  reclaims); when reusing an existing clone, it only fetches into namespaced refs
-  (`refs/self-review/*`) — the working tree is never touched. No other files are written by the app
-  itself. There is now one sanctioned exception, the suggestion-apply path whose boundaries PRD
-  Section 5.4.8 records: `applySuggestion` in `packages/core/src/apply-suggestion.ts` rewrites one
-  reviewed working file when the caller names an explicit destination root and the anchored lines
-  still match the suggestion's recorded original code byte for byte. It refuses and writes nothing
-  otherwise, and it never consults the current working directory. The app reaches it through the
-  `suggestion:apply` channel, and only when the reviewer presses Apply on one suggestion.
+  reclaims); when reusing an existing clone, it only fetches into refs the session owns
+  (`refs/self-review/<session-uuid>/*`, deleted by that session's cleanup; a crash can leave an
+  orphan pair, which is inert) — the working tree is never touched. No other files are written by
+  the app itself. There is now one sanctioned exception, the suggestion-apply path whose boundaries
+  PRD Section 5.4.8 records: `applySuggestion` in `packages/core/src/apply-suggestion.ts` rewrites
+  one reviewed working file when the caller names an explicit destination root and the anchored
+  lines still match the suggestion's recorded original code byte for byte. It refuses and writes
+  nothing otherwise, and it never consults the current working directory. The app reaches it through
+  the `suggestion:apply` channel, and only when the reviewer presses Apply on one suggestion.
   `applySuggestionForSession` in `packages/core/src/review-handlers.ts` names the destination, which
   is the git repository root, the reviewed directory, or the reviewed file's parent, and refuses
   when the session has none. A remote review materialized into a temporary clone is the one session

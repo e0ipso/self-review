@@ -288,12 +288,16 @@ included. The review is still written to a local `review.xml`; nothing is ever s
 forge.
 
 Under the hood the diff is materialized through local git: if you run the command from inside a
-clone of that repository, self-review reuses it (it only fetches refs — your working tree is
-untouched); otherwise it creates a temporary blobless clone under your system temp directory and
-removes it when you close the app. Private repositories work through git's own credentials (SSH keys
-or credential helpers — `gh auth setup-git` / `glab auth git-credential` wire your forge CLI login
-into git). The `gh` / `glab` CLIs are only needed to sync the PR/MR discussion threads; without them
-the review itself still works at full fidelity, just without the threads.
+clone of that repository, self-review reuses it (it only fetches into refs of its own under
+`refs/self-review/`, which it deletes when you close the app — your working tree and branches are
+untouched, and several self-review sessions can share the clone); otherwise it creates a temporary
+blobless clone under your system temp directory and removes it when you close the app. Each git
+command is bounded (10 minutes), the desktop app gives the whole startup 45 seconds, a URL opened
+from the welcome screen gets 10 minutes, and Ctrl+C on `fetch-comments` cancels the clone in
+progress and removes it before exiting. Private repositories work through git's own credentials (SSH
+keys or credential helpers — `gh auth setup-git` / `glab auth git-credential` wire your forge CLI
+login into git). The `gh` / `glab` CLIs are only needed to sync the PR/MR discussion threads;
+without them the review itself still works at full fidelity, just without the threads.
 
 There is also a headless subcommand that fetches the discussion threads into a review file without
 opening a window:

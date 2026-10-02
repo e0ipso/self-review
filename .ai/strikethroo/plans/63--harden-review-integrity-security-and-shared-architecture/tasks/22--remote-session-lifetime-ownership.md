@@ -2,7 +2,7 @@
 id: 22
 group: "remote"
 dependencies: [16, 21]
-status: "pending"
+status: "completed"
 created: 2026-10-01
 skills:
   - nodejs-subprocess
@@ -20,11 +20,11 @@ Remote materialization captures an immutable per-session snapshot so concurrent 
 Node.js child-process lifetime/cancellation and Git ref semantics.
 
 ## Acceptance Criteria
-- [ ] `materializer.ts:47–74,200–214`: fetches into per-session refs (e.g. `refs/self-review/<session-uuid>/base|head`) and resolves SHAs from the same fetch (e.g. `git fetch --porcelain` output or `rev-parse` of the unique refs); refs are deleted only by their owning session on cleanup. A controlled-interleaving test through the real materializer (two sessions, same clone, different PRs and same PR) shows each session gets its own SHAs and neither cleanup removes the other's refs.
-- [ ] The materializer Git runner supports an `AbortSignal` and a per-command timeout; on abort/timeout the child is killed (and its process group where applicable) and the promise rejects with a typed cancellation error. Credential prompting behavior is unchanged (no blanket `GIT_TERMINAL_PROMPT=0` unless it was already set).
-- [ ] Temporary clone cleanup is registered immediately after the temp directory is created (before cloning), and a single try/finally (or owned disposable) spans materialize → load → filter → map (`remote-mode.ts:214–243`). Injected exceptions at each stage (clone, fetch, load, filter, map) leave no temp directory and no child processes (tests).
-- [ ] Desktop startup timeout (`src/main/main.ts:151–154,209`) aborts the in-flight remote bootstrap through the signal and waits for cleanup before exiting; welcome-screen `remote:open-url` and headless `fetch-comments` use the same signal/cleanup ownership with their own documented limits.
-- [ ] `npm run test:unit`, `npm run typecheck`, `npm run typecheck:packages` pass.
+- [x] `materializer.ts:47–74,200–214`: fetches into per-session refs (e.g. `refs/self-review/<session-uuid>/base|head`) and resolves SHAs from the same fetch (e.g. `git fetch --porcelain` output or `rev-parse` of the unique refs); refs are deleted only by their owning session on cleanup. A controlled-interleaving test through the real materializer (two sessions, same clone, different PRs and same PR) shows each session gets its own SHAs and neither cleanup removes the other's refs.
+- [x] The materializer Git runner supports an `AbortSignal` and a per-command timeout; on abort/timeout the child is killed (and its process group where applicable) and the promise rejects with a typed cancellation error. Credential prompting behavior is unchanged (no blanket `GIT_TERMINAL_PROMPT=0` unless it was already set).
+- [x] Temporary clone cleanup is registered immediately after the temp directory is created (before cloning), and a single try/finally (or owned disposable) spans materialize → load → filter → map (`remote-mode.ts:214–243`). Injected exceptions at each stage (clone, fetch, load, filter, map) leave no temp directory and no child processes (tests).
+- [x] Desktop startup timeout (`src/main/main.ts:151–154,209`) aborts the in-flight remote bootstrap through the signal and waits for cleanup before exiting; welcome-screen `remote:open-url` and headless `fetch-comments` use the same signal/cleanup ownership with their own documented limits.
+- [x] `npm run test:unit`, `npm run typecheck`, `npm run typecheck:packages` pass.
 
 Use your internal Todo tool to track these and keep on track.
 

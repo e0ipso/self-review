@@ -108,6 +108,26 @@ apps do not need Tailwind in their project.
 2. **CSS containment**, all `*` selectors and component-specific overrides in `styles.css` are
    prefixed with `.self-review`, preventing style leakage into host applications.
 
+### Prism themes are prebuilt and scoped
+
+Both syntax-highlighting themes ship inside the stylesheet: `src/vendor/prism-light-scoped.css`
+(prism.css under `.self-review:not(.dark)`) and `src/vendor/prism-dark-scoped.css` (prism-one-dark
+under `.self-review.dark`). Toggling `dark` on the wrapper is the entire theme switch. Nothing is
+injected into the document at runtime, so there are no `prismLightCss`/`prismDarkCss` props on
+`ConfigProvider`, `ReviewPanel` or `SingleFileReview`; a host that imports `styles.css` has both
+themes. The desktop renderer imports the same sources (`src/styles.css` and the two vendor files)
+from `src/index.css` instead of the compiled `dist/styles.css`, for the same reason it imports the
+package's TypeScript by relative path: no package build during development.
+
+### Shared configuration defaults
+
+`src/config-defaults.ts` is the one source of the default `AppConfig` (categories, theme, view mode,
+font size, ignore patterns, payload thresholds). `ConfigProvider` merges an embedder's `config` over
+it and exports it as `defaultConfig`; the Node-only loader in `packages/core/src/config.ts` imports
+the same file by relative source path and merges the YAML files over it. The file is pure data with
+a type-only import, so it may be bundled into either package; its header records why it lives here
+and not in `core` or `types`. Keep it free of anything that is not browser-safe.
+
 ### Radix/Base UI portal containers
 
 All shadcn/ui portal-based components (`alert-dialog`, `dropdown-menu`, `select`, `tooltip`) receive
