@@ -260,6 +260,22 @@ You can continue your saved review if you didn't finish it:
 self-review --staged --resume-from review.xml
 ```
 
+Arguments that are not self-review's own go straight to `git diff`. `--resume-from <file>` also
+takes the `--resume-from=<file>` form, a `--` ends self-review's own options (everything after it,
+and the value of a git option such as `-S`, is passed to git as written), and options that change
+what git prints (`--stat`, `--name-only`, `--word-diff`, ...) are refused with the flag named,
+because the review needs a patch it can parse. Git output the app cannot show faithfully, such as a
+merge-conflict section, is reported in the window instead of being left out of the review.
+
+### Saving and quitting
+
+**Finish Review** writes the review and exits. Closing the window, or choosing Quit from the menu
+(Ctrl+Q / Cmd+Q), asks first: **Save & Quit**, **Discard** or **Cancel**. The app only exits after a
+successful save or an explicit Discard. If the save fails, for example because the output path is a
+directory, the disk is full or the file is not writable, the window stays open with all your
+comments, a dialog says why, and any earlier `review.xml` is left exactly as it was. Fix the cause
+or pick another path from the footer of the file tree and save again.
+
 ### Examples
 
 ```bash
@@ -288,12 +304,16 @@ included. The review is still written to a local `review.xml`; nothing is ever s
 forge.
 
 Under the hood the diff is materialized through local git: if you run the command from inside a
-clone of that repository, self-review reuses it (it only fetches refs — your working tree is
-untouched); otherwise it creates a temporary blobless clone under your system temp directory and
-removes it when you close the app. Private repositories work through git's own credentials (SSH keys
-or credential helpers — `gh auth setup-git` / `glab auth git-credential` wire your forge CLI login
-into git). The `gh` / `glab` CLIs are only needed to sync the PR/MR discussion threads; without them
-the review itself still works at full fidelity, just without the threads.
+clone of that repository, self-review reuses it (it only fetches into refs of its own under
+`refs/self-review/`, which it deletes when you close the app — your working tree and branches are
+untouched, and several self-review sessions can share the clone); otherwise it creates a temporary
+blobless clone under your system temp directory and removes it when you close the app. Each git
+command is bounded (10 minutes), the desktop app gives the whole startup 45 seconds, a URL opened
+from the welcome screen gets 10 minutes, and Ctrl+C on `fetch-comments` cancels the clone in
+progress and removes it before exiting. Private repositories work through git's own credentials (SSH
+keys or credential helpers — `gh auth setup-git` / `glab auth git-credential` wire your forge CLI
+login into git). The `gh` / `glab` CLIs are only needed to sync the PR/MR discussion threads;
+without them the review itself still works at full fidelity, just without the threads.
 
 There is also a headless subcommand that fetches the discussion threads into a review file without
 opening a window:
@@ -329,7 +349,8 @@ npx @self-review/serve --resume-from review.xml   # continue a previous review
 npx @self-review/serve -o my-review.xml --staged  # write somewhere other than ./review.xml
 ```
 
-The URL goes to stderr when the process starts. Open it in a browser.
+The URL goes to stderr when the process starts. Open it in a browser exactly as printed: the part
+after `#` is this session's key, and the page does not work without it.
 
 The output path is set once, at startup, by `--output`/`-o` or by `output-file` in
 `.self-review.yaml`. No control in the browser changes it afterward. Finishing the review writes
@@ -343,12 +364,14 @@ is auto-saved either way.
 Walkthrough guides work as they do in the desktop application. A `review.guide.xml` sitting next to
 your output path is picked up at startup and the file tree opens in guided mode.
 
-The listener binds to `127.0.0.1` and there is no authentication. Anything that can reach the port
-can read your diff and finish the review on your behalf, and on a shared host that means every local
-user, not only you. It will not answer a request that names anything but itself, so a web page you
-happen to be visiting cannot reach it. Reaching it over an `ssh -L` forward works as you would
-expect; anyone who can reach that forwarded port has the access you do, and securing it is yours to
-add.
+The listener binds to `127.0.0.1`, will not answer a request that names anything but itself (so a
+web page you happen to be visiting cannot reach it), and requires the session key on every API
+request (so another account on the same host cannot either). The key is drawn fresh each start and
+exists only in the printed URL's fragment: a reloaded or retyped address does not have it and gets a
+page saying so, and a lost URL means starting the process again. Reaching it over an `ssh -L`
+forward works as you would expect — open the printed URL against the forwarded port, fragment and
+all. Anyone who can reach that forwarded port and has the URL has the access you do, so treat the
+URL like a password.
 
 See [`packages/serve/README.md`](packages/serve/README.md) for the package itself.
 
@@ -413,11 +436,21 @@ Customize **self-review** with YAML configuration files:
 
 Project config overrides user config, which overrides built-in defaults.
 
+The two files are trusted differently, because a project file is committed by whoever owns the
+repository while the user file is yours. An `output-file` from your user config is treated like a
+path you typed and may point anywhere, such as a reviews directory outside the repository; an
+`output-file` from a project config, or the default `./review.xml`, must stay inside the directory
+you launched from and may not be a symlink, so a repository cannot redirect where the review is
+saved. Likewise `default-diff-args` from a project config may not contain `--output`, `--ext-diff`
+or `--textconv` (git options that write a file or run an external program); the app refuses to start
+and names the option and the file. Your own arguments and user config are not restricted.
+
 ### Available options
 
 - `theme`: light, dark, or system (default: system)
 - `diff-view`: split or unified (default: split)
-- `font-size`: editor font size in pixels (default: 14)
+- `font-size`: font size in pixels for diff code (default: 14; the row height grows with it, and a
+  value that is not a positive number falls back to the default)
 - `output-file`: path for the review XML output (default: `./review.xml`)
 - `guide-file`: path to the walkthrough guide sidecar (default: derived from `output-file` as
   `<output-basename>.guide.xml`, e.g. `review.guide.xml`)
@@ -434,8 +467,9 @@ Project config overrides user config, which overrides built-in defaults.
   100000). Set to `0` to disable.
 
 When either threshold is exceeded, a confirmation dialog appears. Cancelling exits the app;
-continuing enters large-payload mode with lazy content loading (file hunks are fetched on demand as
-you scroll).
+continuing enters large-payload mode with lazy content loading: every file starts collapsed, and a
+file's hunks are fetched when you open it. A fetch that fails shows its error with a Retry button
+and is not retried on its own.
 
 <details>
 <summary>Example: Custom comment categories</summary>

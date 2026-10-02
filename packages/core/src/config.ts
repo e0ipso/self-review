@@ -1,4 +1,3 @@
-// src/main/config.ts
 // YAML configuration loading and merging
 
 import { readFileSync, existsSync } from 'fs';
@@ -6,105 +5,75 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import { AppConfig } from './types';
+import { DEFAULT_CONFIG } from '../../react/src/config-defaults';
 
-const defaults: AppConfig = {
-  theme: 'system',
-  diffView: 'split',
-  fontSize: 14,
-  outputFormat: 'xml',
-  outputFile: './review.xml',
-  ignore: [
-    '.git',
-    'node_modules',
-    'vendor',
-    '.vendor',
-    '__pycache__',
-    '.venv',
-    'venv',
-    '.env',
-    'dist',
-    'build',
-    '.next',
-    '.nuxt',
-    '.svelte-kit',
-    'target',
-    '*.min.js',
-    '*.min.css',
-    'package-lock.json',
-    'yarn.lock',
-    'pnpm-lock.yaml',
-    'composer.lock',
-    'Gemfile.lock',
-    'Cargo.lock',
-    'poetry.lock',
-    'go.sum',
-  ],
-  categories: [
-    {
-      name: 'question',
-      description: 'Clarification needed — not necessarily a problem',
-      color: '#805ad5',
-    },
-    {
-      name: 'bug',
-      description: 'Likely defect or incorrect behavior',
-      color: '#e53e3e',
-    },
-    {
-      name: 'security',
-      description: 'Security vulnerability or concern',
-      color: '#dd6b20',
-    },
-    {
-      name: 'style',
-      description: 'Code style, naming, or formatting issue',
-      color: '#3182ce',
-    },
-    {
-      name: 'task',
-      description: 'Action item or follow-up task',
-      color: '#38a169',
-    },
-    {
-      name: 'nit',
-      description: 'Minor nitpick, low priority',
-      color: '#718096',
-    },
-  ],
-  defaultDiffArgs: '',
-  showUntracked: true,
-  showUntrackedExplicit: false,
-  wordWrap: true,
-  maxFiles: 500,
-  maxTotalLines: 100000,
-};
+// Shared with the renderer's ConfigProvider; see packages/react/src/config-defaults.ts.
+const defaults: AppConfig = DEFAULT_CONFIG;
 
-export function loadConfig(): AppConfig {
+/**
+ * `project` config is repository data and is trusted less than the reviewer's own `user` config.
+ */
+export type ConfigValueOrigin = 'default' | 'user' | 'project';
+
+export type ConfigProvenance = Readonly<Record<keyof AppConfig, ConfigValueOrigin>>;
+
+export interface ConfigSource {
+  origin: 'user' | 'project';
+  path: string;
+}
+
+export interface LoadedConfig {
+  config: AppConfig;
+  provenance: ConfigProvenance;
+  sources: ConfigSource[];
+}
+
+export interface LoadConfigOptions {
+  cwd?: string;
+  homeDir?: string;
+}
+
+const CONFIG_KEYS = Object.keys(defaults) as (keyof AppConfig)[];
+
+/** Project overrides user overrides defaults; an invalid value is not attributed to its file. */
+export function loadConfigWithProvenance(options: LoadConfigOptions = {}): LoadedConfig {
   let config = { ...defaults };
+  const provenance = Object.fromEntries(CONFIG_KEYS.map(key => [key, 'default'])) as Record<
+    keyof AppConfig,
+    ConfigValueOrigin
+  >;
+  // `guideFile` has no default, so it is missing from CONFIG_KEYS.
+  provenance.guideFile = 'default';
+  const sources: ConfigSource[] = [];
 
-  // Load user-level config
-  const userConfigPath = join(homedir(), '.config', 'self-review', 'config.yaml');
-  if (existsSync(userConfigPath)) {
+  const files: ConfigSource[] = [
+    {
+      origin: 'user',
+      path: join(options.homeDir ?? homedir(), '.config', 'self-review', 'config.yaml'),
+    },
+    { origin: 'project', path: join(options.cwd ?? process.cwd(), '.self-review.yaml') },
+  ];
+  for (const source of files) {
+    if (!existsSync(source.path)) continue;
     try {
-      const userConfig = loadYamlConfig(userConfigPath);
-      config = mergeConfig(config, userConfig);
+      const override = loadYamlConfig(source.path);
+      config = mergeConfig(config, override);
+      for (const key of Object.keys(override) as (keyof AppConfig)[]) {
+        provenance[key] = source.origin;
+      }
+      sources.push(source);
     } catch (error) {
-      console.error(`Warning: Failed to load user config from ${userConfigPath}: ${error}`);
+      console.error(
+        `Warning: Failed to load ${source.origin} config from ${source.path}: ${error}`
+      );
     }
   }
 
-  // Load project-level config
-  const projectConfigPath = join(process.cwd(), '.self-review.yaml');
-  if (existsSync(projectConfigPath)) {
-    try {
-      const projectConfig = loadYamlConfig(projectConfigPath);
-      config = mergeConfig(config, projectConfig);
-    } catch (error) {
-      console.error(`Warning: Failed to load project config from ${projectConfigPath}: ${error}`);
-    }
-  }
+  return { config, provenance, sources };
+}
 
-  return config;
+export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
+  return loadConfigWithProvenance(options).config;
 }
 
 function loadYamlConfig(path: string): Partial<AppConfig> {

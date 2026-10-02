@@ -2,6 +2,9 @@
 // Builds the application menu. Standard menus (File/Edit/View/Window) use
 // Electron's built-in role submenus so they match the platform defaults
 // automatically; only the Help menu is customized.
+//
+// Quit stays the built-in role: main.ts intercepts its `app.quit()` in `before-quit`. A custom click that
+// exited directly would reopen the data-loss path.
 
 import { Menu, shell, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 import { IPC } from '../shared/ipc-channels';

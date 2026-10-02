@@ -22,6 +22,24 @@ Reusable UI layer consumed by the Electron renderer and the webapp e2e test harn
   platform-specific operations (expand context, load images, change output path). The Electron app
   and webapp e2e harness each provide their own adapter implementation.
 
+## Review session semantics
+
+`ReviewProvider` (`src/context/ReviewContext.tsx`) exports exactly the session on screen. Its JSDoc
+is the contract; in short:
+
+- **Identity** is the adapter object plus `reviewSessionIdentity(source, remote)`: source kind,
+  repository and diff arguments or source path, and remote URL.
+- **Replacement.** A new adapter object (or a different static `initialSource`) remounts the session
+  through a React `key`, so the old state is discarded and the old adapter's late results and
+  subscriptions are dropped. A pushed payload with a different identity replaces the session in
+  place, including an empty one. Hosts must keep the adapter identity stable.
+- **Update.** A pushed payload with the same identity keeps comments and viewed flags by path.
+- `initialComments` hydrate once per session, after its files are known, and never again.
+- `SingleFileReview` keys its session on the file path and source, so a different file never
+  inherits the previous file's comments or source.
+- `sessionId` on the context changes on every replacement, for async work that must discard a stale
+  result.
+
 ## Structure
 
 ```
@@ -89,6 +107,26 @@ apps do not need Tailwind in their project.
    `@custom-variant dark (&:is(.dark *))` in `styles.css`.
 2. **CSS containment**, all `*` selectors and component-specific overrides in `styles.css` are
    prefixed with `.self-review`, preventing style leakage into host applications.
+
+### Prism themes are prebuilt and scoped
+
+Both syntax-highlighting themes ship inside the stylesheet: `src/vendor/prism-light-scoped.css`
+(prism.css under `.self-review:not(.dark)`) and `src/vendor/prism-dark-scoped.css` (prism-one-dark
+under `.self-review.dark`). Toggling `dark` on the wrapper is the entire theme switch. Nothing is
+injected into the document at runtime, so there are no `prismLightCss`/`prismDarkCss` props on
+`ConfigProvider`, `ReviewPanel` or `SingleFileReview`; a host that imports `styles.css` has both
+themes. The desktop renderer imports the same sources (`src/styles.css` and the two vendor files)
+from `src/index.css` instead of the compiled `dist/styles.css`, for the same reason it imports the
+package's TypeScript by relative path: no package build during development.
+
+### Shared configuration defaults
+
+`src/config-defaults.ts` is the one source of the default `AppConfig` (categories, theme, view mode,
+font size, ignore patterns, payload thresholds). `ConfigProvider` merges an embedder's `config` over
+it and exports it as `defaultConfig`; the Node-only loader in `packages/core/src/config.ts` imports
+the same file by relative source path and merges the YAML files over it. The file is pure data with
+a type-only import, so it may be bundled into either package; its header records why it lives here
+and not in `core` or `types`. Keep it free of anything that is not browser-safe.
 
 ### Radix/Base UI portal containers
 

@@ -62,7 +62,7 @@ describe('useDiffNavigation', () => {
   });
 
   describe('scrollToFile', () => {
-    it('scrolls to element with matching data-file-path', () => {
+    it('scrolls to the element registered for the path', () => {
       const mockElement = document.createElement('div');
       mockElement.setAttribute('data-file-path', 'test.ts');
       const scrollIntoViewMock = vi.fn();
@@ -70,6 +70,7 @@ describe('useDiffNavigation', () => {
       scrollContainer.appendChild(mockElement);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
+      result.current.registerFileElement('test.ts', mockElement);
 
       act(() => {
         result.current.scrollToFile('test.ts');
@@ -107,6 +108,8 @@ describe('useDiffNavigation', () => {
       scrollContainer.appendChild(element2);
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
+      result.current.registerFileElement('file1.ts', element1);
+      result.current.registerFileElement('file2.ts', element2);
 
       act(() => {
         result.current.scrollToFile('file2.ts');

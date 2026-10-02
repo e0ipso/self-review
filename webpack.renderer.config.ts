@@ -9,15 +9,11 @@ export const rendererConfig: Configuration = {
   module: {
     rules: [
       ...baseRules,
-      // Raw CSS imports (e.g., Prism themes) — imported as strings, not injected
+      // Stylesheets, including the @self-review/react sources src/index.css
+      // imports and the CSS the MDEditor package imports itself. Prism themes
+      // arrive through those sources already scoped; nothing is read as a string.
       {
         test: /\.css$/,
-        resourceQuery: /raw/,
-        type: 'asset/source',
-      },
-      {
-        test: /\.css$/,
-        resourceQuery: { not: [/raw/] },
         use: [
           { loader: 'style-loader' },
           { loader: 'css-loader' },

@@ -1,4 +1,5 @@
 import { defaultUrlTransform, type UrlTransform } from 'react-markdown';
+import { fromHtml } from 'hast-util-from-html';
 import type { Element, Root } from 'hast';
 
 // Reviewed HTML may format text, but cannot create browsing contexts, forms,
@@ -95,6 +96,15 @@ export function isPassiveHtmlAttribute(tag: string, name: string): boolean {
   return GLOBAL_ATTRIBUTES.has(name) || TAG_ATTRIBUTES[tag]?.has(name) === true;
 }
 
+// `language-*` (Prism, ```mermaid detection) is the only class kept: any other token would let
+// content borrow the app's utilities (`fixed`, `inset-0`, `sr-only`) to cover review controls.
+const PASSIVE_CLASS_TOKEN = /^language-[\w-]+$/;
+
+function passiveClassNames(value: unknown): string[] {
+  const tokens = Array.isArray(value) ? value : String(value ?? '').split(/\s+/);
+  return tokens.map(String).filter(token => PASSIVE_CLASS_TOKEN.test(token));
+}
+
 export function rehypePassiveContent() {
   return (tree: Root) => {
     function clean(parent: Root | Element): void {
@@ -103,6 +113,11 @@ export function rehypePassiveContent() {
         if (!PASSIVE_HTML_TAGS.has(node.tagName)) return false;
         for (const key of Object.keys(node.properties)) {
           if (!isPassiveHtmlAttribute(node.tagName, key)) delete node.properties[key];
+        }
+        if ('className' in node.properties) {
+          const classNames = passiveClassNames(node.properties.className);
+          if (classNames.length > 0) node.properties.className = classNames;
+          else delete node.properties.className;
         }
         // GFM task lists stay visible without allowing interactive form controls.
         if (node.tagName === 'input') {
@@ -115,6 +130,29 @@ export function rehypePassiveContent() {
     }
     clean(tree);
   };
+}
+
+const URL_PROPERTIES = ['href', 'src'] as const;
+
+// react-markdown applies `urlTransform` after its rehype plugins; trees outside it need the same.
+function applyUrlPolicy(parent: Root | Element): void {
+  for (const node of parent.children) {
+    if (node.type !== 'element') continue;
+    for (const key of URL_PROPERTIES) {
+      if (!(key in node.properties)) continue;
+      node.properties[key] =
+        localContentUrlTransform(String(node.properties[key] ?? ''), key, node) ?? undefined;
+    }
+    applyUrlPolicy(node);
+  }
+}
+
+/** Surviving elements keep the parser's `position`, so comment anchors are source lines. */
+export function parsePassiveHtml(html: string): Root {
+  const tree = fromHtml(html, { fragment: true });
+  rehypePassiveContent()(tree);
+  applyUrlPolicy(tree);
+  return tree;
 }
 
 /** Resource URLs never get the network privileges of ordinary user links. */

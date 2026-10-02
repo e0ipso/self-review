@@ -56,37 +56,37 @@
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-create-plan/SKILL.md",
-      "computedHash": "41d3206f44742d3cf76446b13ae3304e1b7b175e63897ae435fc77a4aaaa254c"
+      "computedHash": "fec3b0fc5d6f14a8865f64d49d76322a74c4a62761686d5702e39ccce076cd02"
     },
     "st-execute-blueprint": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-execute-blueprint/SKILL.md",
-      "computedHash": "13c6e21b7f2f2a01810fc8c3b2043bc39b0c7ca10709e4c70baa75b4ff9b0d34"
+      "computedHash": "7ff57176ef37c72bd28047379d93b89333fba0cdc6205b5b94a8997667a5b7fa"
     },
     "st-execute-task": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-execute-task/SKILL.md",
-      "computedHash": "df85712fa941b22c154c006586ce254484a03b58457bd78a8b0ad7fb0e632bc5"
+      "computedHash": "14b119d27c1e5878d01b1b0fd91040af3c72b70239a5c79f520b6eff1ac16a1d"
     },
     "st-full-workflow": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-full-workflow/SKILL.md",
-      "computedHash": "4fb17734713eb0470563fbfc8c3157c98be72690d9e142fd68c93d3c0bb8342f"
+      "computedHash": "b835f6a1a2c67e21c6b74f1153d0a9a3f82d0c1ba364f8834dd71c95bbe5247a"
     },
     "st-generate-tasks": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-generate-tasks/SKILL.md",
-      "computedHash": "c70f14b2e92950e770eb0c86d9662d0765292d81c53007efea95a8d47efd65c7"
+      "computedHash": "e6369765820012e02cbfc0d1b14fdb9659075359a25de3be6e6e2e816cfa8346"
     },
     "st-refine-plan": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-refine-plan/SKILL.md",
-      "computedHash": "1197993488ca82efeb41e0b7ae52f95ddbed818ea970c547d479e7ade119f190"
+      "computedHash": "d154b0db227ffce66b129d057582831f8564abe97692c1d1ef86bf0c43bb5162"
     },
     "verification-before-completion": {
       "source": "../sift",

@@ -4,58 +4,14 @@ import React, {
   useState,
   useEffect,
   useCallback,
-  useRef,
   ReactNode,
 } from 'react';
 import type { AppConfig, OutputPathInfo } from '@self-review/types';
 import { hasUsableCategory } from '../utils/category-utils';
+import { DEFAULT_CONFIG } from '../config-defaults';
 
-export const defaultConfig: AppConfig = {
-  theme: 'system',
-  diffView: 'split',
-  fontSize: 14,
-  outputFormat: 'xml',
-  outputFile: './review.xml',
-  ignore: [],
-  categories: [
-    {
-      name: 'bug',
-      description: 'Likely defect or incorrect behavior',
-      color: '#e53e3e',
-    },
-    {
-      name: 'security',
-      description: 'Security vulnerability or concern',
-      color: '#dd6b20',
-    },
-    {
-      name: 'style',
-      description: 'Code style, naming, or formatting issue',
-      color: '#3182ce',
-    },
-    {
-      name: 'question',
-      description: 'Clarification needed — not necessarily a problem',
-      color: '#805ad5',
-    },
-    {
-      name: 'task',
-      description: 'Action item or follow-up task',
-      color: '#38a169',
-    },
-    {
-      name: 'nit',
-      description: 'Minor nitpick, low priority',
-      color: '#718096',
-    },
-  ],
-  defaultDiffArgs: '--staged',
-  showUntracked: true,
-  showUntrackedExplicit: false,
-  wordWrap: true,
-  maxFiles: 500,
-  maxTotalLines: 100000,
-};
+/** Kept under this name for the package's public API. */
+export const defaultConfig: AppConfig = DEFAULT_CONFIG;
 
 export interface ConfigContextValue {
   config: AppConfig;
@@ -91,10 +47,6 @@ export interface ConfigProviderProps {
   initialConfig?: Partial<AppConfig>;
   /** Initial output path info */
   initialOutputPath?: OutputPathInfo;
-  /** CSS string for light Prism theme (optional, for non-webpack environments) */
-  prismLightCss?: string;
-  /** CSS string for dark Prism theme (optional, for non-webpack environments) */
-  prismDarkCss?: string;
 }
 
 // A `categories` list that leaves no usable entry (empty list, every entry shaped
@@ -114,12 +66,18 @@ function mergeInitialConfig(initialConfig: Partial<AppConfig> | undefined): AppC
   return merged;
 }
 
+/** Carries the configured `font-size` (px); `.sr-diff-code` in styles.css reads it. */
+export const FONT_SIZE_CSS_VAR = '--sr-font-size';
+
+// `font-size` is only known to be a number, which admits 0, negatives, NaN and Infinity.
+function resolveFontSize(fontSize: number): number {
+  return Number.isFinite(fontSize) && fontSize > 0 ? fontSize : defaultConfig.fontSize;
+}
+
 export function ConfigProvider({
   children,
   initialConfig,
   initialOutputPath,
-  prismLightCss,
-  prismDarkCss,
 }: ConfigProviderProps) {
   // Lazy initializer: runs once on mount, not on every render, so the
   // fallback's console.error doesn't re-fire on unrelated re-renders.
@@ -129,9 +87,6 @@ export function ConfigProvider({
   );
 
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
-
-  // Tracks the scoped <style> element injected into the wrapper div for Prism theme CSS
-  const styleRef = useRef<HTMLStyleElement | null>(null);
 
   // Callback ref fires synchronously during React's commit phase — before effects and before
   // the browser paints. This ensures portalContainer is non-null from the first render.
@@ -145,24 +100,11 @@ export function ConfigProvider({
     setConfig(prev => ({ ...prev, ...updates }));
   };
 
-  // Apply theme to the .self-review wrapper (scoped) and swap Prism syntax theme
+  // Toggling `dark` is the whole theme switch: both Prism themes are pre-scoped in the stylesheet.
   useEffect(() => {
     const applyTheme = (isDark: boolean) => {
-      // Toggle dark class on the scoped wrapper instead of document.documentElement
       if (portalContainer) {
         portalContainer.classList.toggle('dark', isDark);
-      }
-
-      // Apply Prism theme CSS scoped to this instance's wrapper div (not document.head)
-      if (prismLightCss || prismDarkCss) {
-        if (!styleRef.current && portalContainer) {
-          const el = document.createElement('style');
-          portalContainer.appendChild(el);
-          styleRef.current = el;
-        }
-        if (styleRef.current) {
-          styleRef.current.textContent = isDark ? prismDarkCss || '' : prismLightCss || '';
-        }
       }
     };
 
@@ -175,25 +117,15 @@ export function ConfigProvider({
 
     applyTheme(resolveIsDark(config.theme));
 
-    let removeMediaListener: (() => void) | undefined;
     // Listen for system theme changes when in system mode
-    if (config.theme === 'system') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const listener = (e: MediaQueryListEvent) => {
-        applyTheme(e.matches);
-      };
-      mediaQuery.addEventListener('change', listener);
-      removeMediaListener = () => mediaQuery.removeEventListener('change', listener);
-    }
-
-    return () => {
-      removeMediaListener?.();
-      if (styleRef.current) {
-        styleRef.current.remove();
-        styleRef.current = null;
-      }
+    if (config.theme !== 'system') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const listener = (e: MediaQueryListEvent) => {
+      applyTheme(e.matches);
     };
-  }, [config.theme, prismLightCss, prismDarkCss, portalContainer]);
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, [config.theme, portalContainer]);
 
   return (
     <ConfigContext.Provider
@@ -206,7 +138,16 @@ export function ConfigProvider({
         portalContainer,
       }}
     >
-      <div ref={wrapperCallbackRef} className='self-review' style={{ display: 'contents' }}>
+      <div
+        ref={wrapperCallbackRef}
+        className='self-review'
+        style={
+          {
+            display: 'contents',
+            [FONT_SIZE_CSS_VAR]: `${resolveFontSize(config.fontSize)}px`,
+          } as React.CSSProperties
+        }
+      >
         {children}
       </div>
     </ConfigContext.Provider>

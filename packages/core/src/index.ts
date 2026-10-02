@@ -31,6 +31,9 @@ export type {
   VersionUpdateInfo,
   PayloadStats,
   ImageLoadResult,
+  ReviewSourceIdentity,
+  ReviewSourceMode,
+  ReviewSourceSide,
   ReviewGuide,
   GuideGroup,
   GuideFileEntry,
@@ -39,11 +42,71 @@ export type {
 } from './types';
 
 // Diff parsing
-export { parseDiff } from './diff-parser';
+export { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
+export type { DiffParseResult } from './diff-parser';
 
 // XML I/O
-export { serializeReview } from './xml-serializer';
+export { serializeReview, ASSET_DIR_NAME } from './xml-serializer';
+export type {
+  SerializedReview,
+  SerializeOptions,
+  PlannedAsset,
+  AssetNamer,
+} from './xml-serializer';
 export { parseReviewXml, parseReviewXmlString } from './xml-parser';
+export type { ParsedReview } from './xml-parser';
+export { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
+export type { ReviewXmlErrorCode, XmlIllegalCharacterLocation } from './xml-errors';
+
+// Review output publication (the one way review XML and attachments reach disk)
+export { publishReview, inspectOutputPath, ReviewPublishError } from './review-publisher';
+export type {
+  ReviewPublishErrorCode,
+  ReviewOutputOrigin,
+  ReviewOutputTarget,
+  PublishReviewOptions,
+  PublishReviewResult,
+} from './review-publisher';
+
+// Attachment provenance
+export {
+  parseAttachmentReference,
+  resolveAttachmentOrigins,
+  authorizeAttachmentReference,
+  readAssetFile,
+  relocateAttachments,
+  AttachmentRelocationError,
+} from './attachment-origins';
+export type {
+  AttachmentOrigins,
+  AttachmentReadResult,
+  AttachmentReadFailureReason,
+} from './attachment-origins';
+
+// No-follow filesystem primitives shared by every core writer
+export {
+  SafeFsError,
+  nodeFsLayer,
+  assertNoSymlinkAncestors,
+  writeExclusiveNoFollow,
+  atomicReplace,
+  inspectReplaceTarget,
+  snapshotIdentity,
+  sameFile,
+  classifyFsError,
+} from './safe-fs';
+export type {
+  SafeFsErrorCode,
+  FsLayer,
+  FileIdentity,
+  WriteExclusiveOptions,
+  AtomicReplaceOptions,
+  AtomicReplaceResult,
+} from './safe-fs';
+
+// Line-anchor validation (shared by the resume importer and Apply)
+export { validateLineAnchor, validateLineRange } from './anchor-validation';
+export type { AnchorCheck, AnchorFields, AnchorSide, LineAnchor } from './anchor-validation';
 
 // Walkthrough guide schema
 export { GUIDE_XSD_SCHEMA } from './guide-schema';
@@ -54,17 +117,22 @@ export type { GuideParseResult } from './guide-parser';
 
 // Git operations
 export {
-  runGitDiff,
   runGitDiffAsync,
-  getRepoRoot,
   getRepoRootAsync,
   getUntrackedFilesAsync,
-  validateGitAvailable,
   generateUntrackedDiffs,
+  withParserCompatibleDiffArgs,
+  PARSER_COMPATIBLE_GIT_CONFIG,
+  PARSER_COMPATIBLE_DIFF_FLAGS,
 } from './git';
 
 // Forge providers (remote PR/MR conversation plane)
-export { parseForgeUrl, ForgeCliUnavailableError } from './forge-provider';
+export {
+  parseForgeUrl,
+  ForgeCliUnavailableError,
+  CommandCancelledError,
+  isCommandCancelled,
+} from './forge-provider';
 export type {
   ForgeName,
   ForgeUrl,
@@ -74,18 +142,73 @@ export type {
   ForgeThread,
   FetchThreadsOptions,
   ForgeCommandResult,
+  ForgeCommandOptions,
   ForgeCommandRunner,
+  CommandCancelReason,
   ForgeProvider,
 } from './forge-provider';
 
 // Synthetic diffs (for non-git files/directories)
-export { generateSyntheticDiffs } from './synthetic-diff';
+export { generateSyntheticDiffs, loadSyntheticFiles } from './synthetic-diff';
+export type { SyntheticDiffOptions, SyntheticDiffResult } from './synthetic-diff';
 
 // Directory/file scanning
 export { scanDirectory, scanFile } from './directory-scanner';
+export type { SourceScanOptions, SourceScanResult } from './directory-scanner';
 
-// Configuration
-export { loadConfig } from './config';
+// Input safety budgets
+export {
+  MAX_SOURCE_ENTRIES,
+  BINARY_SNIFF_BYTES,
+  MAX_SOURCE_FILE_BYTES,
+  MAX_SOURCE_TOTAL_BYTES,
+  MAX_GIT_DIFF_OUTPUT_BYTES,
+  MAX_GUIDE_BYTES,
+  MAX_RESUME_XML_BYTES,
+  MAX_RESUME_ATTACHMENTS,
+  MAX_IMAGE_BYTES,
+  DEFAULT_SOURCE_BUDGETS,
+  resolveSourceBudgets,
+  formatBytes,
+} from './input-budgets';
+export type { SourceBudgets } from './input-budgets';
+export { readFileWithinBudget, readFileWithinBudgetSync } from './bounded-read';
+export type { BoundedReadOptions, BoundedReadResult } from './bounded-read';
+
+// Source identity and snapshot reads of reviewed content
+export {
+  describeGitDiffSides,
+  resolveGitSourceIdentity,
+  resolveLocalSourceIdentity,
+  resolveReviewedPathPrefix,
+  rootRelativeReviewedPath,
+  canonicalSourcePath,
+} from './source-identity';
+export type {
+  GitDiffSideSpec,
+  GitDiffSides,
+  GitSourceIdentityOptions,
+  LocalSourceIdentityOptions,
+} from './source-identity';
+export { authorizeReviewedPath, readReviewedContent } from './snapshot-reader';
+export type {
+  ReviewedSnapshot,
+  ReviewedPathRefusal,
+  ReviewedPathAuthorization,
+  SnapshotReadFailure,
+  SnapshotReadResult,
+  SnapshotReadOptions,
+} from './snapshot-reader';
+
+// Configuration, with provenance
+export { loadConfig, loadConfigWithProvenance } from './config';
+export type {
+  ConfigValueOrigin,
+  ConfigProvenance,
+  ConfigSource,
+  LoadedConfig,
+  LoadConfigOptions,
+} from './config';
 
 // Payload sizing
 export { computePayloadStats, countTotalLines, getGitDiffStats } from './payload-sizing';
@@ -97,9 +220,10 @@ export { createIgnoreFilter } from './ignore-filter';
 export { checkWritability } from './fs-utils';
 
 // Anchored suggestion application (writes a reviewed working file)
-export { applySuggestion } from './apply-suggestion';
+export { applySuggestion, isRepositoryControlPath } from './apply-suggestion';
 export type {
   ApplyRefusalReason,
+  ApplySuggestionOptions,
   ApplySuggestionRequest,
   ApplySuggestionApplied,
   ApplySuggestionRefused,
@@ -133,8 +257,14 @@ export {
   materialize,
   resolveRemoteDefaultBranch,
   defaultGitRunner,
+  DEFAULT_GIT_COMMAND_TIMEOUT_MS,
 } from './materializer';
-export type { ExistingClone, MaterializeMode, MaterializeResult } from './materializer';
+export type {
+  ExistingClone,
+  MaterializeMode,
+  MaterializeOptions,
+  MaterializeResult,
+} from './materializer';
 
 // Review session orchestration (transport agnostic; each handler takes the
 // session it acts on and reads no module-scope state)
@@ -148,10 +278,13 @@ export {
   submitReviewState,
   takeReviewState,
   readAttachment,
+  recordResumedAttachments,
   getResumeLoad,
   expandContext,
   prepareDirectoryReview,
   commitReviewStart,
+  commitDiffData,
+  locateReviewedFile,
   resolveSourceBaseDir,
   resolveApplyDestination,
   applySuggestionForSession,
@@ -159,26 +292,62 @@ export {
 export type { ReviewSession, ReviewStartResult } from './review-handlers';
 
 // Startup mode detection (git, directory, file, welcome)
-export { determineMode } from './startup-mode';
+export { determineMode, resolveStartupSource } from './startup-mode';
+export type { StartupSource } from './startup-mode';
+
+// Startup steps both front ends share
+export {
+  resolveOutputTarget,
+  publishOptionsFor,
+  resolveStartupDiffArgs,
+  loadLocalReview,
+  loadResumeDocument,
+  ConfiguredDiffArgsError,
+} from './startup';
+export type { ResolvedDiffArgs, LoadedLocalReview } from './startup';
+
+// Application flag extraction shared by both command lines
+export { extractApplicationOptions, ApplicationOptionError } from './cli-options';
+export type { ApplicationOptionsSpec, ExtractedApplicationOptions } from './cli-options';
 
 // Walkthrough guide sidecar discovery and tolerant loading
 export { deriveGuidePath, resolveGuidePath, loadGuide } from './guide-loader';
 
 // Git diff loading, staged/untracked defaulting, and argument normalisation
-export { loadGitDiffWithUntracked } from './git-diff-loader';
-export type { LoadGitDiffOptions } from './git-diff-loader';
+export { loadGitDiffWithUntracked, dedupeUntrackedByPath } from './git-diff-loader';
+export type { LoadGitDiffOptions, LoadGitDiffResult } from './git-diff-loader';
 export { applyStagedUntrackedDefault } from './staged-untracked';
-export { normalizeGitDiffArgs } from './git-diff-args';
+export {
+  normalizeGitDiffArgs,
+  tokenizeGitDiffArgs,
+  formatGitDiffArgs,
+  classifyGitDiffArgs,
+  findUnsupportedGitDiffOptions,
+  findWriteCapableGitDiffOptions,
+  describeDiffPathRelativity,
+  consumesNextArgument,
+} from './git-diff-args';
+export type { DiffPathRelativity } from './git-diff-args';
 
-// Remote PR/MR session bootstrap (URL -> materialized git-mode inputs)
+// Remote PR/MR session bootstrap and the load/filter/map step shared with fetch-comments
 export {
   startRemoteSession,
+  loadRemoteReview,
   bootstrapRemoteDiff,
   mergeRemoteThreads,
   applyRemoteProvenance,
   computeRemoteDrift,
+  defaultRemoteSessionDeps,
 } from './remote-mode';
-export type { RemoteSession, RemoteSessionDeps, RemoteBootstrapResult } from './remote-mode';
+export type {
+  MaterializedRemoteSession,
+  RemoteSession,
+  RemoteSessionDeps,
+  RemoteLifetimeOptions,
+  StartRemoteSessionOptions,
+  RemoteReviewLoad,
+  RemoteBootstrapResult,
+} from './remote-mode';
 
 // Headless fetch-comments orchestrator
 export { buildRemoteReviewState, runFetchComments } from './fetch-comments';

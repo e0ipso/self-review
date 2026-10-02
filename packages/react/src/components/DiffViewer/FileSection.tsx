@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
+import { useLazyFileContent } from './useLazyFileContent';
 import type { DiffFile } from '@self-review/types';
 import { useReview } from '../../context/ReviewContext';
-import { useAdapter } from '../../context/ReviewAdapterContext';
 import { useGuide } from '../../context/GuideContext';
+import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import {
   getRenderedTextMode,
   isPreviewableImage,
@@ -28,8 +29,7 @@ export default function FileSection({
   expanded: controlledExpanded,
   onToggleExpanded,
 }: FileSectionProps) {
-  const { toggleViewed, getCommentsForFile, files, diffSource, updateFileHunks } = useReview();
-  const adapter = useAdapter();
+  const { toggleViewed, getCommentsForFile, files, diffSource } = useReview();
   const { mode: guideMode, getFileDescription, getFileGroupIndex } = useGuide();
   const [internalExpanded, setInternalExpanded] = useState(true);
   const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
@@ -39,7 +39,10 @@ export default function FileSection({
     side: 'old' | 'new';
   } | null>(null);
   const [showingFileComment, setShowingFileComment] = useState(false);
-  const sectionRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLDivElement | null>(null);
+  const navigation = useOptionalDiffNavigation();
+  const registerFileElement = navigation?.registerFileElement;
+  const unregisterFileElement = navigation?.unregisterFileElement;
 
   const isAddedFile = file.changeType === 'added';
   const filePath_ = file.newPath || file.oldPath || '';
@@ -61,32 +64,22 @@ export default function FileSection({
   const fileState = files.find(f => f.path === filePath);
   const isViewed = fileState?.viewed || false;
 
-  // Lazy content loading state (for large-payload mode)
-  const [contentLoading, setContentLoading] = useState(false);
-  const [contentError, setContentError] = useState(false);
+  // Registered by path so navigation never builds a CSS selector from the filename.
+  const setSectionElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      const previous = sectionRef.current;
+      sectionRef.current = element;
+      if (previous && previous !== element) unregisterFileElement?.(filePath, previous);
+      if (element) registerFileElement?.(filePath, element);
+    },
+    [filePath, registerFileElement, unregisterFileElement]
+  );
 
-  useEffect(() => {
-    if (!expanded || file.contentLoaded !== false || contentLoading) return;
-    if (!adapter?.loadFileContent) return;
-
-    setContentLoading(true);
-    setContentError(false);
-
-    adapter
-      .loadFileContent(filePath)
-      .then(hunks => {
-        if (hunks) {
-          updateFileHunks(filePath, hunks);
-        } else {
-          setContentError(true);
-        }
-        setContentLoading(false);
-      })
-      .catch(() => {
-        setContentError(true);
-        setContentLoading(false);
-      });
-  }, [expanded, file.contentLoaded, contentLoading, filePath, updateFileHunks, adapter]);
+  const { state: contentLoad, retry: retryContentLoad } = useLazyFileContent({
+    file,
+    filePath,
+    expanded,
+  });
 
   // Expand context state
   const isExpandable = diffSource.type === 'git' && !file.isUntracked && !file.isBinary;
@@ -104,13 +97,15 @@ export default function FileSection({
       ? 'unified'
       : viewMode;
 
-  const handleCommentRange = (start: number, end: number, side: 'old' | 'new') => {
+  // Stable identities: the rendered view hands these to every block through context.
+  const handleCommentRange = useCallback((start: number, end: number, side: 'old' | 'new') => {
     setCommentRange({
       start: Math.min(start, end),
       end: Math.max(start, end),
       side,
     });
-  };
+  }, []);
+  const clearCommentRange = useCallback(() => setCommentRange(null), []);
 
   const { dragState, handleDragStart } = useDragSelection({
     sectionRef,
@@ -139,7 +134,7 @@ export default function FileSection({
 
   return (
     <div
-      ref={sectionRef}
+      ref={setSectionElement}
       className={`mx-2 mt-2 border border-border rounded-lg shadow-sm${dragState ? ' select-none' : ''}`}
       data-file-path={filePath}
       data-testid={`file-section-${filePath}`}
@@ -198,14 +193,13 @@ export default function FileSection({
             renderedTextMode,
             showImagePreview,
             showSvgPreview,
-            contentLoading,
-            contentError,
-            onRetry: () => setContentError(false),
+            contentLoad,
+            onRetry: retryContentLoad,
             commentRange,
             dragState,
             onDragStart: handleDragStart,
-            onCancelComment: () => setCommentRange(null),
-            onCommentSaved: () => setCommentRange(null),
+            onCancelComment: clearCommentRange,
+            onCommentSaved: clearCommentRange,
             onCommentRange: handleCommentRange,
             isExpandable,
             expandLoading,

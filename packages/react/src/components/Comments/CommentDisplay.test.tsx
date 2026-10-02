@@ -14,6 +14,7 @@ vi.mock('../../context/ReviewContext', () => ({
     deleteComment: mocks.deleteComment,
     deleteReply: mocks.deleteReply,
   }),
+  useOptionalReview: () => null,
 }));
 
 vi.mock('../../context/ConfigContext', () => ({
@@ -21,7 +22,9 @@ vi.mock('../../context/ConfigContext', () => ({
 }));
 
 vi.mock('./CommentInput', () => ({
-  default: () => <div data-testid='comment-input' />,
+  default: ({ originalCode }: { originalCode?: string }) => (
+    <div data-testid='comment-input' data-original-code={originalCode ?? ''} />
+  ),
 }));
 
 // Stubbed to keep the MDEditor stack out of this test. The prop surface is
@@ -186,5 +189,28 @@ describe('CommentDisplay threads', () => {
     expect(thread.querySelector('.category-badge')).toBeNull();
     expect(thread.querySelector('[data-testid^="comment-severity-"]')).toBeNull();
     expect(thread.querySelector('[data-testid^="comment-confidence-"]')).toBeNull();
+  });
+});
+
+describe('CommentDisplay anchor visibility', () => {
+  const imported = makeComment({
+    lineRange: { side: 'new', start: 2, end: 12 },
+    suggestion: { originalCode: 'line 2\n...\nline 12', proposedCode: 'fixed' },
+  });
+
+  it('marks a range that is not fully visible and edits against the recorded original', () => {
+    const view = render(<CommentDisplay comment={imported} anchorFullyVisible={false} />);
+
+    expect(view.getByTestId('comment-anchor-partial')).toBeTruthy();
+
+    fireEvent.click(view.getByRole('button', { name: 'Edit' }));
+    expect(view.getByTestId('comment-input').getAttribute('data-original-code')).toBe(
+      'line 2\n...\nline 12'
+    );
+  });
+
+  it('shows no marker for a fully visible range', () => {
+    const view = render(<CommentDisplay comment={imported} originalCode='visible' />);
+    expect(view.queryByTestId('comment-anchor-partial')).toBeNull();
   });
 });

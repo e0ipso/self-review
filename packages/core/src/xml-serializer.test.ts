@@ -1,8 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as path from 'path';
 import { serializeReview } from './xml-serializer';
+import { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
 import type { XMLFileInfo } from 'xmllint-wasm';
 import type { ReviewState, FileReviewState, ReviewComment } from './types';
 
@@ -10,24 +9,6 @@ import type { ReviewState, FileReviewState, ReviewComment } from './types';
 vi.mock('xmllint-wasm', () => ({
   validateXML: vi.fn(() => Promise.resolve({ valid: true, errors: [] })),
 }));
-
-// Mock fs for attachment file writing tests
-vi.mock('fs', async importOriginal => {
-  const actual = await importOriginal<typeof import('fs')>();
-  return {
-    ...actual,
-    existsSync: vi.fn(actual.existsSync),
-    mkdirSync: vi.fn(actual.mkdirSync),
-    writeFileSync: vi.fn(actual.writeFileSync),
-    readFileSync: actual.readFileSync,
-  };
-});
-
-// The fs mock above wraps the real implementations, but individual tests
-// replace them with stubs, and vi.clearAllMocks() clears recorded calls without
-// restoring implementations. Suites that assert against a real directory
-// reinstate the pass-throughs from this untouched copy.
-const actualFs = await vi.importActual<typeof import('fs')>('fs');
 
 const TEST_OUTPUT_PATH = '/tmp/test-review.xml';
 
@@ -44,7 +25,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
       expect(xml).toContain('xmlns="urn:self-review:v3"');
@@ -68,7 +49,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<file path="src/main.ts" change-type="modified" viewed="true" />');
       expect(xml).not.toContain('<comment');
@@ -81,7 +62,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('source-path="/home/user/my-project"');
       expect(xml).not.toContain('git-diff-args');
@@ -95,7 +76,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('source-path="/home/user/document.md"');
       expect(xml).not.toContain('git-diff-args');
@@ -109,7 +90,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).not.toContain('git-diff-args');
       expect(xml).not.toContain('repository');
@@ -124,7 +105,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('timestamp="2024-02-20T15:45:30Z"');
       expect(xml).toContain('git-diff-args="HEAD~3"');
@@ -154,7 +135,7 @@ describe('serializeReview', () => {
         files,
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('change-type="added"');
       expect(xml).toContain('change-type="deleted"');
@@ -186,7 +167,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<file path="src/main.ts" change-type="modified" viewed="true">');
       expect(xml).toContain('<comment>');
@@ -219,7 +200,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<comment new-line-start="10" new-line-end="12">');
       expect(xml).toContain('<body>Consider refactoring</body>');
@@ -250,7 +231,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<comment old-line-start="5" old-line-end="8">');
       expect(xml).toContain('<body>Why was this removed?</body>');
@@ -280,7 +261,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<comment new-line-start="42" new-line-end="42">');
     });
@@ -311,7 +292,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<suggestion>');
       expect(xml).toContain('<original-code>const x = foo();</original-code>');
@@ -342,7 +323,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('&lt;Component&gt;');
       expect(xml).toContain('&amp;');
@@ -378,7 +359,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('&lt;');
       expect(xml).toContain('&gt;');
@@ -401,7 +382,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('src/test&amp;file&lt;name&gt;.ts');
     });
@@ -447,7 +428,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<body>File-level comment</body>');
       expect(xml).toContain('<body>Line comment</body>');
@@ -464,7 +445,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       // Check basic XML structure
       expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
@@ -534,7 +515,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       // Should return XML without throwing (graceful fallback)
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
@@ -559,7 +540,7 @@ describe('serializeReview', () => {
         files: [],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('</review>');
       expect(errorSpy).toHaveBeenCalledWith(
@@ -602,18 +583,14 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, '/tmp/test-output/review.xml');
+      const { xml } = await serializeReview(reviewState, '/tmp/test-output/review.xml');
 
       expect(xml).toContain('<attachment path=".self-review-assets/');
       expect(xml).toContain('media-type="image/png"');
       expect(xml).toContain('/>');
     });
 
-    it('writes image files to .self-review-assets directory', async () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
-      vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-      vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-
+    it('plans the image write under .self-review-assets without performing it', async () => {
       const imageData = new ArrayBuffer(16);
       const comment: ReviewComment = {
         id: 'att-write-1',
@@ -645,18 +622,50 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      await serializeReview(reviewState, '/tmp/test-output/review.xml');
+      const { xml, assets } = await serializeReview(reviewState, '/tmp/test-output/review.xml');
 
-      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/test-output/.self-review-assets', {
-        recursive: true,
-      });
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        expect.stringContaining('.self-review-assets/att-write-1-0.png'),
-        expect.any(Buffer)
-      );
+      expect(assets).toEqual([
+        {
+          relativePath: '.self-review-assets/att-write-1-0.png',
+          absolutePath: '/tmp/test-output/.self-review-assets/att-write-1-0.png',
+          data: imageData,
+        },
+      ]);
+      expect(xml).toContain('<attachment path=".self-review-assets/att-write-1-0.png"');
+      // The caller's state is untouched: the buffer is stripped from a copy.
+      expect(comment.attachments?.[0].data).toBe(imageData);
     });
 
-    it('skips asset directory when no attachments exist', async () => {
+    it('names assets through the injected namer', async () => {
+      const comment: ReviewComment = {
+        id: 'att-named',
+        filePath: 'src/main.ts',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        body: 'Image attached',
+        category: 'note',
+        suggestion: null,
+        attachments: [
+          { id: 'img-1', fileName: 'a.png', mediaType: 'image/png', data: new ArrayBuffer(1) },
+          { id: 'img-2', fileName: 'b.jpg', mediaType: 'image/jpeg', data: new ArrayBuffer(1) },
+        ],
+      };
+      const reviewState: ReviewState = {
+        timestamp: '2024-01-15T10:30:00Z',
+        source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+        files: [{ path: 'src/main.ts', changeType: 'modified', viewed: true, comments: [comment] }],
+      };
+
+      const { assets } = await serializeReview(reviewState, '/tmp/test-output/review.xml', {
+        assetName: (prefix, index, ext) => `${prefix}-${index}-unique.${ext}`,
+      });
+
+      expect(assets.map(a => a.relativePath)).toEqual([
+        '.self-review-assets/att-named-0-unique.png',
+        '.self-review-assets/att-named-1-unique.jpg',
+      ]);
+    });
+
+    it('plans no asset when no attachments exist', async () => {
       const reviewState: ReviewState = {
         timestamp: '2024-01-15T10:30:00Z',
         source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
@@ -679,9 +688,9 @@ describe('serializeReview', () => {
         ],
       };
 
-      await serializeReview(reviewState, '/tmp/test-output/review.xml');
+      const { assets } = await serializeReview(reviewState, '/tmp/test-output/review.xml');
 
-      expect(fs.mkdirSync).not.toHaveBeenCalled();
+      expect(assets).toEqual([]);
     });
   });
 
@@ -730,7 +739,7 @@ describe('serializeReview', () => {
         ],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('src/components/Button.tsx');
       expect(xml).toContain('src/utils/helpers.ts');
@@ -763,7 +772,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<body></body>');
       expect(xml).toContain('<category></category>');
@@ -793,7 +802,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('author="alice"');
       expect(xml).toContain('<comment new-line-start="5" new-line-end="5" author="alice">');
@@ -822,7 +831,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).not.toContain('author=');
     });
@@ -851,7 +860,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('author="O&apos;Brien &amp; &quot;Co&quot;"');
     });
@@ -879,7 +888,7 @@ describe('serializeReview', () => {
         files: [file],
       };
 
-      const xml = await serializeReview(reviewState, TEST_OUTPUT_PATH);
+      const { xml } = await serializeReview(reviewState, TEST_OUTPUT_PATH);
 
       expect(xml).toContain('<body>First line\nSecond line\nThird line</body>');
     });
@@ -917,21 +926,21 @@ describe('severity and confidence attributes', () => {
   }
 
   it('serializes severity when set', async () => {
-    const xml = await serializeReview(reviewWith({ severity: 'critical' }), TEST_OUTPUT_PATH);
+    const { xml } = await serializeReview(reviewWith({ severity: 'critical' }), TEST_OUTPUT_PATH);
 
     expect(xml).toContain('severity="critical"');
     expect(xml).not.toContain('confidence=');
   });
 
   it('serializes confidence when set', async () => {
-    const xml = await serializeReview(reviewWith({ confidence: 'low' }), TEST_OUTPUT_PATH);
+    const { xml } = await serializeReview(reviewWith({ confidence: 'low' }), TEST_OUTPUT_PATH);
 
     expect(xml).toContain('confidence="low"');
     expect(xml).not.toContain('severity=');
   });
 
   it('omits both attributes when neither is set', async () => {
-    const xml = await serializeReview(reviewWith({}), TEST_OUTPUT_PATH);
+    const { xml } = await serializeReview(reviewWith({}), TEST_OUTPUT_PATH);
 
     expect(xml).not.toContain('severity=');
     expect(xml).not.toContain('confidence=');
@@ -940,7 +949,7 @@ describe('severity and confidence attributes', () => {
   // Attribute order is asserted deliberately: the signals are appended after
   // author so existing exact-string expectations keep holding.
   it('emits the signals after the line attributes and author', async () => {
-    const xml = await serializeReview(
+    const { xml } = await serializeReview(
       reviewWith({ author: 'Claude Opus 5', severity: 'major', confidence: 'high' }),
       TEST_OUTPUT_PATH
     );
@@ -951,7 +960,7 @@ describe('severity and confidence attributes', () => {
   });
 
   it('emits the signals on a file-level comment', async () => {
-    const xml = await serializeReview(
+    const { xml } = await serializeReview(
       reviewWith({ lineRange: null, severity: 'info', confidence: 'medium' }),
       TEST_OUTPUT_PATH
     );
@@ -998,7 +1007,7 @@ describe('remote provenance attributes', () => {
   // before the remote attributes existed. A purely local review must keep
   // producing this string unchanged: absent remote fields leave no trace.
   it('serializes a review without remote fields byte-identically to the pre-remote output', async () => {
-    const xml = await serializeReview(localReview(), TEST_OUTPUT_PATH);
+    const { xml } = await serializeReview(localReview(), TEST_OUTPUT_PATH);
 
     expect(xml).toBe(
       [
@@ -1032,7 +1041,7 @@ describe('remote provenance attributes', () => {
       remoteForge: 'github',
     };
 
-    const xml = await serializeReview(state, TEST_OUTPUT_PATH);
+    const { xml } = await serializeReview(state, TEST_OUTPUT_PATH);
 
     expect(xml).toContain(
       '<review xmlns="urn:self-review:v3" timestamp="2024-01-15T10:30:00Z"' +
@@ -1045,7 +1054,7 @@ describe('remote provenance attributes', () => {
   });
 
   it('emits each remote root attribute independently, only when set', async () => {
-    const xml = await serializeReview(
+    const { xml } = await serializeReview(
       { ...localReview(), remoteForge: 'gitlab' },
       TEST_OUTPUT_PATH
     );
@@ -1057,7 +1066,7 @@ describe('remote provenance attributes', () => {
   });
 
   it('escapes special characters in remote-url', async () => {
-    const xml = await serializeReview(
+    const { xml } = await serializeReview(
       { ...localReview(), remoteUrl: 'https://gitlab.example.com/g/p/-/merge_requests/7?a=1&b=2' },
       TEST_OUTPUT_PATH
     );
@@ -1071,7 +1080,7 @@ describe('remote provenance attributes', () => {
     const state = localReview();
     state.files[1].comments[0].remoteId = 'PRRT_kwDOAbc123';
 
-    const xml = await serializeReview(state, TEST_OUTPUT_PATH);
+    const { xml } = await serializeReview(state, TEST_OUTPUT_PATH);
 
     expect(xml).toContain(
       '<comment new-line-start="5" new-line-end="7" author="Claude Opus 5" severity="major" confidence="high" remote-id="PRRT_kwDOAbc123">'
@@ -1085,7 +1094,7 @@ describe('remote provenance attributes', () => {
       { id: 'r2', body: 'local turn' },
     ];
 
-    const xml = await serializeReview(state, TEST_OUTPUT_PATH);
+    const { xml } = await serializeReview(state, TEST_OUTPUT_PATH);
 
     expect(xml).toContain('<reply author="Claude Opus 5" remote-id="PRRC_kwDOAbc456">');
     expect(xml).toContain(
@@ -1095,24 +1104,11 @@ describe('remote provenance attributes', () => {
 });
 
 describe('replies', () => {
-  let outputDir: string;
-  let outputPath: string;
+  const outputDir = '/tmp/sr-replies';
+  const outputPath = path.join(outputDir, 'review.xml');
 
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Earlier suites stub these three; put the real implementations back so the
-    // attachment assertions below observe an actual directory.
-    vi.mocked(fs.existsSync).mockImplementation(actualFs.existsSync);
-    vi.mocked(fs.mkdirSync).mockImplementation(actualFs.mkdirSync);
-    vi.mocked(fs.writeFileSync).mockImplementation(actualFs.writeFileSync);
-
-    outputDir = actualFs.mkdtempSync(path.join(os.tmpdir(), 'sr-replies-'));
-    outputPath = path.join(outputDir, 'review.xml');
-  });
-
-  afterEach(() => {
-    actualFs.rmSync(outputDir, { recursive: true, force: true });
   });
 
   function reviewWithThread(overrides: Partial<ReviewComment>): ReviewState {
@@ -1140,12 +1136,20 @@ describe('replies', () => {
     };
   }
 
-  function assetsIn(dir: string): string[] {
-    return actualFs.readdirSync(path.join(dir, '.self-review-assets')).sort();
+  /** The asset file names a serialization plans, in the order they would be written. */
+  function plannedNames(assets: { absolutePath: string }[]): string[] {
+    return assets.map(a => path.basename(a.absolutePath));
+  }
+
+  /** Every planned asset must sit directly inside the output's asset directory. */
+  function expectPlannedInside(assets: { absolutePath: string }[], dir: string): void {
+    for (const asset of assets) {
+      expect(path.dirname(asset.absolutePath)).toBe(path.join(dir, '.self-review-assets'));
+    }
   }
 
   it('emits replies in array order, after the comment attachments', async () => {
-    const xml = await serializeReview(
+    const { xml } = await serializeReview(
       reviewWithThread({
         // No data buffer, so this attachment keeps its fileName and nothing is
         // written: the assertion here is purely about element order.
@@ -1177,7 +1181,7 @@ describe('replies', () => {
   });
 
   it('emits a reply attachment nested inside the reply element', async () => {
-    const xml = await serializeReview(
+    const { xml } = await serializeReview(
       reviewWithThread({
         replies: [
           {
@@ -1204,14 +1208,14 @@ describe('replies', () => {
     const withoutKey = await serializeReview(reviewWithThread({}), outputPath);
     const withEmptyList = await serializeReview(reviewWithThread({ replies: [] }), outputPath);
 
-    expect(withoutKey).not.toContain('<reply');
-    expect(withEmptyList).not.toContain('<reply');
+    expect(withoutKey.xml).not.toContain('<reply');
+    expect(withEmptyList.xml).not.toContain('<reply');
   });
 
   it('escapes markup in a reply body, where a pasted code fence is likeliest', async () => {
     const body = ['```ts', 'if (a < b && c > d) emit("<x>");', '```'].join('\n');
 
-    const xml = await serializeReview(
+    const { xml } = await serializeReview(
       reviewWithThread({ replies: [{ id: 'r1', body }] }),
       outputPath
     );
@@ -1227,11 +1231,11 @@ describe('replies', () => {
     expect(replyBody).not.toMatch(/&(?!(amp|lt|gt|quot|apos);)/);
   });
 
-  // The regression this file exists to prevent: writeAttachments used to
+  // The regression this file exists to prevent: the attachment walk used to
   // short-circuit on a comment whose own attachment list was empty, which
   // skipped its replies. The XML still validated and still named an asset file,
-  // but the blob was never written and nothing reported it.
-  it('writes a reply attachment to disk even when its comment has none', async () => {
+  // but the blob was never planned and nothing reported it.
+  it('plans a reply attachment even when its comment has none', async () => {
     const state = reviewWithThread({
       replies: [
         {
@@ -1249,13 +1253,11 @@ describe('replies', () => {
       ],
     });
 
-    const xml = await serializeReview(state, outputPath);
+    const { xml, assets } = await serializeReview(state, outputPath);
 
-    expect(assetsIn(outputDir)).toEqual(['c1-r-r1-0.png']);
-    expect(
-      actualFs.readFileSync(path.join(outputDir, '.self-review-assets', 'c1-r-r1-0.png'))
-    ).toEqual(Buffer.from([1, 2, 3]));
-    // The emitted path names the file that now exists on disk.
+    expect(plannedNames(assets)).toEqual(['c1-r-r1-0.png']);
+    expect(Buffer.from(assets[0].data)).toEqual(Buffer.from([1, 2, 3]));
+    // The emitted path names the file the plan will create.
     expect(xml).toContain(
       '<attachment path=".self-review-assets/c1-r-r1-0.png" media-type="image/png" />'
     );
@@ -1271,7 +1273,7 @@ describe('replies', () => {
       data: new Uint8Array([byte]).buffer,
     });
 
-    const xml = await serializeReview(
+    const { xml, assets } = await serializeReview(
       reviewWithThread({
         attachments: [png(1)],
         replies: [
@@ -1284,30 +1286,26 @@ describe('replies', () => {
 
     // The comment prefix is still bare comment.id, so existing asset names are
     // unchanged; the reply prefix cannot produce the same name.
-    expect(assetsIn(outputDir)).toEqual(['c1-0.png', 'c1-r-r1-0.png', 'c1-r-r2-0.png']);
+    expect(plannedNames(assets)).toEqual(['c1-0.png', 'c1-r-r1-0.png', 'c1-r-r2-0.png']);
     expect(xml).toContain('<attachment path=".self-review-assets/c1-0.png"');
     expect(xml).toContain('<attachment path=".self-review-assets/c1-r-r1-0.png"');
     expect(xml).toContain('<attachment path=".self-review-assets/c1-r-r2-0.png"');
   });
 
-  it('leaves the asset directory alone when a thread carries no blobs', async () => {
-    await serializeReview(
+  it('plans nothing when a thread carries no blobs', async () => {
+    const { assets } = await serializeReview(
       reviewWithThread({ replies: [{ id: 'r1', body: 'text only' }] }),
       outputPath
     );
 
-    expect(actualFs.existsSync(path.join(outputDir, '.self-review-assets'))).toBe(false);
+    expect(assets).toEqual([]);
   });
 
   // An id reaches this code from outside the process: the serve front end
   // accepts a whole ReviewState over HTTP. A traversing id used to name the
-  // attachment file directly, so it wrote wherever it pointed — and because
-  // the write happens before XSD validation, it landed even when the document
-  // that carried it was rejected a few lines later.
+  // attachment file directly, so the plan pointed wherever the id did.
   it('keeps a traversing comment id from escaping the asset directory', async () => {
-    const escapeTarget = path.join(outputDir, 'escaped-0.png');
-
-    await serializeReview(
+    const { assets } = await serializeReview(
       reviewWithThread({
         id: '../../escaped',
         attachments: [
@@ -1322,15 +1320,15 @@ describe('replies', () => {
       outputPath
     );
 
-    expect(actualFs.existsSync(escapeTarget)).toBe(false);
-    expect(assetsIn(outputDir)).toEqual(['______escaped-0.png']);
+    expectPlannedInside(assets, outputDir);
+    expect(plannedNames(assets)).toEqual(['______escaped-0.png']);
   });
 
   // The containment fix used to call `.replace` on the id directly, so a
   // document whose comment carried an attachment but no id crashed the save —
   // and it crashed after the review had already been taken off the session,
   // which loses it. Naming a file is not the place to enforce the schema.
-  it('still writes an attachment when the comment carries no id', async () => {
+  it('still plans an attachment when the comment carries no id', async () => {
     const state = reviewWithThread({
       attachments: [
         {
@@ -1343,12 +1341,12 @@ describe('replies', () => {
     });
     delete (state.files[0].comments[0] as { id?: string }).id;
 
-    await expect(serializeReview(state, outputPath)).resolves.toBeTruthy();
-    expect(assetsIn(outputDir)).toEqual(['-0.png']);
+    const { assets } = await serializeReview(state, outputPath);
+    expect(plannedNames(assets)).toEqual(['-0.png']);
   });
 
   it('keeps a traversing reply id from escaping the asset directory', async () => {
-    await serializeReview(
+    const { assets } = await serializeReview(
       reviewWithThread({
         replies: [
           {
@@ -1368,7 +1366,177 @@ describe('replies', () => {
       outputPath
     );
 
-    expect(actualFs.existsSync(path.join(outputDir, 'escaped-reply-0.png'))).toBe(false);
-    expect(assetsIn(outputDir)).toEqual(['c1-r-_________escaped-reply-0.png']);
+    expectPlannedInside(assets, outputDir);
+    expect(plannedNames(assets)).toEqual(['c1-r-_________escaped-reply-0.png']);
+  });
+});
+
+describe('lossless text encoding', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function reviewWith(comment: Partial<ReviewComment>, filePath = 'src/main.ts'): ReviewState {
+    return {
+      timestamp: '2024-01-15T10:30:00Z',
+      source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
+      files: [
+        {
+          path: filePath,
+          changeType: 'modified',
+          viewed: true,
+          comments: [
+            {
+              id: 'c1',
+              filePath,
+              lineRange: { side: 'new', start: 5, end: 6 },
+              body: 'Root finding',
+              category: 'bug',
+              suggestion: null,
+              ...comment,
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('writes CR as a numeric reference in text, and LF/TAB as references only in attributes', async () => {
+    const { xml } = await serializeReview(
+      reviewWith(
+        {
+          body: 'line one\r\nline two\rline three\tend',
+          suggestion: { originalCode: 'a\r\nb', proposedCode: 'c\r\n' },
+          author: 'bot\tname',
+        },
+        'dir/with "quote"\nand\ttab\\back.ts'
+      ),
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain('<body>line one&#13;\nline two&#13;line three\tend</body>');
+    expect(xml).toContain('<original-code>a&#13;\nb</original-code>');
+    expect(xml).toContain('<proposed-code>c&#13;\n</proposed-code>');
+    expect(xml).toContain('author="bot&#9;name"');
+    expect(xml).toContain('path="dir/with &quot;quote&quot;&#10;and&#9;tab\\back.ts"');
+    // No raw CR anywhere: a conformant parser would have folded it into LF.
+    expect(xml).not.toContain('\r');
+  });
+
+  it('double-escapes entity-looking literal text so it decodes back to itself, once', async () => {
+    const { xml } = await serializeReview(
+      reviewWith({ body: '&#13; and &lt; and &amp;' }),
+      TEST_OUTPUT_PATH
+    );
+
+    expect(xml).toContain('<body>&amp;#13; and &amp;lt; and &amp;amp;</body>');
+  });
+
+  it.each([
+    ['body', { body: 'a\u0000b' }, 0x0000],
+    ['original-code', { suggestion: { originalCode: 'x\u001by', proposedCode: 'z' } }, 0x001b],
+    ['proposed-code', { suggestion: { originalCode: 'x', proposedCode: '￾' } }, 0xfffe],
+    ['author', { author: 'bot\uD800' }, 0xd800],
+    ['category', { category: 'c\u0007' }, 0x0007],
+  ])(
+    'refuses an XML-illegal character in %s with a typed error naming the comment and field',
+    async (field, overrides, codePoint) => {
+      let caught: unknown;
+      try {
+        await serializeReview(reviewWith(overrides as Partial<ReviewComment>), TEST_OUTPUT_PATH);
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(XmlIllegalCharacterError);
+      const err = caught as XmlIllegalCharacterError;
+      expect(err.code).toBe('xml-illegal-character');
+      expect(err).toMatchObject({ field, commentId: 'c1', filePath: 'src/main.ts', codePoint });
+      expect(err.message).toContain(field);
+      expect(err.message).toContain('c1');
+      expect(err.message).toContain(`U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}`);
+      expect(err.message).not.toContain('[object Object]');
+    }
+  );
+
+  it('names the reply when the illegal character sits in a reply body', async () => {
+    await expect(
+      serializeReview(
+        reviewWith({
+          replies: [
+            { id: 'r9', body: 'fine' },
+            { id: 'r10', body: 'bad\u0001' },
+          ],
+        }),
+        TEST_OUTPUT_PATH
+      )
+    ).rejects.toMatchObject({ field: 'body', commentId: 'c1', replyId: 'r10', codePoint: 1 });
+  });
+
+  it('names the file path field when the illegal character sits in a path attribute', async () => {
+    await expect(
+      serializeReview(reviewWith({}, 'src/\u0002.ts'), TEST_OUTPUT_PATH)
+    ).rejects.toMatchObject({ field: 'path', filePath: 'src/\u0002.ts', codePoint: 2 });
+  });
+
+  it('refuses the whole document, assets included, on an illegal character', async () => {
+    await expect(
+      serializeReview(
+        reviewWith({
+          body: 'bad\u0000',
+          attachments: [
+            {
+              id: 'a1',
+              fileName: 'shot.png',
+              mediaType: 'image/png',
+              data: new Uint8Array([1]).buffer,
+            },
+          ],
+        }),
+        TEST_OUTPUT_PATH
+      )
+    ).rejects.toBeInstanceOf(XmlIllegalCharacterError);
+  });
+
+  it('reports schema diagnostics as readable strings in a typed error, never [object Object]', async () => {
+    const { validateXML } = await import('xmllint-wasm');
+    vi.mocked(validateXML).mockResolvedValueOnce({
+      valid: false,
+      errors: [
+        {
+          message: "Element 'comment': The attribute 'severity' is not allowed.",
+          loc: { lineNumber: 4 },
+        },
+        'a plain string error',
+      ],
+    } as any);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    let caught: unknown;
+    try {
+      await serializeReview(reviewWith({}), TEST_OUTPUT_PATH);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ReviewXmlError);
+    expect((caught as ReviewXmlError).code).toBe('schema-invalid');
+    expect((caught as ReviewXmlError).message).toContain(
+      'Generated XML does not conform to schema'
+    );
+    expect((caught as ReviewXmlError).message).toContain(
+      "The attribute 'severity' is not allowed."
+    );
+    expect((caught as ReviewXmlError).message).toContain('a plain string error');
+    expect((caught as ReviewXmlError).message).not.toContain('[object Object]');
+    // The publisher surfaces these one per line; each is already text.
+    expect((caught as ReviewXmlError).details).toEqual([
+      "line 4: Element 'comment': The attribute 'severity' is not allowed.",
+      'a plain string error',
+    ]);
+    const logged = errorSpy.mock.calls.map(call => call.join(' ')).join('\n');
+    expect(logged).toContain("The attribute 'severity' is not allowed.");
+    expect(logged).not.toContain('[object Object]');
+    errorSpy.mockRestore();
   });
 });

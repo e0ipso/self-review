@@ -117,9 +117,11 @@ Then('the guide overview panel should be visible above the first file section', 
 
 Then('the guide overview should render a Mermaid diagram as SVG', async () => {
   const page = getPage();
-  // Mermaid output keeps its render id; scoping to it excludes lucide icons.
-  const svg = page.locator('[data-testid="guide-overview"] svg[id^="mermaid-"]');
-  await expect(svg.first()).toBeVisible({ timeout: 10000 });
+  // The diagram is an SVG image shown through <img>; its markup never joins
+  // the document, so there is no inline svg[id^="mermaid-"] to look for.
+  const image = page.locator('[data-testid="guide-overview"] img[alt="Mermaid diagram"]');
+  await expect(image.first()).toBeVisible({ timeout: 10000 });
+  await expect(image.first()).toHaveAttribute('src', /^data:image\/svg\+xml;base64,/);
 });
 
 Then('the guide overview panel should not be visible', async () => {

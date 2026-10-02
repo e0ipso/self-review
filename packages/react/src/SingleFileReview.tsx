@@ -1,4 +1,4 @@
-import React, { forwardRef, useMemo } from 'react';
+import React, { forwardRef, useMemo, useRef } from 'react';
 import type {
   AppConfig,
   DiffFile,
@@ -9,7 +9,7 @@ import type {
 import type { ReviewAdapter } from './adapter';
 import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
 import { ConfigProvider } from './context/ConfigContext';
-import { ReviewProvider } from './context/ReviewContext';
+import { ReviewProvider, reviewSessionIdentity } from './context/ReviewContext';
 import { DiffNavigationProvider } from './context/DiffNavigationContext';
 import { TooltipProvider } from './components/ui/tooltip';
 import FileSection from './components/DiffViewer/FileSection';
@@ -18,9 +18,9 @@ import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
 export type SingleFileReviewHandle = ReviewHandle;
 
 export interface SingleFileReviewProps {
-  /** The diff file to review. */
+  /** A different path starts a fresh session; a new object for the same path keeps it. */
   file: DiffFile;
-  /** Optional diff source metadata. */
+  /** Defaults to `{ type: 'file' }` at the file's path. Compared by value. */
   source?: DiffSource;
   /** Optional partial config (theme, categories, etc.). */
   config?: Partial<AppConfig>;
@@ -31,19 +31,14 @@ export interface SingleFileReviewProps {
    * such as `expandContext`, `loadFileContent`, `loadImage`, `readAttachment`,
    * `loadResumedReview`, `submitReview`, and `changeOutputPath`.
    *
-   * Note: a consumer-supplied `loadDiff` is intentionally ignored — `file` and `source`
-   * are the source of truth in single-file mode. Memoize this object on the consumer side
-   * to avoid unnecessary re-renders, the same way `ReviewPanel` expects.
+   * A consumer-supplied `loadDiff` is ignored: `file` and `source` are the source of truth.
+   * Memoize this object, since a new adapter object starts a new session.
    */
   adapter?: Partial<ReviewAdapter>;
   /** CSS class applied to the root container. */
   className?: string;
   /** Default view mode for markdown files: 'raw' shows diff, 'rendered' shows rendered markdown. */
   defaultViewMode?: 'split' | 'unified';
-  /** Prism CSS string for light theme. */
-  prismLightCss?: string;
-  /** Prism CSS string for dark theme. */
-  prismDarkCss?: string;
 }
 
 interface SingleFileReviewInnerProps {
@@ -64,6 +59,41 @@ const SingleFileReviewInner = forwardRef<ReviewHandle, SingleFileReviewInnerProp
   }
 );
 
+interface SingleFileSessionProps extends SingleFileReviewInnerProps {
+  source: DiffSource;
+  adapter?: Partial<ReviewAdapter>;
+}
+
+/** Keyed on path and source identity, so a different file never exports the previous one's state. */
+const SingleFileSession = forwardRef<ReviewHandle, SingleFileSessionProps>(
+  function SingleFileSession({ file, source, adapter, ...inner }, ref) {
+    // Read at load time: a new adapter object would start a new session on a same-path update.
+    const payloadRef = useRef<DiffLoadPayload>({ files: [file], source });
+    payloadRef.current = { files: [file], source };
+
+    // Spread order is load-bearing: the internal loadDiff must win.
+    const mergedAdapter: ReviewAdapter = useMemo(
+      () => ({
+        ...adapter,
+        loadDiff: async (): Promise<DiffLoadPayload> => payloadRef.current,
+      }),
+      [adapter]
+    );
+
+    return (
+      <ReviewAdapterProvider adapter={mergedAdapter}>
+        <ReviewProvider>
+          <DiffNavigationProvider>
+            <TooltipProvider>
+              <SingleFileReviewInner ref={ref} file={file} {...inner} />
+            </TooltipProvider>
+          </DiffNavigationProvider>
+        </ReviewProvider>
+      </ReviewAdapterProvider>
+    );
+  }
+);
+
 /**
  * Single-file review component for reviewing a single file.
  * Defaults to rendered markdown view for .md files.
@@ -80,55 +110,31 @@ const SingleFileReviewInner = forwardRef<ReviewHandle, SingleFileReviewInnerProp
  */
 export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
   function SingleFileReview(
-    {
-      file,
-      source,
-      config,
-      onReviewChange,
-      adapter,
-      className,
-      defaultViewMode = 'unified',
-      prismLightCss,
-      prismDarkCss,
-    },
+    { file, source, config, onReviewChange, adapter, className, defaultViewMode = 'unified' },
     ref
   ) {
-    // Merge consumer-supplied adapter under the internally-generated loadDiff.
-    // Spread order is load-bearing: the internal loadDiff must always win, since
-    // file/source are the source of truth in single-file mode.
-    const mergedAdapter: ReviewAdapter = useMemo(
-      () => ({
-        ...adapter,
-        loadDiff: async (): Promise<DiffLoadPayload> => ({
-          files: [file],
-          source: source || { type: 'file', sourcePath: file.newPath || file.oldPath },
-        }),
-      }),
-      [file, source, adapter]
-    );
+    const resolvedSource: DiffSource = source || {
+      type: 'file',
+      sourcePath: file.newPath || file.oldPath,
+    };
+    const sessionKey = JSON.stringify([
+      file.newPath || file.oldPath,
+      reviewSessionIdentity(resolvedSource),
+    ]);
 
     return (
-      <ReviewAdapterProvider adapter={mergedAdapter}>
-        <ConfigProvider
-          initialConfig={{ ...config, diffView: defaultViewMode }}
-          prismLightCss={prismLightCss}
-          prismDarkCss={prismDarkCss}
-        >
-          <ReviewProvider>
-            <DiffNavigationProvider>
-              <TooltipProvider>
-                <SingleFileReviewInner
-                  ref={ref}
-                  file={file}
-                  viewMode={defaultViewMode}
-                  onReviewChange={onReviewChange}
-                  className={className}
-                />
-              </TooltipProvider>
-            </DiffNavigationProvider>
-          </ReviewProvider>
-        </ConfigProvider>
-      </ReviewAdapterProvider>
+      <ConfigProvider initialConfig={{ ...config, diffView: defaultViewMode }}>
+        <SingleFileSession
+          key={sessionKey}
+          ref={ref}
+          file={file}
+          source={resolvedSource}
+          adapter={adapter}
+          viewMode={defaultViewMode}
+          onReviewChange={onReviewChange}
+          className={className}
+        />
+      </ConfigProvider>
     );
   }
 );

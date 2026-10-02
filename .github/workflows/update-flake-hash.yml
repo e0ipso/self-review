@@ -8,6 +8,8 @@ on:
         required: true
         type: string
 
+permissions: {}
+
 jobs:
   update:
     name: Update flake.nix hash for new release
@@ -16,7 +18,11 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v7
+      # The pull request action authenticates its own push with the token it
+      # is given, so the checkout keeps no credential behind.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Check the hash updater
         run: bash scripts/test/update-flake-hash.test.sh
@@ -26,11 +32,13 @@ jobs:
       # aarch64 keeps every architecture in one job, and so in one pull
       # request. A runner without binfmt fails this workflow only: the release
       # and its artifacts are already published by the time it runs.
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
         with:
           platforms: arm64
 
-      - uses: DeterminateSystems/nix-installer-action@main
+      # Pinned to a commit: this job holds write permission, so the installer
+      # it runs must not be whatever `main` points at today.
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
         with:
           extra-conf: extra-platforms = aarch64-linux
 
@@ -50,8 +58,9 @@ jobs:
             bash scripts/update-flake-hash.sh "$system"
           done
 
-      - uses: peter-evans/create-pull-request@v8
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: 'chore: update flake hashes for ${{ inputs.tag }}'
           title: 'chore: update flake hashes for ${{ inputs.tag }}'
           body: |

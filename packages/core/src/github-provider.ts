@@ -10,6 +10,7 @@
 
 import {
   ForgeCliUnavailableError,
+  isCommandCancelled,
   type FetchThreadsOptions,
   type ForgeCommandResult,
   type ForgeCommandRunner,
@@ -47,6 +48,8 @@ async function runGh(runCommand: ForgeCommandRunner, args: string[]): Promise<st
   try {
     result = await runCommand(GH_CLI, args);
   } catch (error) {
+    // A run cut short by the session's own bounds is not a missing CLI.
+    if (isCommandCancelled(error)) throw error;
     const detail = error instanceof Error ? error.message : String(error);
     throw new ForgeCliUnavailableError('github', GH_CLI, `Failed to run the gh CLI: ${detail}`);
   }
@@ -81,6 +84,10 @@ function parseGhJson(stdout: string, context: string): unknown {
  * Normalize one review comment's anchor. GitHub reports `line: null` when
  * the comment no longer applies to the head diff (outdated); the
  * `original_*` fields then retain the historic anchor.
+ *
+ * GitHub re-anchors comments on each push, so `line: null` is the forge's own
+ * outdated verdict. No `headSha` is carried: `commit_id` cannot be verified to
+ * follow re-anchoring, and a lagging SHA would disable every suggestion.
  */
 function toAnchor(comment: GitHubReviewComment): ForgeThreadAnchor {
   const outdated = comment.line === null || comment.line === undefined;

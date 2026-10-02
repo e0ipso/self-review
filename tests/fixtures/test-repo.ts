@@ -12,6 +12,15 @@ import { tmpdir } from 'os';
  *
  * Returns the path to the repo. Caller is responsible for cleanup.
  */
+// Unchanged lines below the edit in src/auth/login.ts, so the reviewed hunk
+// leaves context hidden for the expand-context scenarios to reveal.
+const LOGIN_UNCHANGED_TAIL = [
+  '',
+  'export function logout(sessionToken: string): void {',
+  ...Array.from({ length: 12 }, (_, i) => `  // session teardown step ${i + 1}`),
+  '}',
+];
+
 export function createTestRepo(): string {
   const repoDir = mkdtempSync(join(tmpdir(), 'self-review-test-'));
 
@@ -47,6 +56,7 @@ export function createTestRepo(): string {
       'function checkPassword(input: string, hash: string): boolean {',
       '  return input === hash; // TODO: proper hashing',
       '}',
+      ...LOGIN_UNCHANGED_TAIL,
     ].join('\n')
   );
 
@@ -99,6 +109,7 @@ export function createTestRepo(): string {
       '  // TODO: use bcrypt',
       '  return input === hash;',
       '}',
+      ...LOGIN_UNCHANGED_TAIL,
     ].join('\n')
   );
 

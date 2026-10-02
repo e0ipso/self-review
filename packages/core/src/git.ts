@@ -1,9 +1,13 @@
-// src/main/git.ts
-// Git command execution
+// Git command execution. Helpers reject rather than exit; front ends report failures.
 
-import { execSync, execFile, execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { generateSyntheticDiffs } from './synthetic-diff';
+import {
+  generateSyntheticDiffs,
+  type SyntheticDiffOptions,
+  type SyntheticDiffResult,
+} from './synthetic-diff';
+import { MAX_GIT_DIFF_OUTPUT_BYTES } from './input-budgets';
 
 const execFileAsync = promisify(execFile);
 
@@ -17,80 +21,7 @@ export function stripTrailingNewline(text: string): string {
   return text.replace(/\r?\n$/, '');
 }
 
-export function runGitDiff(args: string[]): string {
-  try {
-    // Check if git is available
-    try {
-      execSync('git --version', { stdio: 'ignore' });
-    } catch {
-      console.error('Error: git is not installed or not in PATH');
-      process.exit(1);
-    }
-
-    // Check if we're in a git repository
-    try {
-      execSync('git rev-parse --git-dir', { stdio: 'ignore' });
-    } catch {
-      console.error('Error: not a git repository (or any parent up to mount point)');
-      process.exit(1);
-    }
-
-    // Run git diff with the provided arguments
-    const result = execFileSync('git', ['diff', ...args], {
-      encoding: 'utf-8',
-      maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large diffs
-    });
-
-    return result;
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error running git diff: ${error.message}`);
-    } else {
-      console.error('Error running git diff: unknown error');
-    }
-    process.exit(1);
-  }
-}
-
-export function getRepoRoot(): string {
-  try {
-    const result = execSync('git rev-parse --show-toplevel', {
-      encoding: 'utf-8',
-    });
-    return stripTrailingNewline(result);
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error getting repository root: ${error.message}`);
-    } else {
-      console.error('Error getting repository root: unknown error');
-    }
-    process.exit(1);
-  }
-}
-
-/**
- * Lightweight sync validation - checks if git is available and we're in a repo.
- * Called BEFORE Electron initialization for early exit path.
- */
-export function validateGitAvailable(): void {
-  try {
-    execSync('git --version', { stdio: 'ignore' });
-  } catch {
-    console.error('Error: git is not installed or not in PATH');
-    process.exit(1);
-  }
-
-  try {
-    execSync('git rev-parse --git-dir', { stdio: 'ignore' });
-  } catch {
-    console.error('Error: not a git repository (or any parent up to mount point)');
-    process.exit(1);
-  }
-}
-
-/**
- * Async version of getRepoRoot - called AFTER app.whenReady().
- */
+/** Rejects when git is missing or `cwd` is not inside a repository. */
 export async function getRepoRootAsync(cwd?: string): Promise<string> {
   try {
     const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], {
@@ -109,16 +40,59 @@ export async function getRepoRootAsync(cwd?: string): Promise<string> {
 }
 
 /**
- * Async version of runGitDiff - called AFTER app.whenReady().
- * Uses timeout to prevent hanging in CI environments.
+ * Config overrides, placed before `diff`, that keep output parseable whatever the user's config
+ * says.
  */
-export async function runGitDiffAsync(args: string[], cwd?: string): Promise<string> {
+export const PARSER_COMPATIBLE_GIT_CONFIG: readonly string[] = [
+  '-c',
+  'color.ui=never',
+  '-c',
+  'diff.noprefix=false',
+  '-c',
+  'diff.mnemonicPrefix=false',
+  // Untracked enumeration, context expansion and Apply all resolve paths against the root.
+  '-c',
+  'diff.relative=false',
+];
+
+/** Appended after the user's options so a user `--color=always` or `--no-prefix` loses. */
+export const PARSER_COMPATIBLE_DIFF_FLAGS: readonly string[] = [
+  '--no-color',
+  '--no-ext-diff',
+  '--no-textconv',
+  '--src-prefix=a/',
+  '--dst-prefix=b/',
+];
+
+/** Inserts the flags after every user option and before `--`. */
+export function withParserCompatibleDiffArgs(args: readonly string[]): string[] {
+  const separator = args.indexOf('--');
+  if (separator === -1) {
+    return [...args, ...PARSER_COMPATIBLE_DIFF_FLAGS];
+  }
+  return [...args.slice(0, separator), ...PARSER_COMPATIBLE_DIFF_FLAGS, ...args.slice(separator)];
+}
+
+/**
+ * The one entry point for every `git diff` (load, expansion, remote), so the
+ * parser-compatible normalization applies uniformly. Output past `maxOutputBytes`
+ * rejects with an error {@link isOutputLimitError} recognizes.
+ */
+export async function runGitDiffAsync(
+  args: string[],
+  cwd?: string,
+  maxOutputBytes: number = MAX_GIT_DIFF_OUTPUT_BYTES
+): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', ['diff', ...args], {
-      maxBuffer: 50 * 1024 * 1024, // 50MB buffer
-      timeout: 30000, // 30 second timeout
-      cwd,
-    });
+    const { stdout } = await execFileAsync(
+      'git',
+      [...PARSER_COMPATIBLE_GIT_CONFIG, 'diff', ...withParserCompatibleDiffArgs(args)],
+      {
+        maxBuffer: maxOutputBytes,
+        timeout: 30000, // 30 second timeout
+        cwd,
+      }
+    );
     return stdout;
   } catch (error) {
     if (error instanceof Error) {
@@ -128,29 +102,6 @@ export async function runGitDiffAsync(args: string[], cwd?: string): Promise<str
     }
     throw error;
   }
-}
-
-/**
- * Read a blob from a git object spec (`<sha>:<path>`) as raw bytes.
- * Remote mode reads reviewed content at the fetched head SHA — a temporary
- * clone's working tree stays on the default branch and never reflects the
- * PR/MR head.
- */
-export async function readGitBlobAsync(repoPath: string, spec: string): Promise<Buffer> {
-  return await new Promise<Buffer>((resolve, reject) => {
-    execFile(
-      'git',
-      ['-C', repoPath, 'show', spec],
-      { encoding: 'buffer', maxBuffer: 50 * 1024 * 1024, timeout: 30000 },
-      (error, stdout) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(stdout);
-        }
-      }
-    );
-  });
 }
 
 /**
@@ -188,12 +139,20 @@ export async function getUntrackedFilesAsync(repoRoot?: string): Promise<string[
   }
 }
 
+/** True when a child process exceeded `maxBuffer`: a budget hit, not a git failure. */
+export function isOutputLimitError(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+}
+
 /**
  * Generate synthetic unified diffs for untracked files so they can be
- * parsed by the existing diff parser.
- *
- * Delegates to the reusable generateSyntheticDiffs module.
+ * parsed by the existing diff parser. Untracked symlinks are described by
+ * their link text, never followed.
  */
-export function generateUntrackedDiffs(paths: string[], repoRoot: string): string {
-  return generateSyntheticDiffs(paths, repoRoot);
+export function generateUntrackedDiffs(
+  paths: string[],
+  repoRoot: string,
+  options: SyntheticDiffOptions = {}
+): SyntheticDiffResult {
+  return generateSyntheticDiffs(paths, repoRoot, { ...options, followSymlinks: false });
 }

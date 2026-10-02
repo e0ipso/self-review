@@ -2,83 +2,38 @@
 // Headless orchestrator for `self-review fetch-comments <URL>`: materialize
 // the PR/MR, fetch and map its discussion threads, and write a v3 review.xml
 // with remote provenance — no window, nothing on stdout, all logging on
-// stderr. Every collaborator is injectable so the flow is unit-testable; the
-// CLI entry in main.ts stays thin.
+// stderr. Shares its load/filter/map steps with the app (remote-mode.ts); only the
+// thread-fetch policy differs (the app degrades, this fails).
+//
+// No overall deadline: bounded by the per-command timeout and the caller's `signal`.
+// Either way the in-flight command is killed, the clone removed and nothing written.
 
-import { writeFileSync } from 'fs';
-import { resolve } from 'path';
-import { ForgeCliUnavailableError, parseForgeUrl } from './forge-provider';
-import type { ForgeCommandRunner, ForgeName, ForgeProvider, ForgeUrl } from './forge-provider';
-import { createGitHubProvider } from './github-provider';
-import { createGitLabProvider } from './gitlab-provider';
-import {
-  defaultGitRunner,
-  detectExistingClone,
-  materialize,
-  resolveRemoteDefaultBranch,
-} from './materializer';
-import type { ExistingClone, MaterializeResult } from './materializer';
-import { mapThreadsToReviewComments, REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
-import { parseDiff } from './diff-parser';
-import { runGitDiffAsync } from './git';
-import { serializeReview } from './xml-serializer';
-import { loadConfig } from './config';
-import type {
-  AppConfig,
-  DiffFile,
-  FileReviewState,
-  RemoteForge,
-  ReviewComment,
-  ReviewState,
-} from './types';
+import { REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
+import { publishReview } from './review-publisher';
+import type { PublishReviewOptions, PublishReviewResult } from './review-publisher';
+import { loadConfigWithProvenance } from './config';
+import type { LoadedConfig } from './config';
+import { publishOptionsFor, resolveOutputTarget } from './startup';
+import { defaultRemoteSessionDeps, loadRemoteReview, startRemoteSession } from './remote-mode';
+import type { RemoteLifetimeOptions, RemoteSessionDeps } from './remote-mode';
+import type { DiffFile, FileReviewState, RemoteForge, ReviewComment, ReviewState } from './types';
 
-/**
- * Injectable seams for the orchestration. Defaults spawn real processes and
- * touch the real filesystem; tests replace them wholesale.
- */
-export interface FetchCommentsDeps {
-  /** Command runner shared by git, gh and glab invocations. */
-  runner: ForgeCommandRunner;
-  createProvider: (forge: ForgeName, runner: ForgeCommandRunner) => ForgeProvider;
-  materialize: (
-    url: ForgeUrl,
-    baseBranch: string,
-    cwd: string,
-    runner: ForgeCommandRunner,
-    existingClone?: ExistingClone | null
-  ) => Promise<MaterializeResult>;
-  detectExistingClone: (
-    url: ForgeUrl,
-    cwd: string,
-    runner: ForgeCommandRunner
-  ) => Promise<ExistingClone | null>;
-  resolveRemoteDefaultBranch: (
-    url: ForgeUrl,
-    runner: ForgeCommandRunner,
-    existing?: ExistingClone | null
-  ) => Promise<string>;
-  loadDiffFiles: (repoPath: string, baseSha: string, headSha: string) => Promise<DiffFile[]>;
-  serialize: (state: ReviewState, outputPath: string) => Promise<string>;
-  writeFile: (path: string, content: string) => void;
-  loadConfig: () => AppConfig;
+/** Injectable seams: the app's remote-session seams plus this subcommand's output. */
+export interface FetchCommentsDeps extends RemoteSessionDeps {
+  publish: (
+    state: ReviewState,
+    outputPath: string,
+    options: PublishReviewOptions
+  ) => Promise<PublishReviewResult>;
+  loadConfig: () => LoadedConfig;
   now: () => Date;
 }
 
 function defaultDeps(): FetchCommentsDeps {
   return {
-    runner: defaultGitRunner,
-    createProvider: (forge, runner) =>
-      forge === 'github' ? createGitHubProvider(runner) : createGitLabProvider(runner),
-    detectExistingClone,
-    materialize,
-    resolveRemoteDefaultBranch,
-    loadDiffFiles: async (repoPath, baseSha, headSha) =>
-      // Triple-dot: diff from the merge base, matching how forges present a
-      // PR/MR diff. Runs inside the materialized clone.
-      parseDiff(await runGitDiffAsync([`${baseSha}...${headSha}`], repoPath)),
-    serialize: serializeReview,
-    writeFile: (path, content) => writeFileSync(path, content, 'utf-8'),
-    loadConfig,
+    ...defaultRemoteSessionDeps,
+    publish: publishReview,
+    loadConfig: loadConfigWithProvenance,
     now: () => new Date(),
   };
 }
@@ -169,7 +124,7 @@ export function buildRemoteReviewState(args: BuildRemoteReviewStateArgs): Review
   };
 }
 
-export interface FetchCommentsOptions {
+export interface FetchCommentsOptions extends RemoteLifetimeOptions {
   /** Include threads the forge marks resolved (GitLab). Default false. */
   includeResolved?: boolean;
   /** Working directory for clone detection and output resolution. */
@@ -181,7 +136,11 @@ export interface FetchCommentsOptions {
 /**
  * Run the headless fetch-comments flow end to end. Throws on any failure
  * (the caller prints the message to stderr and exits 1); the temporary
- * clone, when one was created, is removed on both success and failure.
+ * clone, when one was created, is removed on both success and failure, and
+ * the removal has completed by the time the promise settles.
+ *
+ * Fetching comments is the whole point, so threads run under the `'required'`
+ * policy: an unavailable forge CLI is an error, not a degraded review.
  */
 export async function runFetchComments(
   url: string,
@@ -189,86 +148,40 @@ export async function runFetchComments(
 ): Promise<void> {
   const deps: FetchCommentsDeps = { ...defaultDeps(), ...options.deps };
   const cwd = options.cwd ?? process.cwd();
+  const lifetime: RemoteLifetimeOptions = { signal: options.signal };
 
-  const forgeUrl = parseForgeUrl(url);
-  if (forgeUrl === null) {
-    throw new Error(
-      `Not a recognized pull/merge request URL: ${url}\n` +
-        'Expected a GitHub PR URL (…/pull/N) or a GitLab MR URL ' +
-        '(…/-/merge_requests/N).'
-    );
-  }
-
-  const provider = deps.createProvider(forgeUrl.forge, deps.runner);
-
-  let baseBranch: string;
-  let existingClone: ExistingClone | null | undefined;
+  // startRemoteSession cleans up after its own failure; once it returns, this try/finally owns the
+  // session.
+  const session = await startRemoteSession(url, cwd, deps, {
+    ...lifetime,
+    includeResolved: options.includeResolved ?? false,
+    threads: 'required',
+  });
   try {
-    baseBranch = await provider.fetchBaseBranch(forgeUrl);
-  } catch (error) {
-    if (!(error instanceof ForgeCliUnavailableError)) throw error;
-    console.error(`[fetch-comments] ${error.message}`);
-    console.error(
-      `[fetch-comments] ${error.cli} unavailable for the base-branch lookup — ` +
-        'falling back to the remote default branch via git ls-remote.'
-    );
-    existingClone = await deps.detectExistingClone(forgeUrl, cwd, deps.runner);
-    baseBranch = await deps.resolveRemoteDefaultBranch(forgeUrl, deps.runner, existingClone);
-  }
-  console.error(`[fetch-comments] Base branch: ${baseBranch}`);
+    console.error(`[fetch-comments] Fetched ${session.fetchedThreads.length} threads`);
 
-  const materialized = await deps.materialize(
-    forgeUrl,
-    baseBranch,
-    cwd,
-    deps.runner,
-    existingClone
-  );
-  try {
-    let threads;
-    try {
-      threads = await provider.fetchThreads(forgeUrl, {
-        includeResolved: options.includeResolved ?? false,
-      });
-    } catch (error) {
-      if (error instanceof ForgeCliUnavailableError) {
-        // Fetching comments is this subcommand's entire purpose: no
-        // degradation, fail with a clear error.
-        throw new Error(
-          `Cannot fetch discussion threads: ${error.message}\n` +
-            `fetch-comments requires the ${error.cli} CLI to be installed ` +
-            'and authenticated.'
-        );
-      }
-      throw error;
+    const loadedConfig = deps.loadConfig();
+    const config = loadedConfig.config;
+    const loaded = await loadRemoteReview(session, config.ignore ?? [], deps.loadDiff, lifetime);
+    for (const diagnostic of loaded.diagnostics) {
+      console.error(`[fetch-comments] Diff diagnostic: ${diagnostic}`);
     }
-    console.error(`[fetch-comments] Fetched ${threads.length} threads`);
-
-    const diffFiles = await deps.loadDiffFiles(
-      materialized.repoPath,
-      materialized.baseSha,
-      materialized.headSha
-    );
-    // The diff is what anchors a `suggestion` fence: without it the mapper
-    // cannot read the original code a fence proposes to replace.
-    const comments = mapThreadsToReviewComments(threads, diffFiles);
 
     const state = buildRemoteReviewState({
       remoteUrl: url,
-      forge: forgeUrl.forge,
-      baseSha: materialized.baseSha,
-      headSha: materialized.headSha,
-      diffFiles,
-      comments,
+      forge: session.forgeUrl.forge,
+      baseSha: session.remote.remoteBaseSha,
+      headSha: session.remote.remoteHeadSha,
+      diffFiles: loaded.files,
+      comments: loaded.comments,
       timestamp: deps.now().toISOString(),
     });
 
-    const config = deps.loadConfig();
-    const outputPath = resolve(cwd, config.outputFile);
-    const xml = await deps.serialize(state, outputPath);
-    deps.writeFile(outputPath, xml + '\n');
-    console.error(`[fetch-comments] ${comments.length} threads written to ${outputPath}`);
+    // No flag names the output, so config provenance decides its trust (as in the app and serve).
+    const target = resolveOutputTarget(null, loadedConfig, cwd);
+    await deps.publish(state, target.path, publishOptionsFor(target));
+    console.error(`[fetch-comments] ${loaded.comments.length} threads written to ${target.path}`);
   } finally {
-    materialized.cleanup();
+    await session.cleanup();
   }
 }

@@ -5,13 +5,17 @@ import type { DiffFile } from '@self-review/types';
 
 // Mock context hooks
 const mockDiffFiles: DiffFile[] = [];
+const mockDiagnostics: string[] = [];
 const mockDiffSource = { type: 'git' as const, gitDiffArgs: '', repository: '' };
 const mockConfig = { diffView: 'unified' as const };
+const mockReview = { isLargePayload: false };
 
 vi.mock('../../context/ReviewContext', () => ({
   useReview: () => ({
     diffFiles: mockDiffFiles,
     diffSource: mockDiffSource,
+    diagnostics: mockDiagnostics,
+    isLargePayload: mockReview.isLargePayload,
   }),
 }));
 
@@ -91,6 +95,61 @@ describe('DiffViewer', () => {
       sections.forEach(section => {
         expect(section.getAttribute('data-expanded')).toBe('false');
       });
+    });
+
+    it('initializes files as collapsed in large-payload mode whatever the file count', () => {
+      mockDiffFiles.length = 0;
+      mockDiffFiles.push(...makeDiffFiles(3));
+      mockReview.isLargePayload = true;
+
+      try {
+        const { getAllByTestId } = render(<DiffViewer />);
+        const sections = getAllByTestId(/^file-section-/);
+
+        expect(sections).toHaveLength(3);
+        sections.forEach(section => {
+          expect(section.getAttribute('data-expanded')).toBe('false');
+        });
+      } finally {
+        mockReview.isLargePayload = false;
+      }
+    });
+  });
+
+  describe('load diagnostics', () => {
+    it('shows the diagnostics instead of an empty-state message when no file loaded', () => {
+      mockDiffFiles.length = 0;
+      mockDiagnostics.length = 0;
+      mockDiagnostics.push('conflict.txt: combined (merge conflict) diff output is not supported');
+
+      const { getByTestId, queryByText } = render(<DiffViewer />);
+
+      expect(getByTestId('diff-diagnostics').textContent).toContain('conflict.txt');
+      expect(queryByText('No changes found')).toBeNull();
+      mockDiagnostics.length = 0;
+    });
+
+    it('keeps the diagnostics visible above the files that did load', () => {
+      mockDiffFiles.length = 0;
+      mockDiffFiles.push(...makeDiffFiles(2));
+      mockDiagnostics.length = 0;
+      mockDiagnostics.push('conflict.txt: combined (merge conflict) diff output is not supported');
+
+      const { getByTestId, getAllByTestId } = render(<DiffViewer />);
+
+      expect(getByTestId('diff-diagnostics').textContent).toContain('conflict.txt');
+      expect(getAllByTestId(/^file-section-/)).toHaveLength(2);
+      mockDiagnostics.length = 0;
+    });
+
+    it('renders no diagnostics element for a clean load', () => {
+      mockDiffFiles.length = 0;
+      mockDiffFiles.push(...makeDiffFiles(1));
+      mockDiagnostics.length = 0;
+
+      const { queryByTestId } = render(<DiffViewer />);
+
+      expect(queryByTestId('diff-diagnostics')).toBeNull();
     });
   });
 });

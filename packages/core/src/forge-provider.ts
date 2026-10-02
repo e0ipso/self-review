@@ -44,16 +44,23 @@ export type ForgeAnchorSide = 'old' | 'new';
  * - `startLine`/`endLine` are `null` when the forge supplies a file path but
  *   no usable line information (the mapper degrades to a file-level comment;
  *   `side` is meaningless in that case and providers should set `'new'`).
- * - `outdated: true` means the forge reports the anchor no longer applies to
- *   the current head (e.g. GitHub outdated review comments); the line fields
- *   then hold the historic anchor and the mapper degrades to file-level.
+ *
+ * Revision provenance (the mapper compares it with the reviewed head; providers
+ * report only what the forge told them):
+ * - `headSha`: head commit the line numbers were computed against, when the
+ *   forge reports one per note (GitLab). A suggestion activates only on a match.
+ * - `outdated`: the forge's own per-note verdict (GitHub `line: null`). `true`
+ *   degrades to file-level; `false` vouches for the anchor when no `headSha` exists.
+ *
+ * An anchor carrying neither is unverifiable: it never activates a suggestion.
  */
 export interface ForgeThreadAnchor {
   filePath: string;
   side: ForgeAnchorSide;
   startLine: number | null;
   endLine: number | null;
-  outdated: boolean;
+  headSha?: string;
+  outdated?: boolean;
 }
 
 /** One turn (root comment or reply) in a forge discussion thread. */
@@ -100,12 +107,58 @@ export interface ForgeCommandResult {
 }
 
 /**
- * Injectable command runner used by provider implementations, mirroring how
- * `git.ts` keeps child-process execution testable. Resolves with the exit
- * code on any completed run (including non-zero); rejects only when the
- * binary cannot be spawned at all (e.g. ENOENT when the CLI is absent).
+ * Optional lifetime bounds; either one kills the child and rejects with {@link
+ * CommandCancelledError}.
  */
-export type ForgeCommandRunner = (command: string, args: string[]) => Promise<ForgeCommandResult>;
+export interface ForgeCommandOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+/**
+ * Injectable command runner for providers and the materializer. Resolves with
+ * the exit code on any completed run; rejects when the binary cannot be spawned
+ * and, with a {@link CommandCancelledError}, when cut short by `options`.
+ */
+export type ForgeCommandRunner = (
+  command: string,
+  args: string[],
+  options?: ForgeCommandOptions
+) => Promise<ForgeCommandResult>;
+
+/** Why a command run was cut short. */
+export type CommandCancelReason = 'aborted' | 'timeout';
+
+/**
+ * A run ended by its caller's bounds (abort or timeout) after the child was
+ * killed. Providers must not fold it into {@link ForgeCliUnavailableError}: a
+ * session being torn down must not degrade into a review without threads.
+ */
+export class CommandCancelledError extends Error {
+  readonly reason: CommandCancelReason;
+  readonly command: string;
+  readonly args: readonly string[];
+
+  constructor(reason: CommandCancelReason, command: string, args: readonly string[]) {
+    super(
+      reason === 'timeout'
+        ? `${command} ${args.join(' ')} timed out and was killed`
+        : `${command} ${args.join(' ')} was cancelled`
+    );
+    this.name = 'CommandCancelledError';
+    this.reason = reason;
+    this.command = command;
+    this.args = args;
+  }
+}
+
+/** Matches by name too, so it works across module instances. */
+export function isCommandCancelled(error: unknown): error is CommandCancelledError {
+  return (
+    error instanceof CommandCancelledError ||
+    (error instanceof Error && error.name === 'CommandCancelledError')
+  );
+}
 
 /**
  * The conversation plane of a forge. Exactly two capabilities: base-branch

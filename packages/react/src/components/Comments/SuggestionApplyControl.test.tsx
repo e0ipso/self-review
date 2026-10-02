@@ -225,3 +225,52 @@ describe('SuggestionApplyControl', () => {
     expect(applySuggestion).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('SuggestionApplyControl: reviewed-path gating', () => {
+  const applied = async (): Promise<SuggestionApplyOutcome> => ({
+    status: 'applied',
+    filePath: FILE_PATH,
+    replacedLines: 1,
+  });
+
+  function renderForPath(filePath: string, adapter: ReviewAdapter) {
+    return render(
+      <ReviewAdapterProvider adapter={adapter}>
+        <ConfigProvider initialConfig={{}}>
+          <ReviewProvider>
+            <SuggestionApplyControl
+              filePath={filePath}
+              lineRange={LINE_RANGE}
+              suggestion={SUGGESTION}
+            />
+          </ReviewProvider>
+        </ConfigProvider>
+      </ReviewAdapterProvider>
+    );
+  }
+
+  it('offers no apply button for a file the reviewed diff does not contain', async () => {
+    const applySuggestion = vi.fn(applied);
+    renderForPath('src/not-in-diff.ts', { ...noopAdapter, applySuggestion });
+
+    const control = await screen.findByTestId('suggestion-apply-unreviewed');
+    expect(control.textContent).toContain('not in the reviewed diff');
+    expect(screen.queryByTestId('suggestion-apply-button')).toBeNull();
+    expect(screen.queryByTestId('suggestion-apply-choose-destination')).toBeNull();
+    expect(applySuggestion).not.toHaveBeenCalled();
+  });
+
+  it('gates the review-level sentinel path the same way', async () => {
+    renderForPath('', { ...noopAdapter, applySuggestion: vi.fn(applied) });
+
+    await screen.findByTestId('suggestion-apply-unreviewed');
+    expect(screen.queryByTestId('suggestion-apply-button')).toBeNull();
+  });
+
+  it('offers the button for a file the reviewed diff contains', async () => {
+    renderForPath(FILE_PATH, { ...noopAdapter, applySuggestion: vi.fn(applied) });
+
+    expect(await screen.findByTestId('suggestion-apply-button')).toBeTruthy();
+    expect(screen.queryByTestId('suggestion-apply-unreviewed')).toBeNull();
+  });
+});

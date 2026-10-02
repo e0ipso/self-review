@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+// The route publishes before it answers; a failed publication leaves the server up; exit follows only an acknowledged success.
+
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -13,7 +15,10 @@ let session: ReviewSession;
 let server: ReturnType<typeof createReviewServer>;
 let base: string;
 let outputPath: string;
-let exited: Promise<number>;
+let exit: ReturnType<typeof vi.fn<(code: number) => void>>;
+
+const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
+const AUTH = { authorization: `Bearer ${CAPABILITY}` };
 
 function reviewState(overrides: Partial<ReviewState> = {}): ReviewState {
   return {
@@ -43,9 +48,14 @@ function reviewState(overrides: Partial<ReviewState> = {}): ReviewState {
 function submit(state: unknown): Promise<Response> {
   return fetch(base + 'api/review', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...AUTH },
     body: JSON.stringify(state),
   });
+}
+
+// Gives the response's `finish` event a turn.
+function settle(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 50));
 }
 
 beforeAll(() => {
@@ -57,20 +67,23 @@ afterAll(() => {
 });
 
 beforeEach(async () => {
-  outputPath = path.join(tmp, `review-${Math.random().toString(36).slice(2)}.xml`);
+  // One directory per case so a leftover directory or asset does not leak into the next.
+  const caseDir = fs.mkdtempSync(path.join(tmp, 'case-'));
+  outputPath = path.join(caseDir, 'review.xml');
   session = createReviewSession();
   session.diffData = {
     source: { type: 'git', gitDiffArgs: '', repository: tmp },
     files: [],
   };
-  server = createReviewServer({ session, repositoryRoot: tmp });
+  server = createReviewServer({
+    session,
+    output: { path: outputPath, origin: 'explicit' },
+    capability: CAPABILITY,
+  });
   // The process exit is injected so the test can observe the code the real
   // program would exit with.
-  let settle: (code: number) => void;
-  exited = new Promise<number>(resolve => {
-    settle = resolve;
-  });
-  completeReviewOnSubmit({ server, session, outputPath, exit: code => settle(code) });
+  exit = vi.fn<(code: number) => void>();
+  completeReviewOnSubmit({ server, exit });
   base = (await listenLoopback(server)).url;
 });
 
@@ -81,29 +94,81 @@ afterEach(() => {
   }
 });
 
-describe('completeReviewOnSubmit', () => {
-  it('writes the output file, stops the listener and exits 0 when a review is submitted', async () => {
-    expect((await submit(reviewState())).status).toBe(200);
+describe('submission protocol', () => {
+  it('publishes before answering: a 200 means the file is on disk', async () => {
+    const res = await submit(reviewState());
 
-    expect(await exited).toBe(0);
-    expect(server.listening).toBe(false);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, outputPath });
+    // The acknowledgement is honest only if the document already exists when the response was sent.
     const xml = fs.readFileSync(outputPath, 'utf-8');
     expect(xml).toContain('urn:self-review:v3');
     expect(xml).toContain('Needs a test.');
   });
 
-  it('exits 1 without an output file when the review cannot be serialized', async () => {
+  it('stops the listener and exits 0 once the acknowledgement has been flushed', async () => {
+    expect((await submit(reviewState())).status).toBe(200);
+
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(exit).toHaveBeenCalledTimes(1);
+    expect(server.listening).toBe(false);
+  });
+
+  it('answers a document the schema rejects with 422, writes nothing and stays up', async () => {
     // Structurally valid (the route accepts it) but not a valid document:
     // timestamp is an xs:dateTime, so the XSD rejects it.
-    expect((await submit(reviewState({ timestamp: 'yesterday' }))).status).toBe(200);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await submit(reviewState({ timestamp: 'yesterday' }));
 
-    expect(await exited).toBe(1);
-    expect(fs.existsSync(outputPath)).toBe(false);
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+      expect(body.code).toBe('validation-failed');
+      expect(typeof body.message).toBe('string');
+      expect(Array.isArray(body.details)).toBe(true);
+
+      await settle();
+      expect(fs.existsSync(outputPath)).toBe(false);
+      expect(server.listening).toBe(true);
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it('reports a write failure, keeps serving, and lets a retry succeed once it is fixed', async () => {
+    fs.mkdirSync(outputPath);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const refused = await submit(reviewState());
+      expect(refused.status).toBe(500);
+      const body = await refused.json();
+      expect(body).toMatchObject({ ok: false, code: 'output-is-directory' });
+      expect(body.message).toContain(outputPath);
+
+      await settle();
+      expect(exit).not.toHaveBeenCalled();
+      expect(server.listening).toBe(true);
+      expect((await fetch(base + 'api/diff', { headers: AUTH })).status).toBe(200);
+
+      fs.rmdirSync(outputPath);
+      const retried = await submit(reviewState());
+      expect(retried.status).toBe(200);
+      expect(await retried.json()).toEqual({ ok: true, outputPath });
+      expect(fs.readFileSync(outputPath, 'utf-8')).toContain('Needs a test.');
+
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+      expect(server.listening).toBe(false);
+    } finally {
+      errors.mockRestore();
+    }
   });
 
   it('writes the attachment bytes the browser encoded, not an empty file', async () => {
     // The whole chain in one test: the client's own encoder, the HTTP body,
-    // the route's decode, the serializer's asset write. `Attachment.data` is
+    // the route's decode, the publisher's asset write. `Attachment.data` is
     // an ArrayBuffer and `JSON.stringify` renders one as `{}`, so without the
     // base64 encoding this file would be written empty — with a 200, and no
     // error anywhere to notice it by.
@@ -114,23 +179,23 @@ describe('completeReviewOnSubmit', () => {
     ];
 
     expect((await submit(encodeReviewStateForWire(state))).status).toBe(200);
-    expect(await exited).toBe(0);
 
-    const asset = path.join(path.dirname(outputPath), '.self-review-assets', 'c1-0.png');
+    const xml = fs.readFileSync(outputPath, 'utf-8');
+    const relative = xml.match(/<attachment path="([^"]+)" media-type="image\/png" \/>/)?.[1];
+    expect(relative).toMatch(/^\.self-review-assets\/c1-[0-9a-f]+\.png$/);
+    const asset = path.join(path.dirname(outputPath), relative!);
     expect(fs.readFileSync(asset)).toEqual(Buffer.from(bytes));
-    expect(fs.readFileSync(outputPath, 'utf-8')).toContain(
-      '<attachment path=".self-review-assets/c1-0.png" media-type="image/png" />'
-    );
   });
 
   it('does nothing for a rejected submission or any other request', async () => {
     expect((await submit({ nope: true })).status).toBe(400);
-    expect((await fetch(base + 'api/diff')).status).toBe(200);
+    expect((await fetch(base + 'api/diff', { headers: AUTH })).status).toBe(200);
 
     // Nothing completed: still listening, nothing written. Losing the tab
     // that made these requests would be no different.
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await settle();
     expect(server.listening).toBe(true);
+    expect(exit).not.toHaveBeenCalled();
     expect(fs.existsSync(outputPath)).toBe(false);
   });
 });

@@ -16,6 +16,7 @@ import {
   ImageLoadResult,
   AppInfo,
   RemoteDriftInfo,
+  ReviewSourceIdentity,
   SuggestionApplyRequest,
   SuggestionApplyOutcome,
   ApplyDestinationOutcome,
@@ -24,6 +25,7 @@ import { getVersionUpdate } from './version-checker';
 import { getAppIconDataUri } from './app-assets';
 import {
   applySuggestionForSession,
+  commitDiffData,
   commitReviewStart,
   createReviewSession,
   expandContext,
@@ -35,18 +37,23 @@ import {
   prepareDirectoryReview,
   preparePayload,
   readAttachment,
+  recordResumedAttachments,
   setApplyDestination,
   submitReviewState,
   takeReviewState,
 } from '../../packages/core/src/review-handlers';
+import type { AttachmentOrigins } from '../../packages/core/src/attachment-origins';
+import { loadResumeDocument } from '../../packages/core/src/startup';
+import type { ParsedReview } from '../../packages/core/src/xml-parser';
 
 // The desktop application's own session. A single module-scope `const` holding
 // it is expected: the mutable state lives inside the session value, which is
 // passed explicitly to every extracted handler.
 const desktopSession = createReviewSession();
 
-export function setDiffData(data: DiffLoadPayload): void {
-  desktopSession.diffData = data;
+export function setDiffData(data: DiffLoadPayload, identity: ReviewSourceIdentity | null): void {
+  // Must commit through core: a bare assignment would leave the reviewed paths and source identity empty.
+  commitDiffData(desktopSession, data, identity);
 }
 
 export function setGuideData(data: GuideLoadPayload | null): void {
@@ -64,11 +71,34 @@ export function setOutputPathInfo(info: OutputPathInfo): void {
 export function setResumeData(
   comments: ReviewComment[],
   viewedFiles: string[] = [],
-  remoteDrift: RemoteDriftInfo | null = null
+  remoteDrift: RemoteDriftInfo | null = null,
+  importDiagnostics: string[] = []
 ): void {
   desktopSession.resumeComments = comments;
   desktopSession.resumeViewedFiles = viewedFiles;
   desktopSession.resumeRemoteDrift = remoteDrift;
+  desktopSession.resumeImportDiagnostics = importDiagnostics;
+}
+
+/** Attachments of the resumed comments are read from beside the document. Returns diagnostics for references that will never be read. */
+export function setResumeDocument(
+  comments: readonly ReviewComment[],
+  resumeDocumentPath: string
+): string[] {
+  return recordResumedAttachments(desktopSession, comments, resumeDocumentPath);
+}
+
+/** Throws when the document cannot be read; main decides what that means. */
+export function loadResumeFile(resumePath: string): {
+  parsed: ParsedReview;
+  importDiagnostics: string[];
+} {
+  const parsed = loadResumeDocument(desktopSession, resumePath);
+  return { parsed, importDiagnostics: desktopSession.resumeImportDiagnostics };
+}
+
+export function getAttachmentOrigins(): AttachmentOrigins {
+  return desktopSession.attachmentOrigins;
 }
 
 export function registerIpcHandlers(): void {
@@ -146,8 +176,14 @@ export function registerIpcHandlers(): void {
     submitReviewState(desktopSession, state);
   });
 
-  // Handle attachment file read from renderer
-  ipcMain.handle(IPC.ATTACHMENT_READ, async (_event, filePath: string) => readAttachment(filePath));
+  // Core authorizes the reference; anything it refuses reads as missing.
+  ipcMain.handle(
+    IPC.ATTACHMENT_READ,
+    async (_event, reference: unknown): Promise<ArrayBuffer | null> => {
+      const result = await readAttachment(desktopSession, reference);
+      return result.ok ? result.data : null;
+    }
+  );
 
   // Send resumed comments and viewed files when the renderer is ready
   // (after diff data is loaded)
@@ -220,7 +256,7 @@ export function registerIpcHandlers(): void {
 
   // Start a directory review from a picked path
   ipcMain.handle(IPC.REVIEW_START_DIRECTORY, async (event, directoryPath: string) => {
-    const { payload, stats, exceedsThresholds } = await prepareDirectoryReview(
+    const { payload, identity, stats, exceedsThresholds } = await prepareDirectoryReview(
       desktopSession,
       directoryPath
     );
@@ -252,7 +288,7 @@ export function registerIpcHandlers(): void {
     }
 
     // Update the cache and send to renderer
-    const outgoing = commitReviewStart(desktopSession, payload);
+    const outgoing = commitReviewStart(desktopSession, payload, identity);
     const window = BrowserWindow.fromWebContents(event.sender);
     if (window) {
       window.webContents.send(IPC.DIFF_LOAD, outgoing);
@@ -302,41 +338,16 @@ export function registerFindInPageForWindow(window: BrowserWindow): void {
   });
 }
 
-export function requestReviewFromRenderer(window: BrowserWindow): Promise<ReviewState> {
-  return new Promise(resolve => {
-    // Host-driven flow: renderer pushes state before triggering save.
-    // If the session already holds a state, use it directly.
-    const preSubmitted = takeReviewState(desktopSession);
-    if (preSubmitted) {
-      console.error('[ipc] Using pre-submitted review state (host-driven)');
-      resolve(preSubmitted);
-      return;
-    }
+/** Consumed once. `null` means the renderer never pushed, which the caller treats as a failed save (never an empty review). */
+export function takeSubmittedReviewState(): ReviewState | null {
+  const state = takeReviewState(desktopSession);
+  if (state) {
+    console.error('[ipc] Using pushed review state for save');
+  }
+  return state;
+}
 
-    // Fallback: pull-based request for backward compatibility.
-    console.error('[ipc] Sending review:request to renderer (fallback)');
-    window.webContents.send('review:request');
-
-    // Wait for response with timeout
-    const timeout = setTimeout(() => {
-      console.error('[ipc] WARNING: Timeout waiting for review state from renderer (5s)');
-      console.error('[ipc] Resolving with empty review state');
-      resolve({
-        timestamp: new Date().toISOString(),
-        source: { type: 'git', gitDiffArgs: '', repository: '' },
-        files: [],
-      });
-    }, 5000);
-
-    // Poll for the submitted state
-    const interval = setInterval(() => {
-      const state = takeReviewState(desktopSession);
-      if (state) {
-        console.error('[ipc] Review state received from renderer');
-        clearTimeout(timeout);
-        clearInterval(interval);
-        resolve(state);
-      }
-    }, 100);
-  });
+export function isReviewOpen(): boolean {
+  const diff = desktopSession.diffData;
+  return diff !== null && diff.source.type !== 'welcome';
 }

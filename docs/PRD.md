@@ -114,11 +114,11 @@ The main process and renderer process communicate via Electron's `ipcMain` / `ip
 | Channel | Direction | Payload | Purpose |
 |---------|-----------|---------|---------|
 | `diff:load` | Main → Renderer | Parsed diff data (files, hunks, lines) | Initial data load |
-| `review:submit` | Renderer → Main | Complete review state (all comments, suggestions) | Triggered on window close |
+| `review:submit` | Renderer → Main | Complete review state (all comments, suggestions) | Pushed ahead of `app:save-and-quit`; main never requests it |
 | `resume:load` | Main → Renderer | Previously exported XML parsed back into review state | Resume from prior review |
 | `config:load` | Main → Renderer | Merged configuration (user + project) | Theme, view mode, categories |
-| `app:close-requested` | Main → Renderer | (none) | Notify renderer that user tried to close the window |
-| `app:save-and-quit` | Renderer → Main | (none) | Save review to file and exit |
+| `app:close-requested` | Main → Renderer | (none) | Ask the renderer to show the confirmation (window close, menu Quit, Cmd/Ctrl+Q) |
+| `app:save-and-quit` | Renderer → Main | (none) | Publish the pushed review and exit only if that succeeds |
 | `app:discard-and-quit` | Renderer → Main | (none) | Exit without saving |
 
 ---
@@ -184,7 +184,7 @@ There are two exit paths:
 
 **Finish Review button:** Clicking "Finish Review" in the toolbar saves the review to the configured output file and exits immediately with code 0. This is the primary exit path.
 
-**Window close (X / Cmd+Q / Alt+F4):** Closing the window by any OS-level method shows a three-way confirmation dialog (skipped automatically if no comments have been added):
+**Window close or Quit (X / Cmd+Q / Alt+F4 / menu Quit / Ctrl+Q):** Closing the window or quitting the app by any method, including the menu's Quit item, shows a three-way confirmation dialog (skipped automatically if no comments have been added). All of these paths go through one state machine, so none can end the process while a review is unsaved:
 
 1. **Save & Quit**, collects the review state, serializes to XML, writes to the output file, exits with code 0.
 2. **Discard**, exits immediately with code 0, without writing any output.
@@ -192,11 +192,13 @@ There are two exit paths:
 
 In both save paths, the application:
 
-1. Collects the current review state from the renderer process via IPC.
-2. Serializes it to XML.
-3. Writes the XML to the configured output file (default `./review.xml`).
+1. Receives the current review state, which the renderer pushes over IPC.
+2. Serializes it to XML and validates it against the schema before anything touches the disk.
+3. Publishes it to the configured output file (default `./review.xml`): attachments are staged first under fresh names, and the XML is renamed into place last, so an earlier `review.xml` and the assets it references are never damaged by a failed attempt.
 4. Logs the output file path to stderr.
 5. Exits with code 0.
+
+**A failed save does not exit.** If the review cannot be published (the XML fails validation, a value holds a character XML 1.0 cannot represent, the output path is a directory or a symbolic link, the disk is full, the directory is not writable, an imported attachment is no longer readable), the window stays open with every comment in place, a native error dialog names the cause and the next step, and the previous output file is untouched. The user can fix the cause or change the output path from the file tree footer and save again, or discard explicitly. A second close request while a save is in flight is ignored until it settles.
 
 If the user saves before adding any comments, an empty review XML (valid against the schema, with zero comments) is written to the output file.
 
@@ -314,7 +316,7 @@ The selected view mode persists for the session and can be set as a default in c
 
 **Added/deleted file override:** Files with change type `added` or `deleted` always render in unified view, regardless of the selected view mode. In split view, these files would waste half the screen, an added file shows content only on the right pane with the left pane empty, and a deleted file shows content only on the left pane with the right pane empty. Forcing unified view for these files uses the full width for the content that matters.
 
-**Rendered text view:** New Markdown files (`.md`/`.markdown` with change type `added`) and new HTML files (`.html`/`.htm` with change type `added`) show a per-file "Raw / Rendered" toggle in the file header. Raw diff mode remains available for these files. In rendered mode, Markdown content is displayed as formatted HTML using `react-markdown`, while HTML content is rendered directly through the same source-line-mapped gutter path. Each rendered block is annotated with its source line range, enabling gutter-based line-range comments mapped to the new-file line numbers. Mermaid code blocks in Markdown render as inline SVG diagrams. Comments placed in the rendered text view use the same `LineRange` contract as the raw diff view, so switching between raw and rendered views preserves comment placement. Modified, deleted, or otherwise non-added HTML files do not use rendered HTML mode and remain in the raw diff flow.
+**Rendered text view:** New Markdown files (`.md`/`.markdown` with change type `added`) and new HTML files (`.html`/`.htm` with change type `added`) show a per-file "Raw / Rendered" toggle in the file header. Raw diff mode remains available for these files. In rendered mode, Markdown content is displayed as formatted HTML using `react-markdown`, while HTML content is rendered directly through the same source-line-mapped gutter path. Each rendered block is annotated with its source line range, enabling gutter-based line-range comments mapped to the new-file line numbers. Mermaid code blocks in Markdown render as diagrams shown through an image boundary (a strict-security render whose output cannot restyle or cover the review controls); oversized or malformed diagrams show a contained error in place of the diagram. Raw HTML in rendered text is reduced to passive tags and attributes: inline styles and layout classes are dropped. Comments placed in the rendered text view use the same `LineRange` contract as the raw diff view, so switching between raw and rendered views preserves comment placement. Modified, deleted, or otherwise non-added HTML files do not use rendered HTML mode and remain in the raw diff flow.
 
 #### 5.3.3 Syntax Highlighting
 
@@ -391,6 +393,8 @@ The app writes a suggestion's proposed code into a local working file when the r
 - **Eligible reviews and destinations.** Applying is offered when the reviewed files sit on disk in a destination the user controls. A git-mode review writes into the repository root, a directory-mode review into the reviewed directory, a single-file review into that file's parent. A remote PR/MR review that reuses an existing local clone applies into that clone, which materialization otherwise never checks out or touches. A remote review materialized into a temporary clone must not write into that clone. Every apply is refused until the user names an explicit destination directory in a native picker, each later apply resolves against the directory they named, and a directory inside the temporary clone is rejected however it was picked. A session with no destination at all refuses too, and writes nothing.
 - **What can be applied.** Only a structured `<suggestion>` carrying a line anchor on the new side. An anchor on deleted lines is refused, because those lines are not in the working file and the app holds no old-to-new mapping. A forge thread arrives as such a suggestion when `mapThreadsToReviewComments` can anchor its single `suggestion` fence against the reviewed diff (Section 4.7); a thread with no anchor, one that degraded to file level, and one whose fence the mapper cannot verify carry `suggestion: null` and are never applied.
 - **Refusal on changed context.** Before writing, the app reads the target lines from disk and compares them with the suggestion's recorded original code, byte for byte. A mismatch refuses the apply and says so, as does a file that is missing, unreadable, not UTF-8, shorter than the anchor, or outside the destination. There is no fuzzy matching and no force flag, and a refused apply leaves the file untouched.
+- **Authorization against the reviewed diff.** The context match is a staleness check, not permission. A file may be written only if it was in the diff the session reviewed (the set of paths is captured when the diff is loaded and never grows from a resumed document, submitted review state or the UI's placeholder entries), and never if its path names repository metadata (`.git` at any depth). The anchor must be a real range (positive integers, start no later than end, on the new side) before any file is opened. An empty proposal deletes the anchored lines and inserts nothing; one trailing newline on a proposal is a terminator, not an extra blank line. Suggestions on files outside the reviewed diff show no Apply button.
+- **Physical containment and transactional write.** The destination root is resolved to its real path, every directory on the way to the file is refused if it is a symbolic link, and the file itself is opened without following links; only a regular file with a single hard link is written. The replacement is written to a temporary file beside the target with the target's permissions and owner, synced, and renamed into place only after the target is confirmed to be the same unmodified file that was read. Any failure removes the temporary file and leaves the target byte for byte as it was, so a refusal is never reported after a change.
 - **Visible outcome.** Every attempt reports its result under the suggestion it came from: how many lines were replaced, or the refusal in a sentence. Nothing is written silently, and a batch never hides a failure.
 - **Still out of scope.** Staging, committing, any write to the forge, and free-form inline editing of the diff.
 - **Unchanged.** File contents never leave the machine, and the v3 XML is untouched. Applying a suggestion records nothing in `review.xml` and needs no schema change.
@@ -582,7 +586,9 @@ prism-theme: one-dark
 # Editor font size in pixels
 font-size: 14
 
-# Output file path for the review XML
+# Output file path for the review XML. From a project file (or by default)
+# it must stay inside the launch directory and may not be a symlink; from the
+# user-level config it is the reviewer's own choice and may point anywhere.
 output-file: ./review.xml
 
 # Default output format (reserved for future multi-format support)
@@ -633,6 +639,10 @@ categories:
 
 # Default git diff arguments for this project. Split with shell quoting
 # rules, so an argument with a space must be quoted to stay one argument.
+# A project file may not supply --output, --ext-diff or --textconv (git
+# options that write a file or run an external program); the app refuses to
+# start and names the option. The reviewer's own arguments and user-level
+# config are not restricted.
 default-diff-args: "--staged"
 
 # Show untracked files (new files not yet added to git): true or false.
@@ -673,6 +683,9 @@ If the diff has changed since the prior review (e.g., the developer made additio
 - **Exact anchor matching:** Place prior comments inline when their recorded range endpoints exist on the recorded old or new side. Do not remap line numbers heuristically.
 - **Orphaned comments:** Comments whose recorded range endpoints are absent from the loaded diff appear in a labeled section above the relevant file diff. Files absent from the current diff retain a reviewable section. Saving preserves the original anchors and comment data in XML v3.
 - **No silent data loss:** Prior comments are never silently dropped.
+- **Lossless text:** Text survives the round trip byte for byte. Values such as `007` or `1e3`, CRLF line endings, tabs and newlines in attributes, and literal text that looks like an entity reference are neither coerced nor decoded twice, so a suggestion's recorded original code still matches the file it was taken from.
+- **Unusable anchors are downgraded, not dropped:** A comment whose line range is not a real anchor (non-positive or non-integer numbers, both sides at once, start after end), and a suggestion the app cannot apply (no anchor, missing code), is kept as file-level feedback with the suggestion text folded into the body, and a non-blocking banner lists what was changed.
+- **Attachments follow the resumed document:** Image attachments are resolved against the directory of the document that was resumed, not the working directory or the new output path. Saving beside that document keeps the references; saving elsewhere copies the imported images beside the new output as new assets, and a save that would leave a reference to an unreadable image is refused instead of writing a dangling one. Only `.self-review-assets/<name>` references to regular files within the size limit are ever read.
 
 ---
 
@@ -697,7 +710,7 @@ The raw unified diff output from `git diff` is parsed into a structured AST:
 interface DiffFile {
   oldPath: string;          // e.g., "a/src/auth.ts"
   newPath: string;          // e.g., "b/src/auth.ts"
-  changeType: 'added' | 'modified' | 'deleted' | 'renamed';
+  changeType: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
   hunks: DiffHunk[];
 }
 
@@ -720,7 +733,9 @@ interface DiffLine {
 
 ### 9.3 Binary Files
 
-Binary files in the diff (e.g., images) are listed in the file tree with a "Binary file" indicator. No diff content is displayed. File-level comments can still be added.
+Binary files in the diff (e.g., images) are listed in the file tree with a "Binary file" indicator. No diff content is displayed. File-level comments can still be added. A `GIT binary patch` is a binary change like any other, and a file git reports as a copy (`copy from` / `copy to`) is listed with the `copied` change type.
+
+**Git output the parser can consume.** Every `git diff` the app runs is forced into one parser-compatible shape regardless of user or repository git configuration (no color, no external diff driver, no textconv, explicit `a/` and `b/` prefixes). A `git diff` output-format option the parser does not consume (`--stat`, `--name-only`, `--word-diff`, and similar) is rejected before git runs, naming the flag. Output the parser cannot represent (`diff --cc` merge-conflict sections, hunks whose line counts disagree with their `@@` header) is reported as a load diagnostic instead of being dropped. The UI shows diagnostics in place of "No changes found" when nothing loaded and as a banner above the files otherwise, so a review is never silently shorter than the change. When a tracked change and a synthetic untracked-file entry share a path, the review keeps one entry for the path (the tracked one).
 
 ### 9.4 Directory Mode (Non-Git Alternative)
 
@@ -750,7 +765,9 @@ max-total-lines: 100000
 When either threshold is exceeded, a confirmation dialog appears showing the payload stats (file count and total lines). The user can:
 
 - **Cancel**, exit the application without loading the diff.
-- **Continue**, enter large-payload mode, where file content is loaded lazily. The initial `diff:load` payload includes file metadata (paths, change types, stats) but omits hunks. Hunks are fetched on demand via the `diff:load-file` IPC channel as the user navigates to each file.
+- **Continue**, enter large-payload mode, where file content is loaded lazily. The initial `diff:load` payload includes file metadata (paths, change types, stats) but omits hunks. Hunks are fetched on demand via the `diff:load-file` IPC channel as the user opens each file; every file section starts collapsed in this mode, so nothing is requested until the reviewer expands it. A load that fails shows its error and a Retry button and is not repeated automatically.
+
+Separately from these transport thresholds, the backend enforces fixed safety budgets on input it did not author (directory entries walked, bytes read per file and in total, git output size, guide and resume document size, attachment size). They are checked before the expensive step, are not configurable, and an exceeded budget is reported as a load diagnostic or a typed error, never as a complete review.
 
 This prevents the renderer from being overwhelmed by very large diffs while still allowing full review capability.
 

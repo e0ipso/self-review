@@ -67,11 +67,12 @@ export default function CommentInput({
         : null;
 
     if (existingComment) {
+      // Always send `attachments`: editComment merges, so omitting it would keep the old list.
       editComment(existingComment.id, {
         body,
         category,
         suggestion,
-        ...(attachments.length ? { attachments } : {}),
+        attachments: attachments.length ? attachments : undefined,
       });
     } else {
       addComment(

@@ -10,6 +10,7 @@ import type {
   DiffLoadPayload,
   GuideLoadPayload,
   OutputPathInfo,
+  ReviewSourceIdentity,
   ReviewState,
   SuggestionApplyRequest,
 } from './types';
@@ -18,12 +19,13 @@ import type {
 // Nothing here mocks `electron` — the extracted handlers never touch it.
 vi.mock('./git', () => ({
   runGitDiffAsync: vi.fn(),
-  readGitBlobAsync: vi.fn(),
 }));
 
 import { runGitDiffAsync } from './git';
+import { gitSync } from './test-support/git-env';
 import {
   applySuggestionForSession,
+  commitDiffData,
   commitReviewStart,
   createReviewSession,
   expandContext,
@@ -66,6 +68,13 @@ function makeFile(path: string): DiffFile {
   };
 }
 
+/** A git payload whose one file is a modification, as git reports it. */
+function makeModifiedGitPayload(filePath: string): DiffLoadPayload {
+  const payload = makeGitPayload(filePath);
+  payload.files[0] = { ...payload.files[0], oldPath: filePath, changeType: 'modified' };
+  return payload;
+}
+
 function makeGitPayload(filePath = 'src/app.ts'): DiffLoadPayload {
   return {
     files: [makeFile(filePath)],
@@ -106,6 +115,27 @@ function makeConfig(outputFile: string): AppConfig {
     wordWrap: false,
     maxFiles: 100,
     maxTotalLines: 10000,
+  };
+}
+
+/**
+ * A hand-built identity rooted at `sourceRoot`, for sessions whose root need
+ * not exist on disk. Git sessions compare the index with the working tree;
+ * local ones have nothing on the old side.
+ */
+function makeIdentity(
+  mode: ReviewSourceIdentity['mode'],
+  sourceRoot: string
+): ReviewSourceIdentity {
+  const local = mode === 'directory' || mode === 'file';
+  return {
+    mode,
+    sourceRoot,
+    invocationCwd: sourceRoot,
+    gitDiffArgv: [],
+    pathPrefix: '',
+    oldSide: local ? { kind: 'none' } : { kind: 'index' },
+    newSide: local ? ({ kind: mode } as ReviewSourceIdentity['newSide']) : { kind: 'working-tree' },
   };
 }
 
@@ -173,7 +203,10 @@ describe('review-handlers', () => {
 
       const sessionA = createReviewSession();
       const sessionB = createReviewSession();
-      sessionA.diffData = makeGitPayload();
+      commitDiffData(sessionA, makeModifiedGitPayload('src/app.ts'), {
+        ...makeIdentity('git', '/repo'),
+        gitDiffArgv: ['main..feature'],
+      });
       sessionB.diffData = makeGitPayload();
 
       const originalHunks = getFileHunks(sessionB, 'src/app.ts');
@@ -185,7 +218,7 @@ describe('review-handlers', () => {
       });
 
       expect(runGitDiffAsync).toHaveBeenCalledWith(
-        ['main..feature', '-U10', '--', 'src/app.ts'],
+        ['main..feature', '-U10', '--', ':(top,literal)src/app.ts'],
         '/repo'
       );
       expect(result?.hunks[0].header).toBe('@@ -1,3 +1,3 @@');
@@ -197,26 +230,24 @@ describe('review-handlers', () => {
       expect(getFileHunks(sessionB, 'src/app.ts')).toEqual([makeHunk()]);
     });
 
-    it('keeps a quoted search string and path as single arguments', async () => {
+    it('re-runs the session argv with its argument boundaries intact', async () => {
       vi.mocked(runGitDiffAsync).mockResolvedValue(EXPANDED_DIFF);
 
       const session = createReviewSession();
-      session.diffData = makeGitPayload();
-      session.diffData.source = {
-        type: 'git',
-        gitDiffArgs: `-S 'foo bar' main..feature -- 'src/my dir'`,
-        repository: '/repo',
-      };
+      commitDiffData(session, makeModifiedGitPayload('src/my dir/app.ts'), {
+        ...makeIdentity('git', '/repo'),
+        gitDiffArgv: ['-S', 'foo bar', 'main..feature', '--', 'src/my dir'],
+      });
 
       await expandContext(session, {
         filePath: 'src/my dir/app.ts',
         contextLines: 10,
       });
 
-      // A whitespace split would have handed git ["-S", "'foo", "bar'"] and
-      // an argument that is not a revision.
+      // The search string stays one argument and the original pathspec is
+      // replaced by the file's own, as a literal pathspec from the root.
       expect(runGitDiffAsync).toHaveBeenCalledWith(
-        ['-S', 'foo bar', 'main..feature', '-U10', '--', 'src/my dir/app.ts'],
+        ['-S', 'foo bar', 'main..feature', '-U10', '--', ':(top,literal)src/my dir/app.ts'],
         '/repo'
       );
     });
@@ -327,6 +358,21 @@ describe('review-handlers', () => {
         drifted: true,
       });
     });
+
+    it('carries import diagnostics, and is worth sending for them alone', () => {
+      const session = createReviewSession();
+      session.resumeImportDiagnostics = [
+        'src/a.ts: comment 1 anchor new-line range is reversed (5 > 3); kept as file-level feedback',
+      ];
+
+      expect(getResumeLoad(session)).toEqual({
+        comments: [],
+        viewedFiles: [],
+        importDiagnostics: [
+          'src/a.ts: comment 1 anchor new-line range is reversed (5 > 3); kept as file-level feedback',
+        ],
+      });
+    });
   });
 
   describe('directory review start', () => {
@@ -382,12 +428,13 @@ describe('review-handlers', () => {
 
     it('commits the payload to the session and strips hunks for large mode', async () => {
       const session = createReviewSession();
-      const { payload } = await prepareDirectoryReview(session, makeTree());
+      const { payload, identity } = await prepareDirectoryReview(session, makeTree());
       payload.isLargePayload = true;
 
-      const outgoing = commitReviewStart(session, payload);
+      const outgoing = commitReviewStart(session, payload, identity);
 
       expect(session.diffData).toBe(payload);
+      expect(session.sourceIdentity).toBe(identity);
       expect(outgoing.files.every(f => f.hunks.length === 0 && f.contentLoaded === false)).toBe(
         true
       );
@@ -420,18 +467,22 @@ describe('review-handlers', () => {
   /** A remote session whose diff was materialized into `clonePath`. */
   function makeRemoteSession(clonePath: string, temporaryClone: boolean) {
     const session = createReviewSession();
-    session.diffData = {
-      files: [makeFile('src/app.ts')],
-      source: { type: 'git', gitDiffArgs: 'base...head', repository: clonePath },
-      remote: {
-        remoteUrl: 'https://github.com/owner/repo/pull/1',
-        remoteBaseSha: 'aaaaaaa',
-        remoteHeadSha: 'bbbbbbb',
-        remoteForge: 'github',
-        threadSyncAvailable: true,
-        temporaryClone,
+    commitDiffData(
+      session,
+      {
+        files: [makeFile('src/app.ts')],
+        source: { type: 'git', gitDiffArgs: 'base...head', repository: clonePath },
+        remote: {
+          remoteUrl: 'https://github.com/owner/repo/pull/1',
+          remoteBaseSha: 'aaaaaaa',
+          remoteHeadSha: 'bbbbbbb',
+          remoteForge: 'github',
+          threadSyncAvailable: true,
+          temporaryClone,
+        },
       },
-    };
+      makeIdentity('remote', clonePath)
+    );
     return session;
   }
 
@@ -472,24 +523,34 @@ describe('review-handlers', () => {
       expect(isTemporaryCloneSession(empty)).toBe(false);
       expect(resolveApplyDestination(empty)).toBeNull();
 
+      // The destination is the identity's physical root, not the payload's
+      // source path: the identity is what every read resolves against.
       const git = createReviewSession();
-      git.diffData = makeGitPayload();
+      commitDiffData(git, makeGitPayload(), makeIdentity('git', '/repo'));
       expect(resolveApplyDestination(git)).toBe('/repo');
 
       const directory = createReviewSession();
-      directory.diffData = {
-        files: [makeFile('a.ts')],
-        source: { type: 'directory', sourcePath: '/scanned' },
-      };
+      commitDiffData(
+        directory,
+        { files: [makeFile('a.ts')], source: { type: 'directory', sourcePath: '/scanned' } },
+        makeIdentity('directory', '/scanned')
+      );
       expect(resolveApplyDestination(directory)).toBe('/scanned');
 
-      // A single-file review writes next to the file, not into it.
+      // A single-file review writes next to the file, not into it: its
+      // identity is rooted at the parent.
       const file = createReviewSession();
-      file.diffData = {
-        files: [makeFile('a.ts')],
-        source: { type: 'file', sourcePath: '/scanned/a.ts' },
-      };
+      commitDiffData(
+        file,
+        { files: [makeFile('a.ts')], source: { type: 'file', sourcePath: '/scanned/a.ts' } },
+        makeIdentity('file', '/scanned')
+      );
       expect(resolveApplyDestination(file)).toBe('/scanned');
+
+      // Without an identity there is no root to write into.
+      const uncommitted = createReviewSession();
+      uncommitted.diffData = makeGitPayload();
+      expect(resolveApplyDestination(uncommitted)).toBeNull();
 
       // A reused clone is the user's own working tree, so it needs no picker.
       const reused = makeRemoteSession(repoDir, false);
@@ -585,10 +646,11 @@ describe('review-handlers', () => {
 
     it('writes the proposal into the reviewed working file', () => {
       const session = createReviewSession();
-      session.diffData = {
-        files: [makeFile('src/app.ts')],
-        source: { type: 'directory', sourcePath: repoDir },
-      };
+      commitDiffData(
+        session,
+        { files: [makeFile('src/app.ts')], source: { type: 'directory', sourcePath: repoDir } },
+        makeIdentity('directory', repoDir)
+      );
 
       const outcome = applySuggestionForSession(session, makeApplyRequest());
 
@@ -603,10 +665,11 @@ describe('review-handlers', () => {
 
     it('refuses a stale anchor and leaves the bytes untouched', () => {
       const session = createReviewSession();
-      session.diffData = {
-        files: [makeFile('src/app.ts')],
-        source: { type: 'directory', sourcePath: repoDir },
-      };
+      commitDiffData(
+        session,
+        { files: [makeFile('src/app.ts')], source: { type: 'directory', sourcePath: repoDir } },
+        makeIdentity('directory', repoDir)
+      );
 
       const outcome = applySuggestionForSession(
         session,
@@ -660,10 +723,17 @@ describe('review-handlers', () => {
 
     it('refuses a file path that resolves outside the destination', () => {
       const session = createReviewSession();
-      session.diffData = {
-        files: [makeFile('src/app.ts')],
-        source: { type: 'directory', sourcePath: repoDir },
-      };
+      // A crafted payload that lists the escaping path gets past membership;
+      // the engine's own lexical check is what refuses it.
+      commitDiffData(
+        session,
+        {
+          files: [makeFile('src/app.ts'), makeFile('../escaped.ts')],
+          source: { type: 'directory', sourcePath: repoDir },
+        },
+        makeIdentity('directory', repoDir)
+      );
+      fs.writeFileSync(nodePath.join(tmpRoot, 'escaped.ts'), ORIGINAL_FILE);
 
       const outcome = applySuggestionForSession(
         session,
@@ -671,7 +741,214 @@ describe('review-handlers', () => {
       );
 
       expect(outcome).toMatchObject({ status: 'refused', reason: 'path-escapes-destination' });
-      expect(fs.existsSync(nodePath.join(tmpRoot, 'escaped.ts'))).toBe(false);
+      expect(fs.readFileSync(nodePath.join(tmpRoot, 'escaped.ts'), 'utf-8')).toBe(ORIGINAL_FILE);
+    });
+  });
+
+  // ===== Authorization against the reviewed diff (plan 63, task 11) =====
+
+  describe('reviewed paths', () => {
+    it('captures every path of the committed diff, old and new, and nothing else', () => {
+      const session = createReviewSession();
+      expect(session.reviewedPaths.size).toBe(0);
+
+      commitDiffData(
+        session,
+        {
+          files: [
+            makeFile('src/app.ts'),
+            { ...makeFile('src/new.ts'), oldPath: 'src/old.ts', changeType: 'renamed' },
+            { ...makeFile(''), oldPath: 'src/gone.ts', changeType: 'deleted' },
+          ],
+          source: { type: 'directory', sourcePath: '/scanned' },
+        },
+        makeIdentity('directory', '/scanned')
+      );
+
+      expect([...session.reviewedPaths].sort()).toEqual([
+        'src/app.ts',
+        'src/gone.ts',
+        'src/new.ts',
+        'src/old.ts',
+      ]);
+    });
+
+    it('is frozen: a later change to the diff data does not extend it', () => {
+      const session = createReviewSession();
+      commitDiffData(session, makeGitPayload('src/app.ts'), makeIdentity('git', '/repo'));
+
+      // The seam a resumed document or a pushed payload would use.
+      session.diffData = {
+        ...session.diffData!,
+        files: [...session.diffData!.files, makeFile('src/injected.ts')],
+      };
+      session.resumeComments = [
+        {
+          id: 'c1',
+          filePath: 'src/injected.ts',
+          lineRange: { side: 'new', start: 1, end: 1 },
+          body: 'from a resumed document',
+          category: 'bug',
+          suggestion: { originalCode: '', proposedCode: 'x' },
+          attachments: [],
+          replies: [],
+        },
+      ];
+
+      expect(session.reviewedPaths.has('src/injected.ts')).toBe(false);
+      expect(() => (session.reviewedPaths as Set<string>).add('src/injected.ts')).toThrow();
+    });
+
+    it('is recaptured for the next committed diff, not accumulated across them', () => {
+      const session = createReviewSession();
+      commitDiffData(session, makeGitPayload('src/first.ts'), makeIdentity('git', '/repo'));
+      commitReviewStart(
+        session,
+        {
+          files: [makeFile('src/second.ts')],
+          source: { type: 'directory', sourcePath: '/scanned' },
+        },
+        makeIdentity('directory', '/scanned')
+      );
+
+      expect([...session.reviewedPaths]).toEqual(['src/second.ts']);
+    });
+  });
+
+  describe('suggestion apply authorization', () => {
+    let tmpRoot: string;
+    let repoDir: string;
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      tmpRoot = fs.realpathSync(fs.mkdtempSync(nodePath.join(os.tmpdir(), 'self-review-authz-')));
+      repoDir = nodePath.join(tmpRoot, 'repo');
+      fs.mkdirSync(nodePath.join(repoDir, 'src'), { recursive: true });
+      gitSync(['init', '-q', repoDir]);
+      fs.writeFileSync(nodePath.join(repoDir, 'src', 'app.ts'), ORIGINAL_FILE);
+    });
+
+    afterEach(() => {
+      errorSpy.mockRestore();
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    });
+
+    /** A session that reviewed exactly `src/app.ts` in the temp repository. */
+    function sessionReviewing(paths: string[]) {
+      const session = createReviewSession();
+      commitDiffData(
+        session,
+        {
+          files: paths.map(makeFile),
+          source: { type: 'git', gitDiffArgs: '', repository: repoDir },
+        },
+        makeIdentity('git', repoDir)
+      );
+      return session;
+    }
+
+    it('applies to a file the review contained', () => {
+      const outcome = applySuggestionForSession(
+        sessionReviewing(['src/app.ts']),
+        makeApplyRequest()
+      );
+
+      expect(outcome).toEqual({ status: 'applied', filePath: 'src/app.ts', replacedLines: 1 });
+    });
+
+    it('refuses a file the review never contained, leaving its bytes untouched', () => {
+      const sentinel = nodePath.join(repoDir, 'src', 'other.ts');
+      fs.writeFileSync(sentinel, ORIGINAL_FILE);
+
+      const outcome = applySuggestionForSession(
+        sessionReviewing(['src/app.ts']),
+        makeApplyRequest({ filePath: 'src/other.ts' })
+      );
+
+      expect(outcome).toMatchObject({ status: 'refused', reason: 'not-reviewed' });
+      expect(fs.readFileSync(sentinel, 'utf-8')).toBe(ORIGINAL_FILE);
+    });
+
+    it('refuses .git/config even when a document claims it was reviewed (audit A3 probe)', () => {
+      const config = nodePath.join(repoDir, '.git', 'config');
+      const before = fs.readFileSync(config, 'utf-8');
+      const first = before.split('\n')[0];
+      // The diff membership check is not the only gate: a crafted payload
+      // that lists the control file is refused for being a control file.
+      const session = sessionReviewing(['src/app.ts', '.git/config']);
+
+      const outcome = applySuggestionForSession(
+        session,
+        makeApplyRequest({
+          filePath: '.git/config',
+          lineRange: { side: 'new', start: 1, end: 1 },
+          suggestion: {
+            originalCode: first,
+            proposedCode: `${first}\n\tbare = true`,
+          },
+        })
+      );
+
+      expect(outcome).toMatchObject({ status: 'refused', reason: 'control-file' });
+      expect(fs.readFileSync(config, 'utf-8')).toBe(before);
+    });
+
+    it('refuses a resume placeholder path: a resumed comment does not widen the review', () => {
+      const ghost = nodePath.join(repoDir, 'src', 'ghost.ts');
+      fs.writeFileSync(ghost, ORIGINAL_FILE);
+      const session = sessionReviewing(['src/app.ts']);
+      session.resumeComments = [
+        {
+          id: 'c1',
+          filePath: 'src/ghost.ts',
+          lineRange: { side: 'new', start: 2, end: 2 },
+          body: 'resumed',
+          category: 'bug',
+          suggestion: { originalCode: 'const b = 2;', proposedCode: 'const b = 20;' },
+          attachments: [],
+          replies: [],
+        },
+      ];
+
+      const outcome = applySuggestionForSession(
+        session,
+        makeApplyRequest({ filePath: 'src/ghost.ts' })
+      );
+
+      expect(outcome).toMatchObject({ status: 'refused', reason: 'not-reviewed' });
+      expect(fs.readFileSync(ghost, 'utf-8')).toBe(ORIGINAL_FILE);
+    });
+
+    it('refuses a malformed anchor before any I/O, in the engine’s vocabulary', () => {
+      const outcome = applySuggestionForSession(
+        sessionReviewing(['src/app.ts']),
+        makeApplyRequest({ lineRange: { side: 'new', start: Number.NaN, end: 1 } })
+      );
+
+      expect(outcome).toMatchObject({ status: 'refused', reason: 'invalid-anchor' });
+      expect(fs.readFileSync(nodePath.join(repoDir, 'src', 'app.ts'), 'utf-8')).toBe(ORIGINAL_FILE);
+    });
+
+    it('authorizes against the reviewed diff, not against the chosen destination’s contents', () => {
+      // A temporary-clone review whose destination is a directory the user
+      // picked: only reviewed paths may be written there, whatever else it holds.
+      const session = makeRemoteSession(repoDir, true);
+      const destination = nodePath.join(tmpRoot, 'chosen');
+      fs.mkdirSync(nodePath.join(destination, 'src'), { recursive: true });
+      fs.writeFileSync(nodePath.join(destination, 'src', 'app.ts'), ORIGINAL_FILE);
+      fs.writeFileSync(nodePath.join(destination, 'src', 'unrelated.ts'), ORIGINAL_FILE);
+      expect(setApplyDestination(session, destination)).toMatchObject({ status: 'chosen' });
+
+      expect(
+        applySuggestionForSession(session, makeApplyRequest({ filePath: 'src/unrelated.ts' }))
+      ).toMatchObject({ status: 'refused', reason: 'not-reviewed' });
+      expect(fs.readFileSync(nodePath.join(destination, 'src', 'unrelated.ts'), 'utf-8')).toBe(
+        ORIGINAL_FILE
+      );
+      expect(applySuggestionForSession(session, makeApplyRequest())).toMatchObject({
+        status: 'applied',
+      });
     });
   });
 });

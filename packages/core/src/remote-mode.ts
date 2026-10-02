@@ -1,76 +1,84 @@
 // packages/core/src/remote-mode.ts
-// Remote PR/MR session bootstrap for the main process.
+// Remote PR/MR session bootstrap, shared by every front end.
 //
 // Binding rule: after materialization, remote mode *is* git mode. This
 // module turns a forge URL into the inputs the existing git-mode pipeline
 // already understands — a repo path and a `baseSha...headSha` range — plus
-// the fetched discussion threads (mapped to ReviewComments for the
-// resume:load path) and the remote provenance the serializer records.
+// the fetched discussion threads and the remote provenance the serializer
+// records. `loadRemoteReview` then loads the diff and maps the threads against it,
+// so the app and `fetch-comments` produce the same comments. Every external effect
+// is injectable so unit tests never spawn git/gh/glab.
 //
-// Reused by both the CLI URL path (main.ts startup) and the splash-screen
-// URL entry (the remote:open-url IPC handler). Every external effect goes
-// through an injectable dependency so unit tests never spawn git/gh/glab.
+// Lifetime: one session, one `AbortSignal`. Aborting kills the command in flight
+// and rejects with `CommandCancelledError`; whatever the session acquired is
+// released first. A returned session hands its `cleanup` to the caller.
 
 import {
-  parseForgeUrl,
+  CommandCancelledError,
   ForgeCliUnavailableError,
-  createGitHubProvider,
-  createGitLabProvider,
-  detectExistingClone,
-  materialize,
-  resolveRemoteDefaultBranch,
-  defaultGitRunner,
-  mapThreadsToReviewComments,
-  createIgnoreFilter,
-} from './index';
+  isCommandCancelled,
+  parseForgeUrl,
+} from './forge-provider';
 import type {
   ForgeCommandRunner,
   ForgeName,
   ForgeProvider,
   ForgeThread,
   ForgeUrl,
+} from './forge-provider';
+import { createGitHubProvider } from './github-provider';
+import { createGitLabProvider } from './gitlab-provider';
+import {
+  DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+  defaultGitRunner,
+  detectExistingClone,
+  materialize,
+  resolveRemoteDefaultBranch,
+} from './materializer';
+import type {
   ExistingClone,
   MaterializeMode,
+  MaterializeOptions,
   MaterializeResult,
-} from './index';
+} from './materializer';
+import { mapThreadsToReviewComments } from './thread-mapper';
+import { createIgnoreFilter } from './ignore-filter';
 import type {
   DiffFile,
   DiffLoadPayload,
   RemoteDriftInfo,
   RemoteSessionInfo,
   ReviewComment,
+  ReviewSourceIdentity,
   ReviewState,
 } from './types';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { formatGitDiffArgs } from './git-diff-args';
+import { canonicalSourcePath } from './source-identity';
 
-/** A materialized remote PR/MR session, ready for the git-mode pipeline. */
-export interface RemoteSession {
+/**
+ * The git-mode inputs plus the forge threads, before any diff is loaded (so nothing to anchor
+ * suggestions to yet).
+ */
+export interface MaterializedRemoteSession {
   forgeUrl: ForgeUrl;
   /** Root of the materialized clone; the pipeline's repo path. */
   repoPath: string;
   /** Arguments for the existing git-diff machinery: `[base...head]`. */
   gitDiffArgs: string[];
   mode: MaterializeMode;
-  /** Removes the temp clone when one was created; idempotent no-op otherwise. */
-  cleanup: () => void;
+  /** Idempotent, never rejects; the receiver of the session must call it. */
+  cleanup: () => Promise<void>;
   /** Provenance + thread-sync status for payloads and the saved review. */
   remote: RemoteSessionInfo;
-  /**
-   * Forge discussion threads mapped to ReviewComments. Empty when the forge
-   * CLI is unavailable. Review-level threads keep the mapper's sentinel
-   * `filePath: ''` (REVIEW_LEVEL_FILE_PATH).
-   *
-   * Mapped here without the reviewed diff, which is not loaded yet, so a
-   * `suggestion` fence stays plain body text. {@link bootstrapRemoteDiff}
-   * replaces these with the same threads mapped against the loaded files.
-   */
-  fetchedComments: ReviewComment[];
-  /**
-   * The threads behind `fetchedComments`, verbatim. Carried so the caller
-   * that loads the diff can map them again with it (SR-0063).
-   */
+  /** Verbatim; empty when thread sync is unavailable. */
   fetchedThreads: ForgeThread[];
+}
+
+/** A session whose diff is loaded and whose threads are mapped against it. */
+export interface RemoteSession extends MaterializedRemoteSession {
+  /** Review-level threads keep the sentinel `filePath: ''` (REVIEW_LEVEL_FILE_PATH). */
+  fetchedComments: ReviewComment[];
 }
 
 /** Injectable seams; defaults are the real core APIs. */
@@ -81,31 +89,59 @@ export interface RemoteSessionDeps {
     baseBranch: string,
     cwd: string,
     runner: ForgeCommandRunner,
-    existingClone?: ExistingClone | null
+    existingClone?: ExistingClone | null,
+    options?: MaterializeOptions
   ) => Promise<MaterializeResult>;
   detectExistingClone: (
     url: ForgeUrl,
     cwd: string,
-    runner: ForgeCommandRunner
+    runner: ForgeCommandRunner,
+    options?: MaterializeOptions
   ) => Promise<ExistingClone | null>;
   resolveRemoteDefaultBranch: (
     url: ForgeUrl,
     runner: ForgeCommandRunner,
-    existing?: ExistingClone | null
+    existing?: ExistingClone | null,
+    options?: MaterializeOptions
   ) => Promise<string>;
   runner: ForgeCommandRunner;
-  /** Loads the diff from the clone. Untracked files are never included. */
+  /** Untracked files are never included. A stand-in may omit `diagnostics` and `identity`. */
   loadDiff: (
     gitDiffArgs: string[],
     cwd: string
-  ) => Promise<{ files: DiffFile[]; repository: string }>;
+  ) => Promise<{
+    files: DiffFile[];
+    repository: string;
+    diagnostics?: string[];
+    identity?: ReviewSourceIdentity;
+  }>;
 }
 
 function defaultCreateProvider(forge: ForgeName, runner: ForgeCommandRunner): ForgeProvider {
   return forge === 'github' ? createGitHubProvider(runner) : createGitLabProvider(runner);
 }
 
-const defaultDeps: RemoteSessionDeps = {
+/** Puts `gh`/`glab` under the session's bounds too, so a startup deadline can reach them. */
+function bindSessionRunner(runner: ForgeCommandRunner, signal?: AbortSignal): ForgeCommandRunner {
+  return (command, args, options) => {
+    if (signal?.aborted) {
+      return Promise.reject(new CommandCancelledError('aborted', command, args));
+    }
+    return runner(command, args, {
+      signal,
+      timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+      ...options,
+    });
+  };
+}
+
+function throwIfAborted(signal: AbortSignal | undefined, stage: string): void {
+  if (signal?.aborted) {
+    throw new CommandCancelledError('aborted', 'self-review', [stage]);
+  }
+}
+
+export const defaultRemoteSessionDeps: RemoteSessionDeps = {
   createProvider: defaultCreateProvider,
   detectExistingClone,
   materialize,
@@ -117,6 +153,20 @@ const defaultDeps: RemoteSessionDeps = {
     loadGitDiffWithUntracked(gitDiffArgs, cwd, { includeUntracked: false }),
 };
 
+export interface RemoteLifetimeOptions {
+  /** Without one, the session is bounded only by the per-command timeout. */
+  signal?: AbortSignal;
+}
+
+export interface StartRemoteSessionOptions extends RemoteLifetimeOptions {
+  includeResolved?: boolean;
+  /**
+   * `'optional'` (default, the app): a failed fetch degrades to no threads.
+   * `'required'` (`fetch-comments`): always attempted, and a failure is fatal.
+   */
+  threads?: 'optional' | 'required';
+}
+
 /**
  * Materialize a forge PR/MR URL into a local git context and fetch its
  * discussion threads.
@@ -124,22 +174,30 @@ const defaultDeps: RemoteSessionDeps = {
  * Fatal failures (unrecognizable URL, materialization errors, base-branch
  * lookup failures other than a missing CLI) throw — callers surface them
  * like any other startup git error. Forge-CLI unavailability is never
- * fatal: the base branch falls back to the git-only default-branch lookup
- * and thread sync degrades to an empty list with a single stderr note.
+ * fatal for the base branch (git-only fallback); for threads see
+ * {@link StartRemoteSessionOptions.threads}.
  */
 export async function startRemoteSession(
   url: string,
   cwd: string,
-  deps: Partial<RemoteSessionDeps> = {}
-): Promise<RemoteSession> {
-  const d: RemoteSessionDeps = { ...defaultDeps, ...deps };
+  deps: Partial<RemoteSessionDeps> = {},
+  options: StartRemoteSessionOptions = {}
+): Promise<MaterializedRemoteSession> {
+  const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
+  const threadsRequired = options.threads === 'required';
+  const { signal } = options;
+  const lifetime: MaterializeOptions = { signal };
+  throwIfAborted(signal, 'start');
 
   const forgeUrl = parseForgeUrl(url);
   if (!forgeUrl) {
-    throw new Error(`Not a recognized pull-request or merge-request URL: ${url}`);
+    throw new Error(
+      `Not a recognized pull-request or merge-request URL: ${url}\n` +
+        'Expected a GitHub PR URL (…/pull/N) or a GitLab MR URL (…/-/merge_requests/N).'
+    );
   }
 
-  const provider = d.createProvider(forgeUrl.forge, d.runner);
+  const provider = d.createProvider(forgeUrl.forge, bindSessionRunner(d.runner, signal));
 
   let cliAvailable = true;
   let baseBranch: string;
@@ -155,19 +213,42 @@ export async function startRemoteSession(
       `[remote] Forge CLI unavailable (${error.cli}): ${error.message} — ` +
         'falling back to the remote default branch via git.'
     );
-    existingClone = await d.detectExistingClone(forgeUrl, cwd, d.runner);
-    baseBranch = await d.resolveRemoteDefaultBranch(forgeUrl, d.runner, existingClone);
+    existingClone = await d.detectExistingClone(forgeUrl, cwd, d.runner, lifetime);
+    baseBranch = await d.resolveRemoteDefaultBranch(forgeUrl, d.runner, existingClone, lifetime);
   }
+  console.error(`[remote] Base branch: ${baseBranch}`);
 
-  const materialized = await d.materialize(forgeUrl, baseBranch, cwd, d.runner, existingClone);
+  const materialized = await d.materialize(
+    forgeUrl,
+    baseBranch,
+    cwd,
+    d.runner,
+    existingClone,
+    lifetime
+  );
 
+  // The caller gets the cleanup handle only with a session, so anything ending the call before that
+  // releases here.
   let fetchedThreads: ForgeThread[] = [];
   let threadSyncAvailable = false;
-  if (cliAvailable) {
+  if (cliAvailable || threadsRequired) {
     try {
-      fetchedThreads = await provider.fetchThreads(forgeUrl);
+      fetchedThreads = await provider.fetchThreads(forgeUrl, {
+        includeResolved: options.includeResolved ?? false,
+      });
       threadSyncAvailable = true;
     } catch (error) {
+      // A cancelled fetch ends the session under either policy.
+      if (threadsRequired || isCommandCancelled(error)) {
+        await materialized.cleanup();
+        if (error instanceof ForgeCliUnavailableError) {
+          throw new Error(
+            `Cannot fetch discussion threads: ${error.message}\n` +
+              `This requires the ${error.cli} CLI to be installed and authenticated.`
+          );
+        }
+        throw error;
+      }
       const message = error instanceof Error ? error.message : String(error);
       console.error(
         `[remote] thread sync unavailable — continuing without forge threads: ${message}`
@@ -177,6 +258,10 @@ export async function startRemoteSession(
     console.error(
       '[remote] thread sync unavailable — forge CLI missing, continuing without forge threads.'
     );
+  }
+  if (signal?.aborted) {
+    await materialized.cleanup();
+    throwIfAborted(signal, 'threads');
   }
 
   return {
@@ -195,8 +280,51 @@ export async function startRemoteSession(
       // into it; the front end needs the fact, not the path.
       temporaryClone: materialized.mode === 'temp-clone',
     },
-    fetchedComments: mapThreadsToReviewComments(fetchedThreads),
     fetchedThreads,
+  };
+}
+
+export interface RemoteReviewLoad {
+  /** After the ignore configuration. */
+  files: DiffFile[];
+  repository: string;
+  diagnostics: string[];
+  /** `session.fetchedThreads` mapped against `files` and the materialized head. */
+  comments: ReviewComment[];
+  identity?: ReviewSourceIdentity;
+}
+
+/**
+ * Load the diff, apply the ignore configuration and map the threads: the one place
+ * this happens, so the app and `fetch-comments` cannot drift. Mapping against the
+ * filtered files and the materialized head keeps a suggestion on an ignored path
+ * or another head plain text (R05). Does not release the session on failure. An
+ * abort during the load discards the result and throws.
+ */
+export async function loadRemoteReview(
+  session: MaterializedRemoteSession,
+  ignorePatterns: string[],
+  loadDiff: RemoteSessionDeps['loadDiff'] = defaultRemoteSessionDeps.loadDiff,
+  options: RemoteLifetimeOptions = {}
+): Promise<RemoteReviewLoad> {
+  throwIfAborted(options.signal, 'load');
+  const { files, repository, diagnostics, identity } = await loadDiff(
+    session.gitDiffArgs,
+    session.repoPath
+  );
+  throwIfAborted(options.signal, 'load');
+  const shouldKeep = createIgnoreFilter(ignorePatterns);
+  const filteredFiles = files.filter(f => shouldKeep(f.newPath || f.oldPath));
+  return {
+    files: filteredFiles,
+    repository,
+    diagnostics: diagnostics ?? [],
+    comments: mapThreadsToReviewComments(
+      session.fetchedThreads,
+      filteredFiles,
+      session.remote.remoteHeadSha
+    ),
+    ...(identity ? { identity } : {}),
   };
 }
 
@@ -204,59 +332,72 @@ export async function startRemoteSession(
 export interface RemoteBootstrapResult {
   session: RemoteSession;
   payload: DiffLoadPayload;
+  identity: ReviewSourceIdentity;
 }
 
 /**
- * Full remote bootstrap: materialize the session, load the diff from the
- * clone through the existing git-diff machinery, apply the ignore filter,
- * map the fetched threads against those files, and shape the git-mode
- * `DiffLoadPayload` (with `remote` provenance attached). Shared by the CLI
- * URL startup path and the splash-screen `remote:open-url` handler.
+ * The loader's identity relabelled as remote, with the user's launch directory rather than the
+ * clone's; a stand-in loader still yields the head, with the merge base unknown.
+ */
+function remoteSourceIdentity(
+  started: MaterializedRemoteSession,
+  loaded: RemoteReviewLoad,
+  cwd: string
+): ReviewSourceIdentity {
+  const resolved = loaded.identity ?? {
+    sourceRoot: canonicalSourcePath(loaded.repository),
+    gitDiffArgv: [...started.gitDiffArgs],
+    pathPrefix: '',
+    oldSide: { kind: 'unknown' as const, reason: 'the merge base was not resolved' },
+    newSide: { kind: 'commit' as const, sha: started.remote.remoteHeadSha },
+  };
+  return { ...resolved, mode: 'remote', invocationCwd: cwd };
+}
+
+/**
+ * Full remote bootstrap for the app: materialize, {@link loadRemoteReview}, and shape
+ * the git-mode `DiffLoadPayload`. Thread sync degrades rather than failing.
  */
 export async function bootstrapRemoteDiff(
   url: string,
   cwd: string,
   ignorePatterns: string[],
-  deps: Partial<RemoteSessionDeps> = {}
+  deps: Partial<RemoteSessionDeps> = {},
+  options: RemoteLifetimeOptions = {}
 ): Promise<RemoteBootstrapResult> {
-  const d: RemoteSessionDeps = { ...defaultDeps, ...deps };
-  const started = await startRemoteSession(url, cwd, d);
+  const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
+  const started = await startRemoteSession(url, cwd, d, { signal: options.signal });
 
-  // From here on the session may own a temporary clone; if anything below
-  // fails the caller never receives the cleanup handle, so release it here.
-  let files: DiffFile[];
-  let repository: string;
+  // The caller gets the cleanup handle only with the result, so any failure before that releases
+  // here.
   try {
-    ({ files, repository } = await d.loadDiff(started.gitDiffArgs, started.repoPath));
+    const loaded = await loadRemoteReview(started, ignorePatterns, d.loadDiff, options);
+    for (const diagnostic of loaded.diagnostics) {
+      console.error(`[remote] Diff diagnostic: ${diagnostic}`);
+    }
+
+    const session: RemoteSession = { ...started, fetchedComments: loaded.comments };
+    return {
+      session,
+      identity: remoteSourceIdentity(started, loaded, cwd),
+      payload: {
+        files: loaded.files,
+        source: {
+          type: 'git',
+          // Same renderer the git-mode path uses, so expand-context can
+          // tokenize this string back into the exact argv.
+          gitDiffArgs: formatGitDiffArgs(session.gitDiffArgs),
+          repository: loaded.repository,
+        },
+        remote: session.remote,
+        // So the renderer never mistakes a failed load for "no changes".
+        ...(loaded.diagnostics.length > 0 ? { diagnostics: loaded.diagnostics } : {}),
+      },
+    };
   } catch (error) {
-    started.cleanup();
+    await started.cleanup();
     throw error;
   }
-  const shouldKeep = createIgnoreFilter(ignorePatterns);
-  const filteredFiles = files.filter(f => shouldKeep(f.newPath || f.oldPath));
-
-  // The reviewed diff exists only now, and the mapper needs it to anchor a
-  // `suggestion` fence. Mapping against the filtered files keeps the
-  // comments consistent with the payload the renderer receives.
-  const session: RemoteSession = {
-    ...started,
-    fetchedComments: mapThreadsToReviewComments(started.fetchedThreads, filteredFiles),
-  };
-
-  return {
-    session,
-    payload: {
-      files: filteredFiles,
-      source: {
-        type: 'git',
-        // Same renderer the git-mode path uses, so expand-context can
-        // tokenize this string back into the exact argv.
-        gitDiffArgs: formatGitDiffArgs(session.gitDiffArgs),
-        repository,
-      },
-      remote: session.remote,
-    },
-  };
 }
 
 /**

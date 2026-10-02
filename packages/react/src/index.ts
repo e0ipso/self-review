@@ -68,6 +68,8 @@ export { default as FileSection } from './components/DiffViewer/FileSection';
 export { default as FileTree } from './components/FileTree';
 export { default as Layout } from './components/Layout';
 export { default as Toolbar } from './components/Toolbar';
+export { default as RemoteDriftBanner } from './components/RemoteDriftBanner';
+export { default as ImportDiagnosticsBanner } from './components/ImportDiagnosticsBanner';
 
 // Hooks
 export { useReviewState } from './hooks/useReviewState';

@@ -1,15 +1,14 @@
 // A `ReviewAdapter` over `fetch`: transport only, since every component the
 // browser renders already lives in `@self-review/react`.
 //
-// Four deliberate properties. `changeOutputPath` is absent, not stubbed —
+// Five deliberate properties. `changeOutputPath` is absent, not stubbed —
 // `FileTree` renders its control on the property's presence, so a stub would
 // draw a dead button. `chooseApplyDestination` is absent for a stronger reason:
 // the UI only asks for a destination when the session is a temporary remote
 // clone, and serve mode has no remote mode, so the case cannot arise.
 // `GET /api/diff` is issued once and shared, carrying both the diff and the
-// guide, so there is no push transport. And `submitReview` resolving is
-// acceptance, not a written file: lifecycle.ts writes on the response's
-// `finish`, so nothing here may report a saved review.
+// guide, so there is no push transport. `submitReview` resolving means the review is on disk. The
+// capability token lives only in this closure, never in storage or a URL.
 
 // Type-only, erased at build time: no runtime dependency on either package.
 import type { ReviewAdapter, GuideLoadPayload } from '@self-review/react';
@@ -25,6 +24,13 @@ import type {
   ResumeLoadPayload,
   ReviewState,
 } from '@self-review/core';
+import {
+  MAX_REVIEW_BODY_BYTES,
+  REVIEW_TOO_LARGE_CODE,
+  capabilityAuthorization,
+  formatMegabytes,
+} from '../protocol';
+import type { ReviewSubmitAck } from '../protocol';
 
 /** What `GET /api/diff` answers: both halves of the initial session. */
 interface DiffApiResponse {
@@ -38,41 +44,102 @@ export interface ConfigApiResponse {
   outputPathInfo: OutputPathInfo | null;
 }
 
-/** Surfaces the server's `{ error }` text, since callers only log what they get. */
-async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
-  if (!response.ok) {
-    throw new Error(await errorText(response, `GET ${path}`));
+/** A request the server refused, or one this adapter refused to send. */
+export class ServeRequestError extends Error {
+  /** Null when the request was never sent. */
+  readonly status: number | null;
+  /** The publisher's code, `REVIEW_TOO_LARGE_CODE` for an oversized body, otherwise null. */
+  readonly code: string | null;
+  readonly details: readonly string[];
+
+  constructor(
+    message: string,
+    options: { status: number | null; code?: string | null; details?: readonly string[] }
+  ) {
+    super(message);
+    this.name = 'ServeRequestError';
+    this.status = options.status;
+    this.code = options.code ?? null;
+    this.details = options.details ?? [];
   }
-  return (await response.json()) as T;
 }
 
-/**
- * Post a JSON body. `content-type: application/json` is not optional: the
- * server answers 415 without it, on both POST routes.
- */
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    throw new Error(await errorText(response, `POST ${path}`));
-  }
-  return (await response.json()) as T;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-async function errorText(response: Response, what: string): Promise<string> {
+// Two refusal shapes: the publisher's `{ ok: false, code, message, details }` and the validation routes' `{ error }`.
+async function requestError(response: Response, what: string): Promise<ServeRequestError> {
+  let body: unknown = null;
   try {
-    const body = (await response.json()) as { error?: unknown };
-    if (typeof body?.error === 'string') {
-      return `${what} failed (${response.status}): ${body.error}`;
-    }
+    body = await response.json();
   } catch {
     // A non-JSON error body is no more informative than the status.
   }
-  return `${what} failed (${response.status})`;
+  if (isRecord(body)) {
+    if (body.ok === false && typeof body.message === 'string') {
+      return new ServeRequestError(body.message, {
+        status: response.status,
+        code: typeof body.code === 'string' ? body.code : null,
+        details: Array.isArray(body.details)
+          ? body.details.filter((line): line is string => typeof line === 'string')
+          : [],
+      });
+    }
+    if (typeof body.error === 'string') {
+      return new ServeRequestError(`${what} failed (${response.status}): ${body.error}`, {
+        status: response.status,
+      });
+    }
+  }
+  return new ServeRequestError(`${what} failed (${response.status})`, {
+    status: response.status,
+  });
+}
+
+// Everything the adapter sends goes through here, so every request presents the token.
+interface ServeClient {
+  fetch(path: string, init?: RequestInit): Promise<Response>;
+  getJson<T>(path: string): Promise<T>;
+  postJsonText(path: string, text: string): Promise<Response>;
+  postJson<T>(path: string, body: unknown): Promise<T>;
+}
+
+function createClient(capability: string): ServeClient {
+  const authorization = capabilityAuthorization(capability);
+
+  const client: ServeClient = {
+    fetch: (path, init = {}) =>
+      fetch(path, {
+        ...init,
+        headers: { ...(init.headers as Record<string, string> | undefined), authorization },
+      }),
+
+    getJson: async <T>(path: string): Promise<T> => {
+      const response = await client.fetch(path);
+      if (!response.ok) {
+        throw await requestError(response, `GET ${path}`);
+      }
+      return (await response.json()) as T;
+    },
+
+    // The server answers 415 on any POST without `content-type: application/json`.
+    postJsonText: (path, text) =>
+      client.fetch(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: text,
+      }),
+
+    postJson: async <T>(path: string, body: unknown): Promise<T> => {
+      const response = await client.postJsonText(path, JSON.stringify(body));
+      if (!response.ok) {
+        throw await requestError(response, `POST ${path}`);
+      }
+      return (await response.json()) as T;
+    },
+  };
+  return client;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,14 +207,30 @@ export function encodeReviewStateForWire(state: ReviewState): unknown {
   };
 }
 
+// The size is measured before sending: base64 can push a review over the limit while it is well under on disk,
+// and the server's 413 arrives after it closed the socket.
+function tooLarge(bytes: number, status: number | null): ServeRequestError {
+  return new ServeRequestError(
+    `This review is ${formatMegabytes(bytes)} MB as sent, over the server's ` +
+      `${formatMegabytes(MAX_REVIEW_BODY_BYTES)} MB limit. Image attachments are the usual ` +
+      'cause — they are base64-encoded on the wire, which adds a third — so remove or shrink ' +
+      'some and press Finish Review again. Nothing has been lost.',
+    { status, code: REVIEW_TOO_LARGE_CODE }
+  );
+}
+
+function byteLength(text: string): number {
+  return new Blob([text]).size;
+}
+
 /** Path-bearing routes take the path as a query parameter, encoded once. */
 function withPath(route: string, filePath: string): string {
   return `${route}?path=${encodeURIComponent(filePath)}`;
 }
 
 /** Read the config and its output path info. Fetched before the UI mounts. */
-export async function loadServeConfig(): Promise<ConfigApiResponse | null> {
-  return getJson<ConfigApiResponse | null>('/api/config');
+export async function loadServeConfig(capability: string): Promise<ConfigApiResponse | null> {
+  return createClient(capability).getJson<ConfigApiResponse | null>('/api/config');
 }
 
 /**
@@ -157,7 +240,8 @@ export async function loadServeConfig(): Promise<ConfigApiResponse | null> {
  * `GET /api/diff` promise is per-session state; a test gets a fresh one per
  * case, and the page creates exactly one.
  */
-export function createFetchAdapter(): ReviewAdapter {
+export function createFetchAdapter(capability: string): ReviewAdapter {
+  const { getJson, postJson, postJsonText, fetch: authorizedFetch } = createClient(capability);
   let diffRequest: Promise<DiffApiResponse> | null = null;
 
   /** The one `GET /api/diff`, shared by loadDiff and both subscriptions. */
@@ -209,10 +293,26 @@ export function createFetchAdapter(): ReviewAdapter {
     applySuggestion: request => postJson('/api/apply-suggestion', request),
 
     submitReview: async (state: ReviewState): Promise<void> => {
-      // Resolving means the submission was *accepted*, not that the review
-      // is on disk: the route only stores it on the session, and
-      // ../lifecycle.ts writes the file on the response's finish event.
-      await postJson<null>('/api/review', encodeReviewStateForWire(state));
+      const text = JSON.stringify(encodeReviewStateForWire(state));
+      const bytes = byteLength(text);
+      if (bytes > MAX_REVIEW_BODY_BYTES) {
+        throw tooLarge(bytes, null);
+      }
+      const response = await postJsonText('/api/review', text);
+      if (response.status === 413) {
+        throw tooLarge(bytes, response.status);
+      }
+      if (!response.ok) {
+        throw await requestError(response, 'POST /api/review');
+      }
+      const ack = (await response.json()) as ReviewSubmitAck | null;
+      if (!isRecord(ack) || ack.ok !== true) {
+        throw new ServeRequestError(
+          'The server answered without acknowledging the review as written. ' +
+            'Check the terminal it was started from, then press Finish Review again.',
+          { status: response.status }
+        );
+      }
     },
 
     expandContext: (request: ExpandContextRequest) =>
@@ -227,7 +327,7 @@ export function createFetchAdapter(): ReviewAdapter {
       // Bytes, not JSON: this route answers octet-stream, and 404 for an
       // attachment whose file is gone — which the image component renders
       // as "Image not found" rather than treating as an error.
-      const response = await fetch(withPath('/api/attachment', filePath));
+      const response = await authorizedFetch(withPath('/api/attachment', filePath));
       if (!response.ok) return null;
       return response.arrayBuffer();
     },

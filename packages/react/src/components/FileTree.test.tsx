@@ -97,3 +97,29 @@ describe('FileTree output path footer', () => {
     expect(screen.queryByText('Change...')).not.toBeNull();
   });
 });
+
+describe('FileTree search', () => {
+  it('finds a deleted file, whose path lives only in oldPath', () => {
+    const deleted: DiffFile = {
+      oldPath: 'src/removed.ts',
+      newPath: '',
+      changeType: 'deleted',
+      isBinary: false,
+      hunks: [],
+    };
+    render(
+      <ConfigProvider>
+        <ReviewProvider initialFiles={[file, deleted]}>
+          <DiffNavigationProvider>
+            <FileTree />
+          </DiffNavigationProvider>
+        </ReviewProvider>
+      </ConfigProvider>
+    );
+
+    fireEvent.change(screen.getByTestId('file-search'), { target: { value: 'removed' } });
+
+    expect(screen.queryByTestId('file-entry-src/removed.ts')).not.toBeNull();
+    expect(screen.queryByTestId('file-entry-src/foo.ts')).toBeNull();
+  });
+});
