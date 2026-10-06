@@ -239,9 +239,9 @@ jobs:
           retention-days: 1
 
       # Artifact naming contract, consumed by the Nix flake and by the external
-      # Homebrew tap. Every asset below is uploaded under the name its maker
-      # produced; GitHub then replaces each space with a dot, which is why the
-      # published zip reads `Self.Review-...`:
+      # Homebrew tap, dispatched by `publish` below. Every asset below is
+      # uploaded under the name its maker produced; GitHub then replaces each
+      # space with a dot, which is why the published zip reads `Self.Review-...`:
       #
       #   zip  Self.Review-linux-<x64|arm64>-<version>.zip
       #   deb  self-review_<version>_<amd64|arm64>.deb
@@ -317,6 +317,20 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.release.outputs.tag }}
         run: gh workflow run release-darwin.yml -f tag="$TAG"
+
+      # Notifies the Homebrew tap; needs the HOMEBREW_TAP_DISPATCH_TOKEN PAT secret.
+      - name: Trigger Homebrew tap update
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_DISPATCH_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "HOMEBREW_TAP_DISPATCH_TOKEN is not set" >&2
+            exit 1
+          fi
+          gh api repos/e0ipso/homebrew-self-review/dispatches \
+            -f event_type=self-review-release \
+            -f "client_payload[release_tag]=$TAG"
 
       # Last, so a registry failure cannot hold back the app release above. A
       # re-run reaches this step with versions an earlier attempt may have

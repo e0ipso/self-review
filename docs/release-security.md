@@ -4,7 +4,9 @@ How the release pipeline decides what it may publish, what each job is allowed t
 repository settings it relies on. The pipeline is
 `.github/workflows/release.yml` (Linux, npm, GitHub Release), which dispatches
 `.github/workflows/release-darwin.yml` (macOS archive) and `.github/workflows/update-flake-hash.yml`
-(Nix hash pull request).
+(Nix hash pull request). It also notifies `e0ipso/homebrew-self-review` through a
+`self-review-release` repository dispatch after dispatching the macOS build. The tap waits up to
+30 minutes for the macOS arm64 and Linux x64 ZIP assets to have sha256 digests.
 
 ## Provenance gate
 
@@ -85,7 +87,15 @@ The workflow files cannot enforce these; the repository owner configures them:
 - Actions: require approval before workflows run for outside contributors.
 - `main`: require a pull request and the CI status checks before merging.
 - Default `GITHUB_TOKEN` permissions: read-only.
+- `HOMEBREW_TAP_DISPATCH_TOKEN` repository secret: a fine-grained PAT with resource owner `e0ipso`,
+  repository access limited to `e0ipso/homebrew-self-review`, and repository permission
+  **Contents: Read and write**, as required by GitHub's
+  [Create a repository dispatch event](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event)
+  REST endpoint. `GITHUB_TOKEN` cannot dispatch to another repository. The `publish` job passes the
+  PAT only to the Homebrew tap notification step through `env`. This secret must exist before the
+  next release; if it is missing, that step fails and npm publishing does not run.
 - npm trusted publishers for `@self-review/types`, `core`, `react` and `serve`: accept OIDC
   publication from `.github/workflows/release.yml`. If the trusted publisher names an environment,
   `publish` must declare the same `environment:`.
-- No long-lived npm token in repository secrets; the pipeline uses only `GITHUB_TOKEN` and OIDC.
+- No long-lived npm token in repository secrets; npm publishing uses OIDC. The pipeline uses
+  `GITHUB_TOKEN` for this repository and the scoped PAT above to notify the Homebrew tap.
