@@ -2,7 +2,7 @@
 type: practice
 title: Commitlint rejects agent attribution in the message and the author email
 description: >-
-  A Co-Authored-By trailer naming an assistant fails commit-msg; so does an
+  Any Co-authored-by trailer or AI tool attribution fails commit-msg; so does an
   author email carrying an assistant keyword.
 tags:
   - git
@@ -19,17 +19,19 @@ kk_relates_to:
 kk_depends_on: []
 kk_confidence: high
 ---
-`.commitlintrc.cjs` extends `@commitlint/config-conventional` and adds two local rules, both at
-error level. `no-ai-attribution` scans the body and footer against a pattern list and fails on a
-`Co-Authored-By` trailer naming an assistant vendor, on a robot-emoji "generated with" line, and on
-phrases claiming machine authorship. `no-ai-author-email` reads `GIT_AUTHOR_EMAIL`, falling back to
+`.commitlintrc.cjs` extends `@commitlint/config-conventional` and adds three local rules, all at
+error level. `no-ai-generated` scans the whole message and fails on any `Co-authored-by` trailer,
+human or not; on `Assisted-by`, `Generated-by`, `Made-with` or `Signed-off-by` trailers naming an AI
+tool; on tool-prefixed trailers such as `Amp-Thread:`; and on "generated with" or "made by" lines
+naming one. `no-sift-ticket-ids` fails on a sift ticket ID, because those point at a private
+tracker. `no-ai-author-email` reads `GIT_AUTHOR_EMAIL`, falling back to
 the `user.email` git config, and fails when it contains any of eleven keywords, among them
 `assistant`, `bot@` and several vendor names. `.husky/commit-msg` runs `npx commitlint --edit $1`, so both fire on every
 local commit.
 
 Several agent harnesses append such a trailer by default, this repo's own global instructions among
 them, so a commit written with harness defaults is rejected: piping a message with that trailer into
-`npx commitlint` exits 1 citing `no-ai-attribution`. Drop the trailer rather than working around
+`npx commitlint` exits 1 citing `no-ai-generated`. Drop the trailer rather than working around
 the hook. History does contain commits carrying it, made in a worktree where `npm run prepare` had
 never run, which leaves the husky hooks unwired and silently unenforced.
 
