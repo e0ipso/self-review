@@ -96,11 +96,11 @@
 /* Ultra-subtle scrollbars */
 .self-review * {
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
 }
 
 .self-review *:hover {
-  scrollbar-color: hsl(var(--border) / 0.3) transparent;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.55) transparent;
 }
 
 .self-review *::-webkit-scrollbar {
@@ -113,16 +113,16 @@
 }
 
 .self-review *::-webkit-scrollbar-thumb {
-  background: transparent;
+  background: hsl(var(--muted-foreground) / 0.35);
   border-radius: 3px;
 }
 
 .self-review *:hover::-webkit-scrollbar-thumb {
-  background: hsl(var(--border) / 0.3);
+  background: hsl(var(--muted-foreground) / 0.55);
 }
 
 .self-review *::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--border) / 0.5);
+  background: hsl(var(--muted-foreground) / 0.7);
 }
 
 /* Prevent Tailwind .table utility from overriding Prism token spans */
