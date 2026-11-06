@@ -33,8 +33,8 @@
       # exactly one architecture per run and can never install one
       # architecture's hash under another.
       srcHashes = {
-        "x86_64-linux" = "sha256-QHIe9guldyjLZFmLJ9K2U0ZU5WGVqYg0VXlNes26xMk=";
-        "aarch64-linux" = "sha256-lf0KMCPpEY1rXfVZtZc2Yx6zt3LCY0472WTd+7VH348=";
+        "x86_64-linux" = "sha256-MkbSFmLFSM4t5IST4uhmRXumtF9VH9U0qP+xNaDSNuk=";
+        "aarch64-linux" = "sha256-T86mGyMQ8h3vYFKohh8111cHvduTjRVxc02AgRfuKQo=";
       };
 
       mkSelfReview =
