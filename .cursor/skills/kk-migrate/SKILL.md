@@ -3,7 +3,7 @@ name: kk-migrate
 description: Run any pending knowledge-base migration by querying the deterministic migration chain (`migrate status`) and executing each pending step's documented procedure in-host, with every write delegated to the step's deterministic CLI primitives. Use when the node reader, `doctor`, or `init` reports an out-of-date `schema_version` / legacy flat layout and asks you to migrate, or when the user asks to migrate the knowledge base.
 ---
 
-<!-- Version: 7 -->
+<!-- Version: 8 -->
 
 # kk-migrate
 
@@ -11,10 +11,20 @@ You are the migrator — for **any** pending knowledge-base migration, not one s
 
 ## Resolve the project root
 
-Resolve the repo root (the directory containing `.ai/kenkeep`) with the shipped detector, then treat the printed path as the working directory for every command below:
+Resolve the repo root (the directory containing `.ai/kenkeep`) with the shipped detector, then treat the printed path as the working directory for every command below. The snippet first walks up from the current directory to the installed detector, so it also works when started from a nested package directory:
 
 ```bash
-KK_REPO_ROOT=$(node .ai/kenkeep/scripts/kk-detect-root.mjs) || exit $?
+KK_REPO_ROOT=$(
+  d=$PWD
+  until [ -f "$d/.ai/kenkeep/scripts/kk-detect-root.mjs" ]; do
+    if [ "$d" = / ]; then
+      echo 'kk-detect-root: no .ai/kenkeep/scripts/kk-detect-root.mjs in this directory or its parents.' >&2
+      exit 2
+    fi
+    d=$(dirname "$d")
+  done
+  cd "$d" && node .ai/kenkeep/scripts/kk-detect-root.mjs
+) || exit $?
 cd "$KK_REPO_ROOT" || exit $?
 pwd
 ```
@@ -130,7 +140,7 @@ Run the primitive reported by dispatch:
 npx --yes kenkeep@latest migrate okf-v3
 ```
 
-It refuses unless the detected on-disk version is exactly `2`. On success it mechanically:
+It refuses unless the detected on-disk version is `2`, or `3` when an earlier run converted every leaf and then failed. On success it mechanically:
 
 - renames leaf frontmatter `kind` -> `type` and `summary` -> `description`;
 - moves kenkeep-owned fields to `kk_` extension keys (`kk_schema_version`, `kk_id`, `kk_relates_to`, `kk_depends_on`, `kk_derived_from`, `kk_confidence`);
@@ -138,13 +148,15 @@ It refuses unless the detected on-disk version is exactly `2`. On success it mec
 - migrates folder summaries out of old `nodes/**/index.md` frontmatter into `.ai/kenkeep/FOLDER_SUMMARIES.md`;
 - rebuilds `nodes/**/index.md`, `ENTRY.md`, and `GRAPH.md`.
 
-It prints one JSON line:
+The primitive validates the complete tree in memory first (every leaf readable, every id unique, no symlink at any file it writes) and aborts with zero changes if anything is wrong. It prints one JSON line:
 
 ```json
-{"converted":2,"folder_summaries":1,"collisions":[]}
+{"converted":2,"already_converted":0,"folder_summaries":1,"collisions":[]}
 ```
 
 If `collisions` is non-empty, surface it clearly: those leaves already had an unmarked `# Related` or `# Citations` heading before the generated sections were appended. Do not try to merge the headings yourself; the user reviews the body diff.
+
+If the primitive fails part-way (a permission or disk error), it exits non-zero with the cause on stderr. The run is resumable: fix the cause and re-run the same command. It recognizes the leaves it already rewrote (`already_converted` counts them) and converts only the remaining v2 leaves, preserving every id, edge and `kk_derived_from`. If the failure came after the last leaf was converted, the re-run converts nothing and only regenerates `FOLDER_SUMMARIES.md`, the indexes, `GRAPH.md` and `ENTRY.md`; `migrate status` reports no pending step meanwhile, so re-run the command directly. A re-run on a finished tree does the same and changes nothing. Report the failure to the user before re-running; do not repair files yourself.
 
 ### 2. Verify and hand off
 

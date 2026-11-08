@@ -26,6 +26,7 @@ import type {
 import { useReviewState } from '../hooks/useReviewState';
 import { useConfig } from './ConfigContext';
 import { useAdapter } from './ReviewAdapterContext';
+import type { ReviewAdapter } from '../adapter';
 
 export interface ReviewContextValue {
   files: FileReviewState[];
@@ -57,25 +58,24 @@ export interface ReviewContextValue {
     contextLines: number
   ) => Promise<{ hunks: DiffHunk[]; totalLines: number } | null>;
   updateFileHunks: (filePath: string, hunks: DiffHunk[]) => void;
-  /**
-   * Remote head drift from the resumed document, when the session is a
-   * resumed remote review. `null` for local reviews and drift-free resumes.
-   */
+  /** Remote head drift from the resumed document; `null` for local or drift-free reviews. */
   remoteDrift: RemoteDriftInfo | null;
-  /**
-   * Provenance of the remote PR/MR under review, or `null` for a local one.
-   * Carries `temporaryClone`, which decides whether an apply has anywhere
-   * to write (PRD Section 5.4.8).
-   */
+  /** One line per resumed comment the importer downgraded (`ResumeLoadPayload.importDiagnostics`). */
+  importDiagnostics: string[];
+  /** Remote PR/MR provenance, or `null`. `temporaryClone` decides where an apply can write. */
   remote: RemoteSessionInfo | null;
-  /**
-   * Destination directory the reviewer named for this session's applies, as
-   * the host reported it, or `null` while none has been named. Only a
-   * temporary-clone review ever needs one.
-   */
+  /** What the host could not load faithfully (`DiffLoadPayload.diagnostics`). */
+  diagnostics: string[];
+  /** Large-payload mode: files may arrive without hunks and load on demand. */
+  isLargePayload: boolean;
+  /** Directory the reviewer named for applies, or `null`. Only a temporary-clone review needs one. */
   applyDestination: string | null;
   /** Record the destination the host accepted. */
   setApplyDestination: (destinationRoot: string) => void;
+  /** Payload paths only, never synthetic entries, so Apply is not offered on placeholders. */
+  reviewedPaths: ReadonlySet<string>;
+  /** Changes when a new session starts; async work compares it to drop stale results. */
+  sessionId: number;
 }
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
@@ -99,44 +99,187 @@ export function useReview() {
   return context;
 }
 
-/**
- * The review session when there is one, `null` otherwise.
- *
- * For a component that renders both inside a review and on its own, and
- * only reads session facts to decide how much of itself to show.
- */
+/** The review session when there is one, `null` otherwise. */
 export function useOptionalReview() {
   return useContext(ReviewContext);
 }
 
+/**
+ * Comparable identity of the review a payload describes: same identity updates the session,
+ * a different one starts a new one. The remote head SHA is left out on purpose, so the same
+ * PR at a newer head is the same review. The adapter is the other half (see {@link ReviewProvider}).
+ */
+export function reviewSessionIdentity(
+  source: DiffSource,
+  remote?: RemoteSessionInfo | null
+): string {
+  let parts: string[];
+  switch (source.type) {
+    case 'git':
+      parts = ['git', source.repository, source.gitDiffArgs];
+      break;
+    case 'directory':
+    case 'file':
+      parts = [source.type, source.sourcePath];
+      break;
+    default:
+      parts = [source.type];
+  }
+  if (remote) parts.push('remote', remote.remoteUrl);
+  return JSON.stringify(parts);
+}
+
+function isPlaceholderSource(source: DiffSource): boolean {
+  return source.type === 'loading' || source.type === 'welcome';
+}
+
+const LOADING_SOURCE: DiffSource = { type: 'loading' };
+const DEFAULT_STATIC_SOURCE: DiffSource = { type: 'directory', sourcePath: '' };
+
+const adapterIds = new WeakMap<object, number>();
+let nextAdapterId = 1;
+
+function adapterIdentity(adapter: object | null): number {
+  if (!adapter) return 0;
+  let id = adapterIds.get(adapter);
+  if (id === undefined) {
+    id = nextAdapterId++;
+    adapterIds.set(adapter, id);
+  }
+  return id;
+}
+
+let nextSessionId = 1;
+
+function pathOf(file: DiffFile): string {
+  return file.newPath || file.oldPath;
+}
+
+/** Returns `prev` itself when nothing changed, so a no-op reconciliation does not re-render. */
+function seedFileStates(diffFiles: DiffFile[], prev: FileReviewState[]): FileReviewState[] {
+  const prevByPath = new Map(prev.map(f => [f.path, f]));
+  const next = diffFiles.map((file): FileReviewState => {
+    const path = pathOf(file);
+    const existing = prevByPath.get(path);
+    if (existing) {
+      return existing.changeType === file.changeType
+        ? existing
+        : { ...existing, changeType: file.changeType };
+    }
+    return { path, changeType: file.changeType, viewed: false, comments: [] };
+  });
+  const unchanged = next.length === prev.length && next.every((f, i) => f === prev[i]);
+  return unchanged ? prev : next;
+}
+
+/** State without a diff entry is dropped on reconcile, so off-diff comments need a synthetic one. */
+function withSyntheticEntries(diffFiles: DiffFile[], paths: Iterable<string>): DiffFile[] {
+  const known = new Set(diffFiles.map(pathOf));
+  const extras: DiffFile[] = [];
+  for (const path of paths) {
+    if (known.has(path)) continue;
+    known.add(path);
+    extras.push({
+      oldPath: path,
+      newPath: path,
+      changeType: 'modified',
+      isBinary: false,
+      hunks: [],
+    });
+  }
+  return extras.length > 0 ? [...diffFiles, ...extras] : diffFiles;
+}
+
+/** Appends comments by id (no duplicates) and adds entries for paths the state lacks. */
+function mergeIntoFileStates(
+  prev: FileReviewState[],
+  commentsByFile: Map<string, ReviewComment[]>,
+  viewedPaths: ReadonlySet<string>
+): FileReviewState[] {
+  const known = new Set(prev.map(f => f.path));
+  const merged = prev.map(file => {
+    const incoming = commentsByFile.get(file.path) ?? [];
+    const ids = new Set(file.comments.map(c => c.id));
+    const added = incoming.filter(c => !ids.has(c.id));
+    const viewed = file.viewed || viewedPaths.has(file.path);
+    if (added.length === 0 && viewed === file.viewed) return file;
+    return { ...file, viewed, comments: [...file.comments, ...added] };
+  });
+  const extras: FileReviewState[] = [];
+  commentsByFile.forEach((comments, path) => {
+    if (!known.has(path)) {
+      extras.push({ path, changeType: 'modified', viewed: viewedPaths.has(path), comments });
+    }
+  });
+  return extras.length > 0 ? [...merged, ...extras] : merged;
+}
+
 export interface ReviewProviderProps {
   children: ReactNode;
-  /** Optional: provide diff data directly instead of using adapter.loadDiff() */
+  /** Static diff data used instead of `adapter.loadDiff()`; no loading or push subscription. */
   initialFiles?: DiffFile[];
-  /** Optional: provide diff source directly */
+  /** Source metadata for `initialFiles`; part of the session identity, compared by value. */
   initialSource?: DiffSource;
-  /** Optional: provide initial comments */
+  /**
+   * Seeds the session once, when its files are known; later values are ignored so they never
+   * overwrite the reviewer's edits. A session pushed later through `adapter.onDiffLoad` starts
+   * without them, except a push that replaces the welcome placeholder.
+   */
   initialComments?: ReviewComment[];
 }
 
-export function ReviewProvider({
+/**
+ * Holds the review session (diff, source, comments, viewed flags). Session identity is the
+ * adapter object plus {@link reviewSessionIdentity}. A different adapter, `initialSource` or
+ * static/adapter switch, or a pushed payload with another identity, replaces the session and
+ * discards everything from the old one. The same identity updates it, carrying comments over by
+ * path. Keep the adapter identity stable unless a new session is intended.
+ */
+export function ReviewProvider(props: ReviewProviderProps) {
+  const adapter = useAdapter();
+  const { initialFiles, initialSource } = props;
+  const sessionKey = [
+    adapterIdentity(adapter),
+    initialFiles ? 'static' : 'adapter',
+    initialSource ? reviewSessionIdentity(initialSource) : '',
+  ].join('|');
+  return <ReviewSessionProvider key={sessionKey} {...props} adapter={adapter} />;
+}
+
+/** Keyed by `ReviewProvider`: replacement unmounts it and cleanups cancel the old adapter's work. */
+function ReviewSessionProvider({
   children,
   initialFiles,
   initialSource,
   initialComments,
-}: ReviewProviderProps) {
+  adapter,
+}: ReviewProviderProps & { adapter: ReviewAdapter | null }) {
+  const startingSource = initialSource || (initialFiles ? DEFAULT_STATIC_SOURCE : LOADING_SOURCE);
   const [allDiffFiles, setAllDiffFiles] = useState<DiffFile[]>(initialFiles || []);
-  const [diffSource, setDiffSource] = useState<DiffSource>(
-    initialSource || (initialFiles ? { type: 'directory', sourcePath: '' } : { type: 'loading' })
-  );
+  const [diffSource, setDiffSource] = useState<DiffSource>(startingSource);
   const [resumedReview, setResumedReview] = useState<ResumeLoadPayload | null>(null);
   const [remote, setRemote] = useState<RemoteSessionInfo | null>(null);
+  const [diagnostics, setDiagnostics] = useState<string[]>([]);
+  const [isLargePayload, setIsLargePayload] = useState(false);
   const [applyDestination, setApplyDestination] = useState<string | null>(null);
+  const [reviewedPaths, setReviewedPaths] = useState<ReadonlySet<string>>(
+    () => new Set((initialFiles ?? []).map(pathOf))
+  );
+  const [sessionId, setSessionId] = useState(() => nextSessionId++);
+  const sessionIdRef = useRef(sessionId);
+  const identityRef = useRef<string | null>(
+    initialFiles ? reviewSessionIdentity(startingSource) : null
+  );
+  const placeholderRef = useRef(isPlaceholderSource(startingSource));
+  // Session an outstanding loadResumedReview() answer belongs to.
+  const resumeOwnerRef = useRef<number | null>(null);
   const resumeAppliedRef = useRef(false);
+  const hydratedRef = useRef(false);
+  const staticFilesRef = useRef(initialFiles);
   const { config } = useConfig();
-  const adapter = useAdapter();
 
   const reviewState = useReviewState();
+  const { setFiles } = reviewState;
 
   // Filter files based on showUntracked toggle
   const diffFiles = useMemo(() => {
@@ -144,93 +287,81 @@ export function ReviewProvider({
     return allDiffFiles.filter(file => !file.isUntracked);
   }, [allDiffFiles, config.showUntracked]);
 
-  // Create refs for review submission
-  const diffSourceRef = useRef(diffSource);
+  // Payload callbacks run outside render and read this.
   const filesRef = useRef(reviewState.files);
-
-  useLayoutEffect(() => {
-    diffSourceRef.current = diffSource;
-  }, [diffSource]);
   useLayoutEffect(() => {
     filesRef.current = reviewState.files;
   }, [reviewState.files]);
 
-  // When allDiffFiles change, initialize FileReviewState for all files
-  useEffect(() => {
-    if (allDiffFiles.length > 0) {
-      reviewState.setFiles(prev => {
-        const prevByPath = new Map(prev.map(f => [f.path, f]));
-        return allDiffFiles.map(file => {
-          const path = file.newPath || file.oldPath;
-          const existing = prevByPath.get(path);
-          if (existing) {
-            return { ...existing, changeType: file.changeType };
-          }
-          return {
-            path,
-            changeType: file.changeType,
-            viewed: false,
-            comments: [] as ReviewComment[],
-          };
-        });
-      });
+  /** Same identity updates the session; a different one replaces it. */
+  const receivePayload = (payload: DiffLoadPayload) => {
+    const identity = reviewSessionIdentity(payload.source, payload.remote);
+    if (identity === identityRef.current) {
+      const commentedPaths = filesRef.current.filter(f => f.comments.length > 0).map(f => f.path);
+      setAllDiffFiles(withSyntheticEntries(payload.files, commentedPaths));
+      setReviewedPaths(new Set(payload.files.map(pathOf)));
+      setDiffSource(payload.source);
+      setRemote(payload.remote ?? null);
+      setDiagnostics(payload.diagnostics ?? []);
+      setIsLargePayload(payload.isLargePayload === true);
+      return;
     }
+
+    identityRef.current = identity;
+    const nextId = nextSessionId++;
+    // A resume requested while a placeholder showed belongs to the review replacing it
+    // (Electron answers the welcome screen's pending request right after pushing the diff).
+    if (placeholderRef.current && resumeOwnerRef.current === sessionIdRef.current) {
+      resumeOwnerRef.current = nextId;
+    }
+    placeholderRef.current = isPlaceholderSource(payload.source);
+    sessionIdRef.current = nextId;
+    setSessionId(nextId);
+    resumeAppliedRef.current = false;
+    setResumedReview(null);
+    setAllDiffFiles(payload.files);
+    setReviewedPaths(new Set(payload.files.map(pathOf)));
+    setDiffSource(payload.source);
+    setRemote(payload.remote ?? null);
+    setDiagnostics(payload.diagnostics ?? []);
+    setIsLargePayload(payload.isLargePayload === true);
+    setApplyDestination(null);
+    setFiles(seedFileStates(payload.files, []));
+  };
+
+  /** Merge comments and viewed paths into the session, keeping off-diff paths. */
+  const mergeIntoSession = (comments: ReviewComment[], viewedPaths: ReadonlySet<string>) => {
+    const commentsByFile = groupCommentsByFile(comments);
+    setFiles(prev => mergeIntoFileStates(prev, commentsByFile, viewedPaths));
+    setAllDiffFiles(prev => withSyntheticEntries(prev, commentsByFile.keys()));
+  };
+
+  useEffect(() => {
+    setFiles(prev => seedFileStates(allDiffFiles, prev));
   }, [allDiffFiles]);
 
-  // Merge the resumed review after loading, even when the current diff is empty.
-  //
-  // The seeding effect above is declared first, so when both run in the same
-  // commit its updater is queued first and this one sees the seeded files.
-  // Applying only once keeps later allDiffFiles updates (lazy hunk loads,
-  // expanded context) from resurrecting comments the user has since deleted.
+  // Declared after the seeding effect so its updater is queued first and this one sees the seeded
+  // files. Applying once keeps later allDiffFiles updates from resurrecting deleted comments.
   useEffect(() => {
     if (!resumedReview || resumeAppliedRef.current) return;
     resumeAppliedRef.current = true;
+    mergeIntoSession(resumedReview.comments, new Set(resumedReview.viewedFiles ?? []));
+  }, [resumedReview]);
 
-    const commentsByFile = groupCommentsByFile(resumedReview.comments);
-    const viewedPaths = new Set(resumedReview.viewedFiles ?? []);
+  // Declared after the seeding effect for the same ordering reason.
+  useEffect(() => {
+    if (hydratedRef.current || !initialComments || initialComments.length === 0) return;
+    if (isPlaceholderSource(diffSource)) return;
+    hydratedRef.current = true;
+    mergeIntoSession(initialComments, new Set());
+  }, [initialComments, diffSource]);
 
-    reviewState.setFiles(prev => {
-      const known = new Set(prev.map(f => f.path));
-      const merged = prev.map(file => ({
-        ...file,
-        comments: commentsByFile.get(file.path) || file.comments,
-        viewed: viewedPaths.has(file.path) || file.viewed,
-      }));
-      // Comments whose path is not in the diff — the review-level sentinel
-      // ('') and threads with outdated anchors on removed files — must
-      // still render and survive save, so they get synthetic entries.
-      const extras: FileReviewState[] = [];
-      commentsByFile.forEach((comments, path) => {
-        if (!known.has(path)) {
-          extras.push({ path, changeType: 'modified', viewed: false, comments });
-        }
-      });
-      return extras.length > 0 ? [...merged, ...extras] : merged;
-    });
+  useEffect(() => {
+    if (!initialFiles || initialFiles === staticFilesRef.current) return;
+    staticFilesRef.current = initialFiles;
+    receivePayload({ files: initialFiles, source: startingSource });
+  }, [initialFiles]);
 
-    // Matching synthetic diff entries (empty hunks): the file tree and the
-    // diff viewer render from diffFiles, and the seeding effect drops any
-    // file state without a diff entry on its next run.
-    setAllDiffFiles(prev => {
-      const known = new Set(prev.map(f => f.newPath || f.oldPath));
-      const extras: DiffFile[] = [];
-      commentsByFile.forEach((_comments, path) => {
-        if (!known.has(path)) {
-          extras.push({
-            oldPath: path,
-            newPath: path,
-            changeType: 'modified',
-            isBinary: false,
-            hunks: [],
-          });
-        }
-      });
-      return extras.length > 0 ? [...prev, ...extras] : prev;
-    });
-  }, [resumedReview, allDiffFiles]);
-
-  // Load data from adapter (if provided and no initialFiles)
   useEffect(() => {
     if (initialFiles || !adapter) return;
 
@@ -240,16 +371,17 @@ export function ReviewProvider({
       try {
         const payload: DiffLoadPayload = await adapter.loadDiff();
         if (cancelled) return;
-        setAllDiffFiles(payload.files);
-        setDiffSource(payload.source);
-        setRemote(payload.remote ?? null);
+        // A push that already established a different session is newer than this response.
+        const identity = reviewSessionIdentity(payload.source, payload.remote);
+        if (identityRef.current !== null && identityRef.current !== identity) return;
+        receivePayload(payload);
 
-        // Load resumed review if adapter supports it. Applying it is deferred to
-        // the effect below: the per-file state it merges into does not exist
-        // until the allDiffFiles effect has seeded it.
+        // Applying is deferred to the effect above: per-file state does not exist until seeding runs.
         if (adapter.loadResumedReview) {
+          resumeOwnerRef.current = sessionIdRef.current;
           const resumed = await adapter.loadResumedReview();
-          if (cancelled) return;
+          if (cancelled || resumeOwnerRef.current !== sessionIdRef.current) return;
+          resumeOwnerRef.current = null;
           setResumedReview(resumed);
         }
       } catch (error) {
@@ -262,37 +394,11 @@ export function ReviewProvider({
     };
   }, []);
 
-  // Later pushed diff payloads replace the session wholesale — the host may
-  // start a review after the initial load resolved (e.g. a remote PR/MR URL
-  // submitted on the welcome screen). loadDiff's promise has settled by
-  // then, so pushes arrive only through this subscription.
+  // The host may start a review after the initial load (e.g. a PR URL from the welcome screen).
   useEffect(() => {
     if (initialFiles || !adapter?.onDiffLoad) return;
-    return adapter.onDiffLoad(payload => {
-      resumeAppliedRef.current = false;
-      setResumedReview(null);
-      setAllDiffFiles(payload.files);
-      setDiffSource(payload.source);
-      setRemote(payload.remote ?? null);
-      // A pushed payload replaces the session, and a destination named for
-      // the previous one says nothing about this review's files.
-      setApplyDestination(null);
-    });
+    return adapter.onDiffLoad(payload => receivePayload(payload));
   }, []);
-
-  // Apply initial comments
-  useEffect(() => {
-    if (!initialComments || initialComments.length === 0) return;
-
-    const commentsByFile = groupCommentsByFile(initialComments);
-
-    reviewState.setFiles(prev =>
-      prev.map(file => ({
-        ...file,
-        comments: commentsByFile.get(file.path) || file.comments,
-      }))
-    );
-  }, [initialComments]);
 
   const expandFileContext = async (
     filePath: string,
@@ -309,15 +415,12 @@ export function ReviewProvider({
     }
   };
 
+  // Hunks requested for a replaced session must not land on a same-named file of the new one.
+  const renderedSessionId = sessionId;
   const updateFileHunks = (filePath: string, hunks: DiffHunk[]) => {
+    if (renderedSessionId !== sessionIdRef.current) return;
     setAllDiffFiles(prev =>
-      prev.map(f => {
-        const fPath = f.newPath || f.oldPath;
-        if (fPath === filePath) {
-          return { ...f, hunks, contentLoaded: true };
-        }
-        return f;
-      })
+      prev.map(f => (pathOf(f) === filePath ? { ...f, hunks, contentLoaded: true } : f))
     );
   };
 
@@ -340,9 +443,14 @@ export function ReviewProvider({
         expandFileContext,
         updateFileHunks,
         remoteDrift: resumedReview?.remoteDrift ?? null,
+        importDiagnostics: resumedReview?.importDiagnostics ?? [],
         remote,
+        diagnostics,
+        isLargePayload,
         applyDestination,
         setApplyDestination,
+        reviewedPaths,
+        sessionId,
       }}
     >
       {children}

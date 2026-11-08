@@ -8,8 +8,11 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReviewState } from '@self-review/core';
-import { createFetchAdapter } from './adapter';
+import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
 import { parseReviewStateBody } from '../validate';
+import { MAX_REVIEW_BODY_BYTES, REVIEW_TOO_LARGE_CODE } from '../protocol';
+
+const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>;
 
@@ -60,14 +63,58 @@ function headersOf(init: RequestInit | undefined): Record<string, string> {
   return (init?.headers ?? {}) as Record<string, string>;
 }
 
+async function rejectionOf(work: Promise<void> | void): Promise<ServeRequestError> {
+  try {
+    await work;
+  } catch (error) {
+    return error as ServeRequestError;
+  }
+  throw new Error('expected the submission to be refused');
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe('createFetchAdapter', () => {
+  // Header only: a query parameter would land in history and logs, storage would outlive the session.
+  it('presents the capability as a bearer token on every request', async () => {
+    const spy = stubFetch(url =>
+      url.startsWith('/api/attachment')
+        ? new Response(new Uint8Array([1]), { status: 200 })
+        : json({ diff: DIFF_PAYLOAD, guide: null, ok: true, outputPath: '/r/review.xml' })
+    );
+    const adapter = createFetchAdapter(CAPABILITY);
+
+    await adapter.loadDiff();
+    await adapter.loadResumedReview!();
+    await adapter.loadFileContent!('src/a.ts');
+    await adapter.loadImage!('img.png');
+    await adapter.readAttachment!('.self-review-assets/a.png');
+    await adapter.expandContext!({ filePath: 'src/a.ts', contextLines: 3 });
+    await adapter.applySuggestion!({
+      filePath: 'src/a.ts',
+      lineRange: { side: 'new', start: 1, end: 1 },
+      suggestion: { originalCode: 'a', proposedCode: 'b' },
+    });
+    await adapter.submitReview!(REVIEW_STATE);
+    await loadServeConfig(CAPABILITY);
+
+    expect(spy).toHaveBeenCalledTimes(9);
+    for (const [url, init] of spy.mock.calls) {
+      expect(headersOf(init).authorization, String(url)).toBe(`Bearer ${CAPABILITY}`);
+      expect(String(url)).not.toContain(CAPABILITY);
+    }
+    const posts = spy.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posts).toHaveLength(3);
+    for (const [, init] of posts) {
+      expect(headersOf(init)['content-type']).toBe('application/json');
+    }
+  });
+
   it('loads the diff from GET /api/diff', async () => {
     const spy = stubRoutes({ '/api/diff': { diff: DIFF_PAYLOAD, guide: null } });
-    const adapter = createFetchAdapter();
+    const adapter = createFetchAdapter(CAPABILITY);
 
     await expect(adapter.loadDiff()).resolves.toEqual(DIFF_PAYLOAD);
     expect(spy).toHaveBeenCalledTimes(1);
@@ -76,12 +123,12 @@ describe('createFetchAdapter', () => {
 
   it('throws when the server has no diff to serve', async () => {
     stubRoutes({ '/api/diff': null });
-    await expect(createFetchAdapter().loadDiff()).rejects.toThrow(/no diff/i);
+    await expect(createFetchAdapter(CAPABILITY).loadDiff()).rejects.toThrow(/no diff/i);
   });
 
   it('satisfies onGuideLoad and onDiffLoad from the one GET /api/diff response', async () => {
     const spy = stubRoutes({ '/api/diff': { diff: DIFF_PAYLOAD, guide: GUIDE_PAYLOAD } });
-    const adapter = createFetchAdapter();
+    const adapter = createFetchAdapter(CAPABILITY);
 
     const guides: unknown[] = [];
     const diffs: unknown[] = [];
@@ -103,7 +150,7 @@ describe('createFetchAdapter', () => {
 
   it('never invokes a guide callback when the session has no guide', async () => {
     stubRoutes({ '/api/diff': { diff: DIFF_PAYLOAD, guide: null } });
-    const adapter = createFetchAdapter();
+    const adapter = createFetchAdapter(CAPABILITY);
     const guides: unknown[] = [];
 
     await adapter.loadDiff();
@@ -116,7 +163,7 @@ describe('createFetchAdapter', () => {
 
   it('does not deliver to a callback that unsubscribed first', async () => {
     stubRoutes({ '/api/diff': { diff: DIFF_PAYLOAD, guide: GUIDE_PAYLOAD } });
-    const adapter = createFetchAdapter();
+    const adapter = createFetchAdapter(CAPABILITY);
     const guides: unknown[] = [];
 
     const unsubscribe = adapter.onGuideLoad!(payload => guides.push(payload));
@@ -129,7 +176,7 @@ describe('createFetchAdapter', () => {
   });
 
   it('omits changeOutputPath entirely — the path is fixed at startup', () => {
-    const adapter = createFetchAdapter();
+    const adapter = createFetchAdapter(CAPABILITY);
     // Not "resolves to null": the file tree renders the control on the
     // property's presence, so a stub would leave a dead button.
     expect('changeOutputPath' in adapter).toBe(false);
@@ -140,13 +187,13 @@ describe('createFetchAdapter', () => {
     const resumed = { comments: [], viewedFiles: ['src/a.ts'] };
     const spy = stubRoutes({ '/api/resume': resumed });
 
-    await expect(createFetchAdapter().loadResumedReview!()).resolves.toEqual(resumed);
+    await expect(createFetchAdapter(CAPABILITY).loadResumedReview!()).resolves.toEqual(resumed);
     expect(spy.mock.calls[0][0]).toBe('/api/resume');
   });
 
   it('turns a null resume response into an empty resume payload', async () => {
     stubRoutes({ '/api/resume': null });
-    await expect(createFetchAdapter().loadResumedReview!()).resolves.toEqual({
+    await expect(createFetchAdapter(CAPABILITY).loadResumedReview!()).resolves.toEqual({
       comments: [],
       viewedFiles: [],
     });
@@ -158,7 +205,9 @@ describe('createFetchAdapter', () => {
     ];
     const spy = stubRoutes({ '/api/file': hunks });
 
-    await expect(createFetchAdapter().loadFileContent!('src/a b.ts')).resolves.toEqual(hunks);
+    await expect(createFetchAdapter(CAPABILITY).loadFileContent!('src/a b.ts')).resolves.toEqual(
+      hunks
+    );
     expect(spy.mock.calls[0][0]).toBe('/api/file?path=src%2Fa%20b.ts');
   });
 
@@ -166,21 +215,23 @@ describe('createFetchAdapter', () => {
     const result = { dataUri: 'data:image/png;base64,AAA' };
     const spy = stubRoutes({ '/api/image': result });
 
-    await expect(createFetchAdapter().loadImage!('img.png')).resolves.toEqual(result);
+    await expect(createFetchAdapter(CAPABILITY).loadImage!('img.png')).resolves.toEqual(result);
     expect(spy.mock.calls[0][0]).toBe('/api/image?path=img.png');
   });
 
   it('reads attachment bytes from GET /api/attachment', async () => {
     const spy = stubFetch(() => new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
 
-    const buffer = await createFetchAdapter().readAttachment!('.self-review-assets/a-0.png');
+    const buffer = await createFetchAdapter(CAPABILITY).readAttachment!(
+      '.self-review-assets/a-0.png'
+    );
     expect(new Uint8Array(buffer!)).toEqual(new Uint8Array([1, 2, 3]));
     expect(spy.mock.calls[0][0]).toBe('/api/attachment?path=.self-review-assets%2Fa-0.png');
   });
 
   it('resolves null when an attachment is missing rather than throwing', async () => {
     stubFetch(() => json({ error: 'attachment not found' }, 404));
-    await expect(createFetchAdapter().readAttachment!('missing.png')).resolves.toBeNull();
+    await expect(createFetchAdapter(CAPABILITY).readAttachment!('missing.png')).resolves.toBeNull();
   });
 
   it('posts an expand-context request as JSON', async () => {
@@ -188,7 +239,7 @@ describe('createFetchAdapter', () => {
     const spy = stubRoutes({ '/api/expand-context': response });
 
     await expect(
-      createFetchAdapter().expandContext!({ filePath: 'src/a.ts', contextLines: 99999 })
+      createFetchAdapter(CAPABILITY).expandContext!({ filePath: 'src/a.ts', contextLines: 99999 })
     ).resolves.toEqual(response);
 
     const [url, init] = spy.mock.calls[0];
@@ -205,14 +256,16 @@ describe('createFetchAdapter', () => {
   it('passes a null expand-context response through', async () => {
     stubRoutes({ '/api/expand-context': null });
     await expect(
-      createFetchAdapter().expandContext!({ filePath: 'src/a.ts', contextLines: 3 })
+      createFetchAdapter(CAPABILITY).expandContext!({ filePath: 'src/a.ts', contextLines: 3 })
     ).resolves.toBeNull();
   });
 
-  it('posts the review state as JSON to /api/review', async () => {
-    const spy = stubRoutes({ '/api/review': null });
+  const ACK = { ok: true, outputPath: '/repo/review.xml' };
 
-    await createFetchAdapter().submitReview!(REVIEW_STATE);
+  it('posts the review state as JSON to /api/review', async () => {
+    const spy = stubRoutes({ '/api/review': ACK });
+
+    await createFetchAdapter(CAPABILITY).submitReview!(REVIEW_STATE);
 
     const [url, init] = spy.mock.calls[0];
     expect(url).toBe('/api/review');
@@ -222,11 +275,11 @@ describe('createFetchAdapter', () => {
   });
 
   it('sends only the three fields the server accepts', async () => {
-    const spy = stubRoutes({ '/api/review': null });
+    const spy = stubRoutes({ '/api/review': ACK });
 
     // Remote provenance is injected server-side; the server rejects an
     // unknown top-level field with 400, so the adapter must not forward it.
-    await createFetchAdapter().submitReview!({
+    await createFetchAdapter(CAPABILITY).submitReview!({
       ...REVIEW_STATE,
       remoteUrl: 'https://github.com/o/r/pull/1',
     });
@@ -240,9 +293,85 @@ describe('createFetchAdapter', () => {
 
   it('rejects when the server refuses the review', async () => {
     stubFetch(() => json({ error: 'files must be an array' }, 400));
-    await expect(createFetchAdapter().submitReview!(REVIEW_STATE)).rejects.toThrow(
-      /files must be an array/
+    const failure = await rejectionOf(createFetchAdapter(CAPABILITY).submitReview!(REVIEW_STATE));
+    expect(failure).toBeInstanceOf(ServeRequestError);
+    expect(failure.status).toBe(400);
+    expect(failure.code).toBeNull();
+    expect(failure.message).toMatch(/files must be an array/);
+  });
+
+  it("surfaces the publisher's code, message and details from a failed publication", async () => {
+    stubFetch(() =>
+      json(
+        {
+          ok: false,
+          code: 'output-is-directory',
+          message: 'Cannot write /repo/review.xml: it is a directory',
+          details: ['one', 'two'],
+        },
+        500
+      )
     );
+    const failure = await rejectionOf(createFetchAdapter(CAPABILITY).submitReview!(REVIEW_STATE));
+    expect(failure).toBeInstanceOf(ServeRequestError);
+    expect(failure.status).toBe(500);
+    expect(failure.code).toBe('output-is-directory');
+    expect(failure.message).toContain('Cannot write /repo/review.xml: it is a directory');
+    expect(failure.details).toEqual(['one', 'two']);
+  });
+
+  it('treats a 200 without an acknowledgement as a failure, never as a saved review', async () => {
+    // The old route answered `null` after only storing the state; accepting that would report an unwritten file.
+    stubRoutes({ '/api/review': null });
+    await expect(createFetchAdapter(CAPABILITY).submitReview!(REVIEW_STATE)).rejects.toThrow(
+      /without acknowledging/i
+    );
+  });
+
+  it('maps a 413 to the too-large code with an actionable message', async () => {
+    stubFetch(() => json({ error: 'request body too large' }, 413));
+    const failure = await rejectionOf(createFetchAdapter(CAPABILITY).submitReview!(REVIEW_STATE));
+    expect(failure).toBeInstanceOf(ServeRequestError);
+    expect(failure.status).toBe(413);
+    expect(failure.code).toBe(REVIEW_TOO_LARGE_CODE);
+    expect(failure.message).toMatch(/32\.0 MB/);
+    expect(failure.message).toMatch(/attachment/i);
+  });
+
+  it('refuses to send a body over the limit, and says how big it was', async () => {
+    const spy = stubRoutes({ '/api/review': ACK });
+    // 25 MiB of image bytes is about 33.3 MiB base64-encoded: over the 32 MiB wire limit, well under it on disk.
+    const blob = new Uint8Array(25 * 1024 * 1024).buffer;
+    const state: ReviewState = {
+      ...REVIEW_STATE,
+      files: [
+        {
+          path: 'src/a.ts',
+          changeType: 'modified',
+          viewed: false,
+          comments: [
+            {
+              id: 'c1',
+              filePath: 'src/a.ts',
+              lineRange: null,
+              body: 'look',
+              category: 'bug',
+              suggestion: null,
+              attachments: [{ id: 'a1', fileName: 'big.png', mediaType: 'image/png', data: blob }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const failure = await rejectionOf(createFetchAdapter(CAPABILITY).submitReview!(state));
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(failure).toBeInstanceOf(ServeRequestError);
+    expect(failure.status).toBeNull();
+    expect(failure.code).toBe(REVIEW_TOO_LARGE_CODE);
+    expect(failure.message).toMatch(/33\.\d MB/);
+    expect(MAX_REVIEW_BODY_BYTES).toBe(32 * 1024 * 1024);
   });
 
   it('reads the config and its output path from GET /api/config', async () => {
@@ -252,8 +381,7 @@ describe('createFetchAdapter', () => {
     };
     const spy = stubRoutes({ '/api/config': payload });
 
-    const { loadServeConfig } = await import('./adapter');
-    await expect(loadServeConfig()).resolves.toEqual(payload);
+    await expect(loadServeConfig(CAPABILITY)).resolves.toEqual(payload);
     expect(spy.mock.calls[0][0]).toBe('/api/config');
   });
 });
@@ -306,8 +434,8 @@ describe('attachment blobs on the wire', () => {
   }
 
   async function submittedBody() {
-    const spy = stubRoutes({ '/api/review': null });
-    await createFetchAdapter().submitReview!(stateWithAttachments());
+    const spy = stubRoutes({ '/api/review': { ok: true, outputPath: '/repo/review.xml' } });
+    await createFetchAdapter(CAPABILITY).submitReview!(stateWithAttachments());
     return JSON.parse(String(spy.mock.calls[0][1]?.body));
   }
 

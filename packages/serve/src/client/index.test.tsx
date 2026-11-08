@@ -1,0 +1,257 @@
+// @vitest-environment jsdom
+
+// The real App and adapter against `createReviewServer` on an ephemeral port. Asserts recovery: a failed request
+// never leaves a blank page or a review that cannot be resubmitted.
+
+import React from 'react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { createReviewSession } from '@self-review/core';
+import type { AppConfig, DiffFile, ReviewSession } from '@self-review/core';
+import { installBrowserApiStubs } from '../../../react/src/test-helpers';
+import { createReviewServer, listenLoopback } from '../server';
+import { completeReviewOnSubmit } from '../lifecycle';
+import { App, takeCapabilityFromLocation } from './index';
+
+installBrowserApiStubs();
+
+// The real Layout's resizable panels need ResizeObserver, which jsdom lacks.
+class StubResizeObserver implements ResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+(globalThis as { ResizeObserver: typeof ResizeObserver }).ResizeObserver = StubResizeObserver;
+
+const CASE_TIMEOUT_MS = 30_000;
+
+const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
+
+const CONFIG: AppConfig = {
+  theme: 'dark',
+  diffView: 'unified',
+  fontSize: 14,
+  outputFormat: 'xml',
+  outputFile: 'review.xml',
+  ignore: [],
+  categories: [],
+  defaultDiffArgs: '',
+  showUntracked: true,
+  showUntrackedExplicit: false,
+  wordWrap: true,
+  maxFiles: 500,
+  maxTotalLines: 50_000,
+};
+
+const INDEX_FILE: DiffFile = {
+  oldPath: 'src/index.ts',
+  newPath: 'src/index.ts',
+  changeType: 'added',
+  isBinary: false,
+  hunks: [
+    {
+      header: '@@ -0,0 +1 @@',
+      oldStart: 0,
+      oldLines: 0,
+      newStart: 1,
+      newLines: 1,
+      lines: [{ type: 'addition', content: 'export {};', oldLineNumber: null, newLineNumber: 1 }],
+    },
+  ],
+};
+
+let tmp: string;
+let outputPath: string;
+let session: ReviewSession;
+let server: ReturnType<typeof createReviewServer>;
+let base: string;
+let exit: ReturnType<typeof vi.fn<(code: number) => void>>;
+let errors: ReturnType<typeof vi.spyOn>;
+
+const realFetch: typeof fetch = globalThis.fetch;
+
+let route: (url: URL, init?: RequestInit) => Promise<Response>;
+
+beforeEach(async () => {
+  tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'serve-client-')));
+  outputPath = path.join(tmp, 'review.xml');
+
+  session = createReviewSession();
+  session.diffData = {
+    source: { type: 'git', gitDiffArgs: '--staged', repository: tmp },
+    files: [INDEX_FILE],
+  };
+  session.config = CONFIG;
+  session.outputPathInfo = { resolvedOutputPath: outputPath, outputPathWritable: true };
+  // A resumed comment is unsaved work without driving the comment editor in jsdom.
+  session.resumeComments = [
+    {
+      id: 'c1',
+      filePath: 'src/index.ts',
+      lineRange: { side: 'new', start: 1, end: 1 },
+      body: 'Needs a test.',
+      category: 'task',
+      suggestion: null,
+    },
+  ];
+
+  server = createReviewServer({
+    session,
+    output: { path: outputPath, origin: 'explicit' },
+    capability: CAPABILITY,
+    clientDir: tmp,
+  });
+  exit = vi.fn<(code: number) => void>();
+  completeReviewOnSubmit({ server, exit });
+  base = (await listenLoopback(server)).url;
+
+  route = (url, init) => realFetch(url, init);
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+    route(new URL(String(input), base), init)
+  );
+  errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  cleanup();
+  errors.mockRestore();
+  vi.unstubAllGlobals();
+  if (server.listening) {
+    server.closeAllConnections();
+    server.close();
+  }
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+function closeIsGuarded(): boolean {
+  const event = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
+async function mountWithUnsavedWork() {
+  const view = render(<App capability={CAPABILITY} />);
+  await view.findByTestId('finish-review-btn', {}, { timeout: 10_000 });
+  await waitFor(() => expect(closeIsGuarded()).toBe(true), { timeout: 10_000 });
+  return view;
+}
+
+describe('session capability', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('takes the key out of the fragment and erases it from the address bar', () => {
+    window.history.replaceState(null, '', `/?x=1#cap=${CAPABILITY}`);
+
+    expect(takeCapabilityFromLocation()).toBe(CAPABILITY);
+    expect(window.location.hash).toBe('');
+    expect(window.location.search).toBe('?x=1');
+    expect(takeCapabilityFromLocation()).toBeNull();
+  });
+
+  it('returns null for a page opened without one', () => {
+    window.history.replaceState(null, '', '/');
+    expect(takeCapabilityFromLocation()).toBeNull();
+    window.history.replaceState(null, '', '/#other=1');
+    expect(takeCapabilityFromLocation()).toBeNull();
+    expect(window.location.hash).toBe('');
+  });
+
+  it('shows the terminal-URL notice, and sends nothing, when the page has no key', async () => {
+    const requests: string[] = [];
+    route = url => {
+      requests.push(url.pathname);
+      return realFetch(url);
+    };
+
+    const view = render(<App capability={null} />);
+
+    expect(await view.findByText('Open the URL printed in the terminal')).toBeTruthy();
+    expect(view.getByTestId('capability-notice').textContent).toContain('#');
+    expect(requests).toEqual([]);
+  });
+
+  it('shows the same notice, not a connection error, when the server refuses the key', async () => {
+    const view = render(<App capability={`${CAPABILITY}-stale`} />);
+
+    expect(await view.findByText('Open the URL printed in the terminal')).toBeTruthy();
+    expect(view.queryByText('Could not reach the review server')).toBeNull();
+  });
+});
+
+describe('serve client', () => {
+  it('shows the connection notice, not a crash, when the config request fails', async () => {
+    route = () => Promise.reject(new TypeError('Failed to fetch'));
+
+    const view = render(<App capability={CAPABILITY} />);
+
+    expect(await view.findByText('Could not reach the review server')).toBeTruthy();
+    expect(view.getByText('Failed to fetch')).toBeTruthy();
+  });
+
+  it(
+    'keeps the review and its close guard after a failed publication, and retries to success',
+    async () => {
+      // A directory at the output path makes the publisher refuse; removing it and resubmitting succeeds.
+      fs.mkdirSync(outputPath);
+      const view = await mountWithUnsavedWork();
+
+      fireEvent.click(view.getByTestId('finish-review-btn'));
+
+      const notice = await view.findByTestId('submit-error', {}, { timeout: 10_000 });
+      expect(notice.textContent).toContain('output-is-directory');
+      expect(notice.textContent).toContain('it is a directory');
+      expect(notice.textContent).toMatch(/Finish Review again/);
+      expect(closeIsGuarded()).toBe(true);
+      expect(view.getByTestId('finish-review-btn')).toBeTruthy();
+      expect(exit).not.toHaveBeenCalled();
+
+      fs.rmdirSync(outputPath);
+      fireEvent.click(view.getByTestId('finish-review-btn'));
+
+      expect(await view.findByText('Review saved', {}, { timeout: 10_000 })).toBeTruthy();
+      expect(fs.readFileSync(outputPath, 'utf-8')).toContain('Needs a test.');
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+      expect(closeIsGuarded()).toBe(false);
+    },
+    CASE_TIMEOUT_MS
+  );
+
+  it(
+    "maps the server's 413 to the size message and lets the reviewer try again",
+    async () => {
+      let refusals = 0;
+      route = (url, init) => {
+        if (url.pathname === '/api/review' && refusals === 0) {
+          refusals += 1;
+          return Promise.resolve(
+            new Response(JSON.stringify({ error: 'request body too large' }), {
+              status: 413,
+              headers: { 'content-type': 'application/json' },
+            })
+          );
+        }
+        return realFetch(url, init);
+      };
+      const view = await mountWithUnsavedWork();
+
+      fireEvent.click(view.getByTestId('finish-review-btn'));
+
+      const notice = await view.findByTestId('submit-error', {}, { timeout: 10_000 });
+      expect(notice.textContent).toMatch(/32\.0 MB limit/);
+      expect(notice.textContent).toMatch(/attachments/i);
+      expect(closeIsGuarded()).toBe(true);
+
+      fireEvent.click(view.getByTestId('finish-review-btn'));
+
+      expect(await view.findByText('Review saved', {}, { timeout: 10_000 })).toBeTruthy();
+      expect(fs.existsSync(outputPath)).toBe(true);
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    },
+    CASE_TIMEOUT_MS
+  );
+});

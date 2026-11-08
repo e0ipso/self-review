@@ -620,6 +620,76 @@ export function createRenderedHtmlPayload(): DiffLoadPayload {
   };
 }
 
+// ── Hostile content fixture data ──
+// Mermaid CSS/HTML injection payloads (A7) and raw HTML using the app's
+// positioning utilities. None of it may escape its preview.
+
+function addedFile(path: string, lines: string[]): DiffFile {
+  return {
+    oldPath: '/dev/null',
+    newPath: path,
+    changeType: 'added',
+    isBinary: false,
+    hunks: [
+      {
+        header: `@@ -0,0 +1,${lines.length} @@`,
+        oldStart: 0,
+        oldLines: 0,
+        newStart: 1,
+        newLines: lines.length,
+        lines: lines.map(
+          (line, i): DiffLine => ({
+            type: 'addition',
+            oldLineNumber: null,
+            newLineNumber: i + 1,
+            content: line,
+          })
+        ),
+      },
+    ],
+  };
+}
+
+const OVERLAY_STYLE =
+  'position:fixed;inset:0;z-index:2147483647;background:black;color:white;font-size:48px';
+
+const hostileMarkdownFile = addedFile('docs/hostile.md', [
+  '# Hostile content',
+  '',
+  'A paragraph before the diagrams.',
+  '',
+  '```mermaid',
+  '%%{init: {"fontFamily": "x;a{b} :not(&){background:green !important} c{d}"}}%%',
+  'flowchart LR',
+  ' A --> B',
+  '```',
+  '',
+  '```mermaid',
+  'stateDiagram-v2',
+  ` classDef overlay fill:red</style></svg><div style="${OVERLAY_STYLE}">AUDIT OVERLAY</div><svg><style>a:b`,
+  ' [*] --> A:::overlay',
+  '```',
+  '',
+  `<div class="fixed inset-0 z-50 bg-black text-white" style="${OVERLAY_STYLE}">RAW HTML OVERLAY</div>`,
+  '',
+  'A paragraph after the diagrams.',
+]);
+
+const hostileHtmlFile = addedFile('docs/hostile.html', [
+  '<main>',
+  '  <h1>Hostile page</h1>',
+  `  <div class="fixed inset-0 z-50 bg-black text-white" style="${OVERLAY_STYLE}">HTML FILE OVERLAY</div>`,
+  '  <p>A trailing paragraph.</p>',
+  '</main>',
+]);
+
+export function createHostileContentPayload(): DiffLoadPayload {
+  return {
+    files: [hostileMarkdownFile, hostileHtmlFile],
+    source: { type: 'git' as const, gitDiffArgs: '', repository: '/mock-test-repo' },
+  };
+}
+
 /**
  * Walkthrough guide fixture matching `fixtureFiles` (the default diff
  * fixture). Display-ready payload, exactly what the Electron main process

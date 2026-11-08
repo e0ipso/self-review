@@ -1,10 +1,5 @@
 declare module 'prismjs/components/*';
 
-declare module '*.css?raw' {
-  const content: string;
-  export default content;
-}
-
 // @emoji-mart/data ships types for its interfaces but no default export.
 declare module '@emoji-mart/data' {
   interface Emoji {

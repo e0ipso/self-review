@@ -4,12 +4,18 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
+  useRef,
   ReactNode,
 } from 'react';
 
 export interface DiffNavigationContextValue {
   activeFilePath: string | null;
   scrollToFile: (filePath: string) => void;
+  /** Lookup by path, never a CSS selector: quotes, backslashes and newlines break selectors. */
+  registerFileElement: (filePath: string, element: HTMLElement) => void;
+  unregisterFileElement: (filePath: string, element: HTMLElement) => void;
+  getFileElement: (filePath: string) => HTMLElement | null;
 }
 
 const DiffNavigationContext = createContext<DiffNavigationContextValue | null>(null);
@@ -33,14 +39,30 @@ export function useOptionalDiffNavigation(): DiffNavigationContextValue | null {
 
 export function DiffNavigationProvider({ children }: { children: ReactNode }) {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const fileElements = useRef(new Map<string, HTMLElement>());
 
-  const scrollToFile = useCallback((filePath: string) => {
-    const scrollContainer = document.querySelector('[data-scroll-container="diff"]');
-    const element = scrollContainer?.querySelector(`[data-file-path="${filePath}"]`);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const registerFileElement = useCallback((filePath: string, element: HTMLElement) => {
+    fileElements.current.set(filePath, element);
+  }, []);
+
+  const unregisterFileElement = useCallback((filePath: string, element: HTMLElement) => {
+    // Two sections can briefly share a path; only the still-registered element may unregister.
+    if (fileElements.current.get(filePath) === element) {
+      fileElements.current.delete(filePath);
     }
   }, []);
+
+  const getFileElement = useCallback(
+    (filePath: string) => fileElements.current.get(filePath) ?? null,
+    []
+  );
+
+  const scrollToFile = useCallback(
+    (filePath: string) => {
+      getFileElement(filePath)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    [getFileElement]
+  );
 
   useEffect(() => {
     // Set up IntersectionObserver to track which file section is visible
@@ -102,9 +124,16 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return (
-    <DiffNavigationContext.Provider value={{ activeFilePath, scrollToFile }}>
-      {children}
-    </DiffNavigationContext.Provider>
+  const value = useMemo(
+    () => ({
+      activeFilePath,
+      scrollToFile,
+      registerFileElement,
+      unregisterFileElement,
+      getFileElement,
+    }),
+    [activeFilePath, scrollToFile, registerFileElement, unregisterFileElement, getFileElement]
   );
+
+  return <DiffNavigationContext.Provider value={value}>{children}</DiffNavigationContext.Provider>;
 }

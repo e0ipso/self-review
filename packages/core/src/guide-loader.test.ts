@@ -4,10 +4,16 @@
 // code), matching the rest of the main-process suite.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { readFile } from 'fs/promises';
+import { readFileWithinBudget } from './bounded-read';
 import { deriveGuidePath, resolveGuidePath, loadGuide } from './guide-loader';
+import { MAX_GUIDE_BYTES } from './input-budgets';
 
-vi.mock('fs/promises');
+vi.mock('./bounded-read');
+
+/** The bounded reader's answer for a guide file holding `text`. */
+function guideContent(text: string) {
+  return { kind: 'ok' as const, content: Buffer.from(text, 'utf-8') };
+}
 
 function fsError(code: string, message: string): NodeJS.ErrnoException {
   const error: NodeJS.ErrnoException = new Error(message);
@@ -84,7 +90,9 @@ describe('loadGuide', () => {
   });
 
   it('returns null silently when the guide file is missing', async () => {
-    vi.mocked(readFile).mockRejectedValue(fsError('ENOENT', 'no such file or directory'));
+    vi.mocked(readFileWithinBudget).mockRejectedValue(
+      fsError('ENOENT', 'no such file or directory')
+    );
 
     const payload = await loadGuide('/work/review.xml', {}, ['src/retry.ts']);
 
@@ -93,7 +101,7 @@ describe('loadGuide', () => {
   });
 
   it('returns null with exactly one stderr warning when the file is unreadable', async () => {
-    vi.mocked(readFile).mockRejectedValue(fsError('EACCES', 'permission denied'));
+    vi.mocked(readFileWithinBudget).mockRejectedValue(fsError('EACCES', 'permission denied'));
 
     const payload = await loadGuide('/work/review.xml', {}, ['src/retry.ts']);
 
@@ -105,7 +113,7 @@ describe('loadGuide', () => {
   });
 
   it('returns null with exactly one stderr warning for an invalid guide', async () => {
-    vi.mocked(readFile).mockResolvedValue('this is not xml at all');
+    vi.mocked(readFileWithinBudget).mockResolvedValue(guideContent('this is not xml at all'));
 
     const payload = await loadGuide('/work/review.xml', {}, ['src/retry.ts']);
 
@@ -117,7 +125,7 @@ describe('loadGuide', () => {
   });
 
   it('returns the reconciled payload for a valid guide', async () => {
-    vi.mocked(readFile).mockResolvedValue(VALID_GUIDE_XML);
+    vi.mocked(readFileWithinBudget).mockResolvedValue(guideContent(VALID_GUIDE_XML));
 
     const payload = await loadGuide('/work/review.xml', {}, ['src/retry.ts', 'src/unmentioned.ts']);
 
@@ -141,10 +149,13 @@ describe('loadGuide', () => {
   });
 
   it('reads from the guide-file override path when configured', async () => {
-    vi.mocked(readFile).mockResolvedValue(VALID_GUIDE_XML);
+    vi.mocked(readFileWithinBudget).mockResolvedValue(guideContent(VALID_GUIDE_XML));
 
     await loadGuide('/work/review.xml', { guideFile: '/custom/guide.xml' }, ['src/retry.ts']);
 
-    expect(vi.mocked(readFile)).toHaveBeenCalledWith('/custom/guide.xml', 'utf-8');
+    expect(vi.mocked(readFileWithinBudget)).toHaveBeenCalledWith(
+      '/custom/guide.xml',
+      MAX_GUIDE_BYTES
+    );
   });
 });

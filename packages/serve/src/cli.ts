@@ -14,6 +14,8 @@ import { parseServeArgs } from './args';
 import { resolveSession } from './startup';
 import { completeReviewOnSubmit } from './lifecycle';
 import { createReviewServer, listenLoopback } from './server';
+import { generateCapability } from './capability';
+import { formatLaunchUrl } from './protocol';
 
 const HELP = `
 self-review-serve - Serve the self-review interface over HTTP
@@ -36,15 +38,22 @@ Examples:
   self-review-serve main..feature-branch
   self-review-serve --resume-from review.xml    # resume a previous review
 
-The URL is printed to stderr on start. The output path is fixed by the
-arguments above and cannot be changed from the browser. Completing the review
-writes that file and stops this process. Nothing is saved before then, and
-closing the tab once you have written a comment warns you first.
+The URL is printed to stderr on start. Open exactly that URL: the part after
+'#' is this session's key, drawn fresh each start, and the browser keeps it
+out of the address bar once the page has loaded. A reloaded or retyped
+address has no key and the page says so; if the URL is lost, stop this
+process and start it again. Over ssh, forward the port (ssh -L) and open the
+same URL against the forwarded port, keeping the '#' part.
 
-The listener binds to 127.0.0.1 and refuses any request that names another
-host or origin, so a web page cannot reach it. There is no authentication:
-anything that can reach the port can read the diff and complete the review,
-which on a shared host means every local user. An ssh -L forward works.
+The output path is fixed by the arguments above and cannot be changed from
+the browser. Completing the review writes that file and stops this process.
+Nothing is saved before then, and closing the tab once you have written a
+comment warns you first. If the file cannot be written, the browser says why
+and keeps the review; fix the problem and press Finish Review again.
+
+The listener binds to 127.0.0.1, refuses any request that names another host
+or origin so a web page cannot reach it, and refuses any API request without
+the key, so another account on the same host cannot either.
 `.trim();
 
 function printVersion(): void {
@@ -71,15 +80,20 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { session, repositoryRoot, outputPath } = await resolveSession(args);
+  const { session, output } = await resolveSession(args);
 
-  const server = createReviewServer({ session, repositoryRoot });
-  completeReviewOnSubmit({ server, session, outputPath });
+  // Leaves only in the printed URL's fragment; the server never sends it.
+  const capability = generateCapability();
+  const server = createReviewServer({ session, output, capability });
+  completeReviewOnSubmit({ server });
 
   const { url } = await listenLoopback(server);
-  console.error(`[serve] Review ready at ${url}`);
-  console.error(`[serve] Completing the review writes ${outputPath} and stops this process.`);
-  console.error('[serve] The listener is loopback-only and unauthenticated.');
+  console.error(`[serve] Review ready at ${formatLaunchUrl(url, capability)}`);
+  console.error(`[serve] Completing the review writes ${output.path} and stops this process.`);
+  console.error(
+    '[serve] The listener is loopback-only. The part of the URL after # is this ' +
+      "session's key: open the URL exactly as printed, and do not share it."
+  );
 }
 
 main().catch(error => {

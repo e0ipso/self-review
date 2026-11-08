@@ -71,8 +71,7 @@ function renderContentArea(overrides: Partial<DiffContentAreaProps> = {}) {
     renderedTextMode: 'html',
     showImagePreview: false,
     showSvgPreview: false,
-    contentLoading: false,
-    contentError: false,
+    contentLoad: { kind: 'idle' },
     onRetry: vi.fn(),
     commentRange: null,
     dragState: null,
@@ -164,5 +163,21 @@ describe('DiffContentArea rendered preview dispatch', () => {
 
     expect(screen.getByTestId('unified-view')).toBeTruthy();
     expect(screen.queryByTestId('rendered-text-view')).toBeNull();
+  });
+});
+
+describe('DiffContentArea omitted content', () => {
+  it('shows why a file was listed without content instead of "No changes to display"', () => {
+    const reason = 'Not loaded: this file is 7 MiB, over the 5 MiB per-file read budget.';
+    renderContentArea({
+      file: makeFile('huge.log', { hunks: [], omittedReason: reason }),
+      renderViewMode: 'raw',
+      isEligibleForRenderedView: false,
+      renderedTextMode: null,
+      contentLoad: { kind: 'loaded' },
+    });
+
+    expect(screen.getByTestId('content-omitted').textContent).toContain(reason);
+    expect(screen.queryByText('No changes to display')).toBeNull();
   });
 });

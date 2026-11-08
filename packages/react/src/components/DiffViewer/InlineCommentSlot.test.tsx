@@ -4,8 +4,19 @@ import { InlineCommentSlot } from './InlineCommentSlot';
 import type { ReviewComment } from '@self-review/types';
 
 vi.mock('../Comments/CommentDisplay', () => ({
-  default: ({ comment }: { comment: ReviewComment }) => (
-    <div data-testid={`comment-${comment.id}`}>{comment.body}</div>
+  default: ({
+    comment,
+    anchorFullyVisible,
+  }: {
+    comment: ReviewComment;
+    anchorFullyVisible?: boolean;
+  }) => (
+    <div
+      data-testid={`comment-${comment.id}`}
+      data-anchor-fully-visible={String(anchorFullyVisible ?? true)}
+    >
+      {comment.body}
+    </div>
   ),
 }));
 
@@ -90,5 +101,24 @@ describe('InlineCommentSlot', () => {
     );
     const divs = container.querySelectorAll('.ml-\\[100px\\]');
     expect(divs.length).toBeGreaterThan(0);
+  });
+});
+
+describe('InlineCommentSlot anchor visibility', () => {
+  it('flags a line comment whose visible code cannot be extracted as not fully visible', () => {
+    const { getByTestId } = render(
+      <InlineCommentSlot
+        commentsToRender={[makeComment('gap'), makeComment('full')]}
+        showCommentInput={false}
+        commentRange={null}
+        filePath='src/foo.ts'
+        originalCode={undefined}
+        onCancel={() => {}}
+        onSaved={() => {}}
+        getOriginalCodeForComment={comment => (comment.id === 'full' ? 'code' : undefined)}
+      />
+    );
+    expect(getByTestId('comment-gap').getAttribute('data-anchor-fully-visible')).toBe('false');
+    expect(getByTestId('comment-full').getAttribute('data-anchor-fully-visible')).toBe('true');
   });
 });

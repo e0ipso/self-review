@@ -58,10 +58,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send(IPC.REVIEW_SUBMIT, state);
   },
 
-  onRequestReview: (callback: () => void) => {
-    ipcRenderer.on('review:request', () => callback());
-  },
-
   onCloseRequested: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on(IPC.APP_CLOSE_REQUESTED, handler);

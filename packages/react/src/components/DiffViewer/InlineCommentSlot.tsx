@@ -12,6 +12,7 @@ export interface InlineCommentSlotProps {
   onCancel: () => void;
   onSaved: () => void;
   indentClass?: string;
+  /** `undefined` for a line comment means the range is not fully visible (see `extractOriginalCode`). */
   getOriginalCodeForComment?: (comment: ReviewComment) => string | undefined;
 }
 
@@ -34,15 +35,21 @@ export function InlineCommentSlot({
         <div
           className={`border-y border-border bg-muted/50 px-4 py-3 space-y-2${indentClass ? ` ${indentClass}` : ''}`}
         >
-          {commentsToRender.map(comment => (
-            <CommentDisplay
-              key={comment.id}
-              comment={comment}
-              originalCode={
-                getOriginalCodeForComment ? getOriginalCodeForComment(comment) : undefined
-              }
-            />
-          ))}
+          {commentsToRender.map(comment => {
+            const visibleCode = getOriginalCodeForComment?.(comment);
+            return (
+              <CommentDisplay
+                key={comment.id}
+                comment={comment}
+                originalCode={visibleCode}
+                anchorFullyVisible={
+                  !getOriginalCodeForComment ||
+                  comment.lineRange === null ||
+                  visibleCode !== undefined
+                }
+              />
+            );
+          })}
         </div>
       )}
       {showCommentInput && commentRange && (

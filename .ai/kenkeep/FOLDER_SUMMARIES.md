@@ -32,6 +32,9 @@ summaries:
     cross-cutting engineering conventions on scope, simplicity, code reuse,
     testing, and commits; read when deciding how to implement or verify any
     change
+  knowledge-base: >-
+    kenkeep capture, curation, node layout and maintenance commands; read when
+    processing sessions or maintaining project knowledge
   knowledge-base/bootstrap: >-
     the bootstrap skill's scope, reading strategy, and node-authoring
     safeguards; read when seeding the knowledge base from existing documentation
@@ -91,6 +94,9 @@ summaries:
   review-xml/schema: >-
     review XML schema and validation contract; read when changing the document
     format or XSD
+  skills: >-
+    review generation, feedback application and guide portability; read when
+    authoring or consuming review artifacts
   skills/apply: >-
     the self-review-apply skill's workflow for consuming review.xml feedback;
     read when applying review comments and suggestions to code
@@ -109,10 +115,6 @@ summaries:
   skills/critique/suggestions: >-
     actionable critique suggestions; read when constructing exact replacement
     suggestions
-  knowledge-base: kenkeep capture, curation, node layout and maintenance commands; read when
-    processing sessions or maintaining project knowledge
-  skills: review generation, feedback application and guide portability; read when
-    authoring or consuming review artifacts
 ---
 # kenkeep Folder Summaries
 
@@ -125,6 +127,7 @@ summaries:
 - `app/ui/lifecycle`: review save and exit behavior; read when changing Finish Review or window-close flows
 - `app/ui/previews`: rendered previews and diff presentation rules; read when changing preview modes or syntax highlighting
 - `engineering`: cross-cutting engineering conventions on scope, simplicity, code reuse, testing, and commits; read when deciding how to implement or verify any change
+- `knowledge-base`: kenkeep capture, curation, node layout and maintenance commands; read when processing sessions or maintaining project knowledge
 - `knowledge-base/bootstrap`: the bootstrap skill's scope, reading strategy, and node-authoring safeguards; read when seeding the knowledge base from existing documentation
 - `knowledge-base/bootstrap/admission`: bootstrap candidate admission and collision handling; read when deciding which extracted nodes to keep
 - `knowledge-base/bootstrap/discovery`: bootstrap discovery and source selection; read when choosing documentation scope or candidate files
@@ -145,6 +148,7 @@ summaries:
 - `review-xml/comments`: review comment content and metadata rules; read when parsing or emitting comment bodies, categories, attribution, or renames
 - `review-xml/line-anchors`: review comment line-anchor rules; read when mapping comments to old or new diff lines
 - `review-xml/schema`: review XML schema and validation contract; read when changing the document format or XSD
+- `skills`: review generation, feedback application and guide portability; read when authoring or consuming review artifacts
 - `skills/apply`: the self-review-apply skill's workflow for consuming review.xml feedback; read when applying review comments and suggestions to code
 - `skills/critique`: the self-review-critique skill's diff selection, comment authoring, and validation rules; read when generating review.xml from a diff
 - `skills/critique/configuration`: critique skill invocation and category configuration; read when starting a critique or choosing output categories

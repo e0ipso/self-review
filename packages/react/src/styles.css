@@ -96,11 +96,11 @@
 /* Ultra-subtle scrollbars */
 .self-review * {
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
 }
 
 .self-review *:hover {
-  scrollbar-color: hsl(var(--border) / 0.3) transparent;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.55) transparent;
 }
 
 .self-review *::-webkit-scrollbar {
@@ -113,16 +113,16 @@
 }
 
 .self-review *::-webkit-scrollbar-thumb {
-  background: transparent;
+  background: hsl(var(--muted-foreground) / 0.35);
   border-radius: 3px;
 }
 
 .self-review *:hover::-webkit-scrollbar-thumb {
-  background: hsl(var(--border) / 0.3);
+  background: hsl(var(--muted-foreground) / 0.55);
 }
 
 .self-review *::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--border) / 0.5);
+  background: hsl(var(--muted-foreground) / 0.7);
 }
 
 /* Prevent Tailwind .table utility from overriding Prism token spans */
@@ -166,6 +166,28 @@
 .self-review .md-editor-comment .w-md-editor-text-pre {
   font-size: 0.875rem !important;
   line-height: 1.25rem !important;
+}
+
+/* Diff code text follows the configured `font-size`: ConfigProvider sets
+ * --sr-font-size on the .self-review root. The line height scales with it but
+ * never drops below the 22px diff row the gutters are laid out against. */
+.self-review .sr-diff-code {
+  font-size: var(--sr-font-size, 14px);
+  line-height: max(22px, calc(var(--sr-font-size, 14px) * 1.5));
+}
+
+/* Rendered text previews are contained. Reviewed Markdown, HTML and guide
+ * prose keeps its `class`/`style` stripped (passive-content.ts), and the
+ * surface it renders into clips and isolates whatever is left: fixed or
+ * absolutely positioned content cannot escape the preview to cover the
+ * file tree, toolbar or Finish Review control, and no stacking order
+ * inside it competes with the app's own. */
+.self-review .rendered-markdown-view,
+.self-review .guide-overview-prose {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  contain: layout paint;
 }
 
 /* Rendered markdown view: override prose margins */

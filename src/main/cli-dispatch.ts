@@ -23,6 +23,7 @@
 // outside a packaged build.
 
 import { spawnSync } from 'child_process';
+import { constants as osConstants } from 'os';
 import { checkEarlyExit, parseCliArgs } from './cli';
 import type { CliArgs, EarlyExitInfo } from './cli';
 import { reexecFromRealPathIfNeeded, resolveReexecExit } from './relaunch-guard';
@@ -108,7 +109,12 @@ export interface CliDispatchDeps {
   parseArgs: () => CliArgs;
   needsReexec: () => boolean;
   reexec: () => void;
-  fetchComments: (url: string, options: { includeResolved: boolean }) => Promise<void>;
+  fetchComments: (
+    url: string,
+    options: { includeResolved: boolean; signal: AbortSignal }
+  ) => Promise<void>;
+  /** Subscribes to SIGINT/SIGTERM and returns the unsubscribe; cancelling lets Ctrl+C remove the temporary clone. */
+  onTerminationSignal: (handler: (signal: NodeJS.Signals) => void) => () => void;
   logError: (message: string) => void;
   exit: (code: number) => void;
 }
@@ -120,6 +126,14 @@ export const defaultCliDispatchDeps: CliDispatchDeps = {
   needsReexec: () => needsHeadlessReexec(process.platform, process.argv, process.env),
   reexec: reexecHeadless,
   fetchComments: runFetchComments,
+  onTerminationSignal: handler => {
+    process.on('SIGINT', handler);
+    process.on('SIGTERM', handler);
+    return () => {
+      process.off('SIGINT', handler);
+      process.off('SIGTERM', handler);
+    };
+  },
   logError: message => console.error(message),
   exit: code => process.exit(code),
 };
@@ -151,15 +165,30 @@ export function dispatchCli(deps: CliDispatchDeps = defaultCliDispatchDeps): boo
     return true;
   }
 
+  // No overall deadline (each git command has its own timeout); SIGINT/SIGTERM cancel, and the exit code is 128 + signal.
+  const controller = new AbortController();
+  let interruptedBy: NodeJS.Signals | null = null;
+  const unsubscribe = deps.onTerminationSignal(signal => {
+    if (interruptedBy) return;
+    interruptedBy = signal;
+    deps.logError(`[fetch-comments] ${signal} received — cancelling and cleaning up`);
+    controller.abort(new Error(`${signal} received`));
+  });
+
   // parseCliArgs exits itself on a missing URL, so remoteUrl is set here.
   deps
     .fetchComments(args.remoteUrl as string, {
       includeResolved: args.allThreads,
+      signal: controller.signal,
     })
-    .then(() => deps.exit(0))
+    .then(() => {
+      unsubscribe();
+      deps.exit(0);
+    })
     .catch(error => {
+      unsubscribe();
       deps.logError(`[fetch-comments] ${error instanceof Error ? error.message : String(error)}`);
-      deps.exit(1);
+      deps.exit(interruptedBy ? 128 + osConstants.signals[interruptedBy] : 1);
     });
   return true;
 }

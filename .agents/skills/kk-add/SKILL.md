@@ -3,7 +3,7 @@ name: kk-add
 description: Capture a kenkeep node manually from the current session. Writes a new node directly under `.ai/kenkeep/nodes/`. The reviewer accepts by leaving the file in place and rejects by deleting it. Use when the user wants to record a project convention, gotcha, rationale, or named-thing into the project knowledge base.
 ---
 
-<!-- Version: 7 -->
+<!-- Version: 8 -->
 
 # kk-add
 
@@ -15,10 +15,20 @@ Before invoking, skim `.ai/kenkeep/ENTRY.md` (already in context) and grep `node
 
 ## Resolve the project root
 
-Resolve the repo root (the directory containing `.ai/kenkeep`) with the shipped detector, then treat the printed path as the working directory for every command below:
+Resolve the repo root (the directory containing `.ai/kenkeep`) with the shipped detector, then treat the printed path as the working directory for every command below. The snippet first walks up from the current directory to the installed detector, so it also works when started from a nested package directory:
 
 ```bash
-KK_REPO_ROOT=$(node .ai/kenkeep/scripts/kk-detect-root.mjs) || exit $?
+KK_REPO_ROOT=$(
+  d=$PWD
+  until [ -f "$d/.ai/kenkeep/scripts/kk-detect-root.mjs" ]; do
+    if [ "$d" = / ]; then
+      echo 'kk-detect-root: no .ai/kenkeep/scripts/kk-detect-root.mjs in this directory or its parents.' >&2
+      exit 2
+    fi
+    d=$(dirname "$d")
+  done
+  cd "$d" && node .ai/kenkeep/scripts/kk-detect-root.mjs
+) || exit $?
 cd "$KK_REPO_ROOT" || exit $?
 pwd
 ```

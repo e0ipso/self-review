@@ -39,6 +39,8 @@ export function getChangeTypeInfo(changeType: DiffFile['changeType']): {
       return { label: 'D', className: 'bg-red-500/15 text-red-700 dark:text-red-400' };
     case 'renamed':
       return { label: 'R', className: 'bg-blue-500/15 text-blue-700 dark:text-blue-400' };
+    case 'copied':
+      return { label: 'C', className: 'bg-violet-500/15 text-violet-700 dark:text-violet-400' };
     default:
       return { label: '?', className: '' };
   }

@@ -1,11 +1,11 @@
-// Eight JSON routes over one ReviewSession, each a thin wrapper over a function
+// Nine JSON routes over one ReviewSession, each a thin wrapper over a function
 // core already exports, plus static serving for the client bundle. node:http,
 // no framework.
 //
-// Two properties are load-bearing: every route validates before core runs, and
-// the listener both binds to loopback and refuses requests that name anything
-// else. Binding alone is not enough — a web page can reach a loopback port, and
-// DNS rebinding would make it same-origin. There is no authentication.
+// Three properties are load-bearing: every route validates before core runs; the listener both binds
+// to loopback and refuses requests that name anything else (a web page can reach loopback, and DNS
+// rebinding would make it same-origin); and every API route requires the session capability (see ./protocol.ts).
+// `POST /api/review` publishes before it answers.
 
 import * as fs from 'node:fs';
 import * as http from 'node:http';
@@ -13,42 +13,56 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import {
+  authorizeReviewedPath,
   getDiffLoad,
   getConfigLoad,
   getResumeLoad,
   getFileHunks,
   loadImage,
+  parseAttachmentReference,
   readAttachment,
   expandContext,
   submitReviewState,
   applySuggestionForSession,
+  publishOptionsFor,
+  publishReview,
+  ReviewPublishError,
 } from '@self-review/core';
-import type { ReviewSession } from '@self-review/core';
+import type {
+  ReviewOutputTarget as CoreReviewOutputTarget,
+  ReviewPublishErrorCode,
+  ReviewSession,
+  ReviewState,
+} from '@self-review/core';
 import {
   containPath,
   parseExpandContextBody,
   parseReviewStateBody,
   parseSuggestionApplyBody,
 } from './validate';
+import { capabilityMatches } from './capability';
+import { CAPABILITY_SCHEME, MAX_REVIEW_BODY_BYTES } from './protocol';
+import type { ReviewSubmitAck, ReviewSubmitFailure } from './protocol';
 
-/** `client/` next to this module, which is `dist/client/` once built. */
-export const CLIENT_DIR = fileURLToPath(new URL('./client/', import.meta.url));
+export { MAX_REVIEW_BODY_BYTES } from './protocol';
+
+// Resolved on demand: `import.meta.url` is not a `file:` URL under the client suite's browser-like environment.
+export function defaultClientDir(): string {
+  return fileURLToPath(new URL('./client/', import.meta.url));
+}
 
 /** Upper bound on a `POST /api/expand-context` body: a path and an integer. */
 export const MAX_EXPAND_CONTEXT_BODY_BYTES = 64 * 1024;
 
-/** Generous but finite: an unbounded read is a trivial denial of service. */
-export const MAX_REVIEW_BODY_BYTES = 32 * 1024 * 1024;
+export type ReviewOutputTarget = CoreReviewOutputTarget;
 
 export interface ReviewServerOptions {
-  /** The session every route acts on; held for the process lifetime. */
+  /** Every request-supplied diff path is authorized against this session's source identity by core (audit A6). */
   session: ReviewSession;
-  /**
-   * Root every request-supplied path is contained under. Must match what core
-   * resolves against, or containment guarantees nothing.
-   */
-  repositoryRoot: string;
-  /** Directory of the client bundle. Defaults to `CLIENT_DIR`; tests inject a fixture. */
+  output: ReviewOutputTarget;
+  /** Bearer token every `/api/` request must present; the server never sends it. */
+  capability: string;
+  /** Directory of the client bundle. Defaults to `defaultClientDir()`; tests inject a fixture. */
   clientDir?: string;
 }
 
@@ -57,7 +71,7 @@ interface RouteContext {
   res: http.ServerResponse;
   url: URL;
   session: ReviewSession;
-  repositoryRoot: string;
+  output: ReviewOutputTarget;
 }
 
 type RouteHandler = (ctx: RouteContext) => Promise<void>;
@@ -208,19 +222,40 @@ function sendError(res: http.ServerResponse, status: number, error: string): voi
   sendJson(res, status, { error }, status === 413 ? { connection: 'close' } : {});
 }
 
-/**
- * Contain the `path` parameter under the repository root. Returns it both as
- * sent (core interprets it relative to the repository) and resolved (for a
- * handler reading disk directly), or answers 400 and returns null.
- */
-function requireContainedPath(ctx: RouteContext): { raw: string; resolved: string } | null {
+// Header only: a token in the query string would land in history and logs.
+function presentsCapability(req: http.IncomingMessage, capability: string): boolean {
+  const header = req.headers.authorization;
+  if (header === undefined) return false;
+  const space = header.indexOf(' ');
+  if (space === -1) return false;
+  if (header.slice(0, space).toLowerCase() !== CAPABILITY_SCHEME.toLowerCase()) return false;
+  return capabilityMatches(capability, header.slice(space + 1).trim());
+}
+
+function sendUnauthorized(res: http.ServerResponse): void {
+  sendJson(res, 401, { error: 'unauthorized' }, { 'www-authenticate': CAPABILITY_SCHEME });
+}
+
+const REVIEWED_PATH_ERROR = 'path must name a file in the reviewed diff';
+
+/** Core's authorization; answers 400 and returns false when `filePath` is not a reviewed path. */
+function requireReviewedPath(ctx: RouteContext, filePath: string, what = 'path'): boolean {
+  if (authorizeReviewedPath(ctx.session, filePath).ok) return true;
+  sendError(
+    ctx.res,
+    400,
+    what === 'path' ? REVIEWED_PATH_ERROR : `${what} must name a file in the reviewed diff`
+  );
+  return false;
+}
+
+function requireReviewedQueryPath(ctx: RouteContext): string | null {
   const raw = ctx.url.searchParams.get('path');
-  const resolved = raw ? containPath(ctx.repositoryRoot, raw) : null;
-  if (raw === null || resolved === null) {
-    sendError(ctx.res, 400, 'path must be a file under the repository root');
+  if (raw === null) {
+    sendError(ctx.res, 400, REVIEWED_PATH_ERROR);
     return null;
   }
-  return { raw, resolved };
+  return requireReviewedPath(ctx, raw) ? raw : null;
 }
 
 type BodyResult = { ok: true; value: unknown } | { ok: false; status: number; error: string };
@@ -287,36 +322,31 @@ const routes: Record<string, RouteHandler> = {
   },
 
   'GET /api/file': async ctx => {
-    const contained = requireContainedPath(ctx);
-    if (contained === null) return;
-    // Diff paths are repository-relative strings; core matches on them as sent.
-    sendJson(ctx.res, 200, getFileHunks(ctx.session, contained.raw));
+    const filePath = requireReviewedQueryPath(ctx);
+    if (filePath === null) return;
+    // Diff paths are source-relative strings; core matches on them as sent.
+    sendJson(ctx.res, 200, getFileHunks(ctx.session, filePath));
   },
 
   'GET /api/image': async ctx => {
-    const contained = requireContainedPath(ctx);
-    if (contained === null) return;
-    // Core resolves against the repository itself, so it gets the raw value.
-    sendJson(ctx.res, 200, await loadImage(ctx.session, contained.raw));
+    const filePath = requireReviewedQueryPath(ctx);
+    if (filePath === null) return;
+    // Core reads the reviewed snapshot under the same identity it just authorized.
+    sendJson(ctx.res, 200, await loadImage(ctx.session, filePath));
   },
 
   'GET /api/attachment': async ctx => {
-    // A different namespace from diff paths, and a different root: review.xml
-    // records these relative to the output file's directory. Rooting them at
-    // the repository 404s every resumed image when -o points elsewhere.
-    const assetRoot = ctx.session.outputPathInfo
-      ? path.dirname(ctx.session.outputPathInfo.resolvedOutputPath)
-      : ctx.repositoryRoot;
+    // Not a diff path: a `.self-review-assets/<name>` reference core resolves itself; only its shape is checked here.
     const raw = ctx.url.searchParams.get('path');
-    const resolved = raw ? containPath(assetRoot, raw) : null;
-    if (resolved === null) {
-      sendError(ctx.res, 400, 'path must be a file under the output directory');
+    if (raw === null || parseAttachmentReference(raw) === null) {
+      sendError(ctx.res, 400, 'path must name a file in the .self-review-assets directory');
       return;
     }
-    // Core reads this path from disk directly, so it gets the contained real path.
-    const data = await readAttachment(resolved);
-    if (data === null) {
-      sendError(ctx.res, 404, 'attachment not found');
+    const result = await readAttachment(ctx.session, raw);
+    if (!result.ok) {
+      const status =
+        result.reason === 'not-authorized' ? 400 : result.reason === 'too-large' ? 413 : 404;
+      sendError(ctx.res, status, status === 404 ? 'attachment not found' : result.message);
       return;
     }
     const { res } = ctx;
@@ -325,10 +355,11 @@ const routes: Record<string, RouteHandler> = {
       'cache-control': 'no-store',
       ...SECURITY_HEADERS,
     });
-    res.end(Buffer.from(data));
+    res.end(Buffer.from(result.data));
   },
 
-  'POST /api/expand-context': async ({ req, res, session, repositoryRoot }) => {
+  'POST /api/expand-context': async ctx => {
+    const { req, res, session } = ctx;
     const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES);
     if (!body.ok) {
       sendError(res, body.status, body.error);
@@ -339,19 +370,15 @@ const routes: Record<string, RouteHandler> = {
       sendError(res, 400, parsed.error);
       return;
     }
-    // Becomes a git pathspec; contain it, then pass it through as sent.
-    if (containPath(repositoryRoot, parsed.value.filePath) === null) {
-      sendError(res, 400, 'filePath must be a file under the repository root');
-      return;
-    }
+    // Becomes a git pathspec; authorized as a reviewed path, then passed through as sent.
+    if (!requireReviewedPath(ctx, parsed.value.filePath, 'filePath')) return;
     sendJson(res, 200, await expandContext(session, parsed.value));
   },
 
-  // The one route that rewrites a file in the reviewed tree. Core refuses
-  // unless the anchored lines still match the suggestion's recorded original
-  // byte for byte, and resolves the destination itself; the path is contained
-  // here so a request cannot even name a file outside the repository.
-  'POST /api/apply-suggestion': async ({ req, res, session, repositoryRoot }) => {
+  // The one route that rewrites a file in the reviewed tree. Core refuses unless the anchored lines still
+  // match the suggestion's recorded original byte for byte, and resolves the destination itself.
+  'POST /api/apply-suggestion': async ctx => {
+    const { req, res, session } = ctx;
     const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES);
     if (!body.ok) {
       sendError(res, body.status, body.error);
@@ -362,14 +389,12 @@ const routes: Record<string, RouteHandler> = {
       sendError(res, 400, parsed.error);
       return;
     }
-    if (containPath(repositoryRoot, parsed.value.filePath) === null) {
-      sendError(res, 400, 'filePath must be a file under the repository root');
-      return;
-    }
+    if (!requireReviewedPath(ctx, parsed.value.filePath, 'filePath')) return;
     sendJson(res, 200, applySuggestionForSession(session, parsed.value));
   },
 
-  'POST /api/review': async ({ req, res, session }) => {
+  // The completion: a 200 means the file is on disk; a failure leaves the server up for a retry.
+  'POST /api/review': async ({ req, res, session, output }) => {
     const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES);
     if (!body.ok) {
       sendError(res, body.status, body.error);
@@ -381,9 +406,47 @@ const routes: Record<string, RouteHandler> = {
       return;
     }
     submitReviewState(session, parsed.value);
-    sendJson(res, 200, null);
+    const outcome = await publishSubmittedReview(parsed.value, output, session);
+    if (outcome.ok) {
+      sendJson(res, 200, outcome);
+    } else {
+      sendJson(res, publishFailureStatus(outcome.code), outcome);
+    }
   },
 };
+
+// Publisher failures are returned, not thrown, so the route answers and keeps serving.
+async function publishSubmittedReview(
+  state: ReviewState,
+  output: ReviewOutputTarget,
+  session: ReviewSession
+): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
+  const options = publishOptionsFor(output, session.attachmentOrigins);
+  try {
+    const { outputPath } = await publishReview(state, output.path, options);
+    console.error(`[serve] Review written to ${outputPath}`);
+    return { ok: true, outputPath };
+  } catch (error) {
+    if (!(error instanceof ReviewPublishError)) throw error;
+    console.error(`[serve] Review not saved (${error.code}): ${error.message}`);
+    for (const detail of error.details) {
+      console.error(`[serve]   ${detail}`);
+    }
+    console.error(
+      '[serve] The review is still open in the browser. Fix the problem and press Finish Review again.'
+    );
+    return { ok: false, code: error.code, message: error.message, details: [...error.details] };
+  }
+}
+
+const DOCUMENT_ERROR_CODES: ReadonlySet<ReviewPublishErrorCode> = new Set([
+  'validation-failed',
+  'xml-illegal-character',
+]);
+
+function publishFailureStatus(code: ReviewPublishErrorCode): number {
+  return DOCUMENT_ERROR_CODES.has(code) ? 422 : 500;
+}
 
 const ROUTE_PATHS = new Set(Object.keys(routes).map(key => key.split(' ')[1]));
 
@@ -437,7 +500,7 @@ async function serveStatic(
  * listening: bind it with `listenLoopback`.
  */
 export function createReviewServer(options: ReviewServerOptions): http.Server {
-  const { session, repositoryRoot, clientDir = CLIENT_DIR } = options;
+  const { session, output, capability, clientDir = defaultClientDir() } = options;
 
   return http.createServer(async (req, res) => {
     const method = req.method ?? 'GET';
@@ -455,10 +518,16 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
       return;
     }
 
+    // Assets are served to anyone; every /api/ route is refused before lookup, so the route table does not leak.
+    if (url.pathname.startsWith('/api/') && !presentsCapability(req, capability)) {
+      sendUnauthorized(res);
+      return;
+    }
+
     try {
       const handler = routes[`${method} ${url.pathname}`];
       if (handler) {
-        await handler({ req, res, url, session, repositoryRoot });
+        await handler({ req, res, url, session, output });
       } else if (ROUTE_PATHS.has(url.pathname)) {
         sendError(res, 405, 'method not allowed');
       } else if (url.pathname.startsWith('/api/')) {

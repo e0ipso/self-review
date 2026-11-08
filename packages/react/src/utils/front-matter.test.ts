@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { parseFrontMatter } from './front-matter';
+import {
+  buildFrontMatterDisplay,
+  FRONT_MATTER_MAX_DEPTH,
+  FRONT_MATTER_MAX_NODES,
+  parseFrontMatter,
+} from './front-matter';
 
 describe('parseFrontMatter', () => {
   it('parses valid front matter with scalar values', () => {
@@ -117,5 +122,81 @@ title: Hello
 ---`;
 
     expect(parseFrontMatter(content)).toBeNull();
+  });
+});
+
+describe('buildFrontMatterDisplay', () => {
+  it('converts nested metadata into a display tree', () => {
+    const result = buildFrontMatterDisplay({
+      title: 'Hello',
+      tags: ['a', 1],
+      author: { name: 'Jane', active: true, extra: null },
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      entries: [
+        ['title', { kind: 'scalar', text: 'Hello' }],
+        [
+          'tags',
+          {
+            kind: 'list',
+            items: [
+              { kind: 'scalar', text: 'a' },
+              { kind: 'scalar', text: '1' },
+            ],
+          },
+        ],
+        [
+          'author',
+          {
+            kind: 'map',
+            entries: [
+              ['name', { kind: 'scalar', text: 'Jane' }],
+              ['active', { kind: 'scalar', text: 'true' }],
+              ['extra', { kind: 'null' }],
+            ],
+          },
+        ],
+      ],
+    });
+  });
+
+  it('rejects the 33-byte self-referencing YAML alias as a cycle', () => {
+    const parsed = parseFrontMatter('---\nloop: &loop [*loop]\n---\nhello');
+    expect(parsed).not.toBeNull();
+
+    expect(buildFrontMatterDisplay(parsed!.metadata)).toEqual({ ok: false, reason: 'cycle' });
+  });
+
+  it('accepts a shared, non-cyclic alias rendered in two places', () => {
+    const parsed = parseFrontMatter('---\nbase: &b {k: v}\ncopy: *b\n---\nbody');
+
+    const result = buildFrontMatterDisplay(parsed!.metadata);
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects nesting deeper than the depth budget', () => {
+    let value: unknown = 'leaf';
+    for (let i = 0; i < FRONT_MATTER_MAX_DEPTH + 1; i++) {
+      value = [value];
+    }
+
+    expect(buildFrontMatterDisplay({ deep: value })).toEqual({ ok: false, reason: 'depth' });
+  });
+
+  it('accepts nesting exactly at the depth budget', () => {
+    let value: unknown = 'leaf';
+    for (let i = 0; i < FRONT_MATTER_MAX_DEPTH - 1; i++) {
+      value = [value];
+    }
+
+    expect(buildFrontMatterDisplay({ deep: value }).ok).toBe(true);
+  });
+
+  it('rejects metadata with more values than the node budget', () => {
+    const wide = Array.from({ length: FRONT_MATTER_MAX_NODES + 1 }, (_, i) => i);
+
+    expect(buildFrontMatterDisplay({ wide })).toEqual({ ok: false, reason: 'nodes' });
   });
 });

@@ -1,7 +1,37 @@
 import { describe, it, expect } from 'vitest';
 import { parseServeArgs } from './args';
+import { SHARED_CLI_CASES } from '../../core/src/test-support/cli-cases';
 
 describe('parseServeArgs', () => {
+  // The cases both command lines must read the same way; the desktop runs
+  // the same table in src/main/cli.test.ts.
+  describe('shared cases', () => {
+    for (const shared of SHARED_CLI_CASES) {
+      it(shared.name, () => {
+        const args = parseServeArgs(shared.argv);
+
+        expect(args.gitDiffArgs).toEqual(shared.gitDiffArgs);
+        expect(args.resumeFrom).toBe(shared.resumeFrom);
+        expect(args.outputPath).toBeNull();
+      });
+    }
+  });
+
+  it('stops reading --output at --, and leaves a git option value spelled like it alone', () => {
+    expect(parseServeArgs(['--', '--output', 'x.xml']).gitDiffArgs).toEqual([
+      '--',
+      '--output',
+      'x.xml',
+    ]);
+    expect(parseServeArgs(['--', '--output', 'x.xml']).outputPath).toBeNull();
+    expect(parseServeArgs(['-S', '--output', 'HEAD']).gitDiffArgs).toEqual([
+      '-S',
+      '--output',
+      'HEAD',
+    ]);
+    expect(parseServeArgs(['-S', '--output', 'HEAD']).outputPath).toBeNull();
+  });
+
   it('passes everything it does not recognize through to git diff', () => {
     expect(parseServeArgs(['--staged', 'main..feature', '--', 'src/a.ts']).gitDiffArgs).toEqual([
       '--staged',

@@ -24,16 +24,10 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     // Check if this is a new search or cycling through existing results
     const isNewSearch = query !== lastSearchedQueryRef.current;
 
-    if (isNewSearch) {
-      // WORKAROUND: Chromium doesn't fire 'found-in-page' event for the first
-      // findInPage call with findNext: false. Call it twice to get the event.
-      window.electronAPI.findInPage({ text: query, forward: true, findNext: false });
-      // Immediate second call to trigger the event and populate counter
-      window.electronAPI.findInPage({ text: query, forward: true, findNext: true });
-    } else {
-      // Normal cycling through existing results
-      window.electronAPI.findInPage({ text: query, forward: true, findNext: true });
-    }
+    // Chromium starts at the focused element and matches the query text in this very input (ordinal 0,
+    // counter "0 of N" on Chromium 152). Blurring first starts the session in the document.
+    if (isNewSearch) inputRef.current?.blur();
+    window.electronAPI.findInPage({ text: query, forward: true, findNext: isNewSearch });
 
     // Update the last searched query after initiating search
     lastSearchedQueryRef.current = query;
@@ -45,16 +39,9 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     // Check if this is a new search or cycling through existing results
     const isNewSearch = query !== lastSearchedQueryRef.current;
 
-    if (isNewSearch) {
-      // WORKAROUND: Chromium doesn't fire 'found-in-page' event for the first
-      // findInPage call with findNext: false. Call it twice to get the event.
-      window.electronAPI.findInPage({ text: query, forward: false, findNext: false });
-      // Immediate second call to trigger the event and populate counter
-      window.electronAPI.findInPage({ text: query, forward: false, findNext: true });
-    } else {
-      // Normal cycling through existing results
-      window.electronAPI.findInPage({ text: query, forward: false, findNext: true });
-    }
+    // Blur first, as above.
+    if (isNewSearch) inputRef.current?.blur();
+    window.electronAPI.findInPage({ text: query, forward: false, findNext: isNewSearch });
 
     // Update the last searched query after initiating search
     lastSearchedQueryRef.current = query;

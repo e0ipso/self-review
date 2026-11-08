@@ -71,8 +71,11 @@ FLAKE
 #!/usr/bin/env bash
 set -uo pipefail
 case "\$1 \${2:-}" in
-  'derivation show')
-    printf '{"/nix/store/stub.drv":{"env":{"urls":"%s"}}}\n' '$ARTIFACT_URL'
+  'eval --raw')
+    case "\$3" in
+      *'#packages.'*'.default.src.url') printf '%s' '$ARTIFACT_URL' ;;
+      *) echo "stub nix: unexpected eval target: \$3" >&2; exit 1 ;;
+    esac
     ;;
   'store prefetch-file')
     for arg in "\$@"; do

@@ -1,5 +1,5 @@
 // @self-review/core — Browser-safe subset (no Node.js APIs)
-// This entry point is used by the webpack renderer build.
+// Internal: aliased by the renderer build; everything here must run with no Node globals.
 
 // Types
 export type {

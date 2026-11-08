@@ -81,3 +81,26 @@ describe('FrontMatterTable', () => {
     expect(container.querySelector('table')).toBeNull();
   });
 });
+
+describe('FrontMatterTable fallback', () => {
+  it('renders a notice instead of recursing forever on cyclic metadata', () => {
+    const loop: unknown[] = [];
+    loop.push(loop);
+
+    render(<FrontMatterTable metadata={{ loop }} />);
+
+    expect(screen.getByTestId('front-matter-fallback').textContent).toContain(
+      'Front matter too complex to display'
+    );
+  });
+
+  it('renders a notice for metadata nested past the depth budget', () => {
+    let deep: unknown = 'leaf';
+    for (let i = 0; i < 1000; i++) deep = { nested: deep };
+
+    const { container } = render(<FrontMatterTable metadata={{ deep }} />);
+
+    expect(screen.getByTestId('front-matter-fallback')).toBeTruthy();
+    expect(container.querySelector('table')).toBeNull();
+  });
+});

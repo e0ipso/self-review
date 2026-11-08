@@ -4,7 +4,7 @@
 
 // ===== Git Diff Types =====
 
-export type ChangeType = 'added' | 'modified' | 'deleted' | 'renamed';
+export type ChangeType = 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
 
 export type DiffLineType = 'context' | 'addition' | 'deletion';
 
@@ -32,6 +32,8 @@ export interface DiffFile {
   hunks: DiffHunk[];
   isUntracked?: boolean;
   contentLoaded?: boolean;
+  /** Set when a safety budget stopped the loader reading this file; `hunks` is then empty and this is shown instead. */
+  omittedReason?: string;
 }
 
 // ===== Diff Source Types =====
@@ -42,6 +44,36 @@ export type DiffSource =
   | { type: 'file'; sourcePath: string }
   | { type: 'welcome' }
   | { type: 'loading' };
+
+// ===== Review Source Identity =====
+
+export type ReviewSourceMode = 'git' | 'directory' | 'file' | 'remote';
+
+/**
+ * One side of a review's comparison, readable again later. A commit's SHA is resolved at load time.
+ * `none` has no content; a read from `unknown` fails visibly rather than falling back to the working tree.
+ */
+export type ReviewSourceSide =
+  | { kind: 'working-tree' }
+  | { kind: 'index' }
+  | { kind: 'commit'; sha: string }
+  | { kind: 'directory' }
+  | { kind: 'file'; path: string }
+  | { kind: 'none' }
+  | { kind: 'unknown'; reason: string };
+
+/** What a session reviews, recorded once at commit. Reads and path authorization resolve against this, never the cwd. */
+export interface ReviewSourceIdentity {
+  mode: ReviewSourceMode;
+  /** Physical directory (symlinks resolved) every reviewed path is relative to. */
+  sourceRoot: string;
+  invocationCwd: string;
+  gitDiffArgv: string[];
+  /** `/`-separated directory under `sourceRoot` that reviewed paths are relative to; empty except for `--relative` git reviews. */
+  pathPrefix: string;
+  oldSide: ReviewSourceSide;
+  newSide: ReviewSourceSide;
+}
 
 // ===== Review State Types =====
 
@@ -329,6 +361,8 @@ export interface DiffLoadPayload {
   files: DiffFile[];
   source: DiffSource;
   isLargePayload?: boolean;
+  /** What the loader could not show faithfully, one message each. Diagnostics with no files is a failed load, not "no changes". */
+  diagnostics?: string[];
   /**
    * Present only for a remote PR/MR session. After materialization, remote
    * mode is git mode: `source` stays `type: 'git'` with `repository` set to
@@ -355,6 +389,8 @@ export interface ResumeLoadPayload {
    * `remote-head-sha` in a remote session. See {@link RemoteDriftInfo}.
    */
   remoteDrift?: RemoteDriftInfo;
+  /** One line per resumed comment downgraded to file-level feedback (unusable anchor or unappliable suggestion). */
+  importDiagnostics?: string[];
 }
 
 /**

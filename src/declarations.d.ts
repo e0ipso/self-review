@@ -1,8 +1,3 @@
-declare module '*.css?raw' {
-  const content: string;
-  export default content;
-}
-
 // @emoji-mart/data ships types for its interfaces but no default export.
 // The package main is a JSON file (sets/15/native.json) that webpack resolves.
 declare module '@emoji-mart/data' {

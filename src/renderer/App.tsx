@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ConfigProvider, useConfig } from '../../packages/react/src/context/ConfigContext';
 import { ReviewProvider, useReview } from '../../packages/react/src/context/ReviewContext';
 import { DiffNavigationProvider } from '../../packages/react/src/context/DiffNavigationContext';
@@ -14,10 +14,9 @@ import { FindBar } from './components/FindBar';
 import WelcomeScreen from './components/WelcomeScreen';
 import UpdateBanner from './components/UpdateBanner';
 import RemoteDriftBanner from '../../packages/react/src/components/RemoteDriftBanner';
+import ImportDiagnosticsBanner from '../../packages/react/src/components/ImportDiagnosticsBanner';
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
-import lightThemeCss from 'prismjs/themes/prism.css?raw';
-import darkThemeCss from 'prism-themes/themes/prism-one-dark.css?raw';
 
 // Electron platform adapter — wraps window.electronAPI for the package context.
 const electronAdapter: ReviewAdapter = {
@@ -73,29 +72,7 @@ function AppContent() {
     });
   }, [setOutputPathInfo]);
 
-  // Keep refs current so the onRequestReview fallback always sends fresh state
-  const diffSourceRef = useRef(diffSource);
-  const filesRef = useRef(files);
-  useLayoutEffect(() => {
-    diffSourceRef.current = diffSource;
-  }, [diffSource]);
-  useLayoutEffect(() => {
-    filesRef.current = files;
-  }, [files]);
-
-  // Fallback: respond when main process pulls state via review:request
-  // (e.g. when saveAndQuit is called without a prior submitReview)
-  useEffect(() => {
-    window.electronAPI.onRequestReview(() => {
-      window.electronAPI.submitReview({
-        timestamp: new Date().toISOString(),
-        source: diffSourceRef.current,
-        files: filesRef.current,
-      });
-    });
-  }, []);
-
-  // Host-driven finish: push state then trigger save
+  // Main never pulls state: a save with no pushed state is reported and writes nothing.
   const handleFinishReview = useCallback(() => {
     window.electronAPI.submitReview({
       timestamp: new Date().toISOString(),
@@ -143,6 +120,7 @@ function AppContent() {
         <div className='flex flex-col h-screen overflow-hidden bg-background text-foreground antialiased'>
           <UpdateBanner />
           <RemoteDriftBanner />
+          <ImportDiagnosticsBanner />
           <Toolbar onFinishReview={handleFinishReview} />
           <div className='flex-1 min-h-0'>
             <Layout />
@@ -173,12 +151,7 @@ export default function App() {
 
   return (
     <ReviewAdapterProvider adapter={electronAdapter}>
-      <ConfigProvider
-        initialConfig={config}
-        initialOutputPath={outputPathInfo ?? undefined}
-        prismLightCss={lightThemeCss}
-        prismDarkCss={darkThemeCss}
-      >
+      <ConfigProvider initialConfig={config} initialOutputPath={outputPathInfo ?? undefined}>
         <GuideProvider>
           <ReviewProvider>
             <AppContent />

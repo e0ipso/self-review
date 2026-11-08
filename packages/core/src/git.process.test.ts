@@ -10,29 +10,19 @@ import {
 } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import {
-  getRepoRoot,
-  getRepoRootAsync,
-  getUntrackedFilesAsync,
-  runGitDiff,
-  runGitDiffAsync,
-} from './git';
+import { getRepoRootAsync, getUntrackedFilesAsync, runGitDiffAsync } from './git';
 import { gitSync } from './test-support/git-env';
 
 // Exercise real child processes: mocked argv checks cannot detect shell expansion.
-describe.each(['sync', 'async'] as const)('literal git diff arguments (%s)', mode => {
-  const originalCwd = process.cwd();
+describe('literal git diff arguments', () => {
   let root: string;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'self-review-test-diff-literal-'));
     gitSync(['init', '-q', root]);
-    // The async wrapper receives an explicit cwd; the sync wrapper inherits it.
-    if (mode === 'sync') process.chdir(root);
   });
 
   afterEach(() => {
-    process.chdir(originalCwd);
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -48,7 +38,7 @@ describe.each(['sync', 'async'] as const)('literal git diff arguments (%s)', mod
     gitSync(['add', '--', filename, 'other.txt'], { cwd: root });
     const args = ['--cached', '--', filename];
 
-    const diff = mode === 'sync' ? runGitDiff(args) : await runGitDiffAsync(args, root);
+    const diff = await runGitDiffAsync(args, root);
 
     expect(existsSync(join(root, 'SELF_REVIEW_INJECTION_MARKER'))).toBe(false);
     expect(diff).toContain('+selected content');
@@ -60,34 +50,26 @@ describe.each(['sync', 'async'] as const)('literal git diff arguments (%s)', mod
 // real. `git rev-parse --show-toplevel` prints it followed by one newline;
 // a blanket .trim() ate the whitespace along with that newline and reported
 // a path that doesn't exist on disk.
-describe.each(['sync', 'async'] as const)(
-  'repository root with whitespace in its path (%s)',
-  mode => {
-    const originalCwd = process.cwd();
-    let parent: string;
-    let root: string;
+describe('repository root with whitespace in its path', () => {
+  let parent: string;
+  let root: string;
 
-    beforeEach(() => {
-      // git reports the resolved top level, and temp dirs can be symlinked.
-      parent = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-root-space-')));
-      root = join(parent, ' trailing and leading space ');
-      mkdirSync(root);
-      gitSync(['init', '-q', root]);
-      if (mode === 'sync') process.chdir(root);
-    });
+  beforeEach(() => {
+    // git reports the resolved top level, and temp dirs can be symlinked.
+    parent = realpathSync(mkdtempSync(join(tmpdir(), 'self-review-test-root-space-')));
+    root = join(parent, ' trailing and leading space ');
+    mkdirSync(root);
+    gitSync(['init', '-q', root]);
+  });
 
-    afterEach(() => {
-      process.chdir(originalCwd);
-      rmSync(parent, { recursive: true, force: true });
-    });
+  afterEach(() => {
+    rmSync(parent, { recursive: true, force: true });
+  });
 
-    it('reports the exact root path, whitespace included', async () => {
-      const reported = mode === 'sync' ? getRepoRoot() : await getRepoRootAsync(root);
-
-      expect(reported).toBe(root);
-    });
-  }
-);
+  it('reports the exact root path, whitespace included', async () => {
+    expect(await getRepoRootAsync(root)).toBe(root);
+  });
+});
 
 // Names git quotes, plus names that survive only NUL-terminated output.
 const LITERAL_NAMES = [

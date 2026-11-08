@@ -39,6 +39,9 @@ Then('I should see diff lines in the {string} file section', async ({}, filePath
   const page = getPage();
   const section = page.locator(`[data-testid="file-section-${filePath}"]`);
   const lines = section.locator('[data-line-number]');
+  // The diff arrives over IPC after the window is up; count only once the
+  // first line is rendered, otherwise a fast launch counts zero.
+  await lines.first().waitFor({ state: 'visible', timeout: 10000 });
   lineCountBefore = await lines.count();
   expect(lineCountBefore).toBeGreaterThan(0);
 });
@@ -67,6 +70,12 @@ When(
     const showAllButton = section
       .locator('.expand-context-bar button')
       .filter({ hasText: /show all/i });
+    // The diff arrives over IPC after the window is up; count the bars only
+    // once one is rendered, otherwise a fast launch clicks nothing.
+    await section
+      .locator('.expand-context-bar')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10000 });
     // If "show all" buttons exist, click them all (top, between, bottom)
     const count = await showAllButton.count();
     for (let i = 0; i < count; i++) {

@@ -84,7 +84,7 @@ const SyntaxLine = React.memo(function SyntaxLine({
 
   return (
     <code
-      className={`font-mono text-[13px] ${wordWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'} block`}
+      className={`font-mono sr-diff-code ${wordWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'} block`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

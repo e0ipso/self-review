@@ -13,29 +13,37 @@ export function AttachmentImage({ attachment }: AttachmentImageProps) {
   const adapter = useAdapter();
 
   useEffect(() => {
-    let revoke: (() => void) | undefined;
+    // `active` goes false in cleanup, so a late read creates no blob URL the cleanup would miss.
+    let active = true;
+    let url: string | null = null;
+    setImageUrl(null);
+    setError(false);
+
+    const show = (bytes: BlobPart) => {
+      url = URL.createObjectURL(new Blob([bytes]));
+      setImageUrl(url);
+    };
 
     if (attachment.data) {
-      const url = URL.createObjectURL(new Blob([attachment.data]));
-      setImageUrl(url);
-      revoke = () => URL.revokeObjectURL(url);
+      show(attachment.data);
     } else if (attachment.fileName && adapter?.readAttachment) {
-      adapter
-        .readAttachment(attachment.fileName)
-        .then(buffer => {
-          if (buffer) {
-            const url = URL.createObjectURL(new Blob([buffer]));
-            setImageUrl(url);
-            revoke = () => URL.revokeObjectURL(url);
-          } else {
-            setError(true);
-          }
-        })
-        .catch(() => setError(true));
+      adapter.readAttachment(attachment.fileName).then(
+        buffer => {
+          if (!active) return;
+          if (buffer) show(buffer);
+          else setError(true);
+        },
+        () => {
+          if (active) setError(true);
+        }
+      );
     }
 
-    return () => revoke?.();
-  }, [attachment.data, attachment.fileName]);
+    return () => {
+      active = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [attachment.data, attachment.fileName, adapter]);
 
   if (error) {
     return (

@@ -20,7 +20,8 @@ Non-obvious semantics (keep in sync with `assets/self-review-v3.xsd`):
 - **`viewed` attribute:** `true` = reviewer looked at this file. `false` = reviewer did not mark it
   as viewed. Distinguishes "reviewed, no comments" from "not yet reviewed."
 - **`path` on renames:** For renamed files (`change-type="renamed"`), `path` is the **new** path.
-- **`change-type` values:** `added`, `modified`, `deleted`, `renamed`.
+- **`change-type` values:** `added`, `modified`, `deleted`, `renamed`, `copied`. For copied
+  files (`change-type="copied"`), `path` is the **new** path, like renames.
 - **`severity`:** How consequential the finding is if it is real, most to least: `critical`,
   `major`, `minor`, `info`. Optional.
 - **`confidence`:** How sure the comment's author was that the finding is real, most to least:

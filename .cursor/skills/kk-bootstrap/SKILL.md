@@ -3,7 +3,7 @@ name: kk-bootstrap
 description: First-time bootstrap of the project knowledge base from existing markdown documentation. Surveys docs, follows cross-references, and writes new node files directly under `.ai/kenkeep/nodes/`. Supervised by the user, who reviews each node on disk before accepting or deleting it. Use when the user wants to seed an empty knowledge base from the project's existing docs.
 ---
 
-<!-- Version: 6 -->
+<!-- Version: 7 -->
 
 # kk-bootstrap
 
@@ -23,10 +23,20 @@ Before you start, read `.ai/kenkeep/config.yaml` (falling back to `~/.config/ken
 
 ## Resolve the project root
 
-Resolve the repo root (the directory containing `.ai/kenkeep`) with the shipped detector, then treat the printed path as the working directory for every command below:
+Resolve the repo root (the directory containing `.ai/kenkeep`) with the shipped detector, then treat the printed path as the working directory for every command below. The snippet first walks up from the current directory to the installed detector, so it also works when started from a nested package directory:
 
 ```bash
-KK_REPO_ROOT=$(node .ai/kenkeep/scripts/kk-detect-root.mjs) || exit $?
+KK_REPO_ROOT=$(
+  d=$PWD
+  until [ -f "$d/.ai/kenkeep/scripts/kk-detect-root.mjs" ]; do
+    if [ "$d" = / ]; then
+      echo 'kk-detect-root: no .ai/kenkeep/scripts/kk-detect-root.mjs in this directory or its parents.' >&2
+      exit 2
+    fi
+    d=$(dirname "$d")
+  done
+  cd "$d" && node .ai/kenkeep/scripts/kk-detect-root.mjs
+) || exit $?
 cd "$KK_REPO_ROOT" || exit $?
 pwd
 ```
@@ -55,7 +65,21 @@ Count the lines and **report briefly to the user before reading anything in dept
 
 ### 2. Skip docs that are already in the state file
 
-Read `.ai/kenkeep/.state/bootstrap-state.json` (it may not exist on a first run; that's fine — treat as empty). For each `+ <relpath>\t<sha>` line, check whether `docs[<relpath>].content_sha256 === <sha>`. If so, the file was already processed at this content hash by a prior run; skip it. Otherwise, the file is new or changed — include it in your working set.
+Read `.ai/kenkeep/.state/bootstrap-state.json` (it may not exist on a first run; that's fine, treat it as empty). For each `+ <relpath>\t<sha>` line, check whether `docs[<relpath>].content_sha256 === <sha>`. If so, a prior run finished this document at this content hash (possibly with zero nodes); skip it. Otherwise, the file is new, changed, or unfinished: include it in your working set.
+
+`docs` only ever holds finished documents (see the finalize step in step 6). A document whose earlier run was interrupted appears under `in_progress[<relpath>]` instead: when its `content_sha256` equals `<sha>`, its `written` map lists the ids already written for that document. Some may have been deleted since, so check which of them still exist under `.ai/kenkeep/nodes/`. Process that document again, but draft only the knowledge the remaining nodes do not already cover. Re-issuing a draft that was already written (same kind and slug) is safe: if its node still exists, `node write` writes nothing and prints the id it wrote the first time; if the node is gone, it writes it again for review.
+
+### 2b. Add the harness's changed memory files
+
+The host harness may keep auto-memory files outside the repo (Claude Code's persisted memories; the other hosts contribute nothing today). They bypass `.kkignore` and `finddocs` by design. Ask the primitive for the ones the per-user ledger has not seen at their current content:
+
+```bash
+npx --yes kenkeep@latest memory list
+```
+
+It prints one JSON document: `{"harness":"<id>","files":[{"iri","path","sha256","bytes","session_id"}]}`. `files` holds only new or changed memory files; `[]` (nothing changed, or a harness without native memory) is a normal result, not an error. Unlike the other primitives this one is not LLM-free on Claude Code: it finds the memory files with one headless `claude -p` call (a billed model call that can take up to a minute; if it fails, `files` is `[]` and nothing is lost, the files come back next run). The other hosts spawn nothing. Listing writes nothing: a file stays listed until it is marked in the finalize step, so an interrupted run sees it again.
+
+Add each listed file to your working set and `Read` it from `path`. Treat it like any other candidate doc in Steps 3 to 6, with two differences: it lives outside the repo, so `node write` takes no `--source-doc`/`--source-hash` for nodes drawn from it, and it is finished with `memory mark` instead of `bootstrap complete-doc` (see "Finalize each document"). Keep its `iri` and `sha256`; the finalize step needs both.
 
 ### 3. Read entry points first
 
@@ -131,7 +155,7 @@ The unit of parallelism is **one candidate doc** (`<batchN>` numbered from 1). F
 2. Delegate the drafting of this one doc to a sub-agent with focused instructions:
 
    > You are drafting kenkeep node candidates for ONE source doc.
-   > - Read the doc at relative path `<relpath>` (content sha256 `<sha256>`) in full.
+   > - Read the doc at relative path `<relpath>` (content sha256 `<sha256>`) in full. (For a harness memory file, the absolute `path` from `memory list` replaces the relpath.)
    > - Decide whether it warrants 0, 1, or more nodes. Use the same practice/map rules as Step 5 of the parent skill.
    > - For each chosen node, produce exactly these keys: `{kind, slug, title, summary, tags[], confidence, body}`. Do not include `id` or YAML frontmatter — the host stamps both.
    > - Write the array as JSON (and nothing else) to the absolute path `<DRAFT_PATH>`. Zero nodes is a valid result; in that case write `[]`.
@@ -141,12 +165,15 @@ The unit of parallelism is **one candidate doc** (`<batchN>` numbered from 1). F
 
 1. Read and parse it as JSON. The expected shape is an array of objects with keys `kind`, `slug`, `title`, `summary`, `tags` (array), `confidence` (`high`|`medium`|`low`), and `body`.
 2. On parse error or shape mismatch, append an `event:"invalid"` line, surface **"batch <batchN> produced invalid output, skipped"**, and continue — never abort the run.
-3. For each validated draft, persist via `node write` (see below), passing the originating doc's `--source-doc` and `--source-hash`. The primitive locks its `bootstrap-state.json` update, so back-to-back invocations are safe.
-4. Append an `event:"validated"` line with the count written and the resolved ids. Issue the next wave only after the current wave's collector turn finishes.
+3. For each validated draft, persist via `node write` (see below), passing the originating doc's `--source-doc` and `--source-hash` (omit both for a harness memory file). The primitive locks its `bootstrap-state.json` update, so back-to-back invocations are safe.
+4. Append an `event:"validated"` line with the count written and the resolved ids.
+5. **Finalize the document** (see "Finalize each document" below) once every draft in the batch was persisted, including a valid `[]` batch, which finalizes with zero nodes. Do not finalize an `invalid` batch or one where any `node write` failed: leaving it unfinished keeps it in the next run's working set.
+
+Issue the next wave only after the current wave's collector turn finishes.
 
 #### Inline fallback path
 
-If the probe says no dispatch primitive exists, draft each candidate's node body inline in this session — same vocabulary (`kind`, `slug`, `title`, `summary`, `tags`, `confidence`, `body`) — and persist each one via `node write` immediately after drafting. Still write the per-batch JSONL log (one batch per doc): append an `event:"issued"` line before drafting and an `event:"validated"` line after the `node write` returns, so the artefact shape is identical across paths.
+If the probe says no dispatch primitive exists, draft each candidate's node body inline in this session, using the same vocabulary (`kind`, `slug`, `title`, `summary`, `tags`, `confidence`, `body`), and persist each one via `node write` immediately after drafting. Still write the per-batch JSONL log (one batch per doc): append an `event:"issued"` line before drafting and an `event:"validated"` line after the `node write` returns, so the artefact shape is identical across paths. When you are done with a document (every node written, or you decided it yields none), finalize it (below) before moving to the next document.
 
 #### Persist via `node write`
 
@@ -162,9 +189,27 @@ npx --yes kenkeep@latest node write <kind> <slug> \
 EOF
 ```
 
-`--source-doc` and `--source-hash` MUST be provided together (the primitive errors out if only one is given). When both are present, the same invocation atomically updates `bootstrap-state.json` so a re-run of step 2 will skip this file. `--source-doc` is the relpath you saw in the `finddocs` output; `--source-hash` is the SHA-256 from the same line.
+`--source-doc` and `--source-hash` MUST be provided together (the primitive errors out if only one is given). `--source-doc` is the relpath you saw in the `finddocs` output (it must name an existing file in the repo); `--source-hash` is the SHA-256 from the same line. The primitive records the document in the node's `kk_derived_from` provenance and records the write under the document's unfinished attempt in `bootstrap-state.json`. It does **not** mark the document done: writing the first of several nodes must not make the next run skip the rest.
 
-On success the primitive prints the resolved node id and exits 0. Capture it. If the slug collides with an existing node, the primitive auto-suffixes (`-2`, `-3`, …) so the printed id may differ from `<slug>`. On any non-zero exit, surface the stderr to the user and continue with the next candidate; do not retry blindly.
+On success the primitive prints the resolved node id and exits 0. Capture it. If the slug collides with an existing node, the primitive auto-suffixes (`-2`, `-3`, …) so the printed id may differ from `<slug>`. The one exception is a retry of a draft already written for the same document and hash in its unfinished attempt: while that node still exists, nothing is written and the first id is printed again. On any non-zero exit, surface the stderr to the user and continue with the next candidate; do not retry blindly, and do not finalize that document.
+
+#### Finalize each document
+
+After a document is fully handled (every surviving draft persisted, or a deliberate zero-node result), declare it done at the hash you processed:
+
+```bash
+npx --yes kenkeep@latest bootstrap complete-doc "<relpath>" --hash "<sha256>"
+```
+
+This is the only step that records the document in `docs` of `bootstrap-state.json`, so step 2 of the next run skips it until its content changes. Zero-node documents need it too; otherwise they are re-read on every run. The primitive prints one JSON line (`{"doc","content_sha256","produced_nodes"}`) and exits 0. `produced_nodes` is the document's history across all its completions: ids recorded by an earlier completion stay listed even if those nodes were deleted later. Only nodes written in this attempt and deleted before this step are left out. A non-zero exit (for example, the document changed during the run) leaves the document unfinished; surface the stderr and move on. If the run stops before this step, the document stays in the next run's working set and resumes as described in step 2.
+
+A harness memory file (step 2b) is finalized with the ledger primitive instead, once every node drawn from it was written, or you decided it yields none:
+
+```bash
+npx --yes kenkeep@latest memory mark "<iri>" --hash "<sha256>" --run-id "$RUN_ID"
+```
+
+It records the file at that content hash in `.ai/kenkeep/.state/memory-ledger.json`, so `memory list` skips it until the content changes, and prints `{"iri","sha256","run_id"}`. A non-zero exit means the file changed during the run or is unreadable: nothing is recorded and it is listed again next time. Never mark a file while one of its `node write` calls failed; leave it unmarked and report it.
 
 **Never overwrite an existing node.** `node write` will not overwrite — `ensureUniqueId` always produces a fresh id. If the candidate is genuinely the same scope as an existing node, **skip it** and call it out in your final report rather than letting it land as a `-2` sibling.
 
@@ -185,6 +230,7 @@ When you're done, summarize for the user:
 - How many docs you read; which ones you skipped and why.
 - How many practice nodes you wrote.
 - How many map nodes you wrote.
+- How many harness memory files `memory list` returned, how many you marked, and which ones stay unmarked (they come back next run).
 - Any candidates you skipped because they overlapped an existing node; the user may want to merge content manually.
 - Any cross-references you noticed but didn't follow (the user might want to direct you to those).
 - Any docs that looked stale or contradictory that the user should double-check.
@@ -199,7 +245,7 @@ Then tell the user to review the written files, accept by leaving them in place,
 - **Don't hallucinate rationale.** Only include "because…" content that's actually present in the source. If the doc just says "use X," your node says "use X," not "use X because of [made-up reason]." Quote or close-paraphrase from the source.
 - **Don't try to read code files.** Stick to markdown documentation. The point of bootstrap is to extract what's already been written down.
 - **Practice/map boundary is hard.** A practice candidate never becomes a map node, and vice versa. Split combined content into two nodes.
-- **Defer to `finddocs` and `node write` for discovery, hashing, slug collision resolution, and state.** Do not reimplement them.
+- **Defer to `finddocs`, `memory list`, `node write`, `bootstrap complete-doc` and `memory mark` for discovery, hashing, slug collision resolution, and state.** Do not reimplement them or edit `bootstrap-state.json` or `memory-ledger.json` by hand. A memory file is marked only after its nodes are on disk.
 
 ## When to stop
 

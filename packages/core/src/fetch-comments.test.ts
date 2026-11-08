@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import type { ForgeThread, ForgeUrl, ForgeProvider } from './forge-provider';
-import { ForgeCliUnavailableError } from './forge-provider';
+import { CommandCancelledError, ForgeCliUnavailableError } from './forge-provider';
 import type { MaterializeResult } from './materializer';
 import { REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 import { mapThreadsToReviewComments } from './thread-mapper';
 import { serializeReview } from './xml-serializer';
 import { parseReviewXmlString } from './xml-parser';
 import type { AppConfig, DiffFile } from './types';
+import type { LoadedConfig } from './config';
 import { buildRemoteReviewState, runFetchComments, type FetchCommentsDeps } from './fetch-comments';
+import type { ReviewState } from './types';
 
 // Mock xmllint-wasm so the round-trip test does not load WASM. The
 // serializer's validation call is still asserted through the mock.
@@ -130,7 +132,7 @@ describe('buildRemoteReviewState', () => {
 });
 
 describe('runFetchComments', () => {
-  let written: Array<{ path: string; content: string }>;
+  let written: Array<{ path: string; content: string; state?: ReviewState }>;
   // A bare vi.fn() infers Mock<Procedure | Constructable>, which the field
   // does not accept, so this is pinned to the field's own signature.
   let cleanup: Mock<MaterializeResult['cleanup']>;
@@ -142,6 +144,7 @@ describe('runFetchComments', () => {
     baseSha: 'aaa111',
     headSha: 'bbb222',
     mode: 'temp-clone',
+    ownedRefs: [],
     cleanup,
   });
 
@@ -162,10 +165,18 @@ describe('runFetchComments', () => {
       detectExistingClone: vi.fn().mockResolvedValue(null),
       materialize: vi.fn().mockResolvedValue(materializeResult()),
       resolveRemoteDefaultBranch: vi.fn().mockResolvedValue('trunk'),
-      loadDiffFiles: vi.fn().mockResolvedValue([makeDiffFile('src/a.ts')]),
-      serialize: vi.fn().mockResolvedValue('<xml/>'),
-      writeFile: (path, content) => written.push({ path, content }),
-      loadConfig: vi.fn().mockReturnValue({ outputFile: './review.xml' } as AppConfig),
+      loadDiff: vi
+        .fn()
+        .mockResolvedValue({ files: [makeDiffFile('src/a.ts')], repository: '/tmp/clone' }),
+      publish: vi.fn().mockImplementation(async (state: ReviewState, outputPath: string) => {
+        written.push({ path: outputPath, content: '<xml/>\n', state });
+        return { outputPath, assetPaths: [] };
+      }),
+      loadConfig: vi.fn().mockReturnValue({
+        config: { outputFile: './review.xml' } as AppConfig,
+        provenance: { outputFile: 'default' } as LoadedConfig['provenance'],
+        sources: [],
+      }),
       now: () => new Date('2026-08-04T10:00:00.000Z'),
     };
   });
@@ -174,15 +185,18 @@ describe('runFetchComments', () => {
     vi.restoreAllMocks();
   });
 
-  it('writes the serialized review to the configured output path and cleans up', async () => {
+  it('publishes the review to the configured output path under the inherited policy', async () => {
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 
     expect(written).toHaveLength(1);
     expect(written[0].path).toBe('/work/review.xml');
-    expect(written[0].content).toBe('<xml/>\n');
     expect(cleanup).toHaveBeenCalled();
 
-    const serialized = (deps.serialize as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    // Config-supplied output path: the publisher must keep it inside the launch directory.
+    const [, , options] = (deps.publish as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(options).toEqual({ outputOrigin: 'inherited', baseDir: '/work' });
+
+    const serialized = written[0].state!;
     expect(serialized.remoteUrl).toBe(PR_URL);
     expect(serialized.remoteForge).toBe('github');
     expect(serialized.remoteBaseSha).toBe('aaa111');
@@ -205,11 +219,14 @@ describe('runFetchComments', () => {
 
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 
-    expect(deps.detectExistingClone).toHaveBeenCalledWith(expect.anything(), '/work', deps.runner);
+    expect(deps.detectExistingClone).toHaveBeenCalledWith(expect.anything(), '/work', deps.runner, {
+      signal: undefined,
+    });
     expect(deps.resolveRemoteDefaultBranch).toHaveBeenCalledWith(
       expect.anything(),
       deps.runner,
-      null
+      null,
+      { signal: undefined }
     );
     const materializeMock = deps.materialize as ReturnType<typeof vi.fn>;
     expect(materializeMock.mock.calls[0][1]).toBe('trunk');
@@ -227,13 +244,43 @@ describe('runFetchComments', () => {
     expect(written).toHaveLength(0);
   });
 
-  it('cleans up the clone when serialization fails', async () => {
-    deps.serialize = vi.fn().mockRejectedValue(new Error('validation failed'));
+  it('cleans up the clone when publication fails', async () => {
+    deps.publish = vi.fn().mockRejectedValue(new Error('validation failed'));
 
     await expect(runFetchComments(PR_URL, { cwd: '/work', deps })).rejects.toThrow(
       'validation failed'
     );
     expect(cleanup).toHaveBeenCalled();
+  });
+
+  it('runs materialization under the caller signal and waits for the clone to be released', async () => {
+    const controller = new AbortController();
+    let released = false;
+    cleanup.mockImplementation(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      released = true;
+    });
+
+    await runFetchComments(PR_URL, { cwd: '/work', deps, signal: controller.signal });
+
+    const materializeMock = deps.materialize as ReturnType<typeof vi.fn>;
+    expect(materializeMock.mock.calls[0][5]).toEqual({ signal: controller.signal });
+    expect(released).toBe(true);
+  });
+
+  it('writes nothing and releases the clone when the run is cancelled during the diff load', async () => {
+    const controller = new AbortController();
+    deps.loadDiff = vi.fn().mockImplementation(async () => {
+      controller.abort();
+      return { files: [makeDiffFile('src/a.ts')], repository: '/tmp/clone' };
+    });
+
+    await expect(
+      runFetchComments(PR_URL, { cwd: '/work', deps, signal: controller.signal })
+    ).rejects.toBeInstanceOf(CommandCancelledError);
+
+    expect(written).toHaveLength(0);
+    expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('rejects URLs that are not PR/MR URLs', async () => {
@@ -275,8 +322,12 @@ describe('runFetchComments', () => {
       makeThread('rt-1', null),
     ] satisfies ForgeThread[]);
     // Use the REAL serializer so the round-trip exercises the production
-    // XML path (validation is mocked to valid at the module level).
-    deps.serialize = (state, outputPath) => serializeReview(state, outputPath);
+    // Validation is mocked at module level; only the disk write is captured.
+    deps.publish = async (state, outputPath) => {
+      const { xml } = await serializeReview(state, outputPath);
+      written.push({ path: outputPath, content: xml + '\n' });
+      return { outputPath, assetPaths: [] };
+    };
 
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 

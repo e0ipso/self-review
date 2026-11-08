@@ -162,8 +162,12 @@ Then('the comment should appear at the same source lines in the raw view', async
 
 Then('the mermaid code block should render as an SVG diagram', async () => {
   const page = getPage();
-  const svg = page.locator('.rendered-markdown-view svg');
-  await expect(svg.first()).toBeVisible({ timeout: 10000 });
+  // The diagram is an SVG image, isolated from the document: Mermaid's
+  // output is shown through <img>, never inserted as markup.
+  const image = page.locator('.rendered-markdown-view img[alt="Mermaid diagram"]');
+  await expect(image.first()).toBeVisible({ timeout: 10000 });
+  await expect(image.first()).toHaveAttribute('src', /^data:image\/svg\+xml;base64,/);
+  await expect(page.locator('.rendered-markdown-view svg[id^="mermaid-"]')).toHaveCount(0);
 });
 
 Then(

@@ -7,6 +7,7 @@
 
 import {
   ForgeCliUnavailableError,
+  isCommandCancelled,
   type FetchThreadsOptions,
   type ForgeAnchorSide,
   type ForgeCommandRunner,
@@ -27,6 +28,7 @@ interface GitLabLineRangeEdge {
 }
 
 interface GitLabPosition {
+  head_sha?: string | null;
   old_path?: string | null;
   new_path?: string | null;
   old_line?: number | null;
@@ -79,6 +81,8 @@ async function runGlabApi(
   try {
     result = await runCommand(GLAB_CLI, args);
   } catch (error) {
+    // A run cut short by the session's own bounds is not a missing CLI.
+    if (isCommandCancelled(error)) throw error;
     const detail = error instanceof Error ? error.message : String(error);
     throw unavailable(`glab CLI could not be spawned: ${detail}`);
   }
@@ -164,9 +168,9 @@ function isDiscussionResolved(notes: GitLabNote[]): boolean {
  * Multi-line `line_range` edges are read on the side chosen above, falling
  * back to the single-line position when an edge lacks that side's line.
  *
- * GitLab has no per-note outdated flag (positions on older heads stay valid
- * positions), so `outdated` is always `false`; drift detection downstream
- * informs the reviewer instead.
+ * GitLab exposes outdatedness only as `position.head_sha`, so the anchor carries
+ * `headSha` verbatim and no `outdated` verdict; the mapper compares it with the
+ * reviewed head, and a position naming no head stays unverifiable.
  */
 function toAnchor(position: GitLabPosition | null | undefined): ForgeThreadAnchor | null {
   if (!position) return null;
@@ -186,7 +190,11 @@ function toAnchor(position: GitLabPosition | null | undefined): ForgeThreadAncho
   const startLine = lineOf(position.line_range?.start) ?? positionLine;
   const endLine = lineOf(position.line_range?.end) ?? positionLine;
 
-  return { filePath, side, startLine, endLine, outdated: false };
+  const anchor: ForgeThreadAnchor = { filePath, side, startLine, endLine };
+  if (typeof position.head_sha === 'string' && position.head_sha.length > 0) {
+    anchor.headSha = position.head_sha;
+  }
+  return anchor;
 }
 
 /**

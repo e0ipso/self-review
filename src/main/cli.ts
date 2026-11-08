@@ -2,6 +2,11 @@
 // CLI argument parsing for self-review
 
 import { parseForgeUrl } from '../../packages/core/src/forge-provider';
+import { classifyGitDiffArgs } from '../../packages/core/src/git-diff-args';
+import {
+  ApplicationOptionError,
+  extractApplicationOptions,
+} from '../../packages/core/src/cli-options';
 
 export interface CliArgs {
   resumeFrom: string | null;
@@ -107,6 +112,15 @@ function getAppArgs(): string[] {
   return dropLeadingChromiumSwitches(appArgs);
 }
 
+// The flag table for both front ends is in packages/core/src/startup.ts.
+const VALUE_FLAGS = { '--resume-from': 'resumeFrom' } as const;
+const EARLY_EXIT_FLAGS = {
+  '--help': 'help',
+  '-h': 'help',
+  '--version': 'version',
+  '-v': 'version',
+} as const;
+
 export function parseCliArgs(): CliArgs {
   const args = getAppArgs();
 
@@ -140,50 +154,48 @@ export function parseCliArgs(): CliArgs {
     };
   }
 
-  let resumeFrom: string | null = null;
+  let resumeFrom: string | null;
+  let gitDiffArgs: string[];
+  try {
+    const extracted = extractApplicationOptions(args, { valueFlags: VALUE_FLAGS });
+    resumeFrom = extracted.values.resumeFrom;
+    gitDiffArgs = extracted.rest;
+  } catch (error) {
+    if (!(error instanceof ApplicationOptionError)) throw error;
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+    // Reached only when a test stubs process.exit.
+    return {
+      resumeFrom: null,
+      gitDiffArgs: [],
+      subcommand: null,
+      remoteUrl: null,
+      allThreads: false,
+    };
+  }
+
+  // Remote GUI mode: only the FIRST positional argument may be a forge URL, never an option's value
+  // (`-S <url>`) and never after `--`. Non-URL positionals keep pass-through.
   let remoteUrl: string | null = null;
-  const gitDiffArgs: string[] = [];
-  let firstPositionalSeen = false;
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-
-    if (arg === '--resume-from') {
-      if (i + 1 >= args.length) {
-        console.error('Error: --resume-from requires a file path argument');
-        process.exit(1);
-      }
-      resumeFrom = args[i + 1];
-      i++; // Skip the next arg
-      continue;
+  const { positionalIndices } = classifyGitDiffArgs(gitDiffArgs);
+  const separator = gitDiffArgs.indexOf('--');
+  const first = positionalIndices.find(i => separator === -1 || i < separator);
+  if (first !== undefined) {
+    const arg = gitDiffArgs[first];
+    if (parseForgeUrl(arg) !== null) {
+      remoteUrl = arg;
+      gitDiffArgs = [...gitDiffArgs.slice(0, first), ...gitDiffArgs.slice(first + 1)];
+    } else if (arg === 'fetch-comments') {
+      // The subcommand reached here in a position dispatch cannot honor.
+      // Forwarding it and its URL to git diff would run the wrong command
+      // on arguments that are not git's, so say so instead.
+      console.error(
+        'Error: fetch-comments must be the first argument: ' +
+          'self-review fetch-comments <url> [--all-threads]'
+      );
+      console.error('       To diff a path named fetch-comments, put it after --.');
+      process.exit(1);
     }
-
-    // Remote GUI mode: only the FIRST positional argument may be a forge
-    // URL, and never after the `--` separator (everything after `--` is a
-    // pathspec by git convention). Non-URL positionals keep pass-through.
-    if (arg === '--') {
-      firstPositionalSeen = true; // no URL detection past the separator
-    } else if (!arg.startsWith('-') && !firstPositionalSeen) {
-      firstPositionalSeen = true;
-      if (parseForgeUrl(arg) !== null) {
-        remoteUrl = arg;
-        continue; // never forwarded to git diff
-      }
-      if (arg === 'fetch-comments') {
-        // The subcommand reached here in a position dispatch cannot honor.
-        // Forwarding it and its URL to git diff would run the wrong command
-        // on arguments that are not git's, so say so instead.
-        console.error(
-          'Error: fetch-comments must be the first argument: ' +
-            'self-review fetch-comments <url> [--all-threads]'
-        );
-        console.error('       To diff a path named fetch-comments, put it after --.');
-        process.exit(1);
-      }
-    }
-
-    // All other args are passed through to git diff
-    gitDiffArgs.push(arg);
   }
 
   return { resumeFrom, gitDiffArgs, subcommand: null, remoteUrl, allThreads: false };
@@ -218,10 +230,12 @@ Examples:
   self-review https://github.com/o/r/pull/42    # review a remote PR
   self-review fetch-comments https://github.com/o/r/pull/42
 
-All arguments except --resume-from and --help are passed to git diff.
+All arguments except --resume-from and --help are passed to git diff; --
+ends the app's own options, so everything after it reaches git as written.
 Leading Electron/Chromium switches (--ozone-platform=headless and friends)
 are consumed by the app and never reach git diff.
-If no arguments are provided, shows unstaged working tree changes.
+If no arguments are provided, shows unstaged working tree changes, or the
+default-diff-args from configuration.
 
 Output is written to ./review.xml by default (configurable via
 output-file in .self-review.yaml or ~/.config/self-review/config.yaml).
@@ -247,14 +261,23 @@ export interface EarlyExitInfo {
 export function checkEarlyExit(): EarlyExitInfo {
   const args = getAppArgs();
 
-  // Check for --help
-  if (args.includes('--help') || args.includes('-h')) {
+  // Same rules as the parser: `--help` after `--` is a pathspec.
+  let flags: { help: boolean; version: boolean };
+  try {
+    flags = extractApplicationOptions(args, {
+      valueFlags: VALUE_FLAGS,
+      booleanFlags: EARLY_EXIT_FLAGS,
+    }).flags;
+  } catch {
+    return { shouldExit: false, exitCode: 0 };
+  }
+
+  if (flags.help) {
     printHelp();
     return { shouldExit: true, exitCode: 0 };
   }
 
-  // Check for --version
-  if (args.includes('--version') || args.includes('-v')) {
+  if (flags.version) {
     printVersion();
     return { shouldExit: true, exitCode: 0 };
   }

@@ -2,23 +2,24 @@
 // Electron main process entry point
 
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
-import { writeFileSync } from 'fs';
 import { resolve } from 'path';
-import { checkWritability } from './fs-utils';
 import { parseCliArgs } from './cli';
+import { formatGitDiffArgs } from '../../packages/core/src/git-diff-args';
+import { loadConfigWithProvenance } from '../../packages/core/src/config';
+import { resolveStartupSource } from '../../packages/core/src/startup-mode';
 import {
-  formatGitDiffArgs,
-  normalizeGitDiffArgs,
-  tokenizeGitDiffArgs,
-} from '../../packages/core/src/git-diff-args';
-import { loadGitDiffWithUntracked } from '../../packages/core/src/git-diff-loader';
-import { scanDirectory, scanFile } from './directory-scanner';
-import { loadConfig } from './config';
-import { applyStagedUntrackedDefault } from '../../packages/core/src/staged-untracked';
-import { determineMode } from '../../packages/core/src/startup-mode';
-import { createIgnoreFilter } from './ignore-filter';
-import { parseReviewXml } from './xml-parser';
-import { serializeReview } from './xml-serializer';
+  loadLocalReview,
+  publishOptionsFor,
+  resolveOutputTarget,
+  resolveStartupDiffArgs,
+} from '../../packages/core/src/startup';
+import { inspectOutputPath, publishReview } from '../../packages/core/src/review-publisher';
+import type {
+  PublishReviewOptions,
+  ReviewOutputTarget,
+} from '../../packages/core/src/review-publisher';
+import { QuitController, saveAndQuit } from './quit-controller';
+import type { SaveFailure } from './quit-controller';
 import {
   registerIpcHandlers,
   registerFindInPageForWindow,
@@ -27,7 +28,10 @@ import {
   setConfigData,
   setOutputPathInfo,
   setResumeData,
-  requestReviewFromRenderer,
+  loadResumeFile,
+  getAttachmentOrigins,
+  takeSubmittedReviewState,
+  isReviewOpen,
   sendDiffLoad,
   sendResumeLoad,
   sendGuideLoad,
@@ -38,6 +42,8 @@ import {
   applyRemoteProvenance,
   computeRemoteDrift,
 } from '../../packages/core/src/remote-mode';
+import type { RemoteBootstrapResult } from '../../packages/core/src/remote-mode';
+import { isCommandCancelled } from '../../packages/core/src/forge-provider';
 import { loadGuide } from '../../packages/core/src/guide-loader';
 import { checkForUpdate } from './version-checker';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
@@ -53,6 +59,7 @@ import {
   RemoteOpenUrlResult,
   RemoteSessionInfo,
   ReviewComment,
+  ReviewSourceIdentity,
 } from '../shared/types';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
@@ -113,33 +120,154 @@ if (process.env.NODE_ENV === 'test' || process.env.DISPLAY === ':99') {
 
 let mainWindow: BrowserWindow | null = null;
 let diffData: DiffLoadPayload | null = null;
+let diffIdentity: ReviewSourceIdentity | null = null;
 let resumeComments: ReviewComment[] = [];
 let resumeViewedFiles: string[] = [];
 let appConfig: AppConfig | null = null;
-let currentOutputPath: string = '';
 let outputPathWritable: boolean = false;
-let isQuitting = false;
+const launchCwd = process.cwd();
+// `inherited` origin must stay inside launchCwd; `explicit` may point anywhere. Replaced whole on a save-dialog pick.
+let outputTarget: ReviewOutputTarget = {
+  path: resolve(launchCwd, 'review.xml'),
+  origin: 'inherited',
+  baseDir: launchCwd,
+};
 // Remote PR/MR session state. remoteSessionInfo is injected into the
 // submitted ReviewState on save so the serializer writes the remote-*
-// attributes; remoteCleanup removes a temporary clone when one was created.
+// attributes. remoteCleanup is only called through disposeRemoteSession; remoteInFlight lets a quit or
+// deadline cancel a bootstrap that has not returned.
 let remoteSessionInfo: RemoteSessionInfo | null = null;
-let remoteCleanup: (() => void) | null = null;
+let remoteCleanup: (() => Promise<void>) | null = null;
+let remoteInFlight: { controller: AbortController; settled: Promise<void> } | null = null;
 
-// When the app is quitting (SIGTERM, app.quit(), etc.), allow windows to close
-// without showing the confirmation dialog.
-app.on('before-quit', () => {
-  isQuitting = true;
-});
+const STARTUP_TIMEOUT_MS = 45_000;
+const STARTUP_CANCEL_GRACE_MS = 10_000;
+// The welcome-screen spinner cannot be cancelled by the reviewer, so the open cancels itself after this.
+const REMOTE_OPEN_TIMEOUT_MS = 10 * 60_000;
+const EXIT_CLEANUP_TIMEOUT_MS = 10_000;
 
-// Temporary remote clones are removed on every exit path. The materializer's
-// cleanup is idempotent: process 'exit' covers the direct process.exit()
-// paths (Finish Review, Save & Quit, Discard, fatal errors) and 'will-quit'
-// covers app.quit() flows.
+const quitController = new QuitController();
+
+function isReviewWindowOpen(): boolean {
+  return (
+    mainWindow !== null &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isLoading() &&
+    isReviewOpen()
+  );
+}
+
+function handleCloseRequest(event: Electron.Event): void {
+  const decision = quitController.closeRequested(isReviewWindowOpen());
+  if (decision === 'allow') return;
+  event.preventDefault();
+  if (decision === 'ask-renderer' && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.APP_CLOSE_REQUESTED);
+  }
+}
+
+// Signal handlers call process.exit() right after app.quit(), so SIGTERM/SIGINT is never held up here.
+app.on('before-quit', handleCloseRequest);
+
+// Bounded wait: the work is not interrupted when the deadline passes.
+function withinTimeout(work: Promise<unknown>, ms: number, what: string): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<void>(resolve => {
+    timer = setTimeout(() => {
+      console.error(`[main] ${what} did not finish within ${ms / 1000}s; continuing`);
+      resolve();
+    }, ms);
+  });
+  return Promise.race([work.then(() => undefined), deadline]).finally(() => clearTimeout(timer));
+}
+
+async function runRemoteBootstrap(
+  url: string,
+  ignorePatterns: string[],
+  controller: AbortController
+): Promise<RemoteBootstrapResult> {
+  const bootstrap = bootstrapRemoteDiff(
+    url,
+    launchCwd,
+    ignorePatterns,
+    {},
+    {
+      signal: controller.signal,
+    }
+  );
+  remoteInFlight = {
+    controller,
+    settled: bootstrap.then(
+      () => undefined,
+      () => undefined
+    ),
+  };
+  try {
+    return await bootstrap;
+  } finally {
+    remoteInFlight = null;
+  }
+}
+
+// Idempotent, bounded, never rejects. Temp-clone removal is the synchronous first step, which the `exit` handler relies on.
+async function disposeRemoteSession(reason: string): Promise<void> {
+  const inFlight = remoteInFlight;
+  if (inFlight) {
+    console.error(`[main] Cancelling the remote materialization in flight (${reason})`);
+    inFlight.controller.abort(new Error(reason));
+    await withinTimeout(inFlight.settled, EXIT_CLEANUP_TIMEOUT_MS, 'Remote cancellation');
+  }
+  const cleanup = remoteCleanup;
+  remoteCleanup = null;
+  if (cleanup) {
+    await withinTimeout(cleanup(), EXIT_CLEANUP_TIMEOUT_MS, 'Remote session cleanup');
+  }
+}
+
+function exitNow(code: number): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.destroy();
+  }
+  void disposeRemoteSession('exit').finally(() => process.exit(code));
+}
+
+function publishOptions(): PublishReviewOptions {
+  return publishOptionsFor(outputTarget, getAttachmentOrigins());
+}
+
+// Advisory only: the save re-checks.
+function probeOutputPath(): boolean {
+  const problem = inspectOutputPath(outputTarget.path, publishOptions());
+  if (problem) {
+    console.error(`[main] Output path check (${problem.code}): ${problem.message}`);
+  }
+  return problem === null;
+}
+
+async function reportSaveFailure(failure: SaveFailure): Promise<void> {
+  console.error(`[main] Error saving review (${failure.code}): ${failure.message}`);
+  for (const line of failure.detail.split('\n')) {
+    if (line.length > 0) console.error(`[main]   ${line}`);
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  await dialog.showMessageBox(mainWindow, {
+    type: 'error',
+    title: 'Review not saved',
+    message: failure.message,
+    detail: failure.detail,
+    buttons: ['OK'],
+    defaultId: 0,
+  });
+}
+
+// 'exit' cannot wait, so only the synchronous part of the cleanup runs there; 'will-quit' holds app.quit() until the release is done.
 process.on('exit', () => {
-  remoteCleanup?.();
+  void remoteCleanup?.();
 });
-app.on('will-quit', () => {
-  remoteCleanup?.();
+app.on('will-quit', event => {
+  if (!remoteCleanup && !remoteInFlight) return;
+  event.preventDefault();
+  void disposeRemoteSession('quit').finally(() => app.quit());
 });
 
 /**
@@ -147,11 +275,22 @@ app.on('will-quit', () => {
  * This function is called from the app.whenReady() handler.
  */
 async function initializeApp() {
-  // Add overall initialization timeout
+  // At the deadline an in-flight remote bootstrap is cancelled (the catch below exits); a forced exit follows after STARTUP_CANCEL_GRACE_MS.
+  const startupController = new AbortController();
+  let forcedExit: NodeJS.Timeout | undefined;
   const initTimeout = setTimeout(() => {
-    console.error('[main] Initialization timeout after 45 seconds');
-    process.exit(1);
-  }, 45000);
+    console.error(`[main] Initialization timeout after ${STARTUP_TIMEOUT_MS / 1000} seconds`);
+    if (!remoteInFlight) {
+      process.exit(1);
+      return;
+    }
+    console.error('[main] Cancelling the remote materialization and waiting for its cleanup');
+    startupController.abort(new Error('initialization timeout'));
+    forcedExit = setTimeout(() => {
+      console.error('[main] Remote cleanup did not finish in time; exiting');
+      process.exit(1);
+    }, STARTUP_CANCEL_GRACE_MS);
+  }, STARTUP_TIMEOUT_MS);
 
   try {
     console.error('[main] Starting initialization');
@@ -160,116 +299,71 @@ async function initializeApp() {
     const cliArgs = parseCliArgs();
     console.error('[main] CLI args parsed:', JSON.stringify(cliArgs));
 
-    // Phase 2: Load configuration
-    appConfig = loadConfig();
-    currentOutputPath = resolve(process.cwd(), appConfig.outputFile);
-    outputPathWritable = checkWritability(currentOutputPath);
+    // Phase 2: Load configuration (provenance decides output-path trust and default-diff-args trust)
+    const loadedConfig = loadConfigWithProvenance({ cwd: launchCwd });
+    appConfig = loadedConfig.config;
+    outputTarget = resolveOutputTarget(null, loadedConfig, launchCwd);
+    outputPathWritable = probeOutputPath();
     console.error(
       '[main] Config loaded, output path:',
-      currentOutputPath,
+      outputTarget.path,
+      `(${outputTarget.origin})`,
       'writable:',
       outputPathWritable
     );
 
-    // Phase 3: Determine git diff args
-    let gitDiffArgs = cliArgs.gitDiffArgs;
-    if (gitDiffArgs.length === 0 && appConfig.defaultDiffArgs) {
-      // Shell-style quoting, so a configured path or search string with a
-      // space stays one argument on the way to git.
-      gitDiffArgs = tokenizeGitDiffArgs(appConfig.defaultDiffArgs);
-    }
-
-    // Normalize: insert `--` before bare path args so expand-context
-    // never confuses them with revisions.
-    gitDiffArgs = normalizeGitDiffArgs(gitDiffArgs);
-
-    // In staged-mode (--staged / --cached), hide untracked files by default
-    // unless the user explicitly opted in via `show-untracked: true` in YAML.
-    // Must run before any code reads appConfig.showUntracked or sends config
-    // to the renderer via setConfigData.
-    appConfig = applyStagedUntrackedDefault(appConfig, gitDiffArgs);
+    // Phase 3: Determine git diff args. The staged/untracked default must apply before anything reads
+    // appConfig.showUntracked or sends config to the renderer.
+    const resolvedArgs = resolveStartupDiffArgs(cliArgs.gitDiffArgs, loadedConfig, launchCwd);
+    const gitDiffArgs = resolvedArgs.gitDiffArgs;
+    appConfig = resolvedArgs.config;
 
     // Phase 4: Determine startup mode. A forge PR/MR URL bypasses local
     // mode detection: after materialization, remote mode is git mode
     // against the materialized clone.
-    const mode = cliArgs.remoteUrl ? 'remote' : determineMode(gitDiffArgs);
-    console.error('[main] Startup mode:', mode);
+    const source = cliArgs.remoteUrl
+      ? ({ mode: 'remote' } as const)
+      : resolveStartupSource(gitDiffArgs, launchCwd);
+    console.error('[main] Startup mode:', source.mode);
 
     let fetchedRemoteComments: ReviewComment[] = [];
-    if (mode === 'remote') {
+    if (source.mode === 'remote') {
       // Remote mode: materialize the PR/MR, then feed the git-mode
       // pipeline with the clone's repo path and the base...head range.
       // Materialization failures throw and are handled like any other
       // fatal startup git error by the catch below.
-      const { session, payload } = await bootstrapRemoteDiff(
+      const { session, payload, identity } = await runRemoteBootstrap(
         cliArgs.remoteUrl!,
-        process.cwd(),
-        appConfig.ignore
+        appConfig.ignore,
+        startupController
       );
       remoteCleanup = session.cleanup;
       remoteSessionInfo = session.remote;
       fetchedRemoteComments = session.fetchedComments;
       diffData = payload;
+      diffIdentity = identity;
       console.error(
         '[main] Remote diff loaded:',
         payload.files.length,
         'files at',
         session.repoPath
       );
-    } else if (mode === 'git') {
-      // Git mode: existing flow
-      console.error('[main] Git diff args:', formatGitDiffArgs(gitDiffArgs));
-
-      const { files: allFiles, repository } = await loadGitDiffWithUntracked(gitDiffArgs);
-      console.error('[main] Loaded', allFiles.length, 'files from git diff');
-
-      const shouldKeep = createIgnoreFilter(appConfig.ignore);
-      const filteredFiles = allFiles.filter(f => shouldKeep(f.newPath || f.oldPath));
-
-      diffData = {
-        files: filteredFiles,
-        source: {
-          type: 'git',
-          // Quoted where a bare join would lose a boundary, so expand-context
-          // can recover this argv exactly.
-          gitDiffArgs: formatGitDiffArgs(gitDiffArgs),
-          repository,
-        },
-      };
-    } else if (mode === 'file') {
-      // File mode: scan a single file as new addition
-      const fileArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
-      const filePath = resolve(process.cwd(), fileArg);
-      console.error('[main] Scanning file:', filePath);
-
-      const files = await scanFile(filePath);
-      console.error('[main] File scan complete:', files.length, 'files');
-
-      diffData = {
-        files,
-        source: { type: 'file', sourcePath: filePath },
-      };
-    } else if (mode === 'directory') {
-      // Directory mode: scan the specified directory
-      const dirArg = gitDiffArgs.find(a => a !== '--' && !a.startsWith('-'))!;
-      const directoryPath = resolve(process.cwd(), dirArg);
-      console.error('[main] Scanning directory:', directoryPath);
-
-      const files = await scanDirectory(directoryPath, appConfig.ignore);
-      console.error('[main] Directory scan complete:', files.length, 'files');
-
-      diffData = {
-        files,
-        source: { type: 'directory', sourcePath: directoryPath },
-      };
     } else {
-      // Welcome mode: open window with no diff data
-      console.error('[main] Welcome mode — no git repo or directory arg');
-
-      diffData = {
-        files: [],
-        source: { type: 'welcome' },
-      };
+      if (source.mode === 'git') {
+        console.error('[main] Git diff args:', formatGitDiffArgs(gitDiffArgs));
+      } else if (source.mode === 'welcome') {
+        console.error('[main] Welcome mode — no git repo or directory arg');
+      } else {
+        console.error(`[main] Scanning ${source.mode}:`, source.sourcePath);
+      }
+      const loaded = await loadLocalReview(source, gitDiffArgs, appConfig, launchCwd, message =>
+        console.error(`[main] ${message}`)
+      );
+      diffData = loaded.payload;
+      diffIdentity = loaded.identity;
+      if (source.mode !== 'welcome') {
+        console.error('[main] Loaded', diffData.files.length, 'files');
+      }
     }
 
     // Phase 4b: Large payload guard
@@ -304,13 +398,19 @@ async function initializeApp() {
 
     // Phase 5: Handle --resume-from if specified
     let resumeRemoteHeadSha: string | undefined;
+    let resumeImportDiagnostics: string[] = [];
     if (cliArgs.resumeFrom) {
+      // The parser reports; this host decides: an unreadable document is fatal.
       try {
         console.error('[main] Loading resume file:', cliArgs.resumeFrom);
-        const parsed = parseReviewXml(cliArgs.resumeFrom);
+        // Attachments resolve beside the resumed document, not the launch directory or the output.
+        const { parsed, importDiagnostics } = loadResumeFile(
+          resolve(launchCwd, cliArgs.resumeFrom)
+        );
         resumeComments = parsed.comments;
         resumeViewedFiles = parsed.viewedFiles;
         resumeRemoteHeadSha = parsed.remoteHeadSha;
+        resumeImportDiagnostics = importDiagnostics;
         console.error(
           '[main] Loaded',
           resumeComments.length,
@@ -318,8 +418,12 @@ async function initializeApp() {
           resumeViewedFiles.length,
           'viewed files from resume file'
         );
-      } catch {
-        console.error('[main] Error loading resume file');
+        for (const diagnostic of resumeImportDiagnostics) {
+          console.error(`[main] Resume import: ${diagnostic}`);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[main] Error loading resume file: ${message}`);
         clearTimeout(initTimeout);
         process.exit(1);
       }
@@ -345,7 +449,7 @@ async function initializeApp() {
     // is silent, a bad one logs one stderr warning and yields no guide.
     if (diffData && diffData.source.type !== 'welcome') {
       const guidePayload = await loadGuide(
-        currentOutputPath,
+        outputTarget.path,
         appConfig,
         diffData.files.map(f => f.newPath || f.oldPath)
       );
@@ -356,16 +460,22 @@ async function initializeApp() {
     }
 
     // Phase 6: Cache data for when renderer requests it
-    setDiffData(diffData);
+    setDiffData(diffData, diffIdentity);
     setConfigData(appConfig);
-    setOutputPathInfo({ resolvedOutputPath: currentOutputPath, outputPathWritable });
-    if (resumeComments.length > 0 || resumeViewedFiles.length > 0 || remoteDrift !== null) {
-      setResumeData(resumeComments, resumeViewedFiles, remoteDrift);
+    setOutputPathInfo({ resolvedOutputPath: outputTarget.path, outputPathWritable });
+    if (
+      resumeComments.length > 0 ||
+      resumeViewedFiles.length > 0 ||
+      remoteDrift !== null ||
+      resumeImportDiagnostics.length > 0
+    ) {
+      setResumeData(resumeComments, resumeViewedFiles, remoteDrift, resumeImportDiagnostics);
     }
 
     // Phase 7: Register IPC handlers
     console.error('[main] Registering IPC handlers');
     registerIpcHandlers();
+    registerLifecycleHandlers();
 
     // Phase 7b: Setup menu
     console.error('[main] Setting up menu');
@@ -383,7 +493,11 @@ async function initializeApp() {
     console.error('[main] Initialization complete');
   } catch (error) {
     clearTimeout(initTimeout);
-    if (error instanceof Error) {
+    if (forcedExit) clearTimeout(forcedExit);
+    if (isCommandCancelled(error)) {
+      // The deadline cancelled the bootstrap; its cleanup already ran.
+      console.error(`[main] Remote materialization cancelled: ${error.message}`);
+    } else if (error instanceof Error) {
       console.error(`[main] Initialization error: ${error.message}`);
       console.error(`[main] Stack trace: ${error.stack}`);
     } else {
@@ -426,61 +540,68 @@ function createWindow(): void {
 
   // Data is sent when renderer requests it via IPC (see ipc-handlers.ts)
 
-  // Handle window close - intercept and ask renderer to show confirmation dialog
-  // Skip the dialog when the app is quitting (SIGTERM, process.kill, etc.)
-  mainWindow.on('close', event => {
-    if (!mainWindow || isQuitting) return;
-    event.preventDefault();
-    mainWindow.webContents.send(IPC.APP_CLOSE_REQUESTED);
+  mainWindow.on('close', handleCloseRequest);
+  mainWindow.on('closed', () => {
+    mainWindow = null;
   });
+}
 
-  // Handle save-and-quit from renderer (Finish Review button or dialog Save & Quit)
+// Registered once from initializeApp: createWindow can rerun on macOS `activate` and listeners would stack.
+function registerLifecycleHandlers(): void {
+  // Finish Review and Save & Quit; a failed publish leaves the window open.
   ipcMain.on(IPC.APP_SAVE_AND_QUIT, async () => {
-    if (!mainWindow) return;
-
-    try {
-      console.error('[main] Save and quit requested');
-      const reviewState = await requestReviewFromRenderer(mainWindow);
-      // Remote provenance is injected main-side so "Finish Review" writes
-      // the remote-* attributes without renderer involvement.
-      const finalState = remoteSessionInfo
-        ? applyRemoteProvenance(reviewState, remoteSessionInfo)
-        : reviewState;
-      const xml = await serializeReview(finalState, currentOutputPath);
-
-      writeFileSync(currentOutputPath, xml + '\n', 'utf-8');
-      console.error(`[main] Review written to ${currentOutputPath}`);
-
-      mainWindow.destroy();
-      process.exit(0);
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error(`[main] Error saving review: ${error.message}`);
-      } else {
-        console.error('[main] Error saving review: unknown error');
-      }
-      process.exit(1);
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    console.error('[main] Save and quit requested');
+    const outcome = await saveAndQuit({
+      controller: quitController,
+      takeState: takeSubmittedReviewState,
+      publish: async state => {
+        // Remote provenance is injected main-side so "Finish Review" writes
+        // the remote-* attributes without renderer involvement.
+        const finalState = remoteSessionInfo
+          ? applyRemoteProvenance(state, remoteSessionInfo)
+          : state;
+        await publishReview(finalState, outputTarget.path, publishOptions());
+        console.error(`[main] Review written to ${outputTarget.path}`);
+      },
+      reportFailure: reportSaveFailure,
+      quit: () => exitNow(0),
+    });
+    if (outcome === 'busy') {
+      console.error('[main] Save already in progress; ignoring repeated request');
     }
   });
 
-  // Handle discard-and-quit from renderer (dialog Discard button)
   ipcMain.on(IPC.APP_DISCARD_AND_QUIT, () => {
     console.error('[main] Discard and quit requested');
-    if (mainWindow) {
-      mainWindow.destroy();
-    }
-    process.exit(0);
+    quitController.discard();
+    exitNow(0);
   });
 
   // Start a remote PR/MR session from a renderer-supplied URL (the welcome
   // screen's URL field). Shares the bootstrap with the CLI URL path.
+  // One open at a time; a quit cancels it, and REMOTE_OPEN_TIMEOUT_MS cancels it on its own.
   ipcMain.handle(IPC.REMOTE_OPEN_URL, async (event, url: string): Promise<RemoteOpenUrlResult> => {
+    if (remoteInFlight) {
+      return { ok: false, error: 'A remote review is already being opened.' };
+    }
+    if (remoteCleanup) {
+      return { ok: false, error: 'A remote review is already open in this window.' };
+    }
+    const controller = new AbortController();
+    const deadline = setTimeout(
+      () =>
+        controller.abort(
+          new Error(`opening the PR/MR took longer than ${REMOTE_OPEN_TIMEOUT_MS / 60_000} minutes`)
+        ),
+      REMOTE_OPEN_TIMEOUT_MS
+    );
     try {
       console.error('[main] Remote URL open requested:', url);
-      const { session, payload } = await bootstrapRemoteDiff(
+      const { session, payload, identity } = await runRemoteBootstrap(
         url,
-        process.cwd(),
-        appConfig?.ignore ?? []
+        appConfig?.ignore ?? [],
+        controller
       );
 
       // Large payload guard, matching the startup path.
@@ -501,7 +622,7 @@ function createWindow(): void {
           });
           if (result === 1) {
             console.error('[main] User cancelled large remote review');
-            session.cleanup();
+            await session.cleanup();
             return { ok: false, error: 'Review cancelled.' };
           }
           payload.isLargePayload = true;
@@ -510,7 +631,7 @@ function createWindow(): void {
 
       remoteCleanup = session.cleanup;
       remoteSessionInfo = session.remote;
-      setDiffData(payload);
+      setDiffData(payload, identity);
       setResumeData(session.fetchedComments, [], null);
 
       // Guide sidecar discovery for the welcome→remote path: startup
@@ -518,7 +639,7 @@ function createWindow(): void {
       // now against the remote diff (same tolerant, never-fatal contract).
       const guidePayload = appConfig
         ? await loadGuide(
-            currentOutputPath,
+            outputTarget.path,
             appConfig,
             payload.files.map(f => f.newPath || f.oldPath)
           )
@@ -545,32 +666,40 @@ function createWindow(): void {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error('[main] Failed to open remote URL:', message);
+      if (isCommandCancelled(error)) {
+        const reason = controller.signal.reason;
+        const why = reason instanceof Error ? reason.message : message;
+        return { ok: false, error: `Opening the PR/MR was cancelled: ${why}` };
+      }
       return { ok: false, error: message };
+    } finally {
+      clearTimeout(deadline);
     }
   });
 
-  // Handle output path change via native save dialog
+  // A path picked in the save dialog is explicit: it may be anywhere.
   ipcMain.handle(IPC.OUTPUT_PATH_CHANGE, async (): Promise<OutputPathInfo | null> => {
-    if (!mainWindow) return null;
+    if (!mainWindow || mainWindow.isDestroyed()) return null;
 
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Save Review As',
-      defaultPath: currentOutputPath,
+      defaultPath: outputTarget.path,
       filters: [{ name: 'XML Files', extensions: ['xml'] }],
     });
 
     if (result.canceled || !result.filePath) return null;
 
-    currentOutputPath = result.filePath;
-    outputPathWritable = checkWritability(currentOutputPath);
+    outputTarget = { path: resolve(result.filePath), origin: 'explicit' };
+    outputPathWritable = probeOutputPath();
     console.error(
       '[main] Output path changed to:',
-      currentOutputPath,
+      outputTarget.path,
       'writable:',
       outputPathWritable
     );
 
-    const info: OutputPathInfo = { resolvedOutputPath: currentOutputPath, outputPathWritable };
+    const info: OutputPathInfo = { resolvedOutputPath: outputTarget.path, outputPathWritable };
+    setOutputPathInfo(info);
     mainWindow.webContents.send(IPC.OUTPUT_PATH_CHANGED, info);
     return info;
   });

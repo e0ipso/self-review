@@ -33,11 +33,8 @@
       # exactly one architecture per run and can never install one
       # architecture's hash under another.
       srcHashes = {
-        "x86_64-linux" = "sha256-YAFsUarHCfsuOCcuF9gfcjWdbNTA5pzPOV0IGw3MkSI=";
-        # lib.fakeHash written out, because the updater matches a literal
-        # sha256 string. scripts/update-flake-hash.sh aarch64-linux replaces it
-        # once a release publishes an arm64 artifact.
-        "aarch64-linux" = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+        "x86_64-linux" = "sha256-MkbSFmLFSM4t5IST4uhmRXumtF9VH9U0qP+xNaDSNuk=";
+        "aarch64-linux" = "sha256-T86mGyMQ8h3vYFKohh8111cHvduTjRVxc02AgRfuKQo=";
       };
 
       mkSelfReview =

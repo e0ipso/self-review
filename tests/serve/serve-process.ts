@@ -16,12 +16,20 @@ import * as path from 'node:path';
 /** The built entry point, exactly what `bin.self-review-serve` points at. */
 export const SERVE_CLI = path.resolve(__dirname, '../../packages/serve/dist/cli.js');
 
-/** Where the URL line comes from — stderr, since stdout is unused. */
-const READY_LINE = /Review ready at (http:\/\/127\.0\.0\.1:\d+\/?)/;
+/**
+ * Where the URL line comes from — stderr, since stdout is unused. The
+ * fragment is the session capability; opening the URL without it gets the
+ * "open the URL printed in the terminal" page and nothing else.
+ */
+const READY_LINE = /Review ready at (http:\/\/127\.0\.0\.1:\d+\/#cap=([A-Za-z0-9_-]+))/;
 
 export interface ServeProcess {
-  /** The served URL, as the program printed it. */
+  /** The launch URL, as the program printed it: origin plus `#cap=<token>`. */
   url: string;
+  /** The listener's origin without the fragment: `http://127.0.0.1:<port>`. */
+  origin: string;
+  /** The session capability the fragment carries. */
+  capability: string;
   /** Everything the program has written to stderr so far. */
   stderr(): string;
   /** Everything it has written to stdout, which should stay empty. */
@@ -75,6 +83,8 @@ export function startServe(args: string[], cwd: string, timeoutMs = 30_000): Pro
 
   const handle: ServeProcess = {
     url: '',
+    origin: '',
+    capability: '',
     stderr: () => stderrText,
     stdout: () => stdoutText,
     hasExited: () => exitCode !== null,
@@ -96,6 +106,8 @@ export function startServe(args: string[], cwd: string, timeoutMs = 30_000): Pro
       clearTimeout(timer);
       child.stderr?.off('data', check);
       handle.url = match[1];
+      handle.origin = new URL(match[1]).origin;
+      handle.capability = match[2];
       resolve(handle);
     };
 

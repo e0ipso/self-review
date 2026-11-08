@@ -2,9 +2,14 @@
 // Serialize ReviewState to XML and validate against XSD
 
 import * as path from 'path';
-import * as fs from 'fs';
 import { ReviewState, FileReviewState, ReviewComment, Reply, Attachment } from './types';
 import { validateXML } from 'xmllint-wasm';
+import {
+  ReviewXmlError,
+  XmlIllegalCharacterError,
+  XmlIllegalCharacterLocation,
+} from './xml-errors';
+import { escapeXmlAttribute, escapeXmlText, findIllegalXmlCharacter } from './xml-text';
 
 // Embed the XSD schema for validation.
 // This MUST stay byte-identical to the on-disk canonical copy
@@ -175,7 +180,7 @@ export const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
     <xs:attribute name="change-type" type="sr:ChangeTypeEnum" use="required">
       <xs:annotation>
         <xs:documentation>
-          The type of change: added, modified, deleted, or renamed.
+          The type of change: added, modified, deleted, renamed, or copied.
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
@@ -519,6 +524,11 @@ export const XSD_SCHEMA = `<?xml version="1.0" encoding="UTF-8"?>
           <xs:documentation>File was moved or renamed, with or without content changes.</xs:documentation>
         </xs:annotation>
       </xs:enumeration>
+      <xs:enumeration value="copied">
+        <xs:annotation>
+          <xs:documentation>File was copied from another path (git copy detection), with or without content changes.</xs:documentation>
+        </xs:annotation>
+      </xs:enumeration>
     </xs:restriction>
   </xs:simpleType>
 
@@ -644,21 +654,6 @@ function extFromMediaType(mediaType: string): string {
 }
 
 /**
- * Copies one attachment list's in-memory blobs into the asset directory and
- * returns the list with each fileName rewritten to its on-disk location and the
- * data buffer stripped.
- *
- * Shared by the comment walk and the reply walk. Serialization emits the
- * fileName it is given without checking that anything was written, so an
- * attachment list that misses this function produces a document that validates
- * against the schema while pointing at a file that does not exist. That failure
- * has no error surface, which is why both walks go through here.
- *
- * The idPrefix names the resulting files. Comments pass their own id, so
- * existing asset names are unchanged; replies pass a prefix that cannot collide
- * with a comment's.
- */
-/**
  * Reduce an id to something that can only ever name a file *inside* the asset
  * directory.
  *
@@ -678,47 +673,76 @@ function assetNameComponent(idPrefix: string): string {
   return String(idPrefix ?? '').replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
-function persistAttachments(
+export const ASSET_DIR_NAME = '.self-review-assets';
+
+export interface PlannedAsset {
+  /** As emitted in the document: `.self-review-assets/<name>`. */
+  relativePath: string;
+  absolutePath: string;
+  data: ArrayBuffer;
+}
+
+/**
+ * `idPrefix` is already URL-safe; the result must be a bare file name. The publisher injects unique
+ * names so a new document never overwrites an asset the previous one references.
+ */
+export type AssetNamer = (idPrefix: string, index: number, ext: string) => string;
+
+export interface SerializeOptions {
+  assetName?: AssetNamer;
+}
+
+export interface SerializedReview {
+  /** Validated, without a trailing newline. */
+  xml: string;
+  /** Blobs the document references that nothing has written yet. */
+  assets: PlannedAsset[];
+}
+
+const defaultAssetName: AssetNamer = (idPrefix, index, ext) => `${idPrefix}-${index}.${ext}`;
+
+/**
+ * Rewrites fileNames to their on-disk locations, strips the data buffers and collects each
+ * blob as a planned asset. Both the comment and reply walks must go through here: a list that
+ * skips it validates against the schema while pointing at a file that does not exist.
+ * Replies pass an `idPrefix` that cannot collide with a comment's.
+ */
+function stageAttachmentList(
   attachments: Attachment[] | undefined,
   idPrefix: string,
   assetDir: string,
-  onWrite: () => void
+  assetName: AssetNamer,
+  assets: PlannedAsset[]
 ): Attachment[] | undefined {
   if (!attachments?.length) return attachments;
 
   return attachments.map((att, index) => {
     if (!att.data) return att;
-    onWrite();
 
     const ext = extFromMediaType(att.mediaType);
-    const fileName = `${assetNameComponent(idPrefix)}-${index}.${ext}`;
-    const relativePath = `.self-review-assets/${fileName}`;
-    const target = path.join(assetDir, fileName);
+    const fileName = assetName(assetNameComponent(idPrefix), index, ext);
+    const relativePath = `${ASSET_DIR_NAME}/${fileName}`;
+    const absolutePath = path.join(assetDir, fileName);
 
-    // `assetNameComponent` already makes this unreachable. It stays because
-    // this write happens *before* the document is validated against the XSD
-    // (see `serializeReview`), so a file lands on disk even when serialization
-    // goes on to fail — which makes an escape here permanent, and worth a
-    // second, independent check rather than one clever regex.
-    if (path.dirname(path.resolve(target)) !== path.resolve(assetDir)) {
+    // Unreachable for the default namer; an independent second check, since an escape is a write to
+    // an arbitrary path.
+    if (path.dirname(path.resolve(absolutePath)) !== path.resolve(assetDir)) {
       throw new Error(`Refusing to write an attachment outside ${assetDir}: ${fileName}`);
     }
 
-    if (!fs.existsSync(assetDir)) {
-      fs.mkdirSync(assetDir, { recursive: true });
-    }
-    fs.writeFileSync(target, Buffer.from(att.data));
-
+    assets.push({ relativePath, absolutePath, data: att.data });
     return { ...att, fileName: relativePath, data: undefined };
   });
 }
 
-function writeAttachments(state: ReviewState, outputFilePath: string): ReviewState {
-  const assetDir = path.join(path.dirname(outputFilePath), '.self-review-assets');
-  let hasAttachments = false;
-  const markWritten = () => {
-    hasAttachments = true;
-  };
+/** Plans the writes without performing them; the publisher decides after validation. */
+function stageAttachments(
+  state: ReviewState,
+  outputFilePath: string,
+  assetName: AssetNamer
+): { state: ReviewState; assets: PlannedAsset[] } {
+  const assetDir = path.join(path.dirname(outputFilePath), ASSET_DIR_NAME);
+  const assets: PlannedAsset[] = [];
 
   const updatedFiles = state.files.map(file => ({
     ...file,
@@ -727,16 +751,23 @@ function writeAttachments(state: ReviewState, outputFilePath: string): ReviewSta
     // own list would drop those blobs without a word.
     comments: file.comments.map(comment => ({
       ...comment,
-      attachments: persistAttachments(comment.attachments, comment.id, assetDir, markWritten),
+      attachments: stageAttachmentList(
+        comment.attachments,
+        comment.id,
+        assetDir,
+        assetName,
+        assets
+      ),
       ...(comment.replies
         ? {
             replies: comment.replies.map(reply => ({
               ...reply,
-              attachments: persistAttachments(
+              attachments: stageAttachmentList(
                 reply.attachments,
                 `${comment.id}-r-${reply.id}`,
                 assetDir,
-                markWritten
+                assetName,
+                assets
               ),
             })),
           }
@@ -744,36 +775,37 @@ function writeAttachments(state: ReviewState, outputFilePath: string): ReviewSta
     })),
   }));
 
-  if (hasAttachments) {
-    console.error(`[main] Wrote attachment files to ${assetDir}`);
-  }
-
-  return { ...state, files: updatedFiles };
+  return { state: { ...state, files: updatedFiles }, assets };
 }
 
-export async function serializeReview(state: ReviewState, outputFilePath: string): Promise<string> {
-  const processedState = writeAttachments(state, outputFilePath);
-  const xml = buildXml(processedState);
+/**
+ * Pure: touches no disk (`publishReview` writes). Built before validation, so an
+ * unrepresentable value is refused first.
+ *
+ * @throws XmlIllegalCharacterError naming the comment/reply and field.
+ * @throws ReviewXmlError `schema-invalid`, one violation per `details` line. A validator
+ *   that fails to load is deliberately not fatal: unvalidated XML after a stderr warning.
+ */
+export async function serializeReview(
+  state: ReviewState,
+  outputFilePath: string,
+  options: SerializeOptions = {}
+): Promise<SerializedReview> {
+  const staged = stageAttachments(state, outputFilePath, options.assetName ?? defaultAssetName);
+  const xml = buildXml(staged.state);
+  await validateAgainstSchema(xml);
+  return { xml, assets: staged.assets };
+}
 
-  // Validate the XML against the XSD
+async function validateAgainstSchema(xml: string): Promise<void> {
+  let validationResult: Awaited<ReturnType<typeof validateXML>>;
   try {
-    const validationResult = await validateXML({
+    validationResult = await validateXML({
       xml: [{ fileName: 'review.xml', contents: xml }],
       schema: [{ fileName: 'self-review-v3.xsd', contents: XSD_SCHEMA }],
     });
-
-    if (!validationResult.valid) {
-      const errors = validationResult.errors || [];
-      console.error('XML validation failed:');
-      errors.forEach((err: unknown) => console.error(`  ${err}`));
-      throw new Error('Generated XML does not conform to schema');
-    }
   } catch (error) {
-    // Re-throw if it's a schema validation failure (our own throw above)
-    if (error instanceof Error && error.message === 'Generated XML does not conform to schema') {
-      throw error;
-    }
-    // Infrastructure failure (e.g. WASM load): log warning and return XML anyway
+    // Infrastructure failure (e.g. WASM load): losing a finished review is the worse outcome.
     if (error instanceof Error) {
       console.error(
         `[main] XML validation infrastructure failed: ${error.message} - emitting XML without validation`
@@ -783,19 +815,39 @@ export async function serializeReview(state: ReviewState, outputFilePath: string
         '[main] XML validation infrastructure failed - emitting XML without validation'
       );
     }
-    return xml;
+    return;
   }
 
-  return xml;
+  if (!validationResult.valid) {
+    const details = (validationResult.errors || []).map(formatSchemaError);
+    console.error('XML validation failed:');
+    details.forEach(detail => console.error(`  ${detail}`));
+    throw new ReviewXmlError(
+      'schema-invalid',
+      `Generated XML does not conform to schema${details.length ? `: ${details.join('; ')}` : ''}`,
+      { details }
+    );
+  }
+}
+
+function formatSchemaError(err: unknown): string {
+  if (typeof err === 'string') return err;
+  if (err && typeof err === 'object') {
+    const { message, loc } = err as { message?: unknown; loc?: { lineNumber?: unknown } | null };
+    const text = typeof message === 'string' ? message : JSON.stringify(err);
+    const line = loc && typeof loc === 'object' ? loc.lineNumber : undefined;
+    return typeof line === 'number' ? `line ${line}: ${text}` : text;
+  }
+  return String(err);
 }
 
 function buildSourceAttributes(state: ReviewState): string {
   const source = state.source;
   if (source.type === 'git') {
-    return ` git-diff-args="${escapeXml(source.gitDiffArgs)}" repository="${escapeXml(source.repository)}"`;
+    return ` git-diff-args="${attr(source.gitDiffArgs, { field: 'git-diff-args' })}" repository="${attr(source.repository, { field: 'repository' })}"`;
   }
   if (source.type === 'directory' || source.type === 'file') {
-    return ` source-path="${escapeXml(source.sourcePath)}"`;
+    return ` source-path="${attr(source.sourcePath, { field: 'source-path' })}"`;
   }
   // welcome mode: no source attributes
   return '';
@@ -811,13 +863,13 @@ function buildRemoteAttributes(state: ReviewState): string {
   const attrs: string[] = [];
 
   if (state.remoteUrl) {
-    attrs.push(`remote-url="${escapeXml(state.remoteUrl)}"`);
+    attrs.push(`remote-url="${attr(state.remoteUrl, { field: 'remote-url' })}"`);
   }
   if (state.remoteBaseSha) {
-    attrs.push(`remote-base-sha="${escapeXml(state.remoteBaseSha)}"`);
+    attrs.push(`remote-base-sha="${attr(state.remoteBaseSha, { field: 'remote-base-sha' })}"`);
   }
   if (state.remoteHeadSha) {
-    attrs.push(`remote-head-sha="${escapeXml(state.remoteHeadSha)}"`);
+    attrs.push(`remote-head-sha="${attr(state.remoteHeadSha, { field: 'remote-head-sha' })}"`);
   }
   if (state.remoteForge) {
     attrs.push(`remote-forge="${state.remoteForge}"`);
@@ -836,7 +888,7 @@ function buildXml(state: ReviewState): string {
   const sourceAttrs = buildSourceAttributes(state);
   const remoteAttrs = buildRemoteAttributes(state);
   lines.push(
-    `<review xmlns="urn:self-review:v3" timestamp="${escapeXml(state.timestamp)}"${sourceAttrs}${remoteAttrs}>`
+    `<review xmlns="urn:self-review:v3" timestamp="${attr(state.timestamp, { field: 'timestamp' })}"${sourceAttrs}${remoteAttrs}>`
   );
 
   // Files
@@ -852,21 +904,22 @@ function buildXml(state: ReviewState): string {
 
 function buildFileXml(file: FileReviewState): string[] {
   const lines: string[] = [];
+  const pathAttr = attr(file.path, { field: 'path', filePath: file.path });
 
   if (file.comments.length === 0) {
     // Self-closing tag for files with no comments
     lines.push(
-      `  <file path="${escapeXml(file.path)}" change-type="${file.changeType}" viewed="${file.viewed}" />`
+      `  <file path="${pathAttr}" change-type="${file.changeType}" viewed="${file.viewed}" />`
     );
   } else {
     // Opening tag
     lines.push(
-      `  <file path="${escapeXml(file.path)}" change-type="${file.changeType}" viewed="${file.viewed}">`
+      `  <file path="${pathAttr}" change-type="${file.changeType}" viewed="${file.viewed}">`
     );
 
     // Comments
     for (const comment of file.comments) {
-      lines.push(...buildCommentXml(comment));
+      lines.push(...buildCommentXml(comment, file.path));
     }
 
     // Closing tag
@@ -876,9 +929,14 @@ function buildFileXml(file: FileReviewState): string[] {
   return lines;
 }
 
-function buildCommentXml(comment: ReviewComment): string[] {
+function buildCommentXml(comment: ReviewComment, filePath: string): string[] {
   const lines: string[] = [];
   const attrs: string[] = [];
+  const at = (field: string): XmlIllegalCharacterLocation => ({
+    field,
+    filePath,
+    commentId: comment.id,
+  });
 
   // Add line attributes
   if (comment.lineRange) {
@@ -892,7 +950,7 @@ function buildCommentXml(comment: ReviewComment): string[] {
   }
 
   if (comment.author) {
-    attrs.push(`author="${escapeXml(comment.author)}"`);
+    attrs.push(`author="${attr(comment.author, at('author'))}"`);
   }
 
   // Thresholding signals. Absent means "below any floor", so they are omitted
@@ -908,7 +966,7 @@ function buildCommentXml(comment: ReviewComment): string[] {
   // Remote provenance. Absent means locally authored, so it is omitted
   // rather than defaulted, exactly like the signals above.
   if (comment.remoteId) {
-    attrs.push(`remote-id="${escapeXml(comment.remoteId)}"`);
+    attrs.push(`remote-id="${attr(comment.remoteId, at('remote-id'))}"`);
   }
 
   const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
@@ -917,30 +975,30 @@ function buildCommentXml(comment: ReviewComment): string[] {
   lines.push(`    <comment${attrStr}>`);
 
   // Body (preserve whitespace and newlines)
-  lines.push(`      <body>${escapeXml(comment.body)}</body>`);
+  lines.push(`      <body>${text(comment.body, at('body'))}</body>`);
 
   // Category (required)
-  lines.push(`      <category>${escapeXml(comment.category)}</category>`);
+  lines.push(`      <category>${text(comment.category, at('category'))}</category>`);
 
   // Suggestion
   if (comment.suggestion) {
     lines.push('      <suggestion>');
     lines.push(
-      `        <original-code>${escapeXml(comment.suggestion.originalCode)}</original-code>`
+      `        <original-code>${text(comment.suggestion.originalCode, at('original-code'))}</original-code>`
     );
     lines.push(
-      `        <proposed-code>${escapeXml(comment.suggestion.proposedCode)}</proposed-code>`
+      `        <proposed-code>${text(comment.suggestion.proposedCode, at('proposed-code'))}</proposed-code>`
     );
     lines.push('      </suggestion>');
   }
 
   // Attachments
-  lines.push(...buildAttachmentXml(comment.attachments, '      '));
+  lines.push(...buildAttachmentXml(comment.attachments, '      ', at('attachment')));
 
   // Replies, in array order: document order is conversation order, and it is
   // the only ordering signal a reply has.
   for (const reply of comment.replies ?? []) {
-    lines.push(...buildReplyXml(reply));
+    lines.push(...buildReplyXml(reply, filePath, comment.id));
   }
 
   // Closing tag
@@ -953,12 +1011,16 @@ function buildCommentXml(comment: ReviewComment): string[] {
  * Attachment elements are identical in form and meaning under a comment and
  * under a reply, so both call sites emit them from here.
  */
-function buildAttachmentXml(attachments: Attachment[] | undefined, indent: string): string[] {
+function buildAttachmentXml(
+  attachments: Attachment[] | undefined,
+  indent: string,
+  owner: XmlIllegalCharacterLocation
+): string[] {
   if (!attachments?.length) return [];
 
   return attachments.map(
     att =>
-      `${indent}<attachment path="${escapeXml(att.fileName)}" media-type="${escapeXml(att.mediaType)}" />`
+      `${indent}<attachment path="${attr(att.fileName, { ...owner, field: 'attachment path' })}" media-type="${attr(att.mediaType, { ...owner, field: 'attachment media-type' })}" />`
   );
 }
 
@@ -968,31 +1030,44 @@ function buildAttachmentXml(attachments: Attachment[] | undefined, indent: strin
  * nested replies — those belong to the root comment, which owns the finding.
  * See ReplyType in the XSD for the reasoning.
  */
-function buildReplyXml(reply: Reply): string[] {
+function buildReplyXml(reply: Reply, filePath: string, commentId: string): string[] {
   const attrs: string[] = [];
+  const at = (field: string): XmlIllegalCharacterLocation => ({
+    field,
+    filePath,
+    commentId,
+    replyId: reply.id,
+  });
 
   if (reply.author) {
-    attrs.push(`author="${escapeXml(reply.author)}"`);
+    attrs.push(`author="${attr(reply.author, at('author'))}"`);
   }
   if (reply.remoteId) {
-    attrs.push(`remote-id="${escapeXml(reply.remoteId)}"`);
+    attrs.push(`remote-id="${attr(reply.remoteId, at('remote-id'))}"`);
   }
 
   const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
 
   return [
     `      <reply${attrStr}>`,
-    `        <body>${escapeXml(reply.body)}</body>`,
-    ...buildAttachmentXml(reply.attachments, '        '),
+    `        <body>${text(reply.body, at('body'))}</body>`,
+    ...buildAttachmentXml(reply.attachments, '        ', at('attachment')),
     '      </reply>',
   ];
 }
 
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+/** Escapes for element content, refusing what XML cannot carry (contract in xml-text.ts). */
+function text(value: string, location: XmlIllegalCharacterLocation): string {
+  return escapeXmlText(checked(value, location));
+}
+
+/** Escape a value for an attribute, refusing one XML cannot carry. */
+function attr(value: string, location: XmlIllegalCharacterLocation): string {
+  return escapeXmlAttribute(checked(value, location));
+}
+
+function checked(value: string, location: XmlIllegalCharacterLocation): string {
+  const illegal = findIllegalXmlCharacter(value);
+  if (illegal) throw new XmlIllegalCharacterError(illegal.codePoint, location);
+  return value;
 }

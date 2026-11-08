@@ -42,10 +42,11 @@ installable="$flake_dir#packages.$system.default.src"
 [ -f "$flake_file" ] || die "no flake.nix in $flake_dir"
 
 # The consumer owns the artifact URL and the unpacking options. Read the URL
-# back off the derivation instead of rebuilding it here, so the updater cannot
-# hash a different artifact than the one the flake fetches.
-url=$(nix derivation show "$installable" | jq -r 'first(.[]).env.urls' | awk '{print $1}')
-[ -n "$url" ] && [ "$url" != "null" ] || die "could not read the source URL from $installable"
+# back off the fetcher instead of rebuilding it here, so the updater cannot
+# hash a different artifact than the one the flake fetches. fetchurl keeps it
+# in passthru: with structured attrs the derivation's env has no `urls`.
+url=$(nix eval --raw "$installable.url") || die "could not evaluate the source URL of $installable"
+[ -n "$url" ] || die "could not read the source URL from $installable"
 
 prefetch_sri() {
   nix store prefetch-file --hash-type sha256 --json "$@" | jq -er '.hash'

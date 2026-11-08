@@ -5,10 +5,24 @@
 // file on disk, and a mock cannot witness them.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import {
+  chmodSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { applySuggestion } from './apply-suggestion';
+import { applySuggestion, isRepositoryControlPath } from './apply-suggestion';
+import { nodeFsLayer } from './safe-fs';
+import type { FsLayer } from './safe-fs';
 import type { LineRange, Suggestion } from './types';
 
 const FILE = 'src/app.ts';
@@ -252,5 +266,353 @@ describe('applySuggestion', () => {
         expect(result.detail).not.toContain('hunter2');
       }
     });
+  });
+});
+
+function errno(code: string): NodeJS.ErrnoException {
+  const error: NodeJS.ErrnoException = new Error(code);
+  error.code = code;
+  return error;
+}
+
+/** An fs layer that fails every call, proving a refusal happened before any I/O. */
+function untouchableFs(): FsLayer {
+  const fail = () => {
+    throw new Error('the filesystem was touched');
+  };
+  return {
+    openSync: fail,
+    writeSync: fail,
+    fsyncSync: fail,
+    fchmodSync: fail,
+    fchownSync: fail,
+    closeSync: fail,
+    renameSync: fail,
+    unlinkSync: fail,
+    lstatSync: fail,
+    fstatSync: fail,
+    readFileSync: fail,
+    mkdirSync: fail,
+    realpathSync: fail,
+  };
+}
+
+/** ENOSPC after `budget` bytes, the way a full disk fails: some bytes land first. */
+function enospcAfter(budget: number): FsLayer {
+  let remaining = budget;
+  return {
+    ...nodeFsLayer,
+    writeSync(fd, buffer) {
+      if (remaining <= 0) throw errno('ENOSPC');
+      const slice = buffer.subarray(0, Math.min(buffer.length, remaining));
+      const written = nodeFsLayer.writeSync(fd, slice);
+      remaining -= written;
+      if (written < buffer.length) throw errno('ENOSPC');
+      return written;
+    },
+  };
+}
+
+const PROBE = 'before\nremove\nafter\n';
+
+describe('applySuggestion: proposal semantics', () => {
+  it('deletes the anchored lines when the proposal is empty, inserting no blank line', () => {
+    seed(FILE, PROBE);
+
+    const result = applySuggestion(
+      request({
+        lineRange: { side: 'new', start: 2, end: 2 },
+        suggestion: { originalCode: 'remove', proposedCode: '' },
+      })
+    );
+
+    expect(result).toMatchObject({ status: 'applied', replacedLines: 1 });
+    expect(read(FILE)).toBe('before\nafter\n');
+  });
+
+  it('treats one trailing newline on the proposal as a terminator, not an extra line', () => {
+    seed(FILE, PROBE);
+
+    const result = applySuggestion(
+      request({
+        lineRange: { side: 'new', start: 2, end: 2 },
+        suggestion: { originalCode: 'remove', proposedCode: 'kept\n' },
+      })
+    );
+
+    expect(result.status).toBe('applied');
+    expect(read(FILE)).toBe('before\nkept\nafter\n');
+  });
+
+  it('keeps a second trailing newline as a genuine blank line', () => {
+    seed(FILE, PROBE);
+
+    const result = applySuggestion(
+      request({
+        lineRange: { side: 'new', start: 2, end: 2 },
+        suggestion: { originalCode: 'remove', proposedCode: 'kept\n\n' },
+      })
+    );
+
+    expect(result.status).toBe('applied');
+    expect(read(FILE)).toBe('before\nkept\n\nafter\n');
+  });
+
+  it('deleting the last line of a file without a final newline leaves none', () => {
+    seed(FILE, 'before\nremove');
+
+    const result = applySuggestion(
+      request({
+        lineRange: { side: 'new', start: 2, end: 2 },
+        suggestion: { originalCode: 'remove', proposedCode: '' },
+      })
+    );
+
+    expect(result.status).toBe('applied');
+    expect(read(FILE)).toBe('before');
+  });
+
+  it('deleting every line leaves an empty file rather than a lone newline', () => {
+    seed(FILE, 'only\n');
+
+    const result = applySuggestion(
+      request({
+        lineRange: { side: 'new', start: 1, end: 1 },
+        suggestion: { originalCode: 'only', proposedCode: '' },
+      })
+    );
+
+    expect(result.status).toBe('applied');
+    expect(read(FILE)).toBe('');
+  });
+});
+
+describe('applySuggestion: anchors are validated before any I/O', () => {
+  const cases: Array<[string, LineRange]> = [
+    ['NaN start', { side: 'new', start: Number.NaN, end: 1 }],
+    ['Infinity end', { side: 'new', start: 1, end: Number.POSITIVE_INFINITY }],
+    ['zero start', { side: 'new', start: 0, end: 1 }],
+    ['fractional start', { side: 'new', start: 1.5, end: 2 }],
+    ['reversed range', { side: 'new', start: 3, end: 2 }],
+    ['negative end', { side: 'new', start: 1, end: -1 }],
+    ['unknown side', { side: 'sideways' as 'new', start: 1, end: 1 }],
+  ];
+
+  for (const [name, lineRange] of cases) {
+    it(`refuses a ${name} without touching the filesystem`, () => {
+      const result = applySuggestion(
+        request({ lineRange, suggestion: { originalCode: '', proposedCode: 'injected' } }),
+        { fs: untouchableFs() }
+      );
+
+      expect(result).toMatchObject({ status: 'refused', reason: 'invalid-anchor' });
+    });
+  }
+
+  it('refuses a NaN anchor with an empty original rather than prepending the proposal', () => {
+    seed(FILE, PROBE);
+
+    const result = applySuggestion(
+      request({
+        lineRange: { side: 'new', start: Number.NaN, end: Number.NaN },
+        suggestion: { originalCode: '', proposedCode: 'injected' },
+      })
+    );
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'invalid-anchor' });
+    expect(read(FILE)).toBe(PROBE);
+  });
+});
+
+describe('applySuggestion: repository control files', () => {
+  it('classifies .git at any depth, as a directory or a file, as a control path', () => {
+    expect(isRepositoryControlPath('.git/config')).toBe(true);
+    expect(isRepositoryControlPath('.git')).toBe(true);
+    expect(isRepositoryControlPath('vendor/lib/.git/hooks/pre-commit')).toBe(true);
+    expect(isRepositoryControlPath('sub/.GIT/HEAD')).toBe(true);
+    expect(isRepositoryControlPath('src/app.ts')).toBe(false);
+    expect(isRepositoryControlPath('.gitignore')).toBe(false);
+    expect(isRepositoryControlPath('.gitmodules')).toBe(false);
+    expect(isRepositoryControlPath('docs/.github/workflows/ci.yml')).toBe(false);
+  });
+
+  it('refuses .git/config and leaves it byte for byte, before any I/O', () => {
+    const before = '[core]\n\trepositoryformatversion = 0\n';
+    seed('.git/config', before);
+
+    const result = applySuggestion(
+      request({
+        filePath: '.git/config',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        suggestion: { originalCode: '[core]', proposedCode: '[core]\n\tbare = true' },
+      }),
+      { fs: untouchableFs() }
+    );
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'control-file' });
+    expect(read('.git/config')).toBe(before);
+  });
+
+  it('refuses a nested repository’s control files too', () => {
+    const before = 'ref: refs/heads/main\n';
+    seed('vendor/dep/.git/HEAD', before);
+
+    const result = applySuggestion(
+      request({
+        filePath: 'vendor/dep/.git/HEAD',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        suggestion: { originalCode: 'ref: refs/heads/main', proposedCode: 'ref: refs/heads/evil' },
+      })
+    );
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'control-file' });
+    expect(read('vendor/dep/.git/HEAD')).toBe(before);
+  });
+});
+
+describe('applySuggestion: physical containment', () => {
+  let outside: string;
+
+  beforeEach(() => {
+    outside = mkdtempSync(join(tmpdir(), 'self-review-apply-outside-'));
+  });
+
+  afterEach(() => {
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it('refuses a leaf symlink and leaves the outside file untouched', () => {
+    const target = join(outside, 'target.txt');
+    writeFileSync(target, 'SENTINEL\n', 'utf8');
+    symlinkSync(target, join(root, 'linked.txt'));
+
+    const result = applySuggestion(
+      request({
+        filePath: 'linked.txt',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        suggestion: { originalCode: 'SENTINEL', proposedCode: 'OVERWRITTEN' },
+      })
+    );
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'unsafe-target' });
+    expect(readFileSync(target, 'utf8')).toBe('SENTINEL\n');
+    expect(statSync(join(root, 'linked.txt'), { throwIfNoEntry: true }).isFile()).toBe(true);
+  });
+
+  it('refuses an ancestor symlink and leaves the outside file untouched', () => {
+    mkdirSync(join(outside, 'dir'));
+    const target = join(outside, 'dir', 'f.txt');
+    writeFileSync(target, 'ANC\n', 'utf8');
+    symlinkSync(join(outside, 'dir'), join(root, 'ancestor'));
+
+    const result = applySuggestion(
+      request({
+        filePath: 'ancestor/f.txt',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        suggestion: { originalCode: 'ANC', proposedCode: 'OVERWRITTEN' },
+      })
+    );
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'unsafe-target' });
+    expect(readFileSync(target, 'utf8')).toBe('ANC\n');
+  });
+
+  it('refuses a hard-linked file rather than detaching the other name', () => {
+    const inside = seed('src/app.ts', `${ORIGINAL.join('\n')}\n`);
+    const alias = join(outside, 'alias.ts');
+    linkSync(inside, alias);
+
+    const result = applySuggestion(request({}));
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'unsafe-target' });
+    expect(read(FILE)).toBe(`${ORIGINAL.join('\n')}\n`);
+    expect(readFileSync(alias, 'utf8')).toBe(`${ORIGINAL.join('\n')}\n`);
+  });
+
+  it('refuses a destination root that does not exist', () => {
+    const result = applySuggestion(request({ destinationRoot: join(outside, 'missing') }));
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'destination-missing' });
+  });
+
+  it('refuses a dot-dot path lexically, before resolving anything', () => {
+    const result = applySuggestion(request({ filePath: 'src/../../escape.ts' }), {
+      fs: untouchableFs(),
+    });
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'path-escapes-destination' });
+  });
+});
+
+describe('applySuggestion: the write is transactional', () => {
+  it('refuses when the file was replaced between the read and the commit', () => {
+    const absolute = seed(FILE, `${ORIGINAL.join('\n')}\n`);
+    // Swap the inode out between the engine's read and its commit.
+    const swapping: FsLayer = {
+      ...nodeFsLayer,
+      readFileSync(fd) {
+        const bytes = nodeFsLayer.readFileSync(fd);
+        unlinkSync(absolute);
+        writeFileSync(absolute, bytes);
+        return bytes;
+      },
+    };
+
+    const result = applySuggestion(request({}), { fs: swapping });
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'file-changed' });
+    expect(read(FILE)).toBe(`${ORIGINAL.join('\n')}\n`);
+    expect(readdirSync(join(root, 'src'))).toEqual(['app.ts']);
+  });
+
+  it('refuses when the file was rewritten in place between the read and the commit', () => {
+    const absolute = seed(FILE, `${ORIGINAL.join('\n')}\n`);
+    const rewriting: FsLayer = {
+      ...nodeFsLayer,
+      readFileSync(fd) {
+        const bytes = nodeFsLayer.readFileSync(fd);
+        writeFileSync(absolute, `${bytes.toString('utf8')}// appended\n`);
+        return bytes;
+      },
+    };
+
+    const result = applySuggestion(request({}), { fs: rewriting });
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'file-changed' });
+    expect(read(FILE)).toBe(`${ORIGINAL.join('\n')}\n// appended\n`);
+  });
+
+  it('leaves the target intact and no temp file behind when the disk fills mid-write', () => {
+    const before = `${ORIGINAL.join('\n')}\n`;
+    seed(FILE, before);
+
+    const result = applySuggestion(request({}), { fs: enospcAfter(2) });
+
+    expect(result).toMatchObject({ status: 'refused', reason: 'write-failed' });
+    expect(read(FILE)).toBe(before);
+    expect(readdirSync(join(root, 'src'))).toEqual(['app.ts']);
+  });
+
+  it('preserves the permission bits of the file it replaced', () => {
+    const absolute = seed(FILE, `${ORIGINAL.join('\n')}\n`);
+    chmodSync(absolute, 0o640);
+
+    const result = applySuggestion(request({}));
+
+    expect(result.status).toBe('applied');
+    expect(statSync(absolute).mode & 0o777).toBe(0o640);
+    expect(read(FILE)).toBe('const a = 1;\nconst b = 22;\nconst c = 3;\n');
+  });
+
+  it('replaces the file through a rename, so the result is a fresh inode with one link', () => {
+    const absolute = seed(FILE, `${ORIGINAL.join('\n')}\n`);
+    const before = statSync(absolute).ino;
+
+    expect(applySuggestion(request({})).status).toBe('applied');
+
+    const after = statSync(absolute);
+    expect(after.ino).not.toBe(before);
+    expect(after.nlink).toBe(1);
+    expect(readdirSync(join(root, 'src'))).toEqual(['app.ts']);
   });
 });

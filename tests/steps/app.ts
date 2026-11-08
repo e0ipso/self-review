@@ -133,6 +133,9 @@ async function launchAppWithRetry(
 
   try {
     appPage = await electronApp.firstWindow();
+    // Electron 44 hands over the first window on its empty initial document; the navigation to index.html
+    // then destroys that execution context. Waiting for #root survives it.
+    await appPage.waitForSelector('#root', { state: 'attached', timeout: 15000 });
     await appPage.waitForLoadState('domcontentloaded');
     return appPage;
   } catch (error) {
@@ -202,8 +205,8 @@ export async function launchAppExpectExit(
 }
 
 /**
- * Close the Electron window by triggering saveAndQuit, which writes XML to file and exits.
- * Use this only when the test needs to assert on the output file.
+ * Finish the review through the toolbar button; a bare `electronAPI.saveAndQuit()` is refused because main
+ * never pulls state from the renderer. Use this only when the test needs to assert on the output file.
  */
 export async function saveAndCloseApp(): Promise<void> {
   if (!electronApp) return;
@@ -213,13 +216,10 @@ export async function saveAndCloseApp(): Promise<void> {
 
   try {
     const page = await app.firstWindow();
-    // saveAndQuit triggers process.exit(0) in main after writing the XML.
-    // The page connection may close before evaluate returns.
-    await page.evaluate(() => {
-      (window as any).electronAPI.saveAndQuit();
-    });
+    // The page connection may close before the click settles (main exits after writing).
+    await page.locator('[data-testid="finish-review-btn"]').click({ timeout: 5000 });
   } catch {
-    // evaluate likely threw because the process exited (closing the
+    // The click likely threw because the process exited (closing the
     // connection).  Do NOT kill here — the process may be exiting cleanly.
   }
 
@@ -256,6 +256,14 @@ export async function closeAppWindow(): Promise<void> {
   if (processExitPromise) {
     await waitForProcessExit(proc, processExitPromise, 15000);
   }
+}
+
+/** Returns the exit code; -1 (after killing it) if the app is still running after `timeoutMs`. */
+export async function waitForAppExit(timeoutMs = 15000): Promise<number> {
+  if (!electronApp || !processExitPromise) {
+    throw new Error('App not launched');
+  }
+  return waitForProcessExit(electronApp.process(), processExitPromise, timeoutMs);
 }
 
 /**

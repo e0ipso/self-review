@@ -38,6 +38,7 @@ function makeDeps(overrides: Partial<CliDispatchDeps> = {}): CliDispatchDeps {
     needsReexec: vi.fn(() => false),
     reexec: vi.fn(),
     fetchComments: vi.fn(async () => {}),
+    onTerminationSignal: vi.fn(() => () => {}),
     logError: vi.fn(),
     exit: vi.fn(),
     ...overrides,
@@ -223,6 +224,7 @@ describe('dispatchCli', () => {
 
     expect(deps.fetchComments).toHaveBeenCalledWith('https://gitlab.com/g/p/-/merge_requests/7', {
       includeResolved: true,
+      signal: expect.any(AbortSignal),
     });
     expect(deps.logError).not.toHaveBeenCalled();
   });
@@ -239,7 +241,81 @@ describe('dispatchCli', () => {
 
     expect(deps.fetchComments).toHaveBeenCalledWith('https://host/o/r/pull/1', {
       includeResolved: false,
+      signal: expect.any(AbortSignal),
     });
+  });
+
+  // Ctrl+C on a headless run must not strand a half-made temporary clone:
+  // the signal cancels the run through its AbortSignal, the run releases
+  // what it acquired, and the exit code says it was interrupted.
+  it('cancels the run on SIGINT, waits for it to settle and exits 130', async () => {
+    let handler: ((signal: NodeJS.Signals) => void) | undefined;
+    const unsubscribe = vi.fn();
+    const deps = makeDeps({
+      parseArgs: vi.fn(() =>
+        makeArgs({ subcommand: 'fetch-comments', remoteUrl: 'https://host/o/r/pull/1' })
+      ),
+      onTerminationSignal: vi.fn(h => {
+        handler = h;
+        return unsubscribe;
+      }),
+      fetchComments: vi.fn(
+        (_url, { signal }) =>
+          new Promise<void>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('git clone was cancelled')));
+          })
+      ),
+    });
+
+    dispatchCli(deps);
+    expect(handler).toBeDefined();
+    expect(deps.exit).not.toHaveBeenCalled();
+
+    handler!('SIGINT');
+    await vi.waitFor(() => expect(deps.exit).toHaveBeenCalledWith(130));
+
+    expect(deps.logError).toHaveBeenCalledWith(expect.stringContaining('SIGINT'));
+    expect(deps.logError).toHaveBeenCalledWith('[fetch-comments] git clone was cancelled');
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  it('exits 143 when a SIGTERM cancelled the run', async () => {
+    let handler: ((signal: NodeJS.Signals) => void) | undefined;
+    const deps = makeDeps({
+      parseArgs: vi.fn(() =>
+        makeArgs({ subcommand: 'fetch-comments', remoteUrl: 'https://host/o/r/pull/1' })
+      ),
+      onTerminationSignal: vi.fn(h => {
+        handler = h;
+        return () => {};
+      }),
+      fetchComments: vi.fn(
+        (_url, { signal }) =>
+          new Promise<void>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('cancelled')));
+          })
+      ),
+    });
+
+    dispatchCli(deps);
+    handler!('SIGTERM');
+
+    await vi.waitFor(() => expect(deps.exit).toHaveBeenCalledWith(143));
+  });
+
+  it('stops listening for termination signals once the run has settled', async () => {
+    const unsubscribe = vi.fn();
+    const deps = makeDeps({
+      parseArgs: vi.fn(() =>
+        makeArgs({ subcommand: 'fetch-comments', remoteUrl: 'https://host/o/r/pull/1' })
+      ),
+      onTerminationSignal: vi.fn(() => unsubscribe),
+    });
+
+    dispatchCli(deps);
+    await vi.waitFor(() => expect(deps.exit).toHaveBeenCalledWith(0));
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it('reports a rejected fetch on stderr and exits one', async () => {
