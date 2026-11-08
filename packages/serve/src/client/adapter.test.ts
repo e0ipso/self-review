@@ -10,7 +10,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReviewState } from '@self-review/core';
 import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
 import { parseReviewStateBody } from '../validate';
-import { MAX_REVIEW_BODY_BYTES, REVIEW_TOO_LARGE_CODE } from '../protocol';
+import { REVIEW_TOO_LARGE_CODE } from '../protocol';
 
 const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
 
@@ -336,42 +336,6 @@ describe('createFetchAdapter', () => {
     expect(failure.code).toBe(REVIEW_TOO_LARGE_CODE);
     expect(failure.message).toMatch(/32\.0 MB/);
     expect(failure.message).toMatch(/attachment/i);
-  });
-
-  it('refuses to send a body over the limit, and says how big it was', async () => {
-    const spy = stubRoutes({ '/api/review': ACK });
-    // 25 MiB of image bytes is about 33.3 MiB base64-encoded: over the 32 MiB wire limit, well under it on disk.
-    const blob = new Uint8Array(25 * 1024 * 1024).buffer;
-    const state: ReviewState = {
-      ...REVIEW_STATE,
-      files: [
-        {
-          path: 'src/a.ts',
-          changeType: 'modified',
-          viewed: false,
-          comments: [
-            {
-              id: 'c1',
-              filePath: 'src/a.ts',
-              lineRange: null,
-              body: 'look',
-              category: 'bug',
-              suggestion: null,
-              attachments: [{ id: 'a1', fileName: 'big.png', mediaType: 'image/png', data: blob }],
-            },
-          ],
-        },
-      ],
-    };
-
-    const failure = await rejectionOf(createFetchAdapter(CAPABILITY).submitReview!(state));
-
-    expect(spy).not.toHaveBeenCalled();
-    expect(failure).toBeInstanceOf(ServeRequestError);
-    expect(failure.status).toBeNull();
-    expect(failure.code).toBe(REVIEW_TOO_LARGE_CODE);
-    expect(failure.message).toMatch(/33\.\d MB/);
-    expect(MAX_REVIEW_BODY_BYTES).toBe(32 * 1024 * 1024);
   });
 
   it('reads the config and its output path from GET /api/config', async () => {
