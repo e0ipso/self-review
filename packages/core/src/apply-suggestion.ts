@@ -11,6 +11,12 @@
 // transactional write live here, not in a transport (audit A3/A4, R04).
 
 import * as path from 'path';
+import { constants as bufferConstants } from 'node:buffer';
+import { MAX_SOURCE_FILE_BYTES } from './input-budgets';
+import { prepareSuggestionContent } from './suggestion-content';
+import { readSuggestionSync, boundedChunks } from './suggestion-read';
+import { atomicReplaceAsync, nodeAsyncFsLayer, openContainedFileAsync } from './safe-fs-async';
+import type { AsyncFsLayer } from './safe-fs-async';
 import type { LineRange, Suggestion } from './types';
 import { validateLineRange } from './anchor-validation';
 import {
@@ -85,6 +91,17 @@ export interface ApplySuggestionRequest {
 export interface ApplySuggestionOptions {
   fs?: FsLayer;
   randomName?: () => string;
+  /** Input and resulting output limits, independently enforced. Both default to 5 MiB. */
+  maxInputBytes?: number;
+  maxOutputBytes?: number;
+  /** Last synchronous authorization check before rename; throwing refuses the write. */
+  beforeCommit?: () => void;
+}
+
+export interface ApplySuggestionAsyncOptions extends Omit<ApplySuggestionOptions, 'fs'> {
+  fs?: AsyncFsLayer;
+  /** Cancellation rejects with signal.reason before commit. A committed write stays applied. */
+  signal?: AbortSignal;
 }
 
 export interface ApplySuggestionApplied {
@@ -146,6 +163,7 @@ function refuseFsError(
   fallback: 'file-unreadable' | 'write-failed'
 ): ApplySuggestionRefused {
   const fsError = toSafeFsError(error, filePath, 'access');
+  if (fsError.code === 'too-large') return refuse(filePath, fallback, fsError.message);
   const [reason, detail] = FS_REFUSALS[fsError.code] ?? [
     fallback,
     `The file could not be ${fallback === 'write-failed' ? 'written' : 'read'} (${errnoOf(fsError.cause) ?? 'unknown'}).`,
@@ -164,42 +182,6 @@ function relativeWithinRoot(filePath: string): string | null {
   return normalized;
 }
 
-/**
- * Split file text into lines, keeping each line's own bytes intact.
- *
- * The split is on `\n` only, so a CRLF file's `\r` stays at the end of the
- * line it terminates. That makes the comparison against `originalCode`
- * byte-exact (the diff parser hands the same `\r` through in `DiffLine`),
- * and it means rejoining preserves mixed line endings exactly as found.
- */
-function splitLines(content: string): string[] {
-  if (content === '') return [];
-  const lines = content.split('\n');
-  // A trailing terminator produces an empty final element that is not a line.
-  if (lines[lines.length - 1] === '') lines.pop();
-  return lines;
-}
-
-/** One trailing `\n` or `\r\n` terminates rather than adds a line; `''` is zero lines (a deletion). */
-function proposalLines(proposedCode: string): string[] {
-  if (proposedCode === '') return [];
-  const body = proposedCode.endsWith('\r\n')
-    ? proposedCode.slice(0, -2)
-    : proposedCode.endsWith('\n')
-      ? proposedCode.slice(0, -1)
-      : proposedCode;
-  return body.split('\n');
-}
-
-/**
- * True when every line being replaced carries a CRLF terminator. Only then
- * is it unambiguous that a hand-typed LF proposal should be written back as
- * CRLF; a mixed or LF region takes the proposal verbatim.
- */
-function isCrlfRegion(anchored: string[]): boolean {
-  return anchored.length > 0 && anchored.every(line => line.endsWith('\r'));
-}
-
 interface OpenedTarget {
   identity: FileIdentity;
   buffer: Buffer;
@@ -210,7 +192,8 @@ function openAndRead(
   realRoot: string,
   rel: string,
   filePath: string,
-  fs: FsLayer
+  fs: FsLayer,
+  maxInputBytes: number
 ): OpenedTarget | ApplySuggestionRefused {
   let opened: ReturnType<typeof openContainedFile>;
   try {
@@ -227,7 +210,10 @@ function openAndRead(
         `The file has ${stats.nlink} hard links, and replacing it would silently detach the others.`
       );
     }
-    return { identity: snapshotIdentity(stats), buffer: fs.readFileSync(fd) };
+    return {
+      identity: snapshotIdentity(stats),
+      buffer: readSuggestionSync(fd, path.join(realRoot, rel), stats.size, maxInputBytes, fs),
+    };
   } catch (error) {
     return refuseFsError(filePath, error, 'file-unreadable');
   } finally {
@@ -249,13 +235,10 @@ function openAndRead(
  * file's trailing-newline state is preserved either way. Any other outcome
  * refuses with a reason and writes nothing.
  */
-export function applySuggestion(
-  request: ApplySuggestionRequest,
-  options: ApplySuggestionOptions = {}
-): ApplySuggestionResult {
-  const { destinationRoot, filePath, lineRange, suggestion } = request;
-  const fs = options.fs ?? nodeFsLayer;
-
+function validateRequest(
+  request: ApplySuggestionRequest
+): { rel: string; start: number; end: number } | ApplySuggestionRefused {
+  const { destinationRoot, filePath, lineRange } = request;
   if (!lineRange) {
     return refuse(
       filePath,
@@ -306,6 +289,38 @@ export function applySuggestion(
     );
   }
 
+  return { rel, start, end };
+}
+
+/** Invalid limit options throw RangeError, before any file is opened. */
+function limits(options: Pick<ApplySuggestionOptions, 'maxInputBytes' | 'maxOutputBytes'>) {
+  const maxInputBytes = options.maxInputBytes ?? MAX_SOURCE_FILE_BYTES;
+  const maxOutputBytes = options.maxOutputBytes ?? MAX_SOURCE_FILE_BYTES;
+  for (const [name, value] of Object.entries({ maxInputBytes, maxOutputBytes })) {
+    if (!Number.isSafeInteger(value) || value < 0 || value >= bufferConstants.MAX_LENGTH) {
+      throw new RangeError(
+        `${name} must be a nonnegative safe integer below ${bufferConstants.MAX_LENGTH}`
+      );
+    }
+  }
+  return { maxInputBytes, maxOutputBytes };
+}
+
+/**
+ * Bounded synchronous Apply for existing callers. Only the anchor is decoded and proposal encoded;
+ * untouched regions are copied as bytes. Invalid options throw RangeError; refusals are values.
+ */
+export function applySuggestion(
+  request: ApplySuggestionRequest,
+  options: ApplySuggestionOptions = {}
+): ApplySuggestionResult {
+  const checked = validateRequest(request);
+  if ('status' in checked) return checked;
+  const { rel, start, end } = checked;
+  const { destinationRoot, filePath, suggestion } = request;
+  const fs = options.fs ?? nodeFsLayer;
+  const { maxInputBytes, maxOutputBytes } = limits(options);
+
   let realRoot: string;
   try {
     realRoot = fs.realpathSync(path.resolve(destinationRoot));
@@ -318,53 +333,122 @@ export function applySuggestion(
   }
   const absolutePath = path.join(realRoot, rel);
 
-  const opened = openAndRead(realRoot, rel, filePath, fs);
+  const opened = openAndRead(realRoot, rel, filePath, fs, maxInputBytes);
   if ('status' in opened) return opened;
   const { identity, buffer } = opened;
 
-  const content = buffer.toString('utf8');
-  if (!Buffer.from(content, 'utf8').equals(buffer)) {
-    return refuse(filePath, 'file-not-utf8', 'The file is not valid UTF-8 text.');
-  }
-
-  const lines = splitLines(content);
-  if (end > lines.length) {
-    return refuse(
-      filePath,
-      'anchor-out-of-range',
-      `Lines ${start}-${end} are outside this file, which has ${lines.length} line(s).`
-    );
-  }
-
-  const anchored = lines.slice(start - 1, end);
-  if (anchored.join('\n') !== suggestion.originalCode) {
-    return refuse(
-      filePath,
-      'context-mismatch',
-      `Lines ${start}-${end} no longer match the code this suggestion was written against.`
-    );
-  }
-
-  const proposed = proposalLines(suggestion.proposedCode);
-  const replacement = isCrlfRegion(anchored)
-    ? proposed.map(line => (line.endsWith('\r') ? line : `${line}\r`))
-    : proposed;
-  const updated = [...lines.slice(0, start - 1), ...replacement, ...lines.slice(end)];
-  const output =
-    updated.length === 0 ? '' : updated.join('\n') + (content.endsWith('\n') ? '\n' : '');
+  const prepared = prepareSuggestionContent(buffer, start, end, suggestion, maxOutputBytes);
+  if ('reason' in prepared) return refuse(filePath, prepared.reason, prepared.detail);
 
   try {
-    atomicReplace(absolutePath, Buffer.from(output, 'utf8'), {
+    atomicReplace(absolutePath, prepared.bytes, {
       fs,
       preserveMode: true,
       preserveOwner: true,
       expectedIdentity: identity,
       expectUnmodified: true,
       randomName: options.randomName,
+      beforeCommit: options.beforeCommit,
     });
   } catch (error) {
     return refuseFsError(filePath, error, 'write-failed');
   }
 
-  return { status: 'applied', filePath, absolutePath, replacedLines: anchored.length };
+  return { status: 'applied', filePath, absolutePath, replacedLines: prepared.replacedLines };
+}
+
+/**
+ * Promise-based Apply with the same byte budgets, validation and replacement policy as Apply.
+ * Bulk reads and writes use native asynchronous I/O in chunks of at most 64 KiB. Operations are
+ * independent; competing applies are checked against the inode/stamp they read, not serialized.
+ * Cancellation rejects before commit and removes staging. After rename it returns applied even
+ * if the signal aborts. The portable final check/rename race is documented in atomicReplaceAsync.
+ */
+export async function applySuggestionAsync(
+  request: ApplySuggestionRequest,
+  options: ApplySuggestionAsyncOptions = {}
+): Promise<ApplySuggestionResult> {
+  options = { ...options };
+  options.signal?.throwIfAborted();
+  // Capture caller-owned data before the first await.
+  request = {
+    ...request,
+    lineRange: request.lineRange && { ...request.lineRange },
+    suggestion: { ...request.suggestion },
+  };
+  const checked = validateRequest(request);
+  if ('status' in checked) return checked;
+  const { rel, start, end } = checked;
+  const { destinationRoot, filePath, suggestion } = request;
+  const { maxInputBytes, maxOutputBytes } = limits(options);
+  const layer = options.fs ?? nodeAsyncFsLayer;
+  let realRoot: string;
+  try {
+    realRoot = await layer.realpath(path.resolve(destinationRoot));
+    options.signal?.throwIfAborted();
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    return refuse(
+      filePath,
+      'destination-missing',
+      `The destination directory could not be resolved (${errnoOf(error) ?? 'unknown'}).`
+    );
+  }
+  const absolutePath = path.join(realRoot, rel);
+  let opened: Awaited<ReturnType<typeof openContainedFileAsync>>;
+  try {
+    opened = await openContainedFileAsync(realRoot, rel, layer, options.signal);
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    return refuseFsError(filePath, error, 'file-unreadable');
+  }
+  const { handle, stats } = opened;
+  let buffer: Buffer;
+  try {
+    if (stats.nlink > 1)
+      return refuse(
+        filePath,
+        'unsafe-target',
+        `The file has ${stats.nlink} hard links, and replacing it would silently detach the others.`
+      );
+    const chunks = boundedChunks(absolutePath, stats.size, maxInputBytes);
+    let step = chunks.next();
+    while (!step.done) {
+      options.signal?.throwIfAborted();
+      const { buffer, offset, length } = step.value;
+      const { bytesRead } = await handle.read(buffer, offset, length, null);
+      options.signal?.throwIfAborted();
+      step = chunks.next(bytesRead);
+    }
+    buffer = step.value;
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    return refuseFsError(filePath, error, 'file-unreadable');
+  } finally {
+    try {
+      await handle.close();
+    } catch {
+      /* Read-only descriptor; no commit depends on close. */
+    }
+    options.signal?.throwIfAborted();
+  }
+  options.signal?.throwIfAborted();
+  const prepared = prepareSuggestionContent(buffer, start, end, suggestion, maxOutputBytes);
+  if ('reason' in prepared) return refuse(filePath, prepared.reason, prepared.detail);
+  try {
+    await atomicReplaceAsync(absolutePath, prepared.bytes, {
+      fs: layer,
+      preserveMode: true,
+      preserveOwner: true,
+      expectedIdentity: snapshotIdentity(stats),
+      expectUnmodified: true,
+      randomName: options.randomName,
+      signal: options.signal,
+      beforeCommit: options.beforeCommit,
+    });
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    return refuseFsError(filePath, error, 'write-failed');
+  }
+  return { status: 'applied', filePath, absolutePath, replacedLines: prepared.replacedLines };
 }

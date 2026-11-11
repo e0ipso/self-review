@@ -296,3 +296,18 @@ describe('atomicReplace: changes while staging', () => {
     }
   }
 });
+
+it('applies the exact mode after ownership changes that clear set-ID bits', () => {
+  const target = path.join(tmp, 'file');
+  writeExclusiveNoFollow(target, Buffer.from('new'), {
+    exactMode: 0o2640,
+    exactOwner: { uid: 1234, gid: 1234 },
+    fs: {
+      ...nodeFsLayer,
+      fchownSync(fd) {
+        fs.fchmodSync(fd, fs.fstatSync(fd).mode & 0o777);
+      },
+    },
+  });
+  expect(fs.statSync(target).mode & 0o7777).toBe(0o2640);
+});
