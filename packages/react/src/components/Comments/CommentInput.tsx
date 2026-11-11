@@ -1,6 +1,7 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useEffect, useRef } from 'react';
 import type { Attachment, LineRange, ReviewComment, Suggestion } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { useReviewCommands } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { isUsableCategory } from '../../utils/category-utils';
 import { Button } from '../ui/button';
@@ -27,7 +28,8 @@ export default function CommentInput({
   existingComment,
   originalCode,
 }: CommentInputProps) {
-  const { addComment, editComment } = useReview();
+  const { t } = useLocalization();
+  const { addComment, editComment } = useReviewCommands();
   const { config } = useConfig();
   const defaultCategory = config.categories?.find(isUsableCategory)?.name ?? '';
   const [body, setBody] = useState('');
@@ -108,13 +110,16 @@ export default function CommentInput({
       onBodyChange={setBody}
       attachments={attachments}
       setAttachments={setAttachments}
-      placeholder='Add your review comment... (paste or drop images here)'
+      placeholder={t('Add your review comment... (paste or drop images here)')}
       headerLabel={
         lineRange ? (
           <span className='text-xs font-medium text-muted-foreground whitespace-nowrap'>
             {lineRange.start === lineRange.end
-              ? `Comment on line ${lineRange.start}`
-              : `Comment on lines ${lineRange.start} to ${lineRange.end}`}
+              ? t('Comment on line {line}', { line: lineRange.start })
+              : t('Comment on lines {start} to {end}', {
+                  start: lineRange.start,
+                  end: lineRange.end,
+                })}
           </span>
         ) : undefined
       }
@@ -157,16 +162,14 @@ export default function CommentInput({
               className='h-7 gap-1.5 text-xs'
             >
               <Code2 className='h-3.5 w-3.5' />
-              {showSuggestion ? 'Remove suggestion' : 'Suggest'}
+              {t(showSuggestion ? 'Remove suggestion' : 'Suggest')}
             </Button>
           )}
           <AttachButton setAttachments={setAttachments} />
         </div>
 
         <div className='flex items-center gap-1.5'>
-          <span className='text-[10px] text-muted-foreground/50 mr-0.5'>
-            <kbd className='font-mono'>Esc</kbd> to unfocus
-          </span>
+          <span className='text-[10px] text-muted-foreground/50 mr-0.5'>{t('Esc to unfocus')}</span>
           <Button
             data-testid='cancel-comment-btn'
             variant='ghost'
@@ -174,7 +177,7 @@ export default function CommentInput({
             onClick={handleCancel}
             className='h-7 text-xs'
           >
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             data-testid='add-comment-btn'
@@ -183,7 +186,7 @@ export default function CommentInput({
             disabled={!isValid}
             className='h-7 text-xs gap-1.5'
           >
-            {existingComment ? 'Update' : 'Comment'}
+            {t(existingComment ? 'Update' : 'Comment')}
             <kbd className='pointer-events-none inline-flex items-center rounded border border-current/20 px-1 font-mono text-[10px] font-medium opacity-60'>
               {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl'}
               {'\u21B5'}

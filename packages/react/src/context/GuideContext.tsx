@@ -5,10 +5,12 @@ import React, {
   useEffect,
   useMemo,
   useCallback,
+  useRef,
   ReactNode,
 } from 'react';
 import type { GuideLoadPayload } from '@self-review/types';
 import { useAdapter } from './ReviewAdapterContext';
+import { ReviewLifecycleContext } from './ReviewLifecycleContext';
 import type { GuideMode } from '../utils/guide-display';
 
 export interface GuideContextValue {
@@ -18,7 +20,7 @@ export interface GuideContextValue {
   mode: GuideMode;
   setMode: (mode: GuideMode) => void;
   /** Feed a guide payload into the context (host subscription or fixture). */
-  setGuide: (guide: GuideLoadPayload) => void;
+  setGuide: (guide: GuideLoadPayload | null) => void;
   /** Guide-authored one-liner for a file; undefined for implicit-group files. */
   getFileDescription: (filePath: string) => string | undefined;
   /**
@@ -61,6 +63,22 @@ export function GuideProvider({ children, initialGuide }: GuideProviderProps) {
   // guide is present; without a guide the mode is ignored by consumers.
   const [mode, setMode] = useState<GuideMode>('guided');
   const adapter = useAdapter();
+  const [owner, setOwner] = useState(adapter);
+  const identity = useRef<string | null>(null);
+  if (owner !== adapter) {
+    setOwner(adapter);
+    setGuide(initialGuide ?? null);
+    setMode('guided');
+    identity.current = null;
+  }
+
+  const onReviewIdentity = useCallback((next: string) => {
+    if (identity.current !== null && identity.current !== next) {
+      setGuide(null);
+      setMode('guided');
+    }
+    identity.current = next;
+  }, []);
 
   useEffect(() => {
     if (initialGuide || !adapter?.onGuideLoad) return;
@@ -100,17 +118,19 @@ export function GuideProvider({ children, initialGuide }: GuideProviderProps) {
   );
 
   return (
-    <GuideContext.Provider
-      value={{
-        guide,
-        mode,
-        setMode,
-        setGuide,
-        getFileDescription,
-        getFileGroupIndex,
-      }}
-    >
-      {children}
-    </GuideContext.Provider>
+    <ReviewLifecycleContext.Provider value={onReviewIdentity}>
+      <GuideContext.Provider
+        value={{
+          guide,
+          mode,
+          setMode,
+          setGuide,
+          getFileDescription,
+          getFileGroupIndex,
+        }}
+      >
+        {children}
+      </GuideContext.Provider>
+    </ReviewLifecycleContext.Provider>
   );
 }

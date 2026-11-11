@@ -14,6 +14,13 @@ async function processMarkdown(input: string): Promise<string> {
 }
 
 describe('remarkEmoji', () => {
+  it('preserves inherited property names as literal shortcodes', async () => {
+    const result = await processMarkdown(':constructor: :\\_\\_proto\\_\\_: :toString:');
+    expect(result).toContain(':constructor:');
+    expect(result).toContain(':toString:');
+    expect(result.replaceAll('\\', '')).toContain(':__proto__:');
+  });
+
   it('replaces valid shortcodes with Unicode emojis', async () => {
     const result = await processMarkdown('Hello :rocket: world');
     expect(result).toContain('🚀');

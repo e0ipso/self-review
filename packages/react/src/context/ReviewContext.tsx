@@ -1,32 +1,43 @@
+import { useLocalization } from '../localization/LocalizationContext';
 import React, {
   createContext,
   useContext,
-  useState,
   useEffect,
   useLayoutEffect,
-  useRef,
   useMemo,
-  ReactNode,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
 } from 'react';
 import type {
   Attachment,
   DiffFile,
   DiffHunk,
-  DiffLoadPayload,
   DiffSource,
   FileReviewState,
   Reply,
   ReviewComment,
-  ResumeLoadPayload,
   RemoteDriftInfo,
   RemoteSessionInfo,
   LineRange,
   Suggestion,
 } from '@self-review/types';
-import { useReviewState } from '../hooks/useReviewState';
+import { useReviewStateOperations } from '../hooks/useReviewState';
+import { useReviewHost } from '../hooks/useReviewHost';
 import { useConfig } from './ConfigContext';
 import { useAdapter } from './ReviewAdapterContext';
 import type { ReviewAdapter } from '../adapter';
+import {
+  createReviewSession,
+  createReviewSessionStore,
+  reviewSessionIdentity,
+  type ReviewSessionStore,
+} from './review-session';
+import { ReviewLifecycleContext } from './ReviewLifecycleContext';
+import { isPlaceholderSource } from './review-session';
+import { Button } from '../components/ui/button';
+export { reviewSessionIdentity } from './review-session';
 
 export interface ReviewContextValue {
   files: FileReviewState[];
@@ -76,65 +87,76 @@ export interface ReviewContextValue {
   reviewedPaths: ReadonlySet<string>;
   /** Changes when a new session starts; async work compares it to drop stale results. */
   sessionId: number;
+  /** Changes on external snapshot replacement, but not on local context expansion. */
+  snapshotId?: number;
+  /** Checks synchronously, including before a replacement has committed in React. */
+  isCurrentSession?: () => boolean;
+  loadError?: string | null;
+  resumeError?: string | null;
+  retryLoad?: () => Promise<void>;
+  retryResume?: () => Promise<void>;
 }
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
-
-function groupCommentsByFile(comments: ReviewComment[]): Map<string, ReviewComment[]> {
-  const byFile = new Map<string, ReviewComment[]>();
-  comments.forEach(comment => {
-    if (!byFile.has(comment.filePath)) {
-      byFile.set(comment.filePath, []);
-    }
-    byFile.get(comment.filePath)!.push(comment);
-  });
-  return byFile;
-}
+const SessionStoreContext = createContext<ReviewSessionStore | null>(null);
+type ReviewCommands = Pick<
+  ReviewContextValue,
+  | 'addComment'
+  | 'editComment'
+  | 'deleteComment'
+  | 'addReply'
+  | 'updateReply'
+  | 'deleteReply'
+  | 'toggleViewed'
+  | 'expandFileContext'
+  | 'updateFileHunks'
+  | 'setApplyDestination'
+  | 'isCurrentSession'
+>;
+const CommandsContext = createContext<ReviewCommands | null>(null);
 
 export function useReview() {
   const context = useContext(ReviewContext);
-  if (!context) {
-    throw new Error('useReview must be used within ReviewProvider');
-  }
+  if (!context) throw new Error('useReview must be used within ReviewProvider');
   return context;
 }
-
-/** The review session when there is one, `null` otherwise. */
 export function useOptionalReview() {
   return useContext(ReviewContext);
 }
-
-/**
- * Comparable identity of the review a payload describes: same identity updates the session,
- * a different one starts a new one. The remote head SHA is left out on purpose, so the same
- * PR at a newer head is the same review. The adapter is the other half (see {@link ReviewProvider}).
- */
-export function reviewSessionIdentity(
-  source: DiffSource,
-  remote?: RemoteSessionInfo | null
-): string {
-  let parts: string[];
-  switch (source.type) {
-    case 'git':
-      parts = ['git', source.repository, source.gitDiffArgs];
-      break;
-    case 'directory':
-    case 'file':
-      parts = [source.type, source.sourcePath];
-      break;
-    default:
-      parts = [source.type];
-  }
-  if (remote) parts.push('remote', remote.remoteUrl);
-  return JSON.stringify(parts);
+export function useReviewCommands() {
+  const commands = useContext(CommandsContext);
+  if (!commands) throw new Error('useReviewCommands must be used within ReviewProvider');
+  return commands;
 }
-
-function isPlaceholderSource(source: DiffSource): boolean {
-  return source.type === 'loading' || source.type === 'welcome';
+function useSessionSelection<T>(
+  select: (state: ReturnType<ReviewSessionStore['getSnapshot']>) => T
+): T {
+  const store = useContext(SessionStoreContext);
+  if (!store) throw new Error('Session selection must be used within ReviewProvider');
+  return useSyncExternalStore(
+    store.subscribe,
+    () => select(store.getSnapshot()),
+    () => select(store.getSnapshot())
+  );
 }
-
-const LOADING_SOURCE: DiffSource = { type: 'loading' };
-const DEFAULT_STATIC_SOURCE: DiffSource = { type: 'directory', sourcePath: '' };
+/** Subscribes only to this file's review state, preserving references for unrelated files. */
+export function useFileReview(filePath: string) {
+  return useSessionSelection(state => state.files.find(file => file.path === filePath));
+}
+export function useReviewedFile(filePath: string) {
+  return useSessionSelection(state =>
+    state.allDiffFiles.find(file => (file.newPath || file.oldPath) === filePath)
+  );
+}
+export function useReviewSource() {
+  return useSessionSelection(state => state.diffSource);
+}
+export function useReviewSessionId() {
+  return useSessionSelection(state => state.sessionId);
+}
+export function useReviewSnapshotId() {
+  return useSessionSelection(state => state.snapshotId);
+}
 
 const adapterIds = new WeakMap<object, number>();
 let nextAdapterId = 1;
@@ -147,71 +169,6 @@ function adapterIdentity(adapter: object | null): number {
     adapterIds.set(adapter, id);
   }
   return id;
-}
-
-let nextSessionId = 1;
-
-function pathOf(file: DiffFile): string {
-  return file.newPath || file.oldPath;
-}
-
-/** Returns `prev` itself when nothing changed, so a no-op reconciliation does not re-render. */
-function seedFileStates(diffFiles: DiffFile[], prev: FileReviewState[]): FileReviewState[] {
-  const prevByPath = new Map(prev.map(f => [f.path, f]));
-  const next = diffFiles.map((file): FileReviewState => {
-    const path = pathOf(file);
-    const existing = prevByPath.get(path);
-    if (existing) {
-      return existing.changeType === file.changeType
-        ? existing
-        : { ...existing, changeType: file.changeType };
-    }
-    return { path, changeType: file.changeType, viewed: false, comments: [] };
-  });
-  const unchanged = next.length === prev.length && next.every((f, i) => f === prev[i]);
-  return unchanged ? prev : next;
-}
-
-/** State without a diff entry is dropped on reconcile, so off-diff comments need a synthetic one. */
-function withSyntheticEntries(diffFiles: DiffFile[], paths: Iterable<string>): DiffFile[] {
-  const known = new Set(diffFiles.map(pathOf));
-  const extras: DiffFile[] = [];
-  for (const path of paths) {
-    if (known.has(path)) continue;
-    known.add(path);
-    extras.push({
-      oldPath: path,
-      newPath: path,
-      changeType: 'modified',
-      isBinary: false,
-      hunks: [],
-    });
-  }
-  return extras.length > 0 ? [...diffFiles, ...extras] : diffFiles;
-}
-
-/** Appends comments by id (no duplicates) and adds entries for paths the state lacks. */
-function mergeIntoFileStates(
-  prev: FileReviewState[],
-  commentsByFile: Map<string, ReviewComment[]>,
-  viewedPaths: ReadonlySet<string>
-): FileReviewState[] {
-  const known = new Set(prev.map(f => f.path));
-  const merged = prev.map(file => {
-    const incoming = commentsByFile.get(file.path) ?? [];
-    const ids = new Set(file.comments.map(c => c.id));
-    const added = incoming.filter(c => !ids.has(c.id));
-    const viewed = file.viewed || viewedPaths.has(file.path);
-    if (added.length === 0 && viewed === file.viewed) return file;
-    return { ...file, viewed, comments: [...file.comments, ...added] };
-  });
-  const extras: FileReviewState[] = [];
-  commentsByFile.forEach((comments, path) => {
-    if (!known.has(path)) {
-      extras.push({ path, changeType: 'modified', viewed: viewedPaths.has(path), comments });
-    }
-  });
-  return extras.length > 0 ? [...merged, ...extras] : merged;
 }
 
 export interface ReviewProviderProps {
@@ -246,7 +203,6 @@ export function ReviewProvider(props: ReviewProviderProps) {
   return <ReviewSessionProvider key={sessionKey} {...props} adapter={adapter} />;
 }
 
-/** Keyed by `ReviewProvider`: replacement unmounts it and cleanups cancel the old adapter's work. */
 function ReviewSessionProvider({
   children,
   initialFiles,
@@ -254,206 +210,164 @@ function ReviewSessionProvider({
   initialComments,
   adapter,
 }: ReviewProviderProps & { adapter: ReviewAdapter | null }) {
-  const startingSource = initialSource || (initialFiles ? DEFAULT_STATIC_SOURCE : LOADING_SOURCE);
-  const [allDiffFiles, setAllDiffFiles] = useState<DiffFile[]>(initialFiles || []);
-  const [diffSource, setDiffSource] = useState<DiffSource>(startingSource);
-  const [resumedReview, setResumedReview] = useState<ResumeLoadPayload | null>(null);
-  const [remote, setRemote] = useState<RemoteSessionInfo | null>(null);
-  const [diagnostics, setDiagnostics] = useState<string[]>([]);
-  const [isLargePayload, setIsLargePayload] = useState(false);
-  const [applyDestination, setApplyDestination] = useState<string | null>(null);
-  const [reviewedPaths, setReviewedPaths] = useState<ReadonlySet<string>>(
-    () => new Set((initialFiles ?? []).map(pathOf))
+  const { t } = useLocalization();
+  const [store] = useState(() =>
+    createReviewSessionStore(createReviewSession(initialFiles, initialSource))
   );
-  const [sessionId, setSessionId] = useState(() => nextSessionId++);
-  const sessionIdRef = useRef(sessionId);
-  const identityRef = useRef<string | null>(
-    initialFiles ? reviewSessionIdentity(startingSource) : null
-  );
-  const placeholderRef = useRef(isPlaceholderSource(startingSource));
-  // Session an outstanding loadResumedReview() answer belongs to.
-  const resumeOwnerRef = useRef<number | null>(null);
-  const resumeAppliedRef = useRef(false);
-  const hydratedRef = useRef(false);
-  const staticFilesRef = useRef(initialFiles);
+  const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const { config } = useConfig();
-
-  const reviewState = useReviewState();
-  const { setFiles } = reviewState;
-
-  // Filter files based on showUntracked toggle
-  const diffFiles = useMemo(() => {
-    if (config.showUntracked) return allDiffFiles;
-    return allDiffFiles.filter(file => !file.isUntracked);
-  }, [allDiffFiles, config.showUntracked]);
-
-  // Payload callbacks run outside render and read this.
-  const filesRef = useRef(reviewState.files);
+  const notifyIdentity = useContext(ReviewLifecycleContext);
   useLayoutEffect(() => {
-    filesRef.current = reviewState.files;
-  }, [reviewState.files]);
-
-  /** Same identity updates the session; a different one replaces it. */
-  const receivePayload = (payload: DiffLoadPayload) => {
-    const identity = reviewSessionIdentity(payload.source, payload.remote);
-    if (identity === identityRef.current) {
-      const commentedPaths = filesRef.current.filter(f => f.comments.length > 0).map(f => f.path);
-      setAllDiffFiles(withSyntheticEntries(payload.files, commentedPaths));
-      setReviewedPaths(new Set(payload.files.map(pathOf)));
-      setDiffSource(payload.source);
-      setRemote(payload.remote ?? null);
-      setDiagnostics(payload.diagnostics ?? []);
-      setIsLargePayload(payload.isLargePayload === true);
-      return;
-    }
-
-    identityRef.current = identity;
-    const nextId = nextSessionId++;
-    // A resume requested while a placeholder showed belongs to the review replacing it
-    // (Electron answers the welcome screen's pending request right after pushing the diff).
-    if (placeholderRef.current && resumeOwnerRef.current === sessionIdRef.current) {
-      resumeOwnerRef.current = nextId;
-    }
-    placeholderRef.current = isPlaceholderSource(payload.source);
-    sessionIdRef.current = nextId;
-    setSessionId(nextId);
-    resumeAppliedRef.current = false;
-    setResumedReview(null);
-    setAllDiffFiles(payload.files);
-    setReviewedPaths(new Set(payload.files.map(pathOf)));
-    setDiffSource(payload.source);
-    setRemote(payload.remote ?? null);
-    setDiagnostics(payload.diagnostics ?? []);
-    setIsLargePayload(payload.isLargePayload === true);
-    setApplyDestination(null);
-    setFiles(seedFileStates(payload.files, []));
-  };
-
-  /** Merge comments and viewed paths into the session, keeping off-diff paths. */
-  const mergeIntoSession = (comments: ReviewComment[], viewedPaths: ReadonlySet<string>) => {
-    const commentsByFile = groupCommentsByFile(comments);
-    setFiles(prev => mergeIntoFileStates(prev, commentsByFile, viewedPaths));
-    setAllDiffFiles(prev => withSyntheticEntries(prev, commentsByFile.keys()));
-  };
-
-  useEffect(() => {
-    setFiles(prev => seedFileStates(allDiffFiles, prev));
-  }, [allDiffFiles]);
-
-  // Declared after the seeding effect so its updater is queued first and this one sees the seeded
-  // files. Applying once keeps later allDiffFiles updates from resurrecting deleted comments.
-  useEffect(() => {
-    if (!resumedReview || resumeAppliedRef.current) return;
-    resumeAppliedRef.current = true;
-    mergeIntoSession(resumedReview.comments, new Set(resumedReview.viewedFiles ?? []));
-  }, [resumedReview]);
-
-  // Declared after the seeding effect for the same ordering reason.
-  useEffect(() => {
-    if (hydratedRef.current || !initialComments || initialComments.length === 0) return;
-    if (isPlaceholderSource(diffSource)) return;
-    hydratedRef.current = true;
-    mergeIntoSession(initialComments, new Set());
-  }, [initialComments, diffSource]);
-
-  useEffect(() => {
-    if (!initialFiles || initialFiles === staticFilesRef.current) return;
-    staticFilesRef.current = initialFiles;
-    receivePayload({ files: initialFiles, source: startingSource });
-  }, [initialFiles]);
-
-  useEffect(() => {
-    if (initialFiles || !adapter) return;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const payload: DiffLoadPayload = await adapter.loadDiff();
-        if (cancelled) return;
-        // A push that already established a different session is newer than this response.
-        const identity = reviewSessionIdentity(payload.source, payload.remote);
-        if (identityRef.current !== null && identityRef.current !== identity) return;
-        receivePayload(payload);
-
-        // Applying is deferred to the effect above: per-file state does not exist until seeding runs.
-        if (adapter.loadResumedReview) {
-          resumeOwnerRef.current = sessionIdRef.current;
-          const resumed = await adapter.loadResumedReview();
-          if (cancelled || resumeOwnerRef.current !== sessionIdRef.current) return;
-          resumeOwnerRef.current = null;
-          setResumedReview(resumed);
-        }
-      } catch (error) {
-        console.error('[ReviewContext] Failed to load diff:', error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // The host may start a review after the initial load (e.g. a PR URL from the welcome screen).
-  useEffect(() => {
-    if (initialFiles || !adapter?.onDiffLoad) return;
-    return adapter.onDiffLoad(payload => receivePayload(payload));
-  }, []);
-
-  const expandFileContext = async (
-    filePath: string,
-    contextLines: number
-  ): Promise<{ hunks: DiffHunk[]; totalLines: number } | null> => {
-    if (!adapter?.expandContext) return null;
-    try {
-      const response = await adapter.expandContext({ filePath, contextLines });
-      if (!response) return null;
-      return { hunks: response.hunks, totalLines: response.totalLines };
-    } catch (error) {
-      console.error('[ReviewContext] Failed to expand context:', error);
-      return null;
-    }
-  };
-
-  // Hunks requested for a replaced session must not land on a same-named file of the new one.
-  const renderedSessionId = sessionId;
-  const updateFileHunks = (filePath: string, hunks: DiffHunk[]) => {
-    if (renderedSessionId !== sessionIdRef.current) return;
-    setAllDiffFiles(prev =>
-      prev.map(f => (pathOf(f) === filePath ? { ...f, hunks, contentLoaded: true } : f))
-    );
-  };
-
-  return (
-    <ReviewContext.Provider
-      value={{
-        files: reviewState.files,
-        diffFiles,
-        diffSource,
-        setDiffFiles: setAllDiffFiles,
-        addComment: reviewState.addComment,
-        editComment: reviewState.updateComment,
-        deleteComment: reviewState.deleteComment,
-        addReply: reviewState.addReply,
-        updateReply: reviewState.updateReply,
-        deleteReply: reviewState.deleteReply,
-        toggleViewed: reviewState.toggleViewed,
-        getCommentsForFile: reviewState.getCommentsForFile,
-        getCommentsForLine: reviewState.getCommentsForLine,
-        expandFileContext,
-        updateFileHunks,
-        remoteDrift: resumedReview?.remoteDrift ?? null,
-        importDiagnostics: resumedReview?.importDiagnostics ?? [],
-        remote,
-        diagnostics,
-        isLargePayload,
-        applyDestination,
-        setApplyDestination,
-        reviewedPaths,
-        sessionId,
-      }}
-    >
-      {children}
-    </ReviewContext.Provider>
+    if (state.identity && !isPlaceholderSource(state.diffSource)) notifyIdentity?.(state.identity);
+  }, [notifyIdentity, state.identity, state.diffSource]);
+  const setFiles = useMemo(
+    () => (update: React.SetStateAction<FileReviewState[]>) =>
+      store.dispatch({ type: 'files', update }),
+    [store]
   );
+  const review = useReviewStateOperations(state.files, setFiles);
+  const { retryLoad, retryResume } = useReviewHost(
+    store,
+    adapter,
+    initialFiles !== undefined,
+    initialComments
+  );
+  const staticFiles = useRef(initialFiles);
+  useLayoutEffect(() => {
+    if (!initialFiles || initialFiles === staticFiles.current) return;
+    staticFiles.current = initialFiles;
+    store.dispatch({
+      type: 'payload',
+      payload: { files: initialFiles, source: initialSource ?? state.diffSource },
+      initialComments,
+    });
+  }, [initialFiles, initialSource, initialComments, store, state.diffSource]);
+  useEffect(() => {
+    store.dispatch({ type: 'hydrate', comments: initialComments });
+  }, [initialComments, store]);
+
+  const diffFiles = useMemo(
+    () =>
+      config.showUntracked
+        ? state.allDiffFiles
+        : state.allDiffFiles.filter(file => !file.isUntracked),
+    [state.allDiffFiles, config.showUntracked]
+  );
+  const commands = useMemo<ReviewCommands>(() => {
+    const owner = state.sessionId;
+    const snapshot = state.snapshotId;
+    const current = () =>
+      store.getSnapshot().sessionId === owner && store.getSnapshot().snapshotId === snapshot;
+    return {
+      addComment: review.addComment,
+      editComment: review.updateComment,
+      deleteComment: review.deleteComment,
+      addReply: review.addReply,
+      updateReply: review.updateReply,
+      deleteReply: review.deleteReply,
+      toggleViewed: review.toggleViewed,
+      isCurrentSession: current,
+      updateFileHunks: (filePath, hunks) => {
+        if (current()) store.dispatch({ type: 'hunks', filePath, hunks });
+      },
+      setApplyDestination: destination => {
+        if (current()) store.dispatch({ type: 'destination', destination });
+      },
+      expandFileContext: async (filePath, contextLines) => {
+        if (!adapter?.expandContext || !current()) return null;
+        try {
+          const result = await adapter.expandContext({ filePath, contextLines });
+          return current() && result
+            ? { hunks: result.hunks, totalLines: result.totalLines }
+            : null;
+        } catch (error) {
+          console.error('[ReviewContext] Failed to expand context:', error);
+          return null;
+        }
+      },
+    };
+  }, [
+    store,
+    adapter,
+    state.sessionId,
+    state.snapshotId,
+    review.addComment,
+    review.updateComment,
+    review.deleteComment,
+    review.addReply,
+    review.updateReply,
+    review.deleteReply,
+    review.toggleViewed,
+  ]);
+  const value: ReviewContextValue = {
+    ...commands,
+    files: state.files,
+    diffFiles,
+    diffSource: state.diffSource,
+    setDiffFiles: files => store.dispatch({ type: 'diff-files', files }),
+    getCommentsForFile: review.getCommentsForFile,
+    getCommentsForLine: review.getCommentsForLine,
+    remoteDrift: state.resumedReview?.remoteDrift ?? null,
+    importDiagnostics: state.resumedReview?.importDiagnostics ?? [],
+    remote: state.remote,
+    diagnostics: state.diagnostics,
+    isLargePayload: state.isLargePayload,
+    applyDestination: state.applyDestination,
+    reviewedPaths: state.reviewedPaths,
+    sessionId: state.sessionId,
+    snapshotId: state.snapshotId,
+    loadError: state.loadError,
+    resumeError: state.resumeError,
+    retryLoad,
+    retryResume,
+  };
+  return (
+    <SessionStoreContext.Provider value={store}>
+      <CommandsContext.Provider value={commands}>
+        <ReviewContext.Provider value={value}>
+          {state.loadError && (
+            <div role='alert' className='m-3 rounded border border-destructive p-3 text-sm'>
+              <p>{t('The review could not be loaded. {detail}', { detail: state.loadError })}</p>
+              <Button onClick={() => void retryLoad()}>{t('Retry loading review')}</Button>
+            </div>
+          )}
+          {state.resumeError && (
+            <div role='alert' className='m-3 rounded border border-destructive p-3 text-sm'>
+              <p>
+                {t('Saved feedback could not be loaded. {detail}', { detail: state.resumeError })}
+              </p>
+              <Button onClick={() => void retryResume()}>
+                {t('Retry loading saved feedback')}
+              </Button>
+            </div>
+          )}
+          {children}
+        </ReviewContext.Provider>
+      </CommandsContext.Provider>
+    </SessionStoreContext.Provider>
+  );
+}
+
+export function useOptionalSnapshotKey() {
+  const store = useContext(SessionStoreContext);
+  const read = () =>
+    store ? `${store.getSnapshot().sessionId}:${store.getSnapshot().snapshotId}` : '';
+  return useSyncExternalStore(store?.subscribe ?? (() => () => {}), read, read);
+}
+
+/** The diff stream does not subscribe to comment mutations. */
+export function useDiffReview() {
+  const all = useSessionSelection(state => state.allDiffFiles);
+  const { config } = useConfig();
+  const diffFiles = useMemo(
+    () => (config.showUntracked ? all : all.filter(file => !file.isUntracked)),
+    [all, config.showUntracked]
+  );
+  return {
+    diffFiles,
+    diffSource: useReviewSource(),
+    diagnostics: useSessionSelection(state => state.diagnostics),
+    isLargePayload: useSessionSelection(state => state.isLargePayload),
+    sessionId: useReviewSessionId(),
+  };
 }

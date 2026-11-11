@@ -1,4 +1,6 @@
 import React from 'react';
+import { Button } from '../ui/button';
+import { useLocalization } from '../../localization/LocalizationContext';
 import { ChevronUp, ChevronDown, UnfoldVertical } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
@@ -23,6 +25,7 @@ export default function ExpandContextBar({
   onExpand,
   loading,
 }: ExpandContextBarProps) {
+  const { t } = useLocalization();
   if (gapSize !== undefined && gapSize <= 0) return null;
 
   const showSingleButton = gapSize !== undefined && gapSize <= 20;
@@ -30,16 +33,19 @@ export default function ExpandContextBar({
   const iconButton = (direction: ExpandDirection, Icon: typeof ChevronUp, title: string) => (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
+        <Button
+          variant='ghost'
+          type='button'
           className='flex items-center justify-center w-5 h-5 rounded-sm text-blue-700/70 dark:text-blue-300/70 hover:text-blue-700 dark:hover:text-blue-200 hover:bg-blue-500/20 dark:hover:bg-blue-400/20 transition-colors cursor-pointer'
           onClick={e => {
             e.stopPropagation();
             onExpand(direction, hunkIndex, position);
           }}
           disabled={loading}
+          aria-label={title}
         >
           <Icon className='h-3.5 w-3.5' />
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent side='right'>{title}</TooltipContent>
     </Tooltip>
@@ -52,38 +58,38 @@ export default function ExpandContextBar({
         {loading ? (
           <span className='text-[10px] text-muted-foreground/50'>...</span>
         ) : showSingleButton ? (
-          iconButton(
-            'all',
-            UnfoldVertical,
-            `Show ${gapSize} hidden line${gapSize !== 1 ? 's' : ''}`
-          )
+          iconButton('all', UnfoldVertical, t('Show hidden lines', { count: gapSize }))
         ) : (
           <>
             {(position === 'top' || position === 'between') &&
-              iconButton('up', ChevronUp, 'Expand up')}
+              iconButton('up', ChevronUp, t('Expand up'))}
             {(position === 'bottom' || position === 'between') &&
-              iconButton('down', ChevronDown, 'Expand down')}
+              iconButton('down', ChevronDown, t('Expand down'))}
           </>
         )}
       </div>
       {/* Label area */}
       <div className='flex-1 px-2'>
         {showSingleButton ? (
-          <button
+          <Button
+            variant='ghost'
+            type='button'
             className='text-[11px] text-blue-700/70 dark:text-blue-300/70 hover:text-blue-700 dark:hover:text-blue-200 transition-colors cursor-pointer'
             onClick={() => onExpand('all', hunkIndex, position)}
             disabled={loading}
           >
-            Show {gapSize} hidden line{gapSize !== 1 ? 's' : ''}
-          </button>
+            {t('Show hidden lines', { count: gapSize })}
+          </Button>
         ) : (
-          <button
+          <Button
+            variant='ghost'
+            type='button'
             className='text-[11px] text-blue-700/70 dark:text-blue-300/70 hover:text-blue-700 dark:hover:text-blue-200 transition-colors cursor-pointer'
             onClick={() => onExpand('all', hunkIndex, position)}
             disabled={loading}
           >
-            Show all hidden lines
-          </button>
+            {t('Show all hidden lines')}
+          </Button>
         )}
       </div>
     </div>

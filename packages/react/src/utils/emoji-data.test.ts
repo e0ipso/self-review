@@ -25,6 +25,11 @@ describe('searchEmojis', () => {
 });
 
 describe('resolveShortcode', () => {
+  it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty'])(
+    'ignores inherited dictionary key %s',
+    shortcode => expect(resolveShortcode(shortcode)).toBeNull()
+  );
+
   it('resolves known shortcode to Unicode emoji', () => {
     expect(resolveShortcode('rocket')).toBe('🚀');
   });

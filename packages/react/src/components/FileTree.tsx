@@ -1,3 +1,4 @@
+import { useLocalization } from '../localization/LocalizationContext';
 import React, { useState, useMemo } from 'react';
 import { useReview } from '../context/ReviewContext';
 import { useConfig } from '../context/ConfigContext';
@@ -27,8 +28,9 @@ import { GuideStation } from './GuideStation';
 import { getGuideAccent } from '../utils/guide-accents';
 
 export default function FileTree() {
+  const { t, number } = useLocalization();
   const { diffFiles, files, toggleViewed } = useReview();
-  const { config, updateConfig, outputPathInfo, setOutputPathInfo } = useConfig();
+  const { config, updateConfig, outputPathInfo, setOutputPathInfo, portalContainer } = useConfig();
   const { activeFilePath, scrollToFile } = useDiffNavigationContext();
   const adapter = useAdapter();
   const { guide, mode } = useGuide();
@@ -55,7 +57,7 @@ export default function FileTree() {
     const event = new CustomEvent('toggle-all-sections', {
       detail: { expanded: newExpanded },
     });
-    document.dispatchEvent(event);
+    portalContainer?.dispatchEvent(event);
   };
 
   const filteredFiles = useMemo(() => {
@@ -88,7 +90,7 @@ export default function FileTree() {
       <div className='px-3 pt-3 pb-2'>
         <div className='flex items-center justify-between mb-2.5'>
           <span className='text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'>
-            Changed files
+            {t('Changed files')}
           </span>
           <div className='flex items-center gap-1'>
             <ToggleGroup
@@ -106,10 +108,10 @@ export default function FileTree() {
                     className='h-5 w-5 p-0'
                   >
                     <Columns2 className='h-3.5 w-3.5' />
-                    <span className='sr-only'>Split view</span>
+                    <span className='sr-only'>{t('Split view')}</span>
                   </ToggleGroupItem>
                 </TooltipTrigger>
-                <TooltipContent>Side-by-side view</TooltipContent>
+                <TooltipContent>{t('Side-by-side view')}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -119,10 +121,10 @@ export default function FileTree() {
                     className='h-5 w-5 p-0'
                   >
                     <AlignJustify className='h-3.5 w-3.5' />
-                    <span className='sr-only'>Unified view</span>
+                    <span className='sr-only'>{t('Unified view')}</span>
                   </ToggleGroupItem>
                 </TooltipTrigger>
-                <TooltipContent>Unified view</TooltipContent>
+                <TooltipContent>{t('Unified view')}</TooltipContent>
               </Tooltip>
             </ToggleGroup>
             <Separator orientation='vertical' className='h-4' />
@@ -132,31 +134,32 @@ export default function FileTree() {
                   variant='ghost'
                   size='icon'
                   data-testid='keyboard-shortcuts-btn'
+                  aria-label={t('Keyboard shortcuts')}
                   className='h-5 w-5 text-muted-foreground hover:text-foreground'
                 >
                   <Keyboard className='h-3.5 w-3.5' />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side='right' className='text-xs space-y-1 p-2'>
-                <div className='font-medium mb-1'>Keyboard Shortcuts</div>
+                <div className='font-medium mb-1'>{t('Keyboard Shortcuts')}</div>
                 <div className='flex justify-between gap-4'>
-                  <span>Find in page</span>
+                  <span>{t('Find in page')}</span>
                   <kbd className='font-mono'>Ctrl+F</kbd>
                 </div>
                 <div className='flex justify-between gap-4'>
-                  <span>Comment on line</span>
+                  <span>{t('Comment on line')}</span>
                   <kbd className='font-mono'>f</kbd>
                 </div>
                 <div className='flex justify-between gap-4'>
-                  <span>Jump to file</span>
+                  <span>{t('Jump to file')}</span>
                   <kbd className='font-mono'>g</kbd>
                 </div>
                 <div className='flex justify-between gap-4'>
-                  <span>Scroll diffs</span>
+                  <span>{t('Scroll diffs')}</span>
                   <kbd className='font-mono'>j/k</kbd>
                 </div>
                 <div className='flex justify-between gap-4'>
-                  <span>Cancel</span>
+                  <span>{t('Cancel')}</span>
                   <kbd className='font-mono'>Esc</kbd>
                 </div>
               </TooltipContent>
@@ -168,6 +171,7 @@ export default function FileTree() {
                   size='icon'
                   data-testid={allExpanded ? 'collapse-all-btn' : 'expand-all-btn'}
                   onClick={handleToggleAllSections}
+                  aria-label={t(allExpanded ? 'Collapse all files' : 'Expand all files')}
                   className='h-5 w-5 text-muted-foreground hover:text-foreground'
                 >
                   {allExpanded ? (
@@ -178,25 +182,26 @@ export default function FileTree() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {allExpanded ? 'Collapse all files' : 'Expand all files'}
+                {t(allExpanded ? 'Collapse all files' : 'Expand all files')}
               </TooltipContent>
             </Tooltip>
             <Badge
               variant='secondary'
               className='h-5 px-1.5 text-[11px] font-normal tabular-nums rounded'
             >
-              {diffFiles.length}
+              {number(diffFiles.length)}
             </Badge>
           </div>
         </div>
         <div className='relative'>
-          <Search className='absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none' />
+          <Search className='absolute start-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none' />
           <Input
             type='text'
-            placeholder='Filter files...'
+            placeholder={t('Filter files...')}
+            aria-label={t('Filter files...')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className='h-7 pl-7 text-xs bg-background'
+            className='h-7 ps-7 text-xs bg-background'
             data-testid='file-search'
           />
         </div>
@@ -255,7 +260,7 @@ export default function FileTree() {
                   sections butt together so the line reads as a single
                   route. The implicit group joins by a dashed segment. */}
               <div
-                className={`pointer-events-none absolute left-[18px] w-[2px] ${
+                className={`pointer-events-none absolute start-[18px] w-[2px] ${
                   isFirst ? 'top-[27px]' : 'top-0'
                 } ${isLast ? 'bottom-2' : 'bottom-0'} ${
                   section.header.implicit
@@ -293,7 +298,7 @@ export default function FileTree() {
 
         {filteredFiles.length === 0 && (
           <div className='text-center text-muted-foreground text-xs py-8'>
-            {searchQuery ? 'No files match your search' : 'No files in diff'}
+            {t(searchQuery ? 'No files match your search' : 'No files in diff')}
           </div>
         )}
       </div>
@@ -304,7 +309,7 @@ export default function FileTree() {
           <Separator />
           <div className='px-3 py-2 space-y-1'>
             <div className='flex items-center gap-1.5 text-xs text-muted-foreground'>
-              <span className='font-medium'>Output:</span>
+              <span className='font-medium'>{t('Output:')}</span>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <TruncatedPath
@@ -326,15 +331,15 @@ export default function FileTree() {
                 <Button
                   variant='ghost'
                   size='sm'
-                  className='h-6 px-2 text-xs ml-auto'
+                  className='h-6 px-2 text-xs ms-auto'
                   onClick={handleChangeOutputPath}
                 >
-                  Change...
+                  {t('Change...')}
                 </Button>
               )}
             </div>
             {!outputPathInfo.outputPathWritable && (
-              <p className='text-xs text-red-500'>Path not writable</p>
+              <p className='text-xs text-red-500'>{t('Path not writable')}</p>
             )}
           </div>
         </>

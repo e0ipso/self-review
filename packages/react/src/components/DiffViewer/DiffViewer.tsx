@@ -1,6 +1,8 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { reviewElement } from '../../utils/review-root';
 import type { DiffFile } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { useDiffReview } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
@@ -16,29 +18,30 @@ import GuideChapterDivider from './GuideChapterDivider';
 export const COLLAPSE_THRESHOLD = 50;
 
 function withDefaultExpansion(
-  prev: Record<string, boolean>,
+  prev: Map<string, boolean>,
   diffFiles: DiffFile[],
   defaultExpanded: boolean
-): Record<string, boolean> {
-  let updated: Record<string, boolean> | null = null;
+): Map<string, boolean> {
+  let updated: Map<string, boolean> | null = null;
   for (const file of diffFiles) {
     const filePath = file.newPath || file.oldPath;
-    if (filePath in prev) continue;
-    updated ??= { ...prev };
-    updated[filePath] = defaultExpanded;
+    if (prev.has(filePath)) continue;
+    updated ??= new Map(prev);
+    updated.set(filePath, defaultExpanded);
   }
   return updated ?? prev;
 }
 
 export default function DiffViewer() {
+  const { t } = useLocalization();
   const {
     diffFiles,
     diffSource,
     diagnostics = [],
     isLargePayload = false,
     sessionId,
-  } = useReview();
-  const { config } = useConfig();
+  } = useDiffReview();
+  const { config, portalContainer } = useConfig();
   const { guide, mode: guideMode } = useGuide();
   const containerRef = useRef<HTMLDivElement>(null);
   const navigation = useOptionalDiffNavigation();
@@ -56,8 +59,8 @@ export default function DiffViewer() {
   // Large-payload sessions start collapsed: every expanded section fetches its own content.
   const defaultExpanded = !isLargePayload && diffFiles.length <= COLLAPSE_THRESHOLD;
 
-  const [expandedState, setExpandedState] = useState<Record<string, boolean>>(() =>
-    withDefaultExpansion({}, diffFiles, defaultExpanded)
+  const [expandedState, setExpandedState] = useState<Map<string, boolean>>(() =>
+    withDefaultExpansion(new Map(), diffFiles, defaultExpanded)
   );
 
   // Reset during render so no section of a new session is committed (and fetched) expanded
@@ -65,7 +68,7 @@ export default function DiffViewer() {
   const [expansionSessionId, setExpansionSessionId] = useState(sessionId);
   if (expansionSessionId !== sessionId) {
     setExpansionSessionId(sessionId);
-    setExpandedState({});
+    setExpandedState(new Map());
   }
 
   // A path first seen keeps the default it was shown with; later default changes don't toggle it.
@@ -73,26 +76,26 @@ export default function DiffViewer() {
     setExpandedState(prev => withDefaultExpansion(prev, diffFiles, defaultExpanded));
   }, [diffFiles, defaultExpanded]);
 
-  const isExpanded = (filePath: string) => expandedState[filePath] ?? defaultExpanded;
+  const isExpanded = (filePath: string) => expandedState.get(filePath) ?? defaultExpanded;
 
   // Listen for toggle-all-sections custom events
   useEffect(() => {
     const handleToggleAll = (event: Event) => {
       const customEvent = event as CustomEvent<{ expanded: boolean }>;
-      const newState: Record<string, boolean> = {};
+      const newState = new Map<string, boolean>();
       diffFiles.forEach(file => {
         const filePath = file.newPath || file.oldPath;
-        newState[filePath] = customEvent.detail?.expanded ?? true;
+        newState.set(filePath, customEvent.detail?.expanded ?? true);
       });
       setExpandedState(newState);
     };
 
-    document.addEventListener('toggle-all-sections', handleToggleAll);
+    portalContainer?.addEventListener('toggle-all-sections', handleToggleAll);
 
     return () => {
-      document.removeEventListener('toggle-all-sections', handleToggleAll);
+      portalContainer?.removeEventListener('toggle-all-sections', handleToggleAll);
     };
-  }, [diffFiles]);
+  }, [diffFiles, portalContainer]);
 
   // Pending scroll adjustment to apply after React commits the DOM change
   const scrollAdjustRef = useRef<number>(0);
@@ -100,7 +103,10 @@ export default function DiffViewer() {
   // Apply scroll compensation synchronously after DOM update, before paint
   useLayoutEffect(() => {
     if (scrollAdjustRef.current > 0) {
-      const scrollContainer = document.querySelector<HTMLElement>('[data-scroll-container="diff"]');
+      const scrollContainer = reviewElement<HTMLElement>(
+        portalContainer,
+        '[data-scroll-container="diff"]'
+      );
       if (scrollContainer) {
         scrollContainer.scrollTop -= scrollAdjustRef.current;
       }
@@ -113,7 +119,10 @@ export default function DiffViewer() {
 
     // Compensate scroll position when collapsing a file above the viewport
     if (isCurrentlyExpanded) {
-      const scrollContainer = document.querySelector<HTMLElement>('[data-scroll-container="diff"]');
+      const scrollContainer = reviewElement<HTMLElement>(
+        portalContainer,
+        '[data-scroll-container="diff"]'
+      );
       // Filenames can hold quotes, backslashes and newlines: sections register by path.
       const sectionEl = navigation?.getFileElement(filePath);
 
@@ -133,10 +142,7 @@ export default function DiffViewer() {
       }
     }
 
-    setExpandedState(prev => ({
-      ...prev,
-      [filePath]: !(prev[filePath] ?? defaultExpanded),
-    }));
+    setExpandedState(prev => new Map(prev).set(filePath, !(prev.get(filePath) ?? defaultExpanded)));
   };
 
   if (diffFiles.length === 0) {
@@ -155,7 +161,7 @@ export default function DiffViewer() {
         <div className='px-4 pt-4'>
           <DiffDiagnostics
             diagnostics={diagnostics}
-            title='Part of this diff could not be reviewed'
+            title={t('Part of this diff could not be reviewed')}
           />
         </div>
       )}
@@ -175,7 +181,11 @@ export default function DiffViewer() {
             const filePath = file.newPath || file.oldPath;
             // Net for failures outside FileSection's own preview boundary.
             return (
-              <PreviewErrorBoundary key={filePath} filePath={filePath} resetKeys={[file]}>
+              <PreviewErrorBoundary
+                key={`${sessionId}:${filePath}`}
+                filePath={filePath}
+                resetKeys={[file]}
+              >
                 <FileSection
                   file={file}
                   viewMode={config.diffView}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useId } from 'react';
 import { flushSync } from 'react-dom';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { GripVertical } from 'lucide-react';
@@ -7,9 +7,13 @@ import DiffViewer from './DiffViewer/DiffViewer';
 import GuideRouteHud from './GuideRouteHud';
 import FileTreeToggle from './FileTreeToggle';
 
-const FILE_TREE_PANEL_ID = 'fileTree';
+import { useConfig } from '../context/ConfigContext';
 
-export default function Layout() {
+function Layout() {
+  const { portalContainer } = useConfig();
+  const panelId = useId();
+  const fileTreePanelId = `${panelId}-file-tree`;
+  const diffPanelId = `${panelId}-diff-viewer`;
   const fileTreePanel = useRef<PanelImperativeHandle | null>(null);
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false);
 
@@ -52,14 +56,14 @@ export default function Layout() {
         syncCollapsed();
       });
     }
-    document.addEventListener('expand-file-tree', handleExpandRequest);
-    return () => document.removeEventListener('expand-file-tree', handleExpandRequest);
-  }, [syncCollapsed]);
+    portalContainer?.addEventListener('expand-file-tree', handleExpandRequest);
+    return () => portalContainer?.removeEventListener('expand-file-tree', handleExpandRequest);
+  }, [syncCollapsed, portalContainer]);
 
   return (
     <Group orientation='horizontal' style={{ flex: 1 }}>
       <Panel
-        id={FILE_TREE_PANEL_ID}
+        id={fileTreePanelId}
         panelRef={fileTreePanel}
         collapsible
         collapsedSize='0%'
@@ -91,7 +95,7 @@ export default function Layout() {
         </div>
       </Separator>
 
-      <Panel id='diffViewer' defaultSize='75%'>
+      <Panel id={diffPanelId} defaultSize='75%'>
         <div className='relative h-full'>
           <div className='h-full overflow-y-auto bg-background' data-scroll-container='diff'>
             <DiffViewer />
@@ -99,7 +103,7 @@ export default function Layout() {
           <div className='absolute bottom-4 left-4 z-30'>
             <FileTreeToggle
               collapsed={fileTreeCollapsed}
-              controls={FILE_TREE_PANEL_ID}
+              controls={fileTreePanelId}
               onToggle={toggleFileTree}
             />
           </div>
@@ -109,3 +113,5 @@ export default function Layout() {
     </Group>
   );
 }
+
+export default React.memo(Layout);

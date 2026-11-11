@@ -1,7 +1,8 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useMemo } from 'react';
-import { MessageSquarePlus } from 'lucide-react';
 import type { DiffFile, DiffLine } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { CommentGutterButton } from './CommentGutterButton';
+import { useFileCommentIndex } from './useFileCommentIndex';
 import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
 import SyntaxLine from './SyntaxLine';
@@ -10,7 +11,6 @@ import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
 import ExpandContextBar from './ExpandContextBar';
 import { getLineBg, getGutterBg } from '../../utils/diff-styles';
-import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 import EmptyLinePane from './EmptyLinePane';
 
 export interface SplitViewProps {
@@ -21,7 +21,7 @@ export interface SplitViewProps {
     currentLine: number;
     side: 'old' | 'new';
   } | null;
-  onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
+  onDragStart: (lineNumber: number, side: 'old' | 'new', keyboard?: boolean) => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
   onExpandContext?: (
@@ -51,9 +51,9 @@ export default function SplitView({
   expandLoading,
   totalLines,
 }: SplitViewProps) {
-  const { getCommentsForLine } = useReview();
+  const { t } = useLocalization();
+  const commentIndex = useFileCommentIndex(file);
   const { config } = useConfig();
-  const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
   const filePath = file.newPath || file.oldPath;
   const language = getLanguageFromPath(filePath);
 
@@ -111,11 +111,10 @@ export default function SplitView({
     return rows;
   };
 
-  // Extract original code for the selected line range (for suggestions)
-  const getOriginalCode = (): string | undefined => {
-    if (!commentRange) return undefined;
-    return extractOriginalCode(file, commentRange);
-  };
+  const originalCode = useMemo(
+    () => (commentRange ? extractOriginalCode(file, commentRange) : undefined),
+    [file, commentRange]
+  );
 
   const renderLineCell = (line: DiffLine | null, side: 'old' | 'new', hasComment = false) => {
     if (!line) {
@@ -138,21 +137,20 @@ export default function SplitView({
       >
         {/* Line number gutter */}
         <div
-          className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter relative`}
+          className={`w-10 flex-shrink-0 text-end pe-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter relative`}
           data-testid={lineTestId}
         >
           {lineNumber && (
-            <button
-              className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
-              onMouseDown={e => {
-                e.preventDefault();
-                e.stopPropagation();
-                onDragStart(lineNumber, side);
-              }}
+            <CommentGutterButton
+              className='absolute start-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/gutter:opacity-100'
+              label={t(
+                side === 'old' ? 'Comment on old line {line}' : 'Comment on new line {line}',
+                { line: lineNumber! }
+              )}
+              onStartDrag={() => onDragStart(lineNumber!, side)}
+              onActivate={() => onDragStart(lineNumber!, side, true)}
               data-testid={`comment-icon-${side}-${lineNumber}`}
-            >
-              <MessageSquarePlus className='h-4 w-4' />
-            </button>
+            />
           )}
           <span className='pointer-events-none'>{lineNumber || ''}</span>
         </div>
@@ -211,18 +209,8 @@ export default function SplitView({
           {buildSplitRows(hunk.lines).map((row, rowIndex) => {
             const oldLineNumber = row.oldLine?.oldLineNumber;
             const newLineNumber = row.newLine?.newLineNumber;
-            const oldComments = oldLineNumber
-              ? getCommentsForLine(file.newPath || file.oldPath, oldLineNumber, 'old')
-              : [];
-            const newComments = newLineNumber
-              ? getCommentsForLine(file.newPath || file.oldPath, newLineNumber, 'new')
-              : [];
-            const oldCommentsToRender = oldComments.filter(
-              c => c.lineRange!.end === oldLineNumber && hasAnchor(c)
-            );
-            const newCommentsToRender = newComments.filter(
-              c => c.lineRange!.end === newLineNumber && hasAnchor(c)
-            );
+            const oldCommentsToRender = commentIndex.endingAt(oldLineNumber, 'old');
+            const newCommentsToRender = commentIndex.endingAt(newLineNumber, 'new');
             const showCommentInputHere =
               commentRange &&
               ((commentRange.side === 'old' && oldLineNumber === commentRange.end) ||
@@ -233,13 +221,13 @@ export default function SplitView({
                 <div className='flex'>
                   {/* Old side (left) */}
                   {row.oldLine ? (
-                    renderLineCell(row.oldLine, 'old', oldComments.length > 0)
+                    renderLineCell(row.oldLine, 'old', commentIndex.covers(oldLineNumber, 'old'))
                   ) : (
                     <EmptyLinePane />
                   )}
                   {/* New side (right) */}
                   {row.newLine ? (
-                    renderLineCell(row.newLine, 'new', newComments.length > 0)
+                    renderLineCell(row.newLine, 'new', commentIndex.covers(newLineNumber, 'new'))
                   ) : (
                     <EmptyLinePane />
                   )}
@@ -250,7 +238,7 @@ export default function SplitView({
                   showCommentInput={!!showCommentInputHere}
                   commentRange={commentRange}
                   filePath={file.newPath || file.oldPath}
-                  originalCode={getOriginalCode()}
+                  originalCode={originalCode}
                   onCancel={onCancelComment}
                   onSaved={onCommentSaved}
                   getOriginalCodeForComment={comment =>

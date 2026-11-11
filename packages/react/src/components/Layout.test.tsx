@@ -45,7 +45,7 @@ function renderLayout(children: React.ReactNode = null) {
 }
 
 function fileTreePanel(): HTMLElement {
-  const panel = document.getElementById('fileTree');
+  const panel = document.querySelector<HTMLElement>('[id$="-file-tree"]');
   if (!panel) throw new Error('file tree panel not rendered');
   return panel;
 }
@@ -62,7 +62,7 @@ describe('Layout file tree collapse', () => {
     const toggle = screen.getByTestId('file-tree-toggle');
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(toggle.getAttribute('aria-label')).toBe('Hide file tree');
-    expect(toggle.getAttribute('aria-controls')).toBe('fileTree');
+    expect(toggle.getAttribute('aria-controls')).toBe(fileTreePanel().id);
     expect(fileTreePanel().style.flexGrow).not.toBe('0');
   });
 
@@ -140,7 +140,7 @@ describe('Layout file tree collapse', () => {
 // restored panel.
 describe('expand-file-tree request', () => {
   function requestExpand(): void {
-    document.dispatchEvent(new CustomEvent('expand-file-tree'));
+    document.querySelector('.self-review')!.dispatchEvent(new CustomEvent('expand-file-tree'));
   }
 
   // Runs fn with React's act environment off, so a render React schedules
@@ -197,10 +197,11 @@ describe('expand-file-tree request', () => {
   it('stops listening once Layout unmounts', () => {
     const { unmount } = renderLayout();
     fireEvent.click(screen.getByTestId('file-tree-toggle'));
+    const root = document.querySelector('.self-review')!;
     unmount();
 
     // A listener surviving unmount would reach into a detached panel handle.
-    expect(() => act(requestExpand)).not.toThrow();
+    expect(() => act(() => root.dispatchEvent(new CustomEvent('expand-file-tree')))).not.toThrow();
   });
 
   it('restores the panel when the g shortcut runs for real', () => {

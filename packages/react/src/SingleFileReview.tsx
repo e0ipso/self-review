@@ -9,7 +9,7 @@ import type {
 import type { ReviewAdapter } from './adapter';
 import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
 import { ConfigProvider } from './context/ConfigContext';
-import { ReviewProvider, reviewSessionIdentity } from './context/ReviewContext';
+import { ReviewProvider, reviewSessionIdentity, useReviewedFile } from './context/ReviewContext';
 import { DiffNavigationProvider } from './context/DiffNavigationContext';
 import { TooltipProvider } from './components/ui/tooltip';
 import FileSection from './components/DiffViewer/FileSection';
@@ -51,9 +51,10 @@ interface SingleFileReviewInnerProps {
 const SingleFileReviewInner = forwardRef<ReviewHandle, SingleFileReviewInnerProps>(
   function SingleFileReviewInner({ file, viewMode, onReviewChange, className }, ref) {
     useReviewBridge(ref, onReviewChange);
+    const currentFile = useReviewedFile(file.newPath || file.oldPath);
     return (
       <div className={className}>
-        <FileSection file={file} viewMode={viewMode} expanded={true} />
+        <>{currentFile && <FileSection file={currentFile} viewMode={viewMode} expanded={true} />}</>
       </div>
     );
   }
@@ -80,9 +81,10 @@ const SingleFileSession = forwardRef<ReviewHandle, SingleFileSessionProps>(
       [adapter]
     );
 
+    const files = useMemo(() => [file], [file]);
     return (
       <ReviewAdapterProvider adapter={mergedAdapter}>
-        <ReviewProvider>
+        <ReviewProvider initialFiles={files} initialSource={source}>
           <DiffNavigationProvider>
             <TooltipProvider>
               <SingleFileReviewInner ref={ref} file={file} {...inner} />

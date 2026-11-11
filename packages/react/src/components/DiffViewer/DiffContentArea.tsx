@@ -1,3 +1,4 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useCallback } from 'react';
 import type { DiffFile } from '@self-review/types';
 import { Button } from '../ui/button';
@@ -7,11 +8,15 @@ import UnifiedView from './UnifiedView';
 import RenderedMarkdownView from './RenderedMarkdownView';
 import RenderedImageView from './RenderedImageView';
 import RenderedSvgView from './RenderedSvgView';
+import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
+import type { ContentPreview } from './content-preview';
+import { previewFromFlags } from './preview-compat';
 import type { LazyLoadState } from './useLazyFileContent';
 
 export interface DiffContentAreaProps {
+  preview?: ContentPreview;
   file: DiffFile;
   filePath: string;
   viewMode: 'split' | 'unified';
@@ -25,7 +30,7 @@ export interface DiffContentAreaProps {
   onRetry: () => void;
   commentRange: { start: number; end: number; side: 'old' | 'new' } | null;
   dragState: { startLine: number; currentLine: number; side: 'old' | 'new' } | null;
-  onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
+  onDragStart: (lineNumber: number, side: 'old' | 'new', keyboard?: boolean) => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
   onCommentRange: (start: number, end: number, side: 'old' | 'new') => void;
@@ -40,6 +45,7 @@ export interface DiffContentAreaProps {
 }
 
 export function DiffContentArea({
+  preview: suppliedPreview,
   file,
   filePath,
   viewMode,
@@ -61,7 +67,9 @@ export function DiffContentArea({
   totalLines,
   handleExpandContext,
 }: DiffContentAreaProps) {
+  const { t } = useLocalization();
   const adapter = useAdapter();
+  const snapshotKey = useOptionalSnapshotKey();
   // Passed to rendered blocks through context; a stable identity keeps that value memoized.
   const handleGutterMouseDown = useCallback(
     (startLine: number, endLine: number) => {
@@ -89,9 +97,12 @@ export function DiffContentArea({
     (contentLoad.kind === 'idle' && file.contentLoaded === false)
   ) {
     return (
-      <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
+      <div
+        role='status'
+        className='flex items-center justify-center py-12 text-sm text-muted-foreground'
+      >
         <Loader2 className='h-4 w-4 animate-spin mr-2' />
-        Loading file content...
+        {t('Loading file content...')}
       </div>
     );
   }
@@ -105,32 +116,63 @@ export function DiffContentArea({
       >
         <AlertTriangle className='h-4 w-4 mt-0.5 shrink-0' aria-hidden='true' />
         <div className='min-w-0 flex-1 space-y-1'>
-          <p>The content of this file could not be loaded.</p>
+          <p>{t('The content of this file could not be loaded.')}</p>
           <p className='text-xs text-muted-foreground break-words'>{contentLoad.message}</p>
           <p className='text-xs text-muted-foreground'>
-            Nothing will be requested again until you retry. If the review host stopped, restart it
-            and then retry.
+            {t(
+              'Nothing will be requested again until you retry. If the review host stopped, restart it and then retry.'
+            )}
           </p>
         </div>
         <Button variant='outline' size='sm' onClick={onRetry}>
-          Retry
+          {t('Retry')}
         </Button>
       </div>
     );
   }
 
-  if (showImagePreview && renderViewMode === 'rendered') {
-    return <RenderedImageView filePath={filePath ?? ''} onLoadImage={adapter?.loadImage} />;
-  }
-
-  if (showSvgPreview && renderViewMode === 'rendered') {
-    return <RenderedSvgView file={file} />;
+  const preview =
+    suppliedPreview ??
+    previewFromFlags({
+      showImagePreview,
+      showSvgPreview,
+      isEligibleForRenderedView,
+      renderedTextMode,
+    });
+  const renderPreview =
+    renderViewMode === 'rendered' &&
+    preview.kind !== 'none' &&
+    (preview.kind !== 'text' || (!file.isBinary && file.hunks.length > 0));
+  if (renderPreview) {
+    switch (preview.kind) {
+      case 'image':
+        return (
+          <RenderedImageView
+            key={snapshotKey}
+            filePath={filePath}
+            onLoadImage={adapter?.loadImage}
+          />
+        );
+      case 'svg':
+        return <RenderedSvgView file={file} />;
+      case 'text':
+        return (
+          <RenderedMarkdownView
+            file={file}
+            contentMode={preview.mode}
+            commentRange={commentRange}
+            onCancelComment={onCancelComment}
+            onCommentSaved={onCommentSaved}
+            onGutterMouseDown={handleGutterMouseDown}
+          />
+        );
+    }
   }
 
   if (file.isBinary) {
     return (
       <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
-        Binary file — no diff available
+        {t('Binary file \u2014 no diff available')}
       </div>
     );
   }
@@ -138,21 +180,8 @@ export function DiffContentArea({
   if (file.hunks.length === 0 && file.contentLoaded !== false) {
     return (
       <div className='flex items-center justify-center py-12 text-sm text-muted-foreground'>
-        No changes to display
+        {t('No changes to display')}
       </div>
-    );
-  }
-
-  if (renderViewMode === 'rendered' && isEligibleForRenderedView && renderedTextMode !== null) {
-    return (
-      <RenderedMarkdownView
-        file={file}
-        contentMode={renderedTextMode}
-        commentRange={commentRange}
-        onCancelComment={onCancelComment}
-        onCommentSaved={onCommentSaved}
-        onGutterMouseDown={handleGutterMouseDown}
-      />
     );
   }
 

@@ -1,6 +1,10 @@
-import { useState, useLayoutEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import type { DiffFile, DiffHunk } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import {
+  useReviewCommands,
+  useReviewSessionId,
+  useReviewSnapshotId,
+} from '../../context/ReviewContext';
 import {
   trimHunkContext,
   getHunkChangeRange,
@@ -19,6 +23,7 @@ interface UseExpandContextParams {
 
 interface UseExpandContextResult {
   expandLoading: boolean;
+  expandError?: boolean;
   totalLines: number | null;
   handleExpandContext: (
     direction: 'up' | 'down' | 'all',
@@ -33,8 +38,11 @@ export function useExpandContext({
   isExpandable,
   sectionRef,
 }: UseExpandContextParams): UseExpandContextResult {
-  const { expandFileContext, updateFileHunks } = useReview();
+  const { expandFileContext, updateFileHunks } = useReviewCommands();
+  const sessionId = useReviewSessionId();
+  const snapshotId = useReviewSnapshotId();
   const [expandLoading, setExpandLoading] = useState(false);
+  const [expandError, setExpandError] = useState(false);
   const [totalLines, setTotalLines] = useState<number | null>(null);
 
   // Per-hunk directional context budgets, raw hunk cache, and original change ranges.
@@ -43,6 +51,27 @@ export function useExpandContext({
   const hunkBudgetsRef = useRef<HunkContextBudget[] | null>(null);
   const rawHunksRef = useRef<DiffHunk[] | null>(null);
   const lastRequestedContextRef = useRef<number>(0);
+
+  const owner = `${sessionId}:${snapshotId}`;
+  const ownerRef = useRef(owner);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const ownerChanged = ownerRef.current !== owner;
+  if (ownerChanged) {
+    ownerRef.current = owner;
+    originalRangesRef.current = null;
+    hunkBudgetsRef.current = null;
+    rawHunksRef.current = null;
+    lastRequestedContextRef.current = 0;
+    setTotalLines(null);
+    setExpandLoading(false);
+    setExpandError(false);
+  }
 
   // Initialize per-hunk tracking from the initial hunks (run once)
   if (originalRangesRef.current === null && file.hunks.length > 0) {
@@ -70,12 +99,16 @@ export function useExpandContext({
     scrollTop: number;
   } | null>(null);
 
+  if (ownerChanged) scrollCompensationRef.current = null;
+
   useLayoutEffect(() => {
     const compensation = scrollCompensationRef.current;
     if (!compensation) return;
     scrollCompensationRef.current = null;
 
-    const scrollContainer = document.querySelector<HTMLElement>('[data-scroll-container="diff"]');
+    const scrollContainer = sectionRef.current?.closest<HTMLElement>(
+      '[data-scroll-container="diff"]'
+    );
     if (!scrollContainer || !sectionRef.current) return;
 
     // Find the anchor line element in the updated DOM
@@ -107,6 +140,7 @@ export function useExpandContext({
       position: 'top' | 'between' | 'bottom'
     ) => {
       if (!isExpandable || expandLoadingRef.current) return;
+      setExpandError(false);
       const budgets = hunkBudgetsRef.current;
       const originalRanges = originalRangesRef.current;
       if (!budgets || !originalRanges) return;
@@ -184,7 +218,9 @@ export function useExpandContext({
       }
 
       // --- Pick scroll anchor ---
-      const scrollContainer = document.querySelector<HTMLElement>('[data-scroll-container="diff"]');
+      const scrollContainer = sectionRef.current?.closest<HTMLElement>(
+        '[data-scroll-container="diff"]'
+      );
       if (scrollContainer && sectionRef.current && currentHunks.length > 0) {
         let anchorLine: { lineNumber: number; side: 'old' | 'new' } | null = null;
 
@@ -230,6 +266,8 @@ export function useExpandContext({
       // --- Fetch (if needed) and trim ---
       const maxBudget = Math.max(...budgets.flatMap(b => [b.above, b.below]), 0);
 
+      const requestOwner = ownerRef.current;
+      expandLoadingRef.current = true;
       setExpandLoading(true);
 
       let rawHunks: DiffHunk[] | null = null;
@@ -238,7 +276,9 @@ export function useExpandContext({
       if (maxBudget > lastRequestedContextRef.current || !rawHunksRef.current) {
         // Need fresh data from git
         const result = await expandFileContext(filePath, maxBudget);
+        if (!mounted.current || ownerRef.current !== requestOwner) return;
         if (!result) {
+          setExpandError(true);
           setExpandLoading(false);
           scrollCompensationRef.current = null;
           return;
@@ -252,6 +292,7 @@ export function useExpandContext({
         rawHunks = rawHunksRef.current;
       }
 
+      if (!mounted.current || ownerRef.current !== requestOwner) return;
       const trimmed = trimHunkContext(rawHunks, originalRanges, budgets);
       updateFileHunks(filePath, trimmed);
       setTotalLines(newTotalLines);
@@ -260,5 +301,5 @@ export function useExpandContext({
     [isExpandable, filePath, expandFileContext, updateFileHunks]
   );
 
-  return { expandLoading, totalLines, handleExpandContext };
+  return { expandLoading, expandError, totalLines, handleExpandContext };
 }

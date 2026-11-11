@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type {
   Attachment,
   FileReviewState,
@@ -33,125 +33,123 @@ export interface UseReviewStateReturn {
   ) => ReviewComment[];
 }
 
-export function useReviewState(): UseReviewStateReturn {
-  const [files, setFiles] = useState<FileReviewState[]>([]);
+export function useReviewState(
+  owner?: Pick<UseReviewStateReturn, 'files' | 'setFiles'>
+): UseReviewStateReturn {
+  const [localFiles, setLocalFiles] = useState<FileReviewState[]>([]);
+  return useReviewStateOperations(owner?.files ?? localFiles, owner?.setFiles ?? setLocalFiles);
+}
 
-  const addComment = (
-    filePath: string,
-    lineRange: LineRange | null,
-    body: string,
-    category: string,
-    suggestion: Suggestion | null,
-    attachments?: Attachment[]
-  ) => {
-    const newComment: ReviewComment = {
-      id: crypto.randomUUID(),
-      filePath,
-      lineRange,
-      body,
-      category,
-      suggestion,
-      ...(attachments?.length ? { attachments } : {}),
+export function useReviewStateOperations(
+  files: FileReviewState[],
+  setFiles: UseReviewStateReturn['setFiles']
+): UseReviewStateReturn {
+  const commands = useMemo(() => {
+    const changeThread = (
+      commentId: string,
+      change: (comment: ReviewComment) => ReviewComment | null
+    ) => {
+      setFiles(previous =>
+        previous.map(file => {
+          if (!file.comments.some(comment => comment.id === commentId)) return file;
+          return {
+            ...file,
+            comments: file.comments.flatMap(comment => {
+              if (comment.id !== commentId) return [comment];
+              const next = change(comment);
+              return next ? [next] : [];
+            }),
+          };
+        })
+      );
+    };
+    const addComment = (
+      filePath: string,
+      lineRange: LineRange | null,
+      body: string,
+      category: string,
+      suggestion: Suggestion | null,
+      attachments?: Attachment[]
+    ) => {
+      const newComment: ReviewComment = {
+        id: crypto.randomUUID(),
+        filePath,
+        lineRange,
+        body,
+        category,
+        suggestion,
+        ...(attachments?.length ? { attachments } : {}),
+      };
+
+      setFiles(prevFiles =>
+        prevFiles.map(file =>
+          file.path === filePath ? { ...file, comments: [...file.comments, newComment] } : file
+        )
+      );
     };
 
-    setFiles(prevFiles =>
-      prevFiles.map(file =>
-        file.path === filePath ? { ...file, comments: [...file.comments, newComment] } : file
-      )
-    );
-  };
+    const updateComment = (id: string, updates: Partial<ReviewComment>) =>
+      changeThread(id, comment => ({ ...comment, ...updates }));
+    const deleteComment = (id: string) => changeThread(id, () => null);
 
-  const updateComment = (id: string, updates: Partial<ReviewComment>) => {
-    setFiles(prevFiles =>
-      prevFiles.map(file => ({
-        ...file,
-        comments: file.comments.map(comment =>
-          comment.id === id ? { ...comment, ...updates } : comment
+    /**
+     * Appends a reply to a comment's thread, creating the array when absent.
+     * Order is conversation order: replies are always appended, never prepended.
+     */
+    const addReply = (
+      commentId: string,
+      body: string,
+      author?: string,
+      attachments?: Attachment[]
+    ) => {
+      const newReply: Reply = {
+        id: crypto.randomUUID(),
+        body,
+        ...(author ? { author } : {}),
+        ...(attachments?.length ? { attachments } : {}),
+      };
+
+      changeThread(commentId, comment => ({
+        ...comment,
+        replies: [...(comment.replies ?? []), newReply],
+      }));
+    };
+    const updateReply = (commentId: string, replyId: string, updates: Partial<Reply>) => {
+      changeThread(commentId, comment => ({
+        ...comment,
+        replies: comment.replies?.map(reply =>
+          reply.id === replyId ? { ...reply, ...updates } : reply
         ),
-      }))
-    );
-  };
-
-  const deleteComment = (id: string) => {
-    setFiles(prevFiles =>
-      prevFiles.map(file => ({
-        ...file,
-        comments: file.comments.filter(comment => comment.id !== id),
-      }))
-    );
-  };
-
-  /**
-   * Appends a reply to a comment's thread, creating the array when absent.
-   * Order is conversation order: replies are always appended, never prepended.
-   */
-  const addReply = (
-    commentId: string,
-    body: string,
-    author?: string,
-    attachments?: Attachment[]
-  ) => {
-    const newReply: Reply = {
-      id: crypto.randomUUID(),
-      body,
-      ...(author ? { author } : {}),
-      ...(attachments?.length ? { attachments } : {}),
+      }));
+    };
+    const deleteReply = (commentId: string, replyId: string) => {
+      changeThread(commentId, comment => ({
+        ...comment,
+        replies: comment.replies?.filter(reply => reply.id !== replyId),
+      }));
     };
 
-    setFiles(prevFiles =>
-      prevFiles.map(file => ({
-        ...file,
-        comments: file.comments.map(comment =>
-          comment.id === commentId
-            ? { ...comment, replies: [...(comment.replies ?? []), newReply] }
-            : comment
-        ),
-      }))
-    );
-  };
+    const toggleViewed = (filePath: string) => {
+      setFiles(prevFiles =>
+        prevFiles.map(file => (file.path === filePath ? { ...file, viewed: !file.viewed } : file))
+      );
+    };
 
-  const updateReply = (commentId: string, replyId: string, updates: Partial<Reply>) => {
-    setFiles(prevFiles =>
-      prevFiles.map(file => ({
-        ...file,
-        comments: file.comments.map(comment =>
-          comment.id === commentId
-            ? {
-                ...comment,
-                replies: comment.replies?.map(reply =>
-                  reply.id === replyId ? { ...reply, ...updates } : reply
-                ),
-              }
-            : comment
-        ),
-      }))
-    );
-  };
+    return {
+      addComment,
+      updateComment,
+      deleteComment,
+      addReply,
+      updateReply,
+      deleteReply,
+      toggleViewed,
+    };
+  }, [setFiles]);
 
-  const deleteReply = (commentId: string, replyId: string) => {
-    setFiles(prevFiles =>
-      prevFiles.map(file => ({
-        ...file,
-        comments: file.comments.map(comment =>
-          comment.id === commentId
-            ? {
-                ...comment,
-                replies: comment.replies?.filter(reply => reply.id !== replyId),
-              }
-            : comment
-        ),
-      }))
-    );
-  };
-
-  const toggleViewed = (filePath: string) => {
-    setFiles(prevFiles =>
-      prevFiles.map(file => (file.path === filePath ? { ...file, viewed: !file.viewed } : file))
-    );
-  };
+  const byPath = useMemo(() => new Map(files.map(file => [file.path, file])), [files]);
 
   const getCommentsForFile = (filePath: string): ReviewComment[] => {
-    const file = files.find(f => f.path === filePath);
+    const file = byPath.get(filePath);
     return file ? file.comments : [];
   };
 
@@ -160,7 +158,7 @@ export function useReviewState(): UseReviewStateReturn {
     lineNumber: number,
     side: 'old' | 'new'
   ): ReviewComment[] => {
-    const file = files.find(f => f.path === filePath);
+    const file = byPath.get(filePath);
     if (!file) return [];
 
     return file.comments.filter(comment => {
@@ -173,13 +171,7 @@ export function useReviewState(): UseReviewStateReturn {
   return {
     files,
     setFiles,
-    addComment,
-    updateComment,
-    deleteComment,
-    addReply,
-    updateReply,
-    deleteReply,
-    toggleViewed,
+    ...commands,
     getCommentsForFile,
     getCommentsForLine,
   };

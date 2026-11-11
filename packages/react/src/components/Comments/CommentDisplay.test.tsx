@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../context/ReviewContext', () => ({
-  useReview: () => ({
+  useReview: () => ({ deleteComment: mocks.deleteComment, deleteReply: mocks.deleteReply }),
+  useReviewCommands: () => ({
     deleteComment: mocks.deleteComment,
     deleteReply: mocks.deleteReply,
   }),
@@ -18,7 +19,7 @@ vi.mock('../../context/ReviewContext', () => ({
 }));
 
 vi.mock('../../context/ConfigContext', () => ({
-  useConfig: () => ({ config: { categories: [] } }),
+  useConfig: () => ({ config: { categories: [] }, portalContainer: document.body }),
 }));
 
 vi.mock('./CommentInput', () => ({
@@ -73,6 +74,16 @@ describe('CommentDisplay threads', () => {
   beforeEach(() => {
     mocks.deleteComment.mockReset();
     mocks.deleteReply.mockReset();
+  });
+
+  it('keeps unknown signal values from a newer host visible without crashing', () => {
+    const comment = {
+      ...makeComment(),
+      severity: 'future',
+      confidence: 'future',
+    } as unknown as ReviewComment;
+    const { getAllByText } = render(<CommentDisplay comment={comment} />);
+    expect(getAllByText('future')).toHaveLength(2);
   });
 
   it('renders replies as direct children of the thread, in array order', () => {
@@ -165,10 +176,13 @@ describe('CommentDisplay threads', () => {
     expect(queryByTestId('reply-btn-c1')).toBeNull();
   });
 
-  it('hides the thread on the global toggle-all-comments event', () => {
+  it('hides the thread on the review toggle-all-comments event', () => {
     const { queryByTestId } = render(<CommentDisplay comment={makeComment({ replies })} />);
 
-    fireEvent(document, new CustomEvent('toggle-all-comments', { detail: { collapsed: true } }));
+    fireEvent(
+      document.body,
+      new CustomEvent('toggle-all-comments', { detail: { collapsed: true } })
+    );
 
     expect(queryByTestId('thread-c1')).toBeNull();
     expect(queryByTestId('reply-btn-c1')).toBeNull();

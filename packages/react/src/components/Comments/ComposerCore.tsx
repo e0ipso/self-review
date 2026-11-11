@@ -1,3 +1,4 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MDEditor, { commands } from '@uiw/react-md-editor';
 import type { Attachment } from '@self-review/types';
@@ -60,6 +61,7 @@ export function ComposerCore({
   height = 240,
   children,
 }: ComposerCoreProps) {
+  const { t } = useLocalization();
   const { config } = useConfig();
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -132,6 +134,7 @@ export function ComposerCore({
             }
             textareaProps={{
               placeholder,
+              'aria-label': placeholder,
               onKeyDown: e => {
                 // Let emoji autocomplete handle keys first when dropdown is open
                 if (emoji.onKeyDown(e)) return;
@@ -176,7 +179,7 @@ export function ComposerCore({
             />
           ))}
           <span className='self-center text-[11px] text-muted-foreground'>
-            {attachments.length} {attachments.length === 1 ? 'image' : 'images'}
+            {t('images', { count: attachments.length })}
           </span>
         </div>
       )}
@@ -196,6 +199,7 @@ export interface AttachButtonProps {
  * Rendered by the parent so it can sit in the parent's own actions bar.
  */
 export function AttachButton({ setAttachments }: AttachButtonProps) {
+  const { t } = useLocalization();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -208,7 +212,7 @@ export function AttachButton({ setAttachments }: AttachButtonProps) {
         className='h-7 gap-1.5 text-xs'
       >
         <Paperclip className='h-3.5 w-3.5' />
-        Attach
+        {t('Attach')}
       </Button>
       <input
         ref={fileInputRef}
