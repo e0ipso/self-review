@@ -8,12 +8,15 @@ import { basename, dirname, join } from 'path';
 import { lstatSync, realpathSync } from 'fs';
 import { assertNoSymlinkAncestors, SafeFsError, sameFile } from './safe-fs';
 import { DiffFile } from './types';
-import { loadSyntheticFiles } from './synthetic-diff';
+import { loadSyntheticFilesAsync } from './synthetic-diff';
+import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
 import { createIgnoreFilter } from './ignore-filter';
 import { resolveSourceBudgets, type SourceBudgets } from './input-budgets';
 
 export interface SourceScanOptions {
   budgets?: Partial<SourceBudgets>;
+  /** Rejects with CommandCancelledError, including ordinary Error abort reasons. */
+  signal?: AbortSignal;
 }
 
 export interface SourceScanResult {
@@ -33,27 +36,32 @@ export async function scanDirectory(
   ignorePatterns: string[] = [],
   options: SourceScanOptions = {}
 ): Promise<SourceScanResult> {
+  checkLoadingCancelled(options.signal);
   const budgets = resolveSourceBudgets(options.budgets);
 
   let root: string;
   try {
     const dirStat = await stat(directoryPath);
+    checkLoadingCancelled(options.signal);
     if (!dirStat.isDirectory()) {
       return failed(`Cannot review "${directoryPath}": it is not a directory.`);
     }
     root = realpathSync(directoryPath);
   } catch (error) {
+    checkLoadingCancelled(options.signal);
     return failed(`Cannot read directory "${directoryPath}": ${messageOf(error)}`);
   }
 
   const shouldKeep = createIgnoreFilter(ignorePatterns);
   let walk: WalkResult;
   try {
-    walk = await walkDirectory(root, shouldKeep, budgets.maxEntries);
+    walk = await walkDirectory(root, shouldKeep, budgets.maxEntries, options.signal);
   } catch (error) {
+    checkLoadingCancelled(options.signal);
     return failed(`Cannot read directory "${directoryPath}": ${messageOf(error)}`);
   }
 
+  checkLoadingCancelled(options.signal);
   if (walk.limitExceeded) {
     console.error(`[scan] Stopped scanning ${directoryPath} after ${budgets.maxEntries} entries`);
     return {
@@ -74,8 +82,9 @@ export async function scanDirectory(
     return { files: [], diagnostics: [], entryLimitExceeded: false };
   }
 
-  const { files, diagnostics } = loadSyntheticFiles(walk.files, root, {
+  const { files, diagnostics } = await loadSyntheticFilesAsync(walk.files, root, {
     budgets: options.budgets,
+    signal: options.signal,
   });
   return { files, diagnostics, entryLimitExceeded: false };
 }
@@ -88,19 +97,27 @@ export async function scanFile(
   filePath: string,
   options: SourceScanOptions = {}
 ): Promise<SourceScanResult> {
+  checkLoadingCancelled(options.signal);
   try {
     const fileStat = await stat(filePath);
+    checkLoadingCancelled(options.signal);
     if (!fileStat.isFile()) {
       return failed(`Cannot review "${filePath}": it is not a regular file.`);
     }
   } catch (error) {
+    checkLoadingCancelled(options.signal);
     return failed(`Cannot read file "${filePath}": ${messageOf(error)}`);
   }
 
-  const { files, diagnostics } = loadSyntheticFiles([basename(filePath)], dirname(filePath), {
-    followSymlinks: true,
-    budgets: options.budgets,
-  });
+  const { files, diagnostics } = await loadSyntheticFilesAsync(
+    [basename(filePath)],
+    dirname(filePath),
+    {
+      followSymlinks: true,
+      budgets: options.budgets,
+      signal: options.signal,
+    }
+  );
   return { files, diagnostics, entryLimitExceeded: false };
 }
 
@@ -112,7 +129,8 @@ interface WalkResult {
 async function walkDirectory(
   root: string,
   shouldKeep: (path: string) => boolean,
-  maxEntries: number
+  maxEntries: number,
+  signal?: AbortSignal
 ): Promise<WalkResult> {
   const files: string[] = [];
   // Relative directory paths still to open; '' is the root itself.
@@ -120,17 +138,20 @@ async function walkDirectory(
   let examined = 0;
 
   while (pending.length > 0) {
+    await loadingCheckpoint(signal);
     const relativeDir = pending.pop()!;
     const target = join(root, relativeDir);
     const before = inspectDirectory(root, relativeDir);
     const dir = await opendir(target);
     try {
+      checkLoadingCancelled(signal);
       // opendir yields: a queued directory or one of its ancestors may have changed.
       const after = inspectDirectory(root, relativeDir);
       if (!sameFile(before, after)) {
         throw new SafeFsError('identity-changed', target, `${target} changed while opening`);
       }
       for await (const entry of dir) {
+        await loadingCheckpoint(signal);
         examined++;
         if (examined > maxEntries) return { files, limitExceeded: true };
 

@@ -8,9 +8,10 @@ import {
 } from './git';
 import { parseDiffWithDiagnostics } from './diff-parser';
 import { findUnsupportedGitDiffOptions } from './git-diff-args';
-import { loadSyntheticFiles } from './synthetic-diff';
+import { loadSyntheticFilesAsync } from './synthetic-diff';
 import { formatBytes, resolveSourceBudgets, type SourceBudgets } from './input-budgets';
 import { isCommandCancelled } from './forge-provider';
+import { checkLoadingCancelled } from './local-loading-lifetime';
 import { pinnedGitDiffArgs } from './pinned-comparison';
 import { resolveGitSourceIdentity } from './source-identity';
 
@@ -54,6 +55,7 @@ export async function loadGitDiffWithUntracked(
   cwd?: string,
   options: LoadGitDiffOptions = {}
 ): Promise<LoadGitDiffResult> {
+  checkLoadingCancelled(options.signal);
   const { includeUntracked = true } = options;
   const budgets = resolveSourceBudgets(options.budgets);
   const repository = await getRepoRootAsync(cwd, options);
@@ -104,7 +106,9 @@ export async function loadGitDiffWithUntracked(
       ],
     };
   }
+  checkLoadingCancelled(options.signal);
   const { files, diagnostics } = parseDiffWithDiagnostics(rawDiff);
+  checkLoadingCancelled(options.signal);
 
   if (!includeUntracked) {
     return { files, repository, identity, diagnostics };
@@ -116,12 +120,14 @@ export async function loadGitDiffWithUntracked(
   try {
     listed = await listUntrackedFilesAsync(repository, options);
   } catch (error) {
+    checkLoadingCancelled(options.signal);
     if (isCommandCancelled(error) && error.reason === 'aborted') throw error;
     diagnostics.push(
       `Untracked files could not be listed; only tracked changes are shown: ${error instanceof Error ? error.message : String(error)}`
     );
     return { files, repository, identity, diagnostics };
   }
+  checkLoadingCancelled(options.signal);
   const prefix = identity.pathPrefix === '' ? '' : `${identity.pathPrefix}/`;
   const reviewPath = (rootPath: string) => rootPath.slice(prefix.length);
   const trackedPaths = new Set(files.map(entryPath));
@@ -143,9 +149,10 @@ export async function loadGitDiffWithUntracked(
 
   let allFiles = files;
   if (untrackedPaths.length > 0) {
-    const untracked = loadSyntheticFiles(untrackedPaths, repository, {
+    const untracked = await loadSyntheticFilesAsync(untrackedPaths, repository, {
       followSymlinks: false,
       budgets: options.budgets,
+      signal: options.signal,
     });
     diagnostics.push(...untracked.diagnostics);
     for (const file of untracked.files) {
@@ -172,5 +179,6 @@ export async function loadGitDiffWithUntracked(
     allFiles = [...files, ...untrackedFiles];
   }
 
+  checkLoadingCancelled(options.signal);
   return { files: allFiles, repository, identity, diagnostics };
 }
