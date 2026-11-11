@@ -1,3 +1,4 @@
+import { useLocalization } from '../localization/LocalizationContext';
 import React from 'react';
 import { Check, Layers } from 'lucide-react';
 import { getGuideAccent } from '../utils/guide-accents';
@@ -36,6 +37,7 @@ export function GuideStation({
   surfaceClassName = 'bg-background',
   className = '',
 }: GuideStationProps) {
+  const { number } = useLocalization();
   const accent = getGuideAccent(index, implicit);
   const ring = accent.ring;
   const fill = complete
@@ -54,7 +56,7 @@ export function GuideStation({
       ) : implicit ? (
         <Layers className='h-3 w-3' />
       ) : (
-        index + 1
+        number(index + 1)
       )}
     </span>
   );

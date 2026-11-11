@@ -1,7 +1,9 @@
 import React, { createRef } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import type { ResumeLoadPayload } from '@self-review/types';
+import type { ResumeLoadPayload, DiffLoadPayload } from '@self-review/types';
+import SuggestionApplyControl from './components/Comments/SuggestionApplyControl';
+import { useConfig } from './context/ConfigContext';
 import { ReviewProviders } from './ReviewProviders';
 import {
   useOptionalApplySession,
@@ -20,6 +22,7 @@ const source = { type: 'directory' as const, sourcePath: '/a' };
 it('composes static host content, bridge and narrow Apply subscriptions', async () => {
   let review!: ReviewContextValue;
   let applyRenders = 0;
+  let outputPath = '';
   const ref = createRef<ReviewHandle>();
   const changed = vi.fn();
   function Apply() {
@@ -29,17 +32,24 @@ it('composes static host content, bridge and narrow Apply subscriptions', async 
   }
   function Host() {
     review = useReview();
+    outputPath = useConfig().outputPathInfo.resolvedOutputPath;
     useReviewBridge(ref, changed);
     return <span>Host welcome or review</span>;
   }
   const loadDiff = vi.fn();
   render(
-    <ReviewProviders adapter={{ loadDiff }} initialFiles={files} initialSource={source}>
+    <ReviewProviders
+      adapter={{ loadDiff }}
+      initialFiles={files}
+      initialSource={source}
+      initialOutputPath={{ resolvedOutputPath: '/chosen/review.xml', outputPathWritable: true }}
+    >
       <Apply />
       <Host />
     </ReviewProviders>
   );
   expect(screen.getByText('Host welcome or review')).toBeTruthy();
+  expect(outputPath).toBe('/chosen/review.xml');
   expect(loadDiff).not.toHaveBeenCalled();
   const before = applyRenders;
   act(() => review.addComment('a', null, 'comment', 'bug', null));
@@ -93,4 +103,77 @@ it('keeps a pushed resume when the initial request resolves later and drops disp
   mounted.unmount();
   expect(unsubscribe).toHaveBeenCalledOnce();
   act(() => receive({ comments: [], viewedFiles: [] }));
+});
+
+it('accepts an empty initial resume acknowledgement followed by an ordered session push', async () => {
+  let pushDiff!: (payload: DiffLoadPayload) => void;
+  let pushResume!: (payload: ResumeLoadPayload) => void;
+  let review!: ReviewContextValue;
+  function Probe() {
+    review = useReview();
+    return null;
+  }
+  const loadResumedReview = vi.fn(async () => ({ comments: [], viewedFiles: [] }));
+  render(
+    <ReviewProviders
+      adapter={{
+        loadDiff: async () => ({ files: [], source: { type: 'welcome' } }),
+        loadResumedReview,
+        onDiffLoad: callback => {
+          pushDiff = callback;
+          return () => {};
+        },
+        onResumeLoad: callback => {
+          pushResume = callback;
+          return () => {};
+        },
+      }}
+    >
+      <Probe />
+    </ReviewProviders>
+  );
+  await waitFor(() => expect(loadResumedReview).toHaveBeenCalledOnce());
+  const comment = {
+    id: 'later',
+    filePath: 'a',
+    lineRange: null,
+    body: 'later feedback',
+    category: 'bug',
+    suggestion: null,
+  };
+  act(() => {
+    pushDiff({ files, source });
+    pushResume({ comments: [comment], viewedFiles: ['a'] });
+  });
+  expect(review.diffSource).toEqual(source);
+  expect(review.files[0].comments).toEqual([comment]);
+  expect(review.files[0].viewed).toBe(true);
+  expect(loadResumedReview).toHaveBeenCalledOnce();
+});
+
+it('keeps an Apply control quiet when its broad parent sees an unrelated comment edit', () => {
+  let review!: ReviewContextValue;
+  let reads = 0;
+  const apply = vi.fn();
+  const suggestion = { originalCode: 'before', proposedCode: 'after' };
+  const range = { start: 1, end: 1, side: 'new' as const };
+  function BroadParent() {
+    review = useReview();
+    return <SuggestionApplyControl filePath='a' lineRange={range} suggestion={suggestion} />;
+  }
+  const adapter = {
+    loadDiff: vi.fn(),
+    get applySuggestion() {
+      reads++;
+      return apply;
+    },
+  };
+  render(
+    <ReviewProviders adapter={adapter} initialFiles={files} initialSource={source}>
+      <BroadParent />
+    </ReviewProviders>
+  );
+  const before = reads;
+  act(() => review.addComment('a', null, 'unrelated', 'bug', null));
+  expect(reads).toBe(before);
 });

@@ -29,7 +29,7 @@ export default function GuideChapterDivider({
   implicitLast,
   entries,
 }: GuideChapterDividerProps) {
-  const { t, number } = useLocalization();
+  const { t, locale } = useLocalization();
   const { files } = useReview();
 
   const viewedCount = entries.filter(({ file }) => {
@@ -51,7 +51,9 @@ export default function GuideChapterDivider({
           }}
           aria-hidden='true'
         >
-          {number(index + 1)}
+          {new Intl.NumberFormat(locale, { minimumIntegerDigits: 2, useGrouping: false }).format(
+            index + 1
+          )}
         </span>
       )}
 

@@ -31,7 +31,7 @@ export interface SuggestionApplyControlProps {
  * and applies straight after. The host still refuses an attempt made
  * without a destination, so this only saves a wasted click.
  */
-export default function SuggestionApplyControl(props: SuggestionApplyControlProps) {
+export default React.memo(function SuggestionApplyControl(props: SuggestionApplyControlProps) {
   const review = useOptionalApplySession();
   const key = JSON.stringify([
     review?.sessionId,
@@ -41,7 +41,7 @@ export default function SuggestionApplyControl(props: SuggestionApplyControlProp
     props.suggestion,
   ]);
   return <OwnedSuggestionApplyControl key={key} {...props} />;
-}
+});
 
 function OwnedSuggestionApplyControl({
   filePath,

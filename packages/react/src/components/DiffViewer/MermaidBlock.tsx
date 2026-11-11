@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useLocalization } from '../../localization/LocalizationContext';
+import { Button } from '../ui/button';
+import { exceedsMermaidComplexity, MERMAID_MAX_EDGES } from './mermaid-budget';
 import { useConfig } from '../../context/ConfigContext';
 import { svgToDataUri } from '../../utils/svg-data-uri';
 
@@ -39,8 +42,32 @@ function resolveIsDark(theme: 'light' | 'dark' | 'system'): boolean {
 }
 
 /** Renders in a hidden off-screen container (outside `.self-review`) removed on success or failure. */
-async function renderMermaidSvg(code: string, isDark: boolean): Promise<string> {
+let renderQueue: Promise<unknown> = Promise.resolve();
+let admittedRenders = 0;
+export const MERMAID_MAX_ADMITTED_RENDERS = 8;
+
+/** Serial admission prevents overlapping global Mermaid configuration and layout jobs. */
+function renderMermaidSvg(code: string, isDark: boolean, signal: AbortSignal): Promise<string> {
+  if (admittedRenders >= MERMAID_MAX_ADMITTED_RENDERS)
+    return Promise.reject(new DiagramImageError('busy'));
+  admittedRenders++;
+  const result = renderQueue
+    .then(() => renderQueuedSvg(code, isDark, signal))
+    .finally(() => {
+      admittedRenders--;
+    });
+  // A stalled library job retains the slot. A wait timeout cannot safely release active layout.
+  renderQueue = result.catch(() => {});
+  return result;
+}
+async function renderQueuedSvg(
+  code: string,
+  isDark: boolean,
+  signal: AbortSignal
+): Promise<string> {
+  signal.throwIfAborted();
   const mermaid = (await import('mermaid')).default;
+  signal.throwIfAborted();
 
   // Re-initialize per render: current palette, and no directives carried over.
   mermaid.initialize({
@@ -51,6 +78,7 @@ async function renderMermaidSvg(code: string, isDark: boolean): Promise<string> 
     // SVG text instead of <foreignObject>, so the output renders identically through <img>.
     htmlLabels: false,
     maxTextSize: MERMAID_MAX_SOURCE_CHARS,
+    maxEdges: MERMAID_MAX_EDGES,
     // Throw on a parse failure instead of drawing Mermaid's error diagram.
     suppressErrorRendering: true,
   });
@@ -62,15 +90,24 @@ async function renderMermaidSvg(code: string, isDark: boolean): Promise<string> 
     'position:fixed;top:0;left:-100000px;width:1024px;height:1px;overflow:hidden;' +
     'visibility:hidden;pointer-events:none;';
   document.body.appendChild(sandbox);
+  const remove = () => sandbox.remove();
+  signal.addEventListener('abort', remove, { once: true });
   try {
     // mermaid.render needs a unique ID per call.
     const { svg } = await mermaid.render(`mermaid-${mermaidIdCounter++}`, code, sandbox);
+    signal.throwIfAborted();
     return svg;
   } finally {
+    signal.removeEventListener('abort', remove);
     sandbox.remove();
   }
 }
 
+class DiagramImageError extends Error {
+  constructor(readonly kind: 'svg' | 'size' | 'busy') {
+    super(kind);
+  }
+}
 interface DiagramImage {
   src: string;
   width: number | undefined;
@@ -82,6 +119,7 @@ interface DiagramImage {
  * image. The viewBox gives the image the intrinsic size a percentage-width SVG lacks.
  */
 function toDiagramImage(svg: string): DiagramImage {
+  if (svg.length > 1_000_000) throw new DiagramImageError('size');
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
   const root = doc.documentElement;
   if (
@@ -90,7 +128,7 @@ function toDiagramImage(svg: string): DiagramImage {
     root.namespaceURI !== SVG_NAMESPACE ||
     root.localName !== 'svg'
   ) {
-    throw new Error('The diagram did not render to a well-formed SVG image');
+    throw new DiagramImageError('svg');
   }
 
   const viewBox = (root.getAttribute('viewBox') ?? '')
@@ -100,6 +138,15 @@ function toDiagramImage(svg: string): DiagramImage {
   const [, , width, height] = viewBox.length === 4 ? viewBox : [];
   const sized = width !== undefined && width > 0 && height !== undefined && height > 0;
 
+  if (
+    sized &&
+    (!Number.isFinite(width) ||
+      !Number.isFinite(height) ||
+      width > 16384 ||
+      height > 16384 ||
+      width * height > 64_000_000)
+  )
+    throw new DiagramImageError('size');
   return {
     src: svgToDataUri(svg),
     width: sized ? Math.ceil(width) : undefined,
@@ -118,67 +165,101 @@ type BlockState =
  */
 export default function MermaidBlock({ code }: { code: string }) {
   const [state, setState] = useState<BlockState>({ status: 'pending' });
+  const [attempt, setAttempt] = useState(0);
   const { config } = useConfig();
+  const { t } = useLocalization();
   const isDark = resolveIsDark(config.theme);
 
   useEffect(() => {
     if (code.length > MERMAID_MAX_SOURCE_CHARS) {
       setState({
         status: 'error',
-        message:
-          `Diagram source is too large (${code.length.toLocaleString()} characters; ` +
-          `the limit is ${MERMAID_MAX_SOURCE_CHARS.toLocaleString()})`,
+        message: t('Diagram source is too large ({count} characters; the limit is {limit})', {
+          count: code.length,
+          limit: MERMAID_MAX_SOURCE_CHARS,
+        }),
       });
       return;
     }
-
+    if (exceedsMermaidComplexity(code)) {
+      setState({
+        status: 'error',
+        message: t('Diagram exceeds the layout complexity limits. Read the source below.'),
+      });
+      return;
+    }
     let settled = false;
+    const abort = new AbortController();
     const settle = (next: BlockState) => {
       if (settled) return;
       settled = true;
       setState(next);
     };
-
     setState({ status: 'pending' });
+    // This timer bounds an asynchronous wait only. It cannot interrupt synchronous layout.
     const timer = window.setTimeout(() => {
       settle({
         status: 'error',
-        message: `Rendering timed out after ${MERMAID_RENDER_TIMEOUT_MS / 1000} seconds`,
+        message: t(
+          'Rendering timed out after {seconds} seconds. Synchronous layout cannot be interrupted.',
+          { seconds: MERMAID_RENDER_TIMEOUT_MS / 1000 }
+        ),
       });
+      abort.abort();
     }, MERMAID_RENDER_TIMEOUT_MS);
-
-    renderMermaidSvg(code, isDark)
+    renderMermaidSvg(code, isDark, abort.signal)
       .then(svg => settle({ status: 'rendered', image: toDiagramImage(svg) }))
       .catch((err: unknown) =>
         settle({
           status: 'error',
-          message: err instanceof Error ? err.message : 'Failed to render diagram',
+          message:
+            err instanceof DiagramImageError
+              ? t(
+                  err.kind === 'svg'
+                    ? 'The diagram did not render to a well-formed SVG image'
+                    : err.kind === 'busy'
+                      ? 'Too many diagrams are waiting. Retry after another diagram finishes.'
+                      : 'Diagram output exceeds the image size limit.'
+                )
+              : t('Failed to render diagram. {detail}', {
+                  detail: err instanceof Error ? err.message : String(err),
+                }),
         })
       )
       .finally(() => window.clearTimeout(timer));
-
     return () => {
       settled = true;
+      abort.abort();
       window.clearTimeout(timer);
     };
-  }, [code, isDark]);
+  }, [code, isDark, attempt, t]);
 
-  if (state.status === 'error') {
+  if (state.status === 'error')
     return (
-      <div
-        data-testid='mermaid-error'
-        className='text-destructive text-sm p-2 border border-destructive/20 rounded'
-      >
-        Mermaid error: {state.message}
+      <div data-testid='mermaid-error' className='text-sm p-2 border border-destructive/20 rounded'>
+        <p role='alert' className='text-destructive'>
+          {t('Mermaid error: {detail}', { detail: state.message })}
+        </p>
+        <Button variant='outline' size='sm' onClick={() => setAttempt(value => value + 1)}>
+          {t('Retry')}
+        </Button>
+        <details open>
+          <summary>{t('Diagram source')}</summary>
+          <pre className='overflow-auto whitespace-pre-wrap'>{code}</pre>
+        </details>
       </div>
     );
-  }
-  if (state.status === 'pending') return <div className='animate-pulse bg-muted h-32 rounded' />;
+  if (state.status === 'pending')
+    return (
+      <div role='status' className='animate-pulse bg-muted p-2 h-32 rounded'>
+        {t('Rendering diagram...')}
+      </div>
+    );
   return (
     <div className='mermaid-block flex justify-center overflow-x-auto max-w-full rounded-lg border border-border bg-white dark:bg-muted/20 p-4'>
       <img
         src={state.image.src}
-        alt='Mermaid diagram'
+        alt={t('Mermaid diagram')}
         width={state.image.width}
         height={state.image.height}
         style={{ maxWidth: '100%', height: 'auto' }}

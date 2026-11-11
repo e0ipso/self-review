@@ -6,6 +6,7 @@ import { useFileCommentIndex } from './useFileCommentIndex';
 import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
 import SyntaxLine from './SyntaxLine';
+import { planHighlighting } from './highlight-budget';
 import { getLanguageFromPath } from '../../utils/file-type-utils';
 import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
@@ -47,6 +48,7 @@ export default function UnifiedView({
 }: UnifiedViewProps) {
   const { t } = useLocalization();
   const commentIndex = useFileCommentIndex(file);
+  const highlighting = useMemo(() => planHighlighting(file), [file]);
   const { config } = useConfig();
   const language = getLanguageFromPath(file.newPath || file.oldPath);
 
@@ -81,6 +83,11 @@ export default function UnifiedView({
 
   return (
     <div className='font-mono text-[13px] leading-[22px] unified-view'>
+      {highlighting.limited && (
+        <p role='status' className='px-3 py-1 text-xs font-sans text-muted-foreground'>
+          {t('Highlighting is limited for this file. All source lines remain available.')}
+        </p>
+      )}
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           {isExpandable &&
@@ -140,6 +147,7 @@ export default function UnifiedView({
               <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
                 <div
                   className={`flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${hasComment ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 26px' }}
                   data-line-number={lineNumber || undefined}
                   data-line-side={side}
                   data-line-type={line.type}
@@ -187,7 +195,7 @@ export default function UnifiedView({
                   >
                     <SyntaxLine
                       content={line.content}
-                      language={language}
+                      language={highlighting.lines.has(line) ? language : 'plaintext'}
                       lineType={line.type}
                       wordWrap={config.wordWrap}
                     />

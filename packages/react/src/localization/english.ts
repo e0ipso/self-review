@@ -292,4 +292,22 @@ export const ENGLISH = {
   },
   'Remote review drift':
     'This PR/MR has changed since this review was recorded ({recorded} → {live}) — line anchors may be stale.',
+  'Highlighting is limited for this file. All source lines remain available.':
+    'Highlighting is limited for this file. All source lines remain available.',
+  'Diagram source is too large ({count} characters; the limit is {limit})':
+    'Diagram source is too large ({count} characters; the limit is {limit})',
+  'Diagram exceeds the layout complexity limits. Read the source below.':
+    'Diagram exceeds the layout complexity limits. Read the source below.',
+  'Rendering timed out after {seconds} seconds. Synchronous layout cannot be interrupted.':
+    'Rendering timed out after {seconds} seconds. Synchronous layout cannot be interrupted.',
+  'The diagram did not render to a well-formed SVG image':
+    'The diagram did not render to a well-formed SVG image',
+  'Diagram output exceeds the image size limit.': 'Diagram output exceeds the image size limit.',
+  'Too many diagrams are waiting. Retry after another diagram finishes.':
+    'Too many diagrams are waiting. Retry after another diagram finishes.',
+  'Failed to render diagram. {detail}': 'Failed to render diagram. {detail}',
+  'Mermaid error: {detail}': 'Mermaid error: {detail}',
+  'Diagram source': 'Diagram source',
+  'Rendering diagram...': 'Rendering diagram...',
+  'Mermaid diagram': 'Mermaid diagram',
 } satisfies Record<string, LocalizedMessage>;

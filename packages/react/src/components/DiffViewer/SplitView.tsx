@@ -6,6 +6,7 @@ import { useFileCommentIndex } from './useFileCommentIndex';
 import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
 import SyntaxLine from './SyntaxLine';
+import { planHighlighting } from './highlight-budget';
 import { getLanguageFromPath } from '../../utils/file-type-utils';
 import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
@@ -53,6 +54,7 @@ export default function SplitView({
 }: SplitViewProps) {
   const { t } = useLocalization();
   const commentIndex = useFileCommentIndex(file);
+  const highlighting = useMemo(() => planHighlighting(file), [file]);
   const { config } = useConfig();
   const filePath = file.newPath || file.oldPath;
   const language = getLanguageFromPath(filePath);
@@ -160,7 +162,7 @@ export default function SplitView({
         >
           <SyntaxLine
             content={line.content}
-            language={language}
+            language={highlighting.lines.has(line) ? language : 'plaintext'}
             lineType={line.type}
             wordWrap={config.wordWrap}
           />
@@ -182,6 +184,11 @@ export default function SplitView({
 
   return (
     <div className='font-mono text-[13px] leading-[22px] split-view'>
+      {highlighting.limited && (
+        <p role='status' className='px-3 py-1 text-xs font-sans text-muted-foreground'>
+          {t('Highlighting is limited for this file. All source lines remain available.')}
+        </p>
+      )}
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
           {isExpandable &&
@@ -218,7 +225,10 @@ export default function SplitView({
 
             return (
               <React.Fragment key={`${hunkIndex}-${rowIndex}`}>
-                <div className='flex'>
+                <div
+                  className='flex'
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 26px' }}
+                >
                   {/* Old side (left) */}
                   {row.oldLine ? (
                     renderLineCell(row.oldLine, 'old', commentIndex.covers(oldLineNumber, 'old'))
