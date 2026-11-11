@@ -34,7 +34,7 @@ export type { SafeFsErrorCode, FileIdentity } from './safe-fs-policy';
 
 /** The subset of `fs` used here, synchronous so a test can inject a failure at an exact step. */
 export interface FsLayer {
-  /** Bounded descriptor reads. Omit only when descriptors are native Node descriptors. */
+  /** Bounded descriptor reads. Legacy adapters retain their readFileSync compatibility path. */
   readSync?(
     fd: number,
     buffer: Uint8Array,

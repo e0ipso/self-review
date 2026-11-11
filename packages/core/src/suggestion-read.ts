@@ -1,5 +1,4 @@
-// Descriptor reads shared by both Apply implementations. At most budget + 1 bytes are read.
-import * as fs from 'node:fs';
+// Native descriptor reads shared by both Apply implementations use at most budget + 1 bytes.
 import { SafeFsError } from './safe-fs-policy';
 
 export function inputBudgetError(target: string, maxBytes: number): SafeFsError {
@@ -47,6 +46,7 @@ export function readSuggestionSync(
   size: number,
   maxBytes: number,
   layer: {
+    readFileSync(fd: number): Buffer;
     readSync?: (
       fd: number,
       buffer: Uint8Array,
@@ -56,15 +56,20 @@ export function readSuggestionSync(
     ) => number;
   }
 ): Buffer {
+  // Compatibility for FsLayer adapters authored before readSync existed. Keep until a major
+  // version can require chunk reads. The supplied reader owns its allocation; check both its
+  // advertised and returned sizes. Native/default adapters always take the bounded path below.
+  if (!layer.readSync) {
+    if (size > maxBytes) throw inputBudgetError(target, maxBytes);
+    const bytes = layer.readFileSync(fd);
+    if (bytes.length > maxBytes) throw inputBudgetError(target, maxBytes);
+    return bytes;
+  }
   const chunks = boundedChunks(target, size, maxBytes);
   let step = chunks.next();
   while (!step.done) {
     const { buffer, offset, length } = step.value;
-    // Old FsLayer implementations did not declare readSync. Their numeric native descriptors
-    // remain supported; virtual descriptor adapters can supply the additive bounded method.
-    const read = layer.readSync
-      ? layer.readSync(fd, buffer, offset, length, null)
-      : fs.readSync(fd, buffer, offset, length, null);
+    const read = layer.readSync(fd, buffer, offset, length, null);
     step = chunks.next(read);
   }
   return step.value;

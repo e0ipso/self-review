@@ -106,6 +106,8 @@ export type {
   AtomicReplaceOptions,
   AtomicReplaceResult,
 } from './safe-fs';
+export { atomicReplaceAsync, nodeAsyncFsLayer } from './safe-fs-async';
+export type { AtomicReplaceAsyncOptions, AsyncFsLayer, AsyncFileHandle } from './safe-fs-async';
 
 // Line-anchor validation (shared by the resume importer and Apply)
 export { validateLineAnchor, validateLineRange } from './anchor-validation';
@@ -235,10 +237,11 @@ export { createIgnoreFilter } from './ignore-filter';
 export { checkWritability } from './fs-utils';
 
 // Anchored suggestion application (writes a reviewed working file)
-export { applySuggestion, isRepositoryControlPath } from './apply-suggestion';
+export { applySuggestion, applySuggestionAsync, isRepositoryControlPath } from './apply-suggestion';
 export type {
   ApplyRefusalReason,
   ApplySuggestionOptions,
+  ApplySuggestionAsyncOptions,
   ApplySuggestionRequest,
   ApplySuggestionApplied,
   ApplySuggestionRefused,
@@ -303,11 +306,13 @@ export {
   resolveSourceBaseDir,
   resolveApplyDestination,
   applySuggestionForSession,
+  applySuggestionForSessionAsync,
 } from './review-handlers';
 export type {
   ReviewSession,
   ReviewStartResult,
   ContextExpansionDependencies,
+  ApplySuggestionForSessionAsyncOptions,
 } from './review-handlers';
 
 // Startup mode detection (git, directory, file, welcome)

@@ -20,7 +20,9 @@ export {
   resolveApplyDestination,
   setApplyDestination,
   applySuggestionForSession,
+  applySuggestionForSessionAsync,
 } from './review-suggestions';
+export type { ApplySuggestionForSessionAsyncOptions } from './review-suggestions';
 export { expandContext } from './review-context';
 export type { ContextExpansionDependencies } from './review-context';
 export { prepareDirectoryReview, commitReviewStart } from './review-start';

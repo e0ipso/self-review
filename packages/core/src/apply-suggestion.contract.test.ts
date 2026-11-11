@@ -240,13 +240,12 @@ for (const variant of variants)
     });
   });
 
-it('supports an inherited synchronous adapter and legacy native-descriptor layers', () => {
+it('uses an inherited bounded reader without calling the legacy whole-file reader', () => {
   fs.writeFileSync(path.join(root, 'file'), 'old\n');
   const inherited = Object.create(nodeFsLayer);
   inherited.readFileSync = () => {
     throw new Error('unbounded reader must not run');
   };
-  inherited.readSync = undefined;
   expect(applySuggestion(request(), { fs: inherited })).toMatchObject({ status: 'applied' });
 });
 
