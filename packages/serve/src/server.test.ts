@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -9,24 +9,7 @@ import * as core from '@self-review/core';
 import type { DiffFile, ReviewSession, ReviewState, AppConfig } from '@self-review/core';
 import { createReviewServer, listenLoopback } from './server';
 
-// Wrap every core function the routes call in a spy that passes through to
-// the real implementation. Success tests then exercise the real code; the
-// rejection tests assert the spy was never reached.
-vi.mock('@self-review/core', async importOriginal => {
-  const actual = await importOriginal<typeof import('@self-review/core')>();
-  return {
-    ...actual,
-    getDiffLoad: vi.fn(actual.getDiffLoad),
-    getConfigLoad: vi.fn(actual.getConfigLoad),
-    getResumeLoad: vi.fn(actual.getResumeLoad),
-    getFileHunks: vi.fn(actual.getFileHunks),
-    loadImage: vi.fn(actual.loadImage),
-    readAttachment: vi.fn(actual.readAttachment),
-    expandContext: vi.fn(actual.expandContext),
-    submitReviewState: vi.fn(actual.submitReviewState),
-    applySuggestionForSession: vi.fn(actual.applySuggestionForSession),
-  };
-});
+import { createReviewOperations } from './review-operations';
 
 // Fixture layout — real paths, so containment is checked against a real tree:
 //
@@ -43,6 +26,7 @@ let tmp: string;
 let root: string;
 let clientDir: string;
 let session: ReviewSession;
+let operations: ReturnType<typeof createReviewOperations>;
 let server: ReturnType<typeof createReviewServer>;
 let base: string;
 
@@ -54,7 +38,7 @@ function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
   return fetch(url, { ...init, headers: { ...AUTH, ...(init.headers as Record<string, string>) } });
 }
 
-const CORE_SPIES = [
+const OPERATION_SPIES = [
   'getDiffLoad',
   'getConfigLoad',
   'getResumeLoad',
@@ -128,8 +112,8 @@ function freshSession(): ReviewSession {
 }
 
 function expectNoCoreCall() {
-  for (const name of CORE_SPIES) {
-    expect(vi.mocked(core[name]), name).not.toHaveBeenCalled();
+  for (const name of OPERATION_SPIES) {
+    expect(vi.mocked(operations[name]), name).not.toHaveBeenCalled();
   }
 }
 
@@ -213,31 +197,25 @@ beforeAll(async () => {
   fs.mkdirSync(path.join(clientDir, 'assets'), { recursive: true });
   fs.writeFileSync(path.join(clientDir, 'index.html'), '<!doctype html><title>self-review</title>');
   fs.writeFileSync(path.join(clientDir, 'assets', 'app.js'), 'console.log("app");\n');
+});
 
+afterAll(() => {
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+beforeEach(async () => {
   session = freshSession();
-  server = createReviewServer({
-    session,
-    clientDir,
-    output: { path: path.join(root, 'review.xml'), origin: 'explicit' },
-    capability: CAPABILITY,
-  });
+  const output = { path: path.join(root, 'review.xml'), origin: 'explicit' as const };
+  operations = createReviewOperations(session, output);
+  for (const name of OPERATION_SPIES) vi.spyOn(operations, name);
+  server = createReviewServer({ session, clientDir, output, capability: CAPABILITY, operations });
   const { port } = await listenLoopback(server, 0);
   base = `http://127.0.0.1:${port}`;
 });
 
-afterAll(async () => {
+afterEach(async () => {
+  server.closeAllConnections();
   await new Promise<void>(resolve => server.close(() => resolve()));
-  fs.rmSync(tmp, { recursive: true, force: true });
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  // Reset the mutable parts a previous test may have touched.
-  session.reviewState = null;
-  session.resumeComments = [];
-  session.resumeViewedFiles = [];
-  session.attachmentOrigins = new Map();
-  session.resumeRemoteDrift = null;
 });
 
 describe('listener', () => {
@@ -260,7 +238,7 @@ describe('GET /api/diff', () => {
     ]);
     expect(body.diff.source).toEqual(session.diffData!.source);
     expect(body.guide).toEqual({ overview: 'Start with the entry point.', groups: [] });
-    expect(vi.mocked(core.getDiffLoad)).toHaveBeenCalledWith(session);
+    expect(vi.mocked(operations.getDiffLoad)).toHaveBeenCalledWith();
   });
 });
 
@@ -271,7 +249,7 @@ describe('GET /api/config', () => {
     const body = await res.json();
     expect(body.config.theme).toBe('dark');
     expect(body.outputPathInfo).toEqual(session.outputPathInfo);
-    expect(vi.mocked(core.getConfigLoad)).toHaveBeenCalledWith(session);
+    expect(vi.mocked(operations.getConfigLoad)).toHaveBeenCalledWith();
   });
 });
 
@@ -287,7 +265,7 @@ describe('GET /api/resume', () => {
     const res = await apiFetch(`${base}/api/resume`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ comments: [], viewedFiles: ['src/index.ts'] });
-    expect(vi.mocked(core.getResumeLoad)).toHaveBeenCalledWith(session);
+    expect(vi.mocked(operations.getResumeLoad)).toHaveBeenCalledWith();
   });
 });
 
@@ -296,7 +274,7 @@ describe('GET /api/file', () => {
     const res = await apiFetch(`${base}/api/file?path=${encodeURIComponent('src/index.ts')}`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([INDEX_HUNK]);
-    expect(vi.mocked(core.getFileHunks)).toHaveBeenCalledWith(session, 'src/index.ts');
+    expect(vi.mocked(operations.getFileHunks)).toHaveBeenCalledWith('src/index.ts');
   });
 
   it('rejects a path the review does not contain with 400 before reaching core', async () => {
@@ -328,7 +306,7 @@ describe('GET /api/image', () => {
     expect(body.dataUri).toBe(
       `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64')}`
     );
-    expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(session, 'img.png');
+    expect(vi.mocked(operations.loadImage)).toHaveBeenCalledWith('img.png');
   });
 
   it('rejects a traversal path with 400 before reaching core', async () => {
@@ -346,7 +324,7 @@ describe('GET /api/image', () => {
     expect((await res.json()).dataUri).toBe(
       `data:image/png;base64,${Buffer.from([0x4c, 0x49, 0x54]).toString('base64')}`
     );
-    expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(session, LITERAL_NAME);
+    expect(vi.mocked(operations.loadImage)).toHaveBeenCalledWith(LITERAL_NAME);
   });
 
   it('rejects a path the review does not contain with 400 before reaching core', async () => {
@@ -362,8 +340,7 @@ describe('GET /api/attachment', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/octet-stream');
     expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('attachment-bytes');
-    expect(vi.mocked(core.readAttachment)).toHaveBeenCalledWith(
-      session,
+    expect(vi.mocked(operations.readAttachment)).toHaveBeenCalledWith(
       '.self-review-assets/attach.bin'
     );
   });
@@ -453,14 +430,14 @@ describe('GET /api/attachment', () => {
 describe('POST /api/expand-context', () => {
   it('passes a valid body to core and returns its result', async () => {
     const expanded = { hunks: [INDEX_HUNK], totalLines: 1 };
-    vi.mocked(core.expandContext).mockResolvedValueOnce(expanded);
+    vi.mocked(operations.expandContext).mockResolvedValueOnce(expanded);
     const res = await postJson('/api/expand-context', {
       filePath: 'src/index.ts',
       contextLines: 10,
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(expanded);
-    expect(vi.mocked(core.expandContext)).toHaveBeenCalledWith(session, {
+    expect(vi.mocked(operations.expandContext)).toHaveBeenCalledWith({
       filePath: 'src/index.ts',
       contextLines: 10,
     });
@@ -545,7 +522,7 @@ describe('POST /api/review', () => {
     const res = await postJson('/api/review', state);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, outputPath });
-    expect(vi.mocked(core.submitReviewState)).toHaveBeenCalledWith(session, state);
+    expect(vi.mocked(operations.submitReviewState)).toHaveBeenCalledWith(state);
     expect(session.reviewState).toEqual(state);
     expect(fs.readFileSync(outputPath, 'utf-8')).toContain('urn:self-review:v3');
   });
@@ -648,14 +625,13 @@ describe('POST /api/review', () => {
     expectNoCoreCall();
   });
 
-  it('accepts the two id shapes this application produces', async () => {
-    // crypto.randomUUID() from the renderer, and generateId() from core's
-    // xml-parser for every comment read back out of a resumed document.
-    for (const id of ['3f1a7c2e-9b45-4d8a-8e21-5c6f0a9b7d33', '1757400000000-k3f9a2z']) {
+  it.each(['3f1a7c2e-9b45-4d8a-8e21-5c6f0a9b7d33', '1757400000000-abc123'])(
+    'accepts the application id %s',
+    async id => {
       const res = await postJson('/api/review', stateWithCommentId(id));
       expect(res.status).toBe(200);
     }
-  });
+  );
 
   // `Attachment.data` is an ArrayBuffer and `JSON.stringify` renders one as
   // `{}`, so an unencoded blob would reach the serializer empty and write a
@@ -699,7 +675,7 @@ describe('POST /api/review', () => {
     );
     expect(res.status).toBe(200);
 
-    const submitted = vi.mocked(core.submitReviewState).mock.calls[0][1];
+    const submitted = vi.mocked(operations.submitReviewState).mock.calls[0][0];
     const data = submitted.files[0].comments[0].attachments![0].data!;
     expect(new Uint8Array(data)).toEqual(BYTES);
     // And the session holds the same bytes, which is what lifecycle writes.
@@ -733,10 +709,20 @@ describe('POST /api/apply-suggestion', () => {
     suggestion: { originalCode: 'export {};', proposedCode: 'export const a = 1;' },
   };
 
+  it('accepts source text beyond 64 KiB and leaves refusal to the core Apply checks', async () => {
+    const res = await postJson('/api/apply-suggestion', {
+      filePath: 'src/index.ts',
+      lineRange: { side: 'new', start: 1, end: 1 },
+      suggestion: { originalCode: 'export {};', proposedCode: 'x'.repeat(70 * 1024) },
+    });
+    expect(res.status).toBe(200);
+    expect(vi.mocked(operations.applySuggestionForSession)).toHaveBeenCalledTimes(1);
+  });
+
   it('reaches core with a well-formed request', async () => {
     const res = await postJson('/api/apply-suggestion', request);
     expect(res.status).toBe(200);
-    expect(vi.mocked(core.applySuggestionForSession)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(operations.applySuggestionForSession)).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a path outside the repository before core runs', async () => {
@@ -768,7 +754,7 @@ describe('POST /api/apply-suggestion', () => {
   it('passes a null lineRange through to core', async () => {
     const res = await postJson('/api/apply-suggestion', { ...request, lineRange: null });
     expect(res.status).toBe(200);
-    expect(vi.mocked(core.applySuggestionForSession)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(operations.applySuggestionForSession)).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1057,13 +1043,16 @@ describe('session capability', () => {
     }
     expect((await apiFetch(`${base}/api/image?path=img.png`)).status).toBe(200);
     expect((await apiFetch(`${base}/api/attachment?path=${ATTACH}`)).status).toBe(200);
-    vi.mocked(core.expandContext).mockResolvedValueOnce({ hunks: [INDEX_HUNK], totalLines: 1 });
+    vi.mocked(operations.expandContext).mockResolvedValueOnce({
+      hunks: [INDEX_HUNK],
+      totalLines: 1,
+    });
     const expanded = await postJson('/api/expand-context', {
       filePath: 'src/index.ts',
       contextLines: 3,
     });
     expect(expanded.status).toBe(200);
-    expect(vi.mocked(core.expandContext)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(operations.expandContext)).toHaveBeenCalledTimes(1);
   });
 
   // The audit's reproduction: `curl -H 'Host: 127.0.0.1:<port>' http://127.0.0.1:<port>/api/diff` from another account.

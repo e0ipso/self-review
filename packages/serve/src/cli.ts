@@ -14,6 +14,7 @@ import { parseServeArgs } from './args';
 import { resolveSession } from './startup';
 import { completeReviewOnSubmit } from './lifecycle';
 import { createReviewServer, listenLoopback } from './server';
+import { createReviewOperations } from './review-operations';
 import { generateCapability } from './capability';
 import { formatLaunchUrl } from './protocol';
 
@@ -84,7 +85,12 @@ async function main(): Promise<void> {
 
   // Leaves only in the printed URL's fragment; the server never sends it.
   const capability = generateCapability();
-  const server = createReviewServer({ session, output, capability });
+  const server = createReviewServer({
+    session,
+    output,
+    capability,
+    operations: createReviewOperations(session, output),
+  });
   completeReviewOnSubmit({ server });
 
   const { url } = await listenLoopback(server);

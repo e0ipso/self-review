@@ -6,7 +6,13 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ImportDiagnosticsBanner, ReviewPanel, Toolbar, useConfig } from '@self-review/react';
+import {
+  ImportDiagnosticsBanner,
+  ReviewPanel,
+  Toolbar,
+  useConfig,
+  useReview,
+} from '@self-review/react';
 import type { ReviewPanelHandle } from '@self-review/react';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
 import '@self-review/react/styles.css';
@@ -92,6 +98,25 @@ function OutputPath({ info }: { info: OutputPathInfo | null }) {
   return null;
 }
 
+/** Observe persisted state without changing the library's comments-only callback. */
+function UnsavedWork({ onChange }: { onChange: () => void }) {
+  const { files } = useReview();
+  const previous = useRef(files);
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = files;
+    if (
+      files.some(file => file.viewed || file.comments.length > 0) ||
+      before.some(file => {
+        const next = files.find(candidate => candidate.path === file.path);
+        return next && (next.viewed !== file.viewed || next.comments !== file.comments);
+      })
+    )
+      onChange();
+  }, [files, onChange]);
+  return null;
+}
+
 // The 200 follows the rename, so claiming a saved file is safe. The server stops after flushing it.
 function Saved({ outputPath }: { outputPath: string | null }) {
   return (
@@ -174,12 +199,35 @@ export function App({ capability }: AppProps) {
     [capability]
   );
   const reviewRef = useRef<ReviewPanelHandle>(null);
+  const submissionPending = useRef(false);
+
+  // Native inert blocks the panel. Capture at window too, since library shortcuts
+  // listen on document and can activate controls outside the focused subtree.
+  useEffect(() => {
+    const block = (event: Event) => {
+      if (!submissionPending.current) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    const events = [
+      'keydown',
+      'click',
+      'beforeinput',
+      'input',
+      'change',
+      'submit',
+      'trigger-line-comment',
+    ];
+    events.forEach(name => window.addEventListener(name, block, true));
+    return () => events.forEach(name => window.removeEventListener(name, block, true));
+  }, []);
 
   const [config, setConfig] = useState<Partial<AppConfig> | null>(null);
   const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo | null>(null);
   const [configError, setConfigError] = useState<ConfigFailure | null>(null);
   const [status, setStatus] = useState<Status>('reviewing');
   const [hasUnsavedWork, setHasUnsavedWork] = useState(false);
+  const markUnsaved = useCallback(() => setHasUnsavedWork(true), []);
   const [failure, setFailure] = useState<SubmitFailure | null>(null);
 
   // Config first: the providers below are seeded with it, so mounting before
@@ -219,16 +267,19 @@ export function App({ capability }: AppProps) {
 
   const handleFinishReview = useCallback(async () => {
     // One in flight at a time; none after an acknowledged one (the server stops). A refused one may be resent.
-    if (status === 'submitting' || status === 'submitted' || adapter === null) return;
+    if (submissionPending.current || status === 'submitted' || adapter === null) return;
     const state = reviewRef.current?.getReviewState();
     if (!state) return;
+    submissionPending.current = true;
     setStatus('submitting');
     setFailure(null);
     try {
       await adapter.submitReview?.(state);
+      submissionPending.current = false;
       setStatus('submitted');
     } catch (error) {
       setFailure(failureOf(error));
+      submissionPending.current = false;
       setStatus('failed');
     }
   }, [adapter, status]);
@@ -258,17 +309,24 @@ export function App({ capability }: AppProps) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {status === 'failed' && failure && <SubmitFailureNotice failure={failure} />}
-      <ReviewPanel
-        ref={reviewRef}
-        adapter={adapter}
-        config={config}
-        onReviewChange={comments => setHasUnsavedWork(comments.length > 0)}
-        className='flex-1 flex flex-col overflow-hidden bg-background text-foreground'
+      <div
+        inert={status === 'submitting'}
+        aria-busy={status === 'submitting'}
+        data-testid='review-interaction'
+        style={{ flex: 1, display: 'flex', minHeight: 0 }}
       >
-        <OutputPath info={outputPathInfo} />
-        <ImportDiagnosticsBanner />
-        <Toolbar onFinishReview={() => void handleFinishReview()} />
-      </ReviewPanel>
+        <ReviewPanel
+          ref={reviewRef}
+          adapter={adapter}
+          config={config}
+          className='flex-1 flex flex-col overflow-hidden bg-background text-foreground'
+        >
+          <UnsavedWork onChange={markUnsaved} />
+          <OutputPath info={outputPathInfo} />
+          <ImportDiagnosticsBanner />
+          <Toolbar onFinishReview={() => void handleFinishReview()} />
+        </ReviewPanel>
+      </div>
     </div>
   );
 }

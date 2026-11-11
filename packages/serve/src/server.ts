@@ -7,240 +7,65 @@
 // rebinding would make it same-origin); and every API route requires the session capability (see ./protocol.ts).
 // `POST /api/review` publishes before it answers.
 
-import * as fs from 'node:fs';
 import * as http from 'node:http';
-import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
-import {
-  authorizeReviewedPath,
-  getDiffLoad,
-  getConfigLoad,
-  getResumeLoad,
-  getFileHunks,
-  loadImage,
-  parseAttachmentReference,
-  readAttachment,
-  expandContext,
-  submitReviewState,
-  applySuggestionForSession,
-  publishOptionsFor,
-  publishReview,
-  ReviewPublishError,
-} from '@self-review/core';
+import { parseAttachmentReference } from '@self-review/core';
 import type {
   ReviewOutputTarget as CoreReviewOutputTarget,
-  ReviewPublishErrorCode,
   ReviewSession,
-  ReviewState,
 } from '@self-review/core';
+import { parseExpandContextBody, parseReviewStateBody, parseSuggestionApplyBody } from './validate';
+import { MAX_REVIEW_BODY_BYTES, MAX_APPLY_BODY_BYTES } from './protocol';
 import {
-  containPath,
-  parseExpandContextBody,
-  parseReviewStateBody,
-  parseSuggestionApplyBody,
-} from './validate';
-import { capabilityMatches } from './capability';
-import { CAPABILITY_SCHEME, MAX_REVIEW_BODY_BYTES } from './protocol';
-import type { ReviewSubmitAck, ReviewSubmitFailure } from './protocol';
+  allowRequest,
+  readJsonBody,
+  sendJson,
+  sendError,
+  SECURITY_HEADERS,
+} from './http-transport';
+import { serveStatic } from './static-assets';
+import { createReviewOperations, type ReviewOperations } from './review-operations';
+import { ReviewSubmission, publishFailureStatus } from './review-submission';
+import { REVIEW_PUBLISHED } from './lifecycle';
 
 export { MAX_REVIEW_BODY_BYTES } from './protocol';
 
-// Resolved on demand: `import.meta.url` is not a `file:` URL under the client suite's browser-like environment.
+// Resolved on demand: import.meta.url is not a file URL in the browser-like test environment.
 export function defaultClientDir(): string {
   return fileURLToPath(new URL('./client/', import.meta.url));
 }
 
-/** Upper bound on a `POST /api/expand-context` body: a path and an integer. */
+/** A path and an integer, rather than source text or attachments. */
 export const MAX_EXPAND_CONTEXT_BODY_BYTES = 64 * 1024;
-
 export type ReviewOutputTarget = CoreReviewOutputTarget;
 
 export interface ReviewServerOptions {
-  /** Every request-supplied diff path is authorized against this session's source identity by core (audit A6). */
   session: ReviewSession;
   output: ReviewOutputTarget;
-  /** Bearer token every `/api/` request must present; the server never sends it. */
+  /** Bearer token required on every API request; never returned by the server. */
   capability: string;
-  /** Directory of the client bundle. Defaults to `defaultClientDir()`; tests inject a fixture. */
   clientDir?: string;
+  /** Session-bound operations. Omitted by existing callers for production defaults. */
+  operations?: ReviewOperations;
 }
 
 interface RouteContext {
   req: http.IncomingMessage;
   res: http.ServerResponse;
   url: URL;
-  session: ReviewSession;
-  output: ReviewOutputTarget;
+  operations: ReviewOperations;
+  submission: ReviewSubmission;
+  published: (response: http.ServerResponse) => void;
 }
 
 type RouteHandler = (ctx: RouteContext) => Promise<void>;
-
-const CONTENT_TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.map': 'application/json; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.txt': 'text/plain; charset=utf-8',
-};
-
-/**
- * The page renders the diff under review, which is the least trusted input the
- * program handles. Rendered content is sanitized before it becomes elements;
- * this is the second line, for whatever gets past that.
- *
- * Inline styles are allowed because index.html carries a <style> block and
- * bundled libraries inject at runtime; blob: because attachments display
- * through createObjectURL.
- */
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "frame-src 'none'",
-  "child-src 'none'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-].join('; ');
-
-const SECURITY_HEADERS: http.OutgoingHttpHeaders = {
-  'content-security-policy': CSP,
-  'x-content-type-options': 'nosniff',
-  'x-frame-options': 'DENY',
-  'referrer-policy': 'no-referrer',
-};
-
-/** A browser may resolve the printed URL either way, or prefer IPv6. */
-const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set(['127.0.0.1', 'localhost', '[::1]']);
-
-/** Lowercased, with an explicit `:80` dropped so it matches the bare host. */
-function normalizeHost(value: string): string {
-  const lowered = value.toLowerCase();
-  return lowered.endsWith(':80') ? lowered.slice(0, -3) : lowered;
-}
-
-/**
- * A rebound request — an attacker's name re-resolved to 127.0.0.1 after the
- * page loads — still carries that name in `Host`, which is what distinguishes
- * it from a real one.
- *
- * The port is deliberately not compared against the bound port: an `ssh -L`
- * forward arrives carrying the forward's port, and refusing that would break
- * the use case this package exists for. It would buy nothing either, since a
- * rebound request fails on the hostname first.
- *
- * A duplicate `Host` is refused, not resolved: Node reads the first, and an
- * intermediary forwarding the last would be reading a different request.
- */
-function hostIsLoopback(req: http.IncomingMessage): boolean {
-  const host = req.headers.host;
-  if (host === undefined) return false;
-
-  let seen = 0;
-  for (let i = 0; i < req.rawHeaders.length; i += 2) {
-    if (req.rawHeaders[i].toLowerCase() === 'host') seen++;
-  }
-  if (seen !== 1) return false;
-
-  // Split the optional port off, keeping an IPv6 literal's brackets.
-  const match = /^(\[[^\]]*\]|[^:]*)(?::(\d+))?$/.exec(host);
-  if (match === null) return false;
-  return LOOPBACK_HOSTNAMES.has(match[1].toLowerCase());
-}
-
-/**
- * A missing `Origin` is allowed — navigations and curl send none. Rejected is
- * an `Origin` naming a different authority than `Host`, including the `null` a
- * sandboxed frame sends.
- *
- * Comparing against `Host` rather than a loopback allowlist is what survives a
- * port forward while still refusing another local page: a dev server on :3000
- * sends its own origin and this listener's host, and those differ.
- */
-function originMatchesHost(req: http.IncomingMessage): boolean {
-  const origin = req.headers.origin;
-  if (origin === undefined) return true;
-  const host = req.headers.host;
-  if (host === undefined) return false;
-  let parsed: URL;
-  try {
-    parsed = new URL(origin);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== 'http:') return false;
-  // `new URL` parses away userinfo, paths and leading-zero ports, any of which
-  // would compare equal to this authority. A browser sends none of them.
-  if (origin !== `${parsed.protocol}//${parsed.host}`) return false;
-  return normalizeHost(parsed.host) === normalizeHost(host);
-}
-
-/**
- * Set by the browser, unforgeable by page script. A cross-site *GET* — an <img>
- * aimed at this port — carries no `Origin`, so without this it would be served
- * and only the absence of CORS headers would stop the page reading it.
- *
- * Non-browser clients send no such header and are unaffected.
- */
-function fetchSiteIsSelf(req: http.IncomingMessage): boolean {
-  const site = req.headers['sec-fetch-site'];
-  if (site === undefined) return true;
-  return site === 'same-origin' || site === 'none';
-}
-
-function sendJson(
-  res: http.ServerResponse,
-  status: number,
-  value: unknown,
-  headers: http.OutgoingHttpHeaders = {}
-): void {
-  res.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-    ...SECURITY_HEADERS,
-    ...headers,
-  });
-  // `JSON.stringify(undefined)` is undefined; a void core result becomes `null`.
-  res.end(JSON.stringify(value ?? null));
-}
-
-function sendError(res: http.ServerResponse, status: number, error: string): void {
-  // A body that blew the cap is not read further; close the connection rather
-  // than let the rest of it be reinterpreted as a next request.
-  sendJson(res, status, { error }, status === 413 ? { connection: 'close' } : {});
-}
-
-// Header only: a token in the query string would land in history and logs.
-function presentsCapability(req: http.IncomingMessage, capability: string): boolean {
-  const header = req.headers.authorization;
-  if (header === undefined) return false;
-  const space = header.indexOf(' ');
-  if (space === -1) return false;
-  if (header.slice(0, space).toLowerCase() !== CAPABILITY_SCHEME.toLowerCase()) return false;
-  return capabilityMatches(capability, header.slice(space + 1).trim());
-}
-
-function sendUnauthorized(res: http.ServerResponse): void {
-  sendJson(res, 401, { error: 'unauthorized' }, { 'www-authenticate': CAPABILITY_SCHEME });
-}
 
 const REVIEWED_PATH_ERROR = 'path must name a file in the reviewed diff';
 
 /** Core's authorization; answers 400 and returns false when `filePath` is not a reviewed path. */
 function requireReviewedPath(ctx: RouteContext, filePath: string, what = 'path'): boolean {
-  if (authorizeReviewedPath(ctx.session, filePath).ok) return true;
+  if (ctx.operations.authorizeReviewedPath(filePath).ok) return true;
   sendError(
     ctx.res,
     400,
@@ -258,81 +83,34 @@ function requireReviewedQueryPath(ctx: RouteContext): string | null {
   return requireReviewedPath(ctx, raw) ? raw : null;
 }
 
-type BodyResult = { ok: true; value: unknown } | { ok: false; status: number; error: string };
-
-/**
- * The declared length is checked before a byte is read and the running total
- * during it, so a chunked body without a length is capped too.
- */
-function readJsonBody(req: http.IncomingMessage, maxBytes: number): Promise<BodyResult> {
-  const contentType = req.headers['content-type'] ?? '';
-  if (!contentType.toLowerCase().startsWith('application/json')) {
-    return Promise.resolve({
-      ok: false,
-      status: 415,
-      error: 'content-type must be application/json',
-    });
-  }
-  const declared = Number(req.headers['content-length']);
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    return Promise.resolve({ ok: false, status: 413, error: 'request body too large' });
-  }
-
-  return new Promise(resolve => {
-    const chunks: Buffer[] = [];
-    let received = 0;
-    req.on('data', (chunk: Buffer) => {
-      received += chunk.length;
-      if (received > maxBytes) {
-        chunks.length = 0;
-        req.removeAllListeners('data');
-        req.removeAllListeners('end');
-        resolve({ ok: false, status: 413, error: 'request body too large' });
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on('end', () => {
-      try {
-        resolve({ ok: true, value: JSON.parse(Buffer.concat(chunks).toString('utf-8')) });
-      } catch {
-        resolve({ ok: false, status: 400, error: 'body must be valid JSON' });
-      }
-    });
-    req.on('error', () => {
-      resolve({ ok: false, status: 400, error: 'request body could not be read' });
-    });
-  });
-}
-
 // Each route validates, calls exactly one core function, and sends its result.
 
 const routes: Record<string, RouteHandler> = {
-  'GET /api/diff': async ({ res, session }) => {
+  'GET /api/diff': async ({ res, operations }) => {
     // The guide rides with the diff, so the client needs no push channel.
-    sendJson(res, 200, getDiffLoad(session));
+    sendJson(res, 200, operations.getDiffLoad());
   },
 
-  'GET /api/config': async ({ res, session }) => {
-    sendJson(res, 200, getConfigLoad(session));
+  'GET /api/config': async ({ res, operations }) => {
+    sendJson(res, 200, operations.getConfigLoad());
   },
 
-  'GET /api/resume': async ({ res, session }) => {
-    sendJson(res, 200, getResumeLoad(session));
+  'GET /api/resume': async ({ res, operations }) => {
+    sendJson(res, 200, operations.getResumeLoad());
   },
 
   'GET /api/file': async ctx => {
     const filePath = requireReviewedQueryPath(ctx);
     if (filePath === null) return;
     // Diff paths are source-relative strings; core matches on them as sent.
-    sendJson(ctx.res, 200, getFileHunks(ctx.session, filePath));
+    sendJson(ctx.res, 200, ctx.operations.getFileHunks(filePath));
   },
 
   'GET /api/image': async ctx => {
     const filePath = requireReviewedQueryPath(ctx);
     if (filePath === null) return;
     // Core reads the reviewed snapshot under the same identity it just authorized.
-    sendJson(ctx.res, 200, await loadImage(ctx.session, filePath));
+    sendJson(ctx.res, 200, await ctx.operations.loadImage(filePath));
   },
 
   'GET /api/attachment': async ctx => {
@@ -342,7 +120,7 @@ const routes: Record<string, RouteHandler> = {
       sendError(ctx.res, 400, 'path must name a file in the .self-review-assets directory');
       return;
     }
-    const result = await readAttachment(ctx.session, raw);
+    const result = await ctx.operations.readAttachment(raw);
     if (!result.ok) {
       const status =
         result.reason === 'not-authorized' ? 400 : result.reason === 'too-large' ? 413 : 404;
@@ -359,7 +137,7 @@ const routes: Record<string, RouteHandler> = {
   },
 
   'POST /api/expand-context': async ctx => {
-    const { req, res, session } = ctx;
+    const { req, res, operations } = ctx;
     const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES);
     if (!body.ok) {
       sendError(res, body.status, body.error);
@@ -372,14 +150,14 @@ const routes: Record<string, RouteHandler> = {
     }
     // Becomes a git pathspec; authorized as a reviewed path, then passed through as sent.
     if (!requireReviewedPath(ctx, parsed.value.filePath, 'filePath')) return;
-    sendJson(res, 200, await expandContext(session, parsed.value));
+    sendJson(res, 200, await operations.expandContext(parsed.value));
   },
 
   // The one route that rewrites a file in the reviewed tree. Core refuses unless the anchored lines still
   // match the suggestion's recorded original byte for byte, and resolves the destination itself.
   'POST /api/apply-suggestion': async ctx => {
-    const { req, res, session } = ctx;
-    const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES);
+    const { req, res, operations } = ctx;
+    const body = await readJsonBody(req, MAX_APPLY_BODY_BYTES);
     if (!body.ok) {
       sendError(res, body.status, body.error);
       return;
@@ -390,109 +168,40 @@ const routes: Record<string, RouteHandler> = {
       return;
     }
     if (!requireReviewedPath(ctx, parsed.value.filePath, 'filePath')) return;
-    sendJson(res, 200, applySuggestionForSession(session, parsed.value));
+    sendJson(res, 200, operations.applySuggestionForSession(parsed.value));
   },
 
-  // The completion: a 200 means the file is on disk; a failure leaves the server up for a retry.
-  'POST /api/review': async ({ req, res, session, output }) => {
-    const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES);
-    if (!body.ok) {
-      sendError(res, body.status, body.error);
+  // One admitted publication owns completion. Invalid or refused attempts reopen admission.
+  'POST /api/review': async ({ req, res, submission, published }) => {
+    if (!submission.begin()) {
+      sendError(res, 409, 'review submission already in progress or complete');
       return;
     }
-    const parsed = parseReviewStateBody(body.value);
-    if (!parsed.ok) {
-      sendError(res, 400, parsed.error);
-      return;
-    }
-    submitReviewState(session, parsed.value);
-    const outcome = await publishSubmittedReview(parsed.value, output, session);
-    if (outcome.ok) {
-      sendJson(res, 200, outcome);
-    } else {
-      sendJson(res, publishFailureStatus(outcome.code), outcome);
+    try {
+      const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES);
+      if (!body.ok) {
+        sendError(res, body.status, body.error);
+        return;
+      }
+      const parsed = parseReviewStateBody(body.value);
+      if (!parsed.ok) {
+        sendError(res, 400, parsed.error);
+        return;
+      }
+      const outcome = await submission.publish(parsed.value);
+      if (outcome.ok) {
+        published(res);
+        sendJson(res, 200, outcome);
+      } else {
+        sendJson(res, publishFailureStatus(outcome.code), outcome);
+      }
+    } finally {
+      submission.release();
     }
   },
 };
 
-// Publisher failures are returned, not thrown, so the route answers and keeps serving.
-async function publishSubmittedReview(
-  state: ReviewState,
-  output: ReviewOutputTarget,
-  session: ReviewSession
-): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
-  const options = publishOptionsFor(output, session.attachmentOrigins);
-  try {
-    const { outputPath } = await publishReview(state, output.path, options);
-    console.error(`[serve] Review written to ${outputPath}`);
-    return { ok: true, outputPath };
-  } catch (error) {
-    if (!(error instanceof ReviewPublishError)) throw error;
-    console.error(`[serve] Review not saved (${error.code}): ${error.message}`);
-    for (const detail of error.details) {
-      console.error(`[serve]   ${detail}`);
-    }
-    console.error(
-      '[serve] The review is still open in the browser. Fix the problem and press Finish Review again.'
-    );
-    return { ok: false, code: error.code, message: error.message, details: [...error.details] };
-  }
-}
-
-const DOCUMENT_ERROR_CODES: ReadonlySet<ReviewPublishErrorCode> = new Set([
-  'validation-failed',
-  'xml-illegal-character',
-]);
-
-function publishFailureStatus(code: ReviewPublishErrorCode): number {
-  return DOCUMENT_ERROR_CODES.has(code) ? 422 : 500;
-}
-
 const ROUTE_PATHS = new Set(Object.keys(routes).map(key => key.split(' ')[1]));
-
-/**
- * `/` is index.html; everything else is contained under the client directory.
- * Anything that is not a regular file under it is a 404.
- */
-async function serveStatic(
-  res: http.ServerResponse,
-  clientDir: string,
-  pathname: string
-): Promise<void> {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    sendError(res, 404, 'not found');
-    return;
-  }
-  const relative = decoded === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
-  const resolved = containPath(clientDir, relative);
-  if (resolved === null) {
-    sendError(res, 404, 'not found');
-    return;
-  }
-
-  let data: Buffer;
-  try {
-    const stat = await fs.promises.stat(resolved);
-    if (!stat.isFile()) {
-      sendError(res, 404, 'not found');
-      return;
-    }
-    data = await fs.promises.readFile(resolved);
-  } catch {
-    sendError(res, 404, 'not found');
-    return;
-  }
-  res.writeHead(200, {
-    'content-type':
-      CONTENT_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream',
-    'content-length': data.length,
-    ...SECURITY_HEADERS,
-  });
-  res.end(data);
-}
 
 /**
  * Taking the session explicitly rather than reading module state mirrors the
@@ -502,7 +211,14 @@ async function serveStatic(
 export function createReviewServer(options: ReviewServerOptions): http.Server {
   const { session, output, capability, clientDir = defaultClientDir() } = options;
 
-  return http.createServer(async (req, res) => {
+  const operations = options.operations ?? createReviewOperations(session, output);
+  const submission = new ReviewSubmission(operations);
+  const active = new Set<Promise<unknown>>();
+  const drain = () => Promise.allSettled([...active]).then(() => {});
+  const published = (response: http.ServerResponse) =>
+    server.emit(REVIEW_PUBLISHED, response, drain);
+
+  const dispatch = async (req: http.IncomingMessage, res: http.ServerResponse) => {
     const method = req.method ?? 'GET';
     let url: URL;
     try {
@@ -512,22 +228,16 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
       return;
     }
 
-    // Before anything is routed: this listener answers only to itself.
-    if (!hostIsLoopback(req) || !originMatchesHost(req) || !fetchSiteIsSelf(req)) {
-      sendError(res, 403, 'forbidden');
-      return;
-    }
-
-    // Assets are served to anyone; every /api/ route is refused before lookup, so the route table does not leak.
-    if (url.pathname.startsWith('/api/') && !presentsCapability(req, capability)) {
-      sendUnauthorized(res);
+    if (!allowRequest(req, res, url, capability)) return;
+    if (submission.completed) {
+      sendError(res, 503, 'review complete; server is stopping');
       return;
     }
 
     try {
       const handler = routes[`${method} ${url.pathname}`];
       if (handler) {
-        await handler({ req, res, url, session, output });
+        await handler({ req, res, url, operations, submission, published });
       } else if (ROUTE_PATHS.has(url.pathname)) {
         sendError(res, 405, 'method not allowed');
       } else if (url.pathname.startsWith('/api/')) {
@@ -545,7 +255,20 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
         res.end();
       }
     }
+  };
+
+  const server = http.createServer((req, res) => {
+    // A disconnected client may leave an operation running. Track both its work
+    // and its response, so shutdown cannot mistake a closed socket for completion.
+    const flushed = new Promise<void>(resolve => {
+      res.once('finish', resolve);
+      res.once('close', resolve);
+    });
+    const request = Promise.allSettled([dispatch(req, res), flushed]);
+    active.add(request);
+    void request.then(() => active.delete(request));
   });
+  return server;
 }
 
 /**

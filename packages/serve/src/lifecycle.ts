@@ -1,51 +1,55 @@
-// A published review stops the process; nothing else does. `POST /api/review` (./server.ts) publishes before it answers, so a flushed 200 means the file is on disk.
+// Completion is signalled by the publication owner, then waits for the response
+// and already admitted operations. HTTP status codes alone do not prove publication.
 
 import type * as http from 'node:http';
 
+export const REVIEW_PUBLISHED = 'review-published';
+const SHUTDOWN_GRACE_MS = 5_000;
+
+type ScheduleDeadline = (expire: () => void) => () => void;
+
 export interface CompletionOptions {
   server: http.Server;
-  /** Injected so a test can observe the exit code. Defaults to `process.exit`. */
+  /** Injected so a test can observe the exit code. Defaults to process.exit. */
   exit?: (code: number) => void;
+  /** Returns cancellation; production allows five seconds for admitted work to drain. */
+  scheduleDeadline?: ScheduleDeadline;
 }
 
-/**
- * Closes open connections too, or a browser's idle keep-alive socket holds the
- * port after the process is done with it.
- */
-function shutdown(server: http.Server, exit: (code: number) => void, code: number): void {
-  server.closeAllConnections();
-  server.close();
-  exit(code);
-}
+const scheduleDeadline: ScheduleDeadline = expire => {
+  const timer = setTimeout(expire, SHUTDOWN_GRACE_MS);
+  return () => clearTimeout(timer);
+};
 
-/**
- * The hook is the response, not the route: `finish` fires once the response is
- * flushed, so the browser has its answer before the socket goes away. Only a
- * 200 is a completion.
- */
+/** The publication owner signals before sending its acknowledgement, even if the peer disconnected. */
 export function completeReviewOnSubmit(options: CompletionOptions): void {
-  const { server, exit = process.exit } = options;
+  const { server, exit = process.exit, scheduleDeadline: schedule = scheduleDeadline } = options;
   let completing = false;
-
-  server.on('request', (req, res) => {
-    if (req.method !== 'POST' || pathnameOf(req.url) !== '/api/review') {
-      return;
-    }
-    res.on('finish', () => {
-      if (res.statusCode !== 200 || completing) {
-        return;
-      }
+  server.on(REVIEW_PUBLISHED, (response: http.ServerResponse, drain: () => Promise<void>) => {
+    const stop = () => {
+      if (completing) return;
       completing = true;
       console.error('[serve] Review complete; stopping.');
-      shutdown(server, exit, 0);
-    });
+      // Stop accepting immediately. Idle keep-alives close as part of server.close;
+      // active connections stay until their operations and responses finish.
+      server.close();
+      let exited = false;
+      let cancelDeadline = () => {};
+      const finish = () => {
+        if (exited) return;
+        exited = true;
+        cancelDeadline();
+        server.closeAllConnections();
+        exit(0);
+      };
+      cancelDeadline = schedule(() => {
+        console.error('[serve] Shutdown deadline reached; closing remaining connections.');
+        finish();
+      });
+      void drain().then(finish, finish);
+    };
+    response.once('finish', stop);
+    response.once('close', stop);
+    if (response.writableFinished || response.destroyed) stop();
   });
-}
-
-function pathnameOf(url: string | undefined): string | null {
-  try {
-    return new URL(url ?? '/', 'http://localhost').pathname;
-  } catch {
-    return null;
-  }
 }

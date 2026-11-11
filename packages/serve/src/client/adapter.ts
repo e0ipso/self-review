@@ -26,6 +26,8 @@ import type {
 } from '@self-review/core';
 import {
   MAX_REVIEW_BODY_BYTES,
+  MAX_APPLY_BODY_BYTES,
+  SUGGESTION_TOO_LARGE_CODE,
   REVIEW_TOO_LARGE_CODE,
   capabilityAuthorization,
   formatMegabytes,
@@ -290,7 +292,21 @@ export function createFetchAdapter(capability: string): ReviewAdapter {
         viewedFiles: [],
       },
 
-    applySuggestion: request => postJson('/api/apply-suggestion', request),
+    applySuggestion: async request => {
+      const text = JSON.stringify(request);
+      const bytes = byteLength(text);
+      const tooLarge = (status: number | null) =>
+        new ServeRequestError(
+          `This suggestion is ${formatMegabytes(bytes)} MB as sent, over the server's ` +
+            `${formatMegabytes(MAX_APPLY_BODY_BYTES)} MB limit. Shorten the proposed code before applying. Nothing was applied.`,
+          { status, code: SUGGESTION_TOO_LARGE_CODE }
+        );
+      if (bytes > MAX_APPLY_BODY_BYTES) throw tooLarge(null);
+      const response = await postJsonText('/api/apply-suggestion', text);
+      if (response.status === 413) throw tooLarge(413);
+      if (!response.ok) throw await requestError(response, 'POST /api/apply-suggestion');
+      return response.json();
+    },
 
     submitReview: async (state: ReviewState): Promise<void> => {
       const text = JSON.stringify(encodeReviewStateForWire(state));

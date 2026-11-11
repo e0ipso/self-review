@@ -221,6 +221,71 @@ describe('parseReviewStateBody', () => {
   });
 });
 
+describe('nested review validation', () => {
+  const comment = {
+    id: 'c1',
+    filePath: 'a.ts',
+    body: 'body',
+    category: 'task',
+    lineRange: { side: 'new', start: 1, end: 2 },
+    suggestion: null,
+    author: 'reviewer',
+    severity: 'major',
+    confidence: 'high',
+    remoteId: 'thread',
+    replies: [{ id: 'r1', body: 'reply', author: 'author', remoteId: 'note' }],
+    extension: { retained: true },
+  };
+  function body(changes: Record<string, unknown> = {}) {
+    return {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      source: { type: 'git', gitDiffArgs: '', repository: '/repo' },
+      files: [
+        {
+          path: 'a.ts',
+          changeType: 'added',
+          viewed: false,
+          comments: [{ ...comment, ...changes }],
+        },
+      ],
+    };
+  }
+
+  it.each([
+    { lineRange: { side: 'sideways', start: 1, end: 2 } },
+    { lineRange: { side: 'new', start: 2, end: 1 } },
+    { lineRange: { side: 'new', start: 0, end: 1 } },
+    { lineRange: { side: 'new', start: 1.5, end: 2 } },
+    { body: null },
+    { author: 123 },
+    { severity: 'urgent' },
+    { confidence: false },
+    { replies: [null] },
+    { replies: [{ id: 'r1', body: 123 }] },
+    { attachments: [null] },
+    { suggestion: { originalCode: 'a', proposedCode: null } },
+  ])('rejects malformed comment data without throwing: %j', changes => {
+    expect(parseReviewStateBody(body(changes))).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('Invalid review state:'),
+    });
+  });
+
+  it('preserves optional metadata, replies, and nested extension fields', () => {
+    expect(parseReviewStateBody(body())).toEqual({ ok: true, value: body() });
+  });
+
+  it('accepts historical omitted nullable fields and normalizes them', () => {
+    const result = parseReviewStateBody(body({ lineRange: undefined, suggestion: undefined }));
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.value.files[0].comments[0]).toMatchObject({
+        lineRange: null,
+        suggestion: null,
+      });
+  });
+});
+
 describe('parseReviewStateBody attachment blobs', () => {
   // A PNG signature: eight bytes that are unmistakably not zeros.
   const BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
