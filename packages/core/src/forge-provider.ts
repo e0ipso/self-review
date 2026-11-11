@@ -178,7 +178,11 @@ export function isCommandCancelled(error: unknown): error is CommandCancelledErr
  * no posting — those concerns live elsewhere.
  *
  * Implementations throw {@link ForgeCliUnavailableError} when their CLI is
- * absent or unauthenticated so callers can degrade cleanly.
+ * absent, unauthenticated or returns malformed required response data so callers can degrade
+ * visibly. A successful fetch returns all validated pages, never a silently shortened list.
+ * Unknown extension fields are ignored. Null/deleted authors use each forge's fallback name.
+ * Runners must propagate CommandCancelledError on interruption, including across pagination.
+ * Each provider instance is safe for concurrent calls when its supplied runner is also safe.
  */
 export interface ForgeProvider {
   readonly forge: ForgeName;
