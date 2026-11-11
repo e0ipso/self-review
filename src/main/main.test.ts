@@ -7,10 +7,14 @@ const harness = vi.hoisted(() => ({
   signals: {} as Record<string, (...args: unknown[]) => unknown>,
   initialize: vi.fn(),
   createWindow: vi.fn(),
+  confirmDiscard: vi.fn(),
+  health: null as import('./renderer-recovery').RendererRecovery | null,
+  operations: null as DesktopOperations | null,
+  boundary: null as ReturnType<typeof import('./ipc-boundary').createIpcBoundary> | null,
   checkUpdate: vi.fn(),
   getUpdate: vi.fn(),
   remote: { closed: false, dispose: vi.fn(async () => {}) },
-  session: { diffData: null },
+  session: { diffData: null as import('../shared/types').DiffLoadPayload | null },
 }));
 vi.mock('electron', () => ({
   app: {
@@ -28,16 +32,32 @@ vi.mock('./desktop-session', () => ({
   createDesktopSession: () => ({
     remote: harness.remote,
     review: harness.session,
-    operations: new DesktopOperations(),
+    operations: (harness.operations = new DesktopOperations()),
   }),
 }));
-vi.mock('./desktop-window', () => ({ createReviewWindow: harness.createWindow }));
+vi.mock('./desktop-window', () => ({
+  createReviewWindow: harness.createWindow,
+  observeRendererHealth: (
+    _window: unknown,
+    health: import('./renderer-recovery').RendererRecovery
+  ) => {
+    harness.health = health;
+  },
+}));
 vi.mock('./startup', () => ({ initializeSession: harness.initialize }));
-vi.mock('./ipc-handlers', () => ({ registerIpcHandlers: vi.fn() }));
+vi.mock('./ipc-handlers', () => ({
+  registerIpcHandlers: (
+    _review: unknown,
+    boundary: ReturnType<typeof import('./ipc-boundary').createIpcBoundary>
+  ) => {
+    harness.boundary = boundary;
+  },
+}));
 vi.mock('./lifecycle-handlers', () => ({ registerLifecycleHandlers: vi.fn() }));
 vi.mock('./presentation', () => ({
-  createReviewPresentation: vi.fn(),
+  createReviewPresentation: () => ({ confirmPayload: vi.fn() }),
   createLifecyclePresentation: vi.fn(),
+  confirmRendererDiscard: harness.confirmDiscard,
 }));
 vi.mock('./remote-open-handler', () => ({ registerRemoteOpenHandler: vi.fn() }));
 vi.mock('./app-assets', () => ({ getAppIconDataUri: vi.fn() }));
@@ -55,7 +75,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 function window() {
-  const listeners: Record<string, () => void> = {};
+  const listeners: Record<string, Array<() => void>> = {};
   let dead = false;
   return {
     isDestroyed: () => dead,
@@ -63,19 +83,22 @@ function window() {
     focus: vi.fn(),
     restore: vi.fn(),
     on: (name: string, callback: () => void) => {
-      listeners[name] = callback;
+      (listeners[name] ??= []).push(callback);
     },
-    webContents: { send: vi.fn() },
+    webContents: { mainFrame: {}, send: vi.fn(), isLoading: () => false, isDestroyed: () => false },
     destroy: () => {
       dead = true;
-      listeners.closed?.();
+      for (const listener of listeners.closed ?? []) listener();
     },
   };
 }
 beforeEach(() => {
   vi.resetModules();
   for (const key of Object.keys(harness.appHandlers)) delete harness.appHandlers[key];
+  harness.session.diffData = null;
   harness.remote.closed = false;
+  harness.health = null;
+  harness.confirmDiscard.mockResolvedValue(false);
   harness.remote.dispose.mockResolvedValue(undefined);
   harness.initialize.mockResolvedValue(true);
   harness.createWindow.mockImplementation(window);
@@ -166,4 +189,89 @@ describe('desktop composition', () => {
     release.resolve();
     await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0));
   });
+});
+
+it('keeps normal close renderer-owned, but native crash recovery can discard without saving', async () => {
+  await import('./main');
+  await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
+  const win = harness.createWindow.mock.results[0].value;
+  harness.session.diffData = { files: [], source: { type: 'directory', sourcePath: '/review' } };
+  const event = { preventDefault: vi.fn() };
+  harness.appHandlers['before-quit'](event);
+  expect(win.webContents.send).toHaveBeenCalledWith(IPC.APP_CLOSE_REQUESTED);
+  expect(harness.confirmDiscard).not.toHaveBeenCalled();
+  harness.health!.failed('crashed');
+  harness.confirmDiscard.mockResolvedValueOnce(true);
+  harness.appHandlers['before-quit'](event);
+  await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0));
+  expect(harness.remote.dispose).toHaveBeenCalledOnce();
+});
+
+it('keeps Apply owned during close and returns restored renderers to normal close flow', async () => {
+  await import('./main');
+  await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
+  const win = harness.createWindow.mock.results[0].value;
+  harness.session.diffData = { files: [], source: { type: 'directory', sourcePath: '/review' } };
+  const done = deferred<void>();
+  const applying = harness.operations!.apply(() => done.promise);
+  const event = { preventDefault: vi.fn() };
+  harness.appHandlers['before-quit'](event);
+  expect(event.preventDefault).toHaveBeenCalled();
+  expect(win.webContents.send).toHaveBeenCalledWith(IPC.APP_CLOSE_REQUESTED);
+  expect(process.exit).not.toHaveBeenCalled();
+  harness.health!.failed('unresponsive');
+  harness.appHandlers['before-quit'](event);
+  await vi.waitFor(() => expect(harness.confirmDiscard).toHaveBeenCalledOnce());
+  harness.health!.restored();
+  done.resolve();
+  await applying;
+  harness.appHandlers['before-quit'](event);
+  expect(win.webContents.send).toHaveBeenCalledWith(IPC.APP_CLOSE_REQUESTED);
+  expect(process.exit).not.toHaveBeenCalled();
+});
+
+it('rejects renderer messages after confirmed failure until restoration', async () => {
+  await import('./main');
+  await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
+  const sender = harness.createWindow.mock.results[0].value.webContents;
+  const event = { sender, senderFrame: sender.mainFrame } as unknown as Electron.IpcMainEvent;
+  expect(() => harness.boundary!.assertPeer(event)).not.toThrow();
+  harness.health!.failed('crashed');
+  expect(() => harness.boundary!.assertPeer(event)).toThrow(/main frame/);
+  harness.health!.restored();
+  expect(() => harness.boundary!.assertPeer(event)).not.toThrow();
+});
+
+it('stops window admission as soon as shutdown is requested', async () => {
+  const startup = deferred<boolean>();
+  harness.initialize.mockReturnValue(startup.promise);
+  await import('./main');
+  harness.signals.SIGTERM();
+  harness.appHandlers.activate();
+  startup.resolve(true);
+  await vi.waitFor(() => expect(harness.remote.dispose).toHaveBeenCalledOnce());
+  expect(harness.createWindow).not.toHaveBeenCalled();
+});
+
+it('cancels work with the originating closed window and permits a new window owner', async () => {
+  await import('./main');
+  await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
+  const first = harness.createWindow.mock.results[0].value;
+  let started!: () => void;
+  const ready = new Promise<void>(resolve => {
+    started = resolve;
+  });
+  const applying = harness.operations!.apply(
+    signal =>
+      new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        started();
+      })
+  );
+  await ready;
+  first.destroy();
+  await expect(applying).rejects.toThrow('The review window closed.');
+  harness.appHandlers.activate();
+  expect(harness.createWindow).toHaveBeenCalledTimes(2);
+  await expect(harness.operations!.read(async () => 'new window')).resolves.toBe('new window');
 });

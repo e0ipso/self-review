@@ -151,3 +151,22 @@ it('handles reordered asynchronous invocation replies without cross-settling the
   f.bridge.dispose();
   await expect(first).rejects.toThrow(/disposed/);
 });
+
+it('releases a failed resume request before later hydration and drops callbacks after unsubscribe', async () => {
+  const f = fixture();
+  f.api.requestResumeData.mockImplementationOnce(() => {
+    throw new Error('send failed');
+  });
+  await expect(f.bridge.adapter.loadResumedReview!()).rejects.toThrow('send failed');
+  const pushed = vi.fn();
+  const stop = f.bridge.adapter.onDiffLoad!(pushed);
+  const late = [...f.diffs][0];
+  stop();
+  stop();
+  late({ files: [], source: { type: 'welcome' } });
+  expect(pushed).not.toHaveBeenCalled();
+  f.bridge.adapter.onResumeLoad!(pushed);
+  await f.resume({ comments: [], viewedFiles: ['later.ts'] });
+  expect(pushed).toHaveBeenCalledExactlyOnceWith({ comments: [], viewedFiles: ['later.ts'] });
+  f.bridge.dispose();
+});

@@ -50,7 +50,7 @@ export function registerLifecycleHandlers(
       current();
       controller.discard();
       void shutdown(0, 'discard');
-    });
+    }, true);
   });
 
   boundary.handle(IPC.OUTPUT_PATH_CHANGE, noArgument, event =>

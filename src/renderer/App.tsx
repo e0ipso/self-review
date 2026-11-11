@@ -16,6 +16,7 @@ import ImportDiagnosticsBanner from '../../packages/react/src/components/ImportD
 import type { AppConfig, OutputPathInfo } from '../shared/types';
 
 import { createElectronAdapter } from './electron-adapter';
+import { useDesktopLocalization } from './useDesktopLocalization';
 import { useSaveReview } from './useSaveReview';
 import {
   LocalizationProvider,
@@ -23,6 +24,7 @@ import {
 } from '../../packages/react/src/localization/LocalizationContext';
 
 function AppContent() {
+  const { t } = useDesktopLocalization();
   const { diffSource } = useReview();
   const { setOutputPathInfo } = useConfig();
   const [isFindBarOpen, setIsFindBarOpen] = useState(false);
@@ -60,7 +62,7 @@ function AppContent() {
     return (
       <div
         role='status'
-        aria-label='Loading review'
+        aria-label={t('Loading review')}
         className='flex items-center justify-center h-screen bg-background'
       >
         <svg
@@ -108,6 +110,7 @@ function AppContent() {
 }
 
 function DesktopApp() {
+  const { t } = useDesktopLocalization();
   const [host, setHost] = useState<{
     bridge: ReturnType<typeof createElectronAdapter>;
     config: AppConfig;
@@ -162,7 +165,7 @@ function DesktopApp() {
     return (
       <div role='alert'>
         {error}
-        <Button onClick={() => setAttempt(value => value + 1)}>Retry</Button>
+        <Button onClick={() => setAttempt(value => value + 1)}>{t('Retry')}</Button>
       </div>
     );
   if (!host) return null;

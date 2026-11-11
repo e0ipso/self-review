@@ -1,5 +1,15 @@
 import { expect, it, vi } from 'vitest';
 const calls = vi.hoisted(() => ({ source: vi.fn(), load: vi.fn() }));
+vi.mock('../../packages/core/src/config', async () => {
+  const { DEFAULT_CONFIG } = await import('../../packages/react/src/config-defaults');
+  return {
+    loadConfigWithProvenance: () => ({
+      config: { ...DEFAULT_CONFIG },
+      provenance: Object.fromEntries(Object.keys(DEFAULT_CONFIG).map(key => [key, 'default'])),
+      sources: [],
+    }),
+  };
+});
 vi.mock('./cli', () => ({ parseCliArgs: () => ({ gitDiffArgs: [] }) }));
 vi.mock('./presentation', () => ({ confirmPayload: vi.fn(async () => true) }));
 vi.mock('../../packages/core/src/startup-mode', () => ({

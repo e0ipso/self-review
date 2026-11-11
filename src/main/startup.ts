@@ -23,7 +23,8 @@ import type { ReviewComment } from '../shared/types';
 /** False means the reviewer declined a large payload. Errors are handled by main's shutdown. */
 export async function initializeSession(
   desktop: DesktopSession,
-  signal = desktop.operations.signal
+  signal = desktop.operations.signal,
+  confirm = confirmPayload
 ): Promise<boolean> {
   signal.throwIfAborted();
   const { review, cwd, remote } = desktop;
@@ -64,7 +65,7 @@ export async function initializeSession(
   signal.throwIfAborted();
   if (remote.closed) return false;
   const { payload, identity } = loaded;
-  if (payload.source.type !== 'welcome' && !(await confirmPayload(payload, config))) return false;
+  if (payload.source.type !== 'welcome' && !(await confirm(payload, config))) return false;
   signal.throwIfAborted();
   if (remote.closed) return false;
   commitDiffData(review, payload, identity);

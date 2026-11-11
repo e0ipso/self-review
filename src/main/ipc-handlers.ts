@@ -162,7 +162,7 @@ export function registerIpcHandlers(
     IPC.DIFF_EXPAND_CONTEXT,
     expansionRequest,
     async (_event, request: ExpandContextRequest) =>
-      operations.read(signal =>
+      operations.apply(signal =>
         expandContext(desktopSession, request, undefined, { signal, timeoutMs: 30_000 })
       )
   );

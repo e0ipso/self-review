@@ -2,6 +2,7 @@ import type { ElectronAPI } from '../../shared/types';
 import React, { useState, useEffect } from 'react';
 import { Button } from '../../../packages/react/src/components/ui/button';
 import { ArrowUpCircle, X } from 'lucide-react';
+import { useDesktopLocalization } from '../useDesktopLocalization';
 import { VersionUpdateInfo } from '../../shared/types';
 
 type UpdateBannerAPI = Pick<
@@ -10,6 +11,7 @@ type UpdateBannerAPI = Pick<
 >;
 
 export default function UpdateBanner({ api = window.electronAPI }: { api?: UpdateBannerAPI }) {
+  const { t } = useDesktopLocalization();
   const [updateInfo, setUpdateInfo] = useState<VersionUpdateInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -31,12 +33,12 @@ export default function UpdateBanner({ api = window.electronAPI }: { api?: Updat
       <div className='flex items-center gap-2'>
         <ArrowUpCircle className='h-3.5 w-3.5 text-blue-600 dark:text-blue-400' />
         <span>
-          Self Review v{updateInfo.latestVersion} is available.{' '}
+          {t('Self Review v{version} is available.', { version: updateInfo.latestVersion })}{' '}
           <button
             className='underline text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer'
             onClick={() => api.openExternal(updateInfo.releaseUrl)}
           >
-            View release
+            {t('View release')}
           </button>
         </span>
       </div>
@@ -48,7 +50,7 @@ export default function UpdateBanner({ api = window.electronAPI }: { api?: Updat
         data-testid='update-banner-dismiss'
       >
         <X className='h-3 w-3' />
-        <span className='sr-only'>Dismiss</span>
+        <span className='sr-only'>{t('Dismiss')}</span>
       </Button>
     </div>
   );

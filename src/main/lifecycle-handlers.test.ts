@@ -72,6 +72,7 @@ it('waits for Apply before discarding and never publishes on discard', async () 
         finish = resolve;
       })
   );
+  await Promise.resolve();
   f.invoke(IPC.APP_DISCARD_AND_QUIT);
   await Promise.resolve();
   expect(f.shutdown).not.toHaveBeenCalled();

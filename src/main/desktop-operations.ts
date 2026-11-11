@@ -6,12 +6,16 @@ export class DesktopOperations {
   private window = new AbortController();
   private readonly pending = new Set<Promise<unknown>>();
   private mutation: Promise<unknown> | null = null;
+  private mutationAbort: AbortController | null = null;
   private completing = false;
   private disposal: Promise<void> | null = null;
   constructor(private readonly limit = 32) {}
 
   get signal(): AbortSignal {
     return this.lifetime.signal;
+  }
+  get finishing(): boolean {
+    return this.completing;
   }
   get busy(): boolean {
     return this.mutation !== null || this.completing;
@@ -74,33 +78,42 @@ export class DesktopOperations {
     } catch (error) {
       return Promise.reject(error);
     }
-    const signal = AbortSignal.any([this.signal, this.window.signal]);
+    const abort = new AbortController();
+    const signal = AbortSignal.any([this.signal, this.window.signal, abort.signal]);
     const work = this.track(async () => {
       signal.throwIfAborted();
       // No post-result cancellation check: rename may already have committed successfully.
       return run(signal);
     });
     this.mutation = work;
+    this.mutationAbort = abort;
     const settled = () => {
-      if (this.mutation === work) this.mutation = null;
+      if (this.mutation === work) {
+        this.mutation = null;
+        this.mutationAbort = null;
+      }
     };
     void work.then(settled, settled);
     return work;
   }
 
-  /** Freeze admission immediately and drain earlier operations before save or explicit discard. */
-  complete<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  /** Reserve completion admission even when reads are full. Apply settles before save/discard;
+   * reads are cancelled and drained by shutdown after the decision. Explicit discard cancels Apply. */
+  complete<T>(run: (signal: AbortSignal) => Promise<T>, cancelApply = false): Promise<T> {
     try {
-      this.admit();
+      this.signal.throwIfAborted();
+      this.window.signal.throwIfAborted();
+      if (this.completing) throw new Error('The review is finishing.');
     } catch (error) {
       return Promise.reject(error);
     }
     this.completing = true;
-    const earlier = [...this.pending];
+    const earlier = this.mutation;
+    if (cancelApply) this.mutationAbort?.abort(new Error('The review was discarded.'));
     const signal = AbortSignal.any([this.signal, this.window.signal]);
     return this.track(async () => {
       try {
-        await Promise.allSettled(earlier);
+        await earlier?.catch(() => {});
         signal.throwIfAborted();
         return await run(signal);
       } finally {

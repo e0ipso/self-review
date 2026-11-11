@@ -91,3 +91,34 @@ it('aborts and drains all operations once, with one bounded shutdown grace', asy
   await vi.advanceTimersByTimeAsync(10);
   await stopping;
 });
+
+it('admits explicit discard when reads are full, cancels Apply, and observes its final result first', async () => {
+  const owner = new DesktopOperations(2);
+  const reading = owner.read(() => new Promise(() => {}));
+  void reading.catch(() => {});
+  const order: string[] = [];
+  const applying = owner.apply(
+    signal =>
+      new Promise((_, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => {
+            order.push('cancelled');
+            reject(signal.reason);
+          },
+          { once: true }
+        );
+      })
+  );
+  const refused = expect(applying).rejects.toThrow('The review was discarded.');
+  await Promise.resolve();
+  const discarding = owner.complete(async () => {
+    order.push('discard');
+  }, true);
+  await discarding;
+  await refused;
+  expect(order).toEqual(['cancelled', 'discard']);
+  // The uncooperative read still owns its slot until bounded shutdown; it cannot trap Discard.
+  await expect(owner.read(async () => 'another')).resolves.toBe('another');
+  await owner.dispose('done', 1);
+});

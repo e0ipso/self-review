@@ -30,10 +30,13 @@ export function createElectronAdapter(api: ReviewAPI, requests = new ElectronReq
     callback: (value: T) => void
   ) {
     if (disposed) return () => {};
+    let active = true;
     const unsubscribe = on(value => {
-      if (!disposed) callback(value);
+      if (!disposed && active) callback(value);
     });
     const release = () => {
+      if (!active) return;
+      active = false;
       subscriptions.delete(release);
       unsubscribe();
     };
@@ -54,7 +57,12 @@ export function createElectronAdapter(api: ReviewAPI, requests = new ElectronReq
       resumeLoad ??= requests
         .run<ResumeLoadPayload>(resolve => {
           resumeReply = resolve;
-          api.requestResumeData();
+          try {
+            api.requestResumeData();
+          } catch (error) {
+            resumeReply = null;
+            throw error;
+          }
           return () => {
             resumeReply = null;
           };

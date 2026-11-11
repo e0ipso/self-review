@@ -1,12 +1,13 @@
 import type { BrowserWindow, IpcMain } from 'electron';
 import { expect, it, vi } from 'vitest';
-const engine = vi.hoisted(() => ({ apply: vi.fn() }));
+const engine = vi.hoisted(() => ({ apply: vi.fn(), expand: vi.fn() }));
 vi.mock('../../packages/core/src/review-handlers', async importOriginal => ({
   ...(await importOriginal<typeof import('../../packages/core/src/review-handlers')>()),
   applySuggestionForSession: () => {
     throw new Error('synchronous Apply invoked');
   },
   applySuggestionForSessionAsync: engine.apply,
+  expandContext: engine.expand,
 }));
 import { createReviewSession } from '../../packages/core/src/review-handlers';
 import { registerIpcHandlers } from './ipc-handlers';
@@ -46,6 +47,11 @@ function fixture() {
     session,
     operations,
     request,
+    expand: (contextLines: number) =>
+      handlers[IPC.DIFF_EXPAND_CONTEXT](
+        { sender, senderFrame: frame },
+        { filePath: 'a.ts', contextLines }
+      ) as Promise<unknown>,
     apply: () =>
       handlers[IPC.SUGGESTION_APPLY]({ sender, senderFrame: frame }, request) as Promise<unknown>,
   };
@@ -81,4 +87,24 @@ it('keeps a committed result applied even if the owner aborts before the reply a
   });
   await expect(f.apply()).resolves.toBe(result);
   expect(engine.apply).toHaveBeenCalledOnce();
+});
+
+it('serializes expansion with Apply and other expansions so late context cannot replace a newer result', async () => {
+  const f = fixture();
+  let finish!: (value: { hunks: never[]; totalLines: number }) => void;
+  engine.expand.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        finish = resolve;
+      })
+  );
+  const expanding = f.expand(10);
+  await Promise.resolve();
+  await expect(f.expand(20)).rejects.toThrow(/already in progress/);
+  await expect(f.apply()).rejects.toThrow(/already in progress/);
+  expect(engine.expand).toHaveBeenCalledOnce();
+  finish({ hunks: [], totalLines: 10 });
+  await expect(expanding).resolves.toEqual({ hunks: [], totalLines: 10 });
+  engine.expand.mockResolvedValueOnce({ hunks: [], totalLines: 20 });
+  await expect(f.expand(20)).resolves.toEqual({ hunks: [], totalLines: 20 });
 });

@@ -76,3 +76,25 @@ it('closes a pristine review directly but protects a viewed flag that was subseq
   expect(screen.getByTestId('close-confirm-dialog')).toBeTruthy();
   expect(host.discardAndQuit).toHaveBeenCalledOnce();
 });
+
+it('names the close decision and focuses Cancel under the shared RTL locale boundary', async () => {
+  const { LocalizationProvider } =
+    await import('../../../packages/react/src/localization/LocalizationContext');
+  const { waitFor } = await import('@testing-library/react');
+  const host = api();
+  context.files = [file([], true)];
+  render(
+    <LocalizationProvider locale='ar' direction='rtl'>
+      <CloseConfirmDialog api={host} />
+    </LocalizationProvider>
+  );
+  host.close();
+  const dialog = screen.getByRole('alertdialog', { name: 'Save your review?' });
+  expect(dialog).toBeTruthy();
+  expect(document.querySelector('[dir="rtl"]')).toBeTruthy();
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(host.submitReview).not.toHaveBeenCalled();
+});
