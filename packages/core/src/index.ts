@@ -336,6 +336,7 @@ export type { ApplicationOptionsSpec, ExtractedApplicationOptions } from './cli-
 
 // Walkthrough guide sidecar discovery and tolerant loading
 export { deriveGuidePath, resolveGuidePath, loadGuide } from './guide-loader';
+export type { LoadGuideOptions } from './guide-loader';
 
 // Git diff loading, staged/untracked defaulting, and argument normalisation
 export { loadGitDiffWithUntracked, dedupeUntrackedByPath } from './git-diff-loader';

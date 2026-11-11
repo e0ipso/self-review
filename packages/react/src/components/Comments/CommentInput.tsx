@@ -2,7 +2,7 @@ import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useEffect, useRef } from 'react';
 import type { Attachment, LineRange, ReviewComment, Suggestion } from '@self-review/types';
 import { useReviewCommands } from '../../context/ReviewContext';
-import { useConfig } from '../../context/ConfigContext';
+import { useCategories } from '../../context/ConfigContext';
 import { isUsableCategory } from '../../utils/category-utils';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
@@ -30,8 +30,8 @@ export default function CommentInput({
 }: CommentInputProps) {
   const { t } = useLocalization();
   const { addComment, editComment } = useReviewCommands();
-  const { config } = useConfig();
-  const defaultCategory = config.categories?.find(isUsableCategory)?.name ?? '';
+  const categories = useCategories();
+  const defaultCategory = categories?.find(isUsableCategory)?.name ?? '';
   const [body, setBody] = useState('');
   const [category, setCategory] = useState(defaultCategory);
   const [showSuggestion, setShowSuggestion] = useState(false);

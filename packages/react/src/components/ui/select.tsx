@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Select as SelectPrimitive } from '@base-ui/react/select';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useConfig } from '../../context/ConfigContext';
+import { usePortalContainer } from '../../context/ConfigContext';
 
 const Select = SelectPrimitive.Root;
 const SelectGroup = SelectPrimitive.Group;
@@ -36,7 +36,7 @@ const SelectContent = React.forwardRef<
     sideOffset?: number;
   }
 >(({ className, children, side, sideOffset = 4, ...props }, ref) => {
-  const { portalContainer } = useConfig();
+  const portalContainer = usePortalContainer();
   return (
     <SelectPrimitive.Portal container={portalContainer}>
       <SelectPrimitive.Positioner side={side} sideOffset={sideOffset}>

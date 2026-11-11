@@ -18,7 +18,8 @@ function sources(directory: string): string[] {
 }
 describe('browser package boundaries', () => {
   it('keeps runtime imports browser-safe and free of internal cycles', () => {
-    const files = sources(root);
+    const configRoot = path.resolve(root, '../../config/src');
+    const files = [...sources(root), ...sources(configRoot)];
     const edges = new Map<string, string[]>();
     const forbidden = new Set([
       ...builtinModules,
@@ -36,6 +37,13 @@ describe('browser package boundaries', () => {
       );
       const imports: string[] = [];
       const visit = (node: ts.Node) => {
+        if (
+          ts.isExportDeclaration(node) &&
+          !node.isTypeOnly &&
+          node.moduleSpecifier &&
+          ts.isStringLiteral(node.moduleSpecifier)
+        )
+          imports.push(node.moduleSpecifier.text);
         if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
           const clause = node.importClause;
           const typeOnly =
@@ -61,7 +69,7 @@ describe('browser package boundaries', () => {
           errors.push(`${path.relative(root, file)} imports ${specifier}`);
         if (!specifier.startsWith('.')) continue;
         const target = path.resolve(path.dirname(file), specifier);
-        if (!target.startsWith(root + path.sep))
+        if (!target.startsWith(root + path.sep) && !target.startsWith(configRoot + path.sep))
           errors.push(`${file} crosses package boundary: ${specifier}`);
         const resolved = [
           target,

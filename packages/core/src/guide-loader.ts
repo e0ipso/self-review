@@ -22,6 +22,7 @@ import { readFileWithinBudget } from './bounded-read';
 import { parseGuideXml, reconcileGuide } from './guide-parser';
 import { formatBytes, MAX_GUIDE_BYTES } from './input-budgets';
 import { AppConfig, GuideLoadPayload } from './types';
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 
 /**
  * Derive the guide sidecar path from the resolved output path: strip the
@@ -40,11 +41,22 @@ export function deriveGuidePath(outputPath: string): string {
  * (resolved against cwd, like `output-file`) when set, otherwise the path
  * derived from the resolved output path.
  */
-export function resolveGuidePath(outputPath: string, config: Pick<AppConfig, 'guideFile'>): string {
+export function resolveGuidePath(
+  outputPath: string,
+  config: Pick<AppConfig, 'guideFile'>,
+  cwd?: string
+): string {
   if (config.guideFile) {
-    return resolve(process.cwd(), config.guideFile);
+    return resolve(cwd ?? process.cwd(), config.guideFile);
   }
   return deriveGuidePath(outputPath);
+}
+
+export interface LoadGuideOptions {
+  /** Resolution directory for a relative guide-file. Defaults to process.cwd(). */
+  cwd?: string;
+  /** Defaults to stderr; missing guides are always silent. */
+  reportDiagnostic?: DiagnosticReporter;
 }
 
 /**
@@ -52,16 +64,18 @@ export function resolveGuidePath(outputPath: string, config: Pick<AppConfig, 'gu
  *
  * Returns the display-ready payload, or null when there is no usable
  * guide. Missing file: silent. Unreadable or invalid file: exactly one
- * `console.error()` line (guide path + reason class). Never throws.
+ * `reportDiagnostic()` line (guide path + reason class). Never throws.
  */
 export async function loadGuide(
   outputPath: string,
   config: Pick<AppConfig, 'guideFile'>,
-  diffFilePaths: string[]
+  diffFilePaths: string[],
+  options: LoadGuideOptions = {}
 ): Promise<GuideLoadPayload | null> {
+  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
   let guidePath: string;
   try {
-    guidePath = resolveGuidePath(outputPath, config);
+    guidePath = resolveGuidePath(outputPath, config, options.cwd);
   } catch {
     return null;
   }
@@ -72,14 +86,14 @@ export async function loadGuide(
     try {
       const read = await readFileWithinBudget(guidePath, MAX_GUIDE_BYTES);
       if (read.kind === 'too-large') {
-        console.error(
+        reportDiagnostic(
           `[guide] Ignoring guide at ${guidePath}: too large (${formatBytes(read.size)}, ` +
             `over the ${formatBytes(MAX_GUIDE_BYTES)} guide budget)`
         );
         return null;
       }
       if (read.kind === 'not-regular') {
-        console.error(`[guide] Ignoring guide at ${guidePath}: unreadable (not a regular file)`);
+        reportDiagnostic(`[guide] Ignoring guide at ${guidePath}: unreadable (not a regular file)`);
         return null;
       }
       content = read.content.toString('utf-8');
@@ -89,7 +103,7 @@ export async function loadGuide(
         // No sidecar next to the output path — the normal case.
         return null;
       }
-      console.error(
+      reportDiagnostic(
         `[guide] Ignoring guide at ${guidePath}: unreadable (${code ?? 'unknown error'})`
       );
       return null;
@@ -99,7 +113,7 @@ export async function loadGuide(
     // Explicit comparison: with strictNullChecks off (see tsconfig),
     // truthiness alone does not narrow the discriminated union.
     if (result.ok === false) {
-      console.error(`[guide] Ignoring guide at ${guidePath}: invalid (${result.reason})`);
+      reportDiagnostic(`[guide] Ignoring guide at ${guidePath}: invalid (${result.reason})`);
       return null;
     }
 
@@ -113,7 +127,7 @@ export async function loadGuide(
   } catch (error) {
     // Belt and braces: no failure mode of the guide loader may escape.
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[guide] Ignoring guide at ${guidePath}: invalid (${message})`);
+    reportDiagnostic(`[guide] Ignoring guide at ${guidePath}: invalid (${message})`);
     return null;
   }
 }

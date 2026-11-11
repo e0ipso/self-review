@@ -224,7 +224,7 @@ jobs:
       # after `make`, whose clean step would otherwise delete out/npm.
       - name: Build and pack workspace packages
         run: |
-          for pkg in packages/types packages/core packages/react packages/serve; do
+          for pkg in packages/types packages/config packages/core packages/react packages/serve; do
             (cd "$pkg" && npm run build)
           done
           mkdir -p out/npm
@@ -340,7 +340,7 @@ jobs:
       # `npm/<file>.tgz` is GitHub shorthand to it, which broke 2.0.1.
       - name: Publish workspace packages to npm
         run: |
-          for name in @self-review/types @self-review/core @self-review/react @self-review/serve; do
+          for name in @self-review/types @self-review/config @self-review/core @self-review/react @self-review/serve; do
             entry=$(jq -c --arg name "$name" '.[] | select(.name == $name)' npm/manifest.json)
             if [ -z "$entry" ]; then
               echo "$name is missing from the packed manifest" >&2

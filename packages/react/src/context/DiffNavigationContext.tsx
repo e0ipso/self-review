@@ -9,7 +9,7 @@ import React, {
   type ReactNode,
 } from 'react';
 import { reviewElement } from '../utils/review-root';
-import { useConfig } from './ConfigContext';
+import { usePortalContainer } from './ConfigContext';
 
 export interface DiffNavigationContextValue {
   activeFilePath: string | null;
@@ -32,7 +32,7 @@ export function useOptionalDiffNavigation() {
 
 export function DiffNavigationProvider({ children }: { children: ReactNode }) {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
-  const { portalContainer } = useConfig();
+  const portalContainer = usePortalContainer();
   const files = useRef(new Map<string, HTMLElement>());
   const intersections = useRef(new Map<Element, number>());
   const observer = useRef<IntersectionObserver | null>(null);

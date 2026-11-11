@@ -43,11 +43,27 @@ export type {
   SuggestionApplyOutcome,
 } from '@self-review/types';
 
-// Context providers (for advanced/custom composition)
+// Compatibility contexts for existing custom compositions.
+// Prefer supported feature hooks when a consumer needs only part of the state.
 export { ReviewProvider, useReview } from './context/ReviewContext';
 export type { ReviewContextValue, ReviewProviderProps } from './context/ReviewContext';
-export { ConfigProvider, useConfig, defaultConfig } from './context/ConfigContext';
-export type { ConfigContextValue, ConfigProviderProps } from './context/ConfigContext';
+export {
+  ConfigProvider,
+  useConfig,
+  defaultConfig,
+  useConfiguration,
+  useAppearance,
+  useCategories,
+  useOutputPath,
+  usePortalContainer,
+} from './context/ConfigContext';
+export type {
+  ConfigContextValue,
+  ConfigProviderProps,
+  ConfigurationValue,
+  AppearanceValue,
+  OutputPathValue,
+} from './context/ConfigContext';
 export { DiffNavigationProvider, useDiffNavigationContext } from './context/DiffNavigationContext';
 export { ReviewAdapterProvider, useAdapter } from './context/ReviewAdapterContext';
 export { GuideProvider, useGuide } from './context/GuideContext';

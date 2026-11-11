@@ -1,7 +1,7 @@
 import { useLocalization } from '../localization/LocalizationContext';
 import React, { useState, useMemo } from 'react';
 import { useReview } from '../context/ReviewContext';
-import { useConfig } from '../context/ConfigContext';
+import { useConfiguration, useOutputPath, usePortalContainer } from '../context/ConfigContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 import { useAdapter } from '../context/ReviewAdapterContext';
 import { useGuide } from '../context/GuideContext';
@@ -30,7 +30,9 @@ import { getGuideAccent } from '../utils/guide-accents';
 export default function FileTree() {
   const { t, number } = useLocalization();
   const { diffFiles, files, toggleViewed } = useReview();
-  const { config, updateConfig, outputPathInfo, setOutputPathInfo, portalContainer } = useConfig();
+  const { config, updateConfig } = useConfiguration();
+  const { outputPathInfo, setOutputPathInfo } = useOutputPath();
+  const portalContainer = usePortalContainer();
   const { activeFilePath, scrollToFile } = useDiffNavigationContext();
   const adapter = useAdapter();
   const { guide, mode } = useGuide();

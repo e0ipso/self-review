@@ -22,7 +22,9 @@ export interface SingleFileReviewProps {
   file: DiffFile;
   /** Defaults to `{ type: 'file' }` at the file's path. Compared by value. */
   source?: DiffSource;
-  /** Optional partial config (theme, categories, etc.). */
+  /** Initial configuration, merged once per mount. Later prop changes are ignored. */
+  initialConfig?: Partial<AppConfig>;
+  /** @deprecated Use initialConfig. Initial-only alias, ignored when initialConfig is supplied. */
   config?: Partial<AppConfig>;
   /** Called when review comments change. */
   onReviewChange?: (comments: ReviewComment[]) => void;
@@ -112,7 +114,16 @@ const SingleFileSession = forwardRef<ReviewHandle, SingleFileSessionProps>(
  */
 export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
   function SingleFileReview(
-    { file, source, config, onReviewChange, adapter, className, defaultViewMode = 'unified' },
+    {
+      file,
+      source,
+      config,
+      initialConfig,
+      onReviewChange,
+      adapter,
+      className,
+      defaultViewMode = 'unified',
+    },
     ref
   ) {
     const resolvedSource: DiffSource = source || {
@@ -125,7 +136,7 @@ export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
     ]);
 
     return (
-      <ConfigProvider initialConfig={{ ...config, diffView: defaultViewMode }}>
+      <ConfigProvider initialConfig={{ ...(initialConfig ?? config), diffView: defaultViewMode }}>
         <SingleFileSession
           key={sessionKey}
           ref={ref}

@@ -10,6 +10,9 @@ import { TooltipProvider } from './components/ui/tooltip';
 
 export interface ReviewProvidersProps extends ReviewProviderProps {
   adapter: ReviewAdapter;
+  /** Initial configuration, merged once per mount. Later prop changes are ignored. */
+  initialConfig?: Partial<AppConfig>;
+  /** @deprecated Use initialConfig. Initial-only alias, ignored when initialConfig is supplied. */
   config?: Partial<AppConfig>;
   initialOutputPath?: OutputPathInfo;
   children: ReactNode;
@@ -19,13 +22,14 @@ export interface ReviewProvidersProps extends ReviewProviderProps {
 export function ReviewProviders({
   adapter,
   config,
+  initialConfig,
   initialOutputPath,
   children,
   ...session
 }: ReviewProvidersProps) {
   return (
     <ReviewAdapterProvider adapter={adapter}>
-      <ConfigProvider initialConfig={config} initialOutputPath={initialOutputPath}>
+      <ConfigProvider initialConfig={initialConfig ?? config} initialOutputPath={initialOutputPath}>
         <GuideProvider>
           <ReviewProvider {...session}>
             <DiffNavigationProvider>

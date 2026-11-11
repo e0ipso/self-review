@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import type { DiffFile } from '@self-review/types';
 import { CommentGutterButton } from './CommentGutterButton';
 import { useFileCommentIndex } from './useFileCommentIndex';
-import { useConfig } from '../../context/ConfigContext';
+import { useAppearance } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
 import SyntaxLine from './SyntaxLine';
 import { planHighlighting } from './highlight-budget';
@@ -49,7 +49,7 @@ export default function UnifiedView({
   const { t } = useLocalization();
   const commentIndex = useFileCommentIndex(file);
   const highlighting = useMemo(() => planHighlighting(file), [file]);
-  const { config } = useConfig();
+  const config = useAppearance();
   const language = getLanguageFromPath(file.newPath || file.oldPath);
 
   // Pre-compute row offsets per hunk for sequential row indexing

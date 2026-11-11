@@ -1,6 +1,6 @@
 import { useLocalization } from '../localization/LocalizationContext';
 import React, { useState, useMemo } from 'react';
-import { useConfig } from '../context/ConfigContext';
+import { useConfiguration, useOutputPath, usePortalContainer } from '../context/ConfigContext';
 import { useDiffReview } from '../context/ReviewContext';
 import { useGuide } from '../context/GuideContext';
 import { useAdapter } from '../context/ReviewAdapterContext';
@@ -34,7 +34,9 @@ export interface ToolbarProps {
 
 export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
   const { t, number } = useLocalization();
-  const { config, updateConfig, outputPathInfo, portalContainer } = useConfig();
+  const { config, updateConfig } = useConfiguration();
+  const { outputPathInfo } = useOutputPath();
+  const portalContainer = usePortalContainer();
   const { diffFiles, diffSource } = useDiffReview();
   const { guide, mode: guideMode, setMode: setGuideMode } = useGuide();
   const adapter = useAdapter();

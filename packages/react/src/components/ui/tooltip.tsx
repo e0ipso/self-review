@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 import { cn } from '../../lib/utils';
-import { useConfig } from '../../context/ConfigContext';
+import { usePortalContainer } from '../../context/ConfigContext';
 
 const TooltipProvider = TooltipPrimitive.Provider;
 const Tooltip = TooltipPrimitive.Root;
@@ -32,7 +32,7 @@ interface TooltipContentProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const TooltipContent = React.forwardRef<HTMLDivElement, TooltipContentProps>(
   ({ className, side, align, sideOffset = 4, alignOffset, ...props }, ref) => {
-    const { portalContainer } = useConfig();
+    const portalContainer = usePortalContainer();
     return (
       <TooltipPrimitive.Portal container={portalContainer}>
         <TooltipPrimitive.Positioner

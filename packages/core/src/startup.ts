@@ -143,7 +143,7 @@ export interface LoadedLocalReview {
 export async function loadLocalReview(
   source: StartupSource,
   gitDiffArgs: readonly string[],
-  config: AppConfig,
+  config: Pick<AppConfig, 'ignore'>,
   cwd: string,
   log: (message: string) => void,
   options: GitExecutionOptions = {}

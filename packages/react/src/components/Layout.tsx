@@ -7,10 +7,10 @@ import DiffViewer from './DiffViewer/DiffViewer';
 import GuideRouteHud from './GuideRouteHud';
 import FileTreeToggle from './FileTreeToggle';
 
-import { useConfig } from '../context/ConfigContext';
+import { usePortalContainer } from '../context/ConfigContext';
 
 function Layout() {
-  const { portalContainer } = useConfig();
+  const portalContainer = usePortalContainer();
   const panelId = useId();
   const fileTreePanelId = `${panelId}-file-tree`;
   const diffPanelId = `${panelId}-diff-viewer`;
