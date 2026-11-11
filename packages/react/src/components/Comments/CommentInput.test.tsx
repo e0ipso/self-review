@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../context/ReviewContext', () => ({
-  useReview: () => ({
+  useReviewCommands: () => ({
     addComment: mocks.addComment,
     editComment: mocks.editComment,
   }),

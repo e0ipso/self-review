@@ -1,7 +1,8 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useMemo } from 'react';
-import { MessageSquarePlus } from 'lucide-react';
 import type { DiffFile } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { CommentGutterButton } from './CommentGutterButton';
+import { useFileCommentIndex } from './useFileCommentIndex';
 import { useConfig } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
 import SyntaxLine from './SyntaxLine';
@@ -10,7 +11,6 @@ import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
 import ExpandContextBar from './ExpandContextBar';
 import { getLineBg, getGutterBg } from '../../utils/diff-styles';
-import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 
 export interface UnifiedViewProps {
   file: DiffFile;
@@ -20,7 +20,7 @@ export interface UnifiedViewProps {
     currentLine: number;
     side: 'old' | 'new';
   } | null;
-  onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
+  onDragStart: (lineNumber: number, side: 'old' | 'new', keyboard?: boolean) => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
   onExpandContext?: (
@@ -45,9 +45,9 @@ export default function UnifiedView({
   expandLoading,
   totalLines,
 }: UnifiedViewProps) {
-  const { getCommentsForLine } = useReview();
+  const { t } = useLocalization();
+  const commentIndex = useFileCommentIndex(file);
   const { config } = useConfig();
-  const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
   const language = getLanguageFromPath(file.newPath || file.oldPath);
 
   // Pre-compute row offsets per hunk for sequential row indexing
@@ -74,11 +74,10 @@ export default function UnifiedView({
     return curr.newStart - (prev.newStart + prev.newLines);
   };
 
-  // Extract original code for the selected line range (for suggestions)
-  const getOriginalCode = (): string | undefined => {
-    if (!commentRange) return undefined;
-    return extractOriginalCode(file, commentRange);
-  };
+  const originalCode = useMemo(
+    () => (commentRange ? extractOriginalCode(file, commentRange) : undefined),
+    [file, commentRange]
+  );
 
   return (
     <div className='font-mono text-[13px] leading-[22px] unified-view'>
@@ -110,29 +109,26 @@ export default function UnifiedView({
             const rowIndex = hunkRowOffsets[hunkIndex] + lineIndex;
             const lineNumber = line.type === 'deletion' ? line.oldLineNumber : line.newLineNumber;
             const side: 'old' | 'new' = line.type === 'deletion' ? 'old' : 'new';
-            const comments = lineNumber ? getCommentsForLine(filePath, lineNumber, side) : [];
-            // Context rows carry both old and new coordinates. Saved old-side
-            // comments must remain visible when switching from split view.
-            const oldContextComments =
-              line.type === 'context' && line.oldLineNumber
-                ? getCommentsForLine(filePath, line.oldLineNumber, 'old')
-                : [];
-            const commentsToRender = [...comments, ...oldContextComments].filter(
-              c =>
-                c.lineRange!.end ===
-                  (c.lineRange!.side === 'old' ? line.oldLineNumber : line.newLineNumber) &&
-                hasAnchor(c)
-            );
+            const commentsToRender = [
+              ...commentIndex.endingAt(line.newLineNumber, 'new'),
+              ...commentIndex.endingAt(line.oldLineNumber, 'old'),
+            ];
+            const hasComment =
+              commentIndex.covers(lineNumber, side) ||
+              (line.type === 'context' && commentIndex.covers(line.oldLineNumber, 'old'));
             const showCommentInputHere =
-              commentRange && lineNumber === commentRange.end && commentRange.side === side;
+              commentRange &&
+              (commentRange.side === 'old' ? line.oldLineNumber : line.newLineNumber) ===
+                commentRange.end;
 
             // Comment range highlight: real line numbers + side
+            const selectedNumber =
+              commentRange?.side === 'old' ? line.oldLineNumber : line.newLineNumber;
             const isInCommentRange =
               commentRange &&
-              commentRange.side === side &&
-              lineNumber !== null &&
-              lineNumber >= commentRange.start &&
-              lineNumber <= commentRange.end;
+              selectedNumber !== null &&
+              selectedNumber >= commentRange.start &&
+              selectedNumber <= commentRange.end;
             // Drag highlight: row indices (side-agnostic for cross-type drag)
             const isInDragRange =
               dragState !== null &&
@@ -143,7 +139,7 @@ export default function UnifiedView({
             return (
               <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
                 <div
-                  className={`flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${comments.length > 0 ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}
+                  className={`flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${hasComment ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}
                   data-line-number={lineNumber || undefined}
                   data-line-side={side}
                   data-line-type={line.type}
@@ -151,45 +147,37 @@ export default function UnifiedView({
                 >
                   {/* Old line number */}
                   <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-old relative`}
+                    className={`w-10 flex-shrink-0 text-end pe-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-old relative`}
                     data-testid={
                       line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined
                     }
                   >
                     {line.oldLineNumber && (
-                      <button
-                        className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter-old:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
-                        onMouseDown={e => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onDragStart(rowIndex, 'old');
-                        }}
+                      <CommentGutterButton
+                        className='absolute start-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/gutter-old:opacity-100'
+                        label={t('Comment on old line {line}', { line: line.oldLineNumber! })}
+                        onStartDrag={() => onDragStart(rowIndex, 'old')}
+                        onActivate={() => onDragStart(rowIndex, 'old', true)}
                         data-testid={`comment-icon-old-${line.oldLineNumber}`}
-                      >
-                        <MessageSquarePlus className='h-4 w-4' />
-                      </button>
+                      />
                     )}
                     <span className='pointer-events-none'>{line.oldLineNumber || ''}</span>
                   </div>
                   {/* New line number */}
                   <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-new relative`}
+                    className={`w-10 flex-shrink-0 text-end pe-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-new relative`}
                     data-testid={
                       line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined
                     }
                   >
                     {line.newLineNumber && (
-                      <button
-                        className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter-new:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
-                        onMouseDown={e => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onDragStart(rowIndex, 'new');
-                        }}
+                      <CommentGutterButton
+                        className='absolute start-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/gutter-new:opacity-100'
+                        label={t('Comment on new line {line}', { line: line.newLineNumber! })}
+                        onStartDrag={() => onDragStart(rowIndex, 'new')}
+                        onActivate={() => onDragStart(rowIndex, 'new', true)}
                         data-testid={`comment-icon-new-${line.newLineNumber}`}
-                      >
-                        <MessageSquarePlus className='h-4 w-4' />
-                      </button>
+                      />
                     )}
                     <span className='pointer-events-none'>{line.newLineNumber || ''}</span>
                   </div>
@@ -211,7 +199,7 @@ export default function UnifiedView({
                   showCommentInput={!!showCommentInputHere}
                   commentRange={commentRange}
                   filePath={file.newPath || file.oldPath}
-                  originalCode={getOriginalCode()}
+                  originalCode={originalCode}
                   onCancel={onCancelComment}
                   onSaved={onCommentSaved}
                   indentClass='ml-[100px]'

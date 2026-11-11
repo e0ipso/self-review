@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, it, expect, afterEach } from 'vitest';
 import { act, fireEvent, renderHook } from '@testing-library/react';
 import { generateLabels, isTextInputFocused, useKeyboardNavigation } from './useKeyboardNavigation';
+import { ConfigProvider } from '../context/ConfigContext';
 import { DiffNavigationProvider } from '../context/DiffNavigationContext';
 import { installBrowserApiStubs } from '../test-helpers';
 
@@ -128,7 +129,17 @@ describe('useKeyboardNavigation f hint', () => {
     document.addEventListener('trigger-line-comment', onTrigger);
 
     renderHook(() => useKeyboardNavigation(), {
-      wrapper: ({ children }) => React.createElement(DiffNavigationProvider, null, children),
+      wrapper: ({ children }) =>
+        React.createElement(
+          ConfigProvider,
+          null,
+          React.createElement(DiffNavigationProvider, null, children),
+          React.createElement('div', {
+            ref: (node: HTMLDivElement | null) => {
+              if (node && !node.contains(section)) node.appendChild(section);
+            },
+          })
+        ),
     });
 
     act(() => {

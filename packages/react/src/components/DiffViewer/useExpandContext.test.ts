@@ -136,6 +136,32 @@ describe('useExpandContext', () => {
     expect(result.current.totalLines).toBeNull();
   });
 
+  it('exposes a failed expansion until an explicit retry succeeds', async () => {
+    mockExpandFileContext
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ hunks: [makeHunk(1, 8)], totalLines: 20 });
+    const file = makeFile([makeHunk(4, 2)]);
+    const { result } = renderHook(() => {
+      const ref = useRef<HTMLDivElement>(null);
+      return useExpandContext({
+        file,
+        filePath: 'src/foo.ts',
+        isExpandable: true,
+        sectionRef: ref,
+      });
+    });
+    await act(async () => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    await waitFor(() => expect(result.current.expandError).toBe(true));
+    expect(mockExpandFileContext).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    await waitFor(() => expect(result.current.expandError).toBe(false));
+    expect(mockExpandFileContext).toHaveBeenCalledTimes(2);
+  });
+
   it('starts with expandLoading false and totalLines null', () => {
     const file = makeFile([makeHunk(1, 3)]);
     const { result } = renderHook(() => {

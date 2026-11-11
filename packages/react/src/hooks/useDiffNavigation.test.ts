@@ -137,6 +137,7 @@ describe('useDiffNavigation', () => {
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
+      result.current.registerFileElement('file1.ts', element);
       // Simulate intersection
       if (intersectionCallback) {
         const entries: IntersectionObserverEntry[] = [
@@ -169,6 +170,8 @@ describe('useDiffNavigation', () => {
 
       const { result } = renderHook(() => useDiffNavigation(), { wrapper });
 
+      result.current.registerFileElement('file1.ts', element1);
+      result.current.registerFileElement('file2.ts', element2);
       if (intersectionCallback) {
         const entries: IntersectionObserverEntry[] = [
           {

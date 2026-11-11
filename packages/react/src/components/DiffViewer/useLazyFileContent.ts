@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DiffFile } from '@self-review/types';
 import { useReviewCommands, useReviewSessionId } from '../../context/ReviewContext';
+import { useLocalization } from '../../localization/LocalizationContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 
 /** Only `idle` starts a request, so a failure stays until the reviewer retries. */
@@ -29,10 +30,10 @@ export interface UseLazyFileContentResult {
   retry: () => void;
 }
 
-function describeFailure(error: unknown): string {
+function describeFailure(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error) return error;
-  return 'the request failed';
+  return fallback;
 }
 
 /**
@@ -46,6 +47,7 @@ export function useLazyFileContent({
   filePath,
   expanded,
 }: UseLazyFileContentOptions): UseLazyFileContentResult {
+  const { t } = useLocalization();
   const { updateFileHunks } = useReviewCommands();
   const sessionId = useReviewSessionId();
   const adapter = useAdapter();
@@ -70,7 +72,7 @@ export function useLazyFileContent({
     if (!loadFileContent) {
       settle({
         kind: 'error',
-        message: 'this review host cannot load file content on demand',
+        message: t('this review host cannot load file content on demand'),
       });
       return;
     }
@@ -86,15 +88,18 @@ export function useLazyFileContent({
           updateFileHunks(filePath, hunks);
           settle({ kind: 'loaded' });
         } else {
-          settle({ kind: 'error', message: 'the review host returned no content for this file' });
+          settle({
+            kind: 'error',
+            message: t('the review host returned no content for this file'),
+          });
         }
       },
       (error: unknown) => {
         if (!current()) return;
-        settle({ kind: 'error', message: describeFailure(error) });
+        settle({ kind: 'error', message: describeFailure(error, t('the request failed')) });
       }
     );
-  }, [needsContent, state.kind, file, sessionId, filePath, adapter, updateFileHunks]);
+  }, [needsContent, state.kind, file, sessionId, filePath, adapter, updateFileHunks, t]);
 
   const retry = useCallback(() => {
     setOwned(prev =>

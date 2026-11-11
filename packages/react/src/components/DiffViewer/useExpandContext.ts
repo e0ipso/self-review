@@ -23,6 +23,7 @@ interface UseExpandContextParams {
 
 interface UseExpandContextResult {
   expandLoading: boolean;
+  expandError?: boolean;
   totalLines: number | null;
   handleExpandContext: (
     direction: 'up' | 'down' | 'all',
@@ -41,6 +42,7 @@ export function useExpandContext({
   const sessionId = useReviewSessionId();
   const snapshotId = useReviewSnapshotId();
   const [expandLoading, setExpandLoading] = useState(false);
+  const [expandError, setExpandError] = useState(false);
   const [totalLines, setTotalLines] = useState<number | null>(null);
 
   // Per-hunk directional context budgets, raw hunk cache, and original change ranges.
@@ -59,7 +61,8 @@ export function useExpandContext({
       mounted.current = false;
     };
   }, []);
-  if (ownerRef.current !== owner) {
+  const ownerChanged = ownerRef.current !== owner;
+  if (ownerChanged) {
     ownerRef.current = owner;
     originalRangesRef.current = null;
     hunkBudgetsRef.current = null;
@@ -67,6 +70,7 @@ export function useExpandContext({
     lastRequestedContextRef.current = 0;
     setTotalLines(null);
     setExpandLoading(false);
+    setExpandError(false);
   }
 
   // Initialize per-hunk tracking from the initial hunks (run once)
@@ -94,6 +98,8 @@ export function useExpandContext({
     anchorOffsetFromContainerTop: number;
     scrollTop: number;
   } | null>(null);
+
+  if (ownerChanged) scrollCompensationRef.current = null;
 
   useLayoutEffect(() => {
     const compensation = scrollCompensationRef.current;
@@ -134,6 +140,7 @@ export function useExpandContext({
       position: 'top' | 'between' | 'bottom'
     ) => {
       if (!isExpandable || expandLoadingRef.current) return;
+      setExpandError(false);
       const budgets = hunkBudgetsRef.current;
       const originalRanges = originalRangesRef.current;
       if (!budgets || !originalRanges) return;
@@ -271,6 +278,7 @@ export function useExpandContext({
         const result = await expandFileContext(filePath, maxBudget);
         if (!mounted.current || ownerRef.current !== requestOwner) return;
         if (!result) {
+          setExpandError(true);
           setExpandLoading(false);
           scrollCompensationRef.current = null;
           return;
@@ -293,5 +301,5 @@ export function useExpandContext({
     [isExpandable, filePath, expandFileContext, updateFileHunks]
   );
 
-  return { expandLoading, totalLines, handleExpandContext };
+  return { expandLoading, expandError, totalLines, handleExpandContext };
 }

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef } from 'react';
 import type { DiffLoadPayload, ReviewComment } from '@self-review/types';
+import { ReviewLifecycleContext } from '../context/ReviewLifecycleContext';
 import type { ReviewAdapter } from '../adapter';
 import {
   isPlaceholderSource,
@@ -18,6 +19,7 @@ export function useReviewHost(
   staticDiff: boolean,
   initialComments?: ReviewComment[]
 ) {
+  const notifyIdentity = useContext(ReviewLifecycleContext);
   const mounted = useRef(false);
   const pushVersion = useRef(0);
   const loadRequest = useRef(0);
@@ -57,12 +59,15 @@ export function useReviewHost(
   const receive = useCallback(
     (payload: DiffLoadPayload) => {
       const previous = store.getSnapshot();
+      // Clear the previous guide before a host can synchronously deliver the next guide.
+      if (!isPlaceholderSource(payload.source))
+        notifyIdentity?.(reviewSessionIdentity(payload.source, payload.remote));
       store.dispatch({ type: 'payload', payload, initialComments: comments.current });
       if (isPlaceholderSource(previous.diffSource) && resumeOwner.current === previous.sessionId) {
         resumeOwner.current = store.getSnapshot().sessionId;
       }
     },
-    [store]
+    [store, notifyIdentity]
   );
 
   // Subscribe before requesting: a host may synchronously push while loadDiff starts.

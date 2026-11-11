@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useLocalization } from '../../localization/LocalizationContext';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useId } from 'react';
 import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
 import { useLazyFileContent } from './useLazyFileContent';
@@ -6,11 +7,7 @@ import type { DiffFile } from '@self-review/types';
 import { useReviewCommands, useFileReview, useReviewSource } from '../../context/ReviewContext';
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
-import {
-  getRenderedTextMode,
-  isPreviewableImage,
-  isPreviewableSvg,
-} from '../../utils/file-type-utils';
+import { getContentPreview, initialPreviewMode } from './content-preview';
 import { getGuideAccent } from '../../utils/guide-accents';
 import { FileSectionHeader } from './FileSectionHeader';
 import { FileSectionBody } from './FileSectionBody';
@@ -29,6 +26,7 @@ export default function FileSection({
   expanded: controlledExpanded,
   onToggleExpanded,
 }: FileSectionProps) {
+  const { t } = useLocalization();
   const { toggleViewed } = useReviewCommands();
   const diffSource = useReviewSource();
   const fileState = useFileReview(file.newPath || file.oldPath);
@@ -41,20 +39,19 @@ export default function FileSection({
     side: 'old' | 'new';
   } | null>(null);
   const [showingFileComment, setShowingFileComment] = useState(false);
+  const bodyId = useId();
   const sectionRef = useRef<HTMLDivElement | null>(null);
   const navigation = useOptionalDiffNavigation();
   const registerFileElement = navigation?.registerFileElement;
   const unregisterFileElement = navigation?.unregisterFileElement;
 
-  const isAddedFile = file.changeType === 'added';
-  const filePath_ = file.newPath || file.oldPath || '';
-  const showImagePreview = isAddedFile && file.isBinary === true && isPreviewableImage(filePath_);
-  const showSvgPreview = isAddedFile && isPreviewableSvg(filePath_);
-  const renderedTextMode = isAddedFile ? getRenderedTextMode(filePath_) : null;
-  const isEligibleForRenderedView = renderedTextMode !== null;
-  const isPreviewable = showImagePreview || showSvgPreview || isEligibleForRenderedView;
-
-  const initialViewMode = showSvgPreview ? 'raw' : isPreviewable ? 'rendered' : 'raw';
+  const preview = getContentPreview(file);
+  const showImagePreview = preview.kind === 'image';
+  const showSvgPreview = preview.kind === 'svg';
+  const renderedTextMode = preview.kind === 'text' ? preview.mode : null;
+  const isEligibleForRenderedView = preview.kind === 'text';
+  const isPreviewable = preview.kind !== 'none';
+  const initialViewMode = initialPreviewMode(preview);
   const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
 
   const filePath = file.newPath || file.oldPath;
@@ -85,7 +82,7 @@ export default function FileSection({
   // Expand context state
   const isExpandable = diffSource.type === 'git' && !file.isUntracked && !file.isBinary;
 
-  const { expandLoading, totalLines, handleExpandContext } = useExpandContext({
+  const { expandLoading, expandError, totalLines, handleExpandContext } = useExpandContext({
     file,
     filePath,
     isExpandable,
@@ -141,6 +138,7 @@ export default function FileSection({
       data-testid={`file-section-${filePath}`}
     >
       <FileSectionHeader
+        bodyId={bodyId}
         file={file}
         filePath={filePath}
         expanded={expanded}
@@ -156,7 +154,13 @@ export default function FileSection({
           }
         }}
         onViewedToggle={handleViewedToggle}
-        onAddFileComment={() => setShowingFileComment(true)}
+        onAddFileComment={() => {
+          if (!expanded) {
+            if (onToggleExpanded) onToggleExpanded(filePath);
+            else setInternalExpanded(true);
+          }
+          setShowingFileComment(true);
+        }}
         onRenderViewModeChange={setRenderViewMode}
       />
 
@@ -177,38 +181,46 @@ export default function FileSection({
         </div>
       )}
 
-      {expanded && (
-        <FileSectionBody
-          filePath={filePath}
-          fileComments={fileComments}
-          orphanedComments={orphanedComments}
-          showingFileComment={showingFileComment}
-          onCancelFileComment={() => setShowingFileComment(false)}
-          onFileCommentSubmit={() => setShowingFileComment(false)}
-          contentAreaProps={{
-            file,
-            filePath,
-            viewMode: effectiveViewMode,
-            renderViewMode,
-            isEligibleForRenderedView,
-            renderedTextMode,
-            showImagePreview,
-            showSvgPreview,
-            contentLoad,
-            onRetry: retryContentLoad,
-            commentRange,
-            dragState,
-            onDragStart: handleDragStart,
-            onCancelComment: clearCommentRange,
-            onCommentSaved: clearCommentRange,
-            onCommentRange: handleCommentRange,
-            isExpandable,
-            expandLoading,
-            totalLines,
-            handleExpandContext,
-          }}
-        />
-      )}
+      <div id={bodyId} hidden={!expanded}>
+        {expanded && expandError && (
+          <p role='alert' className='m-3 text-sm text-destructive'>
+            {t('Context could not be loaded. Use an expand button to try again.')}
+          </p>
+        )}
+        {expanded && (
+          <FileSectionBody
+            filePath={filePath}
+            fileComments={fileComments}
+            orphanedComments={orphanedComments}
+            showingFileComment={showingFileComment}
+            onCancelFileComment={() => setShowingFileComment(false)}
+            onFileCommentSubmit={() => setShowingFileComment(false)}
+            contentAreaProps={{
+              file,
+              preview,
+              filePath,
+              viewMode: effectiveViewMode,
+              renderViewMode,
+              isEligibleForRenderedView,
+              renderedTextMode,
+              showImagePreview,
+              showSvgPreview,
+              contentLoad,
+              onRetry: retryContentLoad,
+              commentRange,
+              dragState,
+              onDragStart: handleDragStart,
+              onCancelComment: clearCommentRange,
+              onCommentSaved: clearCommentRange,
+              onCommentRange: handleCommentRange,
+              isExpandable,
+              expandLoading,
+              totalLines,
+              handleExpandContext,
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

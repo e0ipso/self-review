@@ -1,9 +1,10 @@
+import { useLocalization, type MessageKey } from '../../localization/LocalizationContext';
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
 import type { ReviewComment, CommentSeverity, CommentConfidence } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { useReviewCommands } from '../../context/ReviewContext';
 import { useConfig } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -41,7 +42,7 @@ export interface CommentDisplayProps {
  * schema documentation, because these are exactly the values the human is
  * being asked to sanity-check.
  */
-const SEVERITY_STYLES: Record<CommentSeverity, { className: string; description: string }> = {
+const SEVERITY_STYLES: Record<CommentSeverity, { className: string; description: MessageKey }> = {
   critical: {
     className: 'bg-red-500/15 text-red-600 dark:text-red-400',
     description: 'Critical: data loss, a security hole, or a crash on a path real usage reaches.',
@@ -60,20 +61,21 @@ const SEVERITY_STYLES: Record<CommentSeverity, { className: string; description:
   },
 };
 
-const CONFIDENCE_STYLES: Record<CommentConfidence, { className: string; description: string }> = {
-  high: {
-    className: 'bg-muted text-muted-foreground',
-    description: 'High confidence: traceable from the diff, no unverified assumption needed.',
-  },
-  medium: {
-    className: 'bg-muted text-muted-foreground',
-    description: 'Medium confidence: rests on one assumption the author did not verify.',
-  },
-  low: {
-    className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-    description: 'Low confidence: speculative. Worth your eyes, not worth acting on unattended.',
-  },
-};
+const CONFIDENCE_STYLES: Record<CommentConfidence, { className: string; description: MessageKey }> =
+  {
+    high: {
+      className: 'bg-muted text-muted-foreground',
+      description: 'High confidence: traceable from the diff, no unverified assumption needed.',
+    },
+    medium: {
+      className: 'bg-muted text-muted-foreground',
+      description: 'Medium confidence: rests on one assumption the author did not verify.',
+    },
+    low: {
+      className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+      description: 'Low confidence: speculative. Worth your eyes, not worth acting on unattended.',
+    },
+  };
 
 function SignalBadge({
   label,
@@ -81,21 +83,22 @@ function SignalBadge({
   testId,
 }: {
   label: string;
-  styles: { className: string; description: string };
+  styles?: { className: string; description: MessageKey };
   testId: string;
 }) {
+  const { t } = useLocalization();
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Badge
           variant='secondary'
-          className={`h-5 px-1.5 text-[10px] font-medium ${styles.className}`}
+          className={`h-5 px-1.5 text-[10px] font-medium ${styles?.className ?? 'bg-muted text-muted-foreground'}`}
           data-testid={testId}
         >
           {label}
         </Badge>
       </TooltipTrigger>
-      <TooltipContent side='bottom'>{styles.description}</TooltipContent>
+      <TooltipContent side='bottom'>{t(styles?.description ?? 'Unknown signal')}</TooltipContent>
     </Tooltip>
   );
 }
@@ -105,26 +108,27 @@ export default function CommentDisplay({
   originalCode: originalCodeProp,
   anchorFullyVisible = true,
 }: CommentDisplayProps) {
-  const { deleteComment } = useReview();
-  const { config } = useConfig();
+  const { t } = useLocalization();
+  const { deleteComment } = useReviewCommands();
+  const { config, portalContainer } = useConfig();
   const [isEditing, setIsEditing] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
 
   const categoryDef = config.categories?.find(cat => cat.name === comment.category);
 
-  // Listen for global collapse/expand all events
+  // Bulk commands belong to the enclosing review.
   useEffect(() => {
     const handleToggleAllComments = (event: Event) => {
       const customEvent = event as CustomEvent<{ collapsed: boolean }>;
       setIsCollapsed(customEvent.detail.collapsed);
     };
 
-    document.addEventListener('toggle-all-comments', handleToggleAllComments);
+    portalContainer?.addEventListener('toggle-all-comments', handleToggleAllComments);
     return () => {
-      document.removeEventListener('toggle-all-comments', handleToggleAllComments);
+      portalContainer?.removeEventListener('toggle-all-comments', handleToggleAllComments);
     };
-  }, []);
+  }, [portalContainer]);
 
   const handleDelete = () => {
     deleteComment(comment.id);
@@ -172,7 +176,7 @@ export default function CommentDisplay({
             ) : (
               <ChevronUp className='h-3.5 w-3.5' />
             )}
-            <span className='sr-only'>{isCollapsed ? 'Expand' : 'Collapse'}</span>
+            <span className='sr-only'>{t(isCollapsed ? 'Expand' : 'Collapse')}</span>
           </Button>
           <span className='flex items-center gap-1 text-xs font-semibold text-foreground max-w-[200px] truncate'>
             {comment.author ? (
@@ -183,15 +187,18 @@ export default function CommentDisplay({
             ) : (
               <>
                 <User className='h-3.5 w-3.5 shrink-0' />
-                You
+                {t('You')}
               </>
             )}
           </span>
           {comment.lineRange && (
             <span className='text-[11px] text-muted-foreground'>
               {comment.lineRange.start === comment.lineRange.end
-                ? `line ${comment.lineRange.start}`
-                : `lines ${comment.lineRange.start}\u2013${comment.lineRange.end}`}
+                ? t('line {line}', { line: comment.lineRange.start })
+                : t('lines {start}–{end}', {
+                    start: comment.lineRange.start,
+                    end: comment.lineRange.end,
+                  })}
             </span>
           )}
           {comment.category &&
@@ -224,14 +231,22 @@ export default function CommentDisplay({
             ))}
           {comment.severity && (
             <SignalBadge
-              label={comment.severity}
+              label={
+                Object.prototype.hasOwnProperty.call(SEVERITY_STYLES, comment.severity)
+                  ? t(comment.severity)
+                  : String(comment.severity)
+              }
               styles={SEVERITY_STYLES[comment.severity]}
               testId={`comment-severity-${comment.severity}`}
             />
           )}
           {comment.confidence && (
             <SignalBadge
-              label={`${comment.confidence} confidence`}
+              label={
+                Object.prototype.hasOwnProperty.call(CONFIDENCE_STYLES, comment.confidence)
+                  ? t(`${comment.confidence} confidence`)
+                  : String(comment.confidence)
+              }
               styles={CONFIDENCE_STYLES[comment.confidence]}
               testId={`comment-confidence-${comment.confidence}`}
             />
@@ -241,7 +256,7 @@ export default function CommentDisplay({
               variant='secondary'
               className='h-5 px-1.5 text-[10px] bg-orange-500/15 text-orange-600 dark:text-orange-400'
             >
-              Orphaned
+              {t('Orphaned')}
             </Badge>
           )}
           {comment.lineRange && !anchorFullyVisible && (
@@ -252,12 +267,13 @@ export default function CommentDisplay({
                   className='h-5 px-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400'
                   data-testid='comment-anchor-partial'
                 >
-                  Partly hidden
+                  {t('Partly hidden')}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent side='bottom'>
-                Some lines of this range are not in the loaded diff. The recorded original code is
-                kept for its suggestion.
+                {t(
+                  'Some lines of this range are not in the loaded diff. The recorded original code is kept for its suggestion.'
+                )}
               </TooltipContent>
             </Tooltip>
           )}
@@ -272,7 +288,7 @@ export default function CommentDisplay({
                 className='h-6 w-6 p-0'
               >
                 <Pencil className='h-3 w-3' />
-                <span className='sr-only'>Edit</span>
+                <span className='sr-only'>{t('Edit')}</span>
               </Button>
             </div>
             <Button
@@ -283,7 +299,7 @@ export default function CommentDisplay({
               className='h-6 w-6 p-0 text-muted-foreground hover:text-destructive'
             >
               <Trash2 className='h-3 w-3' />
-              <span className='sr-only'>Delete</span>
+              <span className='sr-only'>{t('Delete')}</span>
             </Button>
           </div>
         )}
@@ -350,7 +366,7 @@ export default function CommentDisplay({
                 className='h-7 gap-1.5 text-xs text-muted-foreground'
               >
                 <ReplyIcon className='h-3.5 w-3.5' />
-                Reply
+                {t('Reply')}
               </Button>
             </div>
           )}

@@ -1,3 +1,4 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useMemo, createContext, useContext } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -11,9 +12,10 @@ import {
   parsePassiveHtml,
 } from '../../utils/passive-content';
 import type { Components, ExtraProps } from 'react-markdown';
-import { MessageSquarePlus } from 'lucide-react';
-import type { DiffFile, LineRange } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { CommentGutterButton } from './CommentGutterButton';
+import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
+import type { DiffFile, LineRange, ReviewComment } from '@self-review/types';
+import { useFileReview } from '../../context/ReviewContext';
 import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
@@ -27,20 +29,17 @@ import type { RenderedTextMode } from '../../utils/file-type-utils';
 // Tracks whether we're inside a block that already has a gutter wrapper,
 // so nested elements (li inside ul, p inside blockquote) don't duplicate it.
 
+const NO_COMMENTS: ReviewComment[] = [];
 const GutterNestingContext = createContext(false);
 
 // Per-render block state goes through this context; component types live at module scope so a
 // parent re-render never remounts the comment composer under a block.
 
 interface RenderedBlockContextValue {
-  file: DiffFile;
-  filePath: string;
   commentRange: LineRange | null;
   /** Maps a 1-based line of the rendered source text to its added line number. */
   resolveLine: (sourceLine: number) => number;
   onGutterMouseDown: (startLine: number, endLine: number) => void;
-  onCancelComment: () => void;
-  onCommentSaved: () => void;
 }
 
 const RenderedBlockContext = createContext<RenderedBlockContextValue | null>(null);
@@ -211,9 +210,8 @@ function BlockWrapper({
   className,
   tagProps,
 }: BlockWrapperProps) {
-  const { getCommentsForFile } = useReview();
-  const { file, filePath, commentRange, onGutterMouseDown, onCancelComment, onCommentSaved } =
-    useRenderedBlockContext();
+  const { t, number } = useLocalization();
+  const { commentRange, onGutterMouseDown } = useRenderedBlockContext();
   const isNested = useContext(GutterNestingContext);
 
   // If nested inside another gutter-wrapped block, or no position data,
@@ -226,20 +224,8 @@ function BlockWrapper({
     );
   }
 
-  const rangeLabel = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
-
-  // Find comments overlapping this block's range
-  const blockComments = getCommentsForFile(filePath).filter(c => {
-    if (!c.lineRange || c.lineRange.side !== 'new') return false;
-    return c.lineRange.start <= endLine && c.lineRange.end >= startLine;
-  });
-
-  // Show comment input below this block if the comment range ends within this block
-  const showCommentInput =
-    commentRange &&
-    commentRange.side === 'new' &&
-    commentRange.end >= startLine &&
-    commentRange.end <= endLine;
+  const rangeLabel =
+    startLine === endLine ? `${number(startLine)}` : `${number(startLine)}-${number(endLine)}`;
 
   // Void elements (hr, img, etc.) can't have children
   const isVoid = HTML_VOID_TAGS.has(Tag as string);
@@ -253,7 +239,7 @@ function BlockWrapper({
 
   const gutter = (
     <GutterEl
-      className='rendered-gutter absolute left-0 top-0 w-16 text-right pr-2 select-none cursor-pointer text-[11px] text-muted-foreground/70'
+      className='rendered-gutter absolute start-0 top-0 w-16 text-end pe-2 select-none cursor-pointer text-[11px] text-muted-foreground/70'
       style={{ lineHeight: 'inherit' }}
       onMouseDown={e => {
         e.preventDefault();
@@ -261,52 +247,28 @@ function BlockWrapper({
         onGutterMouseDown(startLine, endLine);
       }}
     >
-      <button
-        className='absolute left-0 top-0 h-[1lh] flex items-center justify-center w-7 opacity-0 group-hover/rendered-block:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
-        tabIndex={-1}
-      >
-        <MessageSquarePlus className='h-4 w-4' />
-      </button>
+      <CommentGutterButton
+        className='absolute start-0 top-0 h-[1lh] opacity-0 group-hover/rendered-block:opacity-100'
+        label={
+          startLine === endLine
+            ? t('Comment on line {line}', { line: startLine })
+            : t('Comment on lines {start} to {end}', { start: startLine, end: endLine })
+        }
+        onActivate={() => onGutterMouseDown(startLine, endLine)}
+      />
       <span className='pointer-events-none'>{rangeLabel}</span>
     </GutterEl>
   );
 
-  const blockClassName = [className, 'rendered-block group/rendered-block relative']
+  const selected =
+    commentRange?.side === 'new' && commentRange.start <= endLine && commentRange.end >= startLine;
+  const blockClassName = [
+    className,
+    'rendered-block group/rendered-block relative',
+    selected ? 'bg-blue-100 dark:bg-blue-900/30' : '',
+  ]
     .filter(Boolean)
     .join(' ');
-
-  const commentElements = (
-    <>
-      {/* Existing comments for this block */}
-      {blockComments.map(comment => {
-        const visibleCode = comment.lineRange
-          ? extractOriginalCode(file, comment.lineRange)
-          : undefined;
-        return (
-          <div key={comment.id} className='border-y border-border bg-muted/50 px-4 py-3 ml-16'>
-            <CommentDisplay
-              comment={comment}
-              originalCode={visibleCode}
-              anchorFullyVisible={comment.lineRange === null || visibleCode !== undefined}
-            />
-          </div>
-        );
-      })}
-
-      {/* Comment input */}
-      {showCommentInput && (
-        <div className='border-y border-border bg-muted/50 px-4 py-3 ml-16'>
-          <CommentInput
-            filePath={filePath}
-            lineRange={commentRange}
-            onCancel={onCancelComment}
-            onSubmit={onCommentSaved}
-            originalCode={extractOriginalCode(file, commentRange) || undefined}
-          />
-        </div>
-      )}
-    </>
-  );
 
   if (isInlineSafe) {
     // The semantic Tag is the positioned container; gutter lives inside it.
@@ -316,13 +278,12 @@ function BlockWrapper({
           className={blockClassName}
           data-source-start-line={startLine}
           data-source-end-line={endLine}
-          style={{ paddingLeft: '4rem' }}
+          style={{ paddingInlineStart: '4rem' }}
           {...tagProps}
         >
           {gutter}
           {children}
         </Tag>
-        {commentElements}
       </GutterNestingContext.Provider>
     );
   }
@@ -335,7 +296,7 @@ function BlockWrapper({
         className='rendered-block group/rendered-block relative'
         data-source-start-line={startLine}
         data-source-end-line={endLine}
-        style={{ paddingLeft: '4rem' }}
+        style={{ paddingInlineStart: '4rem' }}
       >
         {gutter}
         {isVoid ? (
@@ -346,7 +307,6 @@ function BlockWrapper({
           </Tag>
         )}
       </div>
-      {commentElements}
     </GutterNestingContext.Provider>
   );
 }
@@ -430,6 +390,7 @@ export default function RenderedMarkdownView({
   onCommentSaved,
   onGutterMouseDown,
 }: RenderedMarkdownViewProps) {
+  const { t } = useLocalization();
   const addedLines = useMemo(() => extractAddedFileLines(file), [file]);
   const content = useMemo(() => extractFileContent(addedLines), [addedLines]);
   const frontMatter = useMemo(
@@ -439,6 +400,12 @@ export default function RenderedMarkdownView({
   const markdownBody = frontMatter ? frontMatter.body : content;
   const lineOffset = frontMatter ? frontMatter.lineOffset : 0;
   const filePath = file.newPath || file.oldPath;
+  const fileComments = useFileReview(filePath)?.comments ?? NO_COMMENTS;
+  const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
+  const comments = useMemo(
+    () => fileComments.filter(comment => comment.lineRange !== null && hasAnchor(comment)),
+    [fileComments, hasAnchor]
+  );
 
   const resolveLine = useMemo(
     () => (sourceLine: number) => getAddedLineNumber(sourceLine + lineOffset, addedLines),
@@ -446,16 +413,8 @@ export default function RenderedMarkdownView({
   );
 
   const blockContext = useMemo<RenderedBlockContextValue>(
-    () => ({
-      file,
-      filePath,
-      commentRange,
-      resolveLine,
-      onGutterMouseDown,
-      onCancelComment,
-      onCommentSaved,
-    }),
-    [file, filePath, commentRange, resolveLine, onGutterMouseDown, onCancelComment, onCommentSaved]
+    () => ({ commentRange, resolveLine, onGutterMouseDown }),
+    [commentRange, resolveLine, onGutterMouseDown]
   );
 
   return (
@@ -478,6 +437,44 @@ export default function RenderedMarkdownView({
           <HtmlRenderedContent content={content} />
         )}
       </div>
+      {(comments.length > 0 || commentRange) && (
+        <section
+          aria-label={t('Comments on source lines')}
+          className='space-y-3 border-t border-border bg-muted/30 p-4'
+        >
+          {comments.map(comment => {
+            const visibleCode = comment.lineRange
+              ? extractOriginalCode(file, comment.lineRange)
+              : undefined;
+            return (
+              <div key={comment.id}>
+                <p className='mb-1 text-xs text-muted-foreground'>
+                  {comment.lineRange?.start === comment.lineRange?.end
+                    ? t('Line {line}', { line: comment.lineRange!.start })
+                    : t('Lines {start} to {end}', {
+                        start: comment.lineRange!.start,
+                        end: comment.lineRange!.end,
+                      })}
+                </p>
+                <CommentDisplay
+                  comment={comment}
+                  originalCode={visibleCode}
+                  anchorFullyVisible={visibleCode !== undefined}
+                />
+              </div>
+            );
+          })}
+          {commentRange && (
+            <CommentInput
+              filePath={filePath}
+              lineRange={commentRange}
+              onCancel={onCancelComment}
+              onSubmit={onCommentSaved}
+              originalCode={extractOriginalCode(file, commentRange)}
+            />
+          )}
+        </section>
+      )}
     </RenderedBlockContext.Provider>
   );
 }

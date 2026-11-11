@@ -17,6 +17,12 @@ vi.mock('../../context/ReviewContext', () => ({
     diagnostics: mockDiagnostics,
     isLargePayload: mockReview.isLargePayload,
   }),
+  useDiffReview: () => ({
+    diffFiles: mockDiffFiles,
+    diffSource: mockDiffSource,
+    diagnostics: mockDiagnostics,
+    isLargePayload: mockReview.isLargePayload,
+  }),
 }));
 
 vi.mock('../../context/ConfigContext', () => ({
@@ -95,6 +101,17 @@ describe('DiffViewer', () => {
       sections.forEach(section => {
         expect(section.getAttribute('data-expanded')).toBe('false');
       });
+    });
+
+    it('treats inherited object names as ordinary paths in a large review', () => {
+      mockDiffFiles.length = 0;
+      mockDiffFiles.push(makeDiffFile('__proto__'), makeDiffFile('constructor'));
+      mockReview.isLargePayload = true;
+      const { getAllByTestId } = render(<DiffViewer />);
+      expect(
+        getAllByTestId(/^file-section-/).map(section => section.getAttribute('data-expanded'))
+      ).toEqual(['false', 'false']);
+      mockReview.isLargePayload = false;
     });
 
     it('initializes files as collapsed in large-payload mode whatever the file count', () => {

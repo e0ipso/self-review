@@ -1,6 +1,7 @@
+import { useLocalization } from '../localization/LocalizationContext';
 import React, { useState, useMemo } from 'react';
 import { useConfig } from '../context/ConfigContext';
-import { useReview } from '../context/ReviewContext';
+import { useDiffReview } from '../context/ReviewContext';
 import { useGuide } from '../context/GuideContext';
 import { useAdapter } from '../context/ReviewAdapterContext';
 import { Button } from './ui/button';
@@ -32,8 +33,9 @@ export interface ToolbarProps {
 }
 
 export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
-  const { config, updateConfig, outputPathInfo } = useConfig();
-  const { diffFiles, diffSource } = useReview();
+  const { t, number } = useLocalization();
+  const { config, updateConfig, outputPathInfo, portalContainer } = useConfig();
+  const { diffFiles, diffSource } = useDiffReview();
   const { guide, mode: guideMode, setMode: setGuideMode } = useGuide();
   const adapter = useAdapter();
   const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
@@ -58,7 +60,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
     const event = new CustomEvent('toggle-all-comments', {
       detail: { collapsed: newCollapsed },
     });
-    document.dispatchEvent(event);
+    portalContainer?.dispatchEvent(event);
   };
 
   const handleThemeChange = (theme: 'light' | 'dark' | 'system') => {
@@ -88,14 +90,14 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                     <FilePlus2 className='h-3.5 w-3.5' />
                   )}
                   <span className='text-xs'>
-                    {config.showUntracked ? 'Hide' : 'Show'} New Files
+                    {t(config.showUntracked ? 'Hide New Files' : 'Show New Files')}
                   </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
                 {config.showUntracked
-                  ? 'Hide new files not yet in git'
-                  : 'Show new files not yet in git'}
+                  ? t('Hide new files not yet in git')
+                  : t('Show new files not yet in git')}
               </TooltipContent>
             </Tooltip>
 
@@ -120,12 +122,12 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                 <MessageSquareOff className='h-3.5 w-3.5' />
               )}
               <span className='text-xs'>
-                {allCommentsCollapsed ? 'Expand' : 'Collapse'} Comments
+                {t(allCommentsCollapsed ? 'Expand Comments' : 'Collapse Comments')}
               </span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {allCommentsCollapsed ? 'Expand all comments' : 'Collapse all comments'}
+            {t(allCommentsCollapsed ? 'Expand all comments' : 'Collapse all comments')}
           </TooltipContent>
         </Tooltip>
 
@@ -152,10 +154,10 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                     className='h-8 px-2.5 gap-1.5'
                   >
                     <Route className='h-3.5 w-3.5' />
-                    <span className='text-xs'>Guided</span>
+                    <span className='text-xs'>{t('Guided')}</span>
                   </ToggleGroupItem>
                 </TooltipTrigger>
-                <TooltipContent>Group files by the review walkthrough</TooltipContent>
+                <TooltipContent>{t('Group files by the review walkthrough')}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -165,10 +167,10 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                     className='h-8 px-2.5 gap-1.5'
                   >
                     <List className='h-3.5 w-3.5' />
-                    <span className='text-xs'>Flat</span>
+                    <span className='text-xs'>{t('Flat')}</span>
                   </ToggleGroupItem>
                 </TooltipTrigger>
-                <TooltipContent>Flat file list (diff order)</TooltipContent>
+                <TooltipContent>{t('Flat file list (diff order)')}</TooltipContent>
               </Tooltip>
             </ToggleGroup>
           </>
@@ -190,20 +192,18 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
           {diffSource.type === 'git'
             ? `git diff${diffSource.gitDiffArgs ? ` ${diffSource.gitDiffArgs}` : ''}`
             : diffSource.type === 'directory'
-              ? `Directory: ${diffSource.sourcePath}`
+              ? t('Directory: {path}', { path: diffSource.sourcePath })
               : diffSource.type === 'file'
-                ? `File: ${diffSource.sourcePath.split('/').pop()}`
+                ? t('File: {path}', { path: diffSource.sourcePath.split('/').pop() ?? '' })
                 : ''}
         </span>
         <Separator orientation='vertical' className='h-3.5' />
-        <span>
-          {stats.files} {stats.files === 1 ? 'file' : 'files'} changed
-        </span>
+        <span>{t('files changed', { count: stats.files })}</span>
         {stats.additions > 0 && (
-          <span className='text-green-600 dark:text-green-400'>+{stats.additions}</span>
+          <span className='text-green-600 dark:text-green-400'>+{number(stats.additions)}</span>
         )}
         {stats.deletions > 0 && (
-          <span className='text-red-600 dark:text-red-400'>-{stats.deletions}</span>
+          <span className='text-red-600 dark:text-red-400'>-{number(stats.deletions)}</span>
         )}
       </div>
 
@@ -222,11 +222,11 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
               ) : (
                 <MoveHorizontal className='h-3.5 w-3.5' />
               )}
-              <span className='text-xs'>{config.wordWrap ? 'Wrap Lines' : 'No Wrap'}</span>
+              <span className='text-xs'>{t(config.wordWrap ? 'Wrap Lines' : 'No Wrap')}</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {config.wordWrap ? 'Wrap long lines' : 'Scroll long lines horizontally'}
+            {t(config.wordWrap ? 'Wrap long lines' : 'Scroll long lines horizontally')}
           </TooltipContent>
         </Tooltip>
 
@@ -247,19 +247,19 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                 className='h-8 w-8 p-0'
               >
                 <Sun className='h-3.5 w-3.5' />
-                <span className='sr-only'>Light theme</span>
+                <span className='sr-only'>{t('Light theme')}</span>
               </ToggleGroupItem>
             </TooltipTrigger>
-            <TooltipContent>Light theme</TooltipContent>
+            <TooltipContent>{t('Light theme')}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <ToggleGroupItem value='dark' data-testid='theme-option-dark' className='h-8 w-8 p-0'>
                 <Moon className='h-3.5 w-3.5' />
-                <span className='sr-only'>Dark theme</span>
+                <span className='sr-only'>{t('Dark theme')}</span>
               </ToggleGroupItem>
             </TooltipTrigger>
-            <TooltipContent>Dark theme</TooltipContent>
+            <TooltipContent>{t('Dark theme')}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -269,10 +269,10 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                 className='h-8 w-8 p-0'
               >
                 <Monitor className='h-3.5 w-3.5' />
-                <span className='sr-only'>System theme</span>
+                <span className='sr-only'>{t('System theme')}</span>
               </ToggleGroupItem>
             </TooltipTrigger>
-            <TooltipContent>System theme</TooltipContent>
+            <TooltipContent>{t('System theme')}</TooltipContent>
           </Tooltip>
         </ToggleGroup>
 
@@ -294,10 +294,10 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                     data-hint-action='finish-review'
                     onClick={() => onFinishReview()}
                     className='gap-1.5 h-8 px-3'
-                    disabled={!outputPathInfo.outputPathWritable}
+                    disabled={!outputPathInfo.outputPathWritable || diffSource.type === 'loading'}
                   >
                     <CheckCircle2 className='h-3.5 w-3.5' />
-                    <span className='text-xs font-medium'>Finish Review</span>
+                    <span className='text-xs font-medium'>{t('Finish Review')}</span>
                   </Button>
                 </span>
               </TooltipTrigger>
@@ -305,8 +305,10 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
                 <TooltipContent>
                   {/* The file tree only shows "Change..." when the host can change the path. */}
                   {adapter?.changeOutputPath
-                    ? "Output path is not writable. Click 'Change...' in the file tree to pick a save location."
-                    : 'Output path is not writable.'}
+                    ? t(
+                        "Output path is not writable. Click 'Change...' in the file tree to pick a save location."
+                      )
+                    : t('Output path is not writable.')}
                 </TooltipContent>
               )}
             </Tooltip>

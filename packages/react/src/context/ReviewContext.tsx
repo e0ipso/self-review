@@ -1,3 +1,4 @@
+import { useLocalization } from '../localization/LocalizationContext';
 import React, {
   createContext,
   useContext,
@@ -209,6 +210,7 @@ function ReviewSessionProvider({
   initialComments,
   adapter,
 }: ReviewProviderProps & { adapter: ReviewAdapter | null }) {
+  const { t } = useLocalization();
   const [store] = useState(() =>
     createReviewSessionStore(createReviewSession(initialFiles, initialSource))
   );
@@ -325,14 +327,18 @@ function ReviewSessionProvider({
         <ReviewContext.Provider value={value}>
           {state.loadError && (
             <div role='alert' className='m-3 rounded border border-destructive p-3 text-sm'>
-              <p>The review could not be loaded. {state.loadError}</p>
-              <Button onClick={() => void retryLoad()}>Retry loading review</Button>
+              <p>{t('The review could not be loaded. {detail}', { detail: state.loadError })}</p>
+              <Button onClick={() => void retryLoad()}>{t('Retry loading review')}</Button>
             </div>
           )}
           {state.resumeError && (
             <div role='alert' className='m-3 rounded border border-destructive p-3 text-sm'>
-              <p>Saved feedback could not be loaded. {state.resumeError}</p>
-              <Button onClick={() => void retryResume()}>Retry loading saved feedback</Button>
+              <p>
+                {t('Saved feedback could not be loaded. {detail}', { detail: state.resumeError })}
+              </p>
+              <Button onClick={() => void retryResume()}>
+                {t('Retry loading saved feedback')}
+              </Button>
             </div>
           )}
           {children}
@@ -347,4 +353,21 @@ export function useOptionalSnapshotKey() {
   const read = () =>
     store ? `${store.getSnapshot().sessionId}:${store.getSnapshot().snapshotId}` : '';
   return useSyncExternalStore(store?.subscribe ?? (() => () => {}), read, read);
+}
+
+/** The diff stream does not subscribe to comment mutations. */
+export function useDiffReview() {
+  const all = useSessionSelection(state => state.allDiffFiles);
+  const { config } = useConfig();
+  const diffFiles = useMemo(
+    () => (config.showUntracked ? all : all.filter(file => !file.isUntracked)),
+    [all, config.showUntracked]
+  );
+  return {
+    diffFiles,
+    diffSource: useReviewSource(),
+    diagnostics: useSessionSelection(state => state.diagnostics),
+    isLargePayload: useSessionSelection(state => state.isLargePayload),
+    sessionId: useReviewSessionId(),
+  };
 }

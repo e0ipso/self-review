@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocalization } from '../../localization/LocalizationContext';
 import Prism from 'prismjs';
 import type { LineRange, Suggestion } from '@self-review/types';
 import SuggestionApplyControl from './SuggestionApplyControl';
@@ -33,6 +34,7 @@ export default function SuggestionBlock({
   filePath,
   lineRange = null,
 }: SuggestionBlockProps) {
+  const { t } = useLocalization();
   const highlightCode = (code: string, lang: string): string => {
     try {
       const grammar = Prism.languages[lang] || Prism.languages.plaintext;
@@ -51,7 +53,7 @@ export default function SuggestionBlock({
       data-testid='suggestion-block'
     >
       <div className='flex items-center h-7 px-3 bg-muted text-[11px] font-semibold text-muted-foreground uppercase tracking-wider'>
-        Suggested change
+        {t('Suggested change')}
       </div>
       <div>
         {originalLines.map((line, idx) => (

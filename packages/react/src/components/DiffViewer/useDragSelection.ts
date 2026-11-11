@@ -23,7 +23,7 @@ interface UseDragSelectionParams {
 
 interface UseDragSelectionResult {
   dragState: DragState;
-  handleDragStart: (lineNumber: number, side: 'old' | 'new') => void;
+  handleDragStart: (lineNumber: number, side: 'old' | 'new', keyboard?: boolean) => void;
 }
 
 export function useDragSelection({
@@ -114,7 +114,14 @@ export function useDragSelection({
   const onCommentRangeRef = useRef(onCommentRange);
   onCommentRangeRef.current = onCommentRange;
 
-  const handleDragStart = (lineNumber: number, side: 'old' | 'new') => {
+  const handleDragStart = (lineNumber: number, side: 'old' | 'new', keyboard = false) => {
+    if (keyboard) {
+      const row =
+        effectiveViewMode === 'unified' ? file.hunks.flatMap(hunk => hunk.lines)[lineNumber] : null;
+      const selected = row ? (side === 'old' ? row.oldLineNumber : row.newLineNumber) : lineNumber;
+      if (selected != null) onCommentRange(selected, selected, side);
+      return;
+    }
     const state = { startLine: lineNumber, currentLine: lineNumber, side };
     dragStateRef.current = state;
     setDragState(state);
@@ -132,6 +139,7 @@ export function useDragSelection({
       // Fast path: elementFromPoint
       const target = document.elementFromPoint(e.clientX, e.clientY);
       lineEl = target?.closest('[data-line-number]') as HTMLElement | null;
+      if (lineEl && !sectionRef.current?.contains(lineEl)) return;
 
       // Fallback: search within the file section for element at coordinates
       if (!lineEl && sectionRef.current) {
@@ -243,8 +251,9 @@ export function useDragSelection({
       if (dragStateRef.current) return;
       onCommentRangeRef.current(lineNumber, lineNumber, side);
     };
-    document.addEventListener('trigger-line-comment', handler);
-    return () => document.removeEventListener('trigger-line-comment', handler);
+    const section = sectionRef.current;
+    section?.addEventListener('trigger-line-comment', handler);
+    return () => section?.removeEventListener('trigger-line-comment', handler);
   }, [filePath]);
 
   return { dragState, handleDragStart };

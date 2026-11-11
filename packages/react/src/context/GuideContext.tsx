@@ -20,7 +20,7 @@ export interface GuideContextValue {
   mode: GuideMode;
   setMode: (mode: GuideMode) => void;
   /** Feed a guide payload into the context (host subscription or fixture). */
-  setGuide: (guide: GuideLoadPayload) => void;
+  setGuide: (guide: GuideLoadPayload | null) => void;
   /** Guide-authored one-liner for a file; undefined for implicit-group files. */
   getFileDescription: (filePath: string) => string | undefined;
   /**

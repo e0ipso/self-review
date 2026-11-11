@@ -74,3 +74,16 @@ export { default as ImportDiagnosticsBanner } from './components/ImportDiagnosti
 // Hooks
 export { useReviewState } from './hooks/useReviewState';
 export { useDiffNavigation } from './hooks/useDiffNavigation';
+
+export {
+  LocalizationProvider,
+  useLocalization,
+  createLocalization,
+} from './localization/LocalizationContext';
+export type {
+  LocalizationOptions,
+  LocalizedMessage,
+  MessageKey,
+  MessageValues,
+} from './localization/LocalizationContext';
+export { useReviewCommands, useFileReview } from './context/ReviewContext';

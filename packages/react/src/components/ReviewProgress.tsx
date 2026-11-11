@@ -1,16 +1,20 @@
+import { useLocalization } from '../localization/LocalizationContext';
 import React, { useMemo } from 'react';
 import { useReview } from '../context/ReviewContext';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { Eye, MessageSquare } from 'lucide-react';
 
 export default function ReviewProgress() {
+  const { t, number } = useLocalization();
   const { files, diffFiles } = useReview();
 
   const { viewedCount, totalFiles, commentCount, filesWithComments } = useMemo(() => {
-    const viewed = files.filter(f => f.viewed).length;
+    const paths = new Set(diffFiles.map(file => file.newPath || file.oldPath));
+    const visible = files.filter(file => paths.has(file.path));
+    const viewed = visible.filter(f => f.viewed).length;
     const total = diffFiles.length;
-    const comments = files.reduce((sum, f) => sum + f.comments.length, 0);
-    const withComments = files.filter(f => f.comments.length > 0).length;
+    const comments = visible.reduce((sum, f) => sum + f.comments.length, 0);
+    const withComments = visible.filter(f => f.comments.length > 0).length;
     return {
       viewedCount: viewed,
       totalFiles: total,
@@ -33,9 +37,16 @@ export default function ReviewProgress() {
           >
             <Eye className='h-3 w-3' />
             <span className='tabular-nums'>
-              {viewedCount}/{totalFiles}
+              {number(viewedCount)}/{number(totalFiles)}
             </span>
-            <div className='w-16 h-1.5 rounded-full bg-muted overflow-hidden'>
+            <div
+              role='progressbar'
+              aria-label={t('Review progress')}
+              aria-valuemin={0}
+              aria-valuemax={totalFiles}
+              aria-valuenow={viewedCount}
+              className='w-16 h-1.5 rounded-full bg-muted overflow-hidden'
+            >
               <div
                 className='h-full rounded-full bg-green-600 dark:bg-green-500 transition-all duration-300'
                 style={{ width: `${percentage}%` }}
@@ -44,7 +55,7 @@ export default function ReviewProgress() {
           </div>
         </TooltipTrigger>
         <TooltipContent>
-          {viewedCount} of {totalFiles} files viewed ({percentage}%)
+          {t('files viewed', { viewed: viewedCount, total: totalFiles, percent: percentage })}
         </TooltipContent>
       </Tooltip>
       {commentCount > 0 && (
@@ -55,12 +66,11 @@ export default function ReviewProgress() {
               data-testid='review-stats'
             >
               <MessageSquare className='h-3 w-3' />
-              <span className='tabular-nums'>{commentCount}</span>
+              <span className='tabular-nums'>{number(commentCount)}</span>
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            {commentCount} {commentCount === 1 ? 'comment' : 'comments'} across {filesWithComments}{' '}
-            {filesWithComments === 1 ? 'file' : 'files'}
+            {t('comments across files', { count: commentCount, files: filesWithComments })}
           </TooltipContent>
         </Tooltip>
       )}

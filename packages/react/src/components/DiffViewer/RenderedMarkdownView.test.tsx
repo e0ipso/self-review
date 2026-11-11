@@ -10,6 +10,7 @@ const mockState = vi.hoisted(() => ({
 }));
 
 vi.mock('../../context/ReviewContext', () => ({
+  useFileReview: () => ({ comments: mockState.comments }),
   useReview: () => ({
     getCommentsForFile: vi.fn(() => mockState.comments),
   }),
@@ -71,6 +72,61 @@ function renderView(file: DiffFile, contentMode: RenderedTextMode, onGutterMouse
 describe('RenderedMarkdownView', () => {
   beforeEach(() => {
     mockState.comments = [];
+  });
+
+  it.each([
+    {
+      path: 'a.md',
+      mode: 'markdown' as const,
+      lines: ['---', 'title: Guide', '---', '', 'paragraph'],
+      start: 2,
+      end: 2,
+    },
+    { path: 'a.md', mode: 'markdown' as const, lines: ['first', '', 'second'], start: 2, end: 2 },
+    {
+      path: 'a.html',
+      mode: 'html' as const,
+      lines: ['<script>hidden()</script>', '<p>visible</p>'],
+      start: 1,
+      end: 1,
+    },
+    { path: 'a.md', mode: 'markdown' as const, lines: ['first', '', 'second'], start: 1, end: 3 },
+  ])(
+    'shows one thread for every source range in $path at $start-$end',
+    ({ path, mode, lines, start, end }) => {
+      mockState.comments = [
+        {
+          id: 'source',
+          filePath: path,
+          lineRange: { start, end, side: 'new' },
+          body: 'source thread',
+          category: 'bug',
+          suggestion: null,
+        },
+      ];
+      const { container } = renderView(makeAddedFile(path, lines), mode);
+      expect(screen.getAllByTestId('comment-display')).toHaveLength(1);
+      expect(container.querySelector('script')).toBeNull();
+    }
+  );
+  it('owns one composer when HTML blocks share a source line', () => {
+    render(
+      <RenderedMarkdownView
+        file={makeAddedFile('a.html', ['<p>one</p><p>two</p>'])}
+        contentMode='html'
+        commentRange={{ start: 1, end: 1, side: 'new' }}
+        onCancelComment={vi.fn()}
+        onCommentSaved={vi.fn()}
+        onGutterMouseDown={vi.fn()}
+      />
+    );
+    expect(screen.getAllByTestId('comment-input')).toHaveLength(1);
+  });
+  it('opens a rendered comment with Enter on a named gutter button', () => {
+    const callback = vi.fn();
+    renderView(makeAddedFile('a.md', ['hello']), 'markdown', callback);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Comment on line 1' }), { key: 'Enter' });
+    expect(callback).toHaveBeenCalledExactlyOnceWith(1, 1);
   });
 
   it('keeps Markdown front matter, emoji, and source-line mapping', () => {

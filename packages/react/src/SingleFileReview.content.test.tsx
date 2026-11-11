@@ -48,7 +48,7 @@ describe('single file content ownership', () => {
       <SingleFileReview file={file('replacement')} source={source} adapter={adapter} />
     );
     expect(await screen.findByText('replacement')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Show 2 hidden lines' }));
+    fireEvent.click(screen.getByText('Show 2 hidden lines'));
     await waitFor(() => expect(screen.getByText('expanded result')).toBeTruthy());
   });
 });

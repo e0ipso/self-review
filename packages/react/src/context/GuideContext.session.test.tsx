@@ -57,6 +57,11 @@ describe('guide session ownership', () => {
     expect(screen.getByRole('button').textContent).toBe('A only:flat');
     act(() => push(source('/b')));
     expect(screen.getByRole('button').textContent).toBe('no guide:guided');
+    act(() => {
+      push(source('/c'));
+      pushGuide({ overview: 'C guide', groups: [] });
+    });
+    expect(screen.getByRole('button').textContent).toBe('C guide:guided');
   });
   it('retains a guide delivered before the first diff, but clears it for a new adapter', async () => {
     let resolve!: (p: DiffLoadPayload) => void;

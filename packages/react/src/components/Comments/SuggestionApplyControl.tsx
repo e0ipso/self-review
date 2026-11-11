@@ -1,3 +1,4 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useLayoutEffect, useRef } from 'react';
 import type { LineRange, Suggestion, SuggestionApplyOutcome } from '@self-review/types';
 import { Check, CircleAlert, FolderOpen, Loader2 } from 'lucide-react';
@@ -47,6 +48,7 @@ function OwnedSuggestionApplyControl({
   lineRange,
   suggestion,
 }: SuggestionApplyControlProps) {
+  const { t } = useLocalization();
   const adapter = useAdapter();
   const review = useOptionalReview();
   const applySuggestion = adapter?.applySuggestion;
@@ -77,7 +79,9 @@ function OwnedSuggestionApplyControl({
         data-testid='suggestion-apply-unreviewed'
       >
         <CircleAlert className='h-3 w-3 flex-shrink-0' />
-        <span>This file is not in the reviewed diff, so the suggestion cannot be applied.</span>
+        <span>
+          {t('This file is not in the reviewed diff, so the suggestion cannot be applied.')}
+        </span>
       </div>
     );
   }
@@ -106,7 +110,7 @@ function OwnedSuggestionApplyControl({
         status: 'refused',
         filePath,
         reason: 'host-unavailable',
-        detail: 'The apply request could not be completed.',
+        detail: t('The apply request could not be completed.'),
       });
     }
   };
@@ -149,7 +153,7 @@ function OwnedSuggestionApplyControl({
         status: 'refused',
         filePath,
         reason: 'host-unavailable',
-        detail: 'The destination could not be chosen.',
+        detail: t('The destination could not be chosen.'),
       });
     } finally {
       pending.current = false;
@@ -181,18 +185,19 @@ function OwnedSuggestionApplyControl({
           )}
           {outcome.status === 'applied' ? (
             <span>
-              Applied to {outcome.filePath}. Replaced {outcome.replacedLines} line
-              {outcome.replacedLines === 1 ? '' : 's'}.
+              {t('Applied suggestion', { path: outcome.filePath, count: outcome.replacedLines })}
             </span>
           ) : (
-            <span>Not applied. {outcome.detail}</span>
+            <span>{t('Not applied. {detail}', { detail: outcome.detail })}</span>
           )}
         </span>
       ) : (
         <span className='text-muted-foreground'>
           {missingDestination
-            ? 'This pull request was cloned into a temporary directory. Choose where to write it.'
-            : 'Write the proposal into the working file.'}
+            ? t(
+                'This pull request was cloned into a temporary directory. Choose where to write it.'
+              )
+            : t('Write the proposal into the working file.')}
         </span>
       )}
       {!applied && (
@@ -206,7 +211,7 @@ function OwnedSuggestionApplyControl({
         >
           {isApplying && <Loader2 className='h-3 w-3 animate-spin' />}
           {!isApplying && askFirst && <FolderOpen className='h-3 w-3' />}
-          {isApplying ? 'Applying…' : askFirst ? 'Choose destination…' : 'Apply'}
+          {t(isApplying ? 'Applying…' : askFirst ? 'Choose destination…' : 'Apply')}
         </Button>
       )}
     </div>
