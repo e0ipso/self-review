@@ -306,7 +306,9 @@ describe('GET /api/image', () => {
     expect(body.dataUri).toBe(
       `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64')}`
     );
-    expect(vi.mocked(operations.loadImage)).toHaveBeenCalledWith('img.png');
+    expect(vi.mocked(operations.loadImage)).toHaveBeenCalledWith('img.png', {
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('rejects a traversal path with 400 before reaching core', async () => {
@@ -324,7 +326,9 @@ describe('GET /api/image', () => {
     expect((await res.json()).dataUri).toBe(
       `data:image/png;base64,${Buffer.from([0x4c, 0x49, 0x54]).toString('base64')}`
     );
-    expect(vi.mocked(operations.loadImage)).toHaveBeenCalledWith(LITERAL_NAME);
+    expect(vi.mocked(operations.loadImage)).toHaveBeenCalledWith(LITERAL_NAME, {
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('rejects a path the review does not contain with 400 before reaching core', async () => {
@@ -341,7 +345,8 @@ describe('GET /api/attachment', () => {
     expect(res.headers.get('content-type')).toBe('application/octet-stream');
     expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('attachment-bytes');
     expect(vi.mocked(operations.readAttachment)).toHaveBeenCalledWith(
-      '.self-review-assets/attach.bin'
+      '.self-review-assets/attach.bin',
+      { signal: expect.any(AbortSignal) }
     );
   });
 
@@ -437,10 +442,13 @@ describe('POST /api/expand-context', () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(expanded);
-    expect(vi.mocked(operations.expandContext)).toHaveBeenCalledWith({
-      filePath: 'src/index.ts',
-      contextLines: 10,
-    });
+    expect(vi.mocked(operations.expandContext)).toHaveBeenCalledWith(
+      {
+        filePath: 'src/index.ts',
+        contextLines: 10,
+      },
+      { signal: expect.any(AbortSignal) }
+    );
   });
 
   it('rejects a non-integer contextLines with 400 before reaching core', async () => {
@@ -738,8 +746,6 @@ describe('POST /api/apply-suggestion', () => {
     ['unknown field', { ...request, destination: '/tmp' }],
     ['missing filePath', { ...request, filePath: '' }],
     ['bad side', { ...request, lineRange: { side: 'sideways', start: 1, end: 1 } }],
-    ['zero line', { ...request, lineRange: { side: 'new', start: 0, end: 1 } }],
-    ['inverted range', { ...request, lineRange: { side: 'new', start: 4, end: 2 } }],
     ['unknown lineRange field', { ...request, lineRange: { side: 'new', start: 1, end: 1, x: 1 } }],
     ['non-string code', { ...request, suggestion: { originalCode: 1, proposedCode: 'x' } }],
     ['unknown suggestion field', { ...request, suggestion: { ...request.suggestion, z: 1 } }],
@@ -1121,4 +1127,25 @@ describe('session capability', () => {
       await new Promise<void>(resolve => proxy.close(() => resolve()));
     }
   });
+});
+
+it.each([
+  { side: 'new', start: 0, end: 1 },
+  { side: 'new', start: 4, end: 2 },
+  { side: 'new', start: 1.5, end: 2 },
+])('returns the engine refusal for an unusable numeric Apply range: %j', async lineRange => {
+  vi.mocked(operations.applySuggestionForSession).mockImplementation(request => ({
+    status: 'refused',
+    filePath: request.filePath,
+    reason: 'invalid-anchor',
+    detail: 'invalid range',
+  }));
+  const response = await postJson('/api/apply-suggestion', {
+    filePath: 'src/index.ts',
+    lineRange,
+    suggestion: { originalCode: 'a', proposedCode: 'b' },
+  });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ status: 'refused', reason: 'invalid-anchor' });
+  expect(operations.applySuggestionForSession).toHaveBeenCalledOnce();
 });

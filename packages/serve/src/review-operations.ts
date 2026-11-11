@@ -9,7 +9,13 @@ import type {
   ExpandContextRequest,
   SuggestionApplyRequest,
 } from '@self-review/core';
+import { applyCompatibleSuggestion } from './apply-compatibility';
 import type { SubmissionOperations } from './review-submission';
+
+export interface OperationOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
 
 /** Bound to one session; results and errors retain the core operation's contract. */
 export interface ReviewOperations extends SubmissionOperations {
@@ -18,12 +24,21 @@ export interface ReviewOperations extends SubmissionOperations {
   getConfigLoad: () => ReturnType<typeof core.getConfigLoad>;
   getResumeLoad: () => ReturnType<typeof core.getResumeLoad>;
   getFileHunks: (path: string) => ReturnType<typeof core.getFileHunks>;
-  loadImage: (path: string) => ReturnType<typeof core.loadImage>;
-  readAttachment: (path: string) => ReturnType<typeof core.readAttachment>;
-  expandContext: (request: ExpandContextRequest) => ReturnType<typeof core.expandContext>;
+  loadImage: (path: string, options?: OperationOptions) => ReturnType<typeof core.loadImage>;
+  readAttachment: (
+    path: string,
+    options?: OperationOptions
+  ) => ReturnType<typeof core.readAttachment>;
+  expandContext: (
+    request: ExpandContextRequest,
+    options?: OperationOptions
+  ) => ReturnType<typeof core.expandContext>;
   applySuggestionForSession: (
-    request: SuggestionApplyRequest
-  ) => ReturnType<typeof core.applySuggestionForSession>;
+    request: SuggestionApplyRequest,
+    options?: OperationOptions
+  ) =>
+    | ReturnType<typeof core.applySuggestionForSession>
+    | Promise<ReturnType<typeof core.applySuggestionForSession>>;
 }
 
 export function createReviewOperations(
@@ -36,10 +51,11 @@ export function createReviewOperations(
     getConfigLoad: () => core.getConfigLoad(session),
     getResumeLoad: () => core.getResumeLoad(session),
     getFileHunks: path => core.getFileHunks(session, path),
-    loadImage: path => core.loadImage(session, path),
-    readAttachment: path => core.readAttachment(session, path),
-    expandContext: request => core.expandContext(session, request),
-    applySuggestionForSession: request => core.applySuggestionForSession(session, request),
+    loadImage: (path, options) => core.loadImage(session, path, options),
+    readAttachment: (path, options) => core.readAttachment(session, path, options),
+    expandContext: (request, options) => core.expandContext(session, request, undefined, options),
+    applySuggestionForSession: (request, options) =>
+      applyCompatibleSuggestion(session, request, options),
     submitReviewState: state => core.submitReviewState(session, state),
     publishReview: (state: ReviewState) =>
       core.publishReview(

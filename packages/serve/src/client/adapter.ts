@@ -6,7 +6,7 @@
 // draw a dead button. `chooseApplyDestination` is absent for a stronger reason:
 // the UI only asks for a destination when the session is a temporary remote
 // clone, and serve mode has no remote mode, so the case cannot arise.
-// `GET /api/diff` is issued once and shared, carrying both the diff and the
+// `GET /api/diff` is shared, with explicit retry after failure, carrying the diff and
 // guide, so there is no push transport. `submitReview` resolving means the review is on disk. The
 // capability token lives only in this closure, never in storage or a URL.
 
@@ -25,11 +25,11 @@ import type {
   ReviewState,
 } from '@self-review/core';
 import {
+  SERVER_BUSY_ERROR,
   MAX_REVIEW_BODY_BYTES,
   MAX_APPLY_BODY_BYTES,
   SUGGESTION_TOO_LARGE_CODE,
   REVIEW_TOO_LARGE_CODE,
-  capabilityAuthorization,
   formatMegabytes,
 } from '../protocol';
 import type { ReviewSubmitAck } from '../protocol';
@@ -46,38 +46,29 @@ export interface ConfigApiResponse {
   outputPathInfo: OutputPathInfo | null;
 }
 
-/** A request the server refused, or one this adapter refused to send. */
-export class ServeRequestError extends Error {
-  /** Null when the request was never sent. */
-  readonly status: number | null;
-  /** The publisher's code, `REVIEW_TOO_LARGE_CODE` for an oversized body, otherwise null. */
-  readonly code: string | null;
-  readonly details: readonly string[];
-
-  constructor(
-    message: string,
-    options: { status: number | null; code?: string | null; details?: readonly string[] }
-  ) {
-    super(message);
-    this.name = 'ServeRequestError';
-    this.status = options.status;
-    this.code = options.code ?? null;
-    this.details = options.details ?? [];
-  }
-}
+import { ServeRequestError } from './request-error';
+import { createServeRequester, type ServeRequester } from './requester';
+export { ServeRequestError } from './request-error';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // Two refusal shapes: the publisher's `{ ok: false, code, message, details }` and the validation routes' `{ error }`.
-async function requestError(response: Response, what: string): Promise<ServeRequestError> {
+async function requestError(
+  response: Response,
+  what: string,
+  mutation = false
+): Promise<ServeRequestError> {
   let body: unknown = null;
   try {
     body = await response.json();
   } catch {
     // A non-JSON error body is no more informative than the status.
   }
+  const unknownOutcome =
+    mutation && response.status >= 500 && !(isRecord(body) && body.error === SERVER_BUSY_ERROR);
+  const uncertainty = unknownOutcome ? { uncertain: true, code: 'outcome-unknown' } : {};
   if (isRecord(body)) {
     if (body.ok === false && typeof body.message === 'string') {
       return new ServeRequestError(body.message, {
@@ -91,57 +82,48 @@ async function requestError(response: Response, what: string): Promise<ServeRequ
     if (typeof body.error === 'string') {
       return new ServeRequestError(`${what} failed (${response.status}): ${body.error}`, {
         status: response.status,
+        ...uncertainty,
       });
     }
   }
   return new ServeRequestError(`${what} failed (${response.status})`, {
     status: response.status,
+    ...uncertainty,
   });
 }
 
-// Everything the adapter sends goes through here, so every request presents the token.
-interface ServeClient {
-  fetch(path: string, init?: RequestInit): Promise<Response>;
-  getJson<T>(path: string): Promise<T>;
-  postJsonText(path: string, text: string): Promise<Response>;
-  postJson<T>(path: string, body: unknown): Promise<T>;
-}
-
-function createClient(capability: string): ServeClient {
-  const authorization = capabilityAuthorization(capability);
-
-  const client: ServeClient = {
-    fetch: (path, init = {}) =>
-      fetch(path, {
-        ...init,
-        headers: { ...(init.headers as Record<string, string> | undefined), authorization },
+// Response consumption stays inside the request deadline, including error bodies.
+function createClient(requester: ServeRequester) {
+  return {
+    getJson: <T>(path: string): Promise<T> =>
+      requester.request(path, {}, async response => {
+        if (!response.ok) throw await requestError(response, `GET ${path}`);
+        return response.json() as Promise<T>;
       }),
-
-    getJson: async <T>(path: string): Promise<T> => {
-      const response = await client.fetch(path);
-      if (!response.ok) {
-        throw await requestError(response, `GET ${path}`);
-      }
-      return (await response.json()) as T;
-    },
-
-    // The server answers 415 on any POST without `content-type: application/json`.
-    postJsonText: (path, text) =>
-      client.fetch(path, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: text,
-      }),
-
-    postJson: async <T>(path: string, body: unknown): Promise<T> => {
-      const response = await client.postJsonText(path, JSON.stringify(body));
-      if (!response.ok) {
-        throw await requestError(response, `POST ${path}`);
-      }
-      return (await response.json()) as T;
-    },
+    postJsonText: <T>(path: string, text: string, read: (response: Response) => Promise<T>) =>
+      requester.request(
+        path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: text,
+        },
+        read
+      ),
+    postJson: <T>(path: string, body: unknown): Promise<T> =>
+      requester.request(
+        path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+        async response => {
+          if (!response.ok) throw await requestError(response, `POST ${path}`);
+          return response.json() as Promise<T>;
+        }
+      ),
   };
-  return client;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,8 +213,11 @@ function withPath(route: string, filePath: string): string {
 }
 
 /** Read the config and its output path info. Fetched before the UI mounts. */
-export async function loadServeConfig(capability: string): Promise<ConfigApiResponse | null> {
-  return createClient(capability).getJson<ConfigApiResponse | null>('/api/config');
+export async function loadServeConfig(
+  capability: string,
+  requester = createServeRequester(capability)
+): Promise<ConfigApiResponse | null> {
+  return createClient(requester).getJson<ConfigApiResponse | null>('/api/config');
 }
 
 /**
@@ -242,46 +227,70 @@ export async function loadServeConfig(capability: string): Promise<ConfigApiResp
  * `GET /api/diff` promise is per-session state; a test gets a fresh one per
  * case, and the page creates exactly one.
  */
-export function createFetchAdapter(capability: string): ReviewAdapter {
-  const { getJson, postJson, postJsonText, fetch: authorizedFetch } = createClient(capability);
-  let diffRequest: Promise<DiffApiResponse> | null = null;
+export interface FetchReviewAdapter extends ReviewAdapter {
+  dispose(): void;
+}
 
-  /** The one `GET /api/diff`, shared by loadDiff and both subscriptions. */
+export function createFetchAdapter(
+  capability: string,
+  requester = createServeRequester(capability)
+): FetchReviewAdapter {
+  const { getJson, postJson, postJsonText } = createClient(requester);
+  let diffRequest: Promise<DiffApiResponse> | null = null;
+  let loaded: DiffApiResponse | null = null;
+  let disposed = false;
+  const subscriptions = new Set<(response: DiffApiResponse) => void>();
+
   function requestDiff(): Promise<DiffApiResponse> {
-    diffRequest ??= getJson<DiffApiResponse | null>('/api/diff').then(response => {
-      if (response === null) {
-        throw new Error('The server has no diff to review');
-      }
-      return response;
-    });
-    return diffRequest;
+    if (diffRequest) return diffRequest;
+    const request = getJson<DiffApiResponse | null>('/api/diff')
+      .then(response => {
+        if (response === null) throw new Error('The server has no diff to review');
+        if (!disposed) {
+          loaded = response;
+          for (const deliver of [...subscriptions]) {
+            if (subscriptions.has(deliver)) deliver(response);
+          }
+        }
+        return response;
+      })
+      .catch(error => {
+        if (diffRequest === request) diffRequest = null;
+        throw error;
+      });
+    diffRequest = request;
+    return request;
   }
 
-  /**
-   * Deliver one half of the shared diff response to a subscriber. Returns
-   * the unsubscribe function the interface requires — the subscribing effect
-   * re-runs whenever the adapter identity changes, and a late delivery to a
-   * torn-down consumer would be a state update after unmount.
-   */
   function subscribe<T>(
     select: (response: DiffApiResponse) => T | null,
     callback: (value: T) => void
   ): () => void {
-    let active = true;
-    void requestDiff()
-      .then(response => {
-        const value = select(response);
-        if (active && value !== null) callback(value);
-      })
-      .catch(() => {
-        // loadDiff surfaces the failure; a subscriber has nothing to add.
+    const deliver = (response: DiffApiResponse) => {
+      const value = select(response);
+      if (value !== null) callback(value);
+    };
+    subscriptions.add(deliver);
+    if (loaded) {
+      const response = loaded;
+      void Promise.resolve().then(() => {
+        if (!disposed && subscriptions.has(deliver)) deliver(response);
       });
+    } else {
+      // loadDiff exposes errors. Keep subscribers for an explicit retry.
+      void requestDiff().catch(() => {});
+    }
     return () => {
-      active = false;
+      subscriptions.delete(deliver);
     };
   }
 
   return {
+    dispose: () => {
+      disposed = true;
+      subscriptions.clear();
+      requester.dispose();
+    },
     loadDiff: async (): Promise<DiffLoadPayload> => (await requestDiff()).diff,
 
     loadResumedReview: async (): Promise<ResumeLoadPayload> =>
@@ -302,10 +311,11 @@ export function createFetchAdapter(capability: string): ReviewAdapter {
           { status, code: SUGGESTION_TOO_LARGE_CODE }
         );
       if (bytes > MAX_APPLY_BODY_BYTES) throw tooLarge(null);
-      const response = await postJsonText('/api/apply-suggestion', text);
-      if (response.status === 413) throw tooLarge(413);
-      if (!response.ok) throw await requestError(response, 'POST /api/apply-suggestion');
-      return response.json();
+      return postJsonText('/api/apply-suggestion', text, async response => {
+        if (response.status === 413) throw tooLarge(413);
+        if (!response.ok) throw await requestError(response, 'POST /api/apply-suggestion', true);
+        return response.json();
+      });
     },
 
     submitReview: async (state: ReviewState): Promise<void> => {
@@ -314,21 +324,22 @@ export function createFetchAdapter(capability: string): ReviewAdapter {
       if (bytes > MAX_REVIEW_BODY_BYTES) {
         throw tooLarge(bytes, null);
       }
-      const response = await postJsonText('/api/review', text);
-      if (response.status === 413) {
-        throw tooLarge(bytes, response.status);
-      }
-      if (!response.ok) {
-        throw await requestError(response, 'POST /api/review');
-      }
-      const ack = (await response.json()) as ReviewSubmitAck | null;
-      if (!isRecord(ack) || ack.ok !== true) {
-        throw new ServeRequestError(
-          'The server answered without acknowledging the review as written. ' +
-            'Check the terminal it was started from, then press Finish Review again.',
-          { status: response.status }
-        );
-      }
+      return postJsonText('/api/review', text, async response => {
+        if (response.status === 413) {
+          throw tooLarge(bytes, response.status);
+        }
+        if (!response.ok) {
+          throw await requestError(response, 'POST /api/review', true);
+        }
+        const ack = (await response.json()) as ReviewSubmitAck | null;
+        if (!isRecord(ack) || ack.ok !== true) {
+          throw new ServeRequestError(
+            'The server answered without acknowledging the review as written. ' +
+              'Check the terminal and output file before continuing; do not resend blindly.',
+            { status: response.status, code: 'outcome-unknown', uncertain: true }
+          );
+        }
+      });
     },
 
     expandContext: (request: ExpandContextRequest) =>
@@ -343,9 +354,10 @@ export function createFetchAdapter(capability: string): ReviewAdapter {
       // Bytes, not JSON: this route answers octet-stream, and 404 for an
       // attachment whose file is gone — which the image component renders
       // as "Image not found" rather than treating as an error.
-      const response = await authorizedFetch(withPath('/api/attachment', filePath));
-      if (!response.ok) return null;
-      return response.arrayBuffer();
+      return requester.request(withPath('/api/attachment', filePath), {}, async response => {
+        if (!response.ok) return null;
+        return response.arrayBuffer();
+      });
     },
 
     onGuideLoad: callback => subscribe(response => response.guide, callback),

@@ -12,7 +12,7 @@
 import { createRequire } from 'node:module';
 import { parseServeArgs } from './args';
 import { resolveSession } from './startup';
-import { completeReviewOnSubmit } from './lifecycle';
+import { createServeLifecycle } from './lifecycle';
 import { createReviewServer, listenLoopback } from './server';
 import { createReviewOperations } from './review-operations';
 import { generateCapability } from './capability';
@@ -81,25 +81,44 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { session, output } = await resolveSession(args);
-
-  // Leaves only in the printed URL's fragment; the server never sends it.
-  const capability = generateCapability();
-  const server = createReviewServer({
-    session,
-    output,
-    capability,
-    operations: createReviewOperations(session, output),
-  });
-  completeReviewOnSubmit({ server });
-
-  const { url } = await listenLoopback(server);
-  console.error(`[serve] Review ready at ${formatLaunchUrl(url, capability)}`);
-  console.error(`[serve] Completing the review writes ${output.path} and stops this process.`);
-  console.error(
-    '[serve] The listener is loopback-only. The part of the URL after # is this ' +
-      "session's key: open the URL exactly as printed, and do not share it."
-  );
+  const lifetime = createServeLifecycle({ signals: process });
+  const startupTimer = setTimeout(() => {
+    console.error('[serve] Startup deadline reached; stopping.');
+    lifetime.stop(1);
+  }, 45_000);
+  try {
+    await lifetime.track(
+      (async () => {
+        const { session, output } = await resolveSession(args, {
+          signal: lifetime.signal,
+          timeoutMs: 30_000,
+        });
+        if (lifetime.signal.aborted) throw lifetime.signal.reason;
+        const capability = generateCapability();
+        const server = createReviewServer({
+          capability,
+          operations: createReviewOperations(session, output),
+        });
+        lifetime.attach(server);
+        const { url } = await listenLoopback(server, 0, { signal: lifetime.signal });
+        if (lifetime.signal.aborted) throw lifetime.signal.reason;
+        console.error(`[serve] Review ready at ${formatLaunchUrl(url, capability)}`);
+        console.error(
+          `[serve] Completing the review writes ${output.path} and stops this process.`
+        );
+        console.error(
+          '[serve] The listener is loopback-only. The part of the URL after # is this ' +
+            "session's key: open the URL exactly as printed, and do not share it."
+        );
+      })()
+    );
+  } catch (error) {
+    if (!lifetime.signal.aborted)
+      console.error(`[serve] ${error instanceof Error ? error.message : String(error)}`);
+    lifetime.stop(1);
+  } finally {
+    clearTimeout(startupTimer);
+  }
 }
 
 main().catch(error => {

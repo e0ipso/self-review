@@ -375,3 +375,6 @@ export type {
   BuildRemoteReviewStateArgs,
   FetchCommentsOptions,
 } from './fetch-comments';
+
+export { decodeSuggestionApplyRequest, MAX_CONTEXT_LINES } from './review-request-validation';
+export type { RequestDecodeResult } from './review-request-validation';

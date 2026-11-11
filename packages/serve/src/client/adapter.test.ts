@@ -488,3 +488,66 @@ describe('suggestion transport budget', () => {
     });
   });
 });
+
+it('retries a failed shared diff and delivers both halves to surviving and replacement subscriptions', async () => {
+  let reject!: (error: Error) => void;
+  let resolve!: (response: Response) => void;
+  const first = new Promise<Response>((_done, fail) => {
+    reject = fail;
+  });
+  const retry = new Promise<Response>(done => {
+    resolve = done;
+  });
+  const spy = stubFetch(() => (spy.mock.calls.length === 1 ? first : retry));
+  const adapter = createFetchAdapter(CAPABILITY);
+  const diff = vi.fn();
+  const obsoleteGuide = vi.fn();
+  const guide = vi.fn();
+  const unsubscribeDiff = adapter.onDiffLoad!(diff);
+  const unsubscribeGuide = adapter.onGuideLoad!(obsoleteGuide);
+  const failed = expect(adapter.loadDiff()).rejects.toThrow('unavailable');
+  reject(new Error('unavailable'));
+  await failed;
+  const next = adapter.loadDiff();
+  unsubscribeGuide();
+  adapter.onGuideLoad!(guide);
+  await Promise.resolve();
+  expect(spy).toHaveBeenCalledTimes(2);
+  resolve(json({ diff: DIFF_PAYLOAD, guide: GUIDE_PAYLOAD }));
+  await next;
+  expect(diff).toHaveBeenCalledExactlyOnceWith(DIFF_PAYLOAD);
+  expect(guide).toHaveBeenCalledExactlyOnceWith(GUIDE_PAYLOAD);
+  expect(obsoleteGuide).not.toHaveBeenCalled();
+  unsubscribeDiff();
+  adapter.dispose();
+});
+
+it('drops a late retry delivery when the page is replaced', async () => {
+  let resolve!: (response: Response) => void;
+  stubFetch(
+    () =>
+      new Promise<Response>(done => {
+        resolve = done;
+      })
+  );
+  const adapter = createFetchAdapter(CAPABILITY);
+  const diff = vi.fn();
+  adapter.onDiffLoad!(diff);
+  const pending = adapter.loadDiff();
+  adapter.dispose();
+  await expect(pending).rejects.toThrow(/cancelled/);
+  resolve(json({ diff: DIFF_PAYLOAD, guide: GUIDE_PAYLOAD }));
+  await Promise.resolve();
+  expect(diff).not.toHaveBeenCalled();
+});
+
+it('keeps a pre-admission busy refusal retryable and an unexpected mutation failure uncertain', async () => {
+  stubFetch(() => json({ error: 'review server busy; retry after pending requests finish' }, 503));
+  const adapter = createFetchAdapter(CAPABILITY);
+  const busy = await rejectionOf(adapter.submitReview!(REVIEW_STATE));
+  expect(busy.uncertain).toBe(false);
+  stubFetch(() => json({ error: 'internal error' }, 500));
+  // A new page captures the replacement requester; its previous page transport is stable.
+  const uncertain = await rejectionOf(createFetchAdapter(CAPABILITY).submitReview!(REVIEW_STATE));
+  expect(uncertain).toMatchObject({ uncertain: true, code: 'outcome-unknown' });
+});

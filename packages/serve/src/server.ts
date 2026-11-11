@@ -27,6 +27,13 @@ import {
 import { serveStatic } from './static-assets';
 import { createReviewOperations, type ReviewOperations } from './review-operations';
 import { ReviewSubmission, publishFailureStatus } from './review-submission';
+import {
+  RequestAdmission,
+  REQUEST_SHUTDOWN,
+  type AdmissionOptions,
+  type ManagedReviewServer,
+  type RequestKind,
+} from './request-admission';
 import { REVIEW_PUBLISHED } from './lifecycle';
 
 export { MAX_REVIEW_BODY_BYTES } from './protocol';
@@ -40,13 +47,19 @@ export function defaultClientDir(): string {
 export const MAX_EXPAND_CONTEXT_BODY_BYTES = 64 * 1024;
 export type ReviewOutputTarget = CoreReviewOutputTarget;
 
-export interface ReviewServerOptions {
-  session: ReviewSession;
-  output: ReviewOutputTarget;
+interface ReviewTransportOptions extends AdmissionOptions {
   /** Bearer token required on every API request; never returned by the server. */
   capability: string;
   clientDir?: string;
-  /** Session-bound operations. Omitted by existing callers for production defaults. */
+}
+/** Primary construction consumes bound operations; composition belongs to the CLI. */
+export interface BoundReviewServerOptions extends ReviewTransportOptions {
+  operations: ReviewOperations;
+}
+/** Existing session/output call forms remain supported. */
+export interface ReviewServerOptions extends ReviewTransportOptions {
+  session: ReviewSession;
+  output: ReviewOutputTarget;
   operations?: ReviewOperations;
 }
 
@@ -56,6 +69,7 @@ interface RouteContext {
   url: URL;
   operations: ReviewOperations;
   submission: ReviewSubmission;
+  signal: AbortSignal;
   published: (response: http.ServerResponse) => void;
 }
 
@@ -110,7 +124,7 @@ const routes: Record<string, RouteHandler> = {
     const filePath = requireReviewedQueryPath(ctx);
     if (filePath === null) return;
     // Core reads the reviewed snapshot under the same identity it just authorized.
-    sendJson(ctx.res, 200, await ctx.operations.loadImage(filePath));
+    sendJson(ctx.res, 200, await ctx.operations.loadImage(filePath, { signal: ctx.signal }));
   },
 
   'GET /api/attachment': async ctx => {
@@ -120,7 +134,7 @@ const routes: Record<string, RouteHandler> = {
       sendError(ctx.res, 400, 'path must name a file in the .self-review-assets directory');
       return;
     }
-    const result = await ctx.operations.readAttachment(raw);
+    const result = await ctx.operations.readAttachment(raw, { signal: ctx.signal });
     if (!result.ok) {
       const status =
         result.reason === 'not-authorized' ? 400 : result.reason === 'too-large' ? 413 : 404;
@@ -138,7 +152,7 @@ const routes: Record<string, RouteHandler> = {
 
   'POST /api/expand-context': async ctx => {
     const { req, res, operations } = ctx;
-    const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES);
+    const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES, ctx.signal);
     if (!body.ok) {
       sendError(res, body.status, body.error);
       return;
@@ -150,14 +164,14 @@ const routes: Record<string, RouteHandler> = {
     }
     // Becomes a git pathspec; authorized as a reviewed path, then passed through as sent.
     if (!requireReviewedPath(ctx, parsed.value.filePath, 'filePath')) return;
-    sendJson(res, 200, await operations.expandContext(parsed.value));
+    sendJson(res, 200, await operations.expandContext(parsed.value, { signal: ctx.signal }));
   },
 
   // The one route that rewrites a file in the reviewed tree. Core refuses unless the anchored lines still
   // match the suggestion's recorded original byte for byte, and resolves the destination itself.
   'POST /api/apply-suggestion': async ctx => {
     const { req, res, operations } = ctx;
-    const body = await readJsonBody(req, MAX_APPLY_BODY_BYTES);
+    const body = await readJsonBody(req, MAX_APPLY_BODY_BYTES, ctx.signal);
     if (!body.ok) {
       sendError(res, body.status, body.error);
       return;
@@ -168,17 +182,21 @@ const routes: Record<string, RouteHandler> = {
       return;
     }
     if (!requireReviewedPath(ctx, parsed.value.filePath, 'filePath')) return;
-    sendJson(res, 200, operations.applySuggestionForSession(parsed.value));
+    sendJson(
+      res,
+      200,
+      await operations.applySuggestionForSession(parsed.value, { signal: ctx.signal })
+    );
   },
 
   // One admitted publication owns completion. Invalid or refused attempts reopen admission.
-  'POST /api/review': async ({ req, res, submission, published }) => {
+  'POST /api/review': async ({ req, res, submission, published, signal }) => {
     if (!submission.begin()) {
       sendError(res, 409, 'review submission already in progress or complete');
       return;
     }
     try {
-      const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES);
+      const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES, signal);
       if (!body.ok) {
         sendError(res, body.status, body.error);
         return;
@@ -188,6 +206,7 @@ const routes: Record<string, RouteHandler> = {
         sendError(res, 400, parsed.error);
         return;
       }
+      if (signal.aborted) throw signal.reason;
       const outcome = await submission.publish(parsed.value);
       if (outcome.ok) {
         published(res);
@@ -204,19 +223,30 @@ const routes: Record<string, RouteHandler> = {
 const ROUTE_PATHS = new Set(Object.keys(routes).map(key => key.split(' ')[1]));
 
 /**
- * Taking the session explicitly rather than reading module state mirrors the
- * core handlers and lets a test drive this without a repository. Not yet
- * listening: bind it with `listenLoopback`.
+ * Bound operations keep engine composition outside the transport. The legacy
+ * session/output overload composes the same defaults for existing callers.
+ * Not yet listening: bind it with `listenLoopback`.
  */
-export function createReviewServer(options: ReviewServerOptions): http.Server {
-  const { session, output, capability, clientDir = defaultClientDir() } = options;
-
-  const operations = options.operations ?? createReviewOperations(session, output);
+export function createReviewServer(options: BoundReviewServerOptions): ManagedReviewServer;
+export function createReviewServer(options: ReviewServerOptions): ManagedReviewServer;
+export function createReviewServer(
+  options: BoundReviewServerOptions | ReviewServerOptions
+): ManagedReviewServer {
+  const { capability, clientDir = defaultClientDir() } = options;
+  const operations =
+    options.operations ??
+    createReviewOperations(
+      (options as ReviewServerOptions).session,
+      (options as ReviewServerOptions).output
+    );
   const submission = new ReviewSubmission(operations);
-  const active = new Set<Promise<unknown>>();
-  const drain = () => Promise.allSettled([...active]).then(() => {});
+  const admission = new RequestAdmission({
+    maxRequests: options.maxRequests,
+    maxExpensiveReads: options.maxExpensiveReads,
+    requestTimeoutMs: options.requestTimeoutMs,
+  });
   const published = (response: http.ServerResponse) =>
-    server.emit(REVIEW_PUBLISHED, response, drain);
+    server.emit(REVIEW_PUBLISHED, response, () => admission.drain());
 
   const dispatch = async (req: http.IncomingMessage, res: http.ServerResponse) => {
     const method = req.method ?? 'GET';
@@ -237,13 +267,68 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
     try {
       const handler = routes[`${method} ${url.pathname}`];
       if (handler) {
-        await handler({ req, res, url, operations, submission, published });
+        const kind: RequestKind =
+          url.pathname === '/api/review'
+            ? 'publication'
+            : url.pathname === '/api/apply-suggestion' || url.pathname === '/api/expand-context'
+              ? 'mutation'
+              : url.pathname === '/api/image' || url.pathname === '/api/attachment'
+                ? 'expensive-read'
+                : 'read';
+        const rejection = admission.rejection(kind);
+        if (rejection) {
+          sendJson(res, rejection.status, { error: rejection.error }, { connection: 'close' });
+          return;
+        }
+        admission.run(
+          req,
+          res,
+          kind,
+          async signal => {
+            try {
+              await handler({ req, res, url, operations, submission, published, signal });
+            } catch (error) {
+              if (!signal.aborted)
+                console.error(`[serve] ${method} ${url.pathname} failed:`, error);
+              if (!res.headersSent && !res.destroyed) sendError(res, 500, 'internal error');
+              else if (!res.writableEnded) res.end();
+            }
+          },
+          () => {
+            if (!res.headersSent && !res.destroyed)
+              sendJson(
+                res,
+                503,
+                { error: 'request deadline exceeded; operation outcome may be unknown' },
+                { connection: 'close' }
+              );
+            else if (!res.writableEnded) res.destroy();
+          }
+        );
       } else if (ROUTE_PATHS.has(url.pathname)) {
         sendError(res, 405, 'method not allowed');
       } else if (url.pathname.startsWith('/api/')) {
         sendError(res, 404, 'not found');
       } else if (method === 'GET') {
-        await serveStatic(res, clientDir, url.pathname);
+        const rejection = admission.rejection('read');
+        if (rejection) {
+          sendJson(res, rejection.status, { error: rejection.error }, { connection: 'close' });
+          return;
+        }
+        admission.run(
+          req,
+          res,
+          'read',
+          async () => {
+            try {
+              await serveStatic(res, clientDir, url.pathname);
+            } catch {
+              if (!res.headersSent && !res.destroyed) sendError(res, 500, 'internal error');
+              else res.destroy();
+            }
+          },
+          () => res.destroy()
+        );
       } else {
         sendError(res, 404, 'not found');
       }
@@ -258,16 +343,11 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
   };
 
   const server = http.createServer((req, res) => {
-    // A disconnected client may leave an operation running. Track both its work
-    // and its response, so shutdown cannot mistake a closed socket for completion.
-    const flushed = new Promise<void>(resolve => {
-      res.once('finish', resolve);
-      res.once('close', resolve);
-    });
-    const request = Promise.allSettled([dispatch(req, res), flushed]);
-    active.add(request);
-    void request.then(() => active.delete(request));
-  });
+    void dispatch(req, res);
+  }) as ManagedReviewServer;
+  server[REQUEST_SHUTDOWN] = () => admission.shutdown();
+  server.headersTimeout = 15_000;
+  server.requestTimeout = 60_000;
   return server;
 }
 
@@ -277,14 +357,42 @@ export function createReviewServer(options: ReviewServerOptions): http.Server {
  */
 export function listenLoopback(
   server: http.Server,
-  port = 0
+  port = 0,
+  options: { signal?: AbortSignal } = {}
 ): Promise<{ port: number; url: string }> {
   return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, '127.0.0.1', () => {
-      server.off('error', reject);
+    const { signal } = options;
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const cleanup = () => {
+      signal?.removeEventListener('abort', onAbort);
+      server.off('error', onError);
+      server.off('listening', onListening);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const onAbort = () => {
+      cleanup();
+      server.close();
+      reject(signal?.reason);
+    };
+    const onListening = () => {
+      cleanup();
+      if (signal?.aborted) {
+        server.close();
+        reject(signal.reason);
+        return;
+      }
       const address = server.address() as AddressInfo;
       resolve({ port: address.port, url: `http://127.0.0.1:${address.port}/` });
-    });
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen({ port, host: '127.0.0.1', signal });
   });
 }

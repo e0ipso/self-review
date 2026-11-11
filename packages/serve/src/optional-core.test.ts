@@ -1,0 +1,119 @@
+import { describe, expect, it, vi } from 'vitest';
+import * as core from '@self-review/core';
+import type { SuggestionApplyRequest, SuggestionApplyOutcome } from '@self-review/core';
+import { applyFor } from './apply-compatibility';
+import { startupSourceFor } from './startup-compatibility';
+import { requestContractFor } from './request-contract-compatibility';
+
+const request: SuggestionApplyRequest = {
+  filePath: 'a.txt',
+  lineRange: { side: 'new', start: 0, end: -1 },
+  suggestion: { originalCode: 'a', proposedCode: 'b' },
+};
+const refusal: SuggestionApplyOutcome = {
+  status: 'refused',
+  filePath: 'a.txt',
+  reason: 'invalid-anchor',
+  detail: 'invalid',
+};
+
+describe('optional core capabilities', () => {
+  it('awaits the asynchronous writer and preserves a committed outcome after abort', async () => {
+    let complete!: (outcome: SuggestionApplyOutcome) => void;
+    const asynchronous = vi.fn(
+      () =>
+        new Promise<SuggestionApplyOutcome>(done => {
+          complete = done;
+        })
+    );
+    const synchronous = vi.fn(() => refusal);
+    const signal = new AbortController();
+    const session = core.createReviewSession();
+    const pending = applyFor({
+      applySuggestionForSession: synchronous,
+      applySuggestionForSessionAsync: asynchronous,
+    })(session, request, { signal: signal.signal });
+    expect(asynchronous).toHaveBeenCalledWith(session, request, { signal: signal.signal });
+    expect(synchronous).not.toHaveBeenCalled();
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    // The fake has crossed rename. A late abort cannot turn success into refusal.
+    signal.abort(new Error('disconnected'));
+    const applied: SuggestionApplyOutcome = {
+      status: 'applied',
+      filePath: 'a.txt',
+      replacedLines: 1,
+    };
+    complete(applied);
+    await expect(pending).resolves.toBe(applied);
+  });
+
+  it('preserves the modern writer exact precommit abort reason', async () => {
+    const controller = new AbortController();
+    const reason = new Error('cancel before rename');
+    const pending = applyFor({
+      applySuggestionForSession: () => refusal,
+      applySuggestionForSessionAsync: (_session, _request, options) =>
+        new Promise((_resolve, reject) => {
+          options!.signal!.addEventListener('abort', () => reject(options!.signal!.reason), {
+            once: true,
+          });
+        }),
+    })(core.createReviewSession(), request, { signal: controller.signal });
+    controller.abort(reason);
+    await expect(pending).rejects.toBe(reason);
+  });
+
+  it('loads with only the previous core export surface', async () => {
+    const syncApply = vi.fn(() => refusal);
+    const source = { mode: 'welcome' as const };
+    const syncSource = vi.fn<typeof core.resolveStartupSource>(() => source);
+    await expect(
+      applyFor({ applySuggestionForSession: syncApply })(core.createReviewSession(), request)
+    ).resolves.toBe(refusal);
+    await expect(
+      startupSourceFor({ resolveStartupSource: syncSource })([], '/launch', {})
+    ).resolves.toBe(source);
+    expect(requestContractFor({}).decode(request)).toEqual({ ok: true, value: request });
+    expect(syncApply).toHaveBeenCalledOnce();
+    expect(syncSource).toHaveBeenCalledOnce();
+  });
+
+  it('selects current public source detection and structural decoding', async () => {
+    const source = { mode: 'welcome' as const };
+    const modern = vi.fn<typeof core.resolveStartupSourceAsync>().mockResolvedValue(source);
+    const old = vi.fn(core.resolveStartupSource);
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
+    await expect(
+      startupSourceFor({ resolveStartupSource: old, resolveStartupSourceAsync: modern })(
+        [],
+        '/launch',
+        options
+      )
+    ).resolves.toBe(source);
+    expect(modern).toHaveBeenCalledWith([], '/launch', options);
+    expect(old).not.toHaveBeenCalled();
+    const decode = vi.fn(core.decodeSuggestionApplyRequest);
+    expect(
+      requestContractFor({ decodeSuggestionApplyRequest: decode }).decode(request)
+    ).toMatchObject({ ok: true });
+    expect(decode).toHaveBeenCalledWith(request);
+  });
+
+  it.each([
+    null,
+    [],
+    { ...request, lineRange: '1' },
+    { ...request, lineRange: { side: 'new', start: '1', end: 2 } },
+    request,
+    { ...request, lineRange: null },
+    { ...request, extension: 1 },
+  ])('keeps the previous-core decoder aligned with the public decoder: %j', value => {
+    expect(requestContractFor({}).decode(value)).toEqual(core.decodeSuggestionApplyRequest(value));
+  });
+});

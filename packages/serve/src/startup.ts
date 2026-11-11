@@ -23,9 +23,9 @@ import {
   publishOptionsFor,
   resolveOutputTarget,
   resolveStartupDiffArgs,
-  resolveStartupSource,
 } from '@self-review/core';
-import type { ReviewOutputTarget, ReviewSession } from '@self-review/core';
+import { resolveCompatibleStartupSource } from './startup-compatibility';
+import type { GitExecutionOptions, ReviewOutputTarget, ReviewSession } from '@self-review/core';
 import type { ServeArgs } from './args';
 
 export interface ServeStartup {
@@ -38,7 +38,10 @@ export interface ServeStartup {
 const log = (message: string) => console.error(`[serve] ${message}`);
 
 /** Throws when startup cannot produce a servable session; the caller reports and exits. */
-export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
+export async function resolveSession(
+  args: ServeArgs,
+  options: GitExecutionOptions = {}
+): Promise<ServeStartup> {
   // Phase 2 (main.ts): configuration and the output path.
   const cwd = process.cwd();
   const loadedConfig = loadConfigWithProvenance({ cwd });
@@ -57,7 +60,7 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   const { gitDiffArgs, config } = resolveStartupDiffArgs(args.gitDiffArgs, loadedConfig, cwd);
 
   // Phase 4 (main.ts): what to review. Welcome mode is refused: a browser has no directory picker.
-  const source = resolveStartupSource(gitDiffArgs, cwd);
+  const source = await resolveCompatibleStartupSource(gitDiffArgs, cwd, options);
   log(`Startup mode: ${source.mode}`);
   if (source.mode === 'welcome') {
     throw new Error(
@@ -70,7 +73,8 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
     gitDiffArgs,
     config,
     cwd,
-    log
+    log,
+    options
   );
   log(`Loaded ${diffData.files.length} files`);
 
@@ -115,6 +119,8 @@ export async function resolveSession(args: ServeArgs): Promise<ServeStartup> {
   if (guideData) {
     log(`Walkthrough guide loaded: ${guideData.groups.length} groups`);
   }
+
+  if (options.signal?.aborted) throw options.signal.reason;
 
   // Phase 6 (main.ts) — assemble. Everything the routes read is on the
   // session before the caller opens the listener.

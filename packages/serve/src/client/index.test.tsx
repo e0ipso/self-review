@@ -308,3 +308,24 @@ describe('serve client', () => {
     CASE_TIMEOUT_MS
   );
 });
+
+it('keeps comments and the close guard after an unknown save and prevents resubmission', async () => {
+  const view = await mountWithUnsavedWork();
+  let submissions = 0;
+  route = async (url, init) => {
+    if (url.pathname === '/api/review') {
+      submissions++;
+      throw new TypeError('connection closed after sending');
+    }
+    return realFetch(url, init);
+  };
+  fireEvent.click(view.getByTestId('finish-review-btn'));
+  const notice = await view.findByTestId('submit-error');
+  expect(notice.textContent).toContain('save outcome is unknown');
+  expect(notice.textContent).toContain('Check the terminal and the output file');
+  expect(view.queryByTestId('finish-review-btn')).toBeNull();
+  expect(view.getByText('Needs a test.')).toBeTruthy();
+  expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(false);
+  expect(closeIsGuarded()).toBe(true);
+  expect(submissions).toBe(1);
+});

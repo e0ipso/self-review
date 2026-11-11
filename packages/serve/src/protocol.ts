@@ -55,3 +55,6 @@ export function capabilityAuthorization(capability: string): string {
 export function formatMegabytes(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
 }
+
+/** Admission refuses before starting any engine operation, so retry is safe. */
+export const SERVER_BUSY_ERROR = 'review server busy; retry after pending requests finish';
