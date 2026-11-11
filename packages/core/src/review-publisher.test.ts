@@ -499,3 +499,101 @@ describe('inspectOutputPath', () => {
     expect(inspectOutputPath(outputPath, explicit)?.code).toBe('permission-denied');
   });
 });
+
+describe('publication cancellation', () => {
+  it('supports filesystem adapters with inherited methods', async () => {
+    const layer: FsLayer = Object.create(nodeFsLayer);
+    await expect(
+      publishReview(review(), outputPath, {
+        ...explicit,
+        fs: layer,
+        signal: new AbortController().signal,
+      })
+    ).resolves.toMatchObject({ outputPath });
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain('<review');
+  });
+  it('preserves the previous XML and assets when aborted during serialization', async () => {
+    const previous = await publishReview(withAttachment(), outputPath, explicit);
+    const oldXml = fs.readFileSync(outputPath, 'utf8');
+    const oldAssets = previous.assetPaths.map(file => fs.readFileSync(file));
+    const controller = new AbortController();
+    const { validateXML } = await import('xmllint-wasm');
+    vi.mocked(validateXML).mockImplementationOnce(async () => {
+      controller.abort();
+      return { valid: true, errors: [], rawOutput: '', normalized: '' };
+    });
+    await expect(
+      publishReview(withAttachment(), outputPath, { ...explicit, signal: controller.signal })
+    ).rejects.toMatchObject({
+      name: 'ReviewPublishError',
+      code: 'io-error',
+      message: expect.stringContaining('was cancelled before saving'),
+    });
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe(oldXml);
+    expect(previous.assetPaths.map(file => fs.readFileSync(file))).toEqual(oldAssets);
+    expect(listDir(path.join(tmp, ASSETS))).toHaveLength(previous.assetPaths.length);
+  });
+
+  it('checks cancellation at rename and removes staged assets and temporary XML', async () => {
+    const previous = await publishReview(withAttachment(), outputPath, explicit);
+    const oldXml = fs.readFileSync(outputPath, 'utf8');
+    const controller = new AbortController();
+    let syncs = 0;
+    const fsLayer: FsLayer = {
+      ...nodeFsLayer,
+      fsyncSync(fd) {
+        nodeFsLayer.fsyncSync(fd);
+        // The attachment sync is first, the XML temp-file sync is second.
+        if (++syncs === 2) controller.abort();
+      },
+    };
+    await expect(
+      publishReview(withAttachment(), outputPath, {
+        ...explicit,
+        fs: fsLayer,
+        signal: controller.signal,
+      })
+    ).rejects.toMatchObject({
+      name: 'ReviewPublishError',
+      code: 'io-error',
+      message: expect.stringContaining('was cancelled before saving'),
+    });
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe(oldXml);
+    expect(listDir(path.join(tmp, ASSETS))).toEqual(
+      previous.assetPaths.map(file => path.basename(file)).sort()
+    );
+    expect(listDir(tmp)).toEqual([ASSETS, 'review.xml']);
+  });
+
+  it('keeps a committed publication if interruption arrives immediately after rename', async () => {
+    const controller = new AbortController();
+    const fsLayer: FsLayer = {
+      ...nodeFsLayer,
+      renameSync(from, to) {
+        nodeFsLayer.renameSync(from, to);
+        controller.abort();
+      },
+    };
+    const saved = await publishReview(withAttachment(), outputPath, {
+      ...explicit,
+      fs: fsLayer,
+      signal: controller.signal,
+    });
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain('<review');
+    expect(saved.assetPaths).toHaveLength(1);
+    expect(fs.existsSync(saved.assetPaths[0])).toBe(true);
+  });
+
+  it('refuses an already aborted publication before validation or writes', async () => {
+    fs.writeFileSync(outputPath, 'old document');
+    await expect(
+      publishReview(withAttachment(), outputPath, { ...explicit, signal: AbortSignal.abort() })
+    ).rejects.toMatchObject({
+      name: 'ReviewPublishError',
+      code: 'io-error',
+      message: expect.stringContaining('was cancelled before saving'),
+    });
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe('old document');
+    expect(listDir(tmp)).toEqual(['review.xml']);
+  });
+});

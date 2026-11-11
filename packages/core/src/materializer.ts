@@ -23,6 +23,7 @@ import { stripTrailingNewline } from './git';
 import { defaultGitRunner } from './command-runner';
 export { defaultGitRunner } from './command-runner';
 import { CommandCancelledError } from './forge-provider';
+import { FORGE_DEFINITIONS } from './forge-definitions';
 import type {
   ForgeCommandOptions,
   ForgeCommandResult,
@@ -85,9 +86,7 @@ const AUTH_HINT =
 
 /** Well-known git ref for the PR/MR head on each forge. */
 function headRefFor(url: ForgeUrl): string {
-  return url.forge === 'github'
-    ? `refs/pull/${url.number}/head`
-    : `refs/merge-requests/${url.number}/head`;
+  return FORGE_DEFINITIONS[url.forge].headRef(url.number);
 }
 
 /**

@@ -7,7 +7,10 @@ import { mapThreadsToReviewComments } from './thread-mapper';
 import { serializeReview } from './xml-serializer';
 import { parseReviewXmlString } from './xml-parser';
 import type { AppConfig, DiffFile } from './types';
-import type { LoadedConfig } from './config';
+import { loadConfigWithProvenance, type LoadedConfig } from './config';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { buildRemoteReviewState, runFetchComments, type FetchCommentsDeps } from './fetch-comments';
 import type { ReviewState } from './types';
 
@@ -283,6 +286,74 @@ describe('runFetchComments', () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it('loads config from the programmatic review cwd rather than the host process cwd', async () => {
+    await runFetchComments(PR_URL, { cwd: '/another/project', deps });
+    expect(deps.loadConfig).toHaveBeenCalledWith({ cwd: '/another/project' });
+    expect(written[0].path).toBe('/another/project/review.xml');
+  });
+
+  it('uses the selected project config with inherited output trust', async () => {
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-fetch-config-'));
+    fs.writeFileSync(path.join(project, '.self-review.yaml'), 'output-file: ./project.xml\n');
+    deps.loadConfig = options => loadConfigWithProvenance({ ...options, homeDir: project });
+    try {
+      await runFetchComments(PR_URL, { cwd: project, deps });
+      expect(written[0].path).toBe(path.join(project, 'project.xml'));
+      expect(deps.publish).toHaveBeenCalledWith(
+        expect.anything(),
+        path.join(project, 'project.xml'),
+        {
+          outputOrigin: 'inherited',
+          baseDir: project,
+        }
+      );
+    } finally {
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it('passes publication cancellation through and cleans up before rejecting', async () => {
+    const controller = new AbortController();
+    deps.publish = vi.fn(async (_state, _target, options) => {
+      await new Promise<void>(resolve =>
+        (options.signal ?? controller.signal).addEventListener('abort', () => resolve(), {
+          once: true,
+        })
+      );
+      expect(options.signal).toBe(controller.signal);
+      throw new Error('publication cancelled before rename');
+    });
+    const run = runFetchComments(PR_URL, { cwd: '/work', deps, signal: controller.signal });
+    const observed = run.catch(error => error);
+    await vi.waitFor(() => expect(deps.publish).toHaveBeenCalled());
+    controller.abort();
+    expect(await observed).toMatchObject({ message: 'publication cancelled before rename' });
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(written).toHaveLength(0);
+    expect(console.error).not.toHaveBeenCalledWith(expect.stringContaining('threads written'));
+  });
+
+  it('reports an already saved output but rejects interruption during cleanup', async () => {
+    const controller = new AbortController();
+    let finish!: () => void;
+    cleanup.mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        })
+    );
+    const run = runFetchComments(PR_URL, { cwd: '/work', deps, signal: controller.signal });
+    const observed = expect(run).rejects.toBeInstanceOf(CommandCancelledError);
+    await vi.waitFor(() => expect(cleanup).toHaveBeenCalled());
+    controller.abort();
+    expect(written).toHaveLength(1);
+    finish();
+    await observed;
+    expect(console.error).toHaveBeenCalledWith(
+      '[fetch-comments] 2 threads written to /work/review.xml'
+    );
+  });
+
   it('rejects URLs that are not PR/MR URLs', async () => {
     await expect(
       runFetchComments('https://example.com/not-a-pr', { cwd: '/work', deps })
@@ -295,6 +366,7 @@ describe('runFetchComments', () => {
 
     expect(provider.fetchThreads).toHaveBeenCalledWith(expect.objectContaining({ number: 42 }), {
       includeResolved: true,
+      reviewedHeadSha: 'bbb222',
     });
   });
 
@@ -303,6 +375,7 @@ describe('runFetchComments', () => {
 
     expect(provider.fetchThreads).toHaveBeenCalledWith(expect.objectContaining({ number: 42 }), {
       includeResolved: false,
+      reviewedHeadSha: 'bbb222',
     });
   });
 

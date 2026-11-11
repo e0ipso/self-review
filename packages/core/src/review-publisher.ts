@@ -75,6 +75,10 @@ interface PublishReviewCommonOptions {
   randomName?: () => string;
   /** Imported attachments whose origin is elsewhere are copied beside the output (`relocateAttachments`). */
   attachmentOrigins?: AttachmentOrigins;
+  /** Checked before preparation and immediately before rename. Cancellation throws
+   * ReviewPublishError (`io-error`, with the signal reason as cause). A completed
+   * rename is never rolled back. */
+  signal?: AbortSignal;
 }
 
 export type PublishReviewOptions = PublishReviewCommonOptions &
@@ -103,6 +107,17 @@ export async function publishReview(
   const target = path.resolve(outputPath);
   const outputDir = path.dirname(target);
   const assetDir = path.join(outputDir, ASSET_DIR_NAME);
+  const assertActive = () => {
+    if (options.signal?.aborted) {
+      throw new ReviewPublishError(
+        'io-error',
+        target,
+        `Publication of ${target} was cancelled before saving`,
+        { cause: options.signal.reason }
+      );
+    }
+  };
+  assertActive();
 
   // 1. The document and the output policy, from reads alone.
   let xml: string;
@@ -114,6 +129,7 @@ export async function publishReview(
       : state;
     const namer = uniqueAssetNamer(assetDir, fs, randomName);
     ({ xml, assets } = await serializeReview(publishable, target, { assetName: namer }));
+    assertActive();
     checkOutputPolicy(target, options, fs);
   } catch (error) {
     throw toPublishError(error, target);
@@ -130,9 +146,25 @@ export async function publishReview(
       }
     }
 
-    // 3. The commit point.
+    assertActive();
+    // 3. Rename commits the document. Check at that boundary, after the temp file
+    // has been prepared; cancellation after a successful rename cannot undo it.
     atomicReplace(target, Buffer.from(xml + '\n', 'utf-8'), {
-      fs,
+      fs: options.signal
+        ? new Proxy(fs, {
+            get(layer, key) {
+              if (key === 'renameSync') {
+                return (from: string, to: string) => {
+                  assertActive();
+                  layer.renameSync(from, to);
+                };
+              }
+              // Keep prototype methods and their receiver for supplied adapters.
+              const value = Reflect.get(layer, key);
+              return typeof value === 'function' ? value.bind(layer) : value;
+            },
+          })
+        : fs,
       preserveMode: true,
       randomName,
     });
@@ -263,6 +295,9 @@ const SAFE_FS_TO_PUBLISH: Partial<Record<SafeFsErrorCode, ReviewPublishErrorCode
 
 function toPublishError(error: unknown, target: string): ReviewPublishError {
   if (error instanceof ReviewPublishError) return error;
+  // atomicReplace wraps a refused rename in a filesystem error. Keep the
+  // publisher's typed cancellation rather than relabeling it as an I/O failure.
+  if (error instanceof SafeFsError && error.cause instanceof ReviewPublishError) return error.cause;
   if (error instanceof AttachmentRelocationError) {
     return new ReviewPublishError('attachment-unavailable', error.origin, error.message, {
       details: [error.message],

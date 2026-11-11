@@ -86,8 +86,8 @@ function parseGhJson(stdout: string, context: string): unknown {
  * `original_*` fields then retain the historic anchor.
  *
  * GitHub re-anchors comments on each push, so `line: null` is the forge's own
- * outdated verdict. No `headSha` is carried: `commit_id` cannot be verified to
- * follow re-anchoring, and a lagging SHA would disable every suggestion.
+ * outdated verdict. `commit_id` can lag re-anchoring, so the provider verifies
+ * the PR head around retrieval instead of trusting each comment's recorded commit.
  */
 function toAnchor(comment: GitHubReviewComment): ForgeThreadAnchor {
   const outdated = comment.line === null || comment.line === undefined;
@@ -146,6 +146,31 @@ function groupIntoThreads(comments: GitHubReviewComment[]): ForgeThread[] {
   return threads;
 }
 
+/** An unavailable head read leaves discussion visible but cannot vouch for line numbers. */
+async function readHead(
+  runCommand: ForgeCommandRunner,
+  url: ForgeUrl
+): Promise<string | undefined> {
+  try {
+    const stdout = await runGh(runCommand, [
+      'pr',
+      'view',
+      String(url.number),
+      '--repo',
+      `${url.host}/${url.owner}/${url.repo}`,
+      '--json',
+      'headRefOid',
+    ]);
+    const parsed = parseGhJson(stdout, 'pull request head') as { headRefOid?: unknown };
+    return typeof parsed?.headRefOid === 'string' && /^[a-f0-9]{40}$/i.test(parsed.headRefOid)
+      ? parsed.headRefOid
+      : undefined;
+  } catch (error) {
+    if (isCommandCancelled(error)) throw error;
+    return undefined;
+  }
+}
+
 /**
  * Create the GitHub {@link ForgeProvider} backed by an injected command
  * runner, mirroring how `git.ts` keeps child-process execution testable.
@@ -177,7 +202,9 @@ export function createGitHubProvider(runCommand: ForgeCommandRunner): ForgeProvi
     // `options.includeResolved` is deliberately ignored: GitHub fetch
     // returns all review threads (resolved-state filtering is a GitLab
     // concern).
-    async fetchThreads(url: ForgeUrl, _options?: FetchThreadsOptions): Promise<ForgeThread[]> {
+    async fetchThreads(url: ForgeUrl, options?: FetchThreadsOptions): Promise<ForgeThread[]> {
+      const expectedHead = options?.reviewedHeadSha;
+      const before = expectedHead === undefined ? undefined : await readHead(runCommand, url);
       const stdout = await runGh(runCommand, [
         'api',
         `repos/${url.owner}/${url.repo}/pulls/${url.number}/comments`,
@@ -197,7 +224,19 @@ export function createGitHubProvider(runCommand: ForgeCommandRunner): ForgeProvi
         );
       }
       const comments = pages.flat(1) as GitHubReviewComment[];
-      return groupIntoThreads(comments);
+      const threads = groupIntoThreads(comments);
+      if (expectedHead !== undefined) {
+        const after = await readHead(runCommand, url);
+        const verified = before === expectedHead && after === expectedHead;
+        for (const thread of threads) {
+          if (thread.anchor) {
+            thread.anchor = verified
+              ? { ...thread.anchor, headSha: expectedHead }
+              : { ...thread.anchor, outdated: true };
+          }
+        }
+      }
+      return threads;
     },
   };
 }
