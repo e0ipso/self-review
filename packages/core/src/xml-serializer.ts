@@ -2,6 +2,7 @@
 // Serialize ReviewState to XML and validate against XSD
 
 import * as path from 'path';
+import { validateReviewForSerialization } from './review-state-validation';
 import { ReviewState, FileReviewState, ReviewComment, Reply, Attachment } from './types';
 import { validateXML } from 'xmllint-wasm';
 import {
@@ -791,6 +792,7 @@ export async function serializeReview(
   outputFilePath: string,
   options: SerializeOptions = {}
 ): Promise<SerializedReview> {
+  state = validateReviewForSerialization(state);
   const staged = stageAttachments(state, outputFilePath, options.assetName ?? defaultAssetName);
   const xml = buildXml(staged.state);
   await validateAgainstSchema(xml);

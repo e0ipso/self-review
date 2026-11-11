@@ -10,6 +10,8 @@ export type ReviewXmlErrorCode =
   | 'missing-root'
   /** The generated document does not validate against the v3 XSD. */
   | 'schema-invalid'
+  /** The in-memory review DTO is malformed or has an unusable anchor. */
+  | 'invalid-state'
   | 'xml-illegal-character';
 
 export class ReviewXmlError extends Error {

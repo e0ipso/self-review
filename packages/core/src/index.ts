@@ -45,6 +45,9 @@ export type {
 export { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
 export type { DiffParseResult } from './diff-parser';
 
+// Transport-neutral runtime review DTO validation
+export { validateReviewState } from './review-state-validation';
+
 // XML I/O
 export { serializeReview, ASSET_DIR_NAME } from './xml-serializer';
 export type {
@@ -289,7 +292,11 @@ export {
   resolveApplyDestination,
   applySuggestionForSession,
 } from './review-handlers';
-export type { ReviewSession, ReviewStartResult } from './review-handlers';
+export type {
+  ReviewSession,
+  ReviewStartResult,
+  ContextExpansionDependencies,
+} from './review-handlers';
 
 // Startup mode detection (git, directory, file, welcome)
 export { determineMode, resolveStartupSource } from './startup-mode';

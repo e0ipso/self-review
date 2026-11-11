@@ -101,6 +101,26 @@ describe('atomicReplace', () => {
     expect(fs.readdirSync(tmp)).toEqual(['file.txt']);
   });
 
+  it('returns the written inode identity without inspecting after commit', () => {
+    const target = path.join(tmp, 'file.txt');
+    let committed = false;
+    const layer: FsLayer = {
+      ...nodeFsLayer,
+      renameSync(from, to) {
+        nodeFsLayer.renameSync(from, to);
+        committed = true;
+      },
+      lstatSync(filePath) {
+        if (committed) throw new Error('inspection unavailable after commit');
+        return nodeFsLayer.lstatSync(filePath);
+      },
+    };
+    const result = atomicReplace(target, Buffer.from('committed'), { fs: layer });
+    const actual = fs.statSync(target);
+    expect(result.identity).toMatchObject({ ino: actual.ino, dev: actual.dev, size: actual.size });
+    expect(fs.readFileSync(target, 'utf-8')).toBe('committed');
+  });
+
   it('refuses when the target is no longer the file that was inspected', () => {
     const target = path.join(tmp, 'file.txt');
     fs.writeFileSync(target, 'original');
