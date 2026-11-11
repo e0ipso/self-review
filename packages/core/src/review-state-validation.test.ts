@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { runInNewContext } from 'node:vm';
 import { validateReviewState } from './review-state-validation';
 import { ReviewXmlError } from './xml-errors';
 import { createReviewSession, submitReviewState } from './review-handlers';
@@ -81,6 +82,21 @@ describe('validateReviewState', () => {
     expect(legacy.files[0].comments[0]).not.toHaveProperty('lineRange');
     expect(validated.files[0].comments[0].attachments).toBe(comment.attachments);
     expect(validated.remoteForge).toBe('github');
+  });
+
+  it('accepts an ArrayBuffer from another realm', () => {
+    const value = review();
+    value.files[0].comments[0].attachments![0].data = runInNewContext(
+      'new Uint8Array([1, 2]).buffer'
+    ) as ArrayBuffer;
+    expect(validateReviewState(value)).toBe(value);
+  });
+
+  it('rejects a detached attachment buffer with a validation error', () => {
+    const value = review();
+    const data = value.files[0].comments[0].attachments![0].data!;
+    structuredClone(data, { transfer: [data] });
+    expect(() => validateReviewState(value)).toThrow(ReviewXmlError);
   });
 
   it.each([

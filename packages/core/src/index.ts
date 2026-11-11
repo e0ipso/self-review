@@ -292,7 +292,11 @@ export {
   resolveApplyDestination,
   applySuggestionForSession,
 } from './review-handlers';
-export type { ReviewSession, ReviewStartResult } from './review-handlers';
+export type {
+  ReviewSession,
+  ReviewStartResult,
+  ContextExpansionDependencies,
+} from './review-handlers';
 
 // Startup mode detection (git, directory, file, welcome)
 export { determineMode, resolveStartupSource } from './startup-mode';

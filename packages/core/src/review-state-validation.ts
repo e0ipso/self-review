@@ -108,8 +108,8 @@ function validateAttachments(value: unknown, at: string): void {
     const attachment = record(value, attachmentAt);
     for (const key of ['id', 'fileName', 'mediaType'])
       string(attachment[key], `${attachmentAt}.${key}`);
-    if (attachment.data !== undefined && !(attachment.data instanceof ArrayBuffer))
-      invalid(`${attachmentAt}.data`, 'must be an ArrayBuffer');
+    if (attachment.data !== undefined && !isReadableArrayBuffer(attachment.data))
+      invalid(`${attachmentAt}.data`, 'must be a readable ArrayBuffer');
   });
 }
 
@@ -175,4 +175,15 @@ function normalizeNullableFields(state: ReviewState): ReviewState {
       : file;
   });
   return files.some((file, index) => file !== state.files[index]) ? { ...state, files } : state;
+}
+
+/** Intrinsic slot checks accept buffers across realms and refuse detached buffers before staging. */
+function isReadableArrayBuffer(value: unknown): value is ArrayBuffer {
+  try {
+    const getLength = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength')!.get!;
+    getLength.call(value);
+    return new Uint8Array(value as ArrayBuffer).buffer === value;
+  } catch {
+    return false;
+  }
 }
