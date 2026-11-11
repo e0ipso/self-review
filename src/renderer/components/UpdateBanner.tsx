@@ -1,18 +1,25 @@
+import type { ElectronAPI } from '../../shared/types';
 import React, { useState, useEffect } from 'react';
 import { Button } from '../../../packages/react/src/components/ui/button';
 import { ArrowUpCircle, X } from 'lucide-react';
 import { VersionUpdateInfo } from '../../shared/types';
 
-export default function UpdateBanner() {
+type UpdateBannerAPI = Pick<
+  ElectronAPI,
+  'onVersionUpdate' | 'requestVersionUpdate' | 'openExternal'
+>;
+
+export default function UpdateBanner({ api = window.electronAPI }: { api?: UpdateBannerAPI }) {
   const [updateInfo, setUpdateInfo] = useState<VersionUpdateInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    window.electronAPI.onVersionUpdate(info => {
+    const unsubscribe = api.onVersionUpdate(info => {
       setUpdateInfo(info);
     });
-    window.electronAPI.requestVersionUpdate();
-  }, []);
+    api.requestVersionUpdate();
+    return unsubscribe;
+  }, [api]);
 
   if (!updateInfo || dismissed) return null;
 
@@ -27,7 +34,7 @@ export default function UpdateBanner() {
           Self Review v{updateInfo.latestVersion} is available.{' '}
           <button
             className='underline text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer'
-            onClick={() => window.electronAPI.openExternal(updateInfo.releaseUrl)}
+            onClick={() => api.openExternal(updateInfo.releaseUrl)}
           >
             View release
           </button>

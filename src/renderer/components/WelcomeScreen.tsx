@@ -1,3 +1,4 @@
+import type { ElectronAPI } from '../../shared/types';
 import React, { useEffect, useState } from 'react';
 import { parseForgeUrl } from '@self-review/core';
 import { Button } from '../../../packages/react/src/components/ui/button';
@@ -51,7 +52,12 @@ function Logo({ className }: { className?: string }) {
   );
 }
 
-export default function WelcomeScreen() {
+type WelcomeScreenAPI = Pick<
+  ElectronAPI,
+  'pickDirectory' | 'startDirectoryReview' | 'openRemoteUrl' | 'onCloseRequested' | 'discardAndQuit'
+>;
+
+export default function WelcomeScreen({ api = window.electronAPI }: { api?: WelcomeScreenAPI }) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,15 +65,17 @@ export default function WelcomeScreen() {
   const [remoteError, setRemoteError] = useState<string | null>(null);
 
   useEffect(() => {
-    return window.electronAPI.onCloseRequested(() => {
-      window.electronAPI.discardAndQuit();
+    return api.onCloseRequested(() => {
+      api.discardAndQuit();
     });
-  }, []);
+  }, [api]);
 
   const handleBrowse = async () => {
-    const path = await window.electronAPI.pickDirectory();
-    if (path) {
-      setSelectedPath(path);
+    try {
+      const path = await api.pickDirectory();
+      if (path) setSelectedPath(path);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to choose directory');
     }
   };
 
@@ -83,7 +91,7 @@ export default function WelcomeScreen() {
     setRemoteError(null);
     setLoading(true);
     try {
-      const result = await window.electronAPI.openRemoteUrl(url);
+      const result = await api.openRemoteUrl(url);
       if (result.ok === false) {
         setRemoteError(result.error);
         setLoading(false);
@@ -97,12 +105,14 @@ export default function WelcomeScreen() {
 
   const handleStartReview = async () => {
     if (!selectedPath) return;
+    setError(null);
     setLoading(true);
     try {
-      await window.electronAPI.startDirectoryReview(selectedPath);
+      await api.startDirectoryReview(selectedPath);
     } catch (err) {
       console.error('[WelcomeScreen] Failed to start directory review:', err);
       setError(err instanceof Error ? err.message : 'Failed to start review');
+    } finally {
       setLoading(false);
     }
   };
@@ -149,6 +159,9 @@ export default function WelcomeScreen() {
             <div className='flex items-center gap-3'>
               <Input
                 data-testid='remote-url-input'
+                aria-label='GitHub PR or GitLab MR URL'
+                aria-describedby={remoteError ? 'remote-url-error' : undefined}
+                aria-invalid={!!remoteError}
                 type='url'
                 placeholder='https://github.com/owner/repo/pull/42'
                 value={remoteUrl}
@@ -168,7 +181,12 @@ export default function WelcomeScreen() {
               </Button>
             </div>
             {remoteError && (
-              <p data-testid='remote-url-error' className='text-sm text-destructive'>
+              <p
+                id='remote-url-error'
+                role='alert'
+                data-testid='remote-url-error'
+                className='text-sm text-destructive'
+              >
                 {remoteError}
               </p>
             )}
@@ -208,7 +226,7 @@ export default function WelcomeScreen() {
               </Button>
             )}
             {error && (
-              <p data-testid='welcome-error' className='text-sm text-destructive'>
+              <p role='alert' data-testid='welcome-error' className='text-sm text-destructive'>
                 {error}
               </p>
             )}

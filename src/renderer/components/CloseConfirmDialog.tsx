@@ -1,3 +1,4 @@
+import type { ElectronAPI } from '../../shared/types';
 import React, { useState, useEffect } from 'react';
 import {
   AlertDialog,
@@ -9,36 +10,46 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../../packages/react/src/components/ui/alert-dialog';
+import { useUnsavedReviewWork } from '../useUnsavedReviewWork';
 import { useReview } from '../../../packages/react/src/context/ReviewContext';
 
-export default function CloseConfirmDialog() {
+type CloseConfirmDialogAPI = Pick<
+  ElectronAPI,
+  'onCloseRequested' | 'discardAndQuit' | 'submitReview' | 'saveAndQuit'
+>;
+
+export default function CloseConfirmDialog({
+  api = window.electronAPI,
+}: {
+  api?: CloseConfirmDialogAPI;
+}) {
   const [open, setOpen] = useState(false);
   const { files, diffSource } = useReview();
 
-  const hasComments = files.some(f => f.comments.length > 0);
+  const hasUnsavedWork = useUnsavedReviewWork();
 
   useEffect(() => {
-    return window.electronAPI.onCloseRequested(() => {
-      if (!hasComments) {
-        window.electronAPI.discardAndQuit();
+    return api.onCloseRequested(() => {
+      if (!hasUnsavedWork) {
+        api.discardAndQuit();
         return;
       }
       setOpen(true);
     });
-  }, [hasComments]);
+  }, [hasUnsavedWork, api]);
 
   const handleSaveAndQuit = () => {
     // Push state before main saves; a failed save leaves the review as it is.
-    window.electronAPI.submitReview({
+    api.submitReview({
       timestamp: new Date().toISOString(),
       source: diffSource,
       files,
     });
-    window.electronAPI.saveAndQuit();
+    api.saveAndQuit();
   };
 
   const handleDiscard = () => {
-    window.electronAPI.discardAndQuit();
+    api.discardAndQuit();
   };
 
   return (

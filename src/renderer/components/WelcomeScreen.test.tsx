@@ -107,3 +107,19 @@ describe('WelcomeScreen remote URL entry', () => {
     });
   });
 });
+
+it('restores controls after native large-payload cancellation and allows retry', async () => {
+  const api = installElectronApiStub({ pickDirectory: vi.fn(async () => '/picked') });
+  render(<WelcomeScreen />);
+  fireEvent.click(screen.getByTestId('browse-button'));
+  const start = await screen.findByRole('button', { name: 'Start Review' });
+  fireEvent.click(start);
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Start Review' }) as HTMLButtonElement).disabled
+    ).toBe(false)
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Start Review' }));
+  await waitFor(() => expect(api.startDirectoryReview).toHaveBeenCalledTimes(2));
+  expect((screen.getByTestId('browse-button') as HTMLButtonElement).disabled).toBe(false);
+});

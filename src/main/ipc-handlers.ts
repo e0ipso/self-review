@@ -218,6 +218,7 @@ export function registerIpcHandlers(
         )
           return;
 
+        await selection.authorize(event, directoryPath);
         current();
         opening.assertCurrent();
         // Update the cache and send to renderer

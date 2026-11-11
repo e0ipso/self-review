@@ -126,3 +126,29 @@ it('answers cached update requests after startup completion', async () => {
   await invoke(IPC.VERSION_UPDATE_REQUEST);
   expect(sender.send).toHaveBeenCalledWith(IPC.VERSION_UPDATE_AVAILABLE, update);
 });
+
+it('rejects a directory replaced while its confirmation was pending', async () => {
+  const { session, invoke, presentation } = fixture();
+  const root = await mkdtemp(join(tmpdir(), 'desktop-start-'));
+  try {
+    const directory = join(root, 'picked');
+    await mkdir(directory);
+    await writeFile(join(directory, 'a.ts'), 'hello\n');
+    vi.mocked(presentation.pickDirectory).mockResolvedValue(directory);
+    await invoke(IPC.DIALOG_PICK_DIRECTORY);
+    vi.mocked(presentation.confirmPayload).mockImplementation(async () => {
+      // Retain the original inode at another name so recreation cannot reuse it.
+      const { rename } = await import('fs/promises');
+      await rename(directory, join(root, 'old'));
+      await mkdir(directory);
+      return true;
+    });
+    await expect(invoke(IPC.REVIEW_START_DIRECTORY, directory)).rejects.toThrow(
+      /selected directory has changed/
+    );
+    expect(session.diffData?.source.type).toBe('welcome');
+    expect(session.reviewedPaths.size).toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

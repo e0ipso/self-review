@@ -29,9 +29,6 @@ export default defineConfig({
         // Listed individually, not by wildcard, so a component picks up
         // coverage the moment it gains a test file (SR-0039).
         'src/renderer/components/AboutDialog.tsx',
-        'src/renderer/components/CloseConfirmDialog.tsx',
-        'src/renderer/components/FindBar.tsx',
-        'src/renderer/components/UpdateBanner.tsx',
       ],
     },
   },

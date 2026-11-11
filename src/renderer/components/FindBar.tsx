@@ -1,16 +1,20 @@
+import type { ElectronAPI } from '../../shared/types';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Input } from '../../../packages/react/src/components/ui/input';
 import { Button } from '../../../packages/react/src/components/ui/button';
 import { ChevronUp, ChevronDown, X } from 'lucide-react';
+import { useLocalization } from '../../../packages/react/src/localization/LocalizationContext';
 import { FindInPageResult } from '../../shared/types';
 
 interface FindBarProps {
   isOpen: boolean;
   onClose: () => void;
+  api?: Pick<ElectronAPI, 'findInPage' | 'stopFindInPage' | 'onFindResult'>;
 }
 
-export function FindBar({ isOpen, onClose }: FindBarProps) {
+export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarProps) {
+  const { number } = useLocalization();
   const [query, setQuery] = useState('');
   const [activeMatch, setActiveMatch] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
@@ -27,11 +31,11 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     // Chromium starts at the focused element and matches the query text in this very input (ordinal 0,
     // counter "0 of N" on Chromium 152). Blurring first starts the session in the document.
     if (isNewSearch) inputRef.current?.blur();
-    window.electronAPI.findInPage({ text: query, forward: true, findNext: isNewSearch });
+    api.findInPage({ text: query, forward: true, findNext: isNewSearch });
 
     // Update the last searched query after initiating search
     lastSearchedQueryRef.current = query;
-  }, [query]);
+  }, [query, api]);
 
   const findPrevious = useCallback(() => {
     if (!query) return;
@@ -41,16 +45,16 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
 
     // Blur first, as above.
     if (isNewSearch) inputRef.current?.blur();
-    window.electronAPI.findInPage({ text: query, forward: false, findNext: isNewSearch });
+    api.findInPage({ text: query, forward: false, findNext: isNewSearch });
 
     // Update the last searched query after initiating search
     lastSearchedQueryRef.current = query;
-  }, [query]);
+  }, [query, api]);
 
   const handleClose = useCallback(() => {
-    window.electronAPI.stopFindInPage('clearSelection');
+    api.stopFindInPage('clearSelection');
     onClose();
-  }, [onClose]);
+  }, [onClose, api]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -75,13 +79,13 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
       inputRef.current?.focus();
       inputRef.current?.select();
     }
-  }, [isOpen]);
+  }, [isOpen, api]);
 
   // Subscribe to find results from main process
   useEffect(() => {
     if (!isOpen) return;
 
-    const unsubscribe = window.electronAPI.onFindResult((result: FindInPageResult) => {
+    const unsubscribe = api.onFindResult((result: FindInPageResult) => {
       if (result.finalUpdate) {
         setActiveMatch(result.activeMatchOrdinal);
         setTotalMatches(result.matches);
@@ -93,7 +97,7 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     });
 
     return unsubscribe;
-  }, [isOpen]);
+  }, [isOpen, api]);
 
   // Global keydown listener to handle Escape and Enter even when input loses focus
   // (Chromium's findInPage can steal focus from the input)
@@ -101,6 +105,7 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
     if (!isOpen) return;
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         handleClose();
@@ -130,23 +135,23 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
   // Clear highlights when query is emptied
   useEffect(() => {
     if (!query && lastSearchedQueryRef.current) {
-      window.electronAPI.stopFindInPage('clearSelection');
+      api.stopFindInPage('clearSelection');
       setActiveMatch(0);
       setTotalMatches(0);
       lastSearchedQueryRef.current = '';
     }
-  }, [query]);
+  }, [query, api]);
 
   // Clear highlights when closing
   useEffect(() => {
     if (!isOpen) {
-      window.electronAPI.stopFindInPage('clearSelection');
+      api.stopFindInPage('clearSelection');
       setActiveMatch(0);
       setTotalMatches(0);
       setQuery('');
       lastSearchedQueryRef.current = '';
     }
-  }, [isOpen]);
+  }, [isOpen, api]);
 
   if (!isOpen) return null;
 
@@ -158,20 +163,21 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
   const searched = query && lastSearchedQueryRef.current === query;
   const matchDisplay = searched
     ? adjustedTotal > 0
-      ? `${adjustedActive} of ${adjustedTotal}`
+      ? `${number(adjustedActive)} of ${number(adjustedTotal)}`
       : 'No results'
     : '';
 
   return createPortal(
     <div
       className='fixed flex items-center gap-1 rounded-md border bg-background p-1.5 shadow-lg'
-      style={{ top: 44, right: 16, zIndex: 9998 }}
+      style={{ top: 44, insetInlineEnd: 16, zIndex: 9998 }}
     >
       <Input
         ref={inputRef}
         value={query}
         onChange={e => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
+        aria-label='Find in page'
         placeholder='Find...'
         className='h-7 w-52 text-sm'
       />
@@ -184,6 +190,7 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
         className='h-7 w-7'
         onClick={findPrevious}
         disabled={!query || adjustedTotal === 0}
+        aria-label='Previous match'
         title='Previous match (Shift+Enter)'
       >
         <ChevronUp className='h-4 w-4' />
@@ -194,6 +201,7 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
         className='h-7 w-7'
         onClick={findNext}
         disabled={!query || adjustedTotal === 0}
+        aria-label='Next match'
         title='Next match (Enter)'
       >
         <ChevronDown className='h-4 w-4' />
@@ -203,6 +211,7 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
         size='icon'
         className='h-7 w-7'
         onClick={handleClose}
+        aria-label='Close find bar'
         title='Close (Escape)'
       >
         <X className='h-4 w-4' />
