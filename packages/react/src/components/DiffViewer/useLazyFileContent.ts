@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DiffFile } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { useReviewCommands, useReviewSessionId } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 
 /** Only `idle` starts a request, so a failure stays until the reviewer retries. */
@@ -46,7 +46,8 @@ export function useLazyFileContent({
   filePath,
   expanded,
 }: UseLazyFileContentOptions): UseLazyFileContentResult {
-  const { updateFileHunks, sessionId } = useReview();
+  const { updateFileHunks } = useReviewCommands();
+  const sessionId = useReviewSessionId();
   const adapter = useAdapter();
   const [owned, setOwned] = useState<OwnedLoadState>({ file, sessionId, state: IDLE });
   const state = owned.file === file && owned.sessionId === sessionId ? owned.state : IDLE;

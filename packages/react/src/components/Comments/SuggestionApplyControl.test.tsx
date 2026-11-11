@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type {
   DiffFile,
   DiffLoadPayload,
@@ -74,6 +74,34 @@ function renderInSession(adapter: ReviewAdapter) {
 const noopAdapter: ReviewAdapter = { loadDiff: async () => remotePayload(false) };
 
 describe('SuggestionApplyControl', () => {
+  it('abandons a destination picker when a pushed review replaces its owner', async () => {
+    let push!: (payload: DiffLoadPayload) => void;
+    let resolve!: (value: { status: 'chosen'; destinationRoot: string }) => void;
+    const applySuggestion = vi.fn();
+    const adapter: ReviewAdapter = {
+      loadDiff: async () => remotePayload(true),
+      onDiffLoad: cb => {
+        push = cb;
+        return () => {};
+      },
+      chooseApplyDestination: () =>
+        new Promise(r => {
+          resolve = r;
+        }),
+      applySuggestion,
+    };
+    renderInSession(adapter);
+    const button = await screen.findByTestId('suggestion-apply-choose-destination');
+    fireEvent.click(button);
+    act(() =>
+      push({ ...remotePayload(true), source: { type: 'directory', sourcePath: '/replacement' } })
+    );
+    await act(async () => resolve({ status: 'chosen', destinationRoot: '/destination' }));
+    expect(applySuggestion).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('suggestion-apply-button')).toBeNull();
+    expect(screen.getByTestId('suggestion-apply-choose-destination')).toBeTruthy();
+  });
+
   it('renders nothing when the host cannot apply', () => {
     renderControl(noopAdapter);
 

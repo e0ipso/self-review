@@ -7,7 +7,10 @@ import type { FileSectionHeaderProps } from './FileSectionHeader';
 import type { DiffContentAreaProps } from './DiffContentArea';
 
 vi.mock('../../context/ReviewContext', () => ({
-  useReview: () => ({
+  useReviewSource: () => ({ type: 'git' }),
+  useFileReview: () => undefined,
+  useReviewSessionId: () => 1,
+  useReviewCommands: () => ({
     toggleViewed: vi.fn(),
     getCommentsForFile: vi.fn(() => []),
     files: [],

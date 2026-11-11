@@ -175,7 +175,11 @@ export default function DiffViewer() {
             const filePath = file.newPath || file.oldPath;
             // Net for failures outside FileSection's own preview boundary.
             return (
-              <PreviewErrorBoundary key={filePath} filePath={filePath} resetKeys={[file]}>
+              <PreviewErrorBoundary
+                key={`${sessionId}:${filePath}`}
+                filePath={filePath}
+                resetKeys={[file]}
+              >
                 <FileSection
                   file={file}
                   viewMode={config.diffView}

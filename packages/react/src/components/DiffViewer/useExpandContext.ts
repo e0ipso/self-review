@@ -1,6 +1,10 @@
-import { useState, useLayoutEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import type { DiffFile, DiffHunk } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import {
+  useReviewCommands,
+  useReviewSessionId,
+  useReviewSnapshotId,
+} from '../../context/ReviewContext';
 import {
   trimHunkContext,
   getHunkChangeRange,
@@ -33,7 +37,9 @@ export function useExpandContext({
   isExpandable,
   sectionRef,
 }: UseExpandContextParams): UseExpandContextResult {
-  const { expandFileContext, updateFileHunks } = useReview();
+  const { expandFileContext, updateFileHunks } = useReviewCommands();
+  const sessionId = useReviewSessionId();
+  const snapshotId = useReviewSnapshotId();
   const [expandLoading, setExpandLoading] = useState(false);
   const [totalLines, setTotalLines] = useState<number | null>(null);
 
@@ -43,6 +49,25 @@ export function useExpandContext({
   const hunkBudgetsRef = useRef<HunkContextBudget[] | null>(null);
   const rawHunksRef = useRef<DiffHunk[] | null>(null);
   const lastRequestedContextRef = useRef<number>(0);
+
+  const owner = `${sessionId}:${snapshotId}`;
+  const ownerRef = useRef(owner);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  if (ownerRef.current !== owner) {
+    ownerRef.current = owner;
+    originalRangesRef.current = null;
+    hunkBudgetsRef.current = null;
+    rawHunksRef.current = null;
+    lastRequestedContextRef.current = 0;
+    setTotalLines(null);
+    setExpandLoading(false);
+  }
 
   // Initialize per-hunk tracking from the initial hunks (run once)
   if (originalRangesRef.current === null && file.hunks.length > 0) {
@@ -75,7 +100,9 @@ export function useExpandContext({
     if (!compensation) return;
     scrollCompensationRef.current = null;
 
-    const scrollContainer = document.querySelector<HTMLElement>('[data-scroll-container="diff"]');
+    const scrollContainer = sectionRef.current?.closest<HTMLElement>(
+      '[data-scroll-container="diff"]'
+    );
     if (!scrollContainer || !sectionRef.current) return;
 
     // Find the anchor line element in the updated DOM
@@ -184,7 +211,9 @@ export function useExpandContext({
       }
 
       // --- Pick scroll anchor ---
-      const scrollContainer = document.querySelector<HTMLElement>('[data-scroll-container="diff"]');
+      const scrollContainer = sectionRef.current?.closest<HTMLElement>(
+        '[data-scroll-container="diff"]'
+      );
       if (scrollContainer && sectionRef.current && currentHunks.length > 0) {
         let anchorLine: { lineNumber: number; side: 'old' | 'new' } | null = null;
 
@@ -230,6 +259,8 @@ export function useExpandContext({
       // --- Fetch (if needed) and trim ---
       const maxBudget = Math.max(...budgets.flatMap(b => [b.above, b.below]), 0);
 
+      const requestOwner = ownerRef.current;
+      expandLoadingRef.current = true;
       setExpandLoading(true);
 
       let rawHunks: DiffHunk[] | null = null;
@@ -238,6 +269,7 @@ export function useExpandContext({
       if (maxBudget > lastRequestedContextRef.current || !rawHunksRef.current) {
         // Need fresh data from git
         const result = await expandFileContext(filePath, maxBudget);
+        if (!mounted.current || ownerRef.current !== requestOwner) return;
         if (!result) {
           setExpandLoading(false);
           scrollCompensationRef.current = null;
@@ -252,6 +284,7 @@ export function useExpandContext({
         rawHunks = rawHunksRef.current;
       }
 
+      if (!mounted.current || ownerRef.current !== requestOwner) return;
       const trimmed = trimHunkContext(rawHunks, originalRanges, budgets);
       updateFileHunks(filePath, trimmed);
       setTotalLines(newTotalLines);

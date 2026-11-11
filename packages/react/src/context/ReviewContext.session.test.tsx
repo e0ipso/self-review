@@ -293,6 +293,17 @@ describe('ReviewProvider welcome placeholder', () => {
 });
 
 describe('ReviewProvider initial load ordering', () => {
+  it('keeps a newer same-source push when the initial request arrives late', async () => {
+    const gate = deferred<DiffLoadPayload>();
+    const a = pushableAdapter(gate.promise);
+    a.adapter.loadResumedReview = async () => ({ comments: [comment('r1', 'new.txt')] });
+    const { ctx, exported } = mount({ adapter: a.adapter });
+    act(() => a.push({ files: [diffFile('new.txt')], source: dir('/same') }));
+    await act(async () => gate.resolve({ files: [diffFile('old.txt')], source: dir('/same') }));
+    expect(ctx().diffFiles.map(f => f.newPath)).toEqual(['new.txt']);
+    expect(summary(exported())).toEqual(['new.txt:false:comment r1']);
+  });
+
   it('ignores an initial load that settles after a push started a different session', async () => {
     const gate = deferred<DiffLoadPayload>();
     const a = pushableAdapter(gate.promise);
@@ -385,6 +396,13 @@ describe('ReviewProvider initialComments hydration', () => {
 });
 
 describe('ReviewProvider static files', () => {
+  it('does not authorize synthetic entries installed through the display setter', () => {
+    const { ctx } = mount({ adapter: null, initialFiles: [diffFile('reviewed.txt')] });
+    act(() => ctx().setDiffFiles([diffFile('synthetic.txt')]));
+    expect(ctx().reviewedPaths.has('synthetic.txt')).toBe(false);
+    expect(ctx().reviewedPaths.has('reviewed.txt')).toBe(true);
+  });
+
   it('reconciles new initialFiles for the same source without losing edits', () => {
     const { exported, ctx, rerender } = mount({
       adapter: null,

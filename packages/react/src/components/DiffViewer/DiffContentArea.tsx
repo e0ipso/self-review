@@ -7,6 +7,7 @@ import UnifiedView from './UnifiedView';
 import RenderedMarkdownView from './RenderedMarkdownView';
 import RenderedImageView from './RenderedImageView';
 import RenderedSvgView from './RenderedSvgView';
+import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
 import type { LazyLoadState } from './useLazyFileContent';
@@ -62,6 +63,7 @@ export function DiffContentArea({
   handleExpandContext,
 }: DiffContentAreaProps) {
   const adapter = useAdapter();
+  const snapshotKey = useOptionalSnapshotKey();
   // Passed to rendered blocks through context; a stable identity keeps that value memoized.
   const handleGutterMouseDown = useCallback(
     (startLine: number, endLine: number) => {
@@ -120,7 +122,13 @@ export function DiffContentArea({
   }
 
   if (showImagePreview && renderViewMode === 'rendered') {
-    return <RenderedImageView filePath={filePath ?? ''} onLoadImage={adapter?.loadImage} />;
+    return (
+      <RenderedImageView
+        key={snapshotKey}
+        filePath={filePath ?? ''}
+        onLoadImage={adapter?.loadImage}
+      />
+    );
   }
 
   if (showSvgPreview && renderViewMode === 'rendered') {

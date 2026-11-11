@@ -3,7 +3,7 @@ import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
 import { useLazyFileContent } from './useLazyFileContent';
 import type { DiffFile } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { useReviewCommands, useFileReview, useReviewSource } from '../../context/ReviewContext';
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import {
@@ -29,7 +29,9 @@ export default function FileSection({
   expanded: controlledExpanded,
   onToggleExpanded,
 }: FileSectionProps) {
-  const { toggleViewed, getCommentsForFile, files, diffSource } = useReview();
+  const { toggleViewed } = useReviewCommands();
+  const diffSource = useReviewSource();
+  const fileState = useFileReview(file.newPath || file.oldPath);
   const { mode: guideMode, getFileDescription, getFileGroupIndex } = useGuide();
   const [internalExpanded, setInternalExpanded] = useState(true);
   const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
@@ -57,11 +59,10 @@ export default function FileSection({
 
   const filePath = file.newPath || file.oldPath;
   const guideDescription = guideMode === 'guided' ? getFileDescription(filePath) : undefined;
-  const comments = getCommentsForFile(filePath);
+  const comments = fileState?.comments ?? [];
   const fileComments = comments.filter(c => c.lineRange === null);
   const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
   const orphanedComments = comments.filter(c => !hasAnchor(c));
-  const fileState = files.find(f => f.path === filePath);
   const isViewed = fileState?.viewed || false;
 
   // Registered by path so navigation never builds a CSS selector from the filename.
