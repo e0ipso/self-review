@@ -1,8 +1,9 @@
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { DiffFile } from '@self-review/types';
 import { DiffContentArea, type DiffContentAreaProps } from './DiffContentArea';
+import type { FileSectionBodyProps, FileSectionBody } from './FileSectionBody';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
 
 vi.mock('../../context/ReviewAdapterContext', () => ({
@@ -180,4 +181,14 @@ describe('DiffContentArea omitted content', () => {
     expect(screen.getByTestId('content-omitted').textContent).toContain(reason);
     expect(screen.queryByText('No changes to display')).toBeNull();
   });
+});
+
+it('keeps the legacy preview flag property types required', () => {
+  expectTypeOf<
+    React.ComponentProps<typeof FileSectionBody>
+  >().toEqualTypeOf<FileSectionBodyProps>();
+  expectTypeOf<DiffContentAreaProps['showImagePreview']>().toEqualTypeOf<boolean>();
+  expectTypeOf<DiffContentAreaProps['showSvgPreview']>().toEqualTypeOf<boolean>();
+  expectTypeOf<DiffContentAreaProps['isEligibleForRenderedView']>().toEqualTypeOf<boolean>();
+  expectTypeOf<DiffContentAreaProps['renderedTextMode']>().toEqualTypeOf<RenderedTextMode | null>();
 });

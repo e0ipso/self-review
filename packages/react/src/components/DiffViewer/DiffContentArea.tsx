@@ -12,7 +12,7 @@ import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
 import type { ContentPreview } from './content-preview';
-import { previewFromFlags } from './preview-compat';
+import { normalizePreviewProps } from './preview-compat';
 import type { LazyLoadState } from './useLazyFileContent';
 
 export interface PreviewContentAreaProps {
@@ -43,33 +43,13 @@ export interface PreviewContentAreaProps {
 /** Public 2.0.4 call forms are normalized here, before entering the content dispatcher. */
 export interface DiffContentAreaProps extends Omit<PreviewContentAreaProps, 'preview'> {
   preview?: ContentPreview;
-  isEligibleForRenderedView?: boolean;
-  renderedTextMode?: RenderedTextMode | null;
-  showImagePreview?: boolean;
-  showSvgPreview?: boolean;
+  isEligibleForRenderedView: boolean;
+  renderedTextMode: RenderedTextMode | null;
+  showImagePreview: boolean;
+  showSvgPreview: boolean;
 }
-export function DiffContentArea({
-  preview,
-  isEligibleForRenderedView = false,
-  renderedTextMode = null,
-  showImagePreview = false,
-  showSvgPreview = false,
-  ...props
-}: DiffContentAreaProps) {
-  return (
-    <PreviewContentArea
-      {...props}
-      preview={
-        preview ??
-        previewFromFlags({
-          isEligibleForRenderedView,
-          renderedTextMode,
-          showImagePreview,
-          showSvgPreview,
-        })
-      }
-    />
-  );
+export function DiffContentArea(props: DiffContentAreaProps) {
+  return <PreviewContentArea {...normalizePreviewProps(props)} />;
 }
 
 export function PreviewContentArea({
