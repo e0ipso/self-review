@@ -36,9 +36,21 @@ export class CommandOutputLimitError extends Error {
 // Explicit repository targets outrank the surrounding hook's repository location. Keep
 // credential/configuration variables and GIT_INDEX_FILE, which can intentionally select
 // the index used by a partial commit.
-function repositoryEnvironment(): NodeJS.ProcessEnv {
+function repositoryEnvironment(isolated = false): NodeJS.ProcessEnv {
   const env = { ...process.env };
   for (const key of ['GIT_DIR', 'GIT_COMMON_DIR', 'GIT_WORK_TREE', 'GIT_PREFIX']) delete env[key];
+  if (isolated) {
+    for (const key of [
+      'GIT_INDEX_FILE',
+      'GIT_OBJECT_DIRECTORY',
+      'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+      'GIT_NAMESPACE',
+      'GIT_CEILING_DIRECTORIES',
+      'GIT_SHALLOW_FILE',
+      'GIT_IMPLICIT_WORK_TREE',
+    ])
+      delete env[key];
+  }
   return env;
 }
 
@@ -71,8 +83,9 @@ export const runBufferedCommand: BufferedCommandRunner = (command, args, options
       stdio: ['ignore', 'pipe', 'pipe'],
       cwd: options.cwd,
       env:
-        command === 'git' && (options.cwd !== undefined || args.includes('-C'))
-          ? repositoryEnvironment()
+        command === 'git' &&
+        (options.gitEnvironment === 'isolated' || options.cwd !== undefined || args.includes('-C'))
+          ? repositoryEnvironment(options.gitEnvironment === 'isolated')
           : undefined,
     });
     const stdout: Buffer[] = [];

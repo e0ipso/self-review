@@ -113,6 +113,7 @@ type SessionGit = (args: string[]) => Promise<ForgeCommandResult>;
 function bindGit(runner: ForgeCommandRunner, options: MaterializeOptions): SessionGit {
   const commandOptions: ForgeCommandOptions = {
     signal: options.signal,
+    gitEnvironment: 'isolated',
     timeoutMs: options.commandTimeoutMs ?? DEFAULT_GIT_COMMAND_TIMEOUT_MS,
   };
   return args => {
@@ -209,6 +210,10 @@ async function fetchSnapshot(
     '-C',
     repoPath,
     'fetch',
+    '--refmap=',
+    '--no-tags',
+    '--no-write-fetch-head',
+    '--recurse-submodules=no',
     remote,
     `+refs/heads/${baseBranch}:${refs.base}`,
     `+${headRefFor(url)}:${refs.head}`,
@@ -263,25 +268,34 @@ async function materializeIntoExistingClone(
   const ownedRefs = [refs.base, refs.head];
 
   // Not under the session signal: an aborted session must still release its refs.
-  let released = false;
-  const cleanup = async (): Promise<void> => {
-    if (released) return;
-    released = true;
-    for (const ref of ownedRefs) {
+  const pendingRefs = new Set(ownedRefs);
+  let releasing: Promise<void> | undefined;
+  const releaseRefs = async (): Promise<void> => {
+    for (const ref of pendingRefs) {
       try {
         const result = await runner('git', ['-C', repoPath, 'update-ref', '-d', ref], {
           timeoutMs: CLEANUP_COMMAND_TIMEOUT_MS,
+          gitEnvironment: 'isolated',
         });
         if (result.exitCode !== 0) {
           console.error(
             `self-review: could not delete ${ref} in ${repoPath}: ${result.stderr.trim()}`
           );
+        } else {
+          pendingRefs.delete(ref);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(`self-review: could not delete ${ref} in ${repoPath}: ${message}`);
       }
     }
+  };
+
+  const cleanup = (): Promise<void> => {
+    releasing ??= releaseRefs().finally(() => {
+      releasing = undefined;
+    });
+    return releasing;
   };
 
   // Namespaced refs only: no checkout, branch or working-tree change. A part-way
@@ -316,8 +330,13 @@ async function materializeIntoTempClone(
   let removed = false;
   const cleanup = async (): Promise<void> => {
     if (removed) return;
-    removed = true;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      removed = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`self-review: could not remove ${tempDir}: ${message}`);
+    }
   };
 
   try {

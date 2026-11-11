@@ -18,6 +18,12 @@ import {
 } from './materializer';
 import type { MaterializeResult } from './materializer';
 
+// Wrap only the removal boundary so failure tests keep the real owned directory.
+vi.mock('fs', async importOriginal => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return { ...actual, rmSync: vi.fn(actual.rmSync) };
+});
+
 const BASE_SHA = 'a'.repeat(40);
 const HEAD_SHA = 'b'.repeat(40);
 
@@ -205,6 +211,14 @@ describe('materialize', () => {
 
       const fetch = findCall(calls, 'fetch');
       expect(fetch).toBeDefined();
+      expect(fetch).toEqual(
+        expect.arrayContaining([
+          '--refmap=',
+          '--no-tags',
+          '--no-write-fetch-head',
+          '--recurse-submodules=no',
+        ])
+      );
       expect(fetch).toContain('origin');
       expect(fetch).toContainEqual(
         expect.stringMatching(/^\+refs\/heads\/develop:refs\/self-review\/[^/]+\/base$/)
@@ -273,6 +287,24 @@ describe('materialize', () => {
       expect(output).toContain('ref lock');
     });
 
+    it('retries only failed ref deletions and coalesces concurrent cleanup', async () => {
+      let attempts = 0;
+      const handlers = existingCloneHandlers(
+        'origin\tgit@github.com:e0ipso/self-review.git (fetch)\n'
+      );
+      handlers['update-ref'] = () => (++attempts === 1 ? fail('ref locked') : ok());
+      const { runner, calls } = createRunner(handlers);
+      const result = await materialize(githubUrl, 'main', '/home/user/project', runner);
+      await Promise.all([result.cleanup(), result.cleanup()]);
+      expect(findCalls(calls, 'update-ref')).toHaveLength(2);
+      await result.cleanup();
+      expect(findCalls(calls, 'update-ref').map(call => call[call.length - 1])).toEqual([
+        result.ownedRefs[0],
+        result.ownedRefs[1],
+        result.ownedRefs[0],
+      ]);
+    });
+
     it('reports the reused clone on stderr', async () => {
       const { runner } = createRunner(
         existingCloneHandlers('origin\tgit@github.com:e0ipso/self-review.git (fetch)\n')
@@ -338,6 +370,55 @@ describe('materialize', () => {
       // The clone goes away whole; there is nothing to delete ref by ref.
       expect(result.ownedRefs).toEqual([]);
       expect(findCall(calls, 'update-ref')).toBeUndefined();
+    });
+
+    it('reports a failed temp removal, preserves the operation error and permits retry', async () => {
+      const { runner } = createRunner(tempCloneHandlers());
+      const result = await materialize(githubUrl, 'main', '/not/a/repo', runner);
+      const original = fs.rmSync;
+      const remove = vi
+        .spyOn(fs, 'rmSync')
+        .mockClear()
+        .mockImplementationOnce(() => {
+          throw Object.assign(new Error('removal denied'), { code: 'EACCES' });
+        });
+      try {
+        await expect(result.cleanup()).resolves.toBeUndefined();
+        expect(fs.existsSync(result.repoPath)).toBe(true);
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('removal denied'));
+        await expect(result.cleanup()).resolves.toBeUndefined();
+        expect(fs.existsSync(result.repoPath)).toBe(false);
+        expect(remove.mock.calls.map(call => call[0])).toEqual([result.repoPath, result.repoPath]);
+      } finally {
+        remove.mockRestore();
+        original(result.repoPath, { recursive: true, force: true });
+      }
+    });
+
+    it('retains a clone failure when removing its temp directory also fails', async () => {
+      let ownedDir = '';
+      const handlers = tempCloneHandlers();
+      handlers.clone = args => {
+        ownedDir = args[args.length - 1];
+        throw new Error('primary clone failure');
+      };
+      const { runner } = createRunner(handlers);
+      const original = fs.rmSync;
+      const remove = vi
+        .spyOn(fs, 'rmSync')
+        .mockClear()
+        .mockImplementationOnce(() => {
+          throw new Error('secondary removal failure');
+        });
+      try {
+        await expect(materialize(githubUrl, 'main', '/not/a/repo', runner)).rejects.toThrow(
+          'primary clone failure'
+        );
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('secondary removal failure'));
+      } finally {
+        remove.mockRestore();
+        if (ownedDir) original(ownedDir, { recursive: true, force: true });
+      }
     });
 
     it('reports the created temp directory on stderr', async () => {
@@ -657,6 +738,52 @@ describe('session-owned refs over a shared clone (real git)', () => {
     expect(gitSync(['-C', localDir, 'for-each-ref', 'refs/self-review/']).trim()).toBe('');
   });
 
+  it('changes only session refs despite configured fetch side effects', async () => {
+    const beforeRefs = gitSync(['-C', localDir, 'show-ref']);
+    const fetchHeadPath = path.join(localDir, '.git', 'FETCH_HEAD');
+    fs.writeFileSync(fetchHeadPath, 'existing fetch metadata\n');
+    gitSync(['-C', localDir, 'config', 'fetch.recurseSubmodules', 'true']);
+    gitSync(['-C', remoteDir, 'update-ref', 'refs/heads/main', pr1Sha]);
+    gitSync(['-C', remoteDir, 'update-ref', 'refs/tags/remote-only', pr1Sha]);
+    try {
+      const result = await materialize(forgeUrl(1), 'main', localDir, defaultGitRunner, existing());
+      expect(result.baseSha).toBe(pr1Sha);
+      await result.cleanup();
+      expect(gitSync(['-C', localDir, 'show-ref'])).toBe(beforeRefs);
+      expect(fs.readFileSync(fetchHeadPath, 'utf8')).toBe('existing fetch metadata\n');
+    } finally {
+      gitSync(['-C', remoteDir, 'update-ref', 'refs/heads/main', baseSha]);
+      gitSync(['-C', remoteDir, 'update-ref', '-d', 'refs/tags/remote-only']);
+      gitSync(['-C', localDir, 'config', '--unset', 'fetch.recurseSubmodules']);
+    }
+  });
+
+  it('isolates remote Git from foreign repository, namespace, object and index variables', async () => {
+    const foreign = path.join(fixtureRoot, 'foreign');
+    gitSync(['init', '-q', foreign]);
+    const foreignGit = path.join(foreign, '.git');
+    vi.stubEnv('GIT_DIR', foreignGit);
+    vi.stubEnv('GIT_COMMON_DIR', foreignGit);
+    vi.stubEnv('GIT_WORK_TREE', foreign);
+    vi.stubEnv('GIT_NAMESPACE', 'foreign-namespace');
+    vi.stubEnv('GIT_OBJECT_DIRECTORY', path.join(foreignGit, 'objects'));
+    vi.stubEnv('GIT_ALTERNATE_OBJECT_DIRECTORIES', path.join(foreignGit, 'objects'));
+    vi.stubEnv('GIT_INDEX_FILE', path.join(foreignGit, 'foreign-index'));
+    vi.stubEnv('GIT_CEILING_DIRECTORIES', fixtureRoot);
+    try {
+      const result = await materialize(forgeUrl(2), 'main', localDir, defaultGitRunner, existing());
+      expect(result.headSha).toBe(pr2Sha);
+      for (const ref of result.ownedRefs)
+        expect(gitSync(['-C', localDir, 'rev-parse', ref]).trim()).not.toBe('');
+      await result.cleanup();
+      expect(gitSync(['-C', foreign, 'for-each-ref'])).toBe('');
+      expect(fs.readdirSync(path.join(foreignGit, 'objects')).sort()).toEqual(['info', 'pack']);
+      expect(fs.existsSync(path.join(foreignGit, 'foreign-index'))).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('never touches branches or the working tree of the reused clone', async () => {
     const before = gitSync(['-C', localDir, 'status', '--porcelain', '--branch']);
     const result = await materialize(forgeUrl(2), 'main', localDir, defaultGitRunner, existing());
@@ -841,6 +968,8 @@ describe('resolveRemoteDefaultBranch', () => {
       commandTimeoutMs: 99,
     });
 
-    expect(seen).toEqual([{ signal: controller.signal, timeoutMs: 99 }]);
+    expect(seen).toEqual([
+      { signal: controller.signal, timeoutMs: 99, gitEnvironment: 'isolated' },
+    ]);
   });
 });

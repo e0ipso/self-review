@@ -154,6 +154,11 @@ export const defaultRemoteSessionDeps: RemoteSessionDeps = {
     loadGitDiffWithUntracked(gitDiffArgs, cwd, {
       includeUntracked: false,
       signal: options?.signal,
+      runner: (command, args, execution) =>
+        defaultGitRunner(command, args, {
+          ...execution,
+          gitEnvironment: 'isolated',
+        }),
     }),
 };
 

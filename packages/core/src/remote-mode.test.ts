@@ -26,6 +26,7 @@ import { runFetchComments } from './fetch-comments';
 import { gitSync } from './test-support/git-env';
 import {
   startRemoteSession,
+  defaultRemoteSessionDeps,
   bootstrapRemoteDiff,
   mergeRemoteThreads,
   applyRemoteProvenance,
@@ -750,6 +751,7 @@ describe('session lifetime', () => {
       expect(options).toEqual({
         signal: controller.signal,
         timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+        gitEnvironment: 'isolated',
       });
     }
   });
@@ -1043,4 +1045,34 @@ describe('remote state assembly serializes to valid XML', () => {
       fs.rmSync(outDir, { recursive: true, force: true });
     }
   });
+});
+
+it('loads a remote diff in its clone despite inherited namespace and object redirection', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-remote-env-'));
+  const foreign = path.join(root, 'foreign');
+  const clone = path.join(root, 'clone');
+  gitSync(['init', '-q', foreign]);
+  gitSync(['init', '-q', clone]);
+  const git = (...args: string[]) => gitSync(['-C', clone, ...args]).trim();
+  git('config', 'user.name', 'Test');
+  git('config', 'user.email', 'test@example.com');
+  fs.writeFileSync(path.join(clone, 'a.txt'), 'before\n');
+  git('add', 'a.txt');
+  git('commit', '-qm', 'before');
+  const base = git('rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(clone, 'a.txt'), 'after\n');
+  git('commit', '-qam', 'after');
+  const head = git('rev-parse', 'HEAD');
+  vi.stubEnv('GIT_DIR', path.join(foreign, '.git'));
+  vi.stubEnv('GIT_NAMESPACE', 'foreign');
+  vi.stubEnv('GIT_OBJECT_DIRECTORY', path.join(foreign, '.git', 'objects'));
+  try {
+    const loaded = await defaultRemoteSessionDeps.loadDiff([`${base}...${head}`], clone);
+    expect(loaded.files.map(file => file.newPath)).toEqual(['a.txt']);
+    expect(loaded.repository).toBe(clone);
+    expect(loaded.identity?.newSide).toEqual({ kind: 'commit', sha: head });
+  } finally {
+    vi.unstubAllEnvs();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

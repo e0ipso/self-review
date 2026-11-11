@@ -117,6 +117,9 @@ export interface ForgeCommandOptions {
   cwd?: string;
   /** Combined captured stdout/stderr byte limit, before decoding. */
   maxOutputBytes?: number;
+  /** Remote-owned Git operations ignore ambient repository, index, object and namespace selection.
+   * Local explicit targets keep their intentionally selected alternate index by default. */
+  gitEnvironment?: 'isolated';
 }
 
 /**
