@@ -73,6 +73,10 @@ export interface ReviewSourceIdentity {
   pathPrefix: string;
   oldSide: ReviewSourceSide;
   newSide: ReviewSourceSide;
+  /** Empty-tree object id in this repository's hash format, for an unborn staged comparison. */
+  emptyTreeSha?: string;
+  /** Internal per-file snapshots for synthetic additions mixed into a git comparison. */
+  fileSources?: ReadonlyMap<string, { oldSide: ReviewSourceSide; newSide: ReviewSourceSide }>;
 }
 
 // ===== Review State Types =====

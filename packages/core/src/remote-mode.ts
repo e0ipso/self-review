@@ -108,7 +108,8 @@ export interface RemoteSessionDeps {
   /** Untracked files are never included. A stand-in may omit `diagnostics` and `identity`. */
   loadDiff: (
     gitDiffArgs: string[],
-    cwd: string
+    cwd: string,
+    options?: RemoteLifetimeOptions
   ) => Promise<{
     files: DiffFile[];
     repository: string;
@@ -147,10 +148,13 @@ export const defaultRemoteSessionDeps: RemoteSessionDeps = {
   materialize,
   resolveRemoteDefaultBranch,
   runner: defaultGitRunner,
-  loadDiff: (gitDiffArgs, cwd) =>
+  loadDiff: (gitDiffArgs, cwd, options) =>
     // A base...head diff of a remote PR/MR must never pick up local
     // untracked files (an existing clone may have unrelated ones).
-    loadGitDiffWithUntracked(gitDiffArgs, cwd, { includeUntracked: false }),
+    loadGitDiffWithUntracked(gitDiffArgs, cwd, {
+      includeUntracked: false,
+      signal: options?.signal,
+    }),
 };
 
 export interface RemoteLifetimeOptions {
@@ -310,7 +314,8 @@ export async function loadRemoteReview(
   throwIfAborted(options.signal, 'load');
   const { files, repository, diagnostics, identity } = await loadDiff(
     session.gitDiffArgs,
-    session.repoPath
+    session.repoPath,
+    options
   );
   throwIfAborted(options.signal, 'load');
   const shouldKeep = createIgnoreFilter(ignorePatterns);

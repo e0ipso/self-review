@@ -1,0 +1,118 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { defaultGitRunner, runBufferedCommand } from './command-runner';
+import { gitSync } from './test-support/git-env';
+import { getRepoRootAsync } from './git';
+import { readReviewedContent } from './snapshot-reader';
+import { resolveLocalSourceIdentity, resolveGitSourceIdentity } from './source-identity';
+import type { ForgeCommandOptions } from './forge-provider';
+
+const directories: string[] = [];
+function directory() {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'sr-command-')));
+  directories.push(dir);
+  return dir;
+}
+afterEach(() => {
+  vi.unstubAllEnvs();
+  for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
+// Both adapters expose identical exit, bounds and cancellation behavior.
+describe.each([
+  { name: 'text', run: defaultGitRunner },
+  { name: 'binary', run: runBufferedCommand },
+])('$name command contract', ({ run }) => {
+  it('captures UTF-8 text without a shell and honors cwd', async () => {
+    const cwd = directory();
+    const result = await run(
+      process.execPath,
+      [
+        '-e',
+        'process.stdout.write(process.argv[1]);process.stderr.write(process.cwd());process.exitCode=3;',
+        'café $literal',
+      ],
+      { cwd }
+    );
+    expect(result.stdout.toString()).toBe('café $literal');
+    expect(result.stderr.toString()).toBe(cwd);
+    expect(result.exitCode).toBe(3);
+  });
+  it('rejects a missing binary and an already aborted command', async () => {
+    await expect(run('sr-no-such-command-' + process.pid, [])).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(
+      run(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { signal: AbortSignal.abort() })
+    ).rejects.toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+  });
+  it('kills commands on timeout and output overflow', async () => {
+    await expect(
+      run(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { timeoutMs: 50 })
+    ).rejects.toMatchObject({ name: 'CommandCancelledError', reason: 'timeout' });
+    await expect(
+      run(
+        process.execPath,
+        ['-e', 'process.stdout.write("a".repeat(40));process.stderr.write("b".repeat(40));'],
+        { maxOutputBytes: 64 }
+      )
+    ).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' });
+  });
+  it.each([{ maxOutputBytes: -1 }, { maxOutputBytes: Infinity }, { timeoutMs: NaN }])(
+    'rejects invalid bounds %j before spawning',
+    async (options: ForgeCommandOptions) => {
+      await expect(run('sr-no-such-command-' + process.pid, [], options)).rejects.toBeInstanceOf(
+        RangeError
+      );
+    }
+  );
+});
+
+it('preserves arbitrary binary stdout and stderr bytes', async () => {
+  const result = await runBufferedCommand(process.execPath, [
+    '-e',
+    'const b=Buffer.from([0,255,128,10]);process.stdout.write(b);process.stderr.write(b);',
+  ]);
+  expect(result.stdout).toEqual(Buffer.from([0, 255, 128, 10]));
+  expect(result.stderr).toEqual(result.stdout);
+});
+
+it('honors an explicit source root inside a git hook without discarding the selected index', async () => {
+  const outer = directory();
+  const target = directory();
+  gitSync(['init', '-q', outer]);
+  gitSync(['init', '-q', target]);
+  vi.stubEnv('GIT_DIR', join(outer, '.git'));
+  vi.stubEnv('GIT_WORK_TREE', outer);
+  expect(await getRepoRootAsync(target)).toBe(target);
+  writeFileSync(join(target, 'selected.txt'), 'index selection\n');
+  vi.stubEnv('GIT_INDEX_FILE', join(target, '.git', 'alternate-index'));
+  await defaultGitRunner('git', ['add', 'selected.txt'], { cwd: target });
+  const selected = await defaultGitRunner('git', ['ls-files'], { cwd: target });
+  expect(selected.stdout).toBe('selected.txt\n');
+  expect(gitSync(['ls-files'], { cwd: target })).toBe('');
+});
+
+it('propagates cancellation from identity resolution rather than returning unknown sides', async () => {
+  await expect(
+    resolveGitSourceIdentity({
+      repository: directory(),
+      gitDiffArgv: ['HEAD'],
+      signal: AbortSignal.abort(),
+    })
+  ).rejects.toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+});
+
+it('honors snapshot cancellation for physical files as well as git blobs', async () => {
+  const root = directory();
+  writeFileSync(join(root, 'note.txt'), 'content\n');
+  const source = {
+    sourceIdentity: resolveLocalSourceIdentity({ type: 'directory', sourcePath: root }),
+    reviewedPaths: new Set(['note.txt']),
+  };
+  await expect(
+    readReviewedContent(source, 'note.txt', 'new', { signal: AbortSignal.abort() })
+  ).rejects.toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+});
