@@ -83,6 +83,7 @@ export {
 export type {
   AttachmentOrigins,
   AttachmentReadResult,
+  AttachmentReadOptions,
   AttachmentReadFailureReason,
 } from './attachment-origins';
 
@@ -173,6 +174,8 @@ export {
   MAX_GUIDE_BYTES,
   MAX_RESUME_XML_BYTES,
   MAX_RESUME_ATTACHMENTS,
+  MAX_REVIEW_ATTACHMENTS,
+  MAX_PUBLICATION_ASSET_BYTES,
   MAX_IMAGE_BYTES,
   DEFAULT_SOURCE_BUDGETS,
   resolveSourceBudgets,

@@ -6,11 +6,18 @@ import * as path from 'node:path';
 import { validateReviewForSerialization } from './review-state-validation';
 import { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
 import { checkWritability } from './fs-utils';
-import { ASSET_DIR_NAME, serializeReview } from './xml-serializer';
-import type { PlannedAsset } from './xml-serializer';
+import { serializePlannedReview } from './xml-serializer';
+import { ASSET_DIR_NAME, planPublicationAttachments } from './attachment-planner';
+import type { PublicationAsset } from './attachment-planner';
+import { MAX_IMAGE_BYTES, MAX_PUBLICATION_ASSET_BYTES, formatBytes } from './input-budgets';
+import {
+  atomicReplaceAsync,
+  asyncFsFromSync,
+  nodeAsyncFsLayer,
+  writeExclusiveNoFollowAsync,
+} from './safe-fs-async';
 import {
   SafeFsError,
-  atomicReplace,
   defaultRandomName,
   guarded,
   inspectReplaceTarget,
@@ -18,10 +25,9 @@ import {
   nodeFsLayer,
   toSafeFsError,
   unlinkQuietly,
-  writeExclusiveNoFollow,
 } from './safe-fs';
 import type { FsLayer, SafeFsErrorCode } from './safe-fs';
-import { AttachmentRelocationError, relocateAttachments } from './attachment-origins';
+import { AttachmentRelocationError, readAssetFile } from './attachment-origins';
 import type { AttachmentOrigins } from './attachment-origins';
 import type { ReviewState } from './types';
 
@@ -75,7 +81,9 @@ interface PublishReviewCommonOptions {
   randomName?: () => string;
   /** Imported attachments whose origin is elsewhere are copied beside the output (`relocateAttachments`). */
   attachmentOrigins?: AttachmentOrigins;
-  /** Checked before preparation and immediately before rename. Cancellation throws
+  /** Checked during preparation, between bounded read/write chunks and immediately before rename.
+   * Legacy synchronous adapters cannot preempt a single syscall; without readSync their readFileSync
+   * allocation is guarded by pre/post size checks rather than a hard allocation bound. Cancellation throws
    * ReviewPublishError (`io-error`, with the signal reason as cause). A completed
    * rename is never rolled back. */
   signal?: AbortSignal;
@@ -103,6 +111,7 @@ export async function publishReview(
   options: PublishReviewOptions
 ): Promise<PublishReviewResult> {
   const fs = options.fs ?? nodeFsLayer;
+  const asyncFs = fs === nodeFsLayer ? nodeAsyncFsLayer : asyncFsFromSync(fs, options.signal);
   const randomName = options.randomName ?? defaultRandomName;
   const target = path.resolve(outputPath);
   const outputDir = path.dirname(target);
@@ -121,60 +130,102 @@ export async function publishReview(
 
   // 1. The document and the output policy, from reads alone.
   let xml: string;
-  let assets: PlannedAsset[];
+  let assets: PublicationAsset[];
   try {
     state = validateReviewForSerialization(state);
-    const publishable = options.attachmentOrigins
-      ? await relocateAttachments(state, options.attachmentOrigins, target)
-      : state;
-    const namer = uniqueAssetNamer(assetDir, fs, randomName);
-    ({ xml, assets } = await serializeReview(publishable, target, { assetName: namer }));
+    checkOutputPolicy(target, options, fs);
+    const targetAssetDir = options.attachmentOrigins?.size
+      ? path.join(fs.realpathSync(outputDir), ASSET_DIR_NAME)
+      : assetDir;
+    const plan = planPublicationAttachments(
+      state,
+      target,
+      uniqueAssetNamer(assetDir, fs, randomName),
+      options.attachmentOrigins ?? new Map(),
+      targetAssetDir
+    );
+    assets = plan.assets;
+    xml = await serializePlannedReview(plan.state);
     assertActive();
     checkOutputPolicy(target, options, fs);
   } catch (error) {
+    assertActive();
     throw toPublishError(error, target);
   }
 
-  // 2. Stage the new blobs; every file created here is removed on failure.
+  // 2. Only references are retained by the plan. Disk-derived bytes live for one asset at a time.
   const staged: string[] = [];
+  let remaining = MAX_PUBLICATION_ASSET_BYTES;
   try {
-    if (assets.length > 0) {
-      ensureAssetDirectory(outputDir, fs);
-      for (const asset of assets) {
-        writeExclusiveNoFollow(asset.absolutePath, new Uint8Array(asset.data), { fs });
-        staged.push(asset.absolutePath);
+    // Recheck mutable/resizable buffers after asynchronous validation. Fix each view's length so
+    // later growth cannot increase what an in-flight write consumes.
+    const inline = new Map<PublicationAsset, Uint8Array>();
+    for (const asset of assets) {
+      if ('data' in asset) {
+        const length = new Uint8Array(asset.data).byteLength;
+        if (length > MAX_IMAGE_BYTES || length > remaining) {
+          const message =
+            `Attachment bytes exceed the ${formatBytes(MAX_IMAGE_BYTES)} per-image or ` +
+            `${formatBytes(MAX_PUBLICATION_ASSET_BYTES)} publication asset limit`;
+          throw new ReviewXmlError('invalid-state', message, { details: [message] });
+        }
+        inline.set(asset, new Uint8Array(asset.data, 0, length));
+        remaining -= length;
       }
     }
-
+    for (const asset of assets) {
+      assertActive();
+      let bytes: Uint8Array;
+      if ('data' in asset) bytes = inline.get(asset)!;
+      else {
+        const outcome = await readAssetFile(asset.origin, {
+          fs,
+          signal: options.signal,
+          maxBytes: remaining,
+        });
+        assertActive();
+        if (!outcome.ok)
+          throw new AttachmentRelocationError(
+            asset.reference,
+            asset.origin,
+            outcome.reason,
+            outcome.reason === 'too-large' && remaining < MAX_IMAGE_BYTES
+              ? `The publication asset budget has ${formatBytes(remaining)} remaining. ${outcome.message}`
+              : outcome.message
+          );
+        bytes = new Uint8Array(outcome.data);
+        remaining -= bytes.byteLength;
+      }
+      assertActive();
+      ensureAssetDirectory(outputDir, fs);
+      await writeExclusiveNoFollowAsync(asset.absolutePath, bytes, {
+        fs: asyncFs,
+        signal: options.signal,
+      });
+      staged.push(asset.absolutePath);
+    }
     assertActive();
-    // 3. Rename commits the document. Check at that boundary, after the temp file
-    // has been prepared; cancellation after a successful rename cannot undo it.
-    atomicReplace(target, Buffer.from(xml + '\n', 'utf-8'), {
-      fs: options.signal
-        ? new Proxy(fs, {
-            get(layer, key) {
-              if (key === 'renameSync') {
-                return (from: string, to: string) => {
-                  assertActive();
-                  layer.renameSync(from, to);
-                };
-              }
-              // Keep prototype methods and their receiver for supplied adapters.
-              const value = Reflect.get(layer, key);
-              return typeof value === 'function' ? value.bind(layer) : value;
-            },
-          })
-        : fs,
+    // 3. Rename is the commit boundary. No abort check or fallible cleanup may follow success.
+    await atomicReplaceAsync(target, Buffer.from(xml + '\n', 'utf-8'), {
+      fs: asyncFs,
+      signal: options.signal,
+      beforeCommit: assertActive,
       preserveMode: true,
       randomName,
     });
   } catch (error) {
     for (const file of staged) unlinkQuietly(file, fs);
+    // Async I/O may throw the signal reason directly. Preserve the public cancellation error.
+    assertActive();
     throw toPublishError(error, target);
   }
 
   if (staged.length > 0) {
-    console.error(`[main] Wrote ${staged.length} attachment file(s) to ${assetDir}`);
+    try {
+      console.error(`[main] Wrote ${staged.length} attachment file(s) to ${assetDir}`);
+    } catch {
+      /* A diagnostic cannot change a committed publication's outcome. */
+    }
   }
   return { outputPath: target, assetPaths: staged };
 }
@@ -191,7 +242,7 @@ export function inspectOutputPath(
   } catch (error) {
     return toPublishError(error, target);
   }
-  if (!checkWritability(target)) {
+  if (!checkWritability(target, fs)) {
     const dir = path.dirname(target);
     return new ReviewPublishError(
       'permission-denied',

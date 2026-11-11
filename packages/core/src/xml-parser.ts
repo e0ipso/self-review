@@ -5,7 +5,7 @@
 
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { readFileWithinBudgetSync } from './bounded-read';
-import { formatBytes, MAX_RESUME_ATTACHMENTS, MAX_RESUME_XML_BYTES } from './input-budgets';
+import { formatBytes, MAX_REVIEW_ATTACHMENTS, MAX_RESUME_XML_BYTES } from './input-budgets';
 import {
   ReviewComment,
   Suggestion,
@@ -77,7 +77,7 @@ export function parseReviewXml(xmlPath: string): ParsedReview {
  * Namespace-blind by design: v1, v2 and v3 documents read identically.
  *
  * @throws ReviewXmlError `parse-failed`, `missing-root`, or `input-too-large`
- *   (over `MAX_RESUME_ATTACHMENTS`).
+ *   (over `MAX_REVIEW_ATTACHMENTS`).
  */
 export function parseReviewXmlString(xmlContent: string): ParsedReview {
   const parser = new XMLParser({
@@ -138,11 +138,11 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
 
   // Bounds the reads one document can ask for; refuse rather than drop attachments.
   const attachmentCount = countAttachments(comments);
-  if (attachmentCount > MAX_RESUME_ATTACHMENTS) {
+  if (attachmentCount > MAX_REVIEW_ATTACHMENTS) {
     throw new ReviewXmlError(
       'input-too-large',
       `The review document carries ${attachmentCount} attachments, over the limit of ` +
-        `${MAX_RESUME_ATTACHMENTS} for a review document`
+        `${MAX_REVIEW_ATTACHMENTS} for a review document`
     );
   }
 
