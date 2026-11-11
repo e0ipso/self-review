@@ -17,6 +17,7 @@ import type { ReviewPanelHandle } from '@self-review/react';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
 import '@self-review/react/styles.css';
 import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
+import { createServeRequester } from './requester';
 import { REVIEW_TOO_LARGE_CODE, parseCapabilityFragment } from '../protocol';
 
 // Removed with `history.replaceState`, so it leaves the history entry too. Null after a reload or a retyped address.
@@ -33,10 +34,11 @@ export function takeCapabilityFromLocation(): string | null {
 }
 
 // `failed` is `reviewing` with a notice: the close guard stays up and Finish Review resends.
-type Status = 'reviewing' | 'submitting' | 'submitted' | 'failed';
+type Status = 'reviewing' | 'submitting' | 'submitted' | 'failed' | 'uncertain';
 
 interface SubmitFailure {
   code: string | null;
+  uncertain?: boolean;
   message: string;
   details: readonly string[];
 }
@@ -77,7 +79,12 @@ function CapabilityNotice() {
 
 function failureOf(error: unknown): SubmitFailure {
   if (error instanceof ServeRequestError) {
-    return { code: error.code, message: error.message, details: error.details };
+    return {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      uncertain: error.uncertain,
+    };
   }
   return { code: null, message: messageOf(error), details: [] };
 }
@@ -135,7 +142,7 @@ function Saved({ outputPath }: { outputPath: string | null }) {
 
 // The size message already says what to do, so only filesystem refusals get the generic advice.
 function SubmitFailureNotice({ failure }: { failure: SubmitFailure }) {
-  const fixable = failure.code !== REVIEW_TOO_LARGE_CODE;
+  const fixable = !failure.uncertain && failure.code !== REVIEW_TOO_LARGE_CODE;
   return (
     <div
       role='alert'
@@ -149,7 +156,10 @@ function SubmitFailureNotice({ failure }: { failure: SubmitFailure }) {
       }}
     >
       <div>
-        <strong>The review was not saved{failure.code ? ` (${failure.code})` : ''}:</strong>{' '}
+        <strong>
+          {failure.uncertain ? 'The save outcome is unknown' : 'The review was not saved'}
+          {failure.code ? ` (${failure.code})` : ''}:
+        </strong>{' '}
         {failure.message}
       </div>
       {failure.details.length > 0 && (
@@ -158,6 +168,13 @@ function SubmitFailureNotice({ failure }: { failure: SubmitFailure }) {
             <li key={index}>{line}</li>
           ))}
         </ul>
+      )}
+      {failure.uncertain && (
+        <div>
+          Your comments are still here. Check the terminal and the output file on the server. Stop
+          the original process before restarting with --resume-from if the file was saved. Finish
+          Review is unavailable in this page to prevent a duplicate submission.
+        </div>
       )}
       {fixable && (
         <div style={{ marginTop: '0.25rem' }}>
@@ -194,10 +211,16 @@ export interface AppProps {
 
 export function App({ capability }: AppProps) {
   // One adapter per page; none without a capability, since every request would be refused.
-  const adapter = useMemo(
-    () => (capability === null ? null : createFetchAdapter(capability)),
+  const requester = useMemo(
+    () => (capability === null ? null : createServeRequester(capability)),
     [capability]
   );
+  const adapter = useMemo(
+    () =>
+      capability === null || requester === null ? null : createFetchAdapter(capability, requester),
+    [capability, requester]
+  );
+  useEffect(() => () => adapter?.dispose(), [adapter]);
   const reviewRef = useRef<ReviewPanelHandle>(null);
   const submissionPending = useRef(false);
 
@@ -233,9 +256,9 @@ export function App({ capability }: AppProps) {
   // Config first: the providers below are seeded with it, so mounting before
   // it lands would render the wrong theme and categories.
   useEffect(() => {
-    if (capability === null) return;
+    if (capability === null || requester === null) return;
     let cancelled = false;
-    loadServeConfig(capability)
+    loadServeConfig(capability, requester)
       .then(loaded => {
         if (cancelled) return;
         setConfig(loaded?.config ?? {});
@@ -247,7 +270,7 @@ export function App({ capability }: AppProps) {
     return () => {
       cancelled = true;
     };
-  }, [capability]);
+  }, [capability, requester]);
 
   // Warn before the tab closes with work that only exists in this page.
   //
@@ -267,7 +290,13 @@ export function App({ capability }: AppProps) {
 
   const handleFinishReview = useCallback(async () => {
     // One in flight at a time; none after an acknowledged one (the server stops). A refused one may be resent.
-    if (submissionPending.current || status === 'submitted' || adapter === null) return;
+    if (
+      submissionPending.current ||
+      status === 'submitted' ||
+      status === 'uncertain' ||
+      adapter === null
+    )
+      return;
     const state = reviewRef.current?.getReviewState();
     if (!state) return;
     submissionPending.current = true;
@@ -280,7 +309,7 @@ export function App({ capability }: AppProps) {
     } catch (error) {
       setFailure(failureOf(error));
       submissionPending.current = false;
-      setStatus('failed');
+      setStatus(error instanceof ServeRequestError && error.uncertain ? 'uncertain' : 'failed');
     }
   }, [adapter, status]);
 
@@ -308,7 +337,9 @@ export function App({ capability }: AppProps) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {status === 'failed' && failure && <SubmitFailureNotice failure={failure} />}
+      {(status === 'failed' || status === 'uncertain') && failure && (
+        <SubmitFailureNotice failure={failure} />
+      )}
       <div
         inert={status === 'submitting'}
         aria-busy={status === 'submitting'}
@@ -324,7 +355,9 @@ export function App({ capability }: AppProps) {
           <UnsavedWork onChange={markUnsaved} />
           <OutputPath info={outputPathInfo} />
           <ImportDiagnosticsBanner />
-          <Toolbar onFinishReview={() => void handleFinishReview()} />
+          <Toolbar
+            onFinishReview={status === 'uncertain' ? undefined : () => void handleFinishReview()}
+          />
         </ReviewPanel>
       </div>
     </div>

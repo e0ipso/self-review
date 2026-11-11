@@ -181,7 +181,7 @@ describe('submission protocol', () => {
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
   });
 
-  it('drains an admitted expansion after flushing the saved acknowledgement', async () => {
+  it('refuses publication until the admitted expansion settles', async () => {
     const gate = deferred();
     const expansion = vi.spyOn(operations, 'expandContext').mockImplementationOnce(async () => {
       await gate.promise;
@@ -193,29 +193,29 @@ describe('submission protocol', () => {
       body: JSON.stringify({ filePath: 'src/index.ts', contextLines: 3 }),
     });
     await vi.waitFor(() => expect(expansion).toHaveBeenCalledTimes(1));
-    const saved = await submit(reviewState());
-    expect(await saved.json()).toEqual({ ok: true, outputPath });
-    expect(fs.readFileSync(outputPath, 'utf8')).toContain('Needs a test.');
-    expect(server.listening).toBe(false);
+    const blocked = await submit(reviewState());
+    expect(blocked.status).toBe(409);
+    expect(fs.existsSync(outputPath)).toBe(false);
     expect(exit).not.toHaveBeenCalled();
     gate.resolve();
     const expanded = await pending;
     expect(await expanded.json()).toEqual({ hunks: [], totalLines: 42 });
+    const saved = await submit(reviewState());
+    expect(await saved.json()).toEqual({ ok: true, outputPath });
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain('Needs a test.');
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
     expect(cancelDeadline).toHaveBeenCalledTimes(1);
   });
 
   it('bounds shutdown when an admitted operation never settles', async () => {
     const gate = deferred();
-    const expansion = vi.spyOn(operations, 'expandContext').mockImplementationOnce(async () => {
+    const expansion = vi.spyOn(operations, 'loadImage').mockImplementationOnce(async () => {
       await gate.promise;
-      return null;
+      return { error: 'unavailable' };
     });
-    const pending = fetch(base + 'api/expand-context', {
-      method: 'POST',
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ filePath: 'src/index.ts', contextLines: 3 }),
-    }).catch(error => error);
+    const pending = fetch(base + 'api/image?path=src%2Findex.ts', { headers: AUTH }).catch(
+      error => error
+    );
     await vi.waitFor(() => expect(expansion).toHaveBeenCalledTimes(1));
     try {
       expect((await submit(reviewState())).status).toBe(200);

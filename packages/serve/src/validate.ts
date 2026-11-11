@@ -2,6 +2,7 @@
 // compiler checked; over HTTP the body is whatever the socket delivered.
 
 import { ReviewXmlError } from '@self-review/core';
+import { requestContract } from './request-contract-compatibility';
 import { validateCompatibleReviewState } from './core-compatibility';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -59,7 +60,7 @@ export function containPath(root: string, candidate: string): string | null {
  * Reaches git as `-U${contextLines}`, so it must be bounded. Matches
  * `MAX_CONTEXT` in useExpandContext.ts; keep the two in step.
  */
-export const MAX_CONTEXT_LINES = 99_999;
+export const MAX_CONTEXT_LINES = requestContract.maxContextLines;
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -140,18 +141,6 @@ export function parseSuggestionApplyBody(body: unknown): ParseResult<SuggestionA
         return { ok: false, error: `unknown lineRange field: ${key}` };
       }
     }
-    if (lineRange.side !== 'old' && lineRange.side !== 'new') {
-      return { ok: false, error: "lineRange.side must be 'old' or 'new'" };
-    }
-    for (const key of ['start', 'end'] as const) {
-      const value = lineRange[key];
-      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
-        return { ok: false, error: `lineRange.${key} must be a positive integer` };
-      }
-    }
-    if ((lineRange.end as number) < (lineRange.start as number)) {
-      return { ok: false, error: 'lineRange.end must not precede lineRange.start' };
-    }
   }
 
   if (!isRecord(suggestion)) {
@@ -168,7 +157,7 @@ export function parseSuggestionApplyBody(body: unknown): ParseResult<SuggestionA
     }
   }
 
-  return { ok: true, value: body as unknown as SuggestionApplyRequest };
+  return requestContract.decode(body);
 }
 
 const REVIEW_STATE_KEYS: ReadonlySet<string> = new Set(['timestamp', 'source', 'files']);

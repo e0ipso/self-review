@@ -105,7 +105,18 @@ attachments are the usual cause — they travel base64-encoded, which adds a thi
 shrink some and finish again. A server-side `413` for the same reason is reported the same way.
 
 While Finish Review is pending, the review controls and keyboard shortcuts are blocked so the
-submitted snapshot stays unchanged. A refusal restores editing with the review intact.
+submitted snapshot stays unchanged. A refusal restores editing with the review intact. Read requests
+have a 30-second deadline, and Apply and Finish Review have a 60-second deadline, including reading
+the response body. Failed initial diff loads can be retried; the retry also loads the walkthrough
+guide.
+
+A timeout, lost connection, malformed acknowledgement, or unexpected server error after sending a
+mutation can leave its outcome unknown. The page says so instead of claiming that nothing was
+written. After an uncertain Finish Review, comments remain editable and the close warning stays, but
+Finish Review is unavailable to prevent a blind duplicate submission. Check the terminal and the
+output file, stop the original process, and restart with `--resume-from` if the review was saved. An
+uncertain Apply likewise requires checking the destination before continuing. Mutations are never
+retried automatically. A publisher's explicit refusal remains safely retryable.
 
 Closing the tab warns you after comments or viewed flags change, including deleting the last resumed
 comment or clearing a viewed flag. The warning stays until the server acknowledges the save. Your
@@ -115,13 +126,43 @@ Only one submission can publish at a time. An overlapping authenticated `POST /a
 `409` with `{"error":"review submission already in progress or complete"}`. A failed attempt permits
 retry. Successful acknowledgement still means the XML is on disk. After flushing that response, the
 listener stops accepting connections and drains admitted operations and their responses for up to
-five seconds before closing remaining connections and exiting 0. Core operations without
-cancellation support may still be pending when the CLI exits at that deadline.
+five seconds before closing remaining connections and exiting 0. SIGINT and SIGTERM use the same
+shutdown owner, including during startup and listener creation, and exit with 130 and 143
+respectively. An observed signal takes precedence over completion success. Startup has a 45-second
+deadline, and its git commands have a 30-second timeout. Cancellation reaches supported git and
+snapshot operations. Local directory scanning, attachment filesystem reads, publication and
+previous-core synchronous operations cannot be interrupted while in progress; they are drained until
+the grace period expires. Cancellation does not roll back a committed file.
+
+The server admits at most 32 operations and responses in total, with at most eight concurrent
+expensive image or attachment reads. Excess requests receive `503` with
+`{"error":"review server busy; retry after pending requests finish"}` before engine work starts.
+This refusal is safely retryable. Apply, context expansion and publication are mutually exclusive. A
+competing publication retains the existing `409` response above; a competing Apply or expansion gets
+`409` with `{"error":"review source mutation or publication already in progress"}`. Wait for the
+active operation before retrying. Publication cannot overtake an admitted source mutation.
+
+Each admitted request has a 60-second server deadline. Expiry cancels supported work and answers
+`503` with `{"error":"request deadline exceeded; operation outcome may be unknown"}` if headers have
+not been sent, or closes a response already in progress. Disconnecting cancels the request's owned
+work too. An operation keeps its admission slot until both work and response settle, including when
+a filesystem operation ignores cancellation. Shutdown stops accepting and cancels admitted
+operations, then drains them for up to five seconds.
 
 Suggestion Apply requests have a separate 32 MiB JSON UTF-8 budget for original and proposed code,
 matching the review upload budget. The browser refuses larger suggestions before sending them with
 code `suggestion-too-large`; the server enforces the same bound. Desktop and library callers keep
-their existing capabilities. Context expansion requests retain their 64 KiB bound.
+their existing capabilities. When the installed core exports `applySuggestionForSessionAsync`, serve
+awaits that writer with the request's `signal`. Its default destination input and output limits are
+each 5,242,880 bytes, independent of the HTTP budget; exceeding either resolves as a typed engine
+refusal. With core 2.0.4, serve uses the existing synchronous writer, which blocks and cannot
+interrupt an in-progress write. The compatibility shim can be removed once the published minimum
+core dependency provides the async operation. Context expansion requests retain their 64 KiB bound.
+
+Apply's transport validation checks containers, primitive types and anchor side. A null anchor,
+zero/fractional line number or inverted numeric range reaches core and resolves as its typed refusal
+with HTTP 200, matching the desktop adapter. Reviewed-path authorization and the exact original-code
+check still apply. Context expansion retains its 99,999-line limit.
 
 Nested review JSON is validated after attachment decoding and before it enters the session.
 Malformed containers, source kinds, anchors and optional metadata receive a recoverable `400`

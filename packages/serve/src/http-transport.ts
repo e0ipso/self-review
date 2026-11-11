@@ -173,7 +173,11 @@ type BodyResult = { ok: true; value: unknown } | { ok: false; status: number; er
  * The declared length is checked before a byte is read and the running total
  * during it, so a chunked body without a length is capped too.
  */
-export function readJsonBody(req: http.IncomingMessage, maxBytes: number): Promise<BodyResult> {
+export function readJsonBody(
+  req: http.IncomingMessage,
+  maxBytes: number,
+  signal?: AbortSignal
+): Promise<BodyResult> {
   const contentType = req.headers['content-type'] ?? '';
   if (!contentType.toLowerCase().startsWith('application/json')) {
     return Promise.resolve({
@@ -190,26 +194,41 @@ export function readJsonBody(req: http.IncomingMessage, maxBytes: number): Promi
   return new Promise(resolve => {
     const chunks: Buffer[] = [];
     let received = 0;
-    req.on('data', (chunk: Buffer) => {
+    const finish = (result: BodyResult) => {
+      req.off('data', onData);
+      req.off('end', onEnd);
+      req.off('error', onError);
+      req.off('aborted', onError);
+      signal?.removeEventListener('abort', onError);
+      chunks.length = 0;
+      resolve(result);
+    };
+    const onData = (chunk: Buffer) => {
       received += chunk.length;
       if (received > maxBytes) {
-        chunks.length = 0;
-        req.removeAllListeners('data');
-        req.removeAllListeners('end');
-        resolve({ ok: false, status: 413, error: 'request body too large' });
+        finish({ ok: false, status: 413, error: 'request body too large' });
         return;
       }
       chunks.push(chunk);
-    });
-    req.on('end', () => {
+    };
+    const onEnd = () => {
       try {
-        resolve({ ok: true, value: JSON.parse(Buffer.concat(chunks).toString('utf-8')) });
+        const value: unknown = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+        finish({ ok: true, value });
       } catch {
-        resolve({ ok: false, status: 400, error: 'body must be valid JSON' });
+        finish({ ok: false, status: 400, error: 'body must be valid JSON' });
       }
-    });
-    req.on('error', () => {
-      resolve({ ok: false, status: 400, error: 'request body could not be read' });
-    });
+    };
+    const onError = () =>
+      finish({ ok: false, status: 400, error: 'request body could not be read' });
+    if (signal?.aborted) {
+      onError();
+      return;
+    }
+    req.on('data', onData);
+    req.once('end', onEnd);
+    req.once('error', onError);
+    req.once('aborted', onError);
+    signal?.addEventListener('abort', onError, { once: true });
   });
 }

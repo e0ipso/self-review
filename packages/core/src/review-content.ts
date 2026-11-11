@@ -1,5 +1,6 @@
 // Snapshot image previews and authorized attachment reads for a review session.
 import path from 'path';
+import { CommandCancelledError } from './forge-provider';
 import type { ImageLoadResult, ReviewComment } from './types';
 import type { ReviewSession } from './review-session';
 import { locateReviewedFile } from './review-session';
@@ -30,7 +31,8 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
  */
 export async function loadImage(
   session: Pick<ReviewSession, 'reviewedPaths' | 'diffData' | 'sourceIdentity'>,
-  filePath: string
+  filePath: string,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {}
 ): Promise<ImageLoadResult> {
   if (!session.reviewedPaths.has(filePath)) {
     return { error: 'Image preview unavailable — this file is not part of the reviewed diff.' };
@@ -41,7 +43,10 @@ export async function loadImage(
   const located = locateReviewedFile(session, filePath);
   const side = located?.side ?? 'new';
 
-  const result = await readReviewedContent(session, filePath, side, { maxBytes: MAX_IMAGE_BYTES });
+  const result = await readReviewedContent(session, filePath, side, {
+    ...options,
+    maxBytes: MAX_IMAGE_BYTES,
+  });
   if (!result.ok) {
     if (result.reason === 'too-large') {
       return { error: 'File too large to preview (>10 MB)' };
@@ -75,8 +80,14 @@ export function recordResumedAttachments(
  */
 export async function readAttachment(
   session: Pick<ReviewSession, 'outputPathInfo' | 'attachmentOrigins'>,
-  reference: unknown
+  reference: unknown,
+  options: { signal?: AbortSignal } = {}
 ): Promise<AttachmentReadResult> {
+  const checkCancelled = () => {
+    if (options.signal?.aborted)
+      throw new CommandCancelledError('aborted', 'self-review', ['read-attachment']);
+  };
+  checkCancelled();
   const outputPath = session.outputPathInfo?.resolvedOutputPath;
   const currentAssetDir = outputPath ? path.join(path.dirname(outputPath), ASSET_DIR_NAME) : null;
   const assetPath = authorizeAttachmentReference(
@@ -93,6 +104,7 @@ export async function readAttachment(
     };
   }
   const result = await readAssetFile(assetPath);
+  checkCancelled();
   if (!result.ok) {
     console.error(`[attachment:read] ${result.reason}: ${result.message}`);
   }

@@ -1,4 +1,6 @@
 // Re-diff preparation/execution and guarded merging into the same committed review.
+import { CommandCancelledError, isCommandCancelled } from './forge-provider';
+import type { GitExecutionOptions } from './git';
 import type { DiffFile, DiffHunk, ExpandContextRequest, ReviewSourceIdentity } from './types';
 import type { ReviewSession } from './review-session';
 import { singleFileRediffArgs } from './git-diff-args';
@@ -12,13 +14,16 @@ import { rootRelativeReviewedPath } from './source-identity';
 
 /** The effects expansion needs; callers and tests can supply runners/readers without module mocks. */
 export interface ContextExpansionDependencies {
-  runDiff(args: string[], cwd: string): Promise<string>;
+  runDiff(args: string[], cwd: string, options?: GitExecutionOptions): Promise<string>;
   readContent: typeof readReviewedContent;
   report(message: string, error?: unknown): void;
 }
 
 const nodeExpansionDependencies: ContextExpansionDependencies = {
-  runDiff: runGitDiffAsync,
+  runDiff: (args, cwd, options) =>
+    options && Object.keys(options).length > 0
+      ? runGitDiffAsync(args, cwd, undefined, options)
+      : runGitDiffAsync(args, cwd),
   readContent: readReviewedContent,
   report(message, error) {
     if (error === undefined) console.error(message);
@@ -30,11 +35,14 @@ const nodeExpansionDependencies: ContextExpansionDependencies = {
 async function countReviewedLines(
   session: ReviewedSnapshot,
   file: DiffFile,
-  dependencies: ContextExpansionDependencies
+  dependencies: ContextExpansionDependencies,
+  options: GitExecutionOptions
 ): Promise<number> {
   const side = file.newPath ? 'new' : 'old';
   const filePath = side === 'new' ? file.newPath : file.oldPath;
   const result = await dependencies.readContent(session, filePath, side, {
+    signal: options.signal,
+    timeoutMs: options.timeoutMs,
     maxBytes: MAX_GIT_DIFF_OUTPUT_BYTES,
   });
   if (!result.ok) {
@@ -65,8 +73,14 @@ function countLines(content: Buffer): number {
 export async function expandContext(
   session: Pick<ReviewSession, 'diffData' | 'sourceIdentity' | 'reviewedPaths'>,
   request: ExpandContextRequest,
-  dependencies: ContextExpansionDependencies = nodeExpansionDependencies
+  dependencies: ContextExpansionDependencies = nodeExpansionDependencies,
+  options: GitExecutionOptions = {}
 ): Promise<{ hunks: DiffHunk[]; totalLines: number } | null> {
+  const checkCancelled = () => {
+    if (options.signal?.aborted)
+      throw new CommandCancelledError('aborted', 'self-review', ['expand-context']);
+  };
+  checkCancelled();
   const diffData = session.diffData;
   const identity = session.sourceIdentity;
   if (!diffData || diffData.source.type !== 'git' || identity === null) {
@@ -93,7 +107,8 @@ export async function expandContext(
     session.reviewedPaths === reviewedPaths && session.sourceIdentity === identity;
   try {
     const args = contextDiffArgs(identity, target, request.contextLines);
-    const rawDiff = await dependencies.runDiff(args, identity.sourceRoot);
+    const rawDiff = await dependencies.runDiff(args, identity.sourceRoot, options);
+    checkCancelled();
     if (!isCurrent()) return null;
     const expandedFile = parseDiff(rawDiff).find(
       f => f.oldPath === target.oldPath && f.newPath === target.newPath
@@ -106,7 +121,8 @@ export async function expandContext(
     }
 
     // The reviewed side's length, for gap detection; zero keeps the bars visible.
-    const totalLines = await countReviewedLines(snapshot, target, dependencies);
+    const totalLines = await countReviewedLines(snapshot, target, dependencies, options);
+    checkCancelled();
     if (!isCurrent() || !session.diffData) return null;
 
     session.diffData = {
@@ -120,6 +136,7 @@ export async function expandContext(
 
     return { hunks: expandedFile.hunks, totalLines };
   } catch (error) {
+    if (isCommandCancelled(error)) throw error;
     dependencies.report(`[review] Failed to expand context for ${request.filePath}:`, error);
     return null;
   }

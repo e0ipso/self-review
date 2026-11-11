@@ -22,6 +22,8 @@
 // |
 
 import { resolve } from 'path';
+import type { GitExecutionOptions } from './git';
+import { CommandCancelledError } from './forge-provider';
 import type { AppConfig, DiffLoadPayload, ReviewSourceIdentity } from './types';
 import type { ConfigValueOrigin, LoadedConfig } from './config';
 import type { PublishReviewOptions, ReviewOutputTarget } from './review-publisher';
@@ -143,15 +145,22 @@ export async function loadLocalReview(
   gitDiffArgs: readonly string[],
   config: AppConfig,
   cwd: string,
-  log: (message: string) => void
+  log: (message: string) => void,
+  options: GitExecutionOptions = {}
 ): Promise<LoadedLocalReview> {
+  const checkCancelled = () => {
+    if (options.signal?.aborted)
+      throw new CommandCancelledError('aborted', 'self-review', ['load-local-review']);
+  };
+  checkCancelled();
   if (source.mode === 'git') {
     const shouldKeep = createIgnoreFilter(config.ignore);
     const { files, repository, diagnostics, identity } = await loadGitDiffWithUntracked(
       [...gitDiffArgs],
       cwd,
-      { shouldKeep }
+      { ...options, shouldKeep }
     );
+    checkCancelled();
     for (const diagnostic of diagnostics) log(`Diff diagnostic: ${diagnostic}`);
     return {
       payload: {
@@ -173,6 +182,7 @@ export async function loadLocalReview(
       source.mode === 'file'
         ? await scanFile(source.sourcePath)
         : await scanDirectory(source.sourcePath, config.ignore);
+    checkCancelled();
     for (const diagnostic of scan.diagnostics) log(`Diff diagnostic: ${diagnostic}`);
     return {
       payload: {
