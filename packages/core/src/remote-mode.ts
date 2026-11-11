@@ -55,6 +55,7 @@ import type {
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { formatGitDiffArgs } from './git-diff-args';
 import { canonicalSourcePath } from './source-identity';
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 
 /**
  * The git-mode inputs plus the forge threads, before any diff is loaded (so nothing to anchor
@@ -168,6 +169,8 @@ export const defaultRemoteSessionDeps: RemoteSessionDeps = {
 };
 
 export interface RemoteLifetimeOptions {
+  /** Defaults to stderr, with the existing remote diagnostic text and call form. */
+  reportDiagnostic?: DiagnosticReporter;
   /** Without one, the session is bounded only by the per-command timeout. */
   signal?: AbortSignal;
 }
@@ -198,6 +201,7 @@ export async function startRemoteSession(
   options: StartRemoteSessionOptions = {}
 ): Promise<MaterializedRemoteSession> {
   const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
+  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
   const threadsRequired = options.threads === 'required';
   const { signal } = options;
   const lifetime: MaterializeOptions = { signal };
@@ -223,14 +227,14 @@ export async function startRemoteSession(
       throw error;
     }
     cliAvailable = false;
-    console.error(
+    reportDiagnostic(
       `[remote] Forge CLI unavailable (${error.cli}): ${error.message} — ` +
         'falling back to the remote default branch via git.'
     );
     existingClone = await d.detectExistingClone(forgeUrl, cwd, d.runner, lifetime);
     baseBranch = await d.resolveRemoteDefaultBranch(forgeUrl, d.runner, existingClone, lifetime);
   }
-  console.error(`[remote] Base branch: ${baseBranch}`);
+  reportDiagnostic(`[remote] Base branch: ${baseBranch}`);
 
   const materialized = await d.materialize(
     forgeUrl,
@@ -265,12 +269,12 @@ export async function startRemoteSession(
           throw error;
         }
         const message = error instanceof Error ? error.message : String(error);
-        console.error(
+        reportDiagnostic(
           `[remote] thread sync unavailable — continuing without forge threads: ${message}`
         );
       }
     } else {
-      console.error(
+      reportDiagnostic(
         '[remote] thread sync unavailable — forge CLI missing, continuing without forge threads.'
       );
     }
@@ -383,14 +387,18 @@ export async function bootstrapRemoteDiff(
   options: RemoteLifetimeOptions = {}
 ): Promise<RemoteBootstrapResult> {
   const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
-  const started = await startRemoteSession(url, cwd, d, { signal: options.signal });
+  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  const started = await startRemoteSession(url, cwd, d, {
+    signal: options.signal,
+    reportDiagnostic,
+  });
 
   // The caller gets the cleanup handle only with the result, so any failure before that releases
   // here.
   try {
     const loaded = await loadRemoteReview(started, ignorePatterns, d.loadDiff, options);
     for (const diagnostic of loaded.diagnostics) {
-      console.error(`[remote] Diff diagnostic: ${diagnostic}`);
+      reportDiagnostic(`[remote] Diff diagnostic: ${diagnostic}`);
     }
 
     const session: RemoteSession = { ...started, fetchedComments: loaded.comments };

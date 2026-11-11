@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import MermaidBlock, { MERMAID_MAX_SOURCE_CHARS, MERMAID_SECURE_KEYS } from './MermaidBlock';
 
 vi.mock('../../context/ConfigContext', () => ({
-  useConfig: () => ({ config: { theme: 'light' } }),
+  useAppearance: () => ({ theme: 'light' }),
 }));
 
 // jsdom has no layout engine; give Mermaid's two geometry calls a fixed box.

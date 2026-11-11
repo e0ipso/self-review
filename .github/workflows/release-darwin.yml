@@ -79,7 +79,7 @@ jobs:
 
       - name: Build workspace packages
         run: |
-          for pkg in packages/types packages/core packages/react; do
+          for pkg in packages/types packages/config packages/core packages/react; do
             (cd "$pkg" && npm run build)
           done
 

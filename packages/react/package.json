@@ -52,7 +52,8 @@
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "@self-review/config": "*"
   },
   "peerDependencies": {
     "react": ">=18",

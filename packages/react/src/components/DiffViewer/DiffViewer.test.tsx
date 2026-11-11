@@ -26,9 +26,8 @@ vi.mock('../../context/ReviewContext', () => ({
 }));
 
 vi.mock('../../context/ConfigContext', () => ({
-  useConfig: () => ({
-    config: mockConfig,
-  }),
+  useAppearance: () => mockConfig,
+  usePortalContainer: () => null,
 }));
 
 vi.mock('./FileSection', () => ({

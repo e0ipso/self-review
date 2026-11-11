@@ -7,10 +7,10 @@ import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import { AppConfig } from './types';
 import { stderrReporter, type DiagnosticReporter } from './diagnostics';
-import { DEFAULT_CONFIG } from '../../react/src/config-defaults';
+import { createDefaultConfig } from '../../config/src/index';
 
-// Shared with the renderer's ConfigProvider; see packages/react/src/config-defaults.ts.
-const defaults: AppConfig = DEFAULT_CONFIG;
+// Privately owned reference values, independent of the public compatibility snapshots.
+const defaults = createDefaultConfig();
 
 /**
  * `project` config is repository data and is trusted less than the reviewer's own `user` config.
@@ -49,7 +49,7 @@ const CONFIG_KEYS = Object.keys(defaults) as (keyof AppConfig)[];
  */
 export function loadConfigWithProvenance(options: LoadConfigOptions = {}): LoadedConfig {
   const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
-  let config = { ...defaults };
+  let config = createDefaultConfig();
   const provenance = Object.fromEntries(CONFIG_KEYS.map(key => [key, 'default'])) as Record<
     keyof AppConfig,
     ConfigValueOrigin

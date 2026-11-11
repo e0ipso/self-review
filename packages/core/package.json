@@ -16,7 +16,11 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts",
+        "default": "./dist/index.d.ts"
+      },
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     }
@@ -34,7 +38,8 @@
     "fast-xml-parser": "^5.11.2",
     "ignore": "^7.0.5",
     "xmllint-wasm": "^5.1.0",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "@self-review/config": "*"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

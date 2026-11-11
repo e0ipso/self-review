@@ -1,13 +1,23 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import type { CategoryDef } from '@self-review/types';
+import { render, screen, act } from '@testing-library/react';
+import type { AppConfig, CategoryDef } from '@self-review/types';
 
 import { installBrowserApiStubs } from '../test-helpers';
 
 installBrowserApiStubs();
 
-import { ConfigProvider, useConfig, defaultConfig } from './ConfigContext';
+import {
+  ConfigProvider,
+  useConfig,
+  defaultConfig,
+  useAppearance,
+  useCategories,
+  useOutputPath,
+  usePortalContainer,
+  useConfiguration,
+  type ConfigContextValue,
+} from './ConfigContext';
 import { DEFAULT_CONFIG } from '../config-defaults';
 
 describe('ConfigProvider defaults', () => {
@@ -144,5 +154,178 @@ describe('ConfigProvider font size', () => {
     const fallback = `${defaultConfig.fontSize}px`;
     expect(rootStyle(0).getPropertyValue('--sr-font-size')).toBe(fallback);
     expect(rootStyle(Number.NaN).getPropertyValue('--sr-font-size')).toBe(fallback);
+  });
+});
+
+// These probes observe ownership through the supported mutable configuration and setter APIs.
+describe('configuration ownership and subscriptions', () => {
+  it('owns nested values across providers, including caller-supplied values', () => {
+    const values: ConfigContextValue[] = [];
+    const supplied = {
+      ignore: ['custom'],
+      categories: [{ name: 'custom', description: '', color: '#000' }],
+    };
+    function Probe({ index }: { index: number }) {
+      values[index] = useConfig();
+      return null;
+    }
+    render(
+      <>
+        <ConfigProvider>
+          <Probe index={0} />
+        </ConfigProvider>
+        <ConfigProvider>
+          <Probe index={1} />
+        </ConfigProvider>
+        <ConfigProvider initialConfig={supplied}>
+          <Probe index={2} />
+        </ConfigProvider>
+      </>
+    );
+    const originalName = defaultConfig.categories[0].name;
+    const originalIgnoreLength = defaultConfig.ignore.length;
+    try {
+      values[0].config.ignore.push('one-only');
+      values[0].config.categories[0].name = 'one-only';
+      values[2].config.ignore.push('owned');
+      values[2].config.categories[0].name = 'owned';
+      expect(values[1].config.categories[0].name).toBe(originalName);
+      expect(values[1].config.ignore).not.toContain('one-only');
+      expect(supplied.ignore).toEqual(['custom']);
+      expect(supplied.categories[0].name).toBe('custom');
+    } finally {
+      defaultConfig.categories[0].name = originalName;
+      defaultConfig.ignore.splice(originalIgnoreLength);
+    }
+  });
+
+  it('retains independent nested values on both mutation call forms', () => {
+    let value!: ConfigContextValue;
+    function Probe() {
+      value = useConfig();
+      return null;
+    }
+    render(
+      <ConfigProvider>
+        <Probe />
+      </ConfigProvider>
+    );
+    const replacement: AppConfig = {
+      ...defaultConfig,
+      ignore: ['replace'],
+      categories: [{ name: 'replace', description: '', color: '#000' }],
+    };
+    act(() => value.setConfig(replacement));
+    replacement.ignore.push('late');
+    replacement.categories[0].name = 'late';
+    expect(value.config.ignore).toEqual(['replace']);
+    expect(value.config.categories[0].name).toBe('replace');
+    const updates = {
+      ignore: ['update'],
+      categories: [{ name: 'update', description: '', color: '#000' }],
+    };
+    act(() => value.updateConfig(updates));
+    updates.ignore.push('late');
+    updates.categories[0].name = 'late';
+    expect(value.config.ignore).toEqual(['update']);
+    expect(value.config.categories[0].name).toBe('update');
+  });
+
+  it('preserves explicitly unset partial values and functional setter calls', () => {
+    let value!: ConfigContextValue;
+    function Probe() {
+      value = useConfig();
+      return null;
+    }
+    render(
+      <ConfigProvider initialConfig={{ ignore: undefined }}>
+        <Probe />
+      </ConfigProvider>
+    );
+    expect(value.config.ignore).toBeUndefined();
+    const setter = value.setConfig as React.Dispatch<React.SetStateAction<AppConfig>>;
+    act(() => setter(previous => ({ ...previous, theme: 'dark' })));
+    expect(value.config.theme).toBe('dark');
+    expect(value.config.ignore).toBeUndefined();
+  });
+
+  it('keeps initial configuration semantics and preserves user edits on rerender', () => {
+    let value!: ConfigContextValue;
+    function Probe() {
+      value = useConfig();
+      return null;
+    }
+    const { rerender } = render(
+      <ConfigProvider initialConfig={{ theme: 'light' }}>
+        <Probe />
+      </ConfigProvider>
+    );
+    act(() => value.updateConfig({ wordWrap: false }));
+    rerender(
+      <ConfigProvider initialConfig={{ theme: 'dark', wordWrap: true }}>
+        <Probe />
+      </ConfigProvider>
+    );
+    expect(value.config.theme).toBe('light');
+    expect(value.config.wordWrap).toBe(false);
+  });
+
+  it('only invalidates the focused subscriptions affected by an update', () => {
+    let value!: ConfigContextValue;
+    const counts = { appearance: 0, categories: 0, output: 0, portal: 0, configuration: 0 };
+    function Legacy() {
+      value = useConfig();
+      return null;
+    }
+    function Appearance() {
+      useAppearance();
+      counts.appearance++;
+      return null;
+    }
+    function Categories() {
+      useCategories();
+      counts.categories++;
+      return null;
+    }
+    function Output() {
+      useOutputPath();
+      counts.output++;
+      return null;
+    }
+    function Portal() {
+      usePortalContainer();
+      counts.portal++;
+      return null;
+    }
+    function Configuration() {
+      useConfiguration();
+      counts.configuration++;
+      return null;
+    }
+    render(
+      <ConfigProvider>
+        <Legacy />
+        <Appearance />
+        <Categories />
+        <Output />
+        <Portal />
+        <Configuration />
+      </ConfigProvider>
+    );
+    const before = { ...counts };
+    const callbacks = [value.setConfig, value.updateConfig, value.setOutputPathInfo];
+    act(() =>
+      value.setOutputPathInfo({ resolvedOutputPath: '/review.xml', outputPathWritable: false })
+    );
+    expect(counts).toEqual({ ...before, output: before.output + 1 });
+    expect([value.setConfig, value.updateConfig, value.setOutputPathInfo]).toEqual(callbacks);
+    act(() => value.updateConfig({ theme: 'dark' }));
+    expect(counts).toEqual({
+      ...before,
+      output: before.output + 1,
+      appearance: before.appearance + 1,
+      configuration: before.configuration + 1,
+    });
+    expect(value.portalContainer?.classList.contains('dark')).toBe(true);
   });
 });

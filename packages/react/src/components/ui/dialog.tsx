@@ -3,7 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useLocalization } from '../../localization/LocalizationContext';
-import { useConfig } from '../../context/ConfigContext';
+import { usePortalContainer } from '../../context/ConfigContext';
 
 const Dialog = DialogPrimitive.Root;
 
@@ -32,7 +32,7 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  const { portalContainer } = useConfig();
+  const portalContainer = usePortalContainer();
   const { t } = useLocalization();
   return (
     <DialogPortal container={portalContainer}>

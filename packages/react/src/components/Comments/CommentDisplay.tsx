@@ -5,7 +5,7 @@ import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
 import type { ReviewComment, CommentSeverity, CommentConfidence } from '@self-review/types';
 import { useReviewCommands } from '../../context/ReviewContext';
-import { useConfig } from '../../context/ConfigContext';
+import { useCategories, usePortalContainer } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -110,12 +110,13 @@ export default function CommentDisplay({
 }: CommentDisplayProps) {
   const { t } = useLocalization();
   const { deleteComment } = useReviewCommands();
-  const { config, portalContainer } = useConfig();
+  const categories = useCategories();
+  const portalContainer = usePortalContainer();
   const [isEditing, setIsEditing] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
 
-  const categoryDef = config.categories?.find(cat => cat.name === comment.category);
+  const categoryDef = categories?.find(cat => cat.name === comment.category);
 
   // Bulk commands belong to the enclosing review.
   useEffect(() => {

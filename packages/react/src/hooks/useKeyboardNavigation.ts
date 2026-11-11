@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { reviewElement, reviewElements } from '../utils/review-root';
-import { useConfig } from '../context/ConfigContext';
+import { usePortalContainer } from '../context/ConfigContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 
 export type HintMode = 'normal' | 'hint-diff' | 'hint-file';
@@ -44,7 +44,7 @@ function scrollDiff(root: HTMLElement | null, direction: 1 | -1): void {
 }
 
 export function useKeyboardNavigation() {
-  const { portalContainer: root } = useConfig();
+  const root = usePortalContainer();
   const activeReview = useRef(false);
   const [mode, setMode] = useState<HintMode>('normal');
   const [hints, setHints] = useState<HintItem[]>([]);

@@ -27,7 +27,9 @@ export type ReviewPanelHandle = ReviewHandle;
 export interface ReviewPanelProps {
   /** A different adapter object starts a new session: define it at module scope or memoize it. */
   adapter: ReviewAdapter;
-  /** Optional partial config to merge with defaults (theme, categories, etc.). */
+  /** Initial configuration, merged once per mount. Later prop changes are ignored. */
+  initialConfig?: Partial<AppConfig>;
+  /** @deprecated Use initialConfig. Initial-only alias, ignored when initialConfig is supplied. */
   config?: Partial<AppConfig>;
   /** CSS class applied to the root container. */
   className?: string;
@@ -71,11 +73,11 @@ export interface ReviewPanelProps {
  * ```
  */
 export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(function ReviewPanel(
-  { adapter, config, className, children, onReviewChange },
+  { adapter, config, initialConfig, className, children, onReviewChange },
   ref
 ) {
   return (
-    <ReviewProviders adapter={adapter} config={config}>
+    <ReviewProviders adapter={adapter} config={config} initialConfig={initialConfig}>
       <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
         {children}
       </ReviewPanelInner>

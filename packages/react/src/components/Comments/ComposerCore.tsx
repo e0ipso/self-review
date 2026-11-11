@@ -2,7 +2,7 @@ import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MDEditor, { commands } from '@uiw/react-md-editor';
 import type { Attachment } from '@self-review/types';
-import { useConfig } from '../../context/ConfigContext';
+import { useAppearance } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Paperclip } from 'lucide-react';
 import EmojiAutocomplete from './EmojiAutocomplete';
@@ -71,7 +71,7 @@ export function ComposerCore({
   children,
 }: ComposerCoreProps) {
   const { t } = useLocalization();
-  const { config } = useConfig();
+  const config = useAppearance();
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 

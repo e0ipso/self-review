@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import type { DiffFile, DiffLine } from '@self-review/types';
 import { CommentGutterButton } from './CommentGutterButton';
 import { useFileCommentIndex } from './useFileCommentIndex';
-import { useConfig } from '../../context/ConfigContext';
+import { useAppearance } from '../../context/ConfigContext';
 import HunkHeader from './HunkHeader';
 import SyntaxLine from './SyntaxLine';
 import { planHighlighting } from './highlight-budget';
@@ -55,7 +55,7 @@ export default function SplitView({
   const { t } = useLocalization();
   const commentIndex = useFileCommentIndex(file);
   const highlighting = useMemo(() => planHighlighting(file), [file]);
-  const { config } = useConfig();
+  const config = useAppearance();
   const filePath = file.newPath || file.oldPath;
   const language = getLanguageFromPath(filePath);
 

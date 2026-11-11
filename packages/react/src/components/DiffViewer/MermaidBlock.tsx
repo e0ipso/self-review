@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocalization } from '../../localization/LocalizationContext';
 import { Button } from '../ui/button';
 import { exceedsMermaidComplexity, MERMAID_MAX_EDGES } from './mermaid-budget';
-import { useConfig } from '../../context/ConfigContext';
+import { useAppearance } from '../../context/ConfigContext';
 import { svgToDataUri } from '../../utils/svg-data-uri';
 
 /** Longer diagram source is never handed to Mermaid; also pinned as its `maxTextSize`. */
@@ -166,7 +166,7 @@ type BlockState =
 export default function MermaidBlock({ code }: { code: string }) {
   const [state, setState] = useState<BlockState>({ status: 'pending' });
   const [attempt, setAttempt] = useState(0);
-  const { config } = useConfig();
+  const config = useAppearance();
   const { t } = useLocalization();
   const isDark = resolveIsDark(config.theme);
 

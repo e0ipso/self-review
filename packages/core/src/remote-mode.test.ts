@@ -1175,3 +1175,50 @@ describe('GitHub thread snapshot consistency', () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('remote diagnostic ownership', () => {
+  it('routes bootstrap and diff diagnostics to the supplied reporter', async () => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const reportDiagnostic = vi.fn();
+    const deps = makeDeps({
+      loadDiff: vi.fn(async () => ({
+        files: [],
+        repository: '/repo',
+        diagnostics: ['bounded input'],
+      })),
+    });
+    const started = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps, { reportDiagnostic });
+    expect(reportDiagnostic.mock.calls).toEqual([
+      ['[remote] Base branch: main'],
+      ['[remote] Diff diagnostic: bounded input'],
+    ]);
+    expect(stderr).not.toHaveBeenCalled();
+    await started.session.cleanup();
+    stderr.mockRestore();
+  });
+
+  it('routes optional thread failure without changing cleanup ownership', async () => {
+    const reportDiagnostic = vi.fn();
+    const provider: ForgeProvider = {
+      forge: 'github',
+      fetchBaseBranch: async () => 'main',
+      fetchThreads: async () => {
+        throw new Error('offline');
+      },
+    };
+    const session = await startRemoteSession(
+      PR_URL,
+      '/cwd',
+      makeDeps({ createProvider: () => provider }),
+      { reportDiagnostic }
+    );
+    expect(reportDiagnostic.mock.calls).toEqual([
+      ['[remote] Base branch: main'],
+      ['[remote] thread sync unavailable — continuing without forge threads: offline'],
+    ]);
+    expect(session.remote.threadSyncAvailable).toBe(false);
+    expect(session.cleanup).not.toHaveBeenCalled();
+    await session.cleanup();
+    expect(session.cleanup).toHaveBeenCalledTimes(1);
+  });
+});

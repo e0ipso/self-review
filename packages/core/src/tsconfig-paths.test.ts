@@ -58,6 +58,7 @@ describe('@self-review/types path mapping', () => {
     expect(MAPPED).toEqual([
       'tsconfig.json',
       'tests/tsconfig.json',
+      'packages/config/tsconfig.json',
       'packages/core/tsconfig.json',
       'packages/react/tsconfig.json',
       'packages/serve/tsconfig.json',

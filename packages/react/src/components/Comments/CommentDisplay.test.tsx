@@ -21,7 +21,8 @@ vi.mock('../../context/ReviewContext', () => ({
 }));
 
 vi.mock('../../context/ConfigContext', () => ({
-  useConfig: () => ({ config: { categories: [] }, portalContainer: document.body }),
+  useCategories: () => [],
+  usePortalContainer: () => document.body,
 }));
 
 vi.mock('./CommentInput', () => ({

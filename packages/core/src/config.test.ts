@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { loadConfig, loadConfigWithProvenance } from './config';
 import { readFileWithinBudgetSync } from './bounded-read';
-import { DEFAULT_CONFIG } from '../../react/src/config-defaults';
+import { DEFAULT_CONFIG } from '../../config/src/index';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -35,7 +35,7 @@ describe('config', () => {
       const config = loadConfig();
 
       // The same values the renderer's ConfigProvider starts from
-      // (packages/react/src/config-defaults.ts): one source, no drift.
+      // (packages/config/src/index.ts): one source, no drift.
       expect(config).toEqual(DEFAULT_CONFIG);
 
       expect(config.theme).toBe('system');
@@ -624,5 +624,26 @@ categories:
       expect(loaded.provenance.theme).toBe('default');
       expect(loaded.provenance.outputFile).toBe('default');
     });
+  });
+});
+
+describe('configuration ownership', () => {
+  it('owns nested defaults independently across loads and public snapshots', () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    const first = loadConfig({ cwd: '/project', homeDir: '/home' });
+    const expected = structuredClone(first);
+    const saved = structuredClone(DEFAULT_CONFIG);
+    try {
+      first.ignore.push('owned-only');
+      first.categories[0].name = 'owned-category';
+      first.categories.push({ name: 'owned', description: '', color: '#000' });
+      DEFAULT_CONFIG.ignore.push('public-only');
+      DEFAULT_CONFIG.categories[0].color = '#123456';
+      expect(loadConfig({ cwd: '/project', homeDir: '/home' })).toEqual(expected);
+    } finally {
+      // Also keep the original implementation's red run isolated from other tests.
+      DEFAULT_CONFIG.ignore.splice(0, DEFAULT_CONFIG.ignore.length, ...saved.ignore);
+      DEFAULT_CONFIG.categories.splice(0, DEFAULT_CONFIG.categories.length, ...saved.categories);
+    }
   });
 });

@@ -112,3 +112,14 @@ describe('SingleFileReview adapter merge', () => {
     errorSpy.mockRestore();
   });
 });
+
+it('uses initialConfig ahead of the legacy alias and only at mount', () => {
+  const legacy = { categories: [{ name: 'legacy', description: '', color: '#000' }] };
+  const initial = { categories: [{ name: 'initial', description: '', color: '#000' }] };
+  const { rerender } = render(
+    <SingleFileReview file={file} config={legacy} initialConfig={initial} />
+  );
+  expect(screen.getByTestId('category-names').textContent).toBe('initial');
+  rerender(<SingleFileReview file={file} config={legacy} initialConfig={legacy} />);
+  expect(screen.getByTestId('category-names').textContent).toBe('initial');
+});

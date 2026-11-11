@@ -3,7 +3,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { reviewElement } from '../../utils/review-root';
 import type { DiffFile } from '@self-review/types';
 import { useDiffReview } from '../../context/ReviewContext';
-import { useConfig } from '../../context/ConfigContext';
+import { useAppearance, usePortalContainer } from '../../context/ConfigContext';
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import { buildGuideDisplaySections } from '../../utils/guide-display';
@@ -41,7 +41,8 @@ export default function DiffViewer() {
     isLargePayload = false,
     sessionId,
   } = useDiffReview();
-  const { config, portalContainer } = useConfig();
+  const config = useAppearance();
+  const portalContainer = usePortalContainer();
   const { guide, mode: guideMode } = useGuide();
   const containerRef = useRef<HTMLDivElement>(null);
   const navigation = useOptionalDiffNavigation();
