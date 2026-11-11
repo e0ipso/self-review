@@ -193,6 +193,54 @@ describe('serve client', () => {
     expect(view.getByText('Failed to fetch')).toBeTruthy();
   });
 
+  it('keeps the close warning after deleting the final resumed comment', async () => {
+    const view = await mountWithUnsavedWork();
+    fireEvent.click(view.container.querySelector('[data-hint-action="delete-comment"]')!);
+    await waitFor(() => expect(view.queryByText('Needs a test.')).toBeNull());
+    expect(closeIsGuarded()).toBe(true);
+  });
+
+  it('protects viewed-only progress, including when the flag is cleared again', async () => {
+    session.resumeComments = [];
+    const view = render(<App capability={CAPABILITY} />);
+    const toggle = await view.findByTestId('viewed-toggle-src/index.ts');
+    expect(closeIsGuarded()).toBe(false);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(closeIsGuarded()).toBe(true));
+    fireEvent.click(toggle);
+    expect(closeIsGuarded()).toBe(true);
+  });
+
+  it('blocks mutations and document shortcuts while submitting, then restores editing on refusal', async () => {
+    let refuse!: (response: Response) => void;
+    route = (url, init) =>
+      url.pathname === '/api/review'
+        ? new Promise(resolve => {
+            refuse = resolve;
+          })
+        : realFetch(url, init);
+    const view = await mountWithUnsavedWork();
+    const remove = view.container.querySelector('[data-hint-action="delete-comment"]')!;
+    fireEvent.click(view.getByTestId('finish-review-btn'));
+    await waitFor(() => expect(refuse).toBeTypeOf('function'));
+    expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(true);
+    fireEvent.click(remove);
+    expect(view.getByText('Needs a test.')).toBeTruthy();
+    const shortcut = vi.fn();
+    document.addEventListener('keydown', shortcut);
+    fireEvent.keyDown(document, { key: 'f' });
+    document.removeEventListener('keydown', shortcut);
+    expect(shortcut).not.toHaveBeenCalled();
+    expect(closeIsGuarded()).toBe(true);
+
+    refuse(new Response(JSON.stringify({ error: 'try again' }), { status: 500 }));
+    await view.findByTestId('submit-error');
+    expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(false);
+    fireEvent.click(remove);
+    await waitFor(() => expect(view.queryByText('Needs a test.')).toBeNull());
+    expect(closeIsGuarded()).toBe(true);
+  });
+
   it(
     'keeps the review and its close guard after a failed publication, and retries to success',
     async () => {
