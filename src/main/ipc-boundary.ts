@@ -110,15 +110,16 @@ export function expansionRequest(value: unknown): ExpandContextRequest {
 export function suggestionRequest(value: unknown): SuggestionApplyRequest {
   const request = object(value);
   stringArgument(request.filePath);
-  const range = object(request.lineRange);
-  if (
-    (range.side !== 'old' && range.side !== 'new') ||
-    !Number.isSafeInteger(range.start) ||
-    !Number.isSafeInteger(range.end) ||
-    (range.start as number) < 1 ||
-    (range.end as number) < (range.start as number)
-  )
-    throw new Error('Invalid suggestion anchor.');
+  if (request.lineRange !== null) {
+    const range = object(request.lineRange);
+    if (
+      (range.side !== 'old' && range.side !== 'new') ||
+      typeof range.start !== 'number' ||
+      typeof range.end !== 'number'
+    )
+      throw new Error('Invalid suggestion anchor.');
+  }
+  // Core returns typed refusals for file-level anchors and unusable numeric ranges.
   const suggestion = object(request.suggestion);
   stringArgument(suggestion.originalCode);
   stringArgument(suggestion.proposedCode);

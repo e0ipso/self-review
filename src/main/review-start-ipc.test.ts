@@ -92,6 +92,31 @@ it('supports native selection, cancelled confirmation, retry and one successful 
   }
 });
 
+it.each([
+  [null, 'no-anchor'],
+  [{ side: 'new', start: 0, end: 1 }, 'invalid-anchor'],
+] as const)('returns the core %s anchor refusal as %s', async (lineRange, reason) => {
+  const { invoke, presentation } = fixture();
+  const root = await mkdtemp(join(tmpdir(), 'desktop-apply-anchor-'));
+  try {
+    const file = join(root, 'a.ts');
+    await writeFile(file, 'hello\n');
+    vi.mocked(presentation.pickDirectory).mockResolvedValue(root);
+    await invoke(IPC.DIALOG_PICK_DIRECTORY);
+    await invoke(IPC.REVIEW_START_DIRECTORY, root);
+    await expect(
+      invoke(IPC.SUGGESTION_APPLY, {
+        filePath: 'a.ts',
+        lineRange,
+        suggestion: { originalCode: 'hello', proposedCode: 'changed' },
+      })
+    ).resolves.toMatchObject({ status: 'refused', filePath: 'a.ts', reason });
+    expect(await readFile(file, 'utf8')).toBe('hello\n');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 it('does not commit a directory scan after its pending confirmation changes session', async () => {
   const { session, invoke, presentation } = fixture();
   const root = await mkdtemp(join(tmpdir(), 'desktop-start-'));
