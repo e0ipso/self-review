@@ -167,7 +167,10 @@ function quietly(fn: () => void): void {
   }
 }
 
-export function lstatOrNull(filePath: string, fs: FsLayer = nodeFsLayer): nodeFs.Stats | null {
+export function lstatOrNull(
+  filePath: string,
+  fs: Pick<FsLayer, 'lstatSync'> = nodeFsLayer
+): nodeFs.Stats | null {
   try {
     return fs.lstatSync(filePath);
   } catch (error) {
@@ -180,7 +183,11 @@ export function lstatOrNull(filePath: string, fs: FsLayer = nodeFsLayer): nodeFs
  * Refuse a `rel` whose directories under `root` include a symlink. The leaf is the caller's
  * policy, and a missing component ends the walk: nothing can be linked where nothing is.
  */
-export function assertNoSymlinkAncestors(root: string, rel: string, fs: FsLayer = nodeFsLayer) {
+export function assertNoSymlinkAncestors(
+  root: string,
+  rel: string,
+  fs: Pick<FsLayer, 'lstatSync'> = nodeFsLayer
+) {
   const normalized = path.normalize(rel);
   if (
     path.isAbsolute(normalized) ||
@@ -216,7 +223,10 @@ export function assertNoSymlinkAncestors(root: string, rel: string, fs: FsLayer 
 export function openContainedFile(
   root: string,
   rel: string,
-  fs: FsLayer = nodeFsLayer
+  fs: Pick<
+    FsLayer,
+    'lstatSync' | 'openSync' | 'fstatSync' | 'realpathSync' | 'closeSync'
+  > = nodeFsLayer
 ): { fd: number; stats: nodeFs.Stats } {
   assertNoSymlinkAncestors(root, rel, fs);
   const target = path.join(root, rel);
@@ -361,7 +371,10 @@ export interface AtomicReplaceResult {
 
 /**
  * Replace or create `target` in one `rename` from a same-directory temp file. The `lstat`→`rename`
- * window is accepted: `rename` never follows a link and nothing before it creates through one.
+ * check follows staging, including fsync, and checks dev/ino plus size/mtime when requested.
+ * A same-size rewrite within timestamp granularity can pass. This is not compare-and-swap:
+ * another process can still change the path between the last check and rename. Rename replaces
+ * the named entry rather than following a leaf link; callers must secure ancestor directories.
  */
 export function atomicReplace(
   target: string,
@@ -370,21 +383,7 @@ export function atomicReplace(
 ): AtomicReplaceResult {
   const fs = options.fs ?? nodeFsLayer;
   const existing = inspectReplaceTarget(target, fs);
-  const expected = options.expectedIdentity;
-  if (expected && (!existing || !sameFile(existing, expected))) {
-    throw new SafeFsError(
-      'identity-changed',
-      target,
-      `Refusing to replace ${target}: it is no longer the file that was checked`
-    );
-  }
-  if (expected && options.expectUnmodified && existing && !sameStamp(existing, expected)) {
-    throw new SafeFsError(
-      'identity-changed',
-      target,
-      `Refusing to replace ${target}: it was modified after it was checked`
-    );
-  }
+  assertExpectedTarget(target, existing, options);
   const exactOwner =
     options.preserveOwner && existing ? ownerToRestore(target, existing) : undefined;
 
@@ -412,8 +411,37 @@ export function atomicReplace(
     }
     throw error;
   }
+  try {
+    assertExpectedTarget(target, inspectReplaceTarget(target, fs), options);
+  } catch (error) {
+    unlinkQuietly(temp, fs);
+    throw error;
+  }
   finishReplace(temp, target, fs);
   return { identity, replaced: existing !== null };
+}
+
+/** Checked before staging and again after the temp file has been written and synced. */
+function assertExpectedTarget(
+  target: string,
+  existing: FileIdentity | null,
+  options: Pick<AtomicReplaceOptions, 'expectedIdentity' | 'expectUnmodified'>
+): void {
+  const expected = options.expectedIdentity;
+  if (expected && (!existing || !sameFile(existing, expected))) {
+    throw new SafeFsError(
+      'identity-changed',
+      target,
+      `Refusing to replace ${target}: it is no longer the file that was checked`
+    );
+  }
+  if (expected && options.expectUnmodified && existing && !sameStamp(existing, expected)) {
+    throw new SafeFsError(
+      'identity-changed',
+      target,
+      `Refusing to replace ${target}: it was modified after it was checked`
+    );
+  }
 }
 
 /** Undefined when the new file already gets the right owner; only root may give one away. */
@@ -435,7 +463,11 @@ function ownerToRestore(
   return { uid: existing.uid, gid: existing.gid };
 }
 
-function finishReplace(temp: string, target: string, fs: FsLayer): void {
+function finishReplace(
+  temp: string,
+  target: string,
+  fs: Pick<FsLayer, 'renameSync' | 'unlinkSync' | 'openSync' | 'fsyncSync' | 'closeSync'>
+): void {
   try {
     fs.renameSync(temp, target);
   } catch (error) {
@@ -449,7 +481,7 @@ function finishReplace(temp: string, target: string, fs: FsLayer): void {
 /** `lstat` a replace target under the policy of {@link atomicReplace}; null when absent. */
 export function inspectReplaceTarget(
   target: string,
-  fs: FsLayer = nodeFsLayer
+  fs: Pick<FsLayer, 'lstatSync'> = nodeFsLayer
 ): FileIdentity | null {
   const stats = lstatOrNull(target, fs);
   if (stats === null) return null;
@@ -489,7 +521,7 @@ export function defaultRandomName(): string {
   return randomBytes(6).toString('hex');
 }
 
-function isSymlink(filePath: string, fs: FsLayer): boolean {
+function isSymlink(filePath: string, fs: Pick<FsLayer, 'lstatSync'>): boolean {
   try {
     return fs.lstatSync(filePath).isSymbolicLink();
   } catch {
@@ -497,12 +529,18 @@ function isSymlink(filePath: string, fs: FsLayer): boolean {
   }
 }
 
-export function unlinkQuietly(filePath: string, fs: FsLayer = nodeFsLayer): void {
+export function unlinkQuietly(
+  filePath: string,
+  fs: Pick<FsLayer, 'unlinkSync'> = nodeFsLayer
+): void {
   quietly(() => fs.unlinkSync(filePath));
 }
 
 /** Linux needs a directory fsync for a rename to survive a crash; macOS may refuse it (EINVAL). */
-function syncDirectoryQuietly(dir: string, fs: FsLayer): void {
+function syncDirectoryQuietly(
+  dir: string,
+  fs: Pick<FsLayer, 'openSync' | 'fsyncSync' | 'closeSync'>
+): void {
   quietly(() => {
     const fd = fs.openSync(dir, O_RDONLY);
     try {
