@@ -5,8 +5,17 @@
 // Reads are bounded first (input-budgets.ts). A file over budget is still listed, with no
 // content and an `omittedReason`, and named in the diagnostics.
 
-import { closeSync, constants, fstatSync, lstatSync, openSync, readlinkSync } from 'fs';
-import { join } from 'path';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readlinkSync,
+  realpathSync,
+} from 'fs';
+import { dirname, join, relative, resolve } from 'path';
+import { assertNoSymlinkAncestors, openContainedFile } from './safe-fs';
 import type { DiffFile } from './types';
 import { parseDiffWithDiagnostics } from './diff-parser';
 import { readInto } from './bounded-read';
@@ -93,9 +102,6 @@ export type SyntheticSource =
   | { kind: 'too-large'; size: number; bytesRead: number }
   | { kind: 'over-total'; size: number; bytesRead: number };
 
-/** Read-only, never following a final symlink, never blocking on a FIFO. */
-const NO_FOLLOW_FLAGS =
-  constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0);
 const FOLLOW_FLAGS = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0);
 
 /**
@@ -104,7 +110,12 @@ const FOLLOW_FLAGS = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0);
  */
 export function readSyntheticSource(
   fullPath: string,
-  options: { followSymlinks?: boolean; maxFileBytes?: number; remainingBytes?: number } = {}
+  options: {
+    followSymlinks?: boolean;
+    maxFileBytes?: number;
+    remainingBytes?: number;
+    sourceRoot?: string;
+  } = {}
 ): SyntheticSource {
   const budgets = resolveSourceBudgets();
   const {
@@ -113,17 +124,27 @@ export function readSyntheticSource(
     remainingBytes = budgets.maxTotalBytes,
   } = options;
 
+  const root = options.sourceRoot ?? dirname(fullPath);
+  const rel = relative(root, fullPath);
   if (!followSymlinks) {
-    let isLink: boolean;
+    let linkSize: number | undefined;
     try {
-      isLink = lstatSync(fullPath).isSymbolicLink();
+      assertNoSymlinkAncestors(root, rel);
+      const stats = lstatSync(fullPath);
+      if (stats.isSymbolicLink()) linkSize = stats.size;
     } catch (error) {
       return failure(error);
     }
-    if (isLink) {
+    if (linkSize !== undefined) {
+      if (linkSize > maxFileBytes) return { kind: 'too-large', size: linkSize, bytesRead: 0 };
+      if (linkSize > remainingBytes) return { kind: 'over-total', size: linkSize, bytesRead: 0 };
       // Git stores a link as its target path; never read what it points at.
       try {
         const content = readlinkSync(fullPath, { encoding: 'buffer' });
+        assertNoSymlinkAncestors(root, rel);
+        if (realpathSync(dirname(fullPath)) !== join(realpathSync(root), dirname(rel))) {
+          return { kind: 'unreadable', code: 'unsafe-link', bytesRead: 0 };
+        }
         return { kind: 'symlink', content, bytesRead: content.length };
       } catch (error) {
         return failure(error);
@@ -133,7 +154,7 @@ export function readSyntheticSource(
 
   let fd: number;
   try {
-    fd = openSync(fullPath, followSymlinks ? FOLLOW_FLAGS : NO_FOLLOW_FLAGS);
+    fd = followSymlinks ? openSync(fullPath, FOLLOW_FLAGS) : openContainedFile(root, rel).fd;
   } catch (error) {
     return failure(error);
   }
@@ -166,9 +187,12 @@ export function readSyntheticSource(
 }
 
 function failure(error: unknown, bytesRead = 0): SyntheticSource {
-  const code = (error as NodeJS.ErrnoException | undefined)?.code ?? 'unknown error';
+  const wrapped = error as { cause?: NodeJS.ErrnoException; code?: string } | undefined;
+  const code = wrapped?.cause?.code ?? wrapped?.code ?? 'unknown error';
   // Gone or no longer a directory between listing and reading, or a link swapped in (O_NOFOLLOW).
-  if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP') {
+  if (
+    ['ENOENT', 'ENOTDIR', 'ELOOP', 'not-found', 'not-regular', 'output-is-directory'].includes(code)
+  ) {
     return { kind: 'skip', bytesRead: 0 };
   }
   return { kind: 'unreadable', code, bytesRead };
@@ -189,6 +213,13 @@ export function generateSyntheticDiffs(
   options: SyntheticDiffOptions = {}
 ): SyntheticDiffResult {
   const budgets = resolveSourceBudgets(options.budgets);
+  let sourceRoot: string;
+  try {
+    sourceRoot = realpathSync(rootDir);
+  } catch {
+    // Preserve per-path disappearance diagnostics when a root vanishes before the read.
+    sourceRoot = resolve(rootDir);
+  }
   const diffs: string[] = [];
   const omitted = new Map<string, string>();
   const tooLarge: string[] = [];
@@ -211,7 +242,8 @@ export function generateSyntheticDiffs(
       continue;
     }
 
-    const source = readSyntheticSource(join(rootDir, filePath), {
+    const source = readSyntheticSource(join(sourceRoot, filePath), {
+      sourceRoot,
       followSymlinks: options.followSymlinks,
       maxFileBytes: budgets.maxFileBytes,
       remainingBytes: budgets.maxTotalBytes - totalRead,

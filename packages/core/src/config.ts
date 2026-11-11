@@ -1,6 +1,7 @@
 // YAML configuration loading and merging
 
-import { readFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
+import { readFileWithinBudgetSync } from './bounded-read';
 import { join } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
@@ -33,6 +34,9 @@ export interface LoadConfigOptions {
   homeDir?: string;
 }
 
+/** Configuration is small startup input, bounded before YAML parsing. */
+export const MAX_CONFIG_BYTES = 1024 * 1024;
+
 const CONFIG_KEYS = Object.keys(defaults) as (keyof AppConfig)[];
 
 /** Project overrides user overrides defaults; an invalid value is not attributed to its file. */
@@ -56,7 +60,7 @@ export function loadConfigWithProvenance(options: LoadConfigOptions = {}): Loade
   for (const source of files) {
     if (!existsSync(source.path)) continue;
     try {
-      const override = loadYamlConfig(source.path);
+      const override = loadYamlConfig(source.path, source.origin === 'project');
       config = mergeConfig(config, override);
       for (const key of Object.keys(override) as (keyof AppConfig)[]) {
         provenance[key] = source.origin;
@@ -76,8 +80,15 @@ export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
   return loadConfigWithProvenance(options).config;
 }
 
-function loadYamlConfig(path: string): Partial<AppConfig> {
-  const content = readFileSync(path, 'utf-8');
+function loadYamlConfig(path: string, noFollow: boolean): Partial<AppConfig> {
+  // Project data cannot redirect startup reads through a link. User config may link
+  // to another regular file, but the same byte and nonblocking limits apply.
+  const read = readFileWithinBudgetSync(path, MAX_CONFIG_BYTES, { noFollow });
+  if (read.kind === 'not-regular') throw new Error('Config is not a regular file');
+  if (read.kind === 'too-large') {
+    throw new Error(`Config exceeds the ${MAX_CONFIG_BYTES}-byte limit`);
+  }
+  const content = read.content.toString('utf-8');
   const raw = parseYaml(content);
 
   // An empty file (or one containing only `null`) is a valid "use defaults" state.
