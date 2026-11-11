@@ -211,9 +211,25 @@ export async function applySuggestionForSessionAsync(
   const fileSource = JSON.stringify(identity?.fileSources?.get(request.filePath));
   const chosen = session.applyDestinationRoot;
   const temporary = isTemporaryCloneSession(session);
+  const assertDestination = (physicalRoot: string) => {
+    const destinationRoot = prepared.engineRequest.destinationRoot;
+    if (
+      physicalRoot !== path.resolve(destinationRoot) ||
+      canonicalize(destinationRoot) !== physicalRoot ||
+      (temporary && identity && isWithin(identity.sourceRoot, physicalRoot))
+    ) {
+      throw new SafeFsError(
+        'identity-changed',
+        request.filePath,
+        'The Apply destination no longer belongs to this review.'
+      );
+    }
+  };
   const result = await applySuggestionAsync(prepared.engineRequest, {
     ...options,
+    validateDestination: assertDestination,
     beforeCommit() {
+      assertDestination(prepared.engineRequest.destinationRoot);
       if (
         session.sourceIdentity !== identity ||
         session.reviewedPaths !== paths ||

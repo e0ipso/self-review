@@ -100,6 +100,8 @@ export interface ApplySuggestionOptions {
 
 export interface ApplySuggestionAsyncOptions extends Omit<ApplySuggestionOptions, 'fs'> {
   fs?: AsyncFsLayer;
+  /** Check the resolved physical root after resolution and before staging, before any write. */
+  validateDestination?: (physicalRoot: string) => void;
   /** Cancellation rejects with signal.reason before commit. A committed write stays applied. */
   signal?: AbortSignal;
 }
@@ -395,6 +397,12 @@ export async function applySuggestionAsync(
     );
   }
   const absolutePath = path.join(realRoot, rel);
+  try {
+    options.validateDestination?.(realRoot);
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    return refuseFsError(filePath, error, 'write-failed');
+  }
   let opened: Awaited<ReturnType<typeof openContainedFileAsync>>;
   try {
     opened = await openContainedFileAsync(realRoot, rel, layer, options.signal);
@@ -436,6 +444,7 @@ export async function applySuggestionAsync(
   const prepared = prepareSuggestionContent(buffer, start, end, suggestion, maxOutputBytes);
   if ('reason' in prepared) return refuse(filePath, prepared.reason, prepared.detail);
   try {
+    options.validateDestination?.(realRoot);
     await atomicReplaceAsync(absolutePath, prepared.bytes, {
       fs: layer,
       preserveMode: true,

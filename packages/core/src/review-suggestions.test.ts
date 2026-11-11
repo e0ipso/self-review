@@ -205,3 +205,38 @@ describe('asynchronous session Apply', () => {
     expect(fs.readdirSync(root)).toEqual(['file']);
   });
 });
+
+it('refuses a selected destination redirected into the temporary clone during resolution', async () => {
+  const clone = path.join(root, 'clone');
+  const destination = path.join(root, 'destination');
+  const moved = path.join(root, 'moved');
+  fs.mkdirSync(clone);
+  fs.mkdirSync(destination);
+  fs.writeFileSync(path.join(clone, 'file'), 'old\n');
+  fs.writeFileSync(path.join(destination, 'file'), 'old\n');
+  const session = makeSession(clone, true);
+  setApplyDestination(session, destination);
+  let redirected = false;
+  let staged = false;
+  const result = await applySuggestionForSessionAsync(session, request(), {
+    fs: {
+      ...nodeAsyncFsLayer,
+      async realpath(value) {
+        if (value === destination && !redirected) {
+          redirected = true;
+          fs.renameSync(destination, moved);
+          fs.symlinkSync(clone, destination);
+        }
+        return nodeAsyncFsLayer.realpath(value);
+      },
+      async open(value, flags, mode) {
+        if ((flags & fs.constants.O_CREAT) !== 0) staged = true;
+        return nodeAsyncFsLayer.open(value, flags, mode);
+      },
+    },
+  });
+  expect(result).toMatchObject({ status: 'refused', reason: 'file-changed' });
+  expect(staged).toBe(false);
+  expect(fs.readFileSync(path.join(clone, 'file'), 'utf8')).toBe('old\n');
+  expect(fs.readFileSync(path.join(moved, 'file'), 'utf8')).toBe('old\n');
+});
