@@ -52,16 +52,45 @@ vi.mock('../../packages/core/src/git', () => ({
   runGitDiffAsync: vi.fn(),
 }));
 
-import { BrowserWindow, dialog } from 'electron';
+import { ipcMain, dialog } from 'electron';
 import { execFileSync } from 'child_process';
 import type { ReviewSourceIdentity } from '../shared/types';
 import { IPC } from '../shared/ipc-channels';
+import { registerIpcHandlers } from './ipc-handlers';
 import {
-  registerIpcHandlers,
-  setDiffData,
-  setOutputPathInfo,
-  setResumeDocument,
-} from './ipc-handlers';
+  createReviewSession,
+  commitDiffData,
+  recordResumedAttachments,
+  type ReviewSession,
+} from '../../packages/core/src/review-handlers';
+import { createIpcBoundary } from './ipc-boundary';
+import { createReviewPresentation } from './presentation';
+import { getAppIconDataUri } from './app-assets';
+import { getVersionUpdate } from './version-checker';
+import { ReviewTransition } from './review-transition';
+import type { BrowserWindow } from 'electron';
+
+let session: ReviewSession;
+const frame = {};
+const sender = {
+  send: vi.fn(),
+  mainFrame: frame,
+  isDestroyed: () => false,
+  findInPage: vi.fn(),
+  stopFindInPage: vi.fn(),
+};
+const window = { isDestroyed: () => false, webContents: sender } as unknown as BrowserWindow;
+function peer() {
+  return { sender, senderFrame: frame };
+}
+function setDiffData(payload: DiffLoadPayload, identity: ReviewSourceIdentity | null) {
+  commitDiffData(session, payload, identity);
+}
+const setOutputPathInfo = (info: import('../shared/types').OutputPathInfo) => {
+  session.outputPathInfo = info;
+};
+const setResumeDocument = (comments: import('../shared/types').ReviewComment[], path: string) =>
+  recordResumedAttachments(session, comments, path);
 
 /** A remote identity rooted at `clonePath`; the sides do not matter to the apply tests. */
 function cloneIdentity(clonePath: string): ReviewSourceIdentity {
@@ -114,7 +143,13 @@ describe('ipc-handlers', () => {
     for (const key of Object.keys(handlers)) delete handlers[key];
     for (const key of Object.keys(onHandlers)) delete onHandlers[key];
     vi.clearAllMocks();
-    registerIpcHandlers();
+    session = createReviewSession();
+    registerIpcHandlers(
+      session,
+      createIpcBoundary(ipcMain, () => window),
+      new ReviewTransition(session),
+      createReviewPresentation(getAppIconDataUri, getVersionUpdate)
+    );
   });
 
   describe('DIFF_LOAD_FILE handler', () => {
@@ -129,7 +164,7 @@ describe('ipc-handlers', () => {
       const handler = handlers[IPC.DIFF_LOAD_FILE];
       expect(handler).toBeDefined();
 
-      const result = await handler({}, 'src/app.ts');
+      const result = await handler(peer(), 'src/app.ts');
       expect(result).toEqual(file.hunks);
     });
 
@@ -141,15 +176,11 @@ describe('ipc-handlers', () => {
       setDiffData(payload, null);
 
       const handler = handlers[IPC.DIFF_LOAD_FILE];
-      const result = await handler({}, 'src/nonexistent.ts');
+      const result = await handler(peer(), 'src/nonexistent.ts');
       expect(result).toBeNull();
     });
 
     it('returns null when no cache', async () => {
-      // The desktop session lives at module scope and setDiffData always
-      // assigns, so an earlier test's payload is still there. The empty-session
-      // branch itself is covered in review-handlers.test.ts; here, an empty
-      // file list is the closest this registration can get.
       const payload: DiffLoadPayload = {
         files: [],
         source: { type: 'directory', sourcePath: '/tmp' },
@@ -157,7 +188,7 @@ describe('ipc-handlers', () => {
       setDiffData(payload, null);
 
       const handler = handlers[IPC.DIFF_LOAD_FILE];
-      const result = await handler({}, 'any-file.ts');
+      const result = await handler(peer(), 'any-file.ts');
       expect(result).toBeNull();
     });
 
@@ -176,7 +207,7 @@ describe('ipc-handlers', () => {
       setDiffData(payload, null);
 
       const handler = handlers[IPC.DIFF_LOAD_FILE];
-      const result = await handler({}, 'src/deleted.ts');
+      const result = await handler(peer(), 'src/deleted.ts');
       expect(result).toEqual(file.hunks);
     });
   });
@@ -186,7 +217,7 @@ describe('ipc-handlers', () => {
       const handler = handlers[IPC.APP_GET_INFO];
       expect(handler).toBeDefined();
 
-      const result = await handler({});
+      const result = await handler(peer());
       expect(result).toEqual({
         version: '9.9.9',
         iconDataUri: 'data:image/png;base64,ICON',
@@ -204,9 +235,9 @@ describe('ipc-handlers', () => {
       };
       setDiffData(payload, null);
 
-      const mockSend = vi.fn();
+      const mockSend = sender.send;
       const handler = onHandlers[IPC.DIFF_REQUEST];
-      handler({ sender: { send: mockSend } });
+      handler(peer());
 
       expect(mockSend).toHaveBeenCalledWith(
         IPC.DIFF_LOAD,
@@ -231,9 +262,9 @@ describe('ipc-handlers', () => {
       };
       setDiffData(payload, null);
 
-      const mockSend = vi.fn();
+      const mockSend = sender.send;
       const handler = onHandlers[IPC.DIFF_REQUEST];
-      handler({ sender: { send: mockSend } });
+      handler(peer());
 
       expect(mockSend).toHaveBeenCalledWith(
         IPC.DIFF_LOAD,
@@ -289,7 +320,7 @@ describe('ipc-handlers', () => {
 
       const handler = handlers[IPC.DIFF_EXPAND_CONTEXT];
       expect(handler).toBeDefined();
-      const result = await handler({}, { filePath: 'src/app.ts', contextLines: 10 });
+      const result = await handler(peer(), { filePath: 'src/app.ts', contextLines: 10 });
 
       expect(gitMock).toHaveBeenCalledWith(
         ['a'.repeat(40), 'b'.repeat(40), '-U10', '--', ':(top,literal)src/app.ts'],
@@ -332,7 +363,7 @@ describe('ipc-handlers', () => {
         });
 
         const handler = handlers[IPC.DIFF_LOAD_IMAGE];
-        const result = (await handler({}, 'assets/pic.png')) as {
+        const result = (await handler(peer(), 'assets/pic.png')) as {
           dataUri?: string;
           error?: string;
         };
@@ -395,7 +426,7 @@ describe('ipc-handlers', () => {
         });
 
         const handler = handlers[IPC.DIFF_LOAD_IMAGE];
-        const result = (await handler({}, 'assets/pic.png')) as {
+        const result = (await handler(peer(), 'assets/pic.png')) as {
           dataUri?: string;
           error?: string;
         };
@@ -413,9 +444,6 @@ describe('ipc-handlers', () => {
   // the channels exist, reach the desktop session, and open the picker in
   // the main process rather than trusting a directory from the renderer.
   //
-  // The desktop session lives at module scope and nothing clears the
-  // destination once it is set, so the sequence below must run before any
-  // other test in this file records one.
   describe('SUGGESTION_APPLY and SUGGESTION_CHOOSE_DESTINATION handlers', () => {
     function temporaryClonePayload(clonePath: string): DiffLoadPayload {
       return {
@@ -462,7 +490,7 @@ describe('ipc-handlers', () => {
         expect(choose).toBeDefined();
 
         // 1. Nothing picked yet, so the clone is not written into.
-        expect(await apply({}, request)).toMatchObject({
+        expect(await apply(peer(), request)).toMatchObject({
           status: 'refused',
           reason: 'destination-required',
         });
@@ -472,18 +500,18 @@ describe('ipc-handlers', () => {
 
         // 2. A dismissed picker changes nothing.
         vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({ canceled: true, filePaths: [] });
-        expect(await choose({ sender: {} })).toEqual({ status: 'cancelled' });
+        expect(await choose(peer())).toEqual({ status: 'cancelled' });
 
         // 3. A directory inside the clone is refused however it was reached.
         vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
           canceled: false,
           filePaths: [pathMod.join(clonePath, 'src')],
         });
-        expect(await choose({ sender: {} })).toMatchObject({
+        expect(await choose(peer())).toMatchObject({
           status: 'rejected',
           reason: 'destination-inside-temporary-clone',
         });
-        expect(await apply({}, request)).toMatchObject({
+        expect(await apply(peer(), request)).toMatchObject({
           status: 'refused',
           reason: 'destination-required',
         });
@@ -493,12 +521,12 @@ describe('ipc-handlers', () => {
           canceled: false,
           filePaths: [destination],
         });
-        expect(await choose({ sender: {} })).toEqual({
+        expect(await choose(peer())).toEqual({
           status: 'chosen',
           destinationRoot: destination,
         });
 
-        expect(await apply({}, request)).toEqual({
+        expect(await apply(peer(), request)).toEqual({
           status: 'applied',
           filePath: 'src/app.ts',
           replacedLines: 1,
@@ -515,30 +543,13 @@ describe('ipc-handlers', () => {
       }
     });
 
-    it('opens a directory picker on the requesting window, or standalone without one', async () => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      const choose = handlers[IPC.SUGGESTION_CHOOSE_DESTINATION];
-      const win = { id: 1 };
-      vi.mocked(BrowserWindow.fromWebContents).mockReturnValueOnce(
-        win as unknown as ReturnType<typeof BrowserWindow.fromWebContents>
-      );
+    it('opens the destination picker on the authenticated window', async () => {
       vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: true, filePaths: [] });
-
-      await choose({ sender: {} });
-
-      // showOpenDialog is overloaded on its first argument, so read the
-      // recorded arguments positionally rather than through one signature.
-      const calls = vi.mocked(dialog.showOpenDialog).mock.calls as unknown as unknown[][];
-      const directoryPicker = { properties: ['openDirectory', 'createDirectory'] };
-      expect(calls[0][0]).toBe(win);
-      expect(calls[0][1]).toMatchObject(directoryPicker);
-
-      // No owning window: the dialog is opened application-modal instead, and
-      // the options must still be the first argument.
-      vi.mocked(BrowserWindow.fromWebContents).mockReturnValueOnce(null);
-      await choose({ sender: {} });
-
-      expect(calls[1][0]).toMatchObject(directoryPicker);
+      await handlers[IPC.SUGGESTION_CHOOSE_DESTINATION](peer());
+      expect(dialog.showOpenDialog).toHaveBeenCalledWith(
+        window,
+        expect.objectContaining({ properties: ['openDirectory', 'createDirectory'] })
+      );
     });
   });
 
@@ -578,10 +589,10 @@ describe('ipc-handlers', () => {
         expect(diagnostics).toHaveLength(1);
 
         const read = handlers[IPC.ATTACHMENT_READ];
-        const bytes = (await read({}, '.self-review-assets/a.png')) as ArrayBuffer;
+        const bytes = (await read(peer(), '.self-review-assets/a.png')) as ArrayBuffer;
         expect(Buffer.from(bytes).toString()).toBe('PNG-A');
-        expect(await read({}, '/etc/passwd')).toBeNull();
-        expect(await read({}, '../../etc/passwd')).toBeNull();
+        expect(await read(peer(), '/etc/passwd')).toBeNull();
+        expect(await read(peer(), '../../etc/passwd')).toBeNull();
       } finally {
         fsMod.rmSync(tmp, { recursive: true, force: true });
       }
