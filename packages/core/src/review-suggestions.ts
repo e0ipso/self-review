@@ -19,7 +19,7 @@ import { SafeFsError } from './safe-fs';
 
 export type ApplySuggestionForSessionAsyncOptions = Omit<
   ApplySuggestionAsyncOptions,
-  'beforeCommit'
+  'beforeCommit' | 'validateDestination'
 >;
 
 type ApplySession = Pick<
