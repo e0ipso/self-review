@@ -38,7 +38,7 @@ export default function SuggestionBlock({
       const grammar = Prism.languages[lang] || Prism.languages.plaintext;
       return Prism.highlight(code, grammar, lang);
     } catch {
-      return code;
+      return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
   };
 

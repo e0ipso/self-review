@@ -1,9 +1,27 @@
-import { describe, it, expect } from 'vitest';
+import Prism from 'prismjs';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import SuggestionBlock from './SuggestionBlock';
 import type { Suggestion } from '@self-review/types';
 
 describe('SuggestionBlock', () => {
+  it('keeps source literal when the highlighter fails', () => {
+    const highlight = vi.spyOn(Prism, 'highlight').mockImplementation(() => {
+      throw new Error('highlight failed');
+    });
+    try {
+      const source = '<img src=x onerror=alert(1)> & <script>alert(1)</script>';
+      const { container } = render(
+        <SuggestionBlock suggestion={{ originalCode: source, proposedCode: source }} />
+      );
+      expect(container.querySelector('img, script')).toBeNull();
+      expect(container.querySelector('.suggestion-deletion')?.textContent).toBe('-' + source);
+      expect(container.querySelector('.suggestion-addition')?.textContent).toBe('+' + source);
+    } finally {
+      highlight.mockRestore();
+    }
+  });
+
   it('preserves leading whitespace in original and proposed code', () => {
     const suggestion: Suggestion = {
       originalCode: '    const x = 1;',
