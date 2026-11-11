@@ -77,13 +77,18 @@ import type {
   ApplyDestinationOutcome,
 } from '../../packages/types/src/index';
 
+/** Subscriptions have independent, idempotent disposers. Invocations are never replayed.
+ * Writes keep their main-process owner until the final result, without a retryable timeout.
+ */
 export interface ElectronAPI {
   requestDiffData: () => void;
   onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => () => void;
   requestConfig: () => void;
-  onConfigLoad: (callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void) => void;
+  onConfigLoad: (
+    callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void
+  ) => () => void;
   requestResumeData: () => void;
-  onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
+  onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => () => void;
   onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => () => void;
   submitReview: (state: ReviewState) => void;
   onCloseRequested: (callback: () => void) => () => void;
@@ -94,16 +99,16 @@ export interface ElectronAPI {
   startDirectoryReview: (path: string) => Promise<void>;
   expandContext: (request: ExpandContextRequest) => Promise<ExpandContextResponse | null>;
   changeOutputPath: () => Promise<OutputPathInfo | null>;
-  onOutputPathChanged: (callback: (info: OutputPathInfo) => void) => void;
+  onOutputPathChanged: (callback: (info: OutputPathInfo) => void) => () => void;
   findInPage: (request: FindInPageRequest) => void;
   stopFindInPage: (action: string) => void;
   onFindResult: (callback: (result: FindInPageResult) => void) => () => void;
   requestVersionUpdate: () => void;
-  onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => void;
+  onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => () => void;
   onShowAbout: (callback: () => void) => () => void;
   getAppInfo: () => Promise<AppInfo>;
   openExternal: (url: string) => Promise<void>;
-  loadFileContent: (filePath: string) => Promise<DiffHunk[]>;
+  loadFileContent: (filePath: string) => Promise<DiffHunk[] | null>;
   loadImage: (filePath: string) => Promise<ImageLoadResult>;
   openRemoteUrl: (url: string) => Promise<RemoteOpenUrlResult>;
   applySuggestion: (request: SuggestionApplyRequest) => Promise<SuggestionApplyOutcome>;

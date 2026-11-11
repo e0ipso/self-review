@@ -15,34 +15,13 @@ import WelcomeScreen from './components/WelcomeScreen';
 import UpdateBanner from './components/UpdateBanner';
 import RemoteDriftBanner from '../../packages/react/src/components/RemoteDriftBanner';
 import ImportDiagnosticsBanner from '../../packages/react/src/components/ImportDiagnosticsBanner';
-import type { ReviewAdapter } from '../../packages/react/src/adapter';
-import type { AppConfig, OutputPathInfo } from '@self-review/core';
+import type { AppConfig, OutputPathInfo } from '../shared/types';
 
-// Electron platform adapter — wraps window.electronAPI for the package context.
-const electronAdapter: ReviewAdapter = {
-  loadDiff: () =>
-    new Promise(resolve => {
-      window.electronAPI.onDiffLoad(resolve);
-      window.electronAPI.requestDiffData();
-    }),
-  loadResumedReview: () =>
-    new Promise(resolve => {
-      window.electronAPI.onResumeLoad(resolve);
-      window.electronAPI.requestResumeData();
-    }),
-  submitReview: state => {
-    window.electronAPI.submitReview(state);
-  },
-  expandContext: request => window.electronAPI.expandContext(request),
-  loadFileContent: filePath => window.electronAPI.loadFileContent(filePath),
-  readAttachment: filePath => window.electronAPI.readAttachment(filePath),
-  changeOutputPath: () => window.electronAPI.changeOutputPath(),
-  loadImage: filePath => window.electronAPI.loadImage(filePath),
-  applySuggestion: request => window.electronAPI.applySuggestion(request),
-  chooseApplyDestination: () => window.electronAPI.chooseApplyDestination(),
-  onGuideLoad: callback => window.electronAPI.onGuideLoad(callback),
-  onDiffLoad: callback => window.electronAPI.onDiffLoad(callback),
-};
+import { createElectronAdapter } from './electron-adapter';
+import {
+  LocalizationProvider,
+  useLocalization,
+} from '../../packages/react/src/localization/LocalizationContext';
 
 function AppContent() {
   const { diffSource, files } = useReview();
@@ -67,7 +46,7 @@ function AppContent() {
 
   // Forward IPC output-path changes into the package config context
   useEffect(() => {
-    window.electronAPI.onOutputPathChanged(info => {
+    return window.electronAPI.onOutputPathChanged(info => {
       setOutputPathInfo(info);
     });
   }, [setOutputPathInfo]);
@@ -88,9 +67,14 @@ function AppContent() {
 
   if (diffSource.type === 'loading') {
     return (
-      <div className='flex items-center justify-center h-screen bg-background'>
+      <div
+        role='status'
+        aria-label='Loading review'
+        className='flex items-center justify-center h-screen bg-background'
+      >
         <svg
-          className='animate-spin h-8 w-8 text-muted-foreground'
+          aria-hidden='true'
+          className='animate-spin motion-reduce:animate-none h-8 w-8 text-muted-foreground'
           xmlns='http://www.w3.org/2000/svg'
           fill='none'
           viewBox='0 0 24 24'
@@ -135,29 +119,39 @@ function AppContent() {
 }
 
 export default function App() {
+  const [bridge] = useState(() => createElectronAdapter(window.electronAPI));
+  const { locale, direction } = useLocalization();
+  useEffect(() => () => bridge.dispose(), [bridge]);
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = direction;
+  }, [locale, direction]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo | null>(null);
 
   // Load config via IPC before mounting package providers
   useEffect(() => {
-    window.electronAPI.onConfigLoad((cfg, pathInfo) => {
+    const unsubscribe = window.electronAPI.onConfigLoad((cfg, pathInfo) => {
       setConfig(cfg);
       if (pathInfo) setOutputPathInfo(pathInfo);
     });
     window.electronAPI.requestConfig();
+    return unsubscribe;
   }, []);
 
   if (!config) return null;
 
   return (
-    <ReviewAdapterProvider adapter={electronAdapter}>
-      <ConfigProvider initialConfig={config} initialOutputPath={outputPathInfo ?? undefined}>
-        <GuideProvider>
-          <ReviewProvider>
-            <AppContent />
-          </ReviewProvider>
-        </GuideProvider>
-      </ConfigProvider>
-    </ReviewAdapterProvider>
+    <LocalizationProvider>
+      <ReviewAdapterProvider adapter={bridge.adapter}>
+        <ConfigProvider initialConfig={config} initialOutputPath={outputPathInfo ?? undefined}>
+          <GuideProvider>
+            <ReviewProvider>
+              <AppContent />
+            </ReviewProvider>
+          </GuideProvider>
+        </ConfigProvider>
+      </ReviewAdapterProvider>
+    </LocalizationProvider>
   );
 }
