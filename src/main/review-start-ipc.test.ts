@@ -177,3 +177,9 @@ it('rejects a directory replaced while its confirmation was pending', async () =
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('acknowledges an absent initial resume using the existing empty payload', async () => {
+  const { invoke, sender } = fixture();
+  await invoke(IPC.RESUME_REQUEST);
+  expect(sender.send).toHaveBeenCalledWith(IPC.RESUME_LOAD, { comments: [], viewedFiles: [] });
+});

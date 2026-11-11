@@ -142,9 +142,7 @@ export function registerIpcHandlers(
   // (after diff data is loaded)
   boundary.on(IPC.RESUME_REQUEST, noArgument, event => {
     const payload = getResumeLoad(desktopSession);
-    if (payload) {
-      event.sender.send(IPC.RESUME_LOAD, payload);
-    }
+    event.sender.send(IPC.RESUME_LOAD, payload ?? { comments: [], viewedFiles: [] });
   });
 
   boundary.handle(IPC.DIALOG_PICK_DIRECTORY, noArgument, event => selection.choose(event));

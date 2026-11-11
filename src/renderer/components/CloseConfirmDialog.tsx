@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from '../../../packages/react/src/components/ui/alert-dialog';
 import { useUnsavedReviewWork } from '../useUnsavedReviewWork';
-import { useReview } from '../../../packages/react/src/context/ReviewContext';
+import { useSaveReview } from '../useSaveReview';
 
 type CloseConfirmDialogAPI = Pick<
   ElectronAPI,
@@ -24,7 +24,7 @@ export default function CloseConfirmDialog({
   api?: CloseConfirmDialogAPI;
 }) {
   const [open, setOpen] = useState(false);
-  const { files, diffSource } = useReview();
+  const handleSaveAndQuit = useSaveReview(api);
 
   const hasUnsavedWork = useUnsavedReviewWork();
 
@@ -37,16 +37,6 @@ export default function CloseConfirmDialog({
       setOpen(true);
     });
   }, [hasUnsavedWork, api]);
-
-  const handleSaveAndQuit = () => {
-    // Push state before main saves; a failed save leaves the review as it is.
-    api.submitReview({
-      timestamp: new Date().toISOString(),
-      source: diffSource,
-      files,
-    });
-    api.saveAndQuit();
-  };
 
   const handleDiscard = () => {
     api.discardAndQuit();

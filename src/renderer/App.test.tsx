@@ -1,0 +1,96 @@
+import React, { StrictMode } from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import type { ElectronAPI, DiffLoadPayload, ResumeLoadPayload, AppConfig } from '../shared/types';
+import { DEFAULT_CONFIG } from '../../packages/react/src/config-defaults';
+vi.mock('../../packages/react/src/components/Toolbar', () => ({
+  default: ({ onFinishReview }: { onFinishReview: () => void }) => (
+    <button onClick={onFinishReview}>Finish</button>
+  ),
+}));
+vi.mock('../../packages/react/src/components/Layout', () => ({
+  default: () => <div>Review files</div>,
+}));
+vi.mock('./components/AboutDialog', () => ({ default: () => null }));
+vi.mock('./components/FindBar', () => ({ FindBar: () => null }));
+vi.mock('./components/UpdateBanner', () => ({ default: () => null }));
+vi.mock('./components/CloseConfirmDialog', () => ({ default: () => null }));
+import App from './App';
+afterEach(() => vi.unstubAllGlobals());
+
+it('recreates effect-owned adapters under StrictMode and submits current state before saving', async () => {
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  }));
+  const diffs = new Set<(value: DiffLoadPayload) => void>();
+  const resumes = new Set<(value: ResumeLoadPayload) => void>();
+  const configs = new Set<(value: AppConfig) => void>();
+  const subscribe =
+    <T,>(listeners: Set<(value: T) => void>) =>
+    (callback: (value: T) => void) => {
+      listeners.add(callback);
+      return () => {
+        listeners.delete(callback);
+      };
+    };
+  const order: string[] = [];
+  const api = {
+    onDiffLoad: subscribe(diffs),
+    requestDiffData: () =>
+      queueMicrotask(() => {
+        for (const callback of diffs)
+          callback({ files: [], source: { type: 'directory', sourcePath: '/review' } });
+      }),
+    onResumeLoad: subscribe(resumes),
+    requestResumeData: () =>
+      queueMicrotask(() => {
+        for (const callback of resumes) callback({ comments: [], viewedFiles: [] });
+      }),
+    onConfigLoad: subscribe(configs),
+    requestConfig: () =>
+      queueMicrotask(() => {
+        for (const callback of configs) callback(DEFAULT_CONFIG);
+      }),
+    onGuideLoad: () => () => {},
+    onOutputPathChanged: () => () => {},
+    submitReview: vi.fn(() => {
+      order.push('submit');
+    }),
+    saveAndQuit: () => {
+      order.push('save');
+    },
+  } as unknown as ElectronAPI;
+  window.electronAPI = api;
+  const view = render(
+    <StrictMode>
+      <App />
+    </StrictMode>
+  );
+  await screen.findByText('Review files');
+  fireEvent.click(screen.getByText('Finish'));
+  expect(order).toEqual(['submit', 'save']);
+  expect(api.submitReview).toHaveBeenCalledWith(
+    expect.objectContaining({ source: { type: 'directory', sourcePath: '/review' } })
+  );
+  await act(async () => {
+    for (const callback of diffs)
+      callback({ files: [], source: { type: 'directory', sourcePath: '/replacement' } });
+  });
+  await waitFor(() => expect(screen.getByText('Finish')).toBeTruthy());
+  fireEvent.click(screen.getByText('Finish'));
+  expect(api.submitReview).toHaveBeenLastCalledWith(
+    expect.objectContaining({ source: { type: 'directory', sourcePath: '/replacement' } })
+  );
+  view.unmount();
+  expect(diffs.size + resumes.size + configs.size).toBe(0);
+});
