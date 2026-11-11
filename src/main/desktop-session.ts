@@ -27,11 +27,19 @@ export function createDesktopSession(cwd: string) {
 }
 export type DesktopSession = ReturnType<typeof createDesktopSession>;
 
-export function publicationOptions(desktop: Pick<DesktopSession, 'output' | 'review'>) {
+export function publicationOptions(
+  desktop: Pick<DesktopSession, 'output'> & {
+    review: Pick<DesktopSession['review'], 'attachmentOrigins'>;
+  }
+) {
   return publishOptionsFor(desktop.output, desktop.review.attachmentOrigins);
 }
 
-export function updateOutputInfo(desktop: Pick<DesktopSession, 'output' | 'review'>) {
+export function updateOutputInfo(
+  desktop: Pick<DesktopSession, 'output'> & {
+    review: Pick<DesktopSession['review'], 'attachmentOrigins' | 'outputPathInfo'>;
+  }
+) {
   const problem = inspectOutputPath(desktop.output.path, publicationOptions(desktop));
   if (problem) console.error(`[main] Output path check (${problem.code}): ${problem.message}`);
   return (desktop.review.outputPathInfo = {

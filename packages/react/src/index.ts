@@ -8,7 +8,7 @@ export type { SingleFileReviewProps, SingleFileReviewHandle } from './SingleFile
 export type { ReviewHandle } from './hooks/useReviewBridge';
 
 // Adapter interface
-export type { ReviewAdapter, ConfigAdapter } from './adapter';
+export type { ReviewAdapter, ConfigAdapter, ReviewOperationError } from './adapter';
 
 // Re-export types consumers commonly need
 export type {

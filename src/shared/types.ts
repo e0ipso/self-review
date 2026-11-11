@@ -1,6 +1,8 @@
 // Re-export all types from the canonical source in @self-review/types.
 // This file exists for backward compatibility — all src/ code imports from here.
 export type {
+  ReviewSaveResult,
+  ApplicationLocale,
   ChangeType,
   DiffLineType,
   DiffLine,
@@ -58,6 +60,8 @@ export interface AppInfo {
 }
 
 import type {
+  ReviewSaveResult,
+  ApplicationLocale,
   DiffLoadPayload,
   AppConfig,
   OutputPathInfo,
@@ -93,6 +97,15 @@ export interface ElectronAPI {
   submitReview: (state: ReviewState) => void;
   onCloseRequested: (callback: () => void) => () => void;
   saveAndQuit: () => void;
+  /** Optional acknowledged state handoff, never publication. */
+  handoffReview?: (state: ReviewState) => Promise<void>;
+  /** Publish one snapshot. No close until acknowledgeReviewSave receives its receipt. */
+  saveReview?: (state: ReviewState) => Promise<ReviewSaveResult>;
+  getSaveResult?: () => Promise<ReviewSaveResult | null>;
+  acknowledgeReviewSave?: (receipt: string) => void;
+  /** Legacy save failure notification; older peers may omit it. */
+  onSaveFailed?: (callback: () => void) => () => void;
+  getApplicationLocale?: () => Promise<ApplicationLocale>;
   readAttachment: (filePath: string) => Promise<ArrayBuffer | null>;
   discardAndQuit: () => void;
   pickDirectory: () => Promise<string | null>;

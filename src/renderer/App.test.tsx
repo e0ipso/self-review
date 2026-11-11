@@ -45,6 +45,7 @@ it('recreates effect-owned adapters under StrictMode and submits current state b
     };
   const order: string[] = [];
   const api = {
+    getApplicationLocale: vi.fn(async () => ({ locale: 'ar-EG', direction: 'rtl' as const })),
     onDiffLoad: subscribe(diffs),
     requestDiffData: () =>
       queueMicrotask(() => {
@@ -77,6 +78,8 @@ it('recreates effect-owned adapters under StrictMode and submits current state b
     </StrictMode>
   );
   await screen.findByText('Review files');
+  expect(document.documentElement.lang).toBe('ar-EG');
+  expect(document.documentElement.dir).toBe('rtl');
   fireEvent.click(screen.getByText('Finish'));
   expect(order).toEqual(['submit', 'save']);
   expect(api.submitReview).toHaveBeenCalledWith(

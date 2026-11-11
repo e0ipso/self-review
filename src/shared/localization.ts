@@ -88,3 +88,19 @@ export function createDesktopLocalization({
   };
 }
 export type DesktopLocalization = ReturnType<typeof createDesktopLocalization>;
+
+/** Host locale affects formatters and direction; missing catalogs use the English source. */
+export function resolveApplicationLocale(candidate?: string): import('./types').ApplicationLocale {
+  try {
+    const locale = new Intl.Locale(candidate || 'en');
+    const language = locale.maximize().language;
+    return {
+      locale: locale.toString(),
+      direction: ['ar', 'fa', 'he', 'ur', 'ps', 'sd', 'ug', 'yi'].includes(language)
+        ? 'rtl'
+        : 'ltr',
+    };
+  } catch {
+    return { locale: 'en', direction: 'ltr' };
+  }
+}

@@ -8,6 +8,8 @@ const harness = vi.hoisted(() => ({
   initialize: vi.fn(),
   createWindow: vi.fn(),
   confirmDiscard: vi.fn(),
+  confirmPublished: vi.fn(),
+  publish: vi.fn(),
   health: null as import('./renderer-recovery').RendererRecovery | null,
   operations: null as DesktopOperations | null,
   boundary: null as ReturnType<typeof import('./ipc-boundary').createIpcBoundary> | null,
@@ -22,11 +24,12 @@ vi.mock('electron', () => ({
       harness.appHandlers[name] = callback;
     }),
     whenReady: () => Promise.resolve(),
+    getLocale: () => 'ar-EG',
     quit: vi.fn(),
     commandLine: { appendSwitch: vi.fn() },
     disableHardwareAcceleration: vi.fn(),
   },
-  ipcMain: {},
+  ipcMain: { handle: vi.fn() },
 }));
 vi.mock('./desktop-session', () => ({
   createDesktopSession: () => ({
@@ -58,6 +61,10 @@ vi.mock('./presentation', () => ({
   createReviewPresentation: () => ({ confirmPayload: vi.fn() }),
   createLifecyclePresentation: vi.fn(),
   confirmRendererDiscard: harness.confirmDiscard,
+  confirmPublishedClose: harness.confirmPublished,
+}));
+vi.mock('./publication', () => ({
+  createDesktopPublication: () => ({ publish: harness.publish }),
 }));
 vi.mock('./remote-open-handler', () => ({ registerRemoteOpenHandler: vi.fn() }));
 vi.mock('./app-assets', () => ({ getAppIconDataUri: vi.fn() }));
@@ -99,6 +106,8 @@ beforeEach(() => {
   harness.remote.closed = false;
   harness.health = null;
   harness.confirmDiscard.mockResolvedValue(false);
+  harness.confirmPublished.mockResolvedValue(true);
+  harness.publish.mockResolvedValue(undefined);
   harness.remote.dispose.mockResolvedValue(undefined);
   harness.initialize.mockResolvedValue(true);
   harness.createWindow.mockImplementation(window);
@@ -274,4 +283,24 @@ it('cancels work with the originating closed window and permits a new window own
   harness.appHandlers.activate();
   expect(harness.createWindow).toHaveBeenCalledTimes(2);
   await expect(harness.operations!.read(async () => 'new window')).resolves.toBe('new window');
+});
+
+it('confirms a committed publication natively when its renderer cannot receive the receipt', async () => {
+  await import('./main');
+  await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
+  const { registerLifecycleHandlers } = await import('./lifecycle-handlers');
+  const registration = vi.mocked(registerLifecycleHandlers).mock.calls[0];
+  const controller = registration[2];
+  const publication = registration[4];
+  controller.beginSave();
+  await publication.publish(
+    { timestamp: 'now', source: { type: 'welcome' }, files: [] },
+    new AbortController().signal
+  );
+  harness.health!.failed('crashed');
+  harness.appHandlers['before-quit']({ preventDefault: vi.fn() });
+  await vi.waitFor(() => expect(harness.confirmPublished).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0));
+  expect(harness.confirmDiscard).not.toHaveBeenCalled();
+  expect(harness.publish).toHaveBeenCalledOnce();
 });

@@ -3,11 +3,13 @@ import { app, ipcMain } from 'electron';
 import { createDesktopSession } from './desktop-session';
 import { createDesktopShutdown } from './remote-lifetime';
 import { WindowOwner } from './window-owner';
+import { PublishedReviewRecovery } from './published-review-recovery';
 import { RendererRecovery } from './renderer-recovery';
-import { createDesktopLocalization } from '../shared/localization';
+import { createDesktopLocalization, resolveApplicationLocale } from '../shared/localization';
 import { createReviewWindow, observeRendererHealth } from './desktop-window';
 import { initializeSession } from './startup';
 import { QuitController } from './quit-controller';
+import { bindDesktopReviewOperations } from './review-operations';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createIpcBoundary } from './ipc-boundary';
 import { registerLifecycleHandlers } from './lifecycle-handlers';
@@ -18,6 +20,7 @@ import {
   createReviewPresentation,
   createLifecyclePresentation,
   confirmRendererDiscard,
+  confirmPublishedClose,
 } from './presentation';
 import { createDesktopPublication } from './publication';
 import { registerRemoteOpenHandler } from './remote-open-handler';
@@ -25,7 +28,8 @@ import { IPC } from '../shared/ipc-channels';
 
 const desktop = createDesktopSession(process.cwd());
 const quit = new QuitController();
-const messages = createDesktopLocalization();
+let applicationLocale = resolveApplicationLocale('en');
+let messages = createDesktopLocalization(applicationLocale);
 let recovery: RendererRecovery | null = null;
 const windows = new WindowOwner(() => {
   const window = createReviewWindow(handleCloseRequest);
@@ -52,6 +56,16 @@ const windows = new WindowOwner(() => {
   });
   return window;
 });
+const publishedRecovery = new PublishedReviewRecovery({
+  getWindow: () => windows.current,
+  captureFailure: () => recovery?.captureFailure() ?? null,
+  confirm: window => confirmPublishedClose(window, messages),
+  quit: () => {
+    quit.saveSucceeded();
+    desktop.operations.releaseCompletion();
+    void shutdown(0, 'saved');
+  },
+});
 const shutdownResources = createDesktopShutdown(
   {
     dispose: async (reason: string) => {
@@ -72,6 +86,10 @@ function shutdown(code: number, reason: string): Promise<void> {
 }
 
 function handleCloseRequest(event: Electron.Event): void {
+  if (publishedRecovery.requestClose()) {
+    event.preventDefault();
+    return;
+  }
   const window = windows.current;
   const hasReview = !!desktop.review.diffData && desktop.review.diffData.source.type !== 'welcome';
   if (
@@ -127,6 +145,8 @@ app.on('activate', () => windows.activate());
 void app
   .whenReady()
   .then(async () => {
+    applicationLocale = resolveApplicationLocale(app.getLocale?.());
+    messages = createDesktopLocalization(applicationLocale);
     const timeout = setTimeout(() => {
       console.error('[main] Initialization timeout after 45 seconds');
       windows.stop();
@@ -147,20 +167,37 @@ void app
       const boundary = createIpcBoundary(ipcMain, () =>
         recovery?.unavailable ? null : windows.current
       );
+      boundary.handle(
+        IPC.APP_LOCALE,
+        value => {
+          if (value !== undefined) throw new Error('No payload expected.');
+        },
+        () => applicationLocale
+      );
       registerIpcHandlers(
         desktop.review,
         boundary,
         desktop.transition,
         presentation,
-        desktop.operations
+        desktop.operations,
+        bindDesktopReviewOperations(desktop.review, () => quit.phase === 'reviewing')
       );
+      const publication = createDesktopPublication(desktop);
       registerLifecycleHandlers(
         desktop,
         boundary,
         quit,
         shutdown,
-        createDesktopPublication(desktop),
-        createLifecyclePresentation(messages)
+        {
+          publish: async (state, signal) => {
+            const owner = windows.current;
+            const frame = owner?.webContents.mainFrame;
+            await publication.publish(state, signal);
+            publishedRecovery.record(owner, frame);
+          },
+        },
+        createLifecyclePresentation(messages),
+        messages
       );
       registerRemoteOpenHandler(desktop, boundary, presentation);
       setupMenu(messages);

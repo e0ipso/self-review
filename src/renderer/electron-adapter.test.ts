@@ -170,3 +170,33 @@ it('releases a failed resume request before later hydration and drops callbacks 
   expect(pushed).toHaveBeenCalledExactlyOnceWith({ comments: [], viewedFiles: ['later.ts'] });
   f.bridge.dispose();
 });
+
+it('offers state handoff and publication only when their acknowledgements exist', async () => {
+  const legacy = fixture();
+  expect(legacy.bridge.adapter.handoffReview).toBeUndefined();
+  expect(legacy.bridge.adapter.publishReview).toBeUndefined();
+  legacy.bridge.dispose();
+  let finish!: (value: import('../shared/types').ReviewSaveResult) => void;
+  const api = {
+    ...legacy.api,
+    handoffReview: vi.fn(async () => {}),
+    saveReview: vi.fn(
+      () =>
+        new Promise<import('../shared/types').ReviewSaveResult>(resolve => {
+          finish = resolve;
+        })
+    ),
+    acknowledgeReviewSave: vi.fn(),
+  };
+  const current = createElectronAdapter(api);
+  const state = { timestamp: 'now', source: { type: 'welcome' as const }, files: [] };
+  await current.adapter.handoffReview!(state);
+  expect(api.handoffReview).toHaveBeenCalledWith(state);
+  expect(api.saveReview).not.toHaveBeenCalled();
+  const saved = current.adapter.publishReview!(state);
+  expect(api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  finish({ status: 'saved', receipt: 'written' });
+  await saved;
+  expect(api.acknowledgeReviewSave).toHaveBeenCalledExactlyOnceWith('written');
+  current.dispose();
+});

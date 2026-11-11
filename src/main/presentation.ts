@@ -116,3 +116,24 @@ export async function confirmRendererDiscard(
   });
   return result.response === 1;
 }
+
+/** A real publication result, delivered natively when the renderer cannot receive its receipt. */
+export async function confirmPublishedClose(
+  window: BrowserWindow,
+  messages: DesktopLocalization
+): Promise<boolean> {
+  if (window.isDestroyed()) return false;
+  const result = await dialog.showMessageBox(window, {
+    type: 'info',
+    title: messages.t('Review saved'),
+    message: messages.t('The review was saved, but this window did not acknowledge it.'),
+    detail: messages.t(
+      'Closing discards any unsaved work in this window. The saved output stays on disk. Close the application, or cancel to keep the window open.'
+    ),
+    buttons: [messages.t('Cancel'), messages.t('Close')],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+  return result.response === 1;
+}

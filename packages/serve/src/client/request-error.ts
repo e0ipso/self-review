@@ -1,4 +1,4 @@
-/** A request the server refused, or one this adapter refused to send. */
+/** A known rejection or a missing response. `uncertain` never promises a write was refused. */
 export class ServeRequestError extends Error {
   /** Null when no HTTP response was received, including local refusals. */
   readonly status: number | null;

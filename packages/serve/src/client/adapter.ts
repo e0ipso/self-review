@@ -285,6 +285,30 @@ export function createFetchAdapter(
     };
   }
 
+  const publishReview = async (state: ReviewState): Promise<void> => {
+    const text = JSON.stringify(encodeReviewStateForWire(state));
+    const bytes = byteLength(text);
+    if (bytes > MAX_REVIEW_BODY_BYTES) {
+      throw tooLarge(bytes, null);
+    }
+    return postJsonText('/api/review', text, async response => {
+      if (response.status === 413) {
+        throw tooLarge(bytes, response.status);
+      }
+      if (!response.ok) {
+        throw await requestError(response, 'POST /api/review', true);
+      }
+      const ack = (await response.json()) as ReviewSubmitAck | null;
+      if (!isRecord(ack) || ack.ok !== true) {
+        throw new ServeRequestError(
+          'The server answered without acknowledging the review as written. ' +
+            'Check the terminal and output file before continuing; do not resend blindly.',
+          { status: response.status, code: 'outcome-unknown', uncertain: true }
+        );
+      }
+    });
+  };
+
   return {
     dispose: () => {
       disposed = true;
@@ -318,29 +342,8 @@ export function createFetchAdapter(
       });
     },
 
-    submitReview: async (state: ReviewState): Promise<void> => {
-      const text = JSON.stringify(encodeReviewStateForWire(state));
-      const bytes = byteLength(text);
-      if (bytes > MAX_REVIEW_BODY_BYTES) {
-        throw tooLarge(bytes, null);
-      }
-      return postJsonText('/api/review', text, async response => {
-        if (response.status === 413) {
-          throw tooLarge(bytes, response.status);
-        }
-        if (!response.ok) {
-          throw await requestError(response, 'POST /api/review', true);
-        }
-        const ack = (await response.json()) as ReviewSubmitAck | null;
-        if (!isRecord(ack) || ack.ok !== true) {
-          throw new ServeRequestError(
-            'The server answered without acknowledging the review as written. ' +
-              'Check the terminal and output file before continuing; do not resend blindly.',
-            { status: response.status, code: 'outcome-unknown', uncertain: true }
-          );
-        }
-      });
-    },
+    submitReview: publishReview,
+    publishReview,
 
     expandContext: (request: ExpandContextRequest) =>
       postJson<ExpandContextResponse | null>('/api/expand-context', request),

@@ -1,7 +1,7 @@
 import { useDesktopLocalization } from '../useDesktopLocalization';
 import type { ElectronAPI } from '../../shared/types';
 import React, { useEffect, useState } from 'react';
-import { parseForgeUrl } from '@self-review/core';
+import { parseForgeUrl } from '../../../packages/core/src/browser';
 import { Button } from '../../../packages/react/src/components/ui/button';
 import { Input } from '../../../packages/react/src/components/ui/input';
 import {

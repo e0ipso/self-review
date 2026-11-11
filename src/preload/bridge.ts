@@ -48,6 +48,13 @@ export function createElectronAPI(
       ipcRenderer.send(IPC.APP_SAVE_AND_QUIT);
     },
 
+    handoffReview: state => ipcRenderer.invoke(IPC.REVIEW_HANDOFF, state),
+    saveReview: state => ipcRenderer.invoke(IPC.REVIEW_SAVE, state),
+    getSaveResult: () => ipcRenderer.invoke(IPC.REVIEW_SAVE_STATUS),
+    acknowledgeReviewSave: receipt => ipcRenderer.send(IPC.REVIEW_SAVE_RECEIVED, receipt),
+    onSaveFailed: callback => subscribe(IPC.REVIEW_SAVE_FAILED, callback),
+    getApplicationLocale: () => ipcRenderer.invoke(IPC.APP_LOCALE),
+
     readAttachment: (filePath: string) => ipcRenderer.invoke(IPC.ATTACHMENT_READ, filePath),
 
     discardAndQuit: () => {
