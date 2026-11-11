@@ -1,6 +1,7 @@
 // packages/core/src/staged-untracked.ts
 // Initial-config adjustment for staged-mode reviews.
 
+import { parseGitDiffArgs } from './git-diff-args';
 import type { AppConfig } from './types';
 
 /**
@@ -13,7 +14,9 @@ import type { AppConfig } from './types';
  * toggle can reveal them instantly without re-running git.
  */
 export function applyStagedUntrackedDefault(config: AppConfig, gitDiffArgs: string[]): AppConfig {
-  const stagedMode = gitDiffArgs.includes('--staged') || gitDiffArgs.includes('--cached');
+  const stagedMode = parseGitDiffArgs(gitDiffArgs).options.some(
+    option => option.name === '--staged' || option.name === '--cached'
+  );
   if (!stagedMode) return config;
 
   const userExplicitOptIn = config.showUntrackedExplicit && config.showUntracked;

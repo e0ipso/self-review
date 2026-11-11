@@ -49,6 +49,67 @@ export function consumesNextArgument(arg: string): boolean {
   return false;
 }
 
+/** An effective option, including short options inside a group; values never become options. */
+export interface GitDiffOption {
+  index: number;
+  arg: string;
+  name: string;
+  value?: string;
+}
+
+export interface ParsedGitDiffArgs {
+  options: GitDiffOption[];
+  positionalIndices: number[];
+  /** The actual separator, excluding an option value spelled `--`. */
+  separatorIndex: number | null;
+}
+
+/** One interpretation of option arity, groups and the pathspec boundary for all consumers. */
+export function parseGitDiffArgs(args: readonly string[]): ParsedGitDiffArgs {
+  const options: GitDiffOption[] = [];
+  const positionalIndices: number[] = [];
+  let separatorIndex: number | null = null;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (separatorIndex !== null) {
+      positionalIndices.push(i);
+    } else if (arg === '--') {
+      separatorIndex = i;
+    } else if (arg.startsWith('--')) {
+      const equals = arg.indexOf('=');
+      const option: GitDiffOption = {
+        index: i,
+        arg,
+        name: equals < 0 ? arg : arg.slice(0, equals),
+      };
+      if (equals >= 0) option.value = arg.slice(equals + 1);
+      else if (consumesNextArgument(arg) && i + 1 < args.length) {
+        option.value = args[++i];
+      }
+      options.push(option);
+    } else if (arg.startsWith('-')) {
+      for (let j = 1; j < arg.length; j++) {
+        const name = arg[j];
+        const option: GitDiffOption = { index: i, arg, name: `-${name}` };
+        options.push(option);
+        if (
+          SHORT_OPTIONS_WITH_REQUIRED_VALUES.includes(name) ||
+          SHORT_OPTIONS_WITH_OPTIONAL_VALUES.includes(name)
+        ) {
+          if (j + 1 < arg.length) option.value = arg.slice(j + 1);
+          else if (SHORT_OPTIONS_WITH_REQUIRED_VALUES.includes(name) && i + 1 < args.length) {
+            option.value = args[++i];
+          }
+          break;
+        }
+      }
+    } else {
+      positionalIndices.push(i);
+    }
+  }
+  return { options, positionalIndices, separatorIndex };
+}
+
 /** What the paths in `git diff` output are relative to. */
 export type DiffPathRelativity =
   | { kind: 'root' }
@@ -101,14 +162,13 @@ function withoutDroppedShortOptions(arg: string): string | null {
  */
 export function describeDiffPathRelativity(args: readonly string[]): DiffPathRelativity {
   let relative: DiffPathRelativity = { kind: 'root' };
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--') break;
-    if (arg === '--relative') relative = { kind: 'cwd' };
-    else if (arg.startsWith('--relative='))
-      relative = { kind: 'directory', directory: arg.slice('--relative='.length) };
-    else if (arg === '--no-relative') relative = { kind: 'root' };
-    else if (consumesNextArgument(arg)) i++;
+  for (const option of parseGitDiffArgs(args).options) {
+    if (option.name === '--relative') {
+      relative =
+        option.value === undefined
+          ? { kind: 'cwd' }
+          : { kind: 'directory', directory: option.value };
+    } else if (option.name === '--no-relative') relative = { kind: 'root' };
   }
   return relative;
 }
@@ -157,15 +217,9 @@ const WRITE_CAPABLE_OPTIONS = new Set(['--output', '--ext-diff', '--textconv']);
  * `default-diff-args`; the reviewer's own arguments are unrestricted.
  */
 export function findWriteCapableGitDiffOptions(args: readonly string[]): string[] {
-  const offending: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--') break;
-    const name = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg;
-    if (WRITE_CAPABLE_OPTIONS.has(name)) offending.push(arg);
-    if (consumesNextArgument(arg)) i++;
-  }
-  return offending;
+  return parseGitDiffArgs(args)
+    .options.filter(option => WRITE_CAPABLE_OPTIONS.has(option.name))
+    .map(option => option.arg);
 }
 
 // Output formats `parseDiff` cannot consume: exact spellings plus attached-value prefixes
@@ -230,16 +284,10 @@ function isUnsupportedOutputOption(arg: string): boolean {
 
 /** Options selecting an output format the parser cannot consume, as the user wrote them. */
 export function findUnsupportedGitDiffOptions(args: readonly string[]): string[] {
-  const offending: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--') break;
-    if (isUnsupportedOutputOption(arg)) {
-      offending.push(arg);
-    }
-    if (consumesNextArgument(arg)) i++;
-  }
-  return offending;
+  const offending = parseGitDiffArgs(args).options.filter(
+    option => isUnsupportedOutputOption(option.name) || isUnsupportedOutputOption(option.arg)
+  );
+  return [...new Set(offending.map(option => option.index))].map(index => args[index]);
 }
 
 /** Identify positional arguments without mistaking option values for paths. */
@@ -247,24 +295,11 @@ export function classifyGitDiffArgs(args: string[]): {
   positionalIndices: number[];
   hasSeparator: boolean;
 } {
-  const positionalIndices: number[] = [];
-  let hasSeparator = false;
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (!hasSeparator) {
-      if (arg === '--') {
-        hasSeparator = true;
-        continue;
-      }
-      if (consumesNextArgument(arg)) {
-        i++;
-        continue;
-      }
-      if (arg.startsWith('-')) continue;
-    }
-    positionalIndices.push(i);
-  }
-  return { positionalIndices, hasSeparator };
+  const parsed = parseGitDiffArgs(args);
+  return {
+    positionalIndices: parsed.positionalIndices,
+    hasSeparator: parsed.separatorIndex !== null,
+  };
 }
 
 /**

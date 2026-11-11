@@ -59,7 +59,13 @@ export const DEFAULT_SOURCE_BUDGETS: Readonly<SourceBudgets> = Object.freeze({
 });
 
 export function resolveSourceBudgets(overrides: Partial<SourceBudgets> = {}): SourceBudgets {
-  return { ...DEFAULT_SOURCE_BUDGETS, ...overrides };
+  const budgets = { ...DEFAULT_SOURCE_BUDGETS, ...overrides };
+  for (const [name, value] of Object.entries(budgets)) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new RangeError(`${name} must be a nonnegative safe integer`);
+    }
+  }
+  return budgets;
 }
 
 /** `5 MiB`, `7.3 MiB`, `812 KiB`, `100 bytes`. */

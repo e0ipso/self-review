@@ -332,7 +332,7 @@ describe('bootstrapRemoteDiff', () => {
     const deps = makeDeps();
     const { payload, session } = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps);
 
-    expect(deps.loadDiff).toHaveBeenCalledWith(['aaa111...bbb222'], '/tmp/self-review-clone');
+    expect(deps.loadDiff).toHaveBeenCalledWith(['aaa111...bbb222'], '/tmp/self-review-clone', {});
     expect(payload.source).toEqual({
       type: 'git',
       gitDiffArgs: 'aaa111...bbb222',
@@ -802,6 +802,37 @@ describe('session lifetime', () => {
       name: 'CommandCancelledError',
     });
 
+    expect(fs.existsSync(git.tempDirs[0])).toBe(false);
+  });
+
+  it('passes the session signal into a load that remains pending until cancellation', async () => {
+    const controller = new AbortController();
+    let received: AbortSignal | undefined;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => {
+      entered = resolve;
+    });
+    const git = scriptedGit();
+    const deps = lifetimeDeps(git.runner, {
+      loadDiff: async (_args, _cwd, options) => {
+        received = options?.signal;
+        entered();
+        return new Promise((_resolve, reject) => {
+          controller.signal.addEventListener(
+            'abort',
+            () => reject(new CommandCancelledError('aborted', 'git', ['diff'])),
+            { once: true }
+          );
+        });
+      },
+    });
+    const loading = bootstrapRemoteDiff(PR_URL, '/cwd', [], deps, {
+      signal: controller.signal,
+    }).catch(error => error);
+    await started;
+    controller.abort();
+    expect(await loading).toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+    expect(received).toBe(controller.signal);
     expect(fs.existsSync(git.tempDirs[0])).toBe(false);
   });
 

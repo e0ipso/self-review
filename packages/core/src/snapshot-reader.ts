@@ -1,7 +1,8 @@
 // packages/core/src/snapshot-reader.ts
 // The one place a reviewed path turns into bytes, read from the side the review compared (audit R13, A6).
 
-import { execFile } from 'child_process';
+import { runBufferedCommand, type BufferedCommandRunner } from './command-runner';
+import { CommandCancelledError, isCommandCancelled } from './forge-provider';
 import * as path from 'path';
 import type { ReviewSourceIdentity, ReviewSourceSide } from './types';
 import { MAX_SOURCE_FILE_BYTES } from './input-budgets';
@@ -85,6 +86,10 @@ export type SnapshotReadResult =
 export interface SnapshotReadOptions {
   /** Defaults to `MAX_SOURCE_FILE_BYTES`. */
   maxBytes?: number;
+  /** Aborts git children; a physical read closes its bounded descriptor before rejecting. */
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  runner?: BufferedCommandRunner;
 }
 
 function failure(reason: SnapshotReadFailure, message: string): SnapshotReadResult {
@@ -100,17 +105,35 @@ export async function readReviewedContent(
 ): Promise<SnapshotReadResult> {
   const authorized = authorizeReviewedPath(source, filePath);
   if (!authorized.ok) return failure(authorized.reason, authorized.message);
+  const throwIfAborted = () => {
+    if (options.signal?.aborted)
+      throw new CommandCancelledError('aborted', 'self-review', [
+        'read-reviewed-content',
+        filePath,
+      ]);
+  };
+  throwIfAborted();
   const identity = source.sourceIdentity!;
-  const descriptor = side === 'old' ? identity.oldSide : identity.newSide;
+  const sides = identity.fileSources?.get(filePath) ?? identity;
+  const descriptor = side === 'old' ? sides.oldSide : sides.newSide;
   const maxBytes = options.maxBytes ?? MAX_SOURCE_FILE_BYTES;
-  return readSide(descriptor, authorized.sourceRoot, authorized.relativePath, maxBytes);
+  const result = await readSide(
+    descriptor,
+    authorized.sourceRoot,
+    authorized.relativePath,
+    maxBytes,
+    options
+  );
+  throwIfAborted();
+  return result;
 }
 
 async function readSide(
   descriptor: ReviewSourceSide,
   sourceRoot: string,
   relativePath: string,
-  maxBytes: number
+  maxBytes: number,
+  options: SnapshotReadOptions
 ): Promise<SnapshotReadResult> {
   switch (descriptor.kind) {
     case 'working-tree':
@@ -123,9 +146,9 @@ async function readSide(
     }
     case 'index':
       // `:path` alone would read a leading `<n>:` in the path as a stage number.
-      return readGitBlob(sourceRoot, `:0:${relativePath}`, maxBytes);
+      return readGitBlob(sourceRoot, `:0:${relativePath}`, maxBytes, options);
     case 'commit':
-      return readGitBlob(sourceRoot, `${descriptor.sha}:${relativePath}`, maxBytes);
+      return readGitBlob(sourceRoot, `${descriptor.sha}:${relativePath}`, maxBytes, options);
     case 'none':
       return failure('side-unavailable', 'This side of the review has no content.');
     case 'unknown':
@@ -160,34 +183,37 @@ const FS_FAILURES: Partial<Record<SafeFsErrorCode, [SnapshotReadFailure, string?
 };
 
 /** `cat-file blob`, not `show`: it refuses a tree and never smudges, so the bytes are the ones git compared. */
-function readGitBlob(root: string, spec: string, maxBytes: number): Promise<SnapshotReadResult> {
-  return new Promise(resolve => {
-    execFile(
-      'git',
-      ['cat-file', 'blob', spec],
-      { cwd: root, encoding: 'buffer', maxBuffer: maxBytes + 1, timeout: 30_000 },
-      (error, stdout, stderr) => {
-        if (error) {
-          if (errnoOf(error) === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-            resolve(failure('too-large', `The blob is over the ${maxBytes}-byte limit.`));
-            return;
-          }
-          const detail = stderr.toString('utf-8').trim();
-          if (
-            /does not exist|not a valid object name|invalid object name|not a blob/i.test(detail)
-          ) {
-            resolve(failure('not-found', 'The file does not exist on this side of the review.'));
-            return;
-          }
-          resolve(failure('read-failed', `git cat-file failed: ${detail || error.message}`));
-          return;
-        }
-        if (stdout.length > maxBytes) {
-          resolve(failure('too-large', `The blob is over the ${maxBytes}-byte limit.`));
-          return;
-        }
-        resolve({ ok: true, content: stdout });
+async function readGitBlob(
+  root: string,
+  spec: string,
+  maxBytes: number,
+  options: SnapshotReadOptions
+): Promise<SnapshotReadResult> {
+  try {
+    const result = await (options.runner ?? runBufferedCommand)('git', ['cat-file', 'blob', spec], {
+      cwd: root,
+      maxOutputBytes: maxBytes + 1,
+      timeoutMs: options.timeoutMs ?? 30_000,
+      signal: options.signal,
+    });
+    if (result.exitCode !== 0) {
+      const detail = result.stderr.toString('utf-8').trim();
+      if (/does not exist|not a valid object name|invalid object name|not a blob/i.test(detail)) {
+        return failure('not-found', 'The file does not exist on this side of the review.');
       }
+      return failure('read-failed', `git cat-file failed: ${detail || `exit ${result.exitCode}`}`);
+    }
+    if (result.stdout.length > maxBytes)
+      return failure('too-large', `The blob is over the ${maxBytes}-byte limit.`);
+    return { ok: true, content: result.stdout };
+  } catch (error) {
+    if (isCommandCancelled(error) && error.reason === 'aborted') throw error;
+    if (errnoOf(error) === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+      return failure('too-large', `The blob is over the ${maxBytes}-byte limit.`);
+    }
+    return failure(
+      'read-failed',
+      `git cat-file failed: ${error instanceof Error ? error.message : String(error)}`
     );
-  });
+  }
 }

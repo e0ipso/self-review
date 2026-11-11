@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
+import * as identityModule from './source-identity';
 import { gitSync } from './test-support/git-env';
 
 describe('loadGitDiffWithUntracked', () => {
@@ -25,6 +26,7 @@ describe('loadGitDiffWithUntracked', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -51,6 +53,56 @@ describe('loadGitDiffWithUntracked', () => {
         'dup.txt': 'ROOT CONTENT',
         'sub/dup.txt': 'NESTED CONTENT',
       });
+    }
+  );
+
+  it('uses the resolved commits when a symbolic ref moves before the diff executes', async () => {
+    const first = gitSync(['-C', root, 'rev-parse', 'HEAD']).trim();
+    gitSync(['-C', root, 'branch', 'comparison', first]);
+    writeFileSync(join(root, 'tracked.txt'), 'second\n');
+    gitSync(['-C', root, 'commit', '-qam', 'second']);
+    const second = gitSync(['-C', root, 'rev-parse', 'HEAD']).trim();
+    const resolve = identityModule.resolveGitSourceIdentity;
+    vi.spyOn(identityModule, 'resolveGitSourceIdentity').mockImplementationOnce(async options => {
+      const identity = await resolve(options);
+      gitSync(['-C', root, 'update-ref', 'refs/heads/comparison', second]);
+      return identity;
+    });
+    const result = await loadGitDiffWithUntracked(['comparison', 'HEAD'], root, {
+      includeUntracked: false,
+    });
+    expect(result.identity.gitDiffArgv).toEqual(['comparison', 'HEAD']);
+    expect(result.identity.oldSide).toEqual({ kind: 'commit', sha: first });
+    expect(result.identity.newSide).toEqual({ kind: 'commit', sha: second });
+    expect(result.files.map(file => file.newPath)).toEqual(['tracked.txt']);
+    expect(result.files[0].hunks[0].lines.map(line => line.content)).toEqual([
+      'original',
+      'second',
+    ]);
+  });
+
+  it.each(['sha1', 'sha256'])(
+    'pins an unborn staged comparison even if HEAD is created meanwhile (%s)',
+    async format => {
+      const unborn = join(root, 'unborn');
+      mkdirSync(unborn);
+      gitSync(['init', '-q', `--object-format=${format}`, unborn]);
+      gitSync(['-C', unborn, 'config', 'user.email', 'test@example.com']);
+      gitSync(['-C', unborn, 'config', 'user.name', 'Test']);
+      writeFileSync(join(unborn, 'new.txt'), 'new file\n');
+      gitSync(['-C', unborn, 'add', 'new.txt']);
+      const resolve = identityModule.resolveGitSourceIdentity;
+      vi.spyOn(identityModule, 'resolveGitSourceIdentity').mockImplementationOnce(async options => {
+        const identity = await resolve(options);
+        gitSync(['-C', unborn, 'commit', '-qm', 'first']);
+        return identity;
+      });
+      const result = await loadGitDiffWithUntracked(['--cached'], unborn, {
+        includeUntracked: false,
+      });
+      expect(result.identity.oldSide).toEqual({ kind: 'none' });
+      expect(result.files.map(file => file.newPath)).toEqual(['new.txt']);
+      expect(result.files[0].hunks[0].lines[0].content).toBe('new file');
     }
   );
 

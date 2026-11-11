@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   openSync,
   rmSync,
+  renameSync,
   symlinkSync,
   writeFileSync,
   writeSync,
@@ -70,6 +71,39 @@ describe('generateSyntheticDiffs', () => {
     mkdirSync(join(full, '..'), { recursive: true });
     writeFileSync(full, content);
   }
+
+  it('refuses an enumerated ancestor replaced with an outside symlink before reading', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'self-review-test-outside-'));
+    try {
+      write('sub/note.txt', 'inside\n');
+      writeFileSync(join(outside, 'note.txt'), 'SECRET\n');
+      const enumerated = ['sub/note.txt'];
+      renameSync(join(root, 'sub'), join(root, 'saved'));
+      symlinkSync(outside, join(root, 'sub'));
+      const result = loadSyntheticFiles(enumerated, root);
+      expect(result.files).toEqual([]);
+      expect(result.diagnostics.join(' ')).toContain('unsafe-link');
+      expect(JSON.stringify(result)).not.toContain('SECRET');
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('counts symlink text against file and total read budgets', () => {
+    symlinkSync('1234567890', join(root, 'first'));
+    symlinkSync('1234567890', join(root, 'second'));
+    const perFile = loadSyntheticFiles(['first'], root, { budgets: { maxFileBytes: 5 } });
+    expect(perFile.files[0].omittedReason).toContain('per-file read budget');
+    expect(perFile.files[0].hunks).toEqual([]);
+    const total = loadSyntheticFiles(['first', 'second'], root, { budgets: { maxTotalBytes: 12 } });
+    expect(total.files[0].hunks[0].lines[0].content).toBe('1234567890');
+    expect(total.files[1].omittedReason).toContain('total read budget');
+    expect(total.files[1].hunks).toEqual([]);
+  });
+
+  it('keeps disappeared roots empty instead of throwing', () => {
+    expect(loadSyntheticFiles(['missing.txt'], join(root, 'missing')).files).toEqual([]);
+  });
 
   it('round-trips literal names through the diff parser with their own bytes', () => {
     for (const name of LITERAL_NAMES) {

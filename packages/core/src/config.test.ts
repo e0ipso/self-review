@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { loadConfig, loadConfigWithProvenance } from './config';
+import { readFileWithinBudgetSync } from './bounded-read';
 import { DEFAULT_CONFIG } from '../../react/src/config-defaults';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
 vi.mock('fs');
+vi.mock('./bounded-read');
 vi.mock('os');
 vi.mock('path');
 
@@ -53,7 +55,10 @@ font-size: 16
       vi.mocked(fs.existsSync).mockImplementation(filepath => {
         return filepath === `${mockHomedir}/.config/self-review/config.yaml`;
       });
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -70,7 +75,10 @@ show-untracked: false
       vi.mocked(fs.existsSync).mockImplementation(filepath => {
         return filepath === `${mockCwd}/.self-review.yaml`;
       });
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -92,7 +100,10 @@ show-untracked: false
     it('sets showUntrackedExplicit true when show-untracked: true', () => {
       const mockYaml = `show-untracked: true`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -103,7 +114,10 @@ show-untracked: false
     it('keeps showUntrackedExplicit false when show-untracked has invalid type', () => {
       const mockYaml = `show-untracked: "yes"`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -122,11 +136,11 @@ theme: light
 font-size: 18
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockImplementation(filepath => {
+      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => {
         if (String(filepath).includes('.config/self-review')) {
-          return userYaml;
+          return { kind: 'ok', content: Buffer.from(userYaml) };
         }
-        return projectYaml;
+        return { kind: 'ok', content: Buffer.from(projectYaml) };
       });
 
       const config = loadConfig();
@@ -148,7 +162,10 @@ categories:
     color: '#00ff00'
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -168,7 +185,10 @@ categories:
   - invalid: true
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -179,7 +199,10 @@ categories:
     it('falls back to default categories when the configured list is empty', () => {
       const mockYaml = `categories: []`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -195,7 +218,10 @@ categories:
   - also-invalid: 1
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -211,7 +237,10 @@ categories:
     color: '#ff0000'
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -230,7 +259,10 @@ categories:
     color: '#00ff00'
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -244,7 +276,10 @@ categories:
 theme: invalid-theme
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -257,7 +292,10 @@ theme: invalid-theme
 diff-view: invalid-view
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -270,7 +308,10 @@ diff-view: invalid-view
     it('handles invalid YAML gracefully', () => {
       const mockYaml = `this is not: valid: yaml: syntax:::`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -283,7 +324,7 @@ diff-view: invalid-view
 
     it('treats an empty config file as "use defaults" without warning', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue('');
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({ kind: 'ok', content: Buffer.from('') });
 
       const config = loadConfig();
 
@@ -294,7 +335,10 @@ diff-view: invalid-view
 
     it('treats a config file containing only `null` as "use defaults" without warning', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue('null\n');
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from('null\n'),
+      });
 
       const config = loadConfig();
 
@@ -304,7 +348,10 @@ diff-view: invalid-view
 
     it('warns when YAML parses to a non-object (e.g. an array at the top level)', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue('- one\n- two\n');
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from('- one\n- two\n'),
+      });
 
       const config = loadConfig();
 
@@ -320,7 +367,10 @@ ignore:
   - 'node_modules/**'
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -338,7 +388,10 @@ ignore:
   - 'valid-pattern'
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -352,7 +405,10 @@ ignore:
 default-diff-args: '--staged --ignore-space-change'
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -367,7 +423,10 @@ categories:
     color: '#ff0000'
 `;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -379,7 +438,10 @@ categories:
     it('loads word-wrap from config', () => {
       const mockYaml = `word-wrap: false`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -389,7 +451,10 @@ categories:
     it('ignores non-boolean word-wrap values', () => {
       const mockYaml = `word-wrap: "yes"`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -399,7 +464,10 @@ categories:
     it('loads output-file from config', () => {
       const mockYaml = `output-file: './custom-output.xml'`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -410,11 +478,11 @@ categories:
       const userYaml = `output-file: './user.xml'`;
       const projectYaml = `output-file: './project.xml'`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockImplementation(filepath => {
+      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => {
         if (String(filepath).includes('.config/self-review')) {
-          return userYaml;
+          return { kind: 'ok', content: Buffer.from(userYaml) };
         }
-        return projectYaml;
+        return { kind: 'ok', content: Buffer.from(projectYaml) };
       });
 
       const config = loadConfig();
@@ -425,7 +493,10 @@ categories:
     it('ignores empty output-file and uses default', () => {
       const mockYaml = `output-file: ''`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -443,7 +514,10 @@ categories:
     it('loads guide-file from config', () => {
       const mockYaml = `guide-file: './walkthrough.guide.xml'`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -454,11 +528,11 @@ categories:
       const userYaml = `guide-file: './user.guide.xml'`;
       const projectYaml = `guide-file: './project.guide.xml'`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockImplementation(filepath => {
+      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => {
         if (String(filepath).includes('.config/self-review')) {
-          return userYaml;
+          return { kind: 'ok', content: Buffer.from(userYaml) };
         }
-        return projectYaml;
+        return { kind: 'ok', content: Buffer.from(projectYaml) };
       });
 
       const config = loadConfig();
@@ -469,7 +543,10 @@ categories:
     it('ignores empty guide-file and leaves it unset', () => {
       const mockYaml = `guide-file: ''`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYaml);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(mockYaml),
+      });
 
       const config = loadConfig();
 
@@ -484,9 +561,12 @@ categories:
       const userYaml = `output-file: /home/user/reviews/out.xml\ntheme: dark\n`;
       const projectYaml = `default-diff-args: "--staged"\n`;
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockImplementation(filepath =>
-        String(filepath).includes('.config/self-review') ? userYaml : projectYaml
-      );
+      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => ({
+        kind: 'ok',
+        content: Buffer.from(
+          String(filepath).includes('.config/self-review') ? userYaml : projectYaml
+        ),
+      }));
 
       const loaded = loadConfigWithProvenance();
 
@@ -503,11 +583,14 @@ categories:
 
     it('attributes a value both files set to the project, which wins the merge', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockImplementation(filepath =>
-        String(filepath).includes('.config/self-review')
-          ? 'output-file: user.xml\n'
-          : 'output-file: project.xml\n'
-      );
+      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => ({
+        kind: 'ok',
+        content: Buffer.from(
+          String(filepath).includes('.config/self-review')
+            ? 'output-file: user.xml\n'
+            : 'output-file: project.xml\n'
+        ),
+      }));
 
       const loaded = loadConfigWithProvenance();
 
@@ -531,7 +614,10 @@ categories:
       vi.mocked(fs.existsSync).mockImplementation(filepath =>
         String(filepath).endsWith('.self-review.yaml')
       );
-      vi.mocked(fs.readFileSync).mockReturnValue(`theme: neon\noutput-file: ''\n`);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(`theme: neon\noutput-file: ''\n`),
+      });
 
       const loaded = loadConfigWithProvenance();
 

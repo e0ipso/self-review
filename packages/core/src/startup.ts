@@ -146,12 +146,13 @@ export async function loadLocalReview(
   log: (message: string) => void
 ): Promise<LoadedLocalReview> {
   if (source.mode === 'git') {
+    const shouldKeep = createIgnoreFilter(config.ignore);
     const { files, repository, diagnostics, identity } = await loadGitDiffWithUntracked(
       [...gitDiffArgs],
-      cwd
+      cwd,
+      { shouldKeep }
     );
     for (const diagnostic of diagnostics) log(`Diff diagnostic: ${diagnostic}`);
-    const shouldKeep = createIgnoreFilter(config.ignore);
     return {
       payload: {
         files: files.filter(f => shouldKeep(f.newPath || f.oldPath)),

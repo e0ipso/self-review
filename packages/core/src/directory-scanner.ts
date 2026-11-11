@@ -5,6 +5,8 @@
 
 import { opendir, stat } from 'fs/promises';
 import { basename, dirname, join } from 'path';
+import { lstatSync, realpathSync } from 'fs';
+import { assertNoSymlinkAncestors, SafeFsError, sameFile } from './safe-fs';
 import { DiffFile } from './types';
 import { loadSyntheticFiles } from './synthetic-diff';
 import { createIgnoreFilter } from './ignore-filter';
@@ -33,11 +35,13 @@ export async function scanDirectory(
 ): Promise<SourceScanResult> {
   const budgets = resolveSourceBudgets(options.budgets);
 
+  let root: string;
   try {
     const dirStat = await stat(directoryPath);
     if (!dirStat.isDirectory()) {
       return failed(`Cannot review "${directoryPath}": it is not a directory.`);
     }
+    root = realpathSync(directoryPath);
   } catch (error) {
     return failed(`Cannot read directory "${directoryPath}": ${messageOf(error)}`);
   }
@@ -45,7 +49,7 @@ export async function scanDirectory(
   const shouldKeep = createIgnoreFilter(ignorePatterns);
   let walk: WalkResult;
   try {
-    walk = await walkDirectory(directoryPath, shouldKeep, budgets.maxEntries);
+    walk = await walkDirectory(root, shouldKeep, budgets.maxEntries);
   } catch (error) {
     return failed(`Cannot read directory "${directoryPath}": ${messageOf(error)}`);
   }
@@ -70,7 +74,7 @@ export async function scanDirectory(
     return { files: [], diagnostics: [], entryLimitExceeded: false };
   }
 
-  const { files, diagnostics } = loadSyntheticFiles(walk.files, directoryPath, {
+  const { files, diagnostics } = loadSyntheticFiles(walk.files, root, {
     budgets: options.budgets,
   });
   return { files, diagnostics, entryLimitExceeded: false };
@@ -117,8 +121,15 @@ async function walkDirectory(
 
   while (pending.length > 0) {
     const relativeDir = pending.pop()!;
-    const dir = await opendir(relativeDir === '' ? root : join(root, relativeDir));
+    const target = join(root, relativeDir);
+    const before = inspectDirectory(root, relativeDir);
+    const dir = await opendir(target);
     try {
+      // opendir yields: a queued directory or one of its ancestors may have changed.
+      const after = inspectDirectory(root, relativeDir);
+      if (!sameFile(before, after)) {
+        throw new SafeFsError('identity-changed', target, `${target} changed while opening`);
+      }
       for await (const entry of dir) {
         examined++;
         if (examined > maxEntries) return { files, limitExceeded: true };
@@ -148,4 +159,15 @@ function failed(message: string): SourceScanResult {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function inspectDirectory(root: string, rel: string) {
+  const target = join(root, rel);
+  // Include the directory itself in the ancestor walk.
+  assertNoSymlinkAncestors(root, join(rel, '.self-review-entry'));
+  const stats = lstatSync(target);
+  if (!stats.isDirectory() || realpathSync(target) !== target) {
+    throw new SafeFsError('unsafe-link', target, `${target} is no longer a contained directory`);
+  }
+  return stats;
 }

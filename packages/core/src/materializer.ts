@@ -15,15 +15,15 @@
 // talks to a forge API: head refs come from the forges' well-known git refs
 // (`refs/pull/N/head`, `refs/merge-requests/N/head`) over plain git.
 
-import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { stripTrailingNewline } from './git';
+import { defaultGitRunner } from './command-runner';
+export { defaultGitRunner } from './command-runner';
 import { CommandCancelledError } from './forge-provider';
 import type {
-  CommandCancelReason,
   ForgeCommandOptions,
   ForgeCommandResult,
   ForgeCommandRunner,
@@ -78,116 +78,10 @@ export const DEFAULT_GIT_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
 const CLEANUP_COMMAND_TIMEOUT_MS = 15_000;
 
-const KILL_GRACE_MS = 2_000;
-
-const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
-
 const AUTH_HINT =
   'Hint: if this repository is private or requires authentication, run ' +
   '`gh auth setup-git` (GitHub) or `glab auth git-credential` (GitLab) to ' +
   'wire your CLI credentials into git.';
-
-/**
- * Default runner: spawns the real binary. Rejects on spawn failure, on output over
- * the buffer cap, and with {@link CommandCancelledError} on abort or timeout (SIGTERM,
- * then SIGKILL after {@link KILL_GRACE_MS}; settles once the child exited).
- *
- * Deliberately not in its own process group: that would detach the controlling
- * terminal and silently disable git's and ssh's credential prompts.
- */
-export const defaultGitRunner: ForgeCommandRunner = (command, args, options = {}) =>
-  new Promise<ForgeCommandResult>((resolve, reject) => {
-    const { signal, timeoutMs } = options;
-    if (signal?.aborted) {
-      reject(new CommandCancelledError('aborted', command, args));
-      return;
-    }
-
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let outputBytes = 0;
-    let settled = false;
-    let cancelled: CommandCancelReason | null = null;
-    let overflowed = false;
-    let killTimer: NodeJS.Timeout | undefined;
-    let timeoutTimer: NodeJS.Timeout | undefined;
-
-    const killChild = () => {
-      child.kill('SIGTERM');
-      killTimer = setTimeout(() => {
-        if (!settled) child.kill('SIGKILL');
-      }, KILL_GRACE_MS);
-    };
-    const cancel = (reason: CommandCancelReason) => {
-      if (settled || cancelled !== null) return;
-      cancelled = reason;
-      killChild();
-    };
-    const onAbort = () => cancel('aborted');
-    signal?.addEventListener('abort', onAbort, { once: true });
-    if (timeoutMs !== undefined && timeoutMs > 0) {
-      timeoutTimer = setTimeout(() => cancel('timeout'), timeoutMs);
-    }
-
-    const settle = (outcome: () => void) => {
-      if (settled) return;
-      settled = true;
-      if (killTimer) clearTimeout(killTimer);
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-      signal?.removeEventListener('abort', onAbort);
-      outcome();
-    };
-
-    const collect = (sink: Buffer[]) => (chunk: Buffer) => {
-      outputBytes += chunk.length;
-      if (outputBytes > MAX_OUTPUT_BYTES) {
-        if (!overflowed) {
-          overflowed = true;
-          killChild();
-        }
-        return;
-      }
-      sink.push(chunk);
-    };
-    child.stdout?.on('data', collect(stdout));
-    child.stderr?.on('data', collect(stderr));
-
-    child.on('error', error => settle(() => reject(error)));
-
-    // A helper (ssh waiting on the terminal) may hold our pipes; closing them lets `close` follow
-    // `exit`.
-    child.on('exit', () => {
-      if (cancelled !== null || overflowed) {
-        child.stdout?.destroy();
-        child.stderr?.destroy();
-      }
-    });
-
-    child.on('close', (code, exitSignal) =>
-      settle(() => {
-        if (cancelled !== null) {
-          reject(new CommandCancelledError(cancelled, command, args));
-          return;
-        }
-        if (overflowed) {
-          reject(
-            new Error(`${command} ${args.join(' ')} produced more than ${MAX_OUTPUT_BYTES} bytes`)
-          );
-          return;
-        }
-        let stderrText = Buffer.concat(stderr).toString('utf-8');
-        if (code === null && exitSignal) {
-          stderrText += `${stderrText.endsWith('\n') || stderrText === '' ? '' : '\n'}(killed by ${exitSignal})\n`;
-        }
-        resolve({
-          stdout: Buffer.concat(stdout).toString('utf-8'),
-          stderr: stderrText,
-          exitCode: code ?? 1,
-        });
-      })
-    );
-  });
 
 /** Well-known git ref for the PR/MR head on each forge. */
 function headRefFor(url: ForgeUrl): string {

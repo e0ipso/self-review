@@ -113,6 +113,10 @@ export interface ForgeCommandResult {
 export interface ForgeCommandOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Working directory, without invoking a shell. */
+  cwd?: string;
+  /** Combined captured stdout/stderr byte limit, before decoding. */
+  maxOutputBytes?: number;
 }
 
 /**
