@@ -1,6 +1,7 @@
 // Shared bounded process execution. Resources belong to one call; cancellation settles only
-// after its child has exited. Text adapters and binary blob reads share the same lifetime.
+// after its owned process tree has terminated. Text adapters and binary blob reads share the same lifetime.
 import { spawn } from 'child_process';
+import { terminateProcessTree } from './process-tree';
 import { CommandCancelledError } from './forge-provider';
 import type {
   CommandCancelReason,
@@ -44,7 +45,7 @@ function repositoryEnvironment(): NodeJS.ProcessEnv {
 /**
  * Default runner: spawns the real binary. Rejects on spawn failure, on output over
  * the buffer cap, and with {@link CommandCancelledError} on abort or timeout (SIGTERM,
- * then SIGKILL after {@link KILL_GRACE_MS}; settles once the child exited).
+ * then SIGKILL after {@link KILL_GRACE_MS}; settles once the owned tree terminated).
  *
  * Deliberately not in its own process group: that would detach the controlling
  * terminal and silently disable git's and ssh's credential prompts.
@@ -80,15 +81,18 @@ export const runBufferedCommand: BufferedCommandRunner = (command, args, options
     let settled = false;
     let cancelled: CommandCancelReason | null = null;
     let overflowed = false;
-    let killTimer: NodeJS.Timeout | undefined;
+    let termination: Promise<void> | undefined;
     let timeoutTimer: NodeJS.Timeout | undefined;
 
     const killChild = () => {
-      if (killTimer !== undefined) return;
-      child.kill('SIGTERM');
-      killTimer = setTimeout(() => {
-        if (!settled) child.kill('SIGKILL');
-      }, KILL_GRACE_MS);
+      termination ??= terminateProcessTree(child, KILL_GRACE_MS);
+      // A discovery/termination failure must also settle within the shutdown bound.
+      // Known processes have been killed by the tree owner before it rejects.
+      void termination.catch(error => {
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        settle(() => reject(error));
+      });
     };
     const cancel = (reason: CommandCancelReason) => {
       if (settled || cancelled !== null) return;
@@ -104,7 +108,6 @@ export const runBufferedCommand: BufferedCommandRunner = (command, args, options
     const settle = (outcome: () => void) => {
       if (settled) return;
       settled = true;
-      if (killTimer) clearTimeout(killTimer);
       if (timeoutTimer) clearTimeout(timeoutTimer);
       signal?.removeEventListener('abort', onAbort);
       outcome();
@@ -126,16 +129,13 @@ export const runBufferedCommand: BufferedCommandRunner = (command, args, options
 
     child.on('error', error => settle(() => reject(error)));
 
-    // A helper (ssh waiting on the terminal) may hold our pipes; closing them lets `close` follow
-    // `exit`.
-    child.on('exit', () => {
-      if (cancelled !== null || overflowed) {
-        child.stdout?.destroy();
-        child.stderr?.destroy();
+    child.on('close', async (code, exitSignal) => {
+      try {
+        await termination;
+      } catch (error) {
+        settle(() => reject(error));
+        return;
       }
-    });
-
-    child.on('close', (code, exitSignal) =>
       settle(() => {
         if (cancelled !== null) {
           reject(new CommandCancelledError(cancelled, command, args));
@@ -159,8 +159,8 @@ export const runBufferedCommand: BufferedCommandRunner = (command, args, options
           stderr: stderrBytes,
           exitCode: code ?? 1,
         });
-      })
-    );
+      });
+    });
   });
 
 /** Text view for forge commands and diff metadata. The byte limit is applied before decoding. */
