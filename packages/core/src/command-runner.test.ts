@@ -124,6 +124,51 @@ describe.each([
   { name: 'text', run: defaultGitRunner },
   { name: 'binary', run: runBufferedCommand },
 ])('$name descendant lifetime', ({ run }) => {
+  it('settles an abort after the direct command exits with inherited pipes still open', async () => {
+    const root = directory();
+    const marker = join(root, 'orphan.json');
+    const helper = `require('fs').writeFileSync(process.argv[1],JSON.stringify({pid:process.pid,parent:process.ppid}));setInterval(()=>{},1000);`;
+    const parent = `require('child_process').spawn(process.execPath,['-e',${JSON.stringify(helper)},process.argv[1]],{stdio:'inherit'});setInterval(()=>{if(require('fs').existsSync(process.argv[1]))process.exit(0)},10);`;
+    const controller = new AbortController();
+    let result: unknown;
+    const observed = run(process.execPath, ['-e', parent, marker], {
+      signal: controller.signal,
+    }).catch(error => {
+      result = error;
+    });
+    let helperPid: number | undefined;
+    const alive = (pid: number) => {
+      try {
+        const state = execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], {
+          encoding: 'utf8',
+        }).trim();
+        return state !== '' && !state.startsWith('Z');
+      } catch {
+        return false;
+      }
+    };
+    try {
+      await vi.waitFor(() => {
+        const identities = JSON.parse(readFileSync(marker, 'utf8')) as {
+          pid: number;
+          parent: number;
+        };
+        helperPid = identities.pid;
+        expect(alive(helperPid)).toBe(true);
+        expect(alive(identities.parent)).toBe(false);
+      });
+      controller.abort();
+      await vi.waitFor(() => {
+        expect(result).toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+      });
+    } finally {
+      controller.abort();
+      // The helper has been reparented; only this test's marker authorizes its cleanup.
+      if (helperPid !== undefined && alive(helperPid)) process.kill(helperPid, 'SIGKILL');
+      await observed;
+    }
+  });
+
   it.each(['abort', 'timeout', 'overflow'])(
     'terminates a persistent credential helper on %s',
     async reason => {

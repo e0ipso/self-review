@@ -99,13 +99,21 @@ export const runBufferedCommand: BufferedCommandRunner = (command, args, options
 
     const killChild = () => {
       termination ??= terminateProcessTree(child, KILL_GRACE_MS);
-      // A discovery/termination failure must also settle within the shutdown bound.
-      // Known processes have been killed by the tree owner before it rejects.
-      void termination.catch(error => {
+      const closePipes = () => {
         child.stdout?.destroy();
         child.stderr?.destroy();
-        settle(() => reject(error));
-      });
+      };
+      // A discovery/termination failure must also settle within the shutdown bound.
+      // Known processes have been killed by the tree owner before it rejects.
+      void termination.then(
+        // A naturally exited parent can leave inherited pipes in a reparented helper.
+        // Pipe closure must not hold cancellation open after tree shutdown settles.
+        closePipes,
+        error => {
+          closePipes();
+          settle(() => reject(error));
+        }
+      );
     };
     const cancel = (reason: CommandCancelReason) => {
       if (settled || cancelled !== null) return;
