@@ -19,7 +19,7 @@ import {
   ApplyDestinationOutcome,
 } from '../shared/types';
 import {
-  applySuggestionForSession,
+  applySuggestionForSessionAsync,
   commitReviewStart,
   expandContext,
   getConfigLoad,
@@ -47,13 +47,15 @@ import {
 import type { ReviewSession } from '../../packages/core/src/review-handlers';
 import { ReviewTransition } from './review-transition';
 import { DirectorySelection } from './directory-selection';
+import { DesktopOperations } from './desktop-operations';
 import type { ReviewPresentation } from './presentation';
 
 export function registerIpcHandlers(
   desktopSession: ReviewSession,
   boundary: ReturnType<typeof createIpcBoundary>,
   transition: ReviewTransition,
-  presentation: ReviewPresentation
+  presentation: ReviewPresentation,
+  operations = new DesktopOperations()
 ): void {
   const selection = new DirectorySelection(transition, boundary.capture, event =>
     presentation.pickDirectory(boundary.assertPeer(event))
@@ -75,7 +77,7 @@ export function registerIpcHandlers(
     IPC.DIFF_LOAD_IMAGE,
     stringArgument,
     async (_event, filePath: string): Promise<ImageLoadResult> =>
-      loadImage(desktopSession, filePath)
+      operations.read(signal => loadImage(desktopSession, filePath, { signal }))
   );
 
   // Handle applying one suggestion to the reviewed working file
@@ -83,7 +85,9 @@ export function registerIpcHandlers(
     IPC.SUGGESTION_APPLY,
     suggestionRequest,
     async (_event, request: SuggestionApplyRequest): Promise<SuggestionApplyOutcome> =>
-      applySuggestionForSession(desktopSession, request)
+      operations.apply(signal =>
+        applySuggestionForSessionAsync(desktopSession, request, { signal })
+      )
   );
 
   // Handle the reviewer naming a destination directory for applies. Only a
@@ -92,22 +96,24 @@ export function registerIpcHandlers(
   boundary.handle(
     IPC.SUGGESTION_CHOOSE_DESTINATION,
     noArgument,
-    async (event): Promise<ApplyDestinationOutcome> => {
-      const current = boundary.capture(event);
-      const original = desktopSession.sourceIdentity;
-      const win = boundary.assertPeer(event);
-      const path = await presentation.pickDirectory(win, true);
-      if (path === null) return { status: 'cancelled' };
-      current();
-      if (desktopSession.sourceIdentity !== original)
-        throw new Error('The review session has changed.');
-      return setApplyDestination(desktopSession, path);
-    }
+    async (event): Promise<ApplyDestinationOutcome> =>
+      operations.apply(async signal => {
+        const current = boundary.capture(event);
+        const original = desktopSession.sourceIdentity;
+        const win = boundary.assertPeer(event);
+        const path = await presentation.pickDirectory(win, true);
+        if (path === null) return { status: 'cancelled' };
+        current();
+        signal.throwIfAborted();
+        if (desktopSession.sourceIdentity !== original)
+          throw new Error('The review session has changed.');
+        return setApplyDestination(desktopSession, path);
+      })
   );
 
   // Handle single-file content loading for lazy (large-payload) mode
   boundary.handle(IPC.DIFF_LOAD_FILE, stringArgument, async (_event, filePath: string) =>
-    getFileHunks(desktopSession, filePath)
+    operations.read(async () => getFileHunks(desktopSession, filePath))
   );
 
   // Handle config request from renderer
@@ -120,7 +126,7 @@ export function registerIpcHandlers(
 
   // Handle app info request from renderer (version + icon for the About dialog)
   boundary.handle(IPC.APP_GET_INFO, noArgument, async (): Promise<AppInfo> => {
-    return presentation.appInfo();
+    return operations.read(() => presentation.appInfo());
   });
 
   // Handle review submission from renderer
@@ -133,7 +139,9 @@ export function registerIpcHandlers(
     IPC.ATTACHMENT_READ,
     stringArgument,
     async (_event, reference: unknown): Promise<ArrayBuffer | null> => {
-      const result = await readAttachment(desktopSession, reference);
+      const result = await operations.read(signal =>
+        readAttachment(desktopSession, reference, { signal })
+      );
       return result.ok ? result.data : null;
     }
   );
@@ -145,13 +153,18 @@ export function registerIpcHandlers(
     event.sender.send(IPC.RESUME_LOAD, payload ?? { comments: [], viewedFiles: [] });
   });
 
-  boundary.handle(IPC.DIALOG_PICK_DIRECTORY, noArgument, event => selection.choose(event));
+  boundary.handle(IPC.DIALOG_PICK_DIRECTORY, noArgument, event =>
+    operations.read(() => selection.choose(event), 10 * 60_000)
+  );
 
   // Expand context for a single file by re-running git diff with more context lines
   boundary.handle(
     IPC.DIFF_EXPAND_CONTEXT,
     expansionRequest,
-    async (_event, request: ExpandContextRequest) => expandContext(desktopSession, request)
+    async (_event, request: ExpandContextRequest) =>
+      operations.read(signal =>
+        expandContext(desktopSession, request, undefined, { signal, timeoutMs: 30_000 })
+      )
   );
 
   // Find in page: forward search request to Chromium
@@ -196,48 +209,53 @@ export function registerIpcHandlers(
   boundary.handle(
     IPC.REVIEW_START_DIRECTORY,
     stringArgument,
-    async (event, directoryPath: string) => {
-      const current = boundary.capture(event);
-      const opening = transition.begin();
-      try {
-        const authorizedPath = await selection.authorize(event, directoryPath);
-        const { payload, identity } = await prepareDirectoryReview(desktopSession, authorizedPath);
-        current();
-        opening.assertCurrent();
-        // Scan only the authorized physical root while retaining the reviewer's displayed path.
-        if (payload.source.type === 'directory') payload.source.sourcePath = directoryPath;
-        if (
-          desktopSession.config &&
-          !(await presentation.confirmPayload(
-            payload,
-            desktopSession.config,
-            boundary.assertPeer(event)
-          ))
-        )
-          return;
-
-        await selection.authorize(event, directoryPath);
-        current();
-        opening.assertCurrent();
-        // Update the cache and send to renderer
-        const outgoing = commitReviewStart(desktopSession, payload, identity);
-        boundary.assertPeer(event).webContents.send(IPC.DIFF_LOAD, outgoing);
-
-        if (payload.source.type === 'file') {
-          console.error('[ipc] File review started:', payload.files.length, 'files');
-        } else {
-          console.error(
-            '[ipc] Directory review started:',
-            payload.source.type,
-            'mode with',
-            payload.files.length,
-            'files'
+    async (event, directoryPath: string) =>
+      operations.read(async signal => {
+        const current = boundary.capture(event);
+        const opening = transition.begin();
+        try {
+          const authorizedPath = await selection.authorize(event, directoryPath);
+          const { payload, identity } = await prepareDirectoryReview(
+            desktopSession,
+            authorizedPath
           );
+          current();
+          opening.assertCurrent();
+          // Scan only the authorized physical root while retaining the reviewer's displayed path.
+          if (payload.source.type === 'directory') payload.source.sourcePath = directoryPath;
+          if (
+            desktopSession.config &&
+            !(await presentation.confirmPayload(
+              payload,
+              desktopSession.config,
+              boundary.assertPeer(event)
+            ))
+          )
+            return;
+
+          await selection.authorize(event, directoryPath);
+          current();
+          opening.assertCurrent();
+          signal.throwIfAborted();
+          // Update the cache and send to renderer
+          const outgoing = commitReviewStart(desktopSession, payload, identity);
+          boundary.assertPeer(event).webContents.send(IPC.DIFF_LOAD, outgoing);
+
+          if (payload.source.type === 'file') {
+            console.error('[ipc] File review started:', payload.files.length, 'files');
+          } else {
+            console.error(
+              '[ipc] Directory review started:',
+              payload.source.type,
+              'mode with',
+              payload.files.length,
+              'files'
+            );
+          }
+        } finally {
+          opening.finish();
         }
-      } finally {
-        opening.finish();
-      }
-    }
+      }, 10 * 60_000)
   );
 }
 

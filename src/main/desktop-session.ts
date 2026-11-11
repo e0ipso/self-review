@@ -5,6 +5,7 @@ import { publishOptionsFor } from '../../packages/core/src/startup';
 import type { ReviewOutputTarget } from '../../packages/core/src/review-publisher';
 import type { RemoteSessionInfo } from '../shared/types';
 import { RemoteLifetime } from './remote-lifetime';
+import { DesktopOperations } from './desktop-operations';
 import { ReviewTransition } from './review-transition';
 
 /** Created once in main; startup and both sets of IPC handlers share this owner. */
@@ -13,6 +14,7 @@ export function createDesktopSession(cwd: string) {
   return {
     cwd,
     review,
+    operations: new DesktopOperations(),
     remote: new RemoteLifetime(),
     transition: new ReviewTransition(review),
     remoteInfo: null as RemoteSessionInfo | null,

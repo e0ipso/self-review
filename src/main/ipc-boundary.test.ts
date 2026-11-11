@@ -106,3 +106,25 @@ describe('desktop IPC boundary', () => {
     expect(submitted).toBe(valid);
   });
 });
+
+it('uses the shared maximum context bound and retains numeric anchor refusals and extensions', () => {
+  for (const contextLines of [0, 99_999])
+    expect(expansionRequest({ filePath: 'a', contextLines }).contextLines).toBe(contextLines);
+  expect(() => expansionRequest({ filePath: 'a', contextLines: 100_000 })).toThrow();
+  for (const start of [0, -1, 1.5, NaN, Infinity]) {
+    const value = {
+      filePath: 'a',
+      lineRange: { side: 'new', start, end: 1, extension: true },
+      suggestion: { originalCode: 'a', proposedCode: 'b', extension: true },
+      extension: true,
+    };
+    expect(suggestionRequest(value)).toBe(value);
+  }
+  expect(() =>
+    suggestionRequest({
+      filePath: 'a',
+      lineRange: [],
+      suggestion: { originalCode: 'a', proposedCode: 'b' },
+    })
+  ).toThrow();
+});

@@ -12,14 +12,29 @@ import { registerLifecycleHandlers } from './lifecycle-handlers';
 import { checkForUpdate, getVersionUpdate } from './version-checker';
 import { setupMenu } from './menu';
 import { getAppIconDataUri } from './app-assets';
-import { createReviewPresentation } from './presentation';
+import { createReviewPresentation, createLifecyclePresentation } from './presentation';
+import { createDesktopPublication } from './publication';
+import { registerRemoteOpenHandler } from './remote-open-handler';
 import { IPC } from '../shared/ipc-channels';
 
 const desktop = createDesktopSession(process.cwd());
 const quit = new QuitController();
-const windows = new WindowOwner(() => createReviewWindow(handleCloseRequest));
+const windows = new WindowOwner(() => {
+  const window = createReviewWindow(handleCloseRequest);
+  const cancel = desktop.operations.replaceWindow();
+  desktop.review.reviewState = null;
+  window.on('closed', () => {
+    cancel(new Error('The review window closed.'));
+    desktop.review.reviewState = null;
+  });
+  return window;
+});
 const shutdown = createDesktopShutdown(
-  desktop.remote,
+  {
+    dispose: async (reason: string) => {
+      await Promise.all([desktop.operations.dispose(reason), desktop.remote.dispose(reason)]);
+    },
+  },
   code => process.exit(code),
   () => {
     windows.stop();
@@ -34,7 +49,8 @@ function handleCloseRequest(event: Electron.Event): void {
     !window.webContents.isLoading() &&
     !!desktop.review.diffData &&
     desktop.review.diffData.source.type !== 'welcome';
-  const decision = quit.closeRequested(reviewOpen);
+  const decision =
+    desktop.operations.busy && !quit.mayQuit ? 'ignore' : quit.closeRequested(reviewOpen);
   if (decision === 'allow') return;
   event.preventDefault();
   if (decision === 'ask-renderer') window?.webContents.send(IPC.APP_CLOSE_REQUESTED);
@@ -81,19 +97,29 @@ void app
       void shutdown(1, 'initialization timeout');
     }, 45_000);
     try {
-      if (!(await initializeSession(desktop))) {
+      if (!(await desktop.operations.read(signal => initializeSession(desktop, signal), 45_000))) {
         await shutdown(0, 'initialization cancelled');
         return;
       }
       if (desktop.remote.closed) return;
       const boundary = createIpcBoundary(ipcMain, () => windows.current);
+      const presentation = createReviewPresentation(getAppIconDataUri, getVersionUpdate);
       registerIpcHandlers(
         desktop.review,
         boundary,
         desktop.transition,
-        createReviewPresentation(getAppIconDataUri, getVersionUpdate)
+        presentation,
+        desktop.operations
       );
-      registerLifecycleHandlers(desktop, boundary, quit, shutdown);
+      registerLifecycleHandlers(
+        desktop,
+        boundary,
+        quit,
+        shutdown,
+        createDesktopPublication(desktop),
+        createLifecyclePresentation()
+      );
+      registerRemoteOpenHandler(desktop, boundary, presentation);
       setupMenu();
       windows.initialize();
       // The check uses the default network session. Late completions target the current live window.

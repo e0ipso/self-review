@@ -1,3 +1,4 @@
+import type { LifecyclePresentation } from './lifecycle-handlers';
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import type { AppConfig, DiffLoadPayload } from '../shared/types';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
@@ -53,6 +54,31 @@ export function createReviewPresentation(
     versionUpdate,
     openExternal: async url => {
       await shell.openExternal(url);
+    },
+  };
+}
+
+export function createLifecyclePresentation(): LifecyclePresentation {
+  return {
+    async pickOutputPath(window, defaultPath) {
+      const result = await dialog.showSaveDialog(window, {
+        title: 'Save Review As',
+        defaultPath,
+        filters: [{ name: 'XML Files', extensions: ['xml'] }],
+      });
+      return result.canceled ? null : (result.filePath ?? null);
+    },
+    async reportSaveFailure(window, failure) {
+      console.error(`[main] Error saving review (${failure.code}): ${failure.message}`);
+      if (window.isDestroyed()) return;
+      await dialog.showMessageBox(window, {
+        type: 'error',
+        title: 'Review not saved',
+        message: failure.message,
+        detail: failure.detail,
+        buttons: ['OK'],
+        defaultId: 0,
+      });
     },
   };
 }

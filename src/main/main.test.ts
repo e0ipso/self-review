@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DesktopOperations } from './desktop-operations';
 import { IPC } from '../shared/ipc-channels';
 
 const harness = vi.hoisted(() => ({
@@ -24,13 +25,21 @@ vi.mock('electron', () => ({
   ipcMain: {},
 }));
 vi.mock('./desktop-session', () => ({
-  createDesktopSession: () => ({ remote: harness.remote, review: harness.session }),
+  createDesktopSession: () => ({
+    remote: harness.remote,
+    review: harness.session,
+    operations: new DesktopOperations(),
+  }),
 }));
 vi.mock('./desktop-window', () => ({ createReviewWindow: harness.createWindow }));
 vi.mock('./startup', () => ({ initializeSession: harness.initialize }));
 vi.mock('./ipc-handlers', () => ({ registerIpcHandlers: vi.fn() }));
 vi.mock('./lifecycle-handlers', () => ({ registerLifecycleHandlers: vi.fn() }));
-vi.mock('./presentation', () => ({ createReviewPresentation: vi.fn() }));
+vi.mock('./presentation', () => ({
+  createReviewPresentation: vi.fn(),
+  createLifecyclePresentation: vi.fn(),
+}));
+vi.mock('./remote-open-handler', () => ({ registerRemoteOpenHandler: vi.fn() }));
 vi.mock('./app-assets', () => ({ getAppIconDataUri: vi.fn() }));
 vi.mock('./menu', () => ({ setupMenu: vi.fn() }));
 vi.mock('./version-checker', () => ({
