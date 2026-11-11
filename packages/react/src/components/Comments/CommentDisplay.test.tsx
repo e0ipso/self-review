@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../context/ReviewContext', () => ({
+  useOptionalApplySession: () => null,
+  useOptionalSnapshotKey: () => '',
   useReview: () => ({ deleteComment: mocks.deleteComment, deleteReply: mocks.deleteReply }),
   useReviewCommands: () => ({
     deleteComment: mocks.deleteComment,

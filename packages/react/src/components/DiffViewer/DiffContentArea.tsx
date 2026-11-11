@@ -12,19 +12,15 @@ import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
 import type { ContentPreview } from './content-preview';
-import { previewFromFlags } from './preview-compat';
+import { normalizePreviewProps } from './preview-compat';
 import type { LazyLoadState } from './useLazyFileContent';
 
-export interface DiffContentAreaProps {
-  preview?: ContentPreview;
+export interface PreviewContentAreaProps {
+  preview: ContentPreview;
   file: DiffFile;
   filePath: string;
   viewMode: 'split' | 'unified';
   renderViewMode: 'raw' | 'rendered';
-  isEligibleForRenderedView: boolean;
-  renderedTextMode: RenderedTextMode | null;
-  showImagePreview: boolean;
-  showSvgPreview: boolean;
   /** On-demand content state; only meaningful while `file.contentLoaded === false`. */
   contentLoad: LazyLoadState;
   onRetry: () => void;
@@ -44,16 +40,24 @@ export interface DiffContentAreaProps {
   ) => void;
 }
 
-export function DiffContentArea({
-  preview: suppliedPreview,
+/** Public 2.0.4 call forms are normalized here, before entering the content dispatcher. */
+export interface DiffContentAreaProps extends Omit<PreviewContentAreaProps, 'preview'> {
+  preview?: ContentPreview;
+  isEligibleForRenderedView: boolean;
+  renderedTextMode: RenderedTextMode | null;
+  showImagePreview: boolean;
+  showSvgPreview: boolean;
+}
+export function DiffContentArea(props: DiffContentAreaProps) {
+  return <PreviewContentArea {...normalizePreviewProps(props)} />;
+}
+
+export function PreviewContentArea({
+  preview,
   file,
   filePath,
   viewMode,
   renderViewMode,
-  isEligibleForRenderedView,
-  renderedTextMode,
-  showImagePreview,
-  showSvgPreview,
   contentLoad,
   onRetry,
   commentRange,
@@ -66,7 +70,7 @@ export function DiffContentArea({
   expandLoading,
   totalLines,
   handleExpandContext,
-}: DiffContentAreaProps) {
+}: PreviewContentAreaProps) {
   const { t } = useLocalization();
   const adapter = useAdapter();
   const snapshotKey = useOptionalSnapshotKey();
@@ -101,7 +105,7 @@ export function DiffContentArea({
         role='status'
         className='flex items-center justify-center py-12 text-sm text-muted-foreground'
       >
-        <Loader2 className='h-4 w-4 animate-spin mr-2' />
+        <Loader2 className='h-4 w-4 animate-spin me-2' />
         {t('Loading file content...')}
       </div>
     );
@@ -131,14 +135,6 @@ export function DiffContentArea({
     );
   }
 
-  const preview =
-    suppliedPreview ??
-    previewFromFlags({
-      showImagePreview,
-      showSvgPreview,
-      isEligibleForRenderedView,
-      renderedTextMode,
-    });
   const renderPreview =
     renderViewMode === 'rendered' &&
     preview.kind !== 'none' &&

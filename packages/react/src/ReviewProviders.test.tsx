@@ -1,0 +1,179 @@
+import React, { createRef } from 'react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
+import type { ResumeLoadPayload, DiffLoadPayload } from '@self-review/types';
+import SuggestionApplyControl from './components/Comments/SuggestionApplyControl';
+import { useConfig } from './context/ConfigContext';
+import { ReviewProviders } from './ReviewProviders';
+import {
+  useOptionalApplySession,
+  useReview,
+  type ReviewContextValue,
+} from './context/ReviewContext';
+import { useReviewBridge, type ReviewHandle } from './hooks/useReviewBridge';
+import { installBrowserApiStubs } from './test-helpers';
+installBrowserApiStubs();
+
+const files = [
+  { oldPath: 'a', newPath: 'a', changeType: 'added' as const, isBinary: false, hunks: [] },
+];
+const source = { type: 'directory' as const, sourcePath: '/a' };
+
+it('composes static host content, bridge and narrow Apply subscriptions', async () => {
+  let review!: ReviewContextValue;
+  let applyRenders = 0;
+  let outputPath = '';
+  const ref = createRef<ReviewHandle>();
+  const changed = vi.fn();
+  function Apply() {
+    useOptionalApplySession();
+    applyRenders++;
+    return null;
+  }
+  function Host() {
+    review = useReview();
+    outputPath = useConfig().outputPathInfo.resolvedOutputPath;
+    useReviewBridge(ref, changed);
+    return <span>Host welcome or review</span>;
+  }
+  const loadDiff = vi.fn();
+  render(
+    <ReviewProviders
+      adapter={{ loadDiff }}
+      initialFiles={files}
+      initialSource={source}
+      initialOutputPath={{ resolvedOutputPath: '/chosen/review.xml', outputPathWritable: true }}
+    >
+      <Apply />
+      <Host />
+    </ReviewProviders>
+  );
+  expect(screen.getByText('Host welcome or review')).toBeTruthy();
+  expect(outputPath).toBe('/chosen/review.xml');
+  expect(loadDiff).not.toHaveBeenCalled();
+  const before = applyRenders;
+  act(() => review.addComment('a', null, 'comment', 'bug', null));
+  act(() => review.toggleViewed('a'));
+  expect(applyRenders).toBe(before);
+  expect(ref.current?.getReviewState().files[0].comments[0].body).toBe('comment');
+  expect(changed).toHaveBeenCalledTimes(2);
+  act(() => review.setApplyDestination('/chosen'));
+  expect(applyRenders).toBe(before + 1);
+  expect(changed).toHaveBeenCalledTimes(2);
+});
+
+it('keeps a pushed resume when the initial request resolves later and drops disposed pushes', async () => {
+  let receive!: (payload: ResumeLoadPayload) => void;
+  let finish!: (payload: ResumeLoadPayload) => void;
+  const unsubscribe = vi.fn();
+  let review!: ReviewContextValue;
+  function Probe() {
+    review = useReview();
+    return null;
+  }
+  const mounted = render(
+    <ReviewProviders
+      adapter={{
+        loadDiff: async () => ({ files, source }),
+        loadResumedReview: () =>
+          new Promise(resolve => {
+            finish = resolve;
+          }),
+        onResumeLoad: callback => {
+          receive = callback;
+          return unsubscribe;
+        },
+      }}
+    >
+      <Probe />
+    </ReviewProviders>
+  );
+  await waitFor(() => expect(finish).toBeTypeOf('function'));
+  const comment = {
+    id: 'pushed',
+    filePath: 'a',
+    lineRange: null,
+    body: 'pushed',
+    category: 'bug',
+    suggestion: null,
+  };
+  act(() => receive({ comments: [comment], viewedFiles: [] }));
+  await act(async () => finish({ comments: [], viewedFiles: [] }));
+  expect(review.files[0].comments).toEqual([comment]);
+  mounted.unmount();
+  expect(unsubscribe).toHaveBeenCalledOnce();
+  act(() => receive({ comments: [], viewedFiles: [] }));
+});
+
+it('accepts an empty initial resume acknowledgement followed by an ordered session push', async () => {
+  let pushDiff!: (payload: DiffLoadPayload) => void;
+  let pushResume!: (payload: ResumeLoadPayload) => void;
+  let review!: ReviewContextValue;
+  function Probe() {
+    review = useReview();
+    return null;
+  }
+  const loadResumedReview = vi.fn(async () => ({ comments: [], viewedFiles: [] }));
+  render(
+    <ReviewProviders
+      adapter={{
+        loadDiff: async () => ({ files: [], source: { type: 'welcome' } }),
+        loadResumedReview,
+        onDiffLoad: callback => {
+          pushDiff = callback;
+          return () => {};
+        },
+        onResumeLoad: callback => {
+          pushResume = callback;
+          return () => {};
+        },
+      }}
+    >
+      <Probe />
+    </ReviewProviders>
+  );
+  await waitFor(() => expect(loadResumedReview).toHaveBeenCalledOnce());
+  const comment = {
+    id: 'later',
+    filePath: 'a',
+    lineRange: null,
+    body: 'later feedback',
+    category: 'bug',
+    suggestion: null,
+  };
+  act(() => {
+    pushDiff({ files, source });
+    pushResume({ comments: [comment], viewedFiles: ['a'] });
+  });
+  expect(review.diffSource).toEqual(source);
+  expect(review.files[0].comments).toEqual([comment]);
+  expect(review.files[0].viewed).toBe(true);
+  expect(loadResumedReview).toHaveBeenCalledOnce();
+});
+
+it('keeps an Apply control quiet when its broad parent sees an unrelated comment edit', () => {
+  let review!: ReviewContextValue;
+  let reads = 0;
+  const apply = vi.fn();
+  const suggestion = { originalCode: 'before', proposedCode: 'after' };
+  const range = { start: 1, end: 1, side: 'new' as const };
+  function BroadParent() {
+    review = useReview();
+    return <SuggestionApplyControl filePath='a' lineRange={range} suggestion={suggestion} />;
+  }
+  const adapter = {
+    loadDiff: vi.fn(),
+    get applySuggestion() {
+      reads++;
+      return apply;
+    },
+  };
+  render(
+    <ReviewProviders adapter={adapter} initialFiles={files} initialSource={source}>
+      <BroadParent />
+    </ReviewProviders>
+  );
+  const before = reads;
+  act(() => review.addComment('a', null, 'unrelated', 'bug', null));
+  expect(reads).toBe(before);
+});

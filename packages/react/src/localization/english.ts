@@ -206,4 +206,110 @@ export const ENGLISH = {
   Collapse: 'Collapse',
   You: 'You',
   AI: 'AI',
+  'Image exceeds the 10 MiB file limit.': 'Image exceeds the 10 MiB file limit.',
+  'Image exceeds the 16 megapixel or 8192 pixel dimension limit.':
+    'Image exceeds the 16 megapixel or 8192 pixel dimension limit.',
+  'Use PNG, JPEG, GIF, WebP, BMP or ICO with a readable raster header.':
+    'Use PNG, JPEG, GIF, WebP, BMP or ICO with a readable raster header.',
+  'Image could not be decoded.': 'Image could not be decoded.',
+  'Choose at most {count} images totaling at most {size} MiB.':
+    'Choose at most {count} images totaling at most {size} MiB.',
+  'Attachment failed: {name}. {detail}': 'Attachment failed: {name}. {detail}',
+  'Pasted image': 'Pasted image',
+  'Preparing attachment: {name}': 'Preparing attachment: {name}',
+  'Drop image to attach': 'Drop image to attach',
+  Dismiss: 'Dismiss',
+  'Image not found': 'Image not found',
+  'Loading attachment...': 'Loading attachment...',
+  'Enlarge attachment': 'Enlarge attachment',
+  Attachment: 'Attachment',
+  'Enlarged attachment preview': 'Enlarged attachment preview',
+  'Attachment preview': 'Attachment preview',
+  'Remove attachment': 'Remove attachment',
+  'The path could not be copied. Try again or copy it manually.':
+    'The path could not be copied. Try again or copy it manually.',
+  'Edit reply': 'Edit reply',
+  'Delete reply': 'Delete reply',
+  'Reply to this comment... (paste or drop images here)':
+    'Reply to this comment... (paste or drop images here)',
+  'Review walkthrough': 'Review walkthrough',
+  'Open the walkthrough overview': 'Open the walkthrough overview',
+  'Walkthrough route map': 'Walkthrough route map',
+  'Go to stop {index}: {name}': 'Go to stop {index}: {name}',
+  Appendix: 'Appendix',
+  'Stop {index} of {total}': 'Stop {index} of {total}',
+  '{viewed}/{total} reviewed': '{viewed}/{total} reviewed',
+  '{index}/{total} \u00b7 {name}': '{index}/{total} \u00b7 {name}',
+  'Comments outside the current diff': 'Comments outside the current diff',
+  'These recorded line ranges are not in the loaded diff. Their original locations are preserved when you save.':
+    'These recorded line ranges are not in the loaded diff. Their original locations are preserved when you save.',
+  'The rest of the review is unaffected.': 'The rest of the review is unaffected.',
+  'This file could not be displayed: {path}': 'This file could not be displayed: {path}',
+  'Try again': 'Try again',
+  'The review could not be loaded': 'The review could not be loaded',
+  'The diff could not be read in a form self-review can review':
+    'The diff could not be read in a form self-review can review',
+  'Could not read file': 'Could not read file',
+  'The file {path} could not be read or is empty.':
+    'The file {path} could not be read or is empty.',
+  'No files found': 'No files found',
+  'No files found in the selected directory {path}. The directory may be empty or all files may be excluded by ignore rules.':
+    'No files found in the selected directory {path}. The directory may be empty or all files may be excluded by ignore rules.',
+  'No changes found': 'No changes found',
+  'All arguments are passed directly to git diff.':
+    'All arguments are passed directly to git diff.',
+  'The arguments {args} were passed to git diff. Try different arguments to see your changes.':
+    'The arguments {args} were passed to git diff. Try different arguments to see your changes.',
+  'Common usage examples:': 'Common usage examples:',
+  'Unstaged working tree changes (default)': 'Unstaged working tree changes (default)',
+  'Changes staged for commit': 'Changes staged for commit',
+  'Changes in the last commit': 'Changes in the last commit',
+  'All changes since branching from main': 'All changes since branching from main',
+  'Limit diff to a specific directory': 'Limit diff to a specific directory',
+  stops: { plural: 'count', forms: { one: '{count} stop', other: '{count} stops' } },
+  'walkthrough totals': {
+    plural: 'stops',
+    forms: {
+      one: {
+        plural: 'files',
+        forms: { one: '{stops} stop · {files} file', other: '{stops} stop · {files} files' },
+      },
+      other: {
+        plural: 'files',
+        forms: { one: '{stops} stops · {files} file', other: '{stops} stops · {files} files' },
+      },
+    },
+  },
+  Close: 'Close',
+  'Everything else': 'Everything else',
+  files: { plural: 'count', forms: { one: '{count} file', other: '{count} files' } },
+  'Resumed comments without anchors': {
+    plural: 'count',
+    forms: {
+      one: 'One resumed comment could not be anchored and was kept as file-level feedback:',
+      other: '{count} resumed comments could not be anchored and were kept as file-level feedback:',
+    },
+  },
+  'Remote review drift':
+    'This PR/MR has changed since this review was recorded ({recorded} → {live}) — line anchors may be stale.',
+  'Highlighting is limited for this file. All source lines remain available.':
+    'Highlighting is limited for this file. All source lines remain available.',
+  'Diagram source is too large ({count} characters; the limit is {limit})':
+    'Diagram source is too large ({count} characters; the limit is {limit})',
+  'Diagram exceeds the layout complexity limits. Read the source below.':
+    'Diagram exceeds the layout complexity limits. Read the source below.',
+  'Rendering timed out after {seconds} seconds. Synchronous layout cannot be interrupted.':
+    'Rendering timed out after {seconds} seconds. Synchronous layout cannot be interrupted.',
+  'The diagram did not render to a well-formed SVG image':
+    'The diagram did not render to a well-formed SVG image',
+  'Diagram output exceeds the image size limit.': 'Diagram output exceeds the image size limit.',
+  'Too many diagrams are waiting. Retry after another diagram finishes.':
+    'Too many diagrams are waiting. Retry after another diagram finishes.',
+  'Failed to render diagram. {detail}': 'Failed to render diagram. {detail}',
+  'Mermaid error: {detail}': 'Mermaid error: {detail}',
+  'Diagram source': 'Diagram source',
+  'Rendering diagram...': 'Rendering diagram...',
+  'Mermaid diagram': 'Mermaid diagram',
+  'Highlighting is limited for this suggestion. All code remains available.':
+    'Highlighting is limited for this suggestion. All code remains available.',
 } satisfies Record<string, LocalizedMessage>;

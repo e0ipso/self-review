@@ -1,3 +1,4 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -50,25 +51,37 @@ export default class PreviewErrorBoundary extends React.Component<
     const { error } = this.state;
     if (!error) return this.props.children;
 
-    return (
-      <div
-        role='alert'
-        data-testid='preview-error'
-        className='m-3 flex items-start gap-2 text-destructive text-sm p-3 border border-destructive/20 rounded'
-      >
-        <AlertTriangle className='h-4 w-4 mt-0.5 shrink-0' aria-hidden='true' />
-        <div className='min-w-0 flex-1 space-y-1'>
-          <p>
-            This file could not be displayed:{' '}
-            <code className='font-mono break-all'>{this.props.filePath}</code>
-          </p>
-          <p className='text-xs text-muted-foreground break-words'>{error.message}</p>
-          <p className='text-xs text-muted-foreground'>The rest of the review is unaffected.</p>
-        </div>
-        <Button variant='outline' size='sm' onClick={this.retry}>
-          Try again
-        </Button>
-      </div>
-    );
+    return <PreviewFailure filePath={this.props.filePath} error={error} retry={this.retry} />;
   }
+}
+
+function PreviewFailure({
+  filePath,
+  error,
+  retry,
+}: {
+  filePath: string;
+  error: Error;
+  retry: () => void;
+}) {
+  const { t } = useLocalization();
+  return (
+    <div
+      role='alert'
+      data-testid='preview-error'
+      className='m-3 flex items-start gap-2 text-destructive text-sm p-3 border border-destructive/20 rounded'
+    >
+      <AlertTriangle className='h-4 w-4 mt-0.5 shrink-0' aria-hidden='true' />
+      <div className='min-w-0 flex-1 space-y-1'>
+        <p>{t('This file could not be displayed: {path}', { path: filePath })}</p>
+        <p className='text-xs text-muted-foreground break-words'>{error.message}</p>
+        <p className='text-xs text-muted-foreground'>
+          {t('The rest of the review is unaffected.')}
+        </p>
+      </div>
+      <Button variant='outline' size='sm' onClick={retry}>
+        {t('Try again')}
+      </Button>
+    </div>
+  );
 }

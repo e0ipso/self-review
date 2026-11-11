@@ -1,3 +1,4 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { localContentUrlTransform } from '../../utils/passive-content';
@@ -17,7 +18,7 @@ import { AttachmentImage } from './AttachmentImage';
  * `CommentDisplay -> ReplyDisplay` acyclic.
  */
 export const PROSE_CLASSES =
-  '[&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_pre]:my-2 [&_pre]:p-3 [&_pre]:bg-muted [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_code]:text-[0.85em] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-muted [&_h1]:text-base [&_h1]:font-bold [&_h1]:my-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:my-2 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:my-2 [&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400 [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_hr]:my-2 [&_hr]:border-border [&_pre_code]:bg-transparent [&_pre_code]:p-0';
+  '[&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_pre]:my-2 [&_pre]:p-3 [&_pre]:bg-muted [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_code]:text-[0.85em] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-muted [&_h1]:text-base [&_h1]:font-bold [&_h1]:my-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:my-2 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:my-2 [&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400 [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:text-start [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_blockquote]:border-s-2 [&_blockquote]:border-border [&_blockquote]:ps-3 [&_blockquote]:text-muted-foreground [&_hr]:my-2 [&_hr]:border-border [&_pre_code]:bg-transparent [&_pre_code]:p-0';
 
 export interface ReplyDisplayProps {
   commentId: string;
@@ -33,6 +34,7 @@ export interface ReplyDisplayProps {
  * document, whoever authored the turn.
  */
 export default function ReplyDisplay({ commentId, reply }: ReplyDisplayProps) {
+  const { t } = useLocalization();
   const { deleteReply } = useReview();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -64,11 +66,11 @@ export default function ReplyDisplay({ commentId, reply }: ReplyDisplayProps) {
           ) : (
             <>
               <User className='h-3.5 w-3.5 shrink-0' />
-              You
+              {t('You')}
             </>
           )}
         </span>
-        <div className='flex gap-0.5 opacity-0 group-hover/reply:opacity-100 transition-opacity'>
+        <div className='flex gap-0.5 opacity-0 group-hover/reply:opacity-100 focus-within:opacity-100 transition-opacity'>
           <Button
             variant='ghost'
             size='sm'
@@ -77,7 +79,7 @@ export default function ReplyDisplay({ commentId, reply }: ReplyDisplayProps) {
             className='h-6 w-6 p-0'
           >
             <Pencil className='h-3 w-3' />
-            <span className='sr-only'>Edit reply</span>
+            <span className='sr-only'>{t('Edit reply')}</span>
           </Button>
           <Button
             variant='ghost'
@@ -87,7 +89,7 @@ export default function ReplyDisplay({ commentId, reply }: ReplyDisplayProps) {
             className='h-6 w-6 p-0 text-muted-foreground hover:text-destructive'
           >
             <Trash2 className='h-3 w-3' />
-            <span className='sr-only'>Delete reply</span>
+            <span className='sr-only'>{t('Delete reply')}</span>
           </Button>
         </div>
       </div>

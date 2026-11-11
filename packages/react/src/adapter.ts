@@ -26,6 +26,12 @@ export interface ReviewAdapter {
   /** Load a previously saved review — comments and viewed files (resume flow). */
   loadResumedReview?: () => Promise<ResumeLoadPayload>;
 
+  /**
+   * Later resume pushes, delivered after their owning diff push. A new push supersedes any
+   * pending loadResumedReview response. Old adapters can omit this subscription.
+   */
+  onResumeLoad?: (callback: (payload: ResumeLoadPayload) => void) => () => void;
+
   /** Submit/save a completed review. */
   submitReview?: (state: ReviewState) => Promise<void> | void;
 
@@ -34,6 +40,9 @@ export interface ReviewAdapter {
 
   /** Lazy-load hunks for a single file (large payload mode). */
   loadFileContent?: (filePath: string) => Promise<DiffHunk[] | null>;
+
+  /** Optional native clipboard capability. Reject on failure so the UI can report it. */
+  writeClipboard?: (text: string) => Promise<void>;
 
   /** Read an attachment file for display. */
   readAttachment?: (filePath: string) => Promise<ArrayBuffer | null>;
@@ -51,6 +60,9 @@ export interface ReviewAdapter {
    * no Apply control at all. The host resolves the destination directory,
    * because the UI knows only the review-relative path.
    *
+   * Malformed DTO shapes may reject at the transport boundary. Structurally valid requests,
+   * including null, zero, reversed or out-of-range numeric anchors, reach the engine.
+   * Transport failures reject; callers must present them visibly.
    * Never throws for a refusal. A refused attempt resolves with
    * `status: 'refused'` and a reason, and leaves the file untouched.
    */
@@ -86,8 +98,9 @@ export interface ReviewAdapter {
 }
 
 /**
- * Optional configuration adapter for loading config from external sources.
- * If not provided, the component uses defaults or the config prop.
+ * @deprecated No component consumes this interface. Load configuration in the host and pass
+ * it through ReviewPanel.config, ReviewProviders.config or ConfigProvider.initialConfig.
+ * Kept for source compatibility with existing consumers.
  */
 export interface ConfigAdapter {
   /** Load configuration. Called once on mount. */

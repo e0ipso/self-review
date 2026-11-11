@@ -25,6 +25,7 @@ export function useReviewHost(
   const loadRequest = useRef(0);
   const resumeRequest = useRef(0);
   const resumeOwner = useRef<number | null>(null);
+  const resumePushedOwner = useRef<number | null>(null);
   const loading = useRef(false);
   const comments = useRef(initialComments);
   comments.current = initialComments;
@@ -39,22 +40,26 @@ export function useReviewHost(
     };
   }, []);
 
-  const loadResume = useCallback(async () => {
-    if (!adapter?.loadResumedReview) return;
-    const request = ++resumeRequest.current;
-    resumeOwner.current = store.getSnapshot().sessionId;
-    store.dispatch({ type: 'resume-error', message: null });
-    const current = () =>
-      mounted.current &&
-      request === resumeRequest.current &&
-      resumeOwner.current === store.getSnapshot().sessionId;
-    try {
-      const resumed = await adapter.loadResumedReview();
-      if (current()) store.dispatch({ type: 'resume', resumed });
-    } catch (error) {
-      if (current()) store.dispatch({ type: 'resume-error', message: message(error) });
-    }
-  }, [adapter, store]);
+  const loadResume = useCallback(
+    async (skipPushed = false) => {
+      if (!adapter?.loadResumedReview) return;
+      if (skipPushed && resumePushedOwner.current === store.getSnapshot().sessionId) return;
+      const request = ++resumeRequest.current;
+      resumeOwner.current = store.getSnapshot().sessionId;
+      store.dispatch({ type: 'resume-error', message: null });
+      const current = () =>
+        mounted.current &&
+        request === resumeRequest.current &&
+        resumeOwner.current === store.getSnapshot().sessionId;
+      try {
+        const resumed = await adapter.loadResumedReview();
+        if (current()) store.dispatch({ type: 'resume', resumed });
+      } catch (error) {
+        if (current()) store.dispatch({ type: 'resume-error', message: message(error) });
+      }
+    },
+    [adapter, store]
+  );
 
   const receive = useCallback(
     (payload: DiffLoadPayload) => {
@@ -65,6 +70,8 @@ export function useReviewHost(
       store.dispatch({ type: 'payload', payload, initialComments: comments.current });
       if (isPlaceholderSource(previous.diffSource) && resumeOwner.current === previous.sessionId) {
         resumeOwner.current = store.getSnapshot().sessionId;
+        if (resumePushedOwner.current === previous.sessionId)
+          resumePushedOwner.current = store.getSnapshot().sessionId;
       }
     },
     [store, notifyIdentity]
@@ -79,6 +86,22 @@ export function useReviewHost(
     });
   }, [adapter, staticDiff, receive]);
 
+  useEffect(() => {
+    if (!adapter?.onResumeLoad) return;
+    let active = true;
+    const unsubscribe = adapter.onResumeLoad(resumed => {
+      if (!active || !mounted.current) return;
+      ++resumeRequest.current;
+      resumeOwner.current = store.getSnapshot().sessionId;
+      resumePushedOwner.current = resumeOwner.current;
+      store.dispatch({ type: 'resume', resumed });
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [adapter, store]);
+
   const load = useCallback(async () => {
     if (!adapter || staticDiff || loading.current) return;
     loading.current = true;
@@ -91,7 +114,7 @@ export function useReviewHost(
       if (pushVersion.current === arrival) receive(payload);
       // A duplicate delivery still hydrates resume once; a newer push's files always win.
       if (store.getSnapshot().identity === reviewSessionIdentity(payload.source, payload.remote))
-        await loadResume();
+        await loadResume(true);
     } catch (error) {
       if (mounted.current && request === loadRequest.current && pushVersion.current === arrival) {
         store.dispatch({ type: 'load-error', message: message(error) });
@@ -102,7 +125,7 @@ export function useReviewHost(
   }, [adapter, staticDiff, store, receive, loadResume]);
 
   useEffect(() => {
-    if (staticDiff) void loadResume();
+    if (staticDiff) void loadResume(true);
     else void load();
   }, [staticDiff, load, loadResume]);
   return { retryLoad: load, retryResume: loadResume };

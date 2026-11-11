@@ -1,4 +1,3 @@
-import { useLocalization } from '../localization/LocalizationContext';
 import React, {
   createContext,
   useContext,
@@ -36,7 +35,8 @@ import {
 } from './review-session';
 import { ReviewLifecycleContext } from './ReviewLifecycleContext';
 import { isPlaceholderSource } from './review-session';
-import { Button } from '../components/ui/button';
+import { ReviewLoadContext } from './ReviewLoadContext';
+import { ReviewLoadRecovery } from '../components/ReviewLoadRecovery';
 export { reviewSessionIdentity } from './review-session';
 
 export interface ReviewContextValue {
@@ -210,7 +210,6 @@ function ReviewSessionProvider({
   initialComments,
   adapter,
 }: ReviewProviderProps & { adapter: ReviewAdapter | null }) {
-  const { t } = useLocalization();
   const [store] = useState(() =>
     createReviewSessionStore(createReviewSession(initialFiles, initialSource))
   );
@@ -231,6 +230,15 @@ function ReviewSessionProvider({
     adapter,
     initialFiles !== undefined,
     initialComments
+  );
+  const loadingState = useMemo(
+    () => ({
+      loadError: state.loadError,
+      resumeError: state.resumeError,
+      retryLoad,
+      retryResume,
+    }),
+    [state.loadError, state.resumeError, retryLoad, retryResume]
   );
   const staticFiles = useRef(initialFiles);
   useLayoutEffect(() => {
@@ -325,22 +333,9 @@ function ReviewSessionProvider({
     <SessionStoreContext.Provider value={store}>
       <CommandsContext.Provider value={commands}>
         <ReviewContext.Provider value={value}>
-          {state.loadError && (
-            <div role='alert' className='m-3 rounded border border-destructive p-3 text-sm'>
-              <p>{t('The review could not be loaded. {detail}', { detail: state.loadError })}</p>
-              <Button onClick={() => void retryLoad()}>{t('Retry loading review')}</Button>
-            </div>
-          )}
-          {state.resumeError && (
-            <div role='alert' className='m-3 rounded border border-destructive p-3 text-sm'>
-              <p>
-                {t('Saved feedback could not be loaded. {detail}', { detail: state.resumeError })}
-              </p>
-              <Button onClick={() => void retryResume()}>
-                {t('Retry loading saved feedback')}
-              </Button>
-            </div>
-          )}
+          <ReviewLoadContext.Provider value={loadingState}>
+            <ReviewLoadRecovery />
+          </ReviewLoadContext.Provider>
           {children}
         </ReviewContext.Provider>
       </CommandsContext.Provider>
@@ -371,3 +366,61 @@ export function useDiffReview() {
     sessionId: useReviewSessionId(),
   };
 }
+
+/** Apply controls depend on session ownership and destination, never on comment bodies. */
+export function useOptionalApplySession() {
+  const store = useContext(SessionStoreContext);
+  const commands = useContext(CommandsContext);
+  const subscribe = store?.subscribe ?? emptySubscribe;
+  const read = () => store?.getSnapshot();
+  // Each selected value retains its identity across unrelated file/comment updates.
+  const select =
+    <T,>(selector: (state: ReturnType<ReviewSessionStore['getSnapshot']>) => T) =>
+    () => {
+      const state = read();
+      return state ? selector(state) : undefined;
+    };
+  const sessionId = useSyncExternalStore(
+    subscribe,
+    select(s => s.sessionId),
+    select(s => s.sessionId)
+  );
+  const snapshotId = useSyncExternalStore(
+    subscribe,
+    select(s => s.snapshotId),
+    select(s => s.snapshotId)
+  );
+  const diffSource = useSyncExternalStore(
+    subscribe,
+    select(s => s.diffSource),
+    select(s => s.diffSource)
+  );
+  const reviewedPaths = useSyncExternalStore(
+    subscribe,
+    select(s => s.reviewedPaths),
+    select(s => s.reviewedPaths)
+  );
+  const remote = useSyncExternalStore(
+    subscribe,
+    select(s => s.remote),
+    select(s => s.remote)
+  );
+  const applyDestination = useSyncExternalStore(
+    subscribe,
+    select(s => s.applyDestination),
+    select(s => s.applyDestination)
+  );
+  return store && commands && diffSource && reviewedPaths
+    ? {
+        sessionId,
+        snapshotId,
+        diffSource,
+        reviewedPaths,
+        remote,
+        applyDestination,
+        isCurrentSession: commands.isCurrentSession,
+        setApplyDestination: commands.setApplyDestination,
+      }
+    : null;
+}
+const emptySubscribe = () => () => {};

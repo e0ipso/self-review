@@ -4,7 +4,7 @@ import type { LineRange, Suggestion, SuggestionApplyOutcome } from '@self-review
 import { Check, CircleAlert, FolderOpen, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAdapter } from '../../context/ReviewAdapterContext';
-import { useOptionalReview } from '../../context/ReviewContext';
+import { useOptionalApplySession } from '../../context/ReviewContext';
 
 export interface SuggestionApplyControlProps {
   /** Path of the file the suggestion is anchored in, relative to the review root. */
@@ -31,8 +31,8 @@ export interface SuggestionApplyControlProps {
  * and applies straight after. The host still refuses an attempt made
  * without a destination, so this only saves a wasted click.
  */
-export default function SuggestionApplyControl(props: SuggestionApplyControlProps) {
-  const review = useOptionalReview();
+export default React.memo(function SuggestionApplyControl(props: SuggestionApplyControlProps) {
+  const review = useOptionalApplySession();
   const key = JSON.stringify([
     review?.sessionId,
     review?.snapshotId,
@@ -41,7 +41,7 @@ export default function SuggestionApplyControl(props: SuggestionApplyControlProp
     props.suggestion,
   ]);
   return <OwnedSuggestionApplyControl key={key} {...props} />;
-}
+});
 
 function OwnedSuggestionApplyControl({
   filePath,
@@ -50,7 +50,7 @@ function OwnedSuggestionApplyControl({
 }: SuggestionApplyControlProps) {
   const { t } = useLocalization();
   const adapter = useAdapter();
-  const review = useOptionalReview();
+  const review = useOptionalApplySession();
   const applySuggestion = adapter?.applySuggestion;
   const chooseApplyDestination = adapter?.chooseApplyDestination;
   const [outcome, setOutcome] = useState<SuggestionApplyOutcome | null>(null);

@@ -279,19 +279,19 @@ export default function FileTree() {
                     className='relative z-10'
                   />
                   <span className='min-w-0 flex-1 truncate text-xs font-semibold text-foreground'>
-                    {section.header.name}
+                    {section.header.implicit ? t('Everything else') : section.header.name}
                   </span>
                   <span className='shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground'>
-                    {viewedCount}/{progressPaths.length}
+                    {number(viewedCount)}/{number(progressPaths.length)}
                   </span>
                 </div>
                 {section.header.rationale && (
-                  <div className='mt-1 pl-[30px] text-[11px] leading-snug text-muted-foreground'>
+                  <div className='mt-1 ps-[30px] text-[11px] leading-snug text-muted-foreground'>
                     {section.header.rationale}
                   </div>
                 )}
               </div>
-              <div className='pl-6'>{entryNodes}</div>
+              <div className='ps-6'>{entryNodes}</div>
             </div>
           );
         })}

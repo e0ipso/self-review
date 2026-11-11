@@ -38,6 +38,15 @@ describe('localization boundary', () => {
     for (const key of Object.keys(ENGLISH) as Array<keyof typeof ENGLISH>) {
       expect(
         local.t(key, {
+          limit: 50000,
+          seconds: 10,
+          size: 30,
+          name: 'name',
+          index: 1,
+          stops: 2,
+          args: '--staged',
+          recorded: 'aaa',
+          live: 'bbb',
           count: 2,
           files: 2,
           viewed: 1,

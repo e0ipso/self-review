@@ -1,12 +1,7 @@
 import React, { forwardRef, type ReactNode } from 'react';
 import type { AppConfig, ReviewComment } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
-import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
-import { ConfigProvider } from './context/ConfigContext';
-import { GuideProvider } from './context/GuideContext';
-import { ReviewProvider } from './context/ReviewContext';
-import { DiffNavigationProvider } from './context/DiffNavigationContext';
-import { TooltipProvider } from './components/ui/tooltip';
+import { ReviewProviders } from './ReviewProviders';
 import Layout from './components/Layout';
 import { KeyboardNavigationManager } from './components/KeyboardNavigationManager';
 import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
@@ -80,21 +75,11 @@ export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(funct
   ref
 ) {
   return (
-    <ReviewAdapterProvider adapter={adapter}>
-      <ConfigProvider initialConfig={config}>
-        <GuideProvider>
-          <ReviewProvider>
-            <DiffNavigationProvider>
-              <TooltipProvider>
-                <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
-                  {children}
-                </ReviewPanelInner>
-              </TooltipProvider>
-            </DiffNavigationProvider>
-          </ReviewProvider>
-        </GuideProvider>
-      </ConfigProvider>
-    </ReviewAdapterProvider>
+    <ReviewProviders adapter={adapter} config={config}>
+      <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
+        {children}
+      </ReviewPanelInner>
+    </ReviewProviders>
   );
 });
 
