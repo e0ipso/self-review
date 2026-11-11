@@ -1,3 +1,4 @@
+import { useLocalization } from '../localization/LocalizationContext';
 import React from 'react';
 import type { ResolvedGuideGroup } from '@self-review/types';
 import { getGuideAccent } from '../utils/guide-accents';
@@ -32,11 +33,17 @@ function clip(name: string, max = 18): string {
  * come from theme classes so light and dark both work.
  */
 export function GuideRouteMap({ groups, isGroupComplete, onJump }: GuideRouteMapProps) {
+  const { t, number, direction } = useLocalization();
   const n = groups.length;
   if (n === 0) return null;
 
   const points = groups.map((group, i) => ({
-    x: n === 1 ? W / 2 : PAD_X + (i * (W - 2 * PAD_X)) / (n - 1),
+    x:
+      n === 1
+        ? W / 2
+        : direction === 'rtl'
+          ? W - PAD_X - (i * (W - 2 * PAD_X)) / (n - 1)
+          : PAD_X + (i * (W - 2 * PAD_X)) / (n - 1),
     y: n === 1 ? (Y_HIGH + Y_LOW) / 2 : i % 2 === 0 ? Y_HIGH : Y_LOW,
     r: 11 + Math.min(6, Math.max(0, group.files.length - 1) * 1.5),
   }));
@@ -44,8 +51,8 @@ export function GuideRouteMap({ groups, isGroupComplete, onJump }: GuideRouteMap
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      role='img'
-      aria-label='Walkthrough route map'
+      role='group'
+      aria-label={t('Walkthrough route map')}
       className='h-auto w-full select-none'
       style={{ maxHeight: 220 }}
     >
@@ -84,7 +91,10 @@ export function GuideRouteMap({ groups, isGroupComplete, onJump }: GuideRouteMap
             key={`station-${i}-${group.name}`}
             role={onJump && firstFilePath ? 'button' : undefined}
             tabIndex={onJump && firstFilePath ? 0 : undefined}
-            aria-label={`Go to stop ${i + 1}: ${group.name}`}
+            aria-label={t('Go to stop {index}: {name}', {
+              index: i + 1,
+              name: group.implicit ? t('Everything else') : group.name,
+            })}
             onClick={onJump && firstFilePath ? () => onJump(firstFilePath) : undefined}
             onKeyDown={
               onJump && firstFilePath
@@ -116,7 +126,7 @@ export function GuideRouteMap({ groups, isGroupComplete, onJump }: GuideRouteMap
                 fontWeight={600}
                 className={complete ? 'fill-white' : accent.fillText}
               >
-                {complete ? '✓' : i + 1}
+                {complete ? '✓' : number(i + 1)}
               </text>
             )}
             <text
@@ -127,7 +137,7 @@ export function GuideRouteMap({ groups, isGroupComplete, onJump }: GuideRouteMap
               fontWeight={600}
               className='fill-foreground'
             >
-              {clip(group.name)}
+              {clip(group.implicit ? t('Everything else') : group.name)}
             </text>
             <text
               x={p.x}
@@ -137,7 +147,7 @@ export function GuideRouteMap({ groups, isGroupComplete, onJump }: GuideRouteMap
               fontFamily='ui-monospace, monospace'
               className='fill-muted-foreground'
             >
-              {group.files.length} {group.files.length === 1 ? 'file' : 'files'}
+              {t('files', { count: group.files.length })}
             </text>
           </g>
         );

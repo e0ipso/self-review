@@ -1,3 +1,6 @@
+import { useAdapter } from '../../context/ReviewAdapterContext';
+import { writeClipboard } from '../../utils/clipboard';
+import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useEffect, useRef } from 'react';
 import type { DiffFile, ReviewComment } from '@self-review/types';
@@ -59,15 +62,34 @@ export function FileSectionHeader({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const adapter = useAdapter();
+  const snapshot = useOptionalSnapshotKey();
+  const copyOwner = useRef(0);
+  useEffect(() => {
+    copyOwner.current++;
+    setCopied(false);
+    setCopyError(false);
+    return () => {
+      copyOwner.current++;
+    };
+  }, [filePath, adapter, snapshot]);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
   const copyPath = async () => {
     const pathToCopy = hasSourcePath ? file.newPath : filePath;
+    const owner = ++copyOwner.current;
+    setCopyError(false);
     try {
-      await navigator.clipboard.writeText(pathToCopy);
+      await writeClipboard(pathToCopy, adapter);
+      if (copyOwner.current !== owner) return;
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard API may be unavailable; silently ignore.
+      if (copyOwner.current === owner) setCopyError(true);
     }
   };
 
@@ -83,6 +105,11 @@ export function FileSectionHeader({
 
   return (
     <>
+      {copyError && (
+        <p role='alert' className='px-3 text-sm text-destructive'>
+          {t('The path could not be copied. Try again or copy it manually.')}
+        </p>
+      )}
       <div ref={sentinelRef} className='h-0 w-0' aria-hidden />
       <div
         className={`sticky top-0 z-10 flex items-center gap-2 h-10 px-3 bg-muted/80 backdrop-blur-sm border-b border-border cursor-pointer select-none${isStuck ? '' : ' rounded-t-lg'}`}

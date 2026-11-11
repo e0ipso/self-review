@@ -8,7 +8,12 @@ import { Paperclip } from 'lucide-react';
 import EmojiAutocomplete from './EmojiAutocomplete';
 import AttachmentThumbnail from './AttachmentThumbnail';
 import { useEmojiAutocomplete } from '../../hooks/useEmojiAutocomplete';
-import { processImageFile } from '../../utils/image-utils';
+import { useImageAttachments } from '../../hooks/useImageAttachments';
+import {
+  AttachmentProcessingContext,
+  AttachmentProcessingStatus,
+  useAttachmentProcessing,
+} from './AttachmentProcessing';
 import { AttachmentDropZone } from './AttachmentDropZone';
 
 /**
@@ -24,6 +29,8 @@ import { AttachmentDropZone } from './AttachmentDropZone';
  */
 export interface ComposerCoreProps {
   body: string;
+  attachmentOwner?: string;
+  onProcessingChange?: (pending: boolean) => void;
   onBodyChange: (body: string) => void;
   attachments: Attachment[];
   /**
@@ -50,6 +57,8 @@ export interface ComposerCoreProps {
 
 export function ComposerCore({
   body,
+  attachmentOwner,
+  onProcessingChange,
   onBodyChange,
   attachments,
   setAttachments,
@@ -75,6 +84,13 @@ export function ComposerCore({
     [setAttachments]
   );
 
+  const ingestion = useImageAttachments({
+    onAttach: handleAttach,
+    attachments,
+    owner: attachmentOwner,
+    onProcessingChange,
+  });
+
   useEffect(() => {
     // Auto-focus the editor textarea when the composer mounts
     const textarea =
@@ -90,102 +106,105 @@ export function ComposerCore({
   };
 
   return (
-    <div
-      className={`rounded-lg border bg-card shadow-sm overflow-hidden relative ${isDragging ? 'border-primary border-2' : 'border-foreground/15'}`}
-      data-testid={testId}
-    >
-      <AttachmentDropZone
-        onAttach={handleAttach}
-        isDragging={isDragging}
-        onDragChange={setIsDragging}
+    <AttachmentProcessingContext.Provider value={ingestion}>
+      <div
+        className={`rounded-lg border bg-card shadow-sm overflow-hidden relative ${isDragging ? 'border-primary border-2' : 'border-foreground/15'}`}
+        data-testid={testId}
       >
-        <div
-          className='p-1 relative'
-          data-color-mode={resolveIsDark() ? 'dark' : 'light'}
-          ref={editorContainerRef}
+        <AttachmentDropZone
+          onAttach={handleAttach}
+          isDragging={isDragging}
+          onDragChange={setIsDragging}
         >
-          <MDEditor
-            value={body}
-            onChange={val => onBodyChange(val || '')}
-            preview='edit'
-            highlightEnable={false}
-            commands={[
-              commands.bold,
-              commands.italic,
-              commands.divider,
-              commands.quote,
-              commands.code,
-              commands.link,
-              commands.divider,
-              commands.unorderedListCommand,
-              commands.orderedListCommand,
-              commands.checkedListCommand,
-            ]}
-            extraCommands={
-              headerLabel
-                ? [
-                    {
-                      name: 'header-label',
-                      keyCommand: 'header-label',
-                      render: () => <>{headerLabel}</>,
-                    },
-                  ]
-                : []
-            }
-            textareaProps={{
-              placeholder,
-              'aria-label': placeholder,
-              onKeyDown: e => {
-                // Let emoji autocomplete handle keys first when dropdown is open
-                if (emoji.onKeyDown(e)) return;
+          <div
+            className='p-1 relative'
+            data-color-mode={resolveIsDark() ? 'dark' : 'light'}
+            ref={editorContainerRef}
+          >
+            <MDEditor
+              value={body}
+              onChange={val => onBodyChange(val || '')}
+              preview='edit'
+              highlightEnable={false}
+              commands={[
+                commands.bold,
+                commands.italic,
+                commands.divider,
+                commands.quote,
+                commands.code,
+                commands.link,
+                commands.divider,
+                commands.unorderedListCommand,
+                commands.orderedListCommand,
+                commands.checkedListCommand,
+              ]}
+              extraCommands={
+                headerLabel
+                  ? [
+                      {
+                        name: 'header-label',
+                        keyCommand: 'header-label',
+                        render: () => <>{headerLabel}</>,
+                      },
+                    ]
+                  : []
+              }
+              textareaProps={{
+                placeholder,
+                'aria-label': placeholder,
+                onKeyDown: e => {
+                  // Let emoji autocomplete handle keys first when dropdown is open
+                  if (emoji.onKeyDown(e)) return;
 
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                  e.preventDefault();
-                  onSubmit();
-                }
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  const actions = actionsRef?.current;
-                  if (actions) {
-                    actions.focus();
-                  } else {
-                    (e.target as HTMLElement).blur();
+                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    if (!ingestion.pending) onSubmit();
                   }
-                }
-              },
-              onPaste: undefined,
-            }}
-            height={height}
-            className='md-editor-comment'
-          />
-          <EmojiAutocomplete
-            isOpen={emoji.isOpen}
-            results={emoji.results}
-            selectedIndex={emoji.selectedIndex}
-            position={emoji.position}
-            onSelect={emoji.selectEmoji}
-            onHover={emoji.setSelectedIndex}
-          />
-        </div>
-      </AttachmentDropZone>
-
-      {attachments.length > 0 && (
-        <div className='flex gap-2 flex-wrap px-3 py-2 border-t border-border/50'>
-          {attachments.map(att => (
-            <AttachmentThumbnail
-              key={att.id}
-              attachment={att}
-              onRemove={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    const actions = actionsRef?.current;
+                    if (actions) {
+                      actions.focus();
+                    } else {
+                      (e.target as HTMLElement).blur();
+                    }
+                  }
+                },
+                onPaste: undefined,
+              }}
+              height={height}
+              className='md-editor-comment'
             />
-          ))}
-          <span className='self-center text-[11px] text-muted-foreground'>
-            {t('images', { count: attachments.length })}
-          </span>
-        </div>
-      )}
+            <EmojiAutocomplete
+              isOpen={emoji.isOpen}
+              results={emoji.results}
+              selectedIndex={emoji.selectedIndex}
+              position={emoji.position}
+              onSelect={emoji.selectEmoji}
+              onHover={emoji.setSelectedIndex}
+            />
+          </div>
+        </AttachmentDropZone>
 
-      {children}
-    </div>
+        {attachments.length > 0 && (
+          <div className='flex gap-2 flex-wrap px-3 py-2 border-t border-border/50'>
+            {attachments.map(att => (
+              <AttachmentThumbnail
+                key={att.id}
+                attachment={att}
+                onRemove={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
+              />
+            ))}
+            <span className='self-center text-[11px] text-muted-foreground'>
+              {t('images', { count: attachments.length })}
+            </span>
+          </div>
+        )}
+
+        <AttachmentProcessingStatus ingestion={ingestion} />
+        {children}
+      </div>
+    </AttachmentProcessingContext.Provider>
   );
 }
 
@@ -201,6 +220,11 @@ export interface AttachButtonProps {
 export function AttachButton({ setAttachments }: AttachButtonProps) {
   const { t } = useLocalization();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const shared = useAttachmentProcessing();
+  const local = useImageAttachments({
+    onAttach: images => setAttachments(previous => [...previous, ...images]),
+  });
+  const ingestion = shared ?? local;
 
   return (
     <>
@@ -214,6 +238,7 @@ export function AttachButton({ setAttachments }: AttachButtonProps) {
         <Paperclip className='h-3.5 w-3.5' />
         {t('Attach')}
       </Button>
+      {!shared && <AttachmentProcessingStatus ingestion={local} />}
       <input
         ref={fileInputRef}
         type='file'
@@ -223,9 +248,7 @@ export function AttachButton({ setAttachments }: AttachButtonProps) {
         onChange={e => {
           const files = Array.from(e.target.files || []);
           if (files.length > 0) {
-            Promise.all(files.map(processImageFile))
-              .then(newAttachments => setAttachments(prev => [...prev, ...newAttachments]))
-              .catch(err => console.error('Failed to attach image:', err));
+            ingestion.enqueue(files);
           }
           e.target.value = '';
         }}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Attachment } from '@self-review/types';
+import { useLocalization } from '../../localization/LocalizationContext';
 import { Button } from '../ui/button';
 import { X, ImageIcon } from 'lucide-react';
 
@@ -10,6 +11,7 @@ export default function AttachmentThumbnail({
   attachment: Attachment;
   onRemove: () => void;
 }) {
+  const { t } = useLocalization();
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,7 +24,11 @@ export default function AttachmentThumbnail({
   return (
     <div className='relative group'>
       {url ? (
-        <img src={url} alt='Attachment preview' className='h-16 w-16 object-cover rounded border' />
+        <img
+          src={url}
+          alt={t('Attachment preview')}
+          className='h-16 w-16 object-cover rounded border'
+        />
       ) : (
         <div className='h-16 w-16 flex items-center justify-center rounded border bg-muted'>
           <ImageIcon className='h-4 w-4 text-muted-foreground' />
@@ -31,7 +37,8 @@ export default function AttachmentThumbnail({
       <Button
         variant='ghost'
         size='icon'
-        className='absolute -top-2 -right-2 h-5 w-5 rounded-full bg-background border shadow-sm opacity-0 group-hover:opacity-100'
+        className='absolute -top-2 -end-2 h-5 w-5 rounded-full bg-background border shadow-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+        aria-label={t('Remove attachment')}
         onClick={onRemove}
       >
         <X className='h-3 w-3' />

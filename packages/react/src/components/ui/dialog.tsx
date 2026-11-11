@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useLocalization } from '../../localization/LocalizationContext';
 import { useConfig } from '../../context/ConfigContext';
 
 const Dialog = DialogPrimitive.Root;
@@ -32,6 +33,7 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
   const { portalContainer } = useConfig();
+  const { t } = useLocalization();
   return (
     <DialogPortal container={portalContainer}>
       <DialogOverlay />
@@ -44,9 +46,9 @@ const DialogContent = React.forwardRef<
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className='absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none'>
+        <DialogPrimitive.Close className='absolute end-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none'>
           <X className='h-4 w-4' />
-          <span className='sr-only'>Close</span>
+          <span className='sr-only'>{t('Close')}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>

@@ -41,6 +41,9 @@ export interface ReviewAdapter {
   /** Lazy-load hunks for a single file (large payload mode). */
   loadFileContent?: (filePath: string) => Promise<DiffHunk[] | null>;
 
+  /** Optional native clipboard capability. Reject on failure so the UI can report it. */
+  writeClipboard?: (text: string) => Promise<void>;
+
   /** Read an attachment file for display. */
   readAttachment?: (filePath: string) => Promise<ArrayBuffer | null>;
 

@@ -1,3 +1,4 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { localContentUrlTransform } from '../../utils/passive-content';
@@ -26,6 +27,7 @@ export interface GuideOverviewContentProps {
  * opened from the wayfinding HUD — so both always show the same thing.
  */
 export default function GuideOverviewContent({ onNavigate }: GuideOverviewContentProps) {
+  const { t, number } = useLocalization();
   const { guide } = useGuide();
   const { diffFiles, files } = useReview();
   const navigation = useOptionalDiffNavigation();
@@ -63,16 +65,17 @@ export default function GuideOverviewContent({ onNavigate }: GuideOverviewConten
         <span className='flex items-center gap-2'>
           <MapIcon className='h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400' />
           <span className='font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground'>
-            Review walkthrough
+            {t('Review walkthrough')}
           </span>
         </span>
         <span className='font-mono text-[11px] tabular-nums text-muted-foreground'>
-          {groups.length} {groups.length === 1 ? 'stop' : 'stops'} · {totalFiles}{' '}
-          {totalFiles === 1 ? 'file' : 'files'}
+          {t('walkthrough totals', { stops: groups.length, files: totalFiles })}
           {additions > 0 && (
-            <span className='text-emerald-600 dark:text-emerald-400'> +{additions}</span>
+            <span className='text-emerald-600 dark:text-emerald-400'> +{number(additions)}</span>
           )}
-          {deletions > 0 && <span className='text-red-600 dark:text-red-400'> −{deletions}</span>}
+          {deletions > 0 && (
+            <span className='text-red-600 dark:text-red-400'> −{number(deletions)}</span>
+          )}
         </span>
       </div>
 

@@ -10,6 +10,8 @@ const mockState = vi.hoisted(() => ({
 }));
 
 vi.mock('../../context/ReviewContext', () => ({
+  useOptionalApplySession: () => null,
+  useOptionalSnapshotKey: () => '',
   useFileReview: () => ({ comments: mockState.comments }),
   useReview: () => ({
     getCommentsForFile: vi.fn(() => mockState.comments),

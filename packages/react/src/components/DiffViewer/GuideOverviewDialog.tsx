@@ -1,3 +1,4 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React from 'react';
 import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import GuideOverviewContent from './GuideOverviewContent';
@@ -14,13 +15,14 @@ export interface GuideOverviewDialogProps {
  * the dialog to reveal the target.
  */
 export default function GuideOverviewDialog({ open, onOpenChange }: GuideOverviewDialogProps) {
+  const { t } = useLocalization();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className='block max-h-[85vh] max-w-3xl overflow-y-auto'
         data-testid='guide-overview-dialog'
       >
-        <DialogTitle className='sr-only'>Review walkthrough</DialogTitle>
+        <DialogTitle className='sr-only'>{t('Review walkthrough')}</DialogTitle>
         <GuideOverviewContent onNavigate={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>

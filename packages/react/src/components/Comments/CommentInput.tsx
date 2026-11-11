@@ -38,6 +38,12 @@ export default function CommentInput({
   const [proposedCode, setProposedCode] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const processing = useRef(false);
+  const [attachmentsPending, setAttachmentsPending] = useState(false);
+  const onProcessingChange = React.useCallback((pending: boolean) => {
+    processing.current = pending;
+    setAttachmentsPending(pending);
+  }, []);
 
   useEffect(() => {
     if (existingComment) {
@@ -58,7 +64,7 @@ export default function CommentInput({
   const isValid = hasContent && category.length > 0;
 
   const handleSubmit = () => {
-    if (!isValid) return;
+    if (!isValid || processing.current) return;
 
     const suggestion: Suggestion | null =
       showSuggestion && originalCode
@@ -106,6 +112,8 @@ export default function CommentInput({
 
   return (
     <ComposerCore
+      attachmentOwner={JSON.stringify([filePath, lineRange, existingComment?.id])}
+      onProcessingChange={onProcessingChange}
       body={body}
       onBodyChange={setBody}
       attachments={attachments}
@@ -169,7 +177,7 @@ export default function CommentInput({
         </div>
 
         <div className='flex items-center gap-1.5'>
-          <span className='text-[10px] text-muted-foreground/50 mr-0.5'>{t('Esc to unfocus')}</span>
+          <span className='text-[10px] text-muted-foreground/50 me-0.5'>{t('Esc to unfocus')}</span>
           <Button
             data-testid='cancel-comment-btn'
             variant='ghost'
@@ -183,7 +191,7 @@ export default function CommentInput({
             data-testid='add-comment-btn'
             size='sm'
             onClick={handleSubmit}
-            disabled={!isValid}
+            disabled={!isValid || attachmentsPending}
             className='h-7 text-xs gap-1.5'
           >
             {t(existingComment ? 'Update' : 'Comment')}

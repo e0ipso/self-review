@@ -168,7 +168,7 @@ export default function CommentDisplay({
             variant='ghost'
             size='sm'
             onClick={toggleCollapse}
-            className='h-5 w-5 p-0 -ml-1'
+            className='h-5 w-5 p-0 -ms-1'
             data-testid={`comment-collapse-toggle-${comment.id}`}
           >
             {isCollapsed ? (
@@ -341,7 +341,7 @@ export default function CommentDisplay({
             replies with the rest of the comment body, with no extra wiring.
           */}
           {comment.replies && comment.replies.length > 0 && (
-            <div className='ml-4 border-l-2 border-border/60' data-testid={`thread-${comment.id}`}>
+            <div className='ms-4 border-s-2 border-border/60' data-testid={`thread-${comment.id}`}>
               {comment.replies.map(reply => (
                 <ReplyDisplay key={reply.id} commentId={comment.id} reply={reply} />
               ))}
@@ -349,7 +349,7 @@ export default function CommentDisplay({
           )}
 
           {isReplying ? (
-            <div className='ml-4 px-3 pb-3 pt-2'>
+            <div className='ms-4 px-3 pb-3 pt-2'>
               <ReplyInput
                 commentId={comment.id}
                 onCancel={() => setIsReplying(false)}

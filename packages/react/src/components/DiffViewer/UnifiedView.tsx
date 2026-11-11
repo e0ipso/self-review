@@ -202,7 +202,7 @@ export default function UnifiedView({
                   originalCode={originalCode}
                   onCancel={onCancelComment}
                   onSaved={onCommentSaved}
-                  indentClass='ml-[100px]'
+                  indentClass='ms-[100px]'
                   getOriginalCodeForComment={comment =>
                     comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
                   }

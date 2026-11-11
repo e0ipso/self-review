@@ -1,3 +1,4 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React from 'react';
 import { useReview } from '../../context/ReviewContext';
 import { getGuideAccent } from '../../utils/guide-accents';
@@ -28,6 +29,7 @@ export default function GuideChapterDivider({
   implicitLast,
   entries,
 }: GuideChapterDividerProps) {
+  const { t, number } = useLocalization();
   const { files } = useReview();
 
   const viewedCount = entries.filter(({ file }) => {
@@ -42,23 +44,28 @@ export default function GuideChapterDivider({
     >
       {!header.implicit && (
         <span
-          className='pointer-events-none absolute -top-4 right-2 select-none font-mono text-[104px] font-bold leading-none'
+          className='pointer-events-none absolute -top-4 end-2 select-none font-mono text-[104px] font-bold leading-none'
           style={{
             WebkitTextStroke: `1.5px ${getGuideAccent(index).numeralStroke}`,
             color: 'transparent',
           }}
           aria-hidden='true'
         >
-          {String(index + 1).padStart(2, '0')}
+          {number(index + 1)}
         </span>
       )}
 
       <div className='relative'>
         <div className='font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground'>
-          {header.implicit ? 'Appendix' : `Stop ${index + 1} of ${totalStops}`} · {entries.length}{' '}
-          {entries.length === 1 ? 'file' : 'files'} · {viewedCount}/{entries.length} reviewed
+          {header.implicit
+            ? t('Appendix')
+            : t('Stop {index} of {total}', { index: index + 1, total: totalStops })}{' '}
+          · {t('files', { count: entries.length })} ·{' '}
+          {t('{viewed}/{total} reviewed', { viewed: viewedCount, total: entries.length })}
         </div>
-        <h3 className='mt-1.5 text-xl font-bold tracking-tight text-foreground'>{header.name}</h3>
+        <h3 className='mt-1.5 text-xl font-bold tracking-tight text-foreground'>
+          {header.implicit ? t('Everything else') : header.name}
+        </h3>
         {header.rationale && (
           <p className='mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground'>
             {header.rationale}

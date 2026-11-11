@@ -1,6 +1,8 @@
 import React, { useRef, useCallback } from 'react';
 import { ImageIcon } from 'lucide-react';
-import { processImageFile } from '../../utils/image-utils';
+import { useImageAttachments } from '../../hooks/useImageAttachments';
+import { useAttachmentProcessing, AttachmentProcessingStatus } from './AttachmentProcessing';
+import { useLocalization } from '../../localization/LocalizationContext';
 import type { Attachment } from '@self-review/types';
 
 export interface AttachmentDropZoneProps {
@@ -16,19 +18,12 @@ export function AttachmentDropZone({
   isDragging,
   onDragChange,
 }: AttachmentDropZoneProps) {
+  const { t } = useLocalization();
   const dragCounter = useRef(0);
-
-  const handleImageFiles = useCallback(
-    async (files: (File | Blob)[]) => {
-      try {
-        const newAttachments = await Promise.all(files.map(processImageFile));
-        onAttach(newAttachments);
-      } catch (err) {
-        console.error('Failed to attach image:', err);
-      }
-    },
-    [onAttach]
-  );
+  const shared = useAttachmentProcessing();
+  const local = useImageAttachments({ onAttach });
+  const ingestion = shared ?? local;
+  const handleImageFiles = ingestion.enqueue;
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
@@ -90,11 +85,12 @@ export function AttachmentDropZone({
         <div className='absolute inset-0 z-50 flex items-center justify-center bg-primary/10 backdrop-blur-[1px] rounded-lg pointer-events-none'>
           <div className='flex items-center gap-2 text-sm font-medium text-primary'>
             <ImageIcon className='h-5 w-5' />
-            Drop image to attach
+            {t('Drop image to attach')}
           </div>
         </div>
       )}
       {children}
+      {!shared && <AttachmentProcessingStatus ingestion={local} />}
     </div>
   );
 }
