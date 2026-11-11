@@ -11,6 +11,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  renameSync,
   readFileSync,
   rmSync,
   statSync,
@@ -550,11 +551,17 @@ describe('applySuggestion: the write is transactional', () => {
     // Swap the inode out between the engine's read and its commit.
     const swapping: FsLayer = {
       ...nodeFsLayer,
-      readFileSync(fd) {
-        const bytes = nodeFsLayer.readFileSync(fd);
-        unlinkSync(absolute);
-        writeFileSync(absolute, bytes);
-        return bytes;
+      readSync(fd, buffer, offset, length, position) {
+        const count = nodeFsLayer.readSync!(fd, buffer, offset, length, position);
+        const bytes = buffer.subarray(offset, offset + count);
+        if (count > 0) {
+          // Keep the original inode allocated so inode reuse cannot hide a replacement.
+          const old = `${absolute}.old`;
+          renameSync(absolute, old);
+          writeFileSync(absolute, bytes);
+          unlinkSync(old);
+        }
+        return count;
       },
     };
 
@@ -569,10 +576,12 @@ describe('applySuggestion: the write is transactional', () => {
     const absolute = seed(FILE, `${ORIGINAL.join('\n')}\n`);
     const rewriting: FsLayer = {
       ...nodeFsLayer,
-      readFileSync(fd) {
-        const bytes = nodeFsLayer.readFileSync(fd);
-        writeFileSync(absolute, `${bytes.toString('utf8')}// appended\n`);
-        return bytes;
+      readSync(fd, buffer, offset, length, position) {
+        const count = nodeFsLayer.readSync!(fd, buffer, offset, length, position);
+        const bytes = buffer.subarray(offset, offset + count);
+        if (count > 0 && offset === 0)
+          writeFileSync(absolute, `${Buffer.from(bytes).toString('utf8')}// appended\n`);
+        return count;
       },
     };
 
@@ -613,6 +622,32 @@ describe('applySuggestion: the write is transactional', () => {
     const after = statSync(absolute);
     expect(after.ino).not.toBe(before);
     expect(after.nlink).toBe(1);
+    expect(readdirSync(join(root, 'src'))).toEqual(['app.ts']);
+  });
+});
+
+describe('Apply byte budgets', () => {
+  it('refuses an oversized destination before reading it', () => {
+    seed(FILE, `${ORIGINAL.join('\n')}\n`);
+    const result = applySuggestion(request({}), { maxInputBytes: 8 });
+    expect(result).toMatchObject({ status: 'refused', reason: 'file-unreadable' });
+    expect(result).toHaveProperty('detail', expect.stringContaining('8 byte Apply input limit'));
+    expect(read(FILE)).toBe(`${ORIGINAL.join('\n')}\n`);
+    expect(readdirSync(join(root, 'src'))).toEqual(['app.ts']);
+  });
+
+  it('refuses output growth before staging a replacement', () => {
+    seed(FILE, 'old\n');
+    const result = applySuggestion(
+      request({
+        lineRange: { side: 'new', start: 1, end: 1 },
+        suggestion: { originalCode: 'old', proposedCode: 'a much longer replacement' },
+      }),
+      { maxOutputBytes: 8 }
+    );
+    expect(result).toMatchObject({ status: 'refused', reason: 'write-failed' });
+    expect(result).toHaveProperty('detail', expect.stringContaining('8 byte Apply output limit'));
+    expect(read(FILE)).toBe('old\n');
     expect(readdirSync(join(root, 'src'))).toEqual(['app.ts']);
   });
 });

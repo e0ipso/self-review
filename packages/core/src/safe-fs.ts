@@ -8,41 +8,40 @@ import * as path from 'node:path';
 import { READ_FLAGS, readDescriptorWithinBudget } from './bounded-read';
 import { formatBytes } from './input-budgets';
 
-export type SafeFsErrorCode =
-  | 'output-is-directory'
-  /** EACCES, EPERM or EROFS. */
-  | 'permission-denied'
-  /** ENOSPC or EDQUOT. */
-  | 'no-space'
-  /** A symlink sits where this module would read, create or replace a file, or on the way to it. */
-  | 'unsafe-link'
-  /** Exists, but replacing it would change semantics: hard-linked, not a regular file, or foreign-owned. */
-  | 'unsupported-target'
-  /** The file at the target is not the one the caller checked. */
-  | 'identity-changed'
-  /** ENOENT or ENOTDIR. */
-  | 'not-found'
-  /** A FIFO, socket or device. */
-  | 'not-regular'
-  | 'too-large'
-  | 'io-error';
-
-export class SafeFsError extends Error {
-  readonly code: SafeFsErrorCode;
-  readonly path: string;
-  readonly cause?: unknown;
-
-  constructor(code: SafeFsErrorCode, path: string, message: string, cause?: unknown) {
-    super(message);
-    this.name = 'SafeFsError';
-    this.code = code;
-    this.path = path;
-    if (cause !== undefined) this.cause = cause;
-  }
-}
+import {
+  SafeFsError,
+  errnoOf,
+  toSafeFsError,
+  guarded,
+  snapshotIdentity,
+  sameFile,
+  assertExpectedTarget,
+  ownerToRestore,
+  replacementIdentity,
+} from './safe-fs-policy';
+import type { FileIdentity } from './safe-fs-policy';
+export {
+  SafeFsError,
+  errnoOf,
+  toSafeFsError,
+  guarded,
+  snapshotIdentity,
+  sameFile,
+  sameStamp,
+  classifyFsError,
+} from './safe-fs-policy';
+export type { SafeFsErrorCode, FileIdentity } from './safe-fs-policy';
 
 /** The subset of `fs` used here, synchronous so a test can inject a failure at an exact step. */
 export interface FsLayer {
+  /** Bounded descriptor reads. Omit only when descriptors are native Node descriptors. */
+  readSync?(
+    fd: number,
+    buffer: Uint8Array,
+    offset: number,
+    length: number,
+    position: number | null
+  ): number;
   openSync(path: string, flags: number, mode?: number): number;
   /** May write fewer bytes than given, as the real one may. */
   writeSync(fd: number, buffer: Uint8Array): number;
@@ -60,6 +59,8 @@ export interface FsLayer {
 }
 
 export const nodeFsLayer: FsLayer = {
+  readSync: (fd, buffer, offset, length, position) =>
+    nodeFs.readSync(fd, buffer, offset, length, position),
   openSync: (p, flags, mode) => nodeFs.openSync(p, flags, mode),
   writeSync: (fd, buffer) => nodeFs.writeSync(fd, buffer),
   fsyncSync: fd => nodeFs.fsyncSync(fd),
@@ -79,85 +80,6 @@ export const nodeFsLayer: FsLayer = {
 
 const { O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_RDONLY } = nodeFs.constants;
 
-export interface FileIdentity {
-  dev: number;
-  ino: number;
-  /** Permission bits only (`mode & 0o7777`). */
-  mode: number;
-  nlink: number;
-  size: number;
-  mtimeMs: number;
-  uid: number;
-  gid: number;
-}
-
-export function snapshotIdentity(stats: nodeFs.Stats): FileIdentity {
-  return {
-    dev: stats.dev,
-    ino: stats.ino,
-    mode: stats.mode & 0o7777,
-    nlink: stats.nlink,
-    size: stats.size,
-    mtimeMs: stats.mtimeMs,
-    uid: stats.uid,
-    gid: stats.gid,
-  };
-}
-
-export function sameFile(a: FileIdentity, b: FileIdentity): boolean {
-  return a.dev === b.dev && a.ino === b.ino;
-}
-
-/** A rewrite within the filesystem's timestamp granularity passes; callers compare content too. */
-export function sameStamp(a: FileIdentity, b: FileIdentity): boolean {
-  return a.size === b.size && a.mtimeMs === b.mtimeMs;
-}
-
-const ERRNO_CODES = new Map<string, SafeFsErrorCode>([
-  ['ENOENT', 'not-found'],
-  ['ENOTDIR', 'not-found'],
-  ['EISDIR', 'output-is-directory'],
-  ['EACCES', 'permission-denied'],
-  ['EPERM', 'permission-denied'],
-  ['EROFS', 'permission-denied'],
-  ['ENOSPC', 'no-space'],
-  ['EDQUOT', 'no-space'],
-  ['ELOOP', 'unsafe-link'],
-]);
-
-/** The code a caller maps to its own reason; anything unknown is `io-error`. */
-export function classifyFsError(error: unknown): SafeFsErrorCode {
-  return ERRNO_CODES.get(errnoOf(error) ?? '') ?? 'io-error';
-}
-
-export function errnoOf(error: unknown): string | undefined {
-  if (error && typeof error === 'object' && 'code' in error) {
-    const code = (error as { code?: unknown }).code;
-    return typeof code === 'string' ? code : undefined;
-  }
-  return undefined;
-}
-
-/** Wrap a raw fs failure, passing a `SafeFsError` through untouched. */
-export function toSafeFsError(error: unknown, filePath: string, action: string): SafeFsError {
-  if (error instanceof SafeFsError) return error;
-  const reason = error instanceof Error ? error.message : String(error);
-  return new SafeFsError(
-    classifyFsError(error),
-    filePath,
-    `Cannot ${action} ${filePath}: ${reason}`,
-    error
-  );
-}
-
-export function guarded<T>(filePath: string, action: string, fn: () => T): T {
-  try {
-    return fn();
-  } catch (error) {
-    throw toSafeFsError(error, filePath, action);
-  }
-}
-
 /** Best effort: a failure here is not worth reporting over the one in flight. */
 function quietly(fn: () => void): void {
   try {
@@ -167,7 +89,10 @@ function quietly(fn: () => void): void {
   }
 }
 
-export function lstatOrNull(filePath: string, fs: FsLayer = nodeFsLayer): nodeFs.Stats | null {
+export function lstatOrNull(
+  filePath: string,
+  fs: Pick<FsLayer, 'lstatSync'> = nodeFsLayer
+): nodeFs.Stats | null {
   try {
     return fs.lstatSync(filePath);
   } catch (error) {
@@ -180,7 +105,11 @@ export function lstatOrNull(filePath: string, fs: FsLayer = nodeFsLayer): nodeFs
  * Refuse a `rel` whose directories under `root` include a symlink. The leaf is the caller's
  * policy, and a missing component ends the walk: nothing can be linked where nothing is.
  */
-export function assertNoSymlinkAncestors(root: string, rel: string, fs: FsLayer = nodeFsLayer) {
+export function assertNoSymlinkAncestors(
+  root: string,
+  rel: string,
+  fs: Pick<FsLayer, 'lstatSync'> = nodeFsLayer
+) {
   const normalized = path.normalize(rel);
   if (
     path.isAbsolute(normalized) ||
@@ -216,7 +145,10 @@ export function assertNoSymlinkAncestors(root: string, rel: string, fs: FsLayer 
 export function openContainedFile(
   root: string,
   rel: string,
-  fs: FsLayer = nodeFsLayer
+  fs: Pick<
+    FsLayer,
+    'lstatSync' | 'openSync' | 'fstatSync' | 'realpathSync' | 'closeSync'
+  > = nodeFsLayer
 ): { fd: number; stats: nodeFs.Stats } {
   assertNoSymlinkAncestors(root, rel, fs);
   const target = path.join(root, rel);
@@ -265,6 +197,19 @@ export async function readContainedFile(
   }
 }
 
+type ExclusiveFs = Pick<
+  FsLayer,
+  | 'openSync'
+  | 'writeSync'
+  | 'fsyncSync'
+  | 'fchmodSync'
+  | 'fchownSync'
+  | 'closeSync'
+  | 'unlinkSync'
+  | 'fstatSync'
+  | 'lstatSync'
+>;
+
 export interface WriteExclusiveOptions {
   /** Masked by the umask. Default 0o666. */
   mode?: number;
@@ -272,7 +217,7 @@ export interface WriteExclusiveOptions {
   exactMode?: number;
   /** Applied after creation; failing to is `unsupported-target` and removes the file. */
   exactOwner?: { uid: number; gid: number };
-  fs?: FsLayer;
+  fs?: ExclusiveFs;
 }
 
 /**
@@ -312,7 +257,6 @@ export function writeExclusiveNoFollow(
       }
       offset += written;
     }
-    if (options.exactMode !== undefined) fs.fchmodSync(fd, options.exactMode);
     if (options.exactOwner !== undefined) {
       const { uid, gid } = options.exactOwner;
       try {
@@ -326,6 +270,7 @@ export function writeExclusiveNoFollow(
         );
       }
     }
+    if (options.exactMode !== undefined) fs.fchmodSync(fd, options.exactMode);
     fs.fsyncSync(fd);
     const identity = snapshotIdentity(fs.fstatSync(fd));
     fs.closeSync(fd);
@@ -349,8 +294,10 @@ export interface AtomicReplaceOptions {
   expectedIdentity?: FileIdentity;
   /** With `expectedIdentity`: also refuse a same-inode rewrite (size or mtime moved). */
   expectUnmodified?: boolean;
-  fs?: FsLayer;
+  fs?: ExclusiveFs & Pick<FsLayer, 'renameSync' | 'realpathSync'>;
   randomName?: () => string;
+  /** Synchronous authorization check immediately before rename. A throw removes staging. */
+  beforeCommit?: () => void;
 }
 
 export interface AtomicReplaceResult {
@@ -360,8 +307,11 @@ export interface AtomicReplaceResult {
 }
 
 /**
- * Replace or create `target` in one `rename` from a same-directory temp file. The `lstat`→`rename`
- * window is accepted: `rename` never follows a link and nothing before it creates through one.
+ * Replace or create `target` in one rename from a same-directory temp file. The final target
+ * check follows staging, including fsync, and checks dev/ino plus size/mtime when requested.
+ * A same-size rewrite within timestamp granularity can pass. This is not compare-and-swap:
+ * another process can still change the path between the last check and rename. Rename replaces
+ * the named entry rather than following a leaf link; callers must secure ancestor directories.
  */
 export function atomicReplace(
   target: string,
@@ -369,22 +319,9 @@ export function atomicReplace(
   options: AtomicReplaceOptions = {}
 ): AtomicReplaceResult {
   const fs = options.fs ?? nodeFsLayer;
+  const parent = guarded(target, 'resolve parent', () => fs.realpathSync(path.dirname(target)));
   const existing = inspectReplaceTarget(target, fs);
-  const expected = options.expectedIdentity;
-  if (expected && (!existing || !sameFile(existing, expected))) {
-    throw new SafeFsError(
-      'identity-changed',
-      target,
-      `Refusing to replace ${target}: it is no longer the file that was checked`
-    );
-  }
-  if (expected && options.expectUnmodified && existing && !sameStamp(existing, expected)) {
-    throw new SafeFsError(
-      'identity-changed',
-      target,
-      `Refusing to replace ${target}: it was modified after it was checked`
-    );
-  }
+  assertExpectedTarget(target, existing, options);
   const exactOwner =
     options.preserveOwner && existing ? ownerToRestore(target, existing) : undefined;
 
@@ -412,30 +349,29 @@ export function atomicReplace(
     }
     throw error;
   }
+  try {
+    if (fs.realpathSync(path.dirname(target)) !== parent) {
+      throw new SafeFsError(
+        'identity-changed',
+        target,
+        `Refusing to replace ${target}: its parent directory moved`
+      );
+    }
+    assertExpectedTarget(target, inspectReplaceTarget(target, fs), options);
+    options.beforeCommit?.();
+  } catch (error) {
+    unlinkQuietly(temp, fs);
+    throw toSafeFsError(error, target, 'replace');
+  }
   finishReplace(temp, target, fs);
   return { identity, replaced: existing !== null };
 }
 
-/** Undefined when the new file already gets the right owner; only root may give one away. */
-function ownerToRestore(
+function finishReplace(
+  temp: string,
   target: string,
-  existing: FileIdentity
-): { uid: number; gid: number } | undefined {
-  if (typeof process.geteuid !== 'function' || typeof process.getegid !== 'function')
-    return undefined;
-  const me = { uid: process.geteuid(), gid: process.getegid() };
-  if (existing.uid === me.uid && existing.gid === me.gid) return undefined;
-  if (existing.uid !== me.uid && me.uid !== 0) {
-    throw new SafeFsError(
-      'unsupported-target',
-      target,
-      `Refusing to replace ${target}: it is owned by another user (uid ${existing.uid}), and replacing it would change its owner`
-    );
-  }
-  return { uid: existing.uid, gid: existing.gid };
-}
-
-function finishReplace(temp: string, target: string, fs: FsLayer): void {
+  fs: Pick<FsLayer, 'renameSync' | 'unlinkSync' | 'openSync' | 'fsyncSync' | 'closeSync'>
+): void {
   try {
     fs.renameSync(temp, target);
   } catch (error) {
@@ -449,47 +385,18 @@ function finishReplace(temp: string, target: string, fs: FsLayer): void {
 /** `lstat` a replace target under the policy of {@link atomicReplace}; null when absent. */
 export function inspectReplaceTarget(
   target: string,
-  fs: FsLayer = nodeFsLayer
+  fs: Pick<FsLayer, 'lstatSync'> = nodeFsLayer
 ): FileIdentity | null {
   const stats = lstatOrNull(target, fs);
   if (stats === null) return null;
-  if (stats.isSymbolicLink()) {
-    throw new SafeFsError(
-      'unsafe-link',
-      target,
-      `Refusing to write ${target}: it is a symbolic link, and this program does not follow links when saving`
-    );
-  }
-  if (stats.isDirectory()) {
-    throw new SafeFsError(
-      'output-is-directory',
-      target,
-      `Cannot write ${target}: it is a directory`
-    );
-  }
-  if (!stats.isFile()) {
-    throw new SafeFsError(
-      'unsupported-target',
-      target,
-      `Cannot write ${target}: it exists but is not a regular file`
-    );
-  }
-  // A rename would detach this name from the other links.
-  if (stats.nlink > 1) {
-    throw new SafeFsError(
-      'unsupported-target',
-      target,
-      `Refusing to replace ${target}: it has ${stats.nlink} hard links, and replacing it would silently detach the others`
-    );
-  }
-  return snapshotIdentity(stats);
+  return replacementIdentity(target, stats);
 }
 
 export function defaultRandomName(): string {
   return randomBytes(6).toString('hex');
 }
 
-function isSymlink(filePath: string, fs: FsLayer): boolean {
+function isSymlink(filePath: string, fs: Pick<FsLayer, 'lstatSync'>): boolean {
   try {
     return fs.lstatSync(filePath).isSymbolicLink();
   } catch {
@@ -497,12 +404,18 @@ function isSymlink(filePath: string, fs: FsLayer): boolean {
   }
 }
 
-export function unlinkQuietly(filePath: string, fs: FsLayer = nodeFsLayer): void {
+export function unlinkQuietly(
+  filePath: string,
+  fs: Pick<FsLayer, 'unlinkSync'> = nodeFsLayer
+): void {
   quietly(() => fs.unlinkSync(filePath));
 }
 
 /** Linux needs a directory fsync for a rename to survive a crash; macOS may refuse it (EINVAL). */
-function syncDirectoryQuietly(dir: string, fs: FsLayer): void {
+function syncDirectoryQuietly(
+  dir: string,
+  fs: Pick<FsLayer, 'openSync' | 'fsyncSync' | 'closeSync'>
+): void {
   quietly(() => {
     const fd = fs.openSync(dir, O_RDONLY);
     try {

@@ -9,7 +9,23 @@ import type {
 import type { ReviewSession } from './review-session';
 import { resolveSourceBaseDir } from './review-session';
 import { rootRelativeReviewedPath } from './source-identity';
-import { applySuggestion } from './apply-suggestion';
+import { applySuggestion, applySuggestionAsync } from './apply-suggestion';
+import type {
+  ApplySuggestionResult,
+  ApplySuggestionAsyncOptions,
+  ApplySuggestionRequest,
+} from './apply-suggestion';
+import { SafeFsError } from './safe-fs';
+
+export type ApplySuggestionForSessionAsyncOptions = Omit<
+  ApplySuggestionAsyncOptions,
+  'beforeCommit' | 'validateDestination'
+>;
+
+type ApplySession = Pick<
+  ReviewSession,
+  'diffData' | 'sourceIdentity' | 'applyDestinationRoot' | 'reviewedPaths'
+>;
 
 /**
  * True when this session reviews a remote PR/MR that was materialized into
@@ -122,13 +138,10 @@ export function setApplyDestination(
  *
  * A refusal travels as a value, never a thrown error.
  */
-export function applySuggestionForSession(
-  session: Pick<
-    ReviewSession,
-    'diffData' | 'sourceIdentity' | 'applyDestinationRoot' | 'reviewedPaths'
-  >,
+function prepareSessionApply(
+  session: ApplySession,
   request: SuggestionApplyRequest
-): SuggestionApplyOutcome {
+): { engineRequest: ApplySuggestionRequest } | SuggestionApplyOutcome {
   const destinationRoot = resolveApplyDestination(session);
   const identity = session.sourceIdentity;
   if (!destinationRoot || identity === null) {
@@ -153,14 +166,97 @@ export function applySuggestionForSession(
     };
   }
 
-  const result = applySuggestion({
-    destinationRoot,
-    filePath: rootRelativeReviewedPath(identity, request.filePath),
-    lineRange: request.lineRange,
-    suggestion: request.suggestion,
+  return {
+    engineRequest: {
+      destinationRoot,
+      filePath: rootRelativeReviewedPath(identity, request.filePath),
+      lineRange: request.lineRange,
+      suggestion: request.suggestion,
+    },
+  };
+}
+
+/** Apply synchronously using the session's destination and reviewed-path authorization. */
+export function applySuggestionForSession(
+  session: ApplySession,
+  request: SuggestionApplyRequest
+): SuggestionApplyOutcome {
+  const prepared = prepareSessionApply(session, request);
+  if ('status' in prepared) return prepared;
+  return projectApplyResult(request.filePath, applySuggestion(prepared.engineRequest));
+}
+
+/**
+ * Bounded asynchronous Apply. Capture authorization before awaiting filesystem I/O and recheck
+ * it synchronously just before rename. Replacing the loaded review, changing its identity or
+ * selected destination, or removing membership refuses with file-changed and removes staging.
+ * Cancellation rejects with signal.reason before commit, and a committed result stays applied.
+ */
+export async function applySuggestionForSessionAsync(
+  session: ApplySession,
+  request: SuggestionApplyRequest,
+  options: ApplySuggestionForSessionAsyncOptions = {}
+): Promise<SuggestionApplyOutcome> {
+  options.signal?.throwIfAborted();
+  request = {
+    ...request,
+    lineRange: request.lineRange && { ...request.lineRange },
+    suggestion: { ...request.suggestion },
+  };
+  const prepared = prepareSessionApply(session, request);
+  if ('status' in prepared) return prepared;
+  const identity = session.sourceIdentity;
+  const paths = session.reviewedPaths;
+  const identityStamp = JSON.stringify(identity);
+  const fileSource = JSON.stringify(identity?.fileSources?.get(request.filePath));
+  const chosen = session.applyDestinationRoot;
+  const temporary = isTemporaryCloneSession(session);
+  const assertDestination = (physicalRoot: string) => {
+    const destinationRoot = prepared.engineRequest.destinationRoot;
+    if (
+      physicalRoot !== path.resolve(destinationRoot) ||
+      canonicalize(destinationRoot) !== physicalRoot ||
+      (temporary && identity && isWithin(identity.sourceRoot, physicalRoot))
+    ) {
+      throw new SafeFsError(
+        'identity-changed',
+        request.filePath,
+        'The Apply destination no longer belongs to this review.'
+      );
+    }
+  };
+  const result = await applySuggestionAsync(prepared.engineRequest, {
+    ...options,
+    validateDestination: assertDestination,
+    beforeCommit() {
+      assertDestination(prepared.engineRequest.destinationRoot);
+      if (
+        session.sourceIdentity !== identity ||
+        session.reviewedPaths !== paths ||
+        !session.reviewedPaths.has(request.filePath) ||
+        JSON.stringify(session.sourceIdentity) !== identityStamp ||
+        JSON.stringify(session.sourceIdentity?.fileSources?.get(request.filePath)) !== fileSource ||
+        session.applyDestinationRoot !== chosen ||
+        isTemporaryCloneSession(session) !== temporary ||
+        resolveApplyDestination(session) !== prepared.engineRequest.destinationRoot
+      ) {
+        throw new SafeFsError(
+          'identity-changed',
+          request.filePath,
+          'The review or its Apply destination changed before the write could commit.'
+        );
+      }
+    },
   });
+  return projectApplyResult(request.filePath, result);
+}
+
+function projectApplyResult(
+  filePath: string,
+  result: ApplySuggestionResult
+): SuggestionApplyOutcome {
   console.error(
-    `[suggestion:apply] ${request.filePath}: ${
+    `[suggestion:apply] ${filePath}: ${
       result.status === 'applied' ? 'applied' : `refused (${result.reason})`
     }`
   );
@@ -173,13 +269,13 @@ export function applySuggestionForSession(
   if (result.status === 'applied') {
     return {
       status: 'applied',
-      filePath: request.filePath,
+      filePath,
       replacedLines: result.replacedLines,
     };
   }
   return {
     status: 'refused',
-    filePath: request.filePath,
+    filePath,
     reason: result.reason,
     detail: result.detail,
   };

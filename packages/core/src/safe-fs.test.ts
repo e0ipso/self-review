@@ -254,3 +254,60 @@ describe('atomicReplace: owner and modification policy', () => {
     expect(fs.readdirSync(tmp)).toEqual(['file.txt']);
   });
 });
+
+describe('atomicReplace: changes while staging', () => {
+  for (const phase of ['write', 'sync'] as const) {
+    for (const mutation of ['rewrite', 'replace'] as const) {
+      it(`preserves an external ${mutation} during ${phase} and removes staging`, () => {
+        const target = path.join(tmp, 'file.txt');
+        fs.writeFileSync(target, 'original');
+        const expectedIdentity = inspectReplaceTarget(target)!;
+        let mutated = false;
+        const mutate = () => {
+          if (mutated) return;
+          mutated = true;
+          if (mutation === 'replace') fs.renameSync(target, path.join(outside, 'old'));
+          fs.writeFileSync(target, 'external edit, longer than original');
+        };
+        const layer: FsLayer = {
+          ...nodeFsLayer,
+          writeSync(fd, bytes) {
+            const written = nodeFsLayer.writeSync(fd, bytes);
+            if (phase === 'write') mutate();
+            return written;
+          },
+          fsyncSync(fd) {
+            nodeFsLayer.fsyncSync(fd);
+            if (phase === 'sync') mutate();
+          },
+        };
+        expect(
+          codeOf(() =>
+            atomicReplace(target, Buffer.from('proposal'), {
+              fs: layer,
+              expectedIdentity,
+              expectUnmodified: true,
+            })
+          )
+        ).toBe('identity-changed');
+        expect(fs.readFileSync(target, 'utf8')).toBe('external edit, longer than original');
+        expect(fs.readdirSync(tmp)).toEqual(['file.txt']);
+      });
+    }
+  }
+});
+
+it('applies the exact mode after ownership changes that clear set-ID bits', () => {
+  const target = path.join(tmp, 'file');
+  writeExclusiveNoFollow(target, Buffer.from('new'), {
+    exactMode: 0o2640,
+    exactOwner: { uid: 1234, gid: 1234 },
+    fs: {
+      ...nodeFsLayer,
+      fchownSync(fd) {
+        fs.fchmodSync(fd, fs.fstatSync(fd).mode & 0o777);
+      },
+    },
+  });
+  expect(fs.statSync(target).mode & 0o7777).toBe(0o2640);
+});
