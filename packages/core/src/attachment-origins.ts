@@ -2,11 +2,12 @@
 // Where resumed attachment bytes live, which references may be read, and how they follow a relocated output.
 
 import * as path from 'path';
-import { MAX_IMAGE_BYTES } from './input-budgets';
+import { MAX_IMAGE_BYTES, MAX_PUBLICATION_ASSET_BYTES } from './input-budgets';
+import { validateReviewForSerialization } from './review-state-validation';
 import { readContainedFile, toSafeFsError } from './safe-fs';
 import { canonicalSourcePath } from './source-identity';
-import type { SafeFsErrorCode } from './safe-fs';
-import { ASSET_DIR_NAME } from './xml-serializer';
+import type { SafeFsErrorCode, FsLayer } from './safe-fs';
+import { ASSET_DIR_NAME } from './attachment-planner';
 import type { Attachment, ReviewComment, ReviewState } from './types';
 
 /** Reference as the resumed document wrote it → absolute path beside that document. Session state only. */
@@ -80,14 +81,30 @@ const READ_FAILURES: Partial<Record<SafeFsErrorCode, AttachmentReadFailureReason
 };
 
 /** Read one asset the caller authorized: the asset directory must not be a link, nor the leaf. */
-export async function readAssetFile(assetPath: string): Promise<AttachmentReadResult> {
+export interface AttachmentReadOptions {
+  fs?: FsLayer;
+  signal?: AbortSignal;
+  /** Remaining aggregate budget, in addition to the fixed per-image limit. */
+  maxBytes?: number;
+}
+
+export async function readAssetFile(
+  assetPath: string,
+  options: AttachmentReadOptions = {}
+): Promise<AttachmentReadResult> {
   const assetDir = path.dirname(assetPath);
   const rel = path.join(path.basename(assetDir), path.basename(assetPath));
   try {
-    const content = await readContainedFile(path.dirname(assetDir), rel, MAX_IMAGE_BYTES);
+    const content = await readContainedFile(
+      path.dirname(assetDir),
+      rel,
+      Math.min(MAX_IMAGE_BYTES, options.maxBytes ?? MAX_IMAGE_BYTES),
+      options
+    );
     const data = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength);
     return { ok: true, data: data as ArrayBuffer };
   } catch (error) {
+    options.signal?.throwIfAborted();
     const fsError = toSafeFsError(error, assetPath, 'read');
     return {
       ok: false,
@@ -134,23 +151,37 @@ export class AttachmentRelocationError extends Error {
 
 /**
  * Give every imported attachment whose origin is not beside `outputPath` its bytes, so the
- * publisher stages a copy. Unreadable ones throw: the old reference would resolve to the wrong file.
+ * publisher stages a copy. This compatibility API retains at most 64 MiB of attachment bytes;
+ * publishReview instead plans references and stages one disk-derived buffer at a time. Unreadable ones throw: the old reference would resolve to the wrong file.
  */
 export async function relocateAttachments(
   state: ReviewState,
   origins: AttachmentOrigins,
-  outputPath: string
+  outputPath: string,
+  options: AttachmentReadOptions = {}
 ): Promise<ReviewState> {
+  options.signal?.throwIfAborted();
+  state = validateReviewForSerialization(state);
   if (origins.size === 0) return state;
+  const outputDir = path.dirname(path.resolve(outputPath));
   const targetAssetDir = path.join(
-    canonicalSourcePath(path.dirname(path.resolve(outputPath))),
+    options.fs ? options.fs.realpathSync(outputDir) : canonicalSourcePath(outputDir),
     ASSET_DIR_NAME
   );
+  let remaining = MAX_PUBLICATION_ASSET_BYTES;
+  for (const file of state.files) {
+    for (const { attachments } of attachmentLists(file.comments)) {
+      for (const attachment of attachments) {
+        if (attachment.data) remaining -= new Uint8Array(attachment.data).byteLength;
+      }
+    }
+  }
   const read = new Map<string, ArrayBuffer>();
 
   const relocate = async (attachments: Attachment[]): Promise<Attachment[]> => {
     const result: Attachment[] = [];
     for (const attachment of attachments) {
+      options.signal?.throwIfAborted();
       const origin = attachment.data ? undefined : origins.get(attachment.fileName);
       if (origin === undefined || path.dirname(origin) === targetAssetDir) {
         result.push(attachment);
@@ -158,7 +189,7 @@ export async function relocateAttachments(
       }
       let data = read.get(origin);
       if (data === undefined) {
-        const outcome = await readAssetFile(origin);
+        const outcome = await readAssetFile(origin, { ...options, maxBytes: remaining });
         if (!outcome.ok) {
           throw new AttachmentRelocationError(
             attachment.fileName,
@@ -168,6 +199,7 @@ export async function relocateAttachments(
           );
         }
         data = outcome.data;
+        remaining -= data.byteLength;
         read.set(origin, data);
       }
       result.push({ ...attachment, data });

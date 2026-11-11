@@ -5,8 +5,9 @@
 import * as nodeFs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
-import { READ_FLAGS, readDescriptorWithinBudget } from './bounded-read';
-import { formatBytes } from './input-budgets';
+import { READ_FLAGS } from './bounded-read';
+import { asyncFsFromSync, readContainedFileAsync } from './safe-fs-async';
+import type { AsyncFsLayer } from './safe-fs-async';
 
 import {
   SafeFsError,
@@ -34,6 +35,10 @@ export type { SafeFsErrorCode, FileIdentity } from './safe-fs-policy';
 
 /** The subset of `fs` used here, synchronous so a test can inject a failure at an exact step. */
 export interface FsLayer {
+  /** Optional asynchronous capabilities over this same filesystem. Never inferred for wrappers. */
+  asyncFs?: AsyncFsLayer;
+  /** Advisory writability probe. Legacy adapters use their own directory stats and permission bits. */
+  accessSync?(path: string, mode: number): void;
   /** Bounded descriptor reads. Legacy adapters retain their readFileSync compatibility path. */
   readSync?(
     fd: number,
@@ -59,6 +64,7 @@ export interface FsLayer {
 }
 
 export const nodeFsLayer: FsLayer = {
+  accessSync: (target, mode) => nodeFs.accessSync(target, mode),
   readSync: (fd, buffer, offset, length, position) =>
     nodeFs.readSync(fd, buffer, offset, length, position),
   openSync: (p, flags, mode) => nodeFs.openSync(p, flags, mode),
@@ -178,23 +184,19 @@ export function openContainedFile(
 export async function readContainedFile(
   root: string,
   rel: string,
-  maxBytes: number
+  maxBytes: number,
+  options: { fs?: FsLayer; signal?: AbortSignal } = {}
 ): Promise<Buffer> {
-  const { fd, stats } = openContainedFile(root, rel);
-  const target = path.join(root, rel);
-  try {
-    const read = await readDescriptorWithinBudget(fd, stats, maxBytes);
-    if (read.kind === 'ok') return read.content;
-    throw new SafeFsError(
-      'too-large',
-      target,
-      `The file is ${formatBytes(read.size)}, over the ${formatBytes(maxBytes)} limit`
-    );
-  } catch (error) {
-    throw toSafeFsError(error, target, 'read');
-  } finally {
-    nodeFs.closeSync(fd);
-  }
+  const layer = options.fs;
+  return readContainedFileAsync(
+    root,
+    rel,
+    maxBytes,
+    layer === undefined || layer === nodeFsLayer
+      ? undefined
+      : asyncFsFromSync(layer, options.signal),
+    options.signal
+  );
 }
 
 type ExclusiveFs = Pick<

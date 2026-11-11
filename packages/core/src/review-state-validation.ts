@@ -4,6 +4,12 @@
 import type { ReviewState } from './types';
 import { validateLineRange } from './anchor-validation';
 import { ReviewXmlError } from './xml-errors';
+import {
+  MAX_IMAGE_BYTES,
+  MAX_REVIEW_ATTACHMENTS,
+  MAX_PUBLICATION_ASSET_BYTES,
+  formatBytes,
+} from './input-budgets';
 
 /**
  * Validate the complete in-memory DTO without I/O. Unknown extension fields are retained.
@@ -25,6 +31,7 @@ export function validateReviewForSerialization(state: ReviewState): ReviewState 
 
 function validateState(value: unknown, requireCommentIds: boolean): void {
   const state = record(value, 'review');
+  const budget = { attachments: 0, bytes: 0 };
   string(state.timestamp, 'review.timestamp');
   const source = record(state.source, 'review.source');
   switch (source.type) {
@@ -56,12 +63,17 @@ function validateState(value: unknown, requireCommentIds: boolean): void {
     );
     boolean(file.viewed, `${at}.viewed`);
     array(file.comments, `${at}.comments`).forEach((comment, index) =>
-      validateComment(comment, `${at}.comments[${index}]`, requireCommentIds)
+      validateComment(comment, `${at}.comments[${index}]`, requireCommentIds, budget)
     );
   });
 }
 
-function validateComment(value: unknown, at: string, requireId: boolean): void {
+function validateComment(
+  value: unknown,
+  at: string,
+  requireId: boolean,
+  budget: AttachmentBudget
+): void {
   const comment = record(value, at);
   if (requireId || comment.id !== undefined) string(comment.id, `${at}.id`);
   for (const key of ['filePath', 'body', 'category']) string(comment[key], `${at}.${key}`);
@@ -88,7 +100,7 @@ function validateComment(value: unknown, at: string, requireId: boolean): void {
     if (comment.lineRange === null || comment.lineRange === undefined)
       invalid(`${at}.suggestion`, 'requires a line anchor');
   }
-  validateAttachments(comment.attachments, `${at}.attachments`);
+  validateAttachments(comment.attachments, `${at}.attachments`, budget);
   if (comment.replies !== undefined) {
     array(comment.replies, `${at}.replies`).forEach((value, index) => {
       const replyAt = `${at}.replies[${index}]`;
@@ -96,20 +108,43 @@ function validateComment(value: unknown, at: string, requireId: boolean): void {
       string(reply.id, `${replyAt}.id`);
       string(reply.body, `${replyAt}.body`);
       for (const key of ['author', 'remoteId']) optionalString(reply, key, replyAt);
-      validateAttachments(reply.attachments, `${replyAt}.attachments`);
+      validateAttachments(reply.attachments, `${replyAt}.attachments`, budget);
     });
   }
 }
 
-function validateAttachments(value: unknown, at: string): void {
+interface AttachmentBudget {
+  attachments: number;
+  bytes: number;
+}
+
+function validateAttachments(value: unknown, at: string, budget: AttachmentBudget): void {
   if (value === undefined) return;
-  array(value, at).forEach((value, index) => {
+  const attachments = array(value, at);
+  budget.attachments += attachments.length;
+  if (budget.attachments > MAX_REVIEW_ATTACHMENTS)
+    invalid(at, `exceeds the ${MAX_REVIEW_ATTACHMENTS} attachment limit for a review document`);
+  attachments.forEach((value, index) => {
     const attachmentAt = `${at}[${index}]`;
     const attachment = record(value, attachmentAt);
     for (const key of ['id', 'fileName', 'mediaType'])
       string(attachment[key], `${attachmentAt}.${key}`);
     if (attachment.data !== undefined && !isReadableArrayBuffer(attachment.data))
       invalid(`${attachmentAt}.data`, 'must be a readable ArrayBuffer');
+    if (attachment.data !== undefined) {
+      const bytes = new Uint8Array(attachment.data as ArrayBuffer).byteLength;
+      if (bytes > MAX_IMAGE_BYTES)
+        invalid(
+          `${attachmentAt}.data`,
+          `exceeds the ${formatBytes(MAX_IMAGE_BYTES)} attachment limit`
+        );
+      budget.bytes += bytes;
+      if (budget.bytes > MAX_PUBLICATION_ASSET_BYTES)
+        invalid(
+          at,
+          `exceeds the ${formatBytes(MAX_PUBLICATION_ASSET_BYTES)} publication asset limit`
+        );
+    }
   });
 }
 

@@ -34,8 +34,14 @@ export const MAX_GUIDE_BYTES = 1 * MIB;
  */
 export const MAX_RESUME_XML_BYTES = 16 * MIB;
 
-/** Most attachment references one resumed document may carry; bounds the reads it can ask for. */
-export const MAX_RESUME_ATTACHMENTS = 1_000;
+/** Most attachment occurrences in a review document, including replies and repeated references. */
+export const MAX_REVIEW_ATTACHMENTS = 1_000;
+
+/** Backwards-compatible name for the same reader/writer document contract. */
+export const MAX_RESUME_ATTACHMENTS = MAX_REVIEW_ATTACHMENTS;
+
+/** Total newly staged asset bytes per publication. Existing references require no copy or read. */
+export const MAX_PUBLICATION_ASSET_BYTES = 64 * MIB;
 
 /** Largest image read for a rendered preview or a comment attachment. */
 export const MAX_IMAGE_BYTES = 10 * MIB;

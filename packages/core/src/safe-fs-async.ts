@@ -15,7 +15,9 @@ import {
   ownerToRestore,
   replacementIdentity,
 } from './safe-fs-policy';
-import type { AtomicReplaceOptions, AtomicReplaceResult } from './safe-fs';
+import type { AtomicReplaceOptions, AtomicReplaceResult, FsLayer } from './safe-fs';
+import { formatBytes } from './input-budgets';
+import { setImmediate as yieldToIo } from 'node:timers/promises';
 
 /** Only the handle operations these readers and writers use. Methods retain their receiver. */
 export interface AsyncFileHandle {
@@ -49,6 +51,125 @@ export const nodeAsyncFsLayer: AsyncFsLayer = {
   rename: (from, to) => fs.rename(from, to),
   unlink: target => fs.unlink(target),
 };
+
+/**
+ * Compatibility for supplied synchronous adapters, including virtual descriptors. Each chunk yields
+ * to cancellation. Without readSync, the caller's readFileSync allocates the whole file once: that
+ * call cannot be preempted or bounded during allocation, so callers check size before and after.
+ */
+export function asyncFsFromSync(layer: FsLayer, signal?: AbortSignal): AsyncFsLayer {
+  if (layer.asyncFs) return layer.asyncFs;
+  return {
+    async open(target, flags, mode) {
+      const fd = layer.openSync(target, flags, mode);
+      let cached: Buffer | undefined;
+      let cursor = 0;
+      return {
+        async stat() {
+          return layer.fstatSync(fd);
+        },
+        async read(buffer, offset, length, position) {
+          await yieldToIo();
+          signal?.throwIfAborted();
+          if (layer.readSync) {
+            return { bytesRead: layer.readSync(fd, buffer, offset, length, position) };
+          }
+          cached ??= layer.readFileSync(fd);
+          const start = position ?? cursor;
+          const bytesRead = cached.copy(
+            buffer,
+            offset,
+            start,
+            Math.min(start + length, cached.length)
+          );
+          if (position === null) cursor += bytesRead;
+          return { bytesRead };
+        },
+        async write(buffer) {
+          await yieldToIo();
+          signal?.throwIfAborted();
+          return { bytesWritten: layer.writeSync(fd, buffer) };
+        },
+        async sync() {
+          layer.fsyncSync(fd);
+        },
+        async chmod(mode) {
+          layer.fchmodSync(fd, mode);
+        },
+        async chown(uid, gid) {
+          layer.fchownSync(fd, uid, gid);
+        },
+        async close() {
+          cached = undefined;
+          layer.closeSync(fd);
+        },
+      };
+    },
+    async lstat(target) {
+      return layer.lstatSync(target);
+    },
+    async realpath(target) {
+      return layer.realpathSync(target);
+    },
+    async rename(from, to) {
+      layer.renameSync(from, to);
+    },
+    async unlink(target) {
+      layer.unlinkSync(target);
+    },
+  };
+}
+
+/** Bounded allocation and 64 KiB reads, including growth detection, under the shared no-follow policy. */
+export async function readContainedFileAsync(
+  root: string,
+  rel: string,
+  maxBytes: number,
+  layer: AsyncFsLayer = nodeAsyncFsLayer,
+  signal?: AbortSignal
+): Promise<Buffer> {
+  const { handle, stats } = await openContainedFileAsync(root, rel, layer, signal);
+  const target = path.join(root, rel);
+  const assertSize = (size: number) => {
+    if (size > maxBytes)
+      throw new SafeFsError(
+        'too-large',
+        target,
+        `The file is ${formatBytes(size)}, over the ${formatBytes(maxBytes)} limit`
+      );
+  };
+  try {
+    assertSize(stats.size);
+    let buffer: Buffer = Buffer.alloc(Math.min(stats.size, maxBytes) + 1);
+    let filled = 0;
+    for (;;) {
+      signal?.throwIfAborted();
+      const { bytesRead } = await handle.read(
+        buffer,
+        filled,
+        Math.min(buffer.length - filled, 64 * 1024),
+        null
+      );
+      signal?.throwIfAborted();
+      filled += bytesRead;
+      assertSize(filled);
+      if (bytesRead === 0) break;
+      if (filled === buffer.length) {
+        const next = Buffer.alloc(Math.min(buffer.length * 2, maxBytes + 1));
+        buffer.copy(next);
+        buffer = next;
+      }
+    }
+    assertSize((await handle.stat()).size);
+    signal?.throwIfAborted();
+    return buffer.subarray(0, filled);
+  } catch (error) {
+    signal?.throwIfAborted();
+    throw toSafeFsError(error, target, 'read');
+  } finally {
+    await quietly(() => handle.close());
+  }
+}
 
 export interface AtomicReplaceAsyncOptions extends Omit<AtomicReplaceOptions, 'fs'> {
   fs?: AsyncFsLayer;
@@ -148,6 +269,15 @@ async function writeStagedFile(
   exactOwner: { uid: number; gid: number } | undefined
 ) {
   options.signal?.throwIfAborted();
+  const byteLength = bytes.byteLength;
+  const assertLength = () => {
+    if (bytes.byteLength !== byteLength)
+      throw new SafeFsError(
+        'io-error',
+        temp,
+        `Cannot write ${temp}: the source buffer changed size`
+      );
+  };
   let handle: AsyncFileHandle;
   try {
     handle = await layer.open(
@@ -167,13 +297,16 @@ async function writeStagedFile(
   }
   try {
     let offset = 0;
-    while (offset < bytes.length) {
+    assertLength();
+    while (offset < byteLength) {
       options.signal?.throwIfAborted();
+      assertLength();
       const { bytesWritten } = await handle.write(bytes.subarray(offset, offset + 64 * 1024));
       if (bytesWritten <= 0)
         throw new SafeFsError('io-error', temp, `Cannot write ${temp}: write made no progress`);
       offset += bytesWritten;
     }
+    assertLength();
     if (exactOwner !== undefined) {
       try {
         await handle.chown(exactOwner.uid, exactOwner.gid);
@@ -192,6 +325,22 @@ async function writeStagedFile(
     await quietly(() => layer.unlink(temp));
     throw error;
   }
+}
+
+/** Create, sync and close one unique no-follow asset, removing it on any pre-commit failure. */
+export async function writeExclusiveNoFollowAsync(
+  target: string,
+  bytes: Uint8Array,
+  options: Pick<AtomicReplaceAsyncOptions, 'fs' | 'signal'> = {}
+) {
+  return writeStagedFile(
+    target,
+    bytes,
+    options.fs ?? nodeAsyncFsLayer,
+    options,
+    undefined,
+    undefined
+  );
 }
 
 /**
