@@ -206,6 +206,8 @@ describe('review-handlers', () => {
       commitDiffData(sessionA, makeModifiedGitPayload('src/app.ts'), {
         ...makeIdentity('git', '/repo'),
         gitDiffArgv: ['main..feature'],
+        oldSide: { kind: 'commit', sha: 'a'.repeat(40) },
+        newSide: { kind: 'commit', sha: 'b'.repeat(40) },
       });
       sessionB.diffData = makeGitPayload();
 
@@ -218,7 +220,7 @@ describe('review-handlers', () => {
       });
 
       expect(runGitDiffAsync).toHaveBeenCalledWith(
-        ['main..feature', '-U10', '--', ':(top,literal)src/app.ts'],
+        ['a'.repeat(40), 'b'.repeat(40), '-U10', '--', ':(top,literal)src/app.ts'],
         '/repo'
       );
       expect(result?.hunks[0].header).toBe('@@ -1,3 +1,3 @@');
@@ -283,13 +285,15 @@ describe('review-handlers', () => {
       expect(getFileHunks(session, 'src/other.ts')).toEqual(resultB?.hunks);
     });
 
-    it('re-runs the session argv with its argument boundaries intact', async () => {
+    it('keeps option and path boundaries while pinning revisions', async () => {
       vi.mocked(runGitDiffAsync).mockResolvedValue(EXPANDED_DIFF);
 
       const session = createReviewSession();
       commitDiffData(session, makeModifiedGitPayload('src/my dir/app.ts'), {
         ...makeIdentity('git', '/repo'),
         gitDiffArgv: ['-S', 'foo bar', 'main..feature', '--', 'src/my dir'],
+        oldSide: { kind: 'commit', sha: 'a'.repeat(40) },
+        newSide: { kind: 'commit', sha: 'b'.repeat(40) },
       });
 
       await expandContext(session, {
@@ -300,7 +304,15 @@ describe('review-handlers', () => {
       // The search string stays one argument and the original pathspec is
       // replaced by the file's own, as a literal pathspec from the root.
       expect(runGitDiffAsync).toHaveBeenCalledWith(
-        ['-S', 'foo bar', 'main..feature', '-U10', '--', ':(top,literal)src/my dir/app.ts'],
+        [
+          '-S',
+          'foo bar',
+          'a'.repeat(40),
+          'b'.repeat(40),
+          '-U10',
+          '--',
+          ':(top,literal)src/my dir/app.ts',
+        ],
         '/repo'
       );
     });

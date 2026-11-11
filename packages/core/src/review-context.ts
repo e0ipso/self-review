@@ -2,6 +2,7 @@
 import type { DiffFile, DiffHunk, ExpandContextRequest, ReviewSourceIdentity } from './types';
 import type { ReviewSession } from './review-session';
 import { singleFileRediffArgs } from './git-diff-args';
+import { pinnedGitDiffArgs } from './pinned-comparison';
 import { runGitDiffAsync } from './git';
 import { parseDiff } from './diff-parser';
 import { MAX_GIT_DIFF_OUTPUT_BYTES } from './input-budgets';
@@ -130,7 +131,7 @@ function contextDiffArgs(
   target: DiffFile,
   contextLines: number
 ): string[] {
-  const rediff = singleFileRediffArgs(identity.gitDiffArgv);
+  const rediff = singleFileRediffArgs(pinnedGitDiffArgs(identity));
   const prefix = identity.pathPrefix;
   const paths = [...new Set([target.oldPath, target.newPath].filter(p => p !== ''))];
   return [

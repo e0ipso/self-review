@@ -292,7 +292,7 @@ describe('ipc-handlers', () => {
       const result = await handler({}, { filePath: 'src/app.ts', contextLines: 10 });
 
       expect(gitMock).toHaveBeenCalledWith(
-        ['aaa111...bbb222', '-U10', '--', ':(top,literal)src/app.ts'],
+        ['a'.repeat(40), 'b'.repeat(40), '-U10', '--', ':(top,literal)src/app.ts'],
         '/tmp/self-review-clone'
       );
       expect(result).toMatchObject({ hunks: expect.any(Array) });
