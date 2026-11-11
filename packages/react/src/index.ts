@@ -87,3 +87,7 @@ export type {
   MessageValues,
 } from './localization/LocalizationContext';
 export { useReviewCommands, useFileReview } from './context/ReviewContext';
+
+export { ReviewProviders } from './ReviewProviders';
+export type { ReviewProvidersProps } from './ReviewProviders';
+export { useOptionalApplySession } from './context/ReviewContext';

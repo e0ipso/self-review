@@ -16,6 +16,7 @@ vi.mock('../../context/ReviewContext', () => ({
     deleteReply: mocks.deleteReply,
   }),
   useOptionalReview: () => null,
+  useOptionalApplySession: () => null,
 }));
 
 vi.mock('../../context/ConfigContext', () => ({

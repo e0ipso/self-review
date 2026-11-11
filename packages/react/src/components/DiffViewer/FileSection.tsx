@@ -46,10 +46,6 @@ export default function FileSection({
   const unregisterFileElement = navigation?.unregisterFileElement;
 
   const preview = getContentPreview(file);
-  const showImagePreview = preview.kind === 'image';
-  const showSvgPreview = preview.kind === 'svg';
-  const renderedTextMode = preview.kind === 'text' ? preview.mode : null;
-  const isEligibleForRenderedView = preview.kind === 'text';
   const isPreviewable = preview.kind !== 'none';
   const initialViewMode = initialPreviewMode(preview);
   const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
@@ -201,10 +197,6 @@ export default function FileSection({
               filePath,
               viewMode: effectiveViewMode,
               renderViewMode,
-              isEligibleForRenderedView,
-              renderedTextMode,
-              showImagePreview,
-              showSvgPreview,
               contentLoad,
               onRetry: retryContentLoad,
               commentRange,

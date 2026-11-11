@@ -53,10 +53,12 @@ vi.mock('./FileSectionBody', () => ({
     <div
       data-testid='mock-file-section-body'
       data-render-view-mode={contentAreaProps.renderViewMode}
-      data-rendered-text-mode={contentAreaProps.renderedTextMode ?? 'null'}
-      data-eligible-rendered-text={String(contentAreaProps.isEligibleForRenderedView)}
-      data-show-image-preview={String(contentAreaProps.showImagePreview)}
-      data-show-svg-preview={String(contentAreaProps.showSvgPreview)}
+      data-rendered-text-mode={
+        contentAreaProps.preview?.kind === 'text' ? contentAreaProps.preview.mode : 'null'
+      }
+      data-eligible-rendered-text={String(contentAreaProps.preview?.kind === 'text')}
+      data-show-image-preview={String(contentAreaProps.preview?.kind === 'image')}
+      data-show-svg-preview={String(contentAreaProps.preview?.kind === 'svg')}
     />
   ),
 }));
