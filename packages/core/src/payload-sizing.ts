@@ -1,11 +1,9 @@
 // src/main/payload-sizing.ts
 // Payload size estimation and threshold checking for large review guards.
 
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { executeGit, type GitExecutionOptions } from './git';
+import { isCommandCancelled } from './forge-provider';
 import type { DiffFile, AppConfig, PayloadStats } from './types';
-
-const execFileAsync = promisify(execFile);
 
 /**
  * Compute payload statistics and check against configured thresholds.
@@ -14,7 +12,7 @@ const execFileAsync = promisify(execFile);
 export function computePayloadStats(
   fileCount: number,
   totalLines: number,
-  config: AppConfig
+  config: Pick<AppConfig, 'maxFiles' | 'maxTotalLines'>
 ): PayloadStats {
   const maxFiles = config.maxFiles;
   const maxTotalLines = config.maxTotalLines;
@@ -42,45 +40,71 @@ export function countTotalLines(files: DiffFile[]): number {
   return total;
 }
 
-/**
- * Get git diff stats cheaply using --numstat (avoids full diff parsing).
- * Each output line is "added\tremoved\tfilename".
- * Returns file count and total changed lines (added + removed).
- */
-export async function getGitDiffStats(
-  args: string[],
-  repoRoot: string
-): Promise<{ fileCount: number; totalLines: number }> {
-  try {
-    const { stdout } = await execFileAsync('git', ['diff', '--numstat', ...args], {
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 15000,
-      cwd: repoRoot,
-    });
+export interface GitDiffStats {
+  fileCount: number;
+  totalLines: number;
+}
 
+export type GitDiffStatsResult =
+  | { available: true; stats: GitDiffStats }
+  | { available: false; error: unknown };
+
+/**
+ * Bounded --numstat lookup. Unavailable statistics are distinct from a genuinely empty diff.
+ * Abort and timeout reject with CommandCancelledError instead of becoming an empty result.
+ */
+export async function getGitDiffStatsResult(
+  args: string[],
+  repoRoot: string,
+  options: GitExecutionOptions = {}
+): Promise<GitDiffStatsResult> {
+  try {
+    const stdout = await executeGit(
+      ['diff', '--numstat', ...args],
+      repoRoot,
+      { ...options, timeoutMs: options.timeoutMs ?? 15_000 },
+      10 * 1024 * 1024
+    );
     let fileCount = 0;
     let totalLines = 0;
-
     for (const line of stdout.trim().split('\n')) {
       if (!line) continue;
       const parts = line.split('\t');
       if (parts.length < 3) continue;
-
       fileCount++;
-      // Binary files show '-' for added/removed
+      // Binary files show '-' for added/removed.
       const added = parts[0] === '-' ? 0 : parseInt(parts[0], 10);
       const removed = parts[1] === '-' ? 0 : parseInt(parts[1], 10);
       totalLines += (isNaN(added) ? 0 : added) + (isNaN(removed) ? 0 : removed);
     }
-
-    return { fileCount, totalLines };
+    return { available: true, stats: { fileCount, totalLines } };
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(`[payload-sizing] Failed to get git diff stats: ${error.message}`);
-    } else {
-      console.error('[payload-sizing] Failed to get git diff stats: unknown error');
-    }
-    // Return zeros so the guard does not block on failure
-    return { fileCount: 0, totalLines: 0 };
+    if (isCommandCancelled(error)) throw error;
+    return { available: false, error };
   }
+}
+
+/**
+ * Compatibility lookup: failures still warn and return zeros so existing guards do not block.
+ * Use getGitDiffStatsResult to distinguish failure from an empty diff. Cancellation requested
+ * through the additive execution options propagates; the historical default timeout falls back.
+ */
+export async function getGitDiffStats(
+  args: string[],
+  repoRoot: string,
+  options: GitExecutionOptions = {}
+): Promise<GitDiffStats> {
+  let error: unknown;
+  try {
+    const result = await getGitDiffStatsResult(args, repoRoot, options);
+    if (result.available) return result.stats;
+    error = result.error;
+  } catch (caught) {
+    if (options.signal || options.timeoutMs !== undefined) throw caught;
+    error = caught;
+  }
+  console.error(
+    `[payload-sizing] Failed to get git diff stats: ${error instanceof Error ? error.message : 'unknown error'}`
+  );
+  return { fileCount: 0, totalLines: 0 };
 }

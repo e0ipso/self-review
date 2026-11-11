@@ -36,7 +36,7 @@ export class CommandOutputLimitError extends Error {
 // Explicit repository targets outrank the surrounding hook's repository location. Keep
 // credential/configuration variables and GIT_INDEX_FILE, which can intentionally select
 // the index used by a partial commit.
-function repositoryEnvironment(isolated = false): NodeJS.ProcessEnv {
+export function repositoryEnvironment(isolated = false): NodeJS.ProcessEnv {
   const env = { ...process.env };
   for (const key of ['GIT_DIR', 'GIT_COMMON_DIR', 'GIT_WORK_TREE', 'GIT_PREFIX']) delete env[key];
   if (isolated) {
