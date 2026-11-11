@@ -2,7 +2,7 @@
 import { resolve } from 'path';
 import { parseCliArgs } from './cli';
 import { loadConfigWithProvenance } from '../../packages/core/src/config';
-import { resolveStartupSource } from '../../packages/core/src/startup-mode';
+import { resolveStartupSourceAsync } from '../../packages/core/src/startup-mode';
 import {
   loadLocalReview,
   loadResumeDocument,
@@ -21,7 +21,12 @@ import { updateOutputInfo, type DesktopSession } from './desktop-session';
 import type { ReviewComment } from '../shared/types';
 
 /** False means the reviewer declined a large payload. Errors are handled by main's shutdown. */
-export async function initializeSession(desktop: DesktopSession): Promise<boolean> {
+export async function initializeSession(
+  desktop: DesktopSession,
+  signal = desktop.operations.signal,
+  confirm = confirmPayload
+): Promise<boolean> {
+  signal.throwIfAborted();
   const { review, cwd, remote } = desktop;
   const cli = parseCliArgs();
   const loadedConfig = loadConfigWithProvenance({ cwd });
@@ -31,24 +36,37 @@ export async function initializeSession(desktop: DesktopSession): Promise<boolea
   review.config = config;
   const source = cli.remoteUrl
     ? { mode: 'remote' as const }
-    : resolveStartupSource(gitDiffArgs, cwd);
+    : await resolveStartupSourceAsync(gitDiffArgs, cwd, { signal, timeoutMs: 30_000 });
   let fetchedComments: ReviewComment[] = [];
   let loaded: Awaited<ReturnType<typeof loadLocalReview>>;
   if (source.mode === 'remote') {
     const result = await remote.open(controller =>
-      bootstrapRemoteDiff(cli.remoteUrl!, cwd, config.ignore, {}, { signal: controller.signal })
+      bootstrapRemoteDiff(
+        cli.remoteUrl!,
+        cwd,
+        config.ignore,
+        {},
+        { signal: AbortSignal.any([signal, controller.signal]) }
+      )
     );
     desktop.remoteInfo = result.session.remote;
     fetchedComments = result.session.fetchedComments;
     loaded = result;
   } else {
-    loaded = await loadLocalReview(source, gitDiffArgs, config, cwd, message =>
-      console.error(`[main] ${message}`)
+    loaded = await loadLocalReview(
+      source,
+      gitDiffArgs,
+      config,
+      cwd,
+      message => console.error(`[main] ${message}`),
+      { signal, timeoutMs: 30_000 }
     );
   }
+  signal.throwIfAborted();
   if (remote.closed) return false;
   const { payload, identity } = loaded;
-  if (payload.source.type !== 'welcome' && !(await confirmPayload(payload, config))) return false;
+  if (payload.source.type !== 'welcome' && !(await confirm(payload, config))) return false;
+  signal.throwIfAborted();
   if (remote.closed) return false;
   commitDiffData(review, payload, identity);
   let recordedHead: string | undefined;
@@ -71,5 +89,6 @@ export async function initializeSession(desktop: DesktopSession): Promise<boolea
       payload.files.map(file => file.newPath || file.oldPath)
     );
   }
+  signal.throwIfAborted();
   return !remote.closed;
 }

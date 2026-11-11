@@ -7,11 +7,12 @@
 // exited directly would reopen the data-loss path.
 
 import { app, Menu, shell, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+import { createDesktopLocalization } from '../shared/localization';
 import { IPC } from '../shared/ipc-channels';
 
 const DOCUMENTATION_URL = 'https://github.com/e0ipso/self-review#self-review-';
 
-export function setupMenu(): void {
+export function setupMenu(messages = createDesktopLocalization()): void {
   const isMac = process.platform === 'darwin';
 
   const template: MenuItemConstructorOptions[] = [
@@ -19,7 +20,7 @@ export function setupMenu(): void {
     { role: 'fileMenu' },
     { role: 'editMenu' },
     {
-      label: 'View',
+      label: messages.t('View'),
       submenu: [
         ...(!app.isPackaged
           ? [
@@ -41,14 +42,14 @@ export function setupMenu(): void {
       role: 'help',
       submenu: [
         {
-          label: 'Documentation',
+          label: messages.t('Documentation'),
           click: () => {
             shell.openExternal(DOCUMENTATION_URL);
           },
         },
         { type: 'separator' },
         {
-          label: 'About',
+          label: messages.t('About'),
           click: () => {
             BrowserWindow.getFocusedWindow()?.webContents.send(IPC.APP_SHOW_ABOUT);
           },

@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../../packages/react/src/components/ui/alert-dialog';
+import { useDesktopLocalization } from '../useDesktopLocalization';
 import type { AppInfo } from '../../shared/types';
 
 const REPOSITORY_URL = 'https://github.com/e0ipso/self-review';
@@ -15,6 +16,7 @@ const REPOSITORY_URL = 'https://github.com/e0ipso/self-review';
 type AboutDialogAPI = Pick<ElectronAPI, 'onShowAbout' | 'getAppInfo' | 'openExternal'>;
 
 export default function AboutDialog({ api = window.electronAPI }: { api?: AboutDialogAPI }) {
+  const { t } = useDesktopLocalization();
   const [isOpen, setIsOpen] = useState(false);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
@@ -48,9 +50,13 @@ export default function AboutDialog({ api = window.electronAPI }: { api?: AboutD
           <AlertDialogTitle className='text-center'>self-review</AlertDialogTitle>
           <AlertDialogDescription className='text-center pt-2'>
             <span className='block space-y-1 text-sm'>
-              {appInfo && <span className='block'>Version {appInfo.version}</span>}
+              {appInfo && (
+                <span className='block'>
+                  {t('Version {version}', { version: appInfo.version })}
+                </span>
+              )}
               <span className='block text-xs text-muted-foreground'>
-                GitHub-style PR review UI for local git diffs
+                {t('GitHub-style PR review UI for local git diffs')}
               </span>
               <span className='block text-xs text-muted-foreground pt-2'>
                 © 2026 Mateu Aguiló Bosch
@@ -70,7 +76,7 @@ export default function AboutDialog({ api = window.electronAPI }: { api?: AboutD
             </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogAction onClick={() => setIsOpen(false)}>OK</AlertDialogAction>
+        <AlertDialogAction onClick={() => setIsOpen(false)}>{t('OK')}</AlertDialogAction>
       </AlertDialogContent>
     </AlertDialog>
   );

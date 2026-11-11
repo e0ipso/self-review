@@ -1,5 +1,9 @@
 // Every desktop command enters through the current window's main frame.
 import type { BrowserWindow, IpcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
+import {
+  decodeSuggestionApplyRequest,
+  MAX_CONTEXT_LINES,
+} from '../../packages/core/src/review-request-validation';
 import { validateReviewState } from '../../packages/core/src/review-state-validation';
 import type {
   ExpandContextRequest,
@@ -103,26 +107,17 @@ export function findAction(
 export function expansionRequest(value: unknown): ExpandContextRequest {
   const request = object(value);
   stringArgument(request.filePath);
-  if (!Number.isSafeInteger(request.contextLines) || (request.contextLines as number) < 0)
+  if (
+    !Number.isSafeInteger(request.contextLines) ||
+    (request.contextLines as number) < 0 ||
+    (request.contextLines as number) > MAX_CONTEXT_LINES
+  )
     throw new Error('Invalid context line count.');
   return value as ExpandContextRequest;
 }
 export function suggestionRequest(value: unknown): SuggestionApplyRequest {
-  const request = object(value);
-  stringArgument(request.filePath);
-  if (request.lineRange !== null) {
-    const range = object(request.lineRange);
-    if (
-      (range.side !== 'old' && range.side !== 'new') ||
-      typeof range.start !== 'number' ||
-      typeof range.end !== 'number'
-    )
-      throw new Error('Invalid suggestion anchor.');
-  }
-  // Core returns typed refusals for file-level anchors and unusable numeric ranges.
-  const suggestion = object(request.suggestion);
-  stringArgument(suggestion.originalCode);
-  stringArgument(suggestion.proposedCode);
-  return value as SuggestionApplyRequest;
+  const decoded = decodeSuggestionApplyRequest(value);
+  if (!decoded.ok) throw new Error(decoded.error);
+  return decoded.value;
 }
 export const reviewState = validateReviewState;

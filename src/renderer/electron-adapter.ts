@@ -1,5 +1,6 @@
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
-import type { ElectronAPI } from '../shared/types';
+import type { ElectronAPI, ResumeLoadPayload } from '../shared/types';
+import { ElectronRequests } from './electron-requests';
 
 type ReviewAPI = Pick<
   ElectronAPI,
@@ -18,56 +19,86 @@ type ReviewAPI = Pick<
   | 'onGuideLoad'
 >;
 
-/** Owns temporary request listeners; the host effect releases pending ones on unmount. */
-export function createElectronAdapter(api: ReviewAPI) {
-  const pending = new Set<() => void>();
-  function receive<T>(
-    subscribe: (callback: (value: T) => void) => () => void,
-    request: () => void
-  ): Promise<T> {
-    return new Promise((resolve, reject) => {
-      let unsubscribe = () => {};
-      let received = false;
-      const release = () => {
-        unsubscribe();
-        pending.delete(release);
-      };
-      pending.add(release);
-      unsubscribe = subscribe(value => {
-        received = true;
-        release();
-        resolve(value);
-      });
-      // Also supports a host fake delivering synchronously during subscription.
-      if (received) release();
-      try {
-        request();
-      } catch (error) {
-        release();
-        reject(error);
-      }
+/** Initial resume acknowledgements and later hydration share the old channel but have distinct
+ * consumers. Main sends hydration only after the corresponding diff, on the same ordered peer.
+ */
+export function createElectronAdapter(api: ReviewAPI, requests = new ElectronRequests()) {
+  let disposed = false;
+  const subscriptions = new Set<() => void>();
+  function subscribe<T>(
+    on: (callback: (value: T) => void) => () => void,
+    callback: (value: T) => void
+  ) {
+    if (disposed) return () => {};
+    let active = true;
+    const unsubscribe = on(value => {
+      if (!disposed && active) callback(value);
     });
+    const release = () => {
+      if (!active) return;
+      active = false;
+      subscriptions.delete(release);
+      unsubscribe();
+    };
+    subscriptions.add(release);
+    return release;
   }
+  let resumeReply: ((value: ResumeLoadPayload) => void) | null = null;
+  let resumeLoad: Promise<ResumeLoadPayload> | null = null;
+  const resumePushes = new Set<(value: ResumeLoadPayload) => void>();
+  const offResume = api.onResumeLoad(value => {
+    if (disposed) return;
+    if (resumeReply) resumeReply(value);
+    else for (const callback of resumePushes) callback(value);
+  });
   const adapter: ReviewAdapter = {
-    loadDiff: () => receive(api.onDiffLoad, api.requestDiffData),
-    // An absent resume intentionally has no reply on the existing channel. Its listener stays
-    // available for welcome-to-remote hydration and is released when the host unmounts.
-    loadResumedReview: () => receive(api.onResumeLoad, api.requestResumeData),
+    loadDiff: () => requests.receive(api.onDiffLoad, api.requestDiffData),
+    loadResumedReview: () => {
+      resumeLoad ??= requests
+        .run<ResumeLoadPayload>(resolve => {
+          resumeReply = resolve;
+          try {
+            api.requestResumeData();
+          } catch (error) {
+            resumeReply = null;
+            throw error;
+          }
+          return () => {
+            resumeReply = null;
+          };
+        })
+        .finally(() => {
+          resumeLoad = null;
+        });
+      return resumeLoad;
+    },
+    onResumeLoad: callback => {
+      if (!disposed) resumePushes.add(callback);
+      return () => {
+        resumePushes.delete(callback);
+      };
+    },
     submitReview: state => api.submitReview(state),
-    expandContext: request => api.expandContext(request),
-    loadFileContent: path => api.loadFileContent(path),
-    readAttachment: path => api.readAttachment(path),
-    changeOutputPath: () => api.changeOutputPath(),
-    loadImage: path => api.loadImage(path),
-    applySuggestion: request => api.applySuggestion(request),
-    chooseApplyDestination: () => api.chooseApplyDestination(),
-    onGuideLoad: callback => api.onGuideLoad(callback),
-    onDiffLoad: callback => api.onDiffLoad(callback),
+    expandContext: request => requests.invoke(() => api.expandContext(request)),
+    loadFileContent: path => requests.invoke(() => api.loadFileContent(path)),
+    readAttachment: path => requests.invoke(() => api.readAttachment(path)),
+    changeOutputPath: () => requests.invoke(() => api.changeOutputPath(), true),
+    loadImage: path => requests.invoke(() => api.loadImage(path)),
+    applySuggestion: request => requests.invoke(() => api.applySuggestion(request), true),
+    chooseApplyDestination: () => requests.invoke(() => api.chooseApplyDestination(), true),
+    onGuideLoad: callback => subscribe(api.onGuideLoad, callback),
+    onDiffLoad: callback => subscribe(api.onDiffLoad, callback),
   };
   return {
     adapter,
+    requests,
     dispose: () => {
-      for (const release of pending) release();
+      if (disposed) return;
+      disposed = true;
+      requests.dispose();
+      offResume();
+      for (const release of subscriptions) release();
+      resumePushes.clear();
     },
   };
 }

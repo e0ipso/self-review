@@ -324,7 +324,9 @@ describe('ipc-handlers', () => {
 
       expect(gitMock).toHaveBeenCalledWith(
         ['a'.repeat(40), 'b'.repeat(40), '-U10', '--', ':(top,literal)src/app.ts'],
-        '/tmp/self-review-clone'
+        '/tmp/self-review-clone',
+        undefined,
+        expect.objectContaining({ signal: expect.any(AbortSignal), timeoutMs: 30_000 })
       );
       expect(result).toMatchObject({ hunks: expect.any(Array) });
     });

@@ -1,10 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { ConfigProvider, useConfig } from '../../packages/react/src/context/ConfigContext';
-import { ReviewProvider, useReview } from '../../packages/react/src/context/ReviewContext';
-import { DiffNavigationProvider } from '../../packages/react/src/context/DiffNavigationContext';
-import { ReviewAdapterProvider } from '../../packages/react/src/context/ReviewAdapterContext';
-import { GuideProvider } from '../../packages/react/src/context/GuideContext';
-import { TooltipProvider } from '../../packages/react/src/components/ui/tooltip';
+import { useConfig } from '../../packages/react/src/context/ConfigContext';
+import { useReview } from '../../packages/react/src/context/ReviewContext';
+import { ReviewProviders } from '../../packages/react/src/ReviewProviders';
+import { Button } from '../../packages/react/src/components/ui/button';
 import Toolbar from '../../packages/react/src/components/Toolbar';
 import Layout from '../../packages/react/src/components/Layout';
 import CloseConfirmDialog from './components/CloseConfirmDialog';
@@ -18,13 +16,16 @@ import ImportDiagnosticsBanner from '../../packages/react/src/components/ImportD
 import type { AppConfig, OutputPathInfo } from '../shared/types';
 
 import { createElectronAdapter } from './electron-adapter';
+import { useDesktopLocalization } from './useDesktopLocalization';
+import { useSaveReview } from './useSaveReview';
 import {
   LocalizationProvider,
   useLocalization,
 } from '../../packages/react/src/localization/LocalizationContext';
 
 function AppContent() {
-  const { diffSource, files } = useReview();
+  const { t } = useDesktopLocalization();
+  const { diffSource } = useReview();
   const { setOutputPathInfo } = useConfig();
   const [isFindBarOpen, setIsFindBarOpen] = useState(false);
 
@@ -51,15 +52,7 @@ function AppContent() {
     });
   }, [setOutputPathInfo]);
 
-  // Main never pulls state: a save with no pushed state is reported and writes nothing.
-  const handleFinishReview = useCallback(() => {
-    window.electronAPI.submitReview({
-      timestamp: new Date().toISOString(),
-      source: diffSource,
-      files,
-    });
-    window.electronAPI.saveAndQuit();
-  }, [diffSource, files]);
+  const handleFinishReview = useSaveReview(window.electronAPI);
 
   if (diffSource.type === 'welcome') {
     return <WelcomeScreen />;
@@ -69,7 +62,7 @@ function AppContent() {
     return (
       <div
         role='status'
-        aria-label='Loading review'
+        aria-label={t('Loading review')}
         className='flex items-center justify-center h-screen bg-background'
       >
         <svg
@@ -98,60 +91,99 @@ function AppContent() {
   }
 
   return (
-    <DiffNavigationProvider>
-      <TooltipProvider>
-        <KeyboardNavigationManager />
-        <div className='flex flex-col h-screen overflow-hidden bg-background text-foreground antialiased'>
-          <UpdateBanner />
-          <RemoteDriftBanner />
-          <ImportDiagnosticsBanner />
-          <Toolbar onFinishReview={handleFinishReview} />
-          <div className='flex-1 min-h-0'>
-            <Layout />
-          </div>
+    <>
+      <KeyboardNavigationManager />
+      <div className='flex flex-col h-screen overflow-hidden bg-background text-foreground antialiased'>
+        <UpdateBanner />
+        <RemoteDriftBanner />
+        <ImportDiagnosticsBanner />
+        <Toolbar onFinishReview={handleFinishReview} />
+        <div className='flex-1 min-h-0'>
+          <Layout />
         </div>
-        <FindBar isOpen={isFindBarOpen} onClose={() => setIsFindBarOpen(false)} />
-        <CloseConfirmDialog />
-        <AboutDialog />
-      </TooltipProvider>
-    </DiffNavigationProvider>
+      </div>
+      <FindBar isOpen={isFindBarOpen} onClose={() => setIsFindBarOpen(false)} />
+      <CloseConfirmDialog />
+      <AboutDialog />
+    </>
   );
 }
 
-export default function App() {
-  const [bridge] = useState(() => createElectronAdapter(window.electronAPI));
+function DesktopApp() {
+  const { t } = useDesktopLocalization();
+  const [host, setHost] = useState<{
+    bridge: ReturnType<typeof createElectronAdapter>;
+    config: AppConfig;
+    outputPathInfo?: OutputPathInfo;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const { locale, direction } = useLocalization();
-  useEffect(() => () => bridge.dispose(), [bridge]);
   useEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.dir = direction;
   }, [locale, direction]);
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo | null>(null);
 
-  // Load config via IPC before mounting package providers
+  // Each effect setup owns a new adapter, including StrictMode's setup/cleanup replay.
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onConfigLoad((cfg, pathInfo) => {
-      setConfig(cfg);
-      if (pathInfo) setOutputPathInfo(pathInfo);
+    let active = true;
+    const bridge = createElectronAdapter(window.electronAPI);
+    const offConfig = window.electronAPI.onConfigLoad((config, outputPathInfo) => {
+      if (active)
+        setHost(previous =>
+          previous?.bridge === bridge
+            ? { bridge, config, outputPathInfo: outputPathInfo ?? previous.outputPathInfo }
+            : previous
+        );
     });
-    window.electronAPI.requestConfig();
-    return unsubscribe;
-  }, []);
+    setHost(null);
+    setError(null);
+    void bridge.requests
+      .receive<{ config: AppConfig; outputPathInfo?: OutputPathInfo }>(
+        callback =>
+          window.electronAPI.onConfigLoad((config, outputPathInfo) =>
+            callback({ config, outputPathInfo })
+          ),
+        window.electronAPI.requestConfig
+      )
+      .then(
+        value => {
+          if (active) setHost({ bridge, ...value });
+        },
+        reason => {
+          if (active) setError(reason instanceof Error ? reason.message : String(reason));
+        }
+      );
+    return () => {
+      active = false;
+      offConfig();
+      bridge.dispose();
+    };
+  }, [attempt]);
 
-  if (!config) return null;
+  if (error)
+    return (
+      <div role='alert'>
+        {error}
+        <Button onClick={() => setAttempt(value => value + 1)}>{t('Retry')}</Button>
+      </div>
+    );
+  if (!host) return null;
+  return (
+    <ReviewProviders
+      adapter={host.bridge.adapter}
+      config={host.config}
+      initialOutputPath={host.outputPathInfo}
+    >
+      <AppContent />
+    </ReviewProviders>
+  );
+}
 
+export default function App() {
   return (
     <LocalizationProvider>
-      <ReviewAdapterProvider adapter={bridge.adapter}>
-        <ConfigProvider initialConfig={config} initialOutputPath={outputPathInfo ?? undefined}>
-          <GuideProvider>
-            <ReviewProvider>
-              <AppContent />
-            </ReviewProvider>
-          </GuideProvider>
-        </ConfigProvider>
-      </ReviewAdapterProvider>
+      <DesktopApp />
     </LocalizationProvider>
   );
 }

@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { Input } from '../../../packages/react/src/components/ui/input';
 import { Button } from '../../../packages/react/src/components/ui/button';
 import { ChevronUp, ChevronDown, X } from 'lucide-react';
-import { useLocalization } from '../../../packages/react/src/localization/LocalizationContext';
+import { useDesktopLocalization } from '../useDesktopLocalization';
 import { FindInPageResult } from '../../shared/types';
 
 interface FindBarProps {
@@ -14,7 +14,7 @@ interface FindBarProps {
 }
 
 export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarProps) {
-  const { number } = useLocalization();
+  const { t } = useDesktopLocalization();
   const [query, setQuery] = useState('');
   const [activeMatch, setActiveMatch] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
@@ -163,8 +163,8 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
   const searched = query && lastSearchedQueryRef.current === query;
   const matchDisplay = searched
     ? adjustedTotal > 0
-      ? `${number(adjustedActive)} of ${number(adjustedTotal)}`
-      : 'No results'
+      ? t('{active} of {total}', { active: adjustedActive, total: adjustedTotal })
+      : t('No results')
     : '';
 
   return createPortal(
@@ -177,8 +177,8 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
         value={query}
         onChange={e => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
-        aria-label='Find in page'
-        placeholder='Find...'
+        aria-label={t('Find in page')}
+        placeholder={t('Find...')}
         className='h-7 w-52 text-sm'
       />
       <span className='min-w-[5rem] px-1.5 text-center text-xs text-muted-foreground'>
@@ -190,8 +190,8 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
         className='h-7 w-7'
         onClick={findPrevious}
         disabled={!query || adjustedTotal === 0}
-        aria-label='Previous match'
-        title='Previous match (Shift+Enter)'
+        aria-label={t('Previous match')}
+        title={t('Previous match (Shift+Enter)')}
       >
         <ChevronUp className='h-4 w-4' />
       </Button>
@@ -201,8 +201,8 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
         className='h-7 w-7'
         onClick={findNext}
         disabled={!query || adjustedTotal === 0}
-        aria-label='Next match'
-        title='Next match (Enter)'
+        aria-label={t('Next match')}
+        title={t('Next match (Enter)')}
       >
         <ChevronDown className='h-4 w-4' />
       </Button>
@@ -211,8 +211,8 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
         size='icon'
         className='h-7 w-7'
         onClick={handleClose}
-        aria-label='Close find bar'
-        title='Close (Escape)'
+        aria-label={t('Close find bar')}
+        title={t('Close (Escape)')}
       >
         <X className='h-4 w-4' />
       </Button>

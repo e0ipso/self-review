@@ -3,7 +3,9 @@ import { app, ipcMain } from 'electron';
 import { createDesktopSession } from './desktop-session';
 import { createDesktopShutdown } from './remote-lifetime';
 import { WindowOwner } from './window-owner';
-import { createReviewWindow } from './desktop-window';
+import { RendererRecovery } from './renderer-recovery';
+import { createDesktopLocalization } from '../shared/localization';
+import { createReviewWindow, observeRendererHealth } from './desktop-window';
 import { initializeSession } from './startup';
 import { QuitController } from './quit-controller';
 import { registerIpcHandlers } from './ipc-handlers';
@@ -12,14 +14,51 @@ import { registerLifecycleHandlers } from './lifecycle-handlers';
 import { checkForUpdate, getVersionUpdate } from './version-checker';
 import { setupMenu } from './menu';
 import { getAppIconDataUri } from './app-assets';
-import { createReviewPresentation } from './presentation';
+import {
+  createReviewPresentation,
+  createLifecyclePresentation,
+  confirmRendererDiscard,
+} from './presentation';
+import { createDesktopPublication } from './publication';
+import { registerRemoteOpenHandler } from './remote-open-handler';
 import { IPC } from '../shared/ipc-channels';
 
 const desktop = createDesktopSession(process.cwd());
 const quit = new QuitController();
-const windows = new WindowOwner(() => createReviewWindow(handleCloseRequest));
-const shutdown = createDesktopShutdown(
-  desktop.remote,
+const messages = createDesktopLocalization();
+let recovery: RendererRecovery | null = null;
+const windows = new WindowOwner(() => {
+  const window = createReviewWindow(handleCloseRequest);
+  const cancel = desktop.operations.replaceWindow();
+  desktop.review.reviewState = null;
+  const health = new RendererRecovery({
+    isCurrent: () => windows.current === window,
+    confirmDiscard: failure => confirmRendererDiscard(window, failure, messages),
+    invalidateState: () => {
+      desktop.review.reviewState = null;
+    },
+    discard: stillCurrent =>
+      desktop.operations.complete(async () => {
+        if (!stillCurrent() || quit.phase !== 'reviewing') return;
+        quit.discard();
+        void shutdown(0, 'discard');
+      }, true),
+  });
+  recovery = health;
+  observeRendererHealth(window, health);
+  window.on('closed', () => {
+    cancel(new Error('The review window closed.'));
+    desktop.review.reviewState = null;
+  });
+  return window;
+});
+const shutdownResources = createDesktopShutdown(
+  {
+    dispose: async (reason: string) => {
+      windows.stop();
+      await Promise.all([desktop.operations.dispose(reason), desktop.remote.dispose(reason)]);
+    },
+  },
   code => process.exit(code),
   () => {
     windows.stop();
@@ -27,14 +66,27 @@ const shutdown = createDesktopShutdown(
   }
 );
 
+function shutdown(code: number, reason: string): Promise<void> {
+  windows.stop();
+  return shutdownResources(code, reason);
+}
+
 function handleCloseRequest(event: Electron.Event): void {
   const window = windows.current;
+  const hasReview = !!desktop.review.diffData && desktop.review.diffData.source.type !== 'welcome';
+  if (
+    hasReview &&
+    quit.phase === 'reviewing' &&
+    !desktop.operations.finishing &&
+    recovery?.requestClose()
+  ) {
+    event.preventDefault();
+    return;
+  }
   const reviewOpen =
-    !!window &&
-    !window.webContents.isLoading() &&
-    !!desktop.review.diffData &&
-    desktop.review.diffData.source.type !== 'welcome';
-  const decision = quit.closeRequested(reviewOpen);
+    !!window && !window.webContents.isDestroyed() && !window.webContents.isLoading() && hasReview;
+  const decision =
+    desktop.operations.finishing && !quit.mayQuit ? 'ignore' : quit.closeRequested(reviewOpen);
   if (decision === 'allow') return;
   event.preventDefault();
   if (decision === 'ask-renderer') window?.webContents.send(IPC.APP_CLOSE_REQUESTED);
@@ -81,27 +133,45 @@ void app
       void shutdown(1, 'initialization timeout');
     }, 45_000);
     try {
-      if (!(await initializeSession(desktop))) {
+      const presentation = createReviewPresentation(getAppIconDataUri, getVersionUpdate, messages);
+      if (
+        !(await desktop.operations.read(
+          signal => initializeSession(desktop, signal, presentation.confirmPayload),
+          45_000
+        ))
+      ) {
         await shutdown(0, 'initialization cancelled');
         return;
       }
       if (desktop.remote.closed) return;
-      const boundary = createIpcBoundary(ipcMain, () => windows.current);
+      const boundary = createIpcBoundary(ipcMain, () =>
+        recovery?.unavailable ? null : windows.current
+      );
       registerIpcHandlers(
         desktop.review,
         boundary,
         desktop.transition,
-        createReviewPresentation(getAppIconDataUri, getVersionUpdate)
+        presentation,
+        desktop.operations
       );
-      registerLifecycleHandlers(desktop, boundary, quit, shutdown);
-      setupMenu();
+      registerLifecycleHandlers(
+        desktop,
+        boundary,
+        quit,
+        shutdown,
+        createDesktopPublication(desktop),
+        createLifecyclePresentation(messages)
+      );
+      registerRemoteOpenHandler(desktop, boundary, presentation);
+      setupMenu(messages);
       windows.initialize();
       // The check uses the default network session. Late completions target the current live window.
-      void checkForUpdate()
+      void checkForUpdate({ signal: desktop.operations.signal })
         .then(() => {
           const update = getVersionUpdate();
           const window = windows.current;
-          if (update && window) window.webContents.send(IPC.VERSION_UPDATE_AVAILABLE, update);
+          if (update && window && !desktop.operations.signal.aborted)
+            window.webContents.send(IPC.VERSION_UPDATE_AVAILABLE, update);
         })
         .catch(() => {});
     } catch (error) {
