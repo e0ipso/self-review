@@ -275,6 +275,7 @@ export function App({ capability }: AppProps) {
     setFailure(null);
     try {
       await adapter.submitReview?.(state);
+      submissionPending.current = false;
       setStatus('submitted');
     } catch (error) {
       setFailure(failureOf(error));

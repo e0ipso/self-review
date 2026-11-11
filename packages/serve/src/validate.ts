@@ -1,6 +1,8 @@
 // Request validation for the serve package. Core's handlers assume a caller the
 // compiler checked; over HTTP the body is whatever the socket delivered.
 
+import { ReviewXmlError } from '@self-review/core';
+import { validateCompatibleReviewState } from './core-compatibility';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ExpandContextRequest, ReviewState, SuggestionApplyRequest } from '@self-review/core';
@@ -175,9 +177,8 @@ const REVIEW_STATE_KEYS: ReadonlySet<string> = new Set(['timestamp', 'source', '
  * Accepts exactly `{ timestamp, source, files }`. Remote provenance is never
  * taken from the client; the process injects it after submission.
  *
- * Structural only — the XSD checks nested fields at serialization time. The
- * exception is `id`, checked below, because the serializer turns an id into a
- * file name *before* it validates anything.
+ * Decode transport-only attachment fields, then validate the complete runtime
+ * DTO before it reaches session storage. XSD validation still checks publication.
  */
 export function parseReviewStateBody(body: unknown): ParseResult<ReviewState> {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
@@ -207,7 +208,15 @@ export function parseReviewStateBody(body: unknown): ParseResult<ReviewState> {
     return decoded;
   }
 
-  return { ok: true, value: { timestamp, source, files: decoded.value } as ReviewState };
+  try {
+    return {
+      ok: true,
+      value: validateCompatibleReviewState({ timestamp, source, files: decoded.value }),
+    };
+  } catch (error) {
+    if (!(error instanceof ReviewXmlError)) throw error;
+    return { ok: false, error: error.message };
+  }
 }
 
 // Attachment blobs on the wire. `JSON.stringify` renders an ArrayBuffer as
@@ -278,8 +287,8 @@ function decodeAttachmentList(list: unknown[]): ParseResult<unknown[]> {
 
 /**
  * Walk the files, decoding blobs and checking every id that becomes a file
- * name. Tolerant of anything it does not recognise, since the XSD checks the
- * document later; strict about the encoding, which the XSD cannot see.
+ * name. Leave other nested values for the shared runtime validator; only this
+ * transport understands base64 fields and serialized ArrayBuffer mistakes.
  */
 function decodeFileAttachments(files: unknown[]): ParseResult<unknown[]> {
   const decodedFiles: unknown[] = [];

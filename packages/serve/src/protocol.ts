@@ -8,6 +8,10 @@ import type { ReviewPublishErrorCode } from '@self-review/core';
  */
 export const MAX_REVIEW_BODY_BYTES = 32 * 1024 * 1024;
 
+/** Original plus proposed code, measured as JSON UTF-8 bytes by both ends. */
+export const MAX_APPLY_BODY_BYTES = MAX_REVIEW_BODY_BYTES;
+export const SUGGESTION_TOO_LARGE_CODE = 'suggestion-too-large';
+
 /** A 200 from `POST /api/review`, sent only after the document is published. */
 export interface ReviewSubmitAck {
   ok: true;

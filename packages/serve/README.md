@@ -104,8 +104,28 @@ A review over 32 MB on the wire is refused before it is sent, with its size in t
 attachments are the usual cause — they travel base64-encoded, which adds a third — so remove or
 shrink some and finish again. A server-side `413` for the same reason is reported the same way.
 
-Closing the tab warns you first, once you have entered something. Your comments live only in that
-page until you finish, so closing without finishing loses them.
+While Finish Review is pending, the review controls and keyboard shortcuts are blocked so the
+submitted snapshot stays unchanged. A refusal restores editing with the review intact.
+
+Closing the tab warns you after comments or viewed flags change, including deleting the last resumed
+comment or clearing a viewed flag. The warning stays until the server acknowledges the save. Your
+work lives only in that page until you finish, so closing without finishing loses it.
+
+Only one submission can publish at a time. An overlapping authenticated `POST /api/review` receives
+`409` with `{"error":"review submission already in progress or complete"}`. A failed attempt permits
+retry. Successful acknowledgement still means the XML is on disk. After flushing that response, the
+listener stops accepting connections and drains admitted operations and their responses for up to
+five seconds before closing remaining connections and exiting 0. Core operations without
+cancellation support may still be pending when the CLI exits at that deadline.
+
+Suggestion Apply requests have a separate 32 MiB JSON UTF-8 budget for original and proposed code,
+matching the review upload budget. The browser refuses larger suggestions before sending them with
+code `suggestion-too-large`; the server enforces the same bound. Desktop and library callers keep
+their existing capabilities. Context expansion requests retain their 64 KiB bound.
+
+Nested review JSON is validated after attachment decoding and before it enters the session.
+Malformed containers, source kinds, anchors and optional metadata receive a recoverable `400`
+`{"error":"Invalid review state: ..."}`; publication still performs XML validation.
 
 The desktop application asks the same question with better options, offering to save on the way out.
 A browser will not let a page do that: `beforeunload` is a yes or no prompt whose wording belongs to

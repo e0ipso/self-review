@@ -10,7 +10,11 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReviewState } from '@self-review/core';
 import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
 import { parseReviewStateBody } from '../validate';
-import { REVIEW_TOO_LARGE_CODE } from '../protocol';
+import {
+  MAX_APPLY_BODY_BYTES,
+  SUGGESTION_TOO_LARGE_CODE,
+  REVIEW_TOO_LARGE_CODE,
+} from '../protocol';
 
 const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
 
@@ -440,5 +444,47 @@ describe('attachment blobs on the wire', () => {
     expect(new Uint8Array(comment.attachments![0].data!)).toEqual(BYTES);
     expect(new Uint8Array(comment.replies![0].attachments![0].data!)).toEqual(BYTES);
     expect(comment.attachments![1].data).toBeUndefined();
+  });
+});
+
+describe('suggestion transport budget', () => {
+  const request = {
+    filePath: 'src/a.ts',
+    lineRange: { side: 'new' as const, start: 1, end: 1 },
+    suggestion: { originalCode: 'a', proposedCode: 'b' },
+  };
+
+  it('sends suggestions larger than the context-request budget', async () => {
+    const spy = stubFetch(() => json({ ok: true }));
+    const large = {
+      ...request,
+      suggestion: { ...request.suggestion, proposedCode: 'x'.repeat(70 * 1024) },
+    };
+    await expect(createFetchAdapter(CAPABILITY).applySuggestion!(large)).resolves.toEqual({
+      ok: true,
+    });
+    expect(JSON.parse(spy.mock.calls[0][1]!.body as string)).toEqual(large);
+  });
+
+  it('refuses an oversized suggestion before sending its JSON', async () => {
+    const spy = stubFetch(() => json({ ok: true }));
+    const large = {
+      ...request,
+      suggestion: { ...request.suggestion, proposedCode: 'é'.repeat(MAX_APPLY_BODY_BYTES / 2) },
+    };
+    await expect(createFetchAdapter(CAPABILITY).applySuggestion!(large)).rejects.toMatchObject({
+      status: null,
+      code: SUGGESTION_TOO_LARGE_CODE,
+      message: expect.stringContaining('Nothing was applied.'),
+    });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('maps a server refusal to the same size error', async () => {
+    stubFetch(() => json({ error: 'request body too large' }, 413));
+    await expect(createFetchAdapter(CAPABILITY).applySuggestion!(request)).rejects.toMatchObject({
+      status: 413,
+      code: SUGGESTION_TOO_LARGE_CODE,
+    });
   });
 });

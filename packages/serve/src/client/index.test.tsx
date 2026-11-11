@@ -265,6 +265,11 @@ describe('serve client', () => {
       expect(fs.readFileSync(outputPath, 'utf-8')).toContain('Needs a test.');
       await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
       expect(closeIsGuarded()).toBe(false);
+      const shortcut = vi.fn();
+      document.addEventListener('keydown', shortcut);
+      fireEvent.keyDown(document, { key: 'j' });
+      document.removeEventListener('keydown', shortcut);
+      expect(shortcut).toHaveBeenCalledTimes(1);
     },
     CASE_TIMEOUT_MS
   );
