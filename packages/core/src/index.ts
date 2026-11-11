@@ -205,6 +205,9 @@ export type {
   SnapshotReadOptions,
 } from './snapshot-reader';
 
+// Per-call library diagnostics
+export type { DiagnosticReporter } from './diagnostics';
+
 // Configuration, with provenance
 export { loadConfig, loadConfigWithProvenance } from './config';
 export type {

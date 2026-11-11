@@ -1,6 +1,7 @@
 // src/main/payload-sizing.ts
 // Payload size estimation and threshold checking for large review guards.
 
+import { stderrReporter } from './diagnostics';
 import { executeGit, type GitExecutionOptions } from './git';
 import { isCommandCancelled } from './forge-provider';
 import type { DiffFile, AppConfig, PayloadStats } from './types';
@@ -103,7 +104,7 @@ export async function getGitDiffStats(
     if (options.signal || options.timeoutMs !== undefined) throw caught;
     error = caught;
   }
-  console.error(
+  (options.reportDiagnostic ?? stderrReporter)(
     `[payload-sizing] Failed to get git diff stats: ${error instanceof Error ? error.message : 'unknown error'}`
   );
   return { fileCount: 0, totalLines: 0 };

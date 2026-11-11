@@ -13,6 +13,7 @@ import type {
   RemoteDriftInfo,
 } from './types';
 import type { AttachmentOrigins } from './attachment-origins';
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { validateReviewState } from './review-state-validation';
 
 /**
@@ -207,10 +208,11 @@ export function getConfigLoad(
  */
 export function submitReviewState(
   session: Pick<ReviewSession, 'reviewState'>,
-  state: ReviewState
+  state: ReviewState,
+  reportDiagnostic: DiagnosticReporter = stderrReporter
 ): void {
   state = validateReviewState(state);
-  console.error(
+  reportDiagnostic(
     '[review] Review state submitted:',
     JSON.stringify({
       timestamp: state.timestamp,
