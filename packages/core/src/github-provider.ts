@@ -20,19 +20,43 @@ import {
   type ForgeUrl,
 } from './forge-provider';
 
+import {
+  isRecord,
+  isOptionalString,
+  isOptionalNumber,
+  isNumericId,
+  hasUsableLines,
+} from './forge-payload';
+
 /** Relevant subset of a GitHub REST pull-request review comment. */
 interface GitHubReviewComment {
   id: number;
   in_reply_to_id?: number | null;
   /** `null` for deleted user accounts. */
-  user: { login: string } | null;
+  user?: { login: string } | null;
   body: string;
   path: string;
-  side?: 'LEFT' | 'RIGHT' | null;
-  line: number | null;
+  side?: string | null;
+  line?: number | null;
   start_line?: number | null;
   original_line?: number | null;
   original_start_line?: number | null;
+}
+
+/** Validate the consumed fields before normalizing any page. Extra API fields are allowed. */
+function isReviewComment(value: unknown): value is GitHubReviewComment {
+  if (!isRecord(value)) return false;
+  return (
+    isNumericId(value.id) &&
+    (value.in_reply_to_id == null || isNumericId(value.in_reply_to_id)) &&
+    (value.user == null || (isRecord(value.user) && typeof value.user.login === 'string')) &&
+    typeof value.body === 'string' &&
+    typeof value.path === 'string' &&
+    isOptionalString(value.side) &&
+    ['line', 'start_line', 'original_line', 'original_start_line'].every(key =>
+      isOptionalNumber(value[key])
+    )
+  );
 }
 
 const GH_CLI = 'gh';
@@ -91,11 +115,13 @@ function parseGhJson(stdout: string, context: string): unknown {
  */
 function toAnchor(comment: GitHubReviewComment): ForgeThreadAnchor {
   const outdated = comment.line === null || comment.line === undefined;
-  const endLine = outdated ? (comment.original_line ?? null) : comment.line;
+  const endLine = outdated ? (comment.original_line ?? null) : (comment.line ?? null);
   const startLine = outdated
     ? (comment.original_start_line ?? comment.original_line ?? null)
-    : (comment.start_line ?? comment.line);
-  const hasLines = startLine !== null && endLine !== null;
+    : (comment.start_line ?? comment.line ?? null);
+  const hasLines =
+    hasUsableLines(startLine, endLine) &&
+    (comment.side == null || comment.side === 'LEFT' || comment.side === 'RIGHT');
   return {
     filePath: comment.path,
     // Side is meaningless without usable lines; the contract says 'new'.
@@ -161,8 +187,10 @@ async function readHead(
       '--json',
       'headRefOid',
     ]);
-    const parsed = parseGhJson(stdout, 'pull request head') as { headRefOid?: unknown };
-    return typeof parsed?.headRefOid === 'string' && /^[a-f0-9]{40}$/i.test(parsed.headRefOid)
+    const parsed = parseGhJson(stdout, 'pull request head');
+    return isRecord(parsed) &&
+      typeof parsed.headRefOid === 'string' &&
+      /^[a-f0-9]{40}$/i.test(parsed.headRefOid)
       ? parsed.headRefOid
       : undefined;
   } catch (error) {
@@ -189,10 +217,12 @@ export function createGitHubProvider(runCommand: ForgeCommandRunner): ForgeProvi
         '--json',
         'baseRefName',
       ]);
-      const parsed = parseGhJson(stdout, 'pr view') as {
-        baseRefName?: unknown;
-      };
-      if (typeof parsed?.baseRefName !== 'string' || parsed.baseRefName === '') {
+      const parsed = parseGhJson(stdout, 'pr view');
+      if (
+        !isRecord(parsed) ||
+        typeof parsed.baseRefName !== 'string' ||
+        parsed.baseRefName === ''
+      ) {
         throw new ForgeCliUnavailableError('github', GH_CLI, 'gh pr view returned no baseRefName');
       }
       return parsed.baseRefName;
@@ -216,14 +246,17 @@ export function createGitHubProvider(runCommand: ForgeCommandRunner): ForgeProvi
       // `--paginate --slurp` wraps each response page in an outer array:
       // [[...page1], [...page2]]. Flatten one level to the comment list.
       const pages = parseGhJson(stdout, 'pull request comments');
-      if (!Array.isArray(pages)) {
+      if (
+        !Array.isArray(pages) ||
+        !pages.every(page => Array.isArray(page) && page.every(isReviewComment))
+      ) {
         throw new ForgeCliUnavailableError(
           'github',
           GH_CLI,
           'gh api returned an unexpected payload shape for pull request comments'
         );
       }
-      const comments = pages.flat(1) as GitHubReviewComment[];
+      const comments: GitHubReviewComment[] = pages.flat(1);
       const threads = groupIntoThreads(comments);
       if (expectedHead !== undefined) {
         const after = await readHead(runCommand, url);

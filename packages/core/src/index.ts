@@ -120,6 +120,7 @@ export type { GuideParseResult } from './guide-parser';
 
 // Git operations
 export {
+  GitCommandError,
   runGitDiffAsync,
   getRepoRootAsync,
   getUntrackedFilesAsync,
@@ -128,6 +129,7 @@ export {
   PARSER_COMPATIBLE_GIT_CONFIG,
   PARSER_COMPATIBLE_DIFF_FLAGS,
 } from './git';
+export type { GitExecutionOptions } from './git';
 
 // Forge providers (remote PR/MR conversation plane)
 export {
@@ -203,6 +205,9 @@ export type {
   SnapshotReadOptions,
 } from './snapshot-reader';
 
+// Per-call library diagnostics
+export type { DiagnosticReporter } from './diagnostics';
+
 // Configuration, with provenance
 export { loadConfig, loadConfigWithProvenance } from './config';
 export type {
@@ -214,7 +219,14 @@ export type {
 } from './config';
 
 // Payload sizing
-export { computePayloadStats, countTotalLines, getGitDiffStats } from './payload-sizing';
+export {
+  computePayloadStats,
+  countTotalLines,
+  getGitDiffStats,
+  getGitDiffStatsResult,
+} from './payload-sizing';
+
+export type { GitDiffStats, GitDiffStatsResult } from './payload-sizing';
 
 // Ignore filter
 export { createIgnoreFilter } from './ignore-filter';
@@ -299,7 +311,7 @@ export type {
 } from './review-handlers';
 
 // Startup mode detection (git, directory, file, welcome)
-export { determineMode, resolveStartupSource } from './startup-mode';
+export { determineMode, resolveStartupSource, resolveStartupSourceAsync } from './startup-mode';
 export type { StartupSource } from './startup-mode';
 
 // Startup steps both front ends share

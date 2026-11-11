@@ -18,6 +18,15 @@ import {
   type ForgeUrl,
 } from './forge-provider';
 
+import {
+  isRecord,
+  isOptionalString,
+  isOptionalNumber,
+  isOptionalBoolean,
+  isNumericId,
+  hasUsableLines,
+} from './forge-payload';
+
 const GLAB_CLI = 'glab';
 
 // --- Minimal shapes of the GitLab API payloads we consume ---------------
@@ -41,17 +50,54 @@ interface GitLabPosition {
 
 interface GitLabNote {
   id: number | string;
-  body?: string;
-  author?: { username?: string } | null;
-  system?: boolean;
-  resolvable?: boolean;
-  resolved?: boolean;
+  body?: string | null;
+  author?: { username?: string | null } | null;
+  system?: boolean | null;
+  resolvable?: boolean | null;
+  resolved?: boolean | null;
   position?: GitLabPosition | null;
 }
 
 interface GitLabDiscussion {
   id: string;
-  notes?: GitLabNote[];
+  notes: GitLabNote[];
+}
+
+function isLineEdge(value: unknown): value is GitLabLineRangeEdge {
+  return isRecord(value) && isOptionalNumber(value.old_line) && isOptionalNumber(value.new_line);
+}
+
+function isPosition(value: unknown): value is GitLabPosition {
+  if (!isRecord(value) || !isLineEdge(value)) return false;
+  if (!['head_sha', 'old_path', 'new_path'].every(key => isOptionalString(value[key])))
+    return false;
+  const range = value.line_range;
+  return (
+    range == null ||
+    (isRecord(range) &&
+      (range.start == null || isLineEdge(range.start)) &&
+      (range.end == null || isLineEdge(range.end)))
+  );
+}
+
+function isNote(value: unknown): value is GitLabNote {
+  if (!isRecord(value)) return false;
+  return (
+    (isNumericId(value.id) || (typeof value.id === 'string' && value.id.length > 0)) &&
+    isOptionalString(value.body) &&
+    (value.author == null || (isRecord(value.author) && isOptionalString(value.author.username))) &&
+    ['system', 'resolvable', 'resolved'].every(key => isOptionalBoolean(value[key])) &&
+    (value.position == null || isPosition(value.position))
+  );
+}
+
+function isDiscussion(value: unknown): value is GitLabDiscussion {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    Array.isArray(value.notes) &&
+    value.notes.every(isNote)
+  );
 }
 
 // --- CLI plumbing -------------------------------------------------------
@@ -116,6 +162,10 @@ function parseJsonDocuments(text: string): unknown[] {
         inString = false;
       }
       continue;
+    }
+    if (start < 0) {
+      if (/\s/.test(ch)) continue;
+      if (ch !== '[' && ch !== '{') throw new Error('unexpected text outside JSON document');
     }
     if (ch === '"') {
       inString = true;
@@ -190,7 +240,13 @@ function toAnchor(position: GitLabPosition | null | undefined): ForgeThreadAncho
   const startLine = lineOf(position.line_range?.start) ?? positionLine;
   const endLine = lineOf(position.line_range?.end) ?? positionLine;
 
-  const anchor: ForgeThreadAnchor = { filePath, side, startLine, endLine };
+  const usable = hasUsableLines(startLine, endLine);
+  const anchor: ForgeThreadAnchor = {
+    filePath,
+    side: usable ? side : 'new',
+    startLine: usable ? startLine : null,
+    endLine: usable ? endLine : null,
+  };
   if (typeof position.head_sha === 'string' && position.head_sha.length > 0) {
     anchor.headSha = position.head_sha;
   }
@@ -204,7 +260,7 @@ function toAnchor(position: GitLabPosition | null | undefined): ForgeThreadAncho
  * are ordered replies (GitLab document order is preserved verbatim).
  */
 function toThread(discussion: GitLabDiscussion): ForgeThread | null {
-  const notes = (discussion.notes ?? []).filter(note => note.system !== true);
+  const notes = discussion.notes.filter(note => note.system !== true);
   if (notes.length === 0) return null;
   const [rootNote, ...replyNotes] = notes;
   return {
@@ -236,7 +292,7 @@ export function createGitLabProvider(runCommand: ForgeCommandRunner): ForgeProvi
       } catch {
         throw unavailable(`glab api ${endpoint} returned unparseable JSON`);
       }
-      const targetBranch = (mr as { target_branch?: unknown })?.target_branch;
+      const targetBranch = isRecord(mr) ? mr.target_branch : undefined;
       if (typeof targetBranch !== 'string' || targetBranch.length === 0) {
         throw unavailable(`glab api ${endpoint} returned no target_branch`);
       }
@@ -247,23 +303,27 @@ export function createGitLabProvider(runCommand: ForgeCommandRunner): ForgeProvi
       const endpoint = `projects/${encodeProjectPath(url)}/merge_requests/${url.number}/discussions`;
       const stdout = await runGlabApi(runCommand, url, endpoint, ['--paginate']);
 
-      let discussions: GitLabDiscussion[];
+      let pages: unknown[];
       try {
-        const pages = parseJsonDocuments(stdout);
-        if (pages.length === 0 && stdout.trim() !== '') {
-          throw new Error('no JSON documents in output');
-        }
-        discussions = pages.flatMap(page =>
-          Array.isArray(page) ? (page as GitLabDiscussion[]) : []
-        );
+        pages = parseJsonDocuments(stdout);
+        if (pages.length === 0) throw new Error('no JSON documents in output');
       } catch {
         throw unavailable(`glab api ${endpoint} returned unparseable JSON`);
+      }
+      const discussions: GitLabDiscussion[] = [];
+      for (const page of pages) {
+        if (!Array.isArray(page) || !page.every(isDiscussion)) {
+          throw unavailable(
+            `glab api ${endpoint} returned an unexpected payload shape for discussions`
+          );
+        }
+        for (const discussion of page) discussions.push(discussion);
       }
 
       const includeResolved = options?.includeResolved === true;
       const threads: ForgeThread[] = [];
       for (const discussion of discussions) {
-        const notes = discussion.notes ?? [];
+        const notes = discussion.notes;
         if (!includeResolved && isDiscussionResolved(notes)) continue;
         const thread = toThread(discussion);
         if (thread) threads.push(thread);

@@ -6,6 +6,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import { AppConfig } from './types';
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { DEFAULT_CONFIG } from '../../react/src/config-defaults';
 
 // Shared with the renderer's ConfigProvider; see packages/react/src/config-defaults.ts.
@@ -32,6 +33,8 @@ export interface LoadedConfig {
 export interface LoadConfigOptions {
   cwd?: string;
   homeDir?: string;
+  /** Defaults to stderr; supply a callback to collect diagnostics without printing. */
+  reportDiagnostic?: DiagnosticReporter;
 }
 
 /** Configuration is small startup input, bounded before YAML parsing. */
@@ -39,8 +42,13 @@ export const MAX_CONFIG_BYTES = 1024 * 1024;
 
 const CONFIG_KEYS = Object.keys(defaults) as (keyof AppConfig)[];
 
-/** Project overrides user overrides defaults; an invalid value is not attributed to its file. */
+/**
+ * Project overrides user overrides defaults; an invalid value is not attributed to its file.
+ * The deprecated `output-format` key is retained verbatim for compatibility. Publication always
+ * produces XML. Unsupported values warn without rejecting the configuration or changing provenance.
+ */
 export function loadConfigWithProvenance(options: LoadConfigOptions = {}): LoadedConfig {
+  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
   let config = { ...defaults };
   const provenance = Object.fromEntries(CONFIG_KEYS.map(key => [key, 'default'])) as Record<
     keyof AppConfig,
@@ -60,14 +68,14 @@ export function loadConfigWithProvenance(options: LoadConfigOptions = {}): Loade
   for (const source of files) {
     if (!existsSync(source.path)) continue;
     try {
-      const override = loadYamlConfig(source.path, source.origin === 'project');
+      const override = loadYamlConfig(source.path, source.origin === 'project', reportDiagnostic);
       config = mergeConfig(config, override);
       for (const key of Object.keys(override) as (keyof AppConfig)[]) {
         provenance[key] = source.origin;
       }
       sources.push(source);
     } catch (error) {
-      console.error(
+      reportDiagnostic(
         `Warning: Failed to load ${source.origin} config from ${source.path}: ${error}`
       );
     }
@@ -76,11 +84,16 @@ export function loadConfigWithProvenance(options: LoadConfigOptions = {}): Loade
   return { config, provenance, sources };
 }
 
+/** Load merged configuration; `output-format` is deprecated and publication always uses XML. */
 export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
   return loadConfigWithProvenance(options).config;
 }
 
-function loadYamlConfig(path: string, noFollow: boolean): Partial<AppConfig> {
+function loadYamlConfig(
+  path: string,
+  noFollow: boolean,
+  reportDiagnostic: DiagnosticReporter
+): Partial<AppConfig> {
   // Project data cannot redirect startup reads through a link. User config may link
   // to another regular file, but the same byte and nonblocking limits apply.
   const read = readFileWithinBudgetSync(path, MAX_CONFIG_BYTES, { noFollow });
@@ -107,7 +120,7 @@ function loadYamlConfig(path: string, noFollow: boolean): Partial<AppConfig> {
     if (['light', 'dark', 'system'].includes(raw.theme)) {
       config.theme = raw.theme;
     } else {
-      console.error(`Warning: Invalid theme value "${raw.theme}", using default`);
+      reportDiagnostic(`Warning: Invalid theme value "${raw.theme}", using default`);
     }
   }
 
@@ -115,7 +128,7 @@ function loadYamlConfig(path: string, noFollow: boolean): Partial<AppConfig> {
     if (['split', 'unified'].includes(raw['diff-view'])) {
       config.diffView = raw['diff-view'];
     } else {
-      console.error(`Warning: Invalid diff-view value "${raw['diff-view']}", using default`);
+      reportDiagnostic(`Warning: Invalid diff-view value "${raw['diff-view']}", using default`);
     }
   }
 
@@ -125,6 +138,11 @@ function loadYamlConfig(path: string, noFollow: boolean): Partial<AppConfig> {
 
   if ('output-format' in raw && typeof raw['output-format'] === 'string') {
     config.outputFormat = raw['output-format'];
+    if (config.outputFormat !== 'xml') {
+      reportDiagnostic(
+        'Warning: output-format is deprecated; only XML output is supported. The configured value is retained for compatibility.'
+      );
+    }
   }
 
   if ('ignore' in raw && Array.isArray(raw.ignore)) {
@@ -148,7 +166,7 @@ function loadYamlConfig(path: string, noFollow: boolean): Partial<AppConfig> {
     if (usableCategories.length > 0) {
       config.categories = usableCategories;
     } else {
-      console.error(
+      reportDiagnostic(
         'Warning: Category configuration has no usable categories, using default categories'
       );
     }

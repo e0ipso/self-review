@@ -1,5 +1,6 @@
 // Git command execution. Helpers reject rather than exit; front ends report failures.
 
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { defaultGitRunner } from './command-runner';
 import { CommandCancelledError, isCommandCancelled } from './forge-provider';
 import type { ForgeCommandRunner } from './forge-provider';
@@ -16,6 +17,8 @@ export interface GitExecutionOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
   runner?: ForgeCommandRunner;
+  /** Defaults to stderr for compatibility; strict executeGit itself reports by throwing. */
+  reportDiagnostic?: DiagnosticReporter;
 }
 
 export class GitCommandError extends Error {
@@ -68,9 +71,11 @@ export async function getRepoRootAsync(
     return stripTrailingNewline(stdout);
   } catch (error) {
     if (error instanceof Error) {
-      console.error(`Error getting repository root: ${error.message}`);
+      (options.reportDiagnostic ?? stderrReporter)(
+        `Error getting repository root: ${error.message}`
+      );
     } else {
-      console.error('Error getting repository root: unknown error');
+      (options.reportDiagnostic ?? stderrReporter)('Error getting repository root: unknown error');
     }
     throw error;
   }
@@ -131,9 +136,9 @@ export async function runGitDiffAsync(
     return stdout;
   } catch (error) {
     if (error instanceof Error) {
-      console.error(`Error running git diff: ${error.message}`);
+      (options.reportDiagnostic ?? stderrReporter)(`Error running git diff: ${error.message}`);
     } else {
-      console.error('Error running git diff: unknown error');
+      (options.reportDiagnostic ?? stderrReporter)('Error running git diff: unknown error');
     }
     throw error;
   }
@@ -174,7 +179,7 @@ export async function getUntrackedFilesAsync(
     return await listUntrackedFilesAsync(repoRoot, options);
   } catch (error) {
     if (isCommandCancelled(error) && error.reason === 'aborted') throw error;
-    console.error(
+    (options.reportDiagnostic ?? stderrReporter)(
       `Warning: Failed to list untracked files: ${error instanceof Error ? error.message : 'unknown error'}`
     );
     return [];
