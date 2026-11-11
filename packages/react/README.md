@@ -43,11 +43,12 @@ and diagram rendering; those require the host's browser/Electron checks.
 
 ## Rendering work limits
 
-Raw diff highlighting admits at most 1000 lines and 100,000 input characters per file. No individual
-line or Markdown code fence longer than 2000 characters goes through Prism. Split view may highlight
-each admitted context line twice, at most 2000 calls and 200,000 characters. All skipped content
-remains literal escaped text. A status message identifies limited file highlighting. These are
-input/work bounds, not elapsed CPU deadlines for Prism's grammar implementation.
+Raw diff highlighting admits at most 1000 lines and 100,000 input characters per file. Both sides of
+a suggestion share the same budget. No individual line or Markdown code fence longer than 2000
+characters goes through Prism. Split view may highlight each admitted context line twice, at most
+2000 calls and 200,000 characters. All skipped content remains literal escaped text. A status
+message identifies limited file highlighting. These are input/work bounds, not elapsed CPU deadlines
+for Prism's grammar implementation.
 
 Raw rows use `content-visibility: auto` with an intrinsic line height to let supporting browsers
 defer offscreen layout/paint. Every source row, gutter and comment remains mounted, preserving the

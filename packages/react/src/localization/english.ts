@@ -310,4 +310,6 @@ export const ENGLISH = {
   'Diagram source': 'Diagram source',
   'Rendering diagram...': 'Rendering diagram...',
   'Mermaid diagram': 'Mermaid diagram',
+  'Highlighting is limited for this suggestion. All code remains available.':
+    'Highlighting is limited for this suggestion. All code remains available.',
 } satisfies Record<string, LocalizedMessage>;

@@ -54,3 +54,35 @@ describe('SuggestionBlock', () => {
     expect(additions).toHaveLength(4);
   });
 });
+
+it('bounds suggestion highlighting across both sides while retaining all literal code', () => {
+  const highlight = vi.spyOn(Prism, 'highlight');
+  const last = '<img src=x onerror=alert(1)>literal last line';
+  const original = Array.from({ length: 1005 }, (_, i) =>
+    i === 1004 ? last : `const a${i} = 1;`
+  ).join('\n');
+  const { container } = render(
+    <SuggestionBlock
+      suggestion={{ originalCode: original, proposedCode: 'proposed after budget' }}
+    />
+  );
+  expect(highlight.mock.calls.length).toBeLessThanOrEqual(1000);
+  expect(container.querySelectorAll('.suggestion-deletion')).toHaveLength(1005);
+  expect(container.querySelectorAll('.suggestion-deletion')[1004]?.textContent).toContain(last);
+  expect(container.querySelector('.suggestion-addition')?.textContent).toContain(
+    'proposed after budget'
+  );
+  expect(container.querySelector('img')).toBeNull();
+  expect(screen.getByRole('status').textContent).toContain('All code remains available');
+});
+
+it('never highlights an oversized suggestion line', () => {
+  const highlight = vi.spyOn(Prism, 'highlight');
+  const source = '<script>literal</script>' + 'x'.repeat(2000);
+  const { container } = render(
+    <SuggestionBlock suggestion={{ originalCode: source, proposedCode: source }} />
+  );
+  expect(highlight).not.toHaveBeenCalled();
+  expect(container.querySelector('script')).toBeNull();
+  expect(container.querySelector('.suggestion-addition')?.textContent).toBe('+' + source);
+});
