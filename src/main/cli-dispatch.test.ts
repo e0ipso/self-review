@@ -303,6 +303,36 @@ describe('dispatchCli', () => {
     await vi.waitFor(() => expect(deps.exit).toHaveBeenCalledWith(143));
   });
 
+  it.each([
+    { signal: 'SIGINT' as const, code: 130 },
+    { signal: 'SIGTERM' as const, code: 143 },
+  ])(
+    'exits $code if $signal arrives during a save or cleanup that resolves normally',
+    async ({ signal, code }) => {
+      let handler!: (signal: NodeJS.Signals) => void;
+      let finish!: () => void;
+      const unsubscribe = vi.fn();
+      const deps = makeDeps({
+        parseArgs: () =>
+          makeArgs({ subcommand: 'fetch-comments', remoteUrl: 'https://host/o/r/pull/1' }),
+        onTerminationSignal: h => {
+          handler = h;
+          return unsubscribe;
+        },
+        fetchComments: () =>
+          new Promise<void>(resolve => {
+            finish = resolve;
+          }),
+      });
+      dispatchCli(deps);
+      handler(signal);
+      expect(deps.exit).not.toHaveBeenCalled();
+      finish();
+      await vi.waitFor(() => expect(deps.exit).toHaveBeenCalledWith(code));
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+    }
+  );
+
   it('stops listening for termination signals once the run has settled', async () => {
     const unsubscribe = vi.fn();
     const deps = makeDeps({

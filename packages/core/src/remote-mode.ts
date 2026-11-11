@@ -118,8 +118,13 @@ export interface RemoteSessionDeps {
   }>;
 }
 
+const providerFactories: Record<ForgeName, (runner: ForgeCommandRunner) => ForgeProvider> = {
+  github: createGitHubProvider,
+  gitlab: createGitLabProvider,
+};
+
 function defaultCreateProvider(forge: ForgeName, runner: ForgeCommandRunner): ForgeProvider {
-  return forge === 'github' ? createGitHubProvider(runner) : createGitLabProvider(runner);
+  return providerFactories[forge](runner);
 }
 
 /** Puts `gh`/`glab` under the session's bounds too, so a startup deadline can reach them. */
@@ -154,6 +159,11 @@ export const defaultRemoteSessionDeps: RemoteSessionDeps = {
     loadGitDiffWithUntracked(gitDiffArgs, cwd, {
       includeUntracked: false,
       signal: options?.signal,
+      runner: (command, args, execution) =>
+        defaultGitRunner(command, args, {
+          ...execution,
+          gitEnvironment: 'isolated',
+        }),
     }),
 };
 
@@ -233,59 +243,61 @@ export async function startRemoteSession(
 
   // The caller gets the cleanup handle only with a session, so anything ending the call before that
   // releases here.
-  let fetchedThreads: ForgeThread[] = [];
-  let threadSyncAvailable = false;
-  if (cliAvailable || threadsRequired) {
-    try {
-      fetchedThreads = await provider.fetchThreads(forgeUrl, {
-        includeResolved: options.includeResolved ?? false,
-      });
-      threadSyncAvailable = true;
-    } catch (error) {
-      // A cancelled fetch ends the session under either policy.
-      if (threadsRequired || isCommandCancelled(error)) {
-        await materialized.cleanup();
-        if (error instanceof ForgeCliUnavailableError) {
-          throw new Error(
-            `Cannot fetch discussion threads: ${error.message}\n` +
-              `This requires the ${error.cli} CLI to be installed and authenticated.`
-          );
+  try {
+    let fetchedThreads: ForgeThread[] = [];
+    let threadSyncAvailable = false;
+    if (cliAvailable || threadsRequired) {
+      try {
+        fetchedThreads = await provider.fetchThreads(forgeUrl, {
+          includeResolved: options.includeResolved ?? false,
+          reviewedHeadSha: materialized.headSha,
+        });
+        threadSyncAvailable = true;
+      } catch (error) {
+        // A cancelled fetch ends the session under either policy.
+        if (threadsRequired || isCommandCancelled(error)) {
+          if (error instanceof ForgeCliUnavailableError) {
+            throw new Error(
+              `Cannot fetch discussion threads: ${error.message}\n` +
+                `This requires the ${error.cli} CLI to be installed and authenticated.`
+            );
+          }
+          throw error;
         }
-        throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(
+          `[remote] thread sync unavailable — continuing without forge threads: ${message}`
+        );
       }
-      const message = error instanceof Error ? error.message : String(error);
+    } else {
       console.error(
-        `[remote] thread sync unavailable — continuing without forge threads: ${message}`
+        '[remote] thread sync unavailable — forge CLI missing, continuing without forge threads.'
       );
     }
-  } else {
-    console.error(
-      '[remote] thread sync unavailable — forge CLI missing, continuing without forge threads.'
-    );
-  }
-  if (signal?.aborted) {
-    await materialized.cleanup();
     throwIfAborted(signal, 'threads');
-  }
 
-  return {
-    forgeUrl,
-    repoPath: materialized.repoPath,
-    gitDiffArgs: [`${materialized.baseSha}...${materialized.headSha}`],
-    mode: materialized.mode,
-    cleanup: materialized.cleanup,
-    remote: {
-      remoteUrl: url,
-      remoteBaseSha: materialized.baseSha,
-      remoteHeadSha: materialized.headSha,
-      remoteForge: forgeUrl.forge,
-      threadSyncAvailable,
-      // A temporary clone is deleted on exit, so nothing may be written
-      // into it; the front end needs the fact, not the path.
-      temporaryClone: materialized.mode === 'temp-clone',
-    },
-    fetchedThreads,
-  };
+    return {
+      forgeUrl,
+      repoPath: materialized.repoPath,
+      gitDiffArgs: [`${materialized.baseSha}...${materialized.headSha}`],
+      mode: materialized.mode,
+      cleanup: materialized.cleanup,
+      remote: {
+        remoteUrl: url,
+        remoteBaseSha: materialized.baseSha,
+        remoteHeadSha: materialized.headSha,
+        remoteForge: forgeUrl.forge,
+        threadSyncAvailable,
+        // A temporary clone is deleted on exit, so nothing may be written
+        // into it; the front end needs the fact, not the path.
+        temporaryClone: materialized.mode === 'temp-clone',
+      },
+      fetchedThreads,
+    };
+  } catch (error) {
+    await materialized.cleanup();
+    throw error;
+  }
 }
 
 export interface RemoteReviewLoad {

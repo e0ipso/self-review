@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { defaultGitRunner, runBufferedCommand } from './command-runner';
@@ -7,6 +7,7 @@ import { gitSync } from './test-support/git-env';
 import { getRepoRootAsync } from './git';
 import { readReviewedContent } from './snapshot-reader';
 import { resolveLocalSourceIdentity, resolveGitSourceIdentity } from './source-identity';
+import { execFileSync } from 'child_process';
 import type { ForgeCommandOptions } from './forge-provider';
 
 const directories: string[] = [];
@@ -115,4 +116,60 @@ it('honors snapshot cancellation for physical files as well as git blobs', async
   await expect(
     readReviewedContent(source, 'note.txt', 'new', { signal: AbortSignal.abort() })
   ).rejects.toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+});
+
+// Both transports must wait for helpers, even if their parent exits on TERM and
+// the helper ignores TERM or has closed the inherited pipes.
+describe.each([
+  { name: 'text', run: defaultGitRunner },
+  { name: 'binary', run: runBufferedCommand },
+])('$name descendant lifetime', ({ run }) => {
+  it.each(['abort', 'timeout', 'overflow'])(
+    'terminates a persistent credential helper on %s',
+    async reason => {
+      const root = directory();
+      const marker = join(root, 'helper.pid');
+      const helper = `process.on('SIGTERM',()=>{});require('fs').writeFileSync(process.argv[1],String(process.pid));setInterval(()=>{},1000);`;
+      const parent = `const {spawn}=require('child_process');spawn(process.execPath,['-e',${JSON.stringify(helper)},process.argv[1]],{stdio:${JSON.stringify(reason === 'abort' ? 'inherit' : 'ignore')}});setInterval(()=>{if(require('fs').existsSync(process.argv[1]))process.stdout.write('ready\\n')},10);`;
+      const controller = new AbortController();
+      const promise = run(process.execPath, ['-e', parent, marker], {
+        signal: controller.signal,
+        ...(reason === 'timeout' ? { timeoutMs: 1_000 } : {}),
+        ...(reason === 'overflow' ? { maxOutputBytes: 12 } : {}),
+      });
+      const observed = promise.catch(error => error);
+      let pid: number | undefined;
+      const alive = () => {
+        if (pid === undefined) return false;
+        try {
+          const state = execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], {
+            encoding: 'utf8',
+          }).trim();
+          return state !== '' && !state.startsWith('Z');
+        } catch {
+          return false;
+        }
+      };
+      try {
+        await vi.waitFor(() => {
+          pid = Number(readFileSync(marker, 'utf8'));
+          expect(alive()).toBe(true);
+        });
+        if (reason === 'abort') controller.abort();
+        const error = await observed;
+        expect(error).toMatchObject(
+          reason === 'overflow'
+            ? { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }
+            : { name: 'CommandCancelledError', reason: reason === 'abort' ? 'aborted' : 'timeout' }
+        );
+        expect(alive()).toBe(false);
+      } finally {
+        controller.abort();
+        // The marker is written by this test's helper; never use a process-name kill.
+        if (alive()) process.kill(pid!, 'SIGKILL');
+        await observed;
+      }
+    },
+    10_000
+  );
 });
