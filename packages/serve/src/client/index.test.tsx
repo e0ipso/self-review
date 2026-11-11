@@ -139,6 +139,19 @@ async function mountWithUnsavedWork() {
   return view;
 }
 
+it('keeps the adapter alive through StrictMode effect replay', async () => {
+  const view = render(
+    <React.StrictMode>
+      <App capability={CAPABILITY} />
+    </React.StrictMode>
+  );
+  await view.findByTestId('finish-review-btn', {}, { timeout: 2_000 });
+  await waitFor(() => expect(closeIsGuarded()).toBe(true));
+  expect(view.getByText('Needs a test.')).toBeTruthy();
+  fireEvent.click(view.getByTestId('finish-review-btn'));
+  expect(await view.findByText('Review saved', {}, { timeout: 2_000 })).toBeTruthy();
+});
+
 describe('session capability', () => {
   afterEach(() => {
     window.history.replaceState(null, '', '/');
@@ -309,7 +322,7 @@ describe('serve client', () => {
   );
 });
 
-it('keeps comments and the close guard after an unknown save and prevents resubmission', async () => {
+it('keeps an unknown save guarded until the reviewer explicitly confirms a retry is safe', async () => {
   const view = await mountWithUnsavedWork();
   let submissions = 0;
   route = async (url, init) => {
@@ -328,4 +341,26 @@ it('keeps comments and the close guard after an unknown save and prevents resubm
   expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(false);
   expect(closeIsGuarded()).toBe(true);
   expect(submissions).toBe(1);
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  try {
+    fireEvent.click(view.getByRole('button', { name: 'Allow retry after checking output' }));
+    expect(view.queryByTestId('finish-review-btn')).toBeNull();
+    expect(submissions).toBe(1);
+    confirm.mockReturnValue(true);
+    fireEvent.click(view.getByRole('button', { name: 'Allow retry after checking output' }));
+    expect(view.getByTestId('finish-review-btn')).toBeTruthy();
+    expect(view.getByText('Needs a test.')).toBeTruthy();
+    expect(closeIsGuarded()).toBe(true);
+    expect(submissions).toBe(1);
+    route = (url, init) => {
+      if (url.pathname === '/api/review') submissions++;
+      return realFetch(url, init);
+    };
+    fireEvent.click(view.getByTestId('finish-review-btn'));
+    expect(await view.findByText('Review saved', {}, { timeout: 10_000 })).toBeTruthy();
+    expect(submissions).toBe(2);
+    expect(fs.existsSync(outputPath)).toBe(true);
+  } finally {
+    confirm.mockRestore();
+  }
 });

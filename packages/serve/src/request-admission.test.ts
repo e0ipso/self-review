@@ -81,6 +81,27 @@ async function setup(options: AdmissionOptions = {}) {
 }
 
 describe('HTTP operation ownership', () => {
+  it('aborts an admitted publication when its peer disconnects', async () => {
+    const { post, operations } = await setup();
+    const pending = gate();
+    let signal: AbortSignal | undefined;
+    const publish = vi
+      .spyOn(operations, 'publishReview')
+      .mockImplementation(async (_state, options) => {
+        signal = options?.signal;
+        await pending.promise;
+        signal?.throwIfAborted();
+        return { outputPath: '/review.xml' };
+      });
+    const controller = new AbortController();
+    const result = post('review', state, controller.signal).catch(error => error);
+    await vi.waitFor(() => expect(publish).toHaveBeenCalledOnce());
+    controller.abort();
+    await result;
+    await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+    pending.resolve();
+  });
+
   it('constructs from bound operations without a dummy session or output', async () => {
     const { get } = await setup();
     expect((await get('diff')).status).toBe(200);

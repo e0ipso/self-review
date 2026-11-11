@@ -57,11 +57,10 @@ export function createReviewOperations(
     applySuggestionForSession: (request, options) =>
       applyCompatibleSuggestion(session, request, options),
     submitReviewState: state => core.submitReviewState(session, state),
-    publishReview: (state: ReviewState) =>
-      core.publishReview(
-        state,
-        output.path,
-        core.publishOptionsFor(output, session.attachmentOrigins)
-      ),
+    publishReview: (state: ReviewState, options) =>
+      core.publishReview(state, output.path, {
+        ...core.publishOptionsFor(output, session.attachmentOrigins),
+        signal: options?.signal,
+      }),
   };
 }

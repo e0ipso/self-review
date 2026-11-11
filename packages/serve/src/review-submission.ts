@@ -7,7 +7,10 @@ import type { ReviewSubmitAck, ReviewSubmitFailure } from './protocol';
 /** A publisher resolves only after commit; a refusal throws without replacing the previous file. */
 export interface SubmissionOperations {
   submitReviewState: (state: ReviewState) => void;
-  publishReview: (state: ReviewState) => Promise<{ outputPath: string }>;
+  publishReview: (
+    state: ReviewState,
+    options?: { signal?: AbortSignal }
+  ) => Promise<{ outputPath: string }>;
 }
 
 export class ReviewSubmission {
@@ -31,10 +34,13 @@ export class ReviewSubmission {
     if (this.state === 'publishing') this.state = 'open';
   }
 
-  async publish(state: ReviewState): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
+  async publish(
+    state: ReviewState,
+    options?: { signal?: AbortSignal }
+  ): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
     this.operations.submitReviewState(state);
     try {
-      const { outputPath } = await this.operations.publishReview(state);
+      const { outputPath } = await this.operations.publishReview(state, options);
       this.state = 'published';
       console.error(`[serve] Review written to ${outputPath}`);
       return { ok: true, outputPath };

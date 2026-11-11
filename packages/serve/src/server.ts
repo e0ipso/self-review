@@ -207,7 +207,7 @@ const routes: Record<string, RouteHandler> = {
         return;
       }
       if (signal.aborted) throw signal.reason;
-      const outcome = await submission.publish(parsed.value);
+      const outcome = await submission.publish(parsed.value, { signal });
       if (outcome.ok) {
         published(res);
         sendJson(res, 200, outcome);

@@ -4,9 +4,10 @@
 // under `sideEffects`; without this import the UI renders unstyled.
 // The capability is taken from the launch URL once, before React mounts, then erased from the address bar.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  Button,
   ImportDiagnosticsBanner,
   ReviewPanel,
   Toolbar,
@@ -17,7 +18,9 @@ import type { ReviewPanelHandle } from '@self-review/react';
 import type { AppConfig, OutputPathInfo } from '@self-review/core';
 import '@self-review/react/styles.css';
 import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
+import type { FetchReviewAdapter } from './adapter';
 import { createServeRequester } from './requester';
+import type { ServeRequester } from './requester';
 import { REVIEW_TOO_LARGE_CODE, parseCapabilityFragment } from '../protocol';
 
 // Removed with `history.replaceState`, so it leaves the history entry too. Null after a reload or a retyped address.
@@ -172,8 +175,9 @@ function SubmitFailureNotice({ failure }: { failure: SubmitFailure }) {
       {failure.uncertain && (
         <div>
           Your comments are still here. Check the terminal and the output file on the server. Stop
-          the original process before restarting with --resume-from if the file was saved. Finish
-          Review is unavailable in this page to prevent a duplicate submission.
+          the original process before restarting with --resume-from if the file was saved. If it was
+          not saved and the original server is still running, you can allow a retry below. Keep this
+          page open to preserve unsaved comments. No submission is retried automatically.
         </div>
       )}
       {fixable && (
@@ -209,18 +213,25 @@ export interface AppProps {
   capability: string | null;
 }
 
-export function App({ capability }: AppProps) {
-  // One adapter per page; none without a capability, since every request would be refused.
-  const requester = useMemo(
-    () => (capability === null ? null : createServeRequester(capability)),
-    [capability]
-  );
-  const adapter = useMemo(
-    () =>
-      capability === null || requester === null ? null : createFetchAdapter(capability, requester),
-    [capability, requester]
-  );
-  useEffect(() => () => adapter?.dispose(), [adapter]);
+export function App(props: AppProps) {
+  return <ReviewApp key={props.capability} {...props} />;
+}
+
+function ReviewApp({ capability }: AppProps) {
+  const [connection, setConnection] = useState<{
+    requester: ServeRequester;
+    adapter: FetchReviewAdapter;
+  } | null>(null);
+  // Each effect setup owns fresh resources, including React's setup/cleanup replay.
+  useEffect(() => {
+    if (capability === null) return;
+    const requester = createServeRequester(capability);
+    const adapter = createFetchAdapter(capability, requester);
+    setConnection({ requester, adapter });
+    return () => adapter.dispose();
+  }, [capability]);
+  const requester = connection?.requester ?? null;
+  const adapter = connection?.adapter ?? null;
   const reviewRef = useRef<ReviewPanelHandle>(null);
   const submissionPending = useRef(false);
 
@@ -316,7 +327,7 @@ export function App({ capability }: AppProps) {
   // All hooks stay above this line: an early return ahead of an effect made React throw on the shorter hook list.
 
   // No key and a refused key get the same page: the fix is the printed URL either way.
-  if (adapter === null || configError?.unauthorized) {
+  if (capability === null || configError?.unauthorized) {
     return <CapabilityNotice />;
   }
 
@@ -333,7 +344,7 @@ export function App({ capability }: AppProps) {
     return <Saved outputPath={outputPathInfo?.resolvedOutputPath ?? null} />;
   }
 
-  if (!config) return null;
+  if (!config || !adapter) return null;
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -355,6 +366,25 @@ export function App({ capability }: AppProps) {
           <UnsavedWork onChange={markUnsaved} />
           <OutputPath info={outputPathInfo} />
           <ImportDiagnosticsBanner />
+          {status === 'uncertain' && (
+            <div className='p-2'>
+              <Button
+                variant='outline'
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Have you checked the terminal and output file and confirmed that this review was not saved? Only allow a retry if the original server is still running.'
+                    )
+                  ) {
+                    setStatus('reviewing');
+                    setFailure(null);
+                  }
+                }}
+              >
+                Allow retry after checking output
+              </Button>
+            </div>
+          )}
           <Toolbar
             onFinishReview={status === 'uncertain' ? undefined : () => void handleFinishReview()}
           />
