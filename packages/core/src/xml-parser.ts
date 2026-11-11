@@ -89,6 +89,9 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
     parseTagValue: false,
     parseAttributeValue: false,
     processEntities: false,
+    preserveOrder: true,
+    cdataPropName: '#cdata',
+    removeNSPrefix: true,
   });
 
   // The parser is lenient (garbage still yields an object), so check well-formedness first for a
@@ -102,7 +105,7 @@ export function parseReviewXmlString(xmlContent: string): ParsedReview {
 
   let result: Record<string, unknown>;
   try {
-    result = parser.parse(xmlContent) as Record<string, unknown>;
+    result = orderedChildren(parser.parse(xmlContent) as OrderedNode[]);
   } catch (error) {
     throw new ReviewXmlError('parse-failed', `Invalid XML: ${messageOf(error)}`, { cause: error });
   }
@@ -194,7 +197,7 @@ function parseComment(
   const reviewComment: ReviewComment = {
     id: generateId(),
     filePath,
-    lineRange,
+    lineRange: reason === null ? lineRange : null,
     body,
     category: text(comment, 'category') ?? '',
     suggestion: suggestion?.ok ? suggestion.suggestion : null,
@@ -299,8 +302,43 @@ function attribute(node: Record<string, unknown>, key: string): string | undefin
 /** Decoded child text, or undefined when absent or not plain text. */
 function text(node: Record<string, unknown>, key: string): string | undefined {
   const raw = node[key];
-  if (typeof raw === 'string') return decodeXmlEntities(raw);
+  if (typeof raw === 'string') return raw;
   return undefined;
+}
+
+/** Ordered parsing keeps CDATA distinct until text has been decoded exactly once. */
+type OrderedNode = { [key: string]: OrderedNode[] | string | Record<string, unknown> };
+
+function orderedChildren(children: OrderedNode[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const child of children) {
+    const name = Object.keys(child).find(key => key !== ':@');
+    if (!name || name.startsWith('#') || name.startsWith('?')) continue;
+    const segments = child[name] as OrderedNode[];
+    const attributes = child[':@'] as Record<string, unknown> | undefined;
+    const hasElements = segments.some(segment =>
+      Object.keys(segment).some(key => key !== '#text' && key !== '#cdata')
+    );
+    const value =
+      hasElements || attributes
+        ? { ...orderedChildren(segments), ...attributes }
+        : segments
+            .map(segment => {
+              if ('#cdata' in segment) {
+                return (segment['#cdata'] as OrderedNode[]).map(part => part['#text']).join('');
+              }
+              return decodeXmlEntities(String(segment['#text'] ?? ''));
+            })
+            .join('');
+    if (name in result) {
+      const previous = result[name];
+      if (Array.isArray(previous)) previous.push(value);
+      else result[name] = [previous, value];
+    } else {
+      result[name] = value;
+    }
+  }
+  return result;
 }
 
 /** Absent means human, so an empty author reads as absent. */

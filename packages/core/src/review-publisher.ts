@@ -3,6 +3,7 @@
 // stage new assets, then rename the XML into place; a failure before the rename leaves the old files.
 
 import * as path from 'node:path';
+import { validateReviewForSerialization } from './review-state-validation';
 import { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
 import { checkWritability } from './fs-utils';
 import { ASSET_DIR_NAME, serializeReview } from './xml-serializer';
@@ -107,6 +108,7 @@ export async function publishReview(
   let xml: string;
   let assets: PlannedAsset[];
   try {
+    state = validateReviewForSerialization(state);
     const publishable = options.attachmentOrigins
       ? await relocateAttachments(state, options.attachmentOrigins, target)
       : state;

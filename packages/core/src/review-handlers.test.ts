@@ -230,6 +230,59 @@ describe('review-handlers', () => {
       expect(getFileHunks(sessionB, 'src/app.ts')).toEqual([makeHunk()]);
     });
 
+    it('drops an expansion when the review is replaced during git execution', async () => {
+      const session = createReviewSession();
+      commitDiffData(session, makeModifiedGitPayload('src/app.ts'), makeIdentity('git', '/repo'));
+      let finish!: (diff: string) => void;
+      vi.mocked(runGitDiffAsync).mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            finish = resolve;
+          })
+      );
+      const pending = expandContext(session, { filePath: 'src/app.ts', contextLines: 10 });
+      await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+      const replacement = makeGitPayload('different.ts');
+      const identity = makeIdentity('directory', '/different');
+      commitDiffData(session, replacement, identity);
+      finish(EXPANDED_DIFF);
+      expect(await pending).toBeNull();
+      expect(session.diffData).toBe(replacement);
+      expect(session.sourceIdentity).toBe(identity);
+      expect([...session.reviewedPaths]).toEqual(['different.ts']);
+    });
+
+    it('retains overlapping expansions of different files', async () => {
+      const session = createReviewSession();
+      const payload = makeModifiedGitPayload('src/app.ts');
+      payload.files.push(makeModifiedGitPayload('src/other.ts').files[0]);
+      commitDiffData(session, payload, makeIdentity('git', '/repo'));
+      let first!: (diff: string) => void;
+      let second!: (diff: string) => void;
+      vi.mocked(runGitDiffAsync)
+        .mockImplementationOnce(
+          () =>
+            new Promise(resolve => {
+              first = resolve;
+            })
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise(resolve => {
+              second = resolve;
+            })
+        );
+      const a = expandContext(session, { filePath: 'src/app.ts', contextLines: 10 });
+      const b = expandContext(session, { filePath: 'src/other.ts', contextLines: 10 });
+      await vi.waitFor(() => expect(second).toBeTypeOf('function'));
+      first(EXPANDED_DIFF);
+      const resultA = await a;
+      second(EXPANDED_DIFF.replaceAll('src/app.ts', 'src/other.ts'));
+      const resultB = await b;
+      expect(getFileHunks(session, 'src/app.ts')).toEqual(resultA?.hunks);
+      expect(getFileHunks(session, 'src/other.ts')).toEqual(resultB?.hunks);
+    });
+
     it('re-runs the session argv with its argument boundaries intact', async () => {
       vi.mocked(runGitDiffAsync).mockResolvedValue(EXPANDED_DIFF);
 

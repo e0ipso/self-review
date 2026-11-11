@@ -7,6 +7,7 @@
 // layer (src/main/ipc-handlers.ts) owns the transport and does the sending.
 
 import * as fs from 'fs';
+import { validateReviewState } from './review-state-validation';
 import path from 'path';
 import {
   DiffLoadPayload,
@@ -29,11 +30,14 @@ import {
 } from './types';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { singleFileRediffArgs } from './git-diff-args';
+import { runGitDiffAsync } from './git';
+import { parseDiff } from './diff-parser';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
 import { applySuggestion } from './apply-suggestion';
 import { MAX_GIT_DIFF_OUTPUT_BYTES, MAX_IMAGE_BYTES } from './input-budgets';
 import { isPreviewableImage } from './file-type-utils';
 import { readReviewedContent } from './snapshot-reader';
+import type { ReviewedSnapshot } from './snapshot-reader';
 import { resolveLocalSourceIdentity, rootRelativeReviewedPath } from './source-identity';
 import {
   authorizeAttachmentReference,
@@ -240,7 +244,7 @@ export async function loadImage(
 }
 
 /** Zero when unreadable; the caller treats that as unknown. */
-async function countReviewedLines(session: ReviewSession, file: DiffFile): Promise<number> {
+async function countReviewedLines(session: ReviewedSnapshot, file: DiffFile): Promise<number> {
   const side = file.newPath ? 'new' : 'old';
   const filePath = side === 'new' ? file.newPath : file.oldPath;
   const result = await readReviewedContent(session, filePath, side, {
@@ -290,6 +294,7 @@ export function getConfigLoad(
  * Store a review state submitted by the front end on the session.
  */
 export function submitReviewState(session: ReviewSession, state: ReviewState): void {
+  state = validateReviewState(state);
   console.error(
     '[review] Review state submitted:',
     JSON.stringify({
@@ -586,10 +591,13 @@ export async function expandContext(
     return null;
   }
 
+  // commitDiffData installs a fresh authorization set even when the payload/identity are reused.
+  const reviewedPaths = session.reviewedPaths;
+  const snapshot: ReviewedSnapshot = { sourceIdentity: identity, reviewedPaths };
+  const isCurrent = () =>
+    session.reviewedPaths === reviewedPaths && session.sourceIdentity === identity;
   try {
-    const { runGitDiffAsync } = await import('./git');
-    const { parseDiff } = await import('./diff-parser');
-
+    if (!isCurrent()) return null;
     const rediff = singleFileRediffArgs(identity.gitDiffArgv);
     const prefix = identity.pathPrefix;
     const paths = [...new Set([target.oldPath, target.newPath].filter(p => p !== ''))];
@@ -603,6 +611,7 @@ export async function expandContext(
 
     // Never the process cwd.
     const rawDiff = await runGitDiffAsync(expandArgs, identity.sourceRoot);
+    if (!isCurrent()) return null;
     const expandedFile = parseDiff(rawDiff).find(
       f => f.oldPath === target.oldPath && f.newPath === target.newPath
     );
@@ -612,11 +621,16 @@ export async function expandContext(
     }
 
     // The reviewed side's length, for gap detection; zero keeps the bars visible.
-    const totalLines = await countReviewedLines(session, target);
+    const totalLines = await countReviewedLines(snapshot, target);
+    if (!isCurrent() || !session.diffData) return null;
 
     session.diffData = {
-      ...diffData,
-      files: diffData.files.map(f => (f === target ? { ...f, hunks: expandedFile.hunks } : f)),
+      ...session.diffData,
+      files: session.diffData.files.map(f =>
+        f.oldPath === target.oldPath && f.newPath === target.newPath
+          ? { ...f, hunks: expandedFile.hunks }
+          : f
+      ),
     };
 
     return { hunks: expandedFile.hunks, totalLines };

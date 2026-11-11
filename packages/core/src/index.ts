@@ -45,6 +45,9 @@ export type {
 export { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
 export type { DiffParseResult } from './diff-parser';
 
+// Transport-neutral runtime review DTO validation
+export { validateReviewState } from './review-state-validation';
+
 // XML I/O
 export { serializeReview, ASSET_DIR_NAME } from './xml-serializer';
 export type {

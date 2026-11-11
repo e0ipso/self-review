@@ -390,8 +390,9 @@ export function atomicReplace(
 
   const random = options.randomName ?? defaultRandomName;
   const temp = path.join(path.dirname(target), `.${path.basename(target)}.${random()}.tmp`);
+  let identity: FileIdentity;
   try {
-    writeExclusiveNoFollow(temp, bytes, {
+    identity = writeExclusiveNoFollow(temp, bytes, {
       fs,
       exactMode: options.preserveMode && existing ? existing.mode : undefined,
       exactOwner,
@@ -411,7 +412,8 @@ export function atomicReplace(
     }
     throw error;
   }
-  return { identity: finishReplace(temp, target, fs), replaced: existing !== null };
+  finishReplace(temp, target, fs);
+  return { identity, replaced: existing !== null };
 }
 
 /** Undefined when the new file already gets the right owner; only root may give one away. */
@@ -433,7 +435,7 @@ function ownerToRestore(
   return { uid: existing.uid, gid: existing.gid };
 }
 
-function finishReplace(temp: string, target: string, fs: FsLayer): FileIdentity {
+function finishReplace(temp: string, target: string, fs: FsLayer): void {
   try {
     fs.renameSync(temp, target);
   } catch (error) {
@@ -441,7 +443,7 @@ function finishReplace(temp: string, target: string, fs: FsLayer): FileIdentity 
     throw toSafeFsError(error, target, 'replace');
   }
   syncDirectoryQuietly(path.dirname(target), fs);
-  return guarded(target, 'inspect', () => snapshotIdentity(fs.lstatSync(target)));
+  // Rename commits the inode we already inspected. No fallible work may follow it.
 }
 
 /** `lstat` a replace target under the policy of {@link atomicReplace}; null when absent. */

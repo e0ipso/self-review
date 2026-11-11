@@ -139,6 +139,53 @@ describe('publishReview', () => {
     expect(listDir(tmp)).toEqual([ASSETS, 'review.xml']);
   });
 
+  it('keeps the committed XML and assets when inspection fails after rename', async () => {
+    let committed = false;
+    const layer: FsLayer = {
+      ...nodeFsLayer,
+      renameSync(from, to) {
+        nodeFsLayer.renameSync(from, to);
+        committed = true;
+      },
+      lstatSync(target) {
+        if (committed) throw errno('EIO');
+        return nodeFsLayer.lstatSync(target);
+      },
+    };
+    const result = await publishReview(withAttachment(), outputPath, { ...explicit, fs: layer });
+    expect(committed).toBe(true);
+    const xml = fs.readFileSync(outputPath, 'utf-8');
+    expect(result.assetPaths).toHaveLength(1);
+    for (const relative of assetPathsIn(xml)) {
+      expect(fs.readFileSync(path.join(tmp, relative))).toEqual(Buffer.from(PNG));
+    }
+  });
+
+  it.each([
+    ['reversed', { side: 'new', start: 9, end: 4 }],
+    ['unsafe', { side: 'new', start: 1, end: Number.MAX_SAFE_INTEGER + 1 }],
+    ['unanchored suggestion', null],
+  ] as const)('rejects %s anchors before staging assets', async (_name, lineRange) => {
+    const state = withAttachment();
+    state.files[0].comments[0].lineRange = lineRange;
+    state.files[0].comments[0].suggestion = { originalCode: 'a', proposedCode: 'b' };
+    const error = await publishError(state, outputPath, explicit);
+    expect(error.code).toBe('validation-failed');
+    expect(error.cause).toMatchObject({ name: 'ReviewXmlError', code: 'invalid-state' });
+    expect(listDir(tmp)).toEqual([]);
+  });
+
+  it('reports malformed nested state as validation failure before reading attachments', async () => {
+    const state = withAttachment();
+    const invalid: unknown = { ...state, files: [{ ...state.files[0], comments: null }] };
+    const error = await publishError(invalid as ReviewState, outputPath, {
+      ...explicit,
+      attachmentOrigins: new Map([['.self-review-assets/a.png', '/missing/a.png']]),
+    });
+    expect(error.code).toBe('validation-failed');
+    expect(listDir(tmp)).toEqual([]);
+  });
+
   it('never overwrites an asset the previous document references', async () => {
     const previous = await publishPrevious();
 
