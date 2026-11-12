@@ -58,8 +58,9 @@ export class RequestAdmission {
     res: http.ServerResponse,
     kind: RequestKind,
     work: (signal: AbortSignal) => Promise<void>,
-    timeout: () => void
+    timeout: (elapsedMs?: number) => void
   ): void {
+    const started = performance.now();
     const controller = new AbortController();
     const exclusive = kind === 'publication' || kind === 'mutation';
     if (exclusive) this.exclusive = true;
@@ -71,8 +72,10 @@ export class RequestAdmission {
     req.once('aborted', abort);
     res.once('close', onClose);
     const timer = setTimeout(() => {
+      // Disconnect and shutdown already own cancellation; they are not deadlines.
+      if (controller.signal.aborted) return;
       controller.abort(new Error('Review request deadline exceeded.'));
-      timeout();
+      timeout(Math.max(0, Math.round(performance.now() - started)));
     }, this.options.requestTimeoutMs ?? 60_000);
     const flushed = new Promise<void>(resolve => {
       const finish = () => {

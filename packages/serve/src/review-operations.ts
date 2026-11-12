@@ -80,6 +80,7 @@ export function createPublicationOperations(
       return core.publishReview(owned, output.path, {
         ...core.publishOptionsFor(output, session.attachmentOrigins),
         signal: options?.signal,
+        reportDiagnostic: report,
       });
     },
   };

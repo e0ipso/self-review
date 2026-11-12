@@ -201,7 +201,10 @@ Each admitted request has a 60-second server deadline. Expiry cancels supported 
 not been sent, or closes a response already in progress. Disconnecting cancels the request's owned
 work too. An operation keeps its admission slot until both work and response settle, including when
 a filesystem operation ignores cancellation. Shutdown stops accepting and cancels admitted
-operations, then drains them for up to five seconds.
+operations, then drains them for up to five seconds. Each expiry reports one bounded diagnostic with
+the operation kind and elapsed milliseconds. It includes no request path, query, body or session
+key. Disconnect and shutdown cancellation do not produce deadline diagnostics. Static responses
+close on expiry rather than returning JSON, including before headers.
 
 Suggestion Apply requests have a separate 32 MiB JSON UTF-8 budget for original and proposed code,
 matching the review upload budget. The browser refuses larger suggestions before sending them with
@@ -214,10 +217,13 @@ interrupt an in-progress write. The compatibility shim can be removed once the p
 core dependency provides the async operation. Context expansion requests retain their 64 KiB bound.
 
 Programmatic `createReviewServer` callers may supply a per-instance `reportDiagnostic(message)`
-callback for submission success and known publication refusals. `ReviewSubmission` also accepts it
-as an optional second constructor argument. Defaults retain the existing stderr messages, and the
-CLI supplies its diagnostic reporter explicitly. A throwing reporter cannot change a committed
-success, hide the underlying refusal, reopen completed admission or retry a write.
+callback for submission success, known publication refusals, transport failures and deadlines.
+`createPublicationOperations` also forwards its supplied reporter to Core publication diagnostics.
+An installed older Core may still send its own diagnostics to stderr if it ignores that option.
+`ReviewSubmission` also accepts it as an optional second constructor argument. Defaults retain the
+existing stderr messages, and the CLI supplies its diagnostic reporter explicitly. A throwing
+reporter cannot change a committed success, hide the underlying refusal, reopen completed admission
+or retry a write.
 
 Core 2.0.4 remains a supported installed peer. On that peer, startup prints diagnostics for the
 synchronous startup probe and Apply, local loading without signal support, and publication without
@@ -351,6 +357,10 @@ session secret, not a login: treat the printed URL like a password, and securing
 yours to do.
 
 ## Engine and transport contracts
+
+Recognized API routes return `405` for an unsupported method with an `Allow` header listing only the
+methods registered for that path. Host, origin and session-key checks still run first. This does not
+add HEAD or OPTIONS handlers.
 
 The CLI resolves installed Core capabilities once into a normalized engine contract. Core 2.0.4
 remains supported without disabling Apply, resume or publication. Its synchronous source probe,
