@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import { READ_FLAGS } from './bounded-read';
 import { asyncFsFromSync, readContainedFileAsync } from './safe-fs-async';
 import type { AsyncFsLayer } from './safe-fs-async';
+import type { BoundedAsyncReadFsLayer } from './safe-fs-read';
 
 import {
   SafeFsError,
@@ -185,16 +186,17 @@ export async function readContainedFile(
   root: string,
   rel: string,
   maxBytes: number,
-  options: { fs?: FsLayer; signal?: AbortSignal } = {}
+  options: { fs?: FsLayer; readFs?: BoundedAsyncReadFsLayer; signal?: AbortSignal } = {}
 ): Promise<Buffer> {
   const layer = options.fs;
   return readContainedFileAsync(
     root,
     rel,
     maxBytes,
-    layer === undefined || layer === nodeFsLayer
-      ? undefined
-      : asyncFsFromSync(layer, options.signal),
+    options.readFs ??
+      (layer === undefined || layer === nodeFsLayer
+        ? undefined
+        : asyncFsFromSync(layer, options.signal)),
     options.signal
   );
 }

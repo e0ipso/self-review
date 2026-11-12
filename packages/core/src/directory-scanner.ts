@@ -4,10 +4,11 @@
 // Only regular files are reviewed; links are never followed out of the tree.
 
 import { stderrReporter, type DiagnosticReporter } from './diagnostics';
-import { opendir, stat } from 'fs/promises';
 import { basename, dirname, join } from 'path';
-import { lstatSync, realpathSync } from 'fs';
-import { assertNoSymlinkAncestors, SafeFsError, sameFile } from './safe-fs';
+import { SafeFsError, sameFile } from './safe-fs';
+import { assertNoSymlinkAncestorsAsync } from './safe-fs-read';
+import type { ScanFsLayer } from './scan-fs';
+import { nodeScanFsLayer } from './node-scan-fs';
 import { DiffFile } from './types';
 import { loadSyntheticFilesAsync } from './synthetic-diff';
 import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
@@ -15,6 +16,8 @@ import { createIgnoreFilter } from './ignore-filter';
 import { resolveSourceBudgets, type SourceBudgets } from './input-budgets';
 
 export interface SourceScanOptions {
+  /** Read-only scan and descriptor capability; never falls back to the host filesystem. */
+  scanFs?: ScanFsLayer;
   /** Defaults to stderr. Payload diagnostics are retained independently of presentation. */
   reportDiagnostic?: DiagnosticReporter;
   budgets?: Partial<SourceBudgets>;
@@ -40,11 +43,12 @@ export async function scanDirectory(
   options: SourceScanOptions = {}
 ): Promise<SourceScanResult> {
   checkLoadingCancelled(options.signal);
+  const layer = options.scanFs ?? nodeScanFsLayer;
   const budgets = resolveSourceBudgets(options.budgets);
 
   let root: string;
   try {
-    const dirStat = await stat(directoryPath);
+    const dirStat = await layer.stat(directoryPath);
     checkLoadingCancelled(options.signal);
     if (!dirStat.isDirectory()) {
       return failed(
@@ -52,7 +56,8 @@ export async function scanDirectory(
         `Cannot review "${directoryPath}": it is not a directory.`
       );
     }
-    root = realpathSync(directoryPath);
+    root = await layer.realpath(directoryPath);
+    checkLoadingCancelled(options.signal);
   } catch (error) {
     checkLoadingCancelled(options.signal);
     return failed(
@@ -64,7 +69,7 @@ export async function scanDirectory(
   const shouldKeep = createIgnoreFilter(ignorePatterns);
   let walk: WalkResult;
   try {
-    walk = await walkDirectory(root, shouldKeep, budgets.maxEntries, options.signal);
+    walk = await walkDirectory(root, shouldKeep, budgets.maxEntries, layer, options.signal);
   } catch (error) {
     checkLoadingCancelled(options.signal);
     return failed(
@@ -97,6 +102,7 @@ export async function scanDirectory(
   }
 
   const { files, diagnostics } = await loadSyntheticFilesAsync(walk.files, root, {
+    readFs: layer,
     budgets: options.budgets,
     signal: options.signal,
   });
@@ -112,8 +118,9 @@ export async function scanFile(
   options: SourceScanOptions = {}
 ): Promise<SourceScanResult> {
   checkLoadingCancelled(options.signal);
+  const layer = options.scanFs ?? nodeScanFsLayer;
   try {
-    const fileStat = await stat(filePath);
+    const fileStat = await layer.stat(filePath);
     checkLoadingCancelled(options.signal);
     if (!fileStat.isFile()) {
       return failed(
@@ -131,6 +138,7 @@ export async function scanFile(
     dirname(filePath),
     {
       followSymlinks: true,
+      readFs: layer,
       budgets: options.budgets,
       signal: options.signal,
     }
@@ -147,6 +155,7 @@ async function walkDirectory(
   root: string,
   shouldKeep: (path: string) => boolean,
   maxEntries: number,
+  layer: ScanFsLayer,
   signal?: AbortSignal
 ): Promise<WalkResult> {
   const files: string[] = [];
@@ -158,12 +167,13 @@ async function walkDirectory(
     await loadingCheckpoint(signal);
     const relativeDir = pending.pop()!;
     const target = join(root, relativeDir);
-    const before = inspectDirectory(root, relativeDir);
-    const dir = await opendir(target);
+    const before = await inspectDirectory(root, relativeDir, layer, signal);
+    checkLoadingCancelled(signal);
+    const dir = await layer.opendir(target);
     try {
       checkLoadingCancelled(signal);
       // opendir yields: a queued directory or one of its ancestors may have changed.
-      const after = inspectDirectory(root, relativeDir);
+      const after = await inspectDirectory(root, relativeDir, layer, signal);
       if (!sameFile(before, after)) {
         throw new SafeFsError('identity-changed', target, `${target} changed while opening`);
       }
@@ -202,13 +212,21 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function inspectDirectory(root: string, rel: string) {
+async function inspectDirectory(
+  root: string,
+  rel: string,
+  layer: ScanFsLayer,
+  signal?: AbortSignal
+) {
   const target = join(root, rel);
   // Include the directory itself in the ancestor walk.
-  assertNoSymlinkAncestors(root, join(rel, '.self-review-entry'));
-  const stats = lstatSync(target);
-  if (!stats.isDirectory() || realpathSync(target) !== target) {
+  await assertNoSymlinkAncestorsAsync(root, join(rel, '.self-review-entry'), layer, signal);
+  checkLoadingCancelled(signal);
+  const stats = await layer.lstat(target);
+  checkLoadingCancelled(signal);
+  if (!stats.isDirectory() || (await layer.realpath(target)) !== target) {
     throw new SafeFsError('unsafe-link', target, `${target} is no longer a contained directory`);
   }
+  checkLoadingCancelled(signal);
   return stats;
 }

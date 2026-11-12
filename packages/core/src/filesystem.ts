@@ -37,3 +37,6 @@ export type {
   SyncReadFsLayer,
 } from './safe-fs-read';
 export { asyncFsFromSync } from './safe-fs-legacy';
+
+export type { SourceReadFsLayer, ScanFsLayer, ScanEntry, ScanDirectoryHandle } from './scan-fs';
+export { nodeScanFsLayer } from './node-scan-fs';

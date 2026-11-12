@@ -8,10 +8,12 @@ import {
   readlinkSync,
   realpathSync,
 } from 'fs';
-import { open } from 'fs/promises';
 import { dirname, join, relative } from 'path';
 import { assertNoSymlinkAncestors, openContainedFile } from './safe-fs';
-import { openContainedFileAsync, type AsyncFileHandle } from './safe-fs-async';
+import { openContainedFileAsync } from './safe-fs-async';
+import { assertNoSymlinkAncestorsAsync, type AsyncReadHandle } from './safe-fs-read';
+import type { SourceReadFsLayer } from './scan-fs';
+import { nodeScanFsLayer } from './node-scan-fs';
 import { readInto, readIntoAsync } from './bounded-read';
 import { BINARY_SNIFF_BYTES, resolveSourceBudgets } from './input-budgets';
 import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
@@ -162,30 +164,65 @@ export function readSyntheticSource(
   }
 }
 
+/** Link text follows the same injected filesystem as the subsequent descriptor read. */
+async function readLinkSourceAsync(
+  fullPath: string,
+  root: string,
+  rel: string,
+  options: ReturnType<typeof sourceOptions>,
+  layer: SourceReadFsLayer,
+  signal?: AbortSignal
+): Promise<SyntheticSource | null> {
+  if (options.followSymlinks) return null;
+  await assertNoSymlinkAncestorsAsync(root, rel, layer, signal);
+  checkLoadingCancelled(signal);
+  const stats = await layer.lstat(fullPath);
+  checkLoadingCancelled(signal);
+  if (!stats.isSymbolicLink()) return null;
+  if (stats.size > options.maxFileBytes)
+    return { kind: 'too-large', size: stats.size, bytesRead: 0 };
+  if (stats.size > options.remainingBytes)
+    return { kind: 'over-total', size: stats.size, bytesRead: 0 };
+  const content = await layer.readlink(fullPath);
+  checkLoadingCancelled(signal);
+  await assertNoSymlinkAncestorsAsync(root, rel, layer, signal);
+  checkLoadingCancelled(signal);
+  const parent = await layer.realpath(dirname(fullPath));
+  checkLoadingCancelled(signal);
+  const physicalRoot = await layer.realpath(root);
+  checkLoadingCancelled(signal);
+  if (parent !== join(physicalRoot, dirname(rel)))
+    return { kind: 'unreadable', code: 'unsafe-link', bytesRead: 0 };
+  if (content.length > options.maxFileBytes)
+    return { kind: 'too-large', size: content.length, bytesRead: content.length };
+  if (content.length > options.remainingBytes)
+    return { kind: 'over-total', size: content.length, bytesRead: content.length };
+  return { kind: 'symlink', content, bytesRead: content.length };
+}
+
 /**
  * Owns its handle until close, including cancellation during a native open/read. Native calls
  * cannot be preempted; after they settle, cancellation wins and no partial content is returned.
  */
 export async function readSyntheticSourceAsync(
   fullPath: string,
-  input: SyntheticSourceOptions & { signal?: AbortSignal } = {}
+  input: SyntheticSourceOptions & { signal?: AbortSignal; readFs?: SourceReadFsLayer } = {}
 ): Promise<SyntheticSource> {
   const { signal } = input;
   await loadingCheckpoint(signal);
   const options = sourceOptions(input);
   const root = options.sourceRoot ?? dirname(fullPath);
   const rel = relative(root, fullPath);
-  const link = readLinkSource(fullPath, root, rel, options);
-  if (link) {
-    checkLoadingCancelled(signal);
-    return link;
-  }
-  let handle: AsyncFileHandle | undefined;
+  const layer = input.readFs ?? nodeScanFsLayer;
+  let handle: AsyncReadHandle | undefined;
   let bytesRead = 0;
   try {
+    const link = await readLinkSourceAsync(fullPath, root, rel, options, layer, signal);
+    checkLoadingCancelled(signal);
+    if (link) return link;
     handle = options.followSymlinks
-      ? await open(fullPath, constants.O_RDONLY | constants.O_NONBLOCK)
-      : (await openContainedFileAsync(root, rel, undefined, signal)).handle;
+      ? await layer.open(fullPath, constants.O_RDONLY | constants.O_NONBLOCK)
+      : (await openContainedFileAsync(root, rel, layer, signal)).handle;
     checkLoadingCancelled(signal);
     const stats = await handle.stat();
     checkLoadingCancelled(signal);
