@@ -8,6 +8,8 @@ import { nonThrowingReporter } from './diagnostic-reporter';
 
 /** A publisher resolves only after commit; a refusal throws without replacing the previous file. */
 export interface PublicationOperations {
+  /** Optional for original operation sets; selected with the engine that publishes. */
+  publicationError?: typeof ReviewPublishError;
   publishReview: (
     state: ReviewState,
     options?: { signal?: AbortSignal }
@@ -64,7 +66,7 @@ export class ReviewSubmission {
       this.report(`[serve] Review written to ${outputPath}`);
       return { ok: true, outputPath };
     } catch (error) {
-      if (!(error instanceof ReviewPublishError)) throw error;
+      if (!(error instanceof (this.operations.publicationError ?? ReviewPublishError))) throw error;
       this.report(`[serve] Review not saved (${error.code}): ${error.message}`);
       for (const detail of error.details) this.report(`[serve]   ${detail}`);
       this.report(

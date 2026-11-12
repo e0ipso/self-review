@@ -207,7 +207,7 @@ describe('submission protocol', () => {
     expect(cancelDeadline).toHaveBeenCalledTimes(1);
   });
 
-  it('bounds shutdown when an admitted operation never settles', async () => {
+  it('closes connections at the shutdown deadline and retains admitted work until it settles', async () => {
     const gate = deferred();
     const expansion = vi.spyOn(operations, 'loadImage').mockImplementationOnce(async () => {
       await gate.promise;
@@ -221,13 +221,14 @@ describe('submission protocol', () => {
       expect((await submit(reviewState())).status).toBe(200);
       expect(exit).not.toHaveBeenCalled();
       expireDeadline();
-      expect(exit).toHaveBeenCalledWith(0);
+      expect(exit).not.toHaveBeenCalled();
       expect(await pending).toBeInstanceOf(Error);
+      expect(server.listening).toBe(false);
     } finally {
       gate.resolve();
     }
     await vi.waitFor(() => expect(cancelDeadline).toHaveBeenCalledTimes(1));
-    expect(exit).toHaveBeenCalledTimes(1);
+    expect(exit).toHaveBeenCalledExactlyOnceWith(0);
   });
 
   it.each([

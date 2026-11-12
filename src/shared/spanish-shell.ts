@@ -89,6 +89,11 @@ export const SPANISH_SHELL = {
     'La revisión sigue cargándose o no se pudo restaurar. Resuelve el error de carga antes de guardar.',
   'The host could not accept the review state. {detail}':
     'El anfitrión no pudo aceptar el estado de la revisión. {detail}',
+  'Close requested. Waiting for the host to finish pending work. The window has not closed yet.':
+    'Cierre solicitado. Esperando a que la aplicación termine el trabajo pendiente. La ventana aún no se ha cerrado.',
+  'The review was saved. Waiting for the window to close. You can check publication status or request close.':
+    'La revisión se guardó. Esperando a que se cierre la ventana. Puedes comprobar el estado del guardado o solicitar el cierre.',
+  'Request close again': 'Solicitar el cierre de nuevo',
   'Saving review…': 'Guardando revisión…',
   'The save outcome is unknown. Check the output file before closing. The review has not been resent.':
     'Se desconoce el resultado del guardado. Comprueba el archivo de salida antes de cerrar. La revisión no se ha vuelto a enviar.',

@@ -49,16 +49,16 @@ describe('serve shutdown ownership', () => {
     expect(signals.listenerCount('SIGTERM')).toBe(0);
   });
 
-  it('bounds startup shutdown even when the loader cannot be interrupted', async () => {
+  it('retains startup ownership past the connection deadline when loading cannot be interrupted', async () => {
     const { signals, exit, lifetime, expire } = setup();
     const startup = deferred();
     const pending = lifetime.track(startup.promise);
     signals.emit('SIGTERM');
     expire();
-    expect(exit).toHaveBeenCalledExactlyOnceWith(143);
+    expect(exit).not.toHaveBeenCalled();
     startup.resolve();
     await pending;
-    expect(exit).toHaveBeenCalledOnce();
+    expect(exit).toHaveBeenCalledExactlyOnceWith(143);
   });
 
   it('cannot report completion success after an observed interrupt', async () => {
@@ -87,10 +87,10 @@ describe('serve shutdown ownership', () => {
     signals.emit('SIGINT');
     signals.emit('SIGTERM');
     expire();
-    expect(exit).toHaveBeenCalledExactlyOnceWith(143);
+    expect(exit).not.toHaveBeenCalled();
     pending.resolve();
     await work;
-    expect(exit).toHaveBeenCalledOnce();
+    expect(exit).toHaveBeenCalledExactlyOnceWith(143);
   });
 
   it('refuses a late listener after interrupted startup', async () => {

@@ -177,3 +177,33 @@ it('defers typed save decoding until after admission while authenticating and ch
   expect(() => handlers[IPC.REVIEW_SAVE]({ ...peer, senderFrame: {} }, null)).toThrow();
   expect(run).toHaveBeenCalledOnce();
 });
+
+it('rejects hostile Apply extensions before snapshot capture or source operations', async () => {
+  const { registerSuggestionHandlers } = await import('./suggestion-ipc');
+  const { DesktopOperations } = await import('./desktop-operations');
+  const f = fixture();
+  const applySuggestion = vi.fn(async () => ({
+    status: 'applied' as const,
+    filePath: 'a',
+    replacedLines: 1,
+  }));
+  const captureSnapshot = vi.fn(() => () => {});
+  registerSuggestionHandlers(
+    { applySuggestion, captureSnapshot, setApplyDestination: vi.fn() },
+    f.boundary,
+    new DesktopOperations(),
+    { pickDirectory: vi.fn() }
+  );
+  const extension: Record<string, unknown> = {};
+  extension.self = extension;
+  expect(() =>
+    f.handlers[IPC.SUGGESTION_APPLY](f.peer, {
+      filePath: 'a',
+      lineRange: null,
+      suggestion: { originalCode: 'a', proposedCode: 'b' },
+      extension,
+    })
+  ).toThrow(/Cyclic/);
+  expect(captureSnapshot).not.toHaveBeenCalled();
+  expect(applySuggestion).not.toHaveBeenCalled();
+});

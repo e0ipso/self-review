@@ -1,6 +1,7 @@
 // Bound validation work after Electron's structured clone, before canonical DTO validation.
 import {
   MAX_SOURCE_ENTRIES,
+  MAX_SOURCE_FILE_BYTES,
   MAX_RESUME_XML_BYTES,
   MAX_IMAGE_BYTES,
   MAX_PUBLICATION_ASSET_BYTES,
@@ -13,7 +14,19 @@ export const MAX_IPC_COLLECTION_ITEMS = MAX_SOURCE_ENTRIES;
 export const MAX_IPC_VALUES = MAX_SOURCE_ENTRIES * 16;
 export const MAX_IPC_DEPTH = 64;
 
+// Both snippets may fill a supported 5 MiB source/output file. ASCII needs two
+// UTF-16 bytes per UTF-8 byte. Reserve another 64 KiB for paths, keys and extensions.
+export const MAX_IPC_APPLY_TEXT_BYTES = 4 * MAX_SOURCE_FILE_BYTES + 64 * 1024;
+
 export function preflightReviewMessage(value: unknown): void {
+  preflightMessage(value, MAX_IPC_TEXT_BYTES);
+}
+
+export function preflightApplyMessage(value: unknown): void {
+  preflightMessage(value, MAX_IPC_APPLY_TEXT_BYTES);
+}
+
+function preflightMessage(value: unknown, maxTextBytes: number): void {
   let values = 0;
   let textBytes = 0;
   let binaryBytes = 0;
@@ -24,7 +37,7 @@ export function preflightReviewMessage(value: unknown): void {
   };
   const text = (value: string) => {
     textBytes += value.length * 2;
-    if (textBytes > MAX_IPC_TEXT_BYTES) refuse();
+    if (textBytes > maxTextBytes) refuse();
   };
   function visit(node: unknown, depth: number): void {
     if (++values > MAX_IPC_VALUES || depth > MAX_IPC_DEPTH) refuse();

@@ -143,16 +143,17 @@ Only one submission can publish at a time. An overlapping authenticated `POST /a
 `409` with `{"error":"review submission already in progress or complete"}`. A failed attempt permits
 retry. Successful acknowledgement still means the XML is on disk. After flushing that response, the
 listener stops accepting connections and drains admitted operations and their responses for up to
-five seconds before closing remaining connections and exiting 0. SIGINT and SIGTERM use the same
-shutdown owner, including during startup and listener creation, and exit with 130 and 143
-respectively. An observed signal takes precedence over completion success. Startup has a 45-second
-deadline, and its git commands have a 30-second timeout. With the current core, cancellation reaches
-git, snapshot reads, directory and file loading, attachment preparation, and asynchronous asset
-staging. Publication accepts at most 1,000 attachment occurrences, 10 MiB per image and 64 MiB of
-newly staged assets, including resumed references that need copying. These disk-derived limits are
-independent of the HTTP body limit. Cancellation does not roll back a committed file.
-Synchronous/native work can still delay event-loop callbacks; the grace period is not hard
-preemption of arbitrary code.
+five seconds before closing remaining connections. Exit 0 follows once admitted work and cleanup
+settle; a pending native operation may delay final exit beyond that grace period. SIGINT and SIGTERM
+use the same shutdown owner, including during startup and listener creation, and exit with 130 and
+143 respectively. An observed signal takes precedence over completion success. Startup has a
+45-second deadline, and its git commands have a 30-second timeout. With the current core,
+cancellation reaches git, snapshot reads, directory and file loading, attachment preparation, and
+asynchronous asset staging. Publication accepts at most 1,000 attachment occurrences, 10 MiB per
+image and 64 MiB of newly staged assets, including resumed references that need copying. These
+disk-derived limits are independent of the HTTP body limit. Cancellation does not roll back a
+committed file. Synchronous/native work can still delay event-loop callbacks; the grace period is
+not hard preemption of arbitrary code.
 
 The listener accepts at most 64 TCP connections, including idle keepalive connections and peers that
 have not finished sending HTTP headers. Excess connections close before parsing a request or logging
@@ -165,13 +166,16 @@ Static bundle files stream from one opened regular-file descriptor per request i
 larger file receives `413` with `{"error":"static asset exceeds 32 MiB limit"}` before successful
 headers. This limit accommodates the bundled scripts, styles, fonts and diagrams. The original file
 size fixes both Content-Length and the read range, so file growth cannot extend the response. A
-failed or shortened read after headers closes the response as incomplete. Missing files,
-directories, unsafe paths and initial read failures retain the `404` response. Descriptor opens use
-no-follow and nonblocking flags, reject non-regular files, and recheck containment and inode
-identity. Disconnect, request expiry and shutdown cancel reads and backpressure waits. Admission
-retains the operation until the descriptor closes and the response settles. Already issued
-filesystem calls and kernel socket buffers may finish after cancellation; cancellation does not
-preempt native I/O.
+failed or shortened read after headers closes the response as incomplete. Missing files, directories
+and unsafe paths retain the quiet `404` response. Unexpected I/O failures receive a generic `500`
+and go to the injected diagnostic reporter. Containment inspection uses asynchronous metadata calls
+before opening and during the inode recheck, with cancellation checkpoints between calls.
+Missing-path inspection removes one requested path component per lookup and never enumerates a
+directory. Descriptor opens use no-follow and nonblocking flags, reject non-regular files, and
+recheck containment and inode identity. Disconnect, request expiry and shutdown cancel reads and
+backpressure waits. Admission retains the operation until the descriptor closes and the response
+settles. Already issued filesystem calls and kernel socket buffers may finish after cancellation;
+cancellation does not preempt native I/O.
 
 The server admits at most 32 operations and responses in total, with at most eight concurrent
 expensive DTO, image or attachment reads. Excess requests receive `503` with
@@ -201,7 +205,8 @@ Each admitted request has a 60-second server deadline. Expiry cancels supported 
 not been sent, or closes a response already in progress. Disconnecting cancels the request's owned
 work too. An operation keeps its admission slot until both work and response settle, including when
 a filesystem operation ignores cancellation. Shutdown stops accepting and cancels admitted
-operations, then drains them for up to five seconds. Each expiry reports one bounded diagnostic with
+operations, then closes remaining connections after five seconds. Owned operations and cleanup
+remain joined until they settle before process exit. Each expiry reports one bounded diagnostic with
 the operation kind and elapsed milliseconds. It includes no request path, query, body or session
 key. Disconnect and shutdown cancellation do not produce deadline diagnostics. Static responses
 close on expiry rather than returning JSON, including before headers.
@@ -370,6 +375,19 @@ remains supported without disabling Apply, resume or publication. Its synchronou
 local loading and Apply can delay cancellation; its publication lacks the newer aggregate asset
 budget and cooperative staging cancellation. The CLI reports those limitations at startup. Pure
 request validation stays bundled, and fallback errors retain the installed Core error class.
+
+`resolveServeEngine` accepts the capabilities its selectors use. Its `.core` retains the supplied
+object and all inferred members, and the original `ServeEngine` and resolver return types retain the
+complete root namespace. `createPublicationOperations` takes only its read, Apply, validation and
+publication roles. It binds `requestValidation` and the publication error constructor from that same
+engine. Route construction uses those validators for review, Apply and context requests. Original
+operation sets may omit the added roles and retain the installed-engine defaults. The exported
+`parseReviewStateBody`, `parseSuggestionApplyBody` and `parseExpandContextBody` remain default
+compatibility entry points with the same strict field policy and error text.
+
+Startup forwards its host reporter through `loadConfigWithProvenance` options. Reporter throws and
+rejections cannot change loaded configuration or provenance. Core 2.0.4 ignores this option and
+keeps its own configuration diagnostics on stderr, as it does for guide and image diagnostics.
 
 First-party transport construction uses `createBoundReviewServer` with bound read operations and an
 explicit publication role from `createPublicationOperations`. Publication owns its supplied state

@@ -9,7 +9,8 @@ import type { ReviewSession, ReviewState } from '@self-review/core';
 export function ownedReviewState(
   session: ReviewSession,
   state: ReviewState,
-  outputPath: string
+  outputPath: string,
+  ErrorType: typeof ReviewPublishError = ReviewPublishError
 ): ReviewState {
   const owned = normalizePublicationState(
     state,
@@ -17,7 +18,7 @@ export function ownedReviewState(
     capturePublicationOwnership(session.diffData)
   );
   if (!owned)
-    throw new ReviewPublishError(
+    throw new ErrorType(
       'validation-failed',
       outputPath,
       'The submitted source does not match the loaded review.'

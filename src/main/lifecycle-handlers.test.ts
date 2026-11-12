@@ -136,7 +136,6 @@ it('acknowledges disk publication before permitting close and deduplicates overl
   >;
   await vi.waitFor(() => expect(f.publish).toHaveBeenCalledOnce());
   expect(await f.invoke(IPC.REVIEW_SAVE, state)).toEqual({ status: 'busy' });
-  f.invoke(IPC.APP_DISCARD_AND_QUIT);
   expect(f.controller.closeRequested(true)).toBe('ignore');
   expect(f.shutdown).not.toHaveBeenCalled();
   finish();
@@ -409,3 +408,141 @@ it.each([IPC.REVIEW_SAVE, IPC.APP_SAVE_AND_QUIT])(
     );
   }
 );
+
+it.each(['saved', 'failed'] as const)(
+  'queues explicit recovery discard until a pending publication has %s without replay',
+  async outcome => {
+    const f = fixture();
+    let finish!: () => void;
+    f.publish.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          finish = () => (outcome === 'saved' ? resolve() : reject(new Error('disk full')));
+        })
+    );
+    const saving = f.invoke(IPC.REVIEW_SAVE, state) as Promise<unknown>;
+    await vi.waitFor(() => expect(f.publish).toHaveBeenCalledOnce());
+    f.invoke(IPC.APP_DISCARD_AND_QUIT);
+    f.invoke(IPC.APP_DISCARD_AND_QUIT);
+    expect(f.shutdown).not.toHaveBeenCalled();
+    expect(f.controller.mayQuit).toBe(false);
+    expect(await f.invoke(IPC.REVIEW_SAVE, state)).toEqual({ status: 'busy' });
+    finish();
+    expect(await saving).toMatchObject({ status: outcome });
+    await vi.waitFor(() =>
+      expect(f.shutdown).toHaveBeenCalledExactlyOnceWith(
+        0,
+        outcome === 'saved' ? 'saved' : 'discard'
+      )
+    );
+    expect(f.controller.closeRequested(true)).toBe('allow');
+    expect(f.publish).toHaveBeenCalledOnce();
+  }
+);
+
+it('closes after a committed publication with lost acknowledgement without another write', async () => {
+  const f = fixture();
+  const saved = await f.invoke(IPC.REVIEW_SAVE, state);
+  f.invoke(IPC.REVIEW_SAVE_RECEIVED, 'unknown');
+  expect(f.shutdown).not.toHaveBeenCalled();
+  expect(f.invoke(IPC.REVIEW_SAVE_STATUS)).toEqual(saved);
+  f.invoke(IPC.APP_DISCARD_AND_QUIT);
+  await vi.waitFor(() => expect(f.shutdown).toHaveBeenCalledExactlyOnceWith(0, 'saved'));
+  expect(f.controller.closeRequested(true)).toBe('allow');
+  expect(f.publish).toHaveBeenCalledOnce();
+});
+
+it('drops a queued recovery-close intent when its peer is replaced', async () => {
+  const f = fixture();
+  let finish!: () => void;
+  f.publish.mockImplementationOnce(
+    () =>
+      new Promise<void>(resolve => {
+        finish = resolve;
+      })
+  );
+  const saving = f.invoke(IPC.REVIEW_SAVE, state) as Promise<unknown>;
+  await vi.waitFor(() => expect(f.publish).toHaveBeenCalledOnce());
+  f.invoke(IPC.APP_DISCARD_AND_QUIT);
+  f.replacePeer();
+  finish();
+  await expect(saving).rejects.toThrow(/current review window/);
+  expect(f.shutdown).not.toHaveBeenCalled();
+  expect(f.controller.closeRequested(true)).toBe('ignore');
+});
+
+it('keeps a recovery close admitted while a receipt publication waits for Apply', async () => {
+  const f = fixture();
+  let finish!: () => void;
+  const applying = f.desktop.operations.apply(
+    () =>
+      new Promise<void>(resolve => {
+        finish = resolve;
+      })
+  );
+  await Promise.resolve();
+  const saving = f.invoke(IPC.REVIEW_SAVE, state) as Promise<unknown>;
+  f.invoke(IPC.APP_DISCARD_AND_QUIT);
+  expect(f.publish).not.toHaveBeenCalled();
+  expect(f.shutdown).not.toHaveBeenCalled();
+  finish();
+  await applying;
+  expect(await saving).toMatchObject({ status: 'saved' });
+  await vi.waitFor(() => expect(f.shutdown).toHaveBeenCalledExactlyOnceWith(0, 'saved'));
+  expect(f.publish).toHaveBeenCalledOnce();
+});
+
+it.each(['load', 'output'] as const)(
+  'never closes a replacement %s owner for an older queued intent',
+  async replacement => {
+    const f = fixture();
+    let finish!: () => void;
+    f.publish.mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        })
+    );
+    const saving = f.invoke(IPC.REVIEW_SAVE, state) as Promise<unknown>;
+    await vi.waitFor(() => expect(f.publish).toHaveBeenCalledOnce());
+    f.invoke(IPC.APP_DISCARD_AND_QUIT);
+    if (replacement === 'load') f.desktop.review.diffData = { files: [], source: state.source };
+    else f.desktop.output = { path: '/other/review.xml', origin: 'explicit' };
+    finish();
+    await saving;
+    expect(f.shutdown).not.toHaveBeenCalled();
+    expect(() => f.invoke(IPC.REVIEW_SAVE_STATUS)).toThrow(/owner has changed/);
+    f.invoke(IPC.APP_DISCARD_AND_QUIT);
+    expect(f.shutdown).not.toHaveBeenCalled();
+  }
+);
+
+it('closes a known failed publication by explicit discard and never writes it again', async () => {
+  const f = fixture();
+  f.publish.mockRejectedValueOnce(new Error('disk full'));
+  expect(await f.invoke(IPC.REVIEW_SAVE, state)).toMatchObject({ status: 'failed' });
+  f.invoke(IPC.APP_DISCARD_AND_QUIT);
+  await vi.waitFor(() => expect(f.shutdown).toHaveBeenCalledExactlyOnceWith(0, 'discard'));
+  expect(f.publish).toHaveBeenCalledOnce();
+});
+
+it('queues legacy discard during publication without manufacturing a receipt', async () => {
+  const f = fixture();
+  f.desktop.review.reviewState = state;
+  let finish!: () => void;
+  f.publish.mockImplementationOnce(
+    () =>
+      new Promise<void>((_resolve, reject) => {
+        finish = () => reject(new Error('disk full'));
+      })
+  );
+  expect(f.invoke(IPC.APP_SAVE_AND_QUIT)).toBeUndefined();
+  await vi.waitFor(() => expect(f.publish).toHaveBeenCalledOnce());
+  expect(f.invoke(IPC.APP_DISCARD_AND_QUIT)).toBeUndefined();
+  expect(f.invoke(IPC.REVIEW_SAVE_STATUS)).toBeNull();
+  expect(f.shutdown).not.toHaveBeenCalled();
+  finish();
+  await vi.waitFor(() => expect(f.shutdown).toHaveBeenCalledExactlyOnceWith(0, 'discard'));
+  expect(f.invoke(IPC.REVIEW_SAVE_STATUS)).toBeNull();
+  expect(f.publish).toHaveBeenCalledOnce();
+});

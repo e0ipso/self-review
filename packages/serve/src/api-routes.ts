@@ -1,7 +1,8 @@
 // API handlers bind only their own engine capabilities. Admission is mandatory at registration.
 import type * as http from 'node:http';
 import { parseAttachmentReference } from '@self-review/core';
-import { parseExpandContextBody, parseReviewStateBody, parseSuggestionApplyBody } from './validate';
+import { createRequestValidation, type RequestValidation } from './validate';
+import { installedServeEngine } from './engine-contract';
 import { MAX_REVIEW_BODY_BYTES, MAX_APPLY_BODY_BYTES } from './protocol';
 import { readJsonBody, sendJson, sendError, SECURITY_HEADERS } from './http-transport';
 import type { ReviewTransportOperations as ReviewOperations } from './review-operations';
@@ -108,10 +109,13 @@ function createAttachmentRoute({
   };
 }
 
-function createExpansionRoute({
-  authorizeReviewedPath,
-  expandContext,
-}: Pick<ReviewOperations, 'authorizeReviewedPath' | 'expandContext'>): RouteHandler {
+function createExpansionRoute(
+  {
+    authorizeReviewedPath,
+    expandContext,
+  }: Pick<ReviewOperations, 'authorizeReviewedPath' | 'expandContext'>,
+  parseExpandContextBody: RequestValidation['parseExpandContextBody']
+): RouteHandler {
   return async ctx => {
     const { req, res } = ctx;
     const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES, ctx.signal);
@@ -132,10 +136,13 @@ function createExpansionRoute({
   };
 }
 
-function createApplyRoute({
-  authorizeReviewedPath,
-  applySuggestionForSession,
-}: Pick<ReviewOperations, 'authorizeReviewedPath' | 'applySuggestionForSession'>): RouteHandler {
+function createApplyRoute(
+  {
+    authorizeReviewedPath,
+    applySuggestionForSession,
+  }: Pick<ReviewOperations, 'authorizeReviewedPath' | 'applySuggestionForSession'>,
+  parseSuggestionApplyBody: RequestValidation['parseSuggestionApplyBody']
+): RouteHandler {
   return async ctx => {
     const { req, res } = ctx;
     const body = await readJsonBody(req, MAX_APPLY_BODY_BYTES, ctx.signal);
@@ -155,7 +162,8 @@ function createApplyRoute({
 
 function createSubmissionRoute(
   submission: Pick<ReviewSubmission, 'begin' | 'publish' | 'release'>,
-  published: (response: http.ServerResponse) => void
+  published: (response: http.ServerResponse) => void,
+  parseReviewStateBody: RequestValidation['parseReviewStateBody']
 ): RouteHandler {
   return async ({ req, res, signal }) => {
     if (!submission.begin()) {
@@ -195,7 +203,9 @@ export interface ApiRoute {
 export function createApiRoutes(
   operations: ReviewOperations,
   submission: ReviewSubmission,
-  published: (response: http.ServerResponse) => void
+  published: (response: http.ServerResponse) => void,
+  validation: RequestValidation = operations.requestValidation ??
+    createRequestValidation(installedServeEngine)
 ): Record<string, ApiRoute> {
   // Keep operation replacement observable for hosts using the existing injected test seam.
   const getDiffLoad = () => operations.getDiffLoad();
@@ -244,21 +254,27 @@ export function createApiRoutes(
     },
     'POST /api/expand-context': {
       kind: 'mutation',
-      handle: createExpansionRoute({
-        authorizeReviewedPath,
-        expandContext: (...args) => operations.expandContext(...args),
-      }),
+      handle: createExpansionRoute(
+        {
+          authorizeReviewedPath,
+          expandContext: (...args) => operations.expandContext(...args),
+        },
+        validation.parseExpandContextBody
+      ),
     },
     'POST /api/apply-suggestion': {
       kind: 'mutation',
-      handle: createApplyRoute({
-        authorizeReviewedPath,
-        applySuggestionForSession: (...args) => operations.applySuggestionForSession(...args),
-      }),
+      handle: createApplyRoute(
+        {
+          authorizeReviewedPath,
+          applySuggestionForSession: (...args) => operations.applySuggestionForSession(...args),
+        },
+        validation.parseSuggestionApplyBody
+      ),
     },
     'POST /api/review': {
       kind: 'publication',
-      handle: createSubmissionRoute(submission, published),
+      handle: createSubmissionRoute(submission, published, validation.parseReviewStateBody),
     },
   };
 }

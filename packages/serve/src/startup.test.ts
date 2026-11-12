@@ -431,3 +431,18 @@ it('awaits the optional async resume capability with the startup signal before g
     await failure;
   }
 });
+
+it.each(['capture', 'throw', 'reject'] as const)(
+  'forwards configuration diagnostics to the startup %s reporter',
+  async mode => {
+    fs.writeFileSync(path.join(repo, '.self-review.yaml'), 'font-size: .inf\n');
+    const report = vi.fn(() => {
+      if (mode === 'throw') throw new Error('report failed');
+      if (mode === 'reject') return Promise.reject(new Error('report failed'));
+    });
+    const host = createStartupHost(repo, report);
+    const result = await resolveSession(parseServeArgs([]), {}, host);
+    expect(Number.isFinite(result.session.config?.fontSize)).toBe(true);
+    expect(report).toHaveBeenCalledWith(expect.stringContaining('font-size'));
+  }
+);

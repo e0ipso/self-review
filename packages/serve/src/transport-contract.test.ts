@@ -160,3 +160,100 @@ it('returns the additive busy code before invoking a refused operation', async (
     await (await reading).arrayBuffer();
   }
 });
+
+it('binds all request validators to the engine supplying the operations', async () => {
+  const { resolveServeEngine } = await import('./engine-contract');
+  const { session, output, state } = setup();
+  class PeerXmlError extends Error {
+    readonly code = 'invalid-state' as const;
+    readonly details: readonly string[] = [];
+    constructor(_code: ConstructorParameters<typeof core.ReviewXmlError>[0], message: string) {
+      super(message);
+    }
+  }
+  const validate = vi.fn(() => {
+    throw new PeerXmlError('invalid-state', 'peer validation refusal');
+  });
+  const decode = vi.fn(() => ({ ok: false as const, error: 'peer apply refusal' }));
+  const engine = resolveServeEngine({
+    ...core,
+    ReviewXmlError: PeerXmlError,
+    validateReviewState: validate,
+    decodeSuggestionApplyRequest: decode,
+    MAX_CONTEXT_LINES: 2,
+  });
+  const operations = createPublicationOperations(session, output, engine);
+  const publish = vi.spyOn(operations, 'publishReview');
+  const url = await listen(
+    createBoundReviewServer({ operations, publication: operations, capability: 'key' })
+  );
+  const post = (route: string, body: unknown) =>
+    fetch(url + 'api/' + route, { method: 'POST', headers, body: JSON.stringify(body) });
+  const review = await post('review', state);
+  expect(review.status).toBe(400);
+  expect(await review.json()).toEqual({ error: 'peer validation refusal' });
+  expect(validate).toHaveBeenCalledOnce();
+  expect(publish).not.toHaveBeenCalled();
+  const apply = await post('apply-suggestion', {
+    filePath: 'a.txt',
+    lineRange: null,
+    suggestion: { originalCode: '', proposedCode: '' },
+  });
+  expect(apply.status).toBe(400);
+  expect(await apply.json()).toEqual({ error: 'peer apply refusal' });
+  expect(decode).toHaveBeenCalledOnce();
+  const expand = await post('expand-context', { filePath: 'a.txt', contextLines: 3 });
+  expect(expand.status).toBe(400);
+  expect(await expand.json()).toEqual({ error: 'contextLines must be an integer between 0 and 2' });
+});
+
+it('uses the supplied publication error constructor and keeps unknown failures uncertain', async () => {
+  const { resolveServeEngine } = await import('./engine-contract');
+  const { session, output, state } = setup();
+  class PeerPublishError extends Error {
+    readonly details: readonly string[] = [];
+    constructor(
+      readonly code: core.ReviewPublishError['code'],
+      readonly path: string,
+      message: string
+    ) {
+      super(message);
+    }
+  }
+  const publishReview = vi.fn<typeof core.publishReview>(async () => {
+    throw new PeerPublishError('permission-denied', output.path, 'peer publication refusal');
+  });
+  const engine = resolveServeEngine({
+    ...core,
+    ReviewPublishError: PeerPublishError,
+    publishReview,
+  });
+  const operations = createPublicationOperations(session, output, engine);
+  const report = vi.fn();
+  const url = await listen(
+    createBoundReviewServer({
+      operations,
+      publication: operations,
+      capability: 'key',
+      reportDiagnostic: report,
+    })
+  );
+  const send = (body = state) =>
+    fetch(url + 'api/review', { method: 'POST', headers, body: JSON.stringify(body) });
+  const foreign = await send({ ...state, source: { ...state.source, sourcePath: '/foreign' } });
+  expect(foreign.status).toBe(422);
+  expect(publishReview).not.toHaveBeenCalled();
+  const known = await send();
+  expect(known.status).toBe(500);
+  expect(await known.json()).toEqual({
+    ok: false,
+    code: 'permission-denied',
+    message: 'peer publication refusal',
+    details: [],
+  });
+  publishReview.mockRejectedValueOnce(new Error('unclassified failure'));
+  const unknown = await send();
+  expect(unknown.status).toBe(500);
+  expect(await unknown.json()).toEqual({ error: 'internal error' });
+  expect(publishReview).toHaveBeenCalledTimes(2);
+});

@@ -12,6 +12,7 @@ import type {
 } from '@self-review/core';
 import { ownedReviewState } from './source-ownership';
 import type { SubmissionOperations, PublicationOperations } from './review-submission';
+import { createRequestValidation, type RequestValidation } from './validate';
 import { nonThrowingReporter } from './diagnostic-reporter';
 
 export interface OperationOptions {
@@ -21,6 +22,8 @@ export interface OperationOptions {
 
 /** Bound to one session; results and errors retain the core operation's contract. */
 export interface ReviewOperations extends SubmissionOperations {
+  /** Optional for original operation sets. Bound together with the selected engine. */
+  requestValidation?: RequestValidation;
   authorizeReviewedPath: (path: string) => ReturnType<typeof core.authorizeReviewedPath>;
   getDiffLoad: () => ReturnType<typeof core.getDiffLoad>;
   getConfigLoad: () => ReturnType<typeof core.getConfigLoad>;
@@ -46,16 +49,53 @@ export interface ReviewOperations extends SubmissionOperations {
 export type ReviewTransportOperations = Omit<ReviewOperations, keyof SubmissionOperations>;
 export type PublicationReviewOperations = ReviewTransportOperations & PublicationOperations;
 
+/** The publication consumer needs reads, one writer and its peer's validation. */
+export type PublicationEngine = Pick<
+  ServeEngine,
+  'applySuggestion' | 'requestContract' | 'validateReviewState'
+> & {
+  core: Pick<
+    typeof core,
+    | 'authorizeReviewedPath'
+    | 'getDiffLoad'
+    | 'getConfigLoad'
+    | 'getResumeLoad'
+    | 'getFileHunks'
+    | 'loadImage'
+    | 'readAttachment'
+    | 'expandContext'
+    | 'publishReview'
+    | 'publishOptionsFor'
+    | 'ReviewXmlError'
+    | 'ReviewPublishError'
+  >;
+};
+
 /** First-party operations publish the supplied state without a redundant handoff. */
 export function createPublicationOperations(
   session: ReviewSession,
   output: ReviewOutputTarget,
-  engine: ServeEngine = installedServeEngine,
+  engine?: PublicationEngine,
+  reportDiagnostic?: (message: string) => void
+): PublicationReviewOperations;
+/** Retain the original reflected parameter type for existing consumers. */
+export function createPublicationOperations(
+  session: ReviewSession,
+  output: ReviewOutputTarget,
+  engine?: ServeEngine,
+  reportDiagnostic?: (message: string) => void
+): PublicationReviewOperations;
+export function createPublicationOperations(
+  session: ReviewSession,
+  output: ReviewOutputTarget,
+  engine: PublicationEngine = installedServeEngine,
   reportDiagnostic?: (message: string) => void
 ): PublicationReviewOperations {
   const { core, applySuggestion } = engine;
   const report = reportDiagnostic && nonThrowingReporter(reportDiagnostic);
   return {
+    requestValidation: createRequestValidation(engine),
+    publicationError: core.ReviewPublishError,
     authorizeReviewedPath: path => core.authorizeReviewedPath(session, path),
     getDiffLoad: () => core.getDiffLoad(session),
     getConfigLoad: () => core.getConfigLoad(session),
@@ -72,7 +112,7 @@ export function createPublicationOperations(
     expandContext: (request, options) => core.expandContext(session, request, undefined, options),
     applySuggestionForSession: (request, options) => applySuggestion(session, request, options),
     publishReview: (state: ReviewState, options) => {
-      const owned = ownedReviewState(session, state, output.path);
+      const owned = ownedReviewState(session, state, output.path, core.ReviewPublishError);
       // Preserve the CLI diagnostic without recreating the handoff cache mutation.
       if (report)
         report(

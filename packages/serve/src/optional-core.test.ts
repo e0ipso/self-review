@@ -162,3 +162,24 @@ it('retains custom selector method receivers when resolving capabilities once', 
   await expect(startupSourceFor(engine)([], '/launch', {})).resolves.toBe(engine.source);
   await expect(applyFor(engine)(core.createReviewSession(), request)).resolves.toBe(engine.outcome);
 });
+
+it('selects only required capabilities while preserving every original root member and alias', async () => {
+  const { resolveServeEngine } = await import('./engine-contract');
+  const minimal = {
+    ReviewXmlError: core.ReviewXmlError,
+    resolveStartupSource: () => ({ mode: 'welcome' as const }),
+    applySuggestionForSession: () => refusal,
+    recordResumedAttachments: core.recordResumedAttachments,
+  };
+  const selected = resolveServeEngine(minimal);
+  expect(selected.core).toBe(minimal);
+  await expect(selected.resolveSource([], '/virtual', {})).resolves.toEqual({ mode: 'welcome' });
+  await expect(selected.applySuggestion(core.createReviewSession(), request)).resolves.toBe(
+    refusal
+  );
+  const complete: import('./engine-contract').ServeEngine = resolveServeEngine(core);
+  const legacyReturn: ReturnType<typeof resolveServeEngine> = complete;
+  expect(complete.core).toBe(core);
+  expect(legacyReturn.core.parseDiff).toBe(core.parseDiff);
+  expect(complete.core.loadResumeDocument).toBe(core.loadResumeDocument);
+});

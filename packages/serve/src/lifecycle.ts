@@ -81,8 +81,11 @@ export function createServeLifecycle(options: LifecycleOptions = {}) {
     // Cancellation never rolls back a publication that has already committed.
     controller.abort(new Error('Review server is stopping.'));
     cancelDeadline = schedule(() => {
-      console.error('[serve] Shutdown deadline reached; closing remaining connections.');
-      finish();
+      console.error(
+        '[serve] Shutdown deadline reached; closing remaining connections and waiting for owned work.'
+      );
+      server?.closeAllConnections();
+      maybeFinish();
     });
     drainServer();
     maybeFinish();

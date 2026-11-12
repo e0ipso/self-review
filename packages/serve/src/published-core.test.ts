@@ -11,6 +11,7 @@ import { createPublicationOperations, createReviewOperations } from './review-op
 import { installedServeEngine } from './engine-contract';
 import { validateCompatibleReviewState } from './core-compatibility';
 import { ReviewSubmission } from './review-submission';
+import { createRequestValidation } from './validate';
 import type { ReviewState } from '@self-review/core';
 
 type Host = {
@@ -20,6 +21,7 @@ type Host = {
   installedServeEngine: typeof installedServeEngine;
   validateCompatibleReviewState: typeof validateCompatibleReviewState;
   ReviewSubmission: typeof ReviewSubmission;
+  createRequestValidation: typeof createRequestValidation;
 };
 let directory: string;
 let previous: Host;
@@ -30,6 +32,7 @@ const current: Host = {
   installedServeEngine,
   validateCompatibleReviewState,
   ReviewSubmission,
+  createRequestValidation,
 };
 
 beforeAll(async () => {
@@ -55,6 +58,7 @@ beforeAll(async () => {
         export { installedServeEngine } from './engine-contract';
         export { validateCompatibleReviewState } from './core-compatibility';
         export { ReviewSubmission } from './review-submission';
+        export { createRequestValidation } from './validate';
       `,
       resolveDir: sourceDir,
     },
@@ -110,6 +114,27 @@ for (const peer of ['published 2.0.4', 'current source'] as const) {
       const state: ReviewState = { timestamp: '2026-01-01T00:00:00Z', source, files: [] };
       return { host, root, session, source, identity, payload, output, state };
     }
+
+    it('uses that peer for strict route parsing and typed fallback validation', () => {
+      const { host, state } = fixture();
+      const parse = host.createRequestValidation(host.installedServeEngine);
+      expect(parse.parseReviewStateBody({ ...state, extension: true })).toEqual({
+        ok: false,
+        error: 'unknown field: extension',
+      });
+      expect(parse.parseReviewStateBody({ ...state, files: [null] })).toMatchObject({ ok: false });
+      expect(
+        parse.parseSuggestionApplyBody({
+          filePath: 'a.txt',
+          lineRange: null,
+          suggestion: { originalCode: 'a', proposedCode: 'b' },
+        })
+      ).toMatchObject({ ok: true });
+      expect(parse.parseExpandContextBody({ filePath: 'a.txt', contextLines: 100_000 })).toEqual({
+        ok: false,
+        error: 'contextLines must be an integer between 0 and 99999',
+      });
+    });
 
     it('keeps installed error identity for validation and ownership refusals before writes', async () => {
       const { host, root, session, output, state } = fixture();

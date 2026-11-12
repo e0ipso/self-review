@@ -59,3 +59,48 @@ export function containPath(root: string, candidate: string): string | null {
   const rootWithSep = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
   return resolved.startsWith(rootWithSep) ? resolved : null;
 }
+
+/** Async static-request inspection. Each failed lookup removes one path component;
+ * no directory enumeration or detached I/O. Cancellation joins the pending syscall.
+ * Native metadata work itself is not preemptible.
+ */
+export async function containPathAsync(
+  root: string,
+  candidate: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<string | null> {
+  const { signal } = options;
+  async function realpath(name: string): Promise<string> {
+    signal?.throwIfAborted();
+    const resolved = await fs.promises.realpath(name);
+    signal?.throwIfAborted();
+    return resolved;
+  }
+  let resolvedRoot: string;
+  try {
+    resolvedRoot = await realpath(root);
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (!isUnavailablePathError(error)) throw error;
+    return null;
+  }
+  const missing: string[] = [];
+  let current = path.resolve(resolvedRoot, candidate);
+  for (;;) {
+    signal?.throwIfAborted();
+    try {
+      const ancestor = await realpath(current);
+      const resolved = path.join(ancestor, ...missing.reverse());
+      const rootWithSep = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
+      return resolved === resolvedRoot || resolved.startsWith(rootWithSep) ? resolved : null;
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (!isUnavailablePathError(error)) throw error;
+      if ((error as NodeJS.ErrnoException).code === 'ELOOP') return null;
+      const parent = path.dirname(current);
+      if (parent === current) return null;
+      missing.push(path.basename(current));
+      current = parent;
+    }
+  }
+}

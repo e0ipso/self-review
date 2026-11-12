@@ -9,6 +9,7 @@
 // with no browser equivalent, so the first becomes automatic and the second
 // becomes a startup error.
 
+import { nonThrowingReporter } from './diagnostic-reporter';
 import { resolve } from 'node:path';
 import {
   commitDiffData,
@@ -60,8 +61,9 @@ export async function resolveSessionWithHost(
   options.signal?.throwIfAborted();
   // Phase 2 (main.ts): configuration and the output path.
   const { cwd, operations, reportDiagnostic } = host;
-  const log = (message: string) => reportDiagnostic(`[serve] ${message}`);
-  const loadedConfig = operations.loadConfigWithProvenance({ cwd });
+  const report = nonThrowingReporter(reportDiagnostic);
+  const log = (message: string) => report(`[serve] ${message}`);
+  const loadedConfig = operations.loadConfigWithProvenance({ cwd, reportDiagnostic: report });
   const output = resolveOutputTarget(args.outputPath, loadedConfig, cwd);
   // Advisory (the publisher re-checks at submit), but refusing an output that can never be written beats serving a review with no way out.
   const problem = operations.inspectOutput(output);

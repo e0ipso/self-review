@@ -3,7 +3,7 @@ import { resolve } from 'path';
 import { commitDiffData, commitLoadedReview } from '../../packages/core/src/review-handlers';
 import { computeRemoteDrift, mergeRemoteThreads } from '../../packages/core/src/remote-mode';
 import { confirmPayload } from './presentation';
-import { updateOutputInfo, type DesktopSession } from './desktop-session';
+import { type DesktopSession } from './desktop-session';
 import type { ReviewComment } from '../shared/types';
 import { defaultStartupOperations, type StartupOperations } from './startup-operations';
 
@@ -21,7 +21,24 @@ export async function initializeSession(
   if (remote.closed) return false;
   const { config, source } = plan;
   desktop.output = plan.output;
-  updateOutputInfo(desktop);
+  const problem = await operations.inspectOutput?.(plan.output, review.attachmentOrigins);
+  signal.throwIfAborted();
+  if (remote.closed) return false;
+  review.outputPathInfo = {
+    resolvedOutputPath: plan.output.path,
+    outputPathWritable: !problem,
+  };
+  if (problem) {
+    try {
+      void Promise.resolve(
+        operations.reportDiagnostic(
+          `[main] Output path check (${problem.code}): ${problem.message}`
+        )
+      ).catch(() => {});
+    } catch {
+      // An advisory diagnostic cannot change the inspected state.
+    }
+  }
   review.config = config;
   let fetchedComments: ReviewComment[] = [];
   let loaded: Awaited<ReturnType<StartupOperations['loadLocal']>>;
