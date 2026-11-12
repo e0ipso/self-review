@@ -10,6 +10,7 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "paths": {
+      "@self-review/core/validation": ["./packages/core/src/validation.ts"],
       "@self-review/core": ["./packages/core/src/index.ts"],
       "@self-review/react": ["./packages/react/src/index.ts"],
       "@self-review/types": ["./packages/types/src/index.ts"]

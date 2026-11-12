@@ -119,6 +119,8 @@ export function sendJson(
   value: unknown,
   headers: http.OutgoingHttpHeaders = {}
 ): void {
+  // Serialize before headers so a failure can still produce a useful error.
+  const text = JSON.stringify(value ?? null);
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
@@ -126,7 +128,7 @@ export function sendJson(
     ...headers,
   });
   // `JSON.stringify(undefined)` is undefined; a void core result becomes `null`.
-  res.end(JSON.stringify(value ?? null));
+  res.end(text);
 }
 
 export function sendError(res: http.ServerResponse, status: number, error: string): void {

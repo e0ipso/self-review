@@ -98,7 +98,9 @@ describe('submission diagnostics', () => {
     const report = vi.fn(() => {
       throw new Error('reporter failed');
     });
-    const operations = createReviewOperations(createReviewSession(), {
+    const session = createReviewSession();
+    session.diffData = { source: state.source, files: [] };
+    const operations = createReviewOperations(session, {
       path: '/review.xml',
       origin: 'explicit',
     });

@@ -87,7 +87,9 @@ describe('createFetchAdapter', () => {
     const spy = stubFetch(url =>
       url.startsWith('/api/attachment')
         ? new Response(new Uint8Array([1]), { status: 200 })
-        : json({ diff: DIFF_PAYLOAD, guide: null, ok: true, outputPath: '/r/review.xml' })
+        : url === '/api/apply-suggestion'
+          ? json({ status: 'applied', filePath: 'src/a.ts', replacedLines: 1 })
+          : json({ diff: DIFF_PAYLOAD, guide: null, ok: true, outputPath: '/r/review.xml' })
     );
     const adapter = createFetchAdapter(CAPABILITY);
 
@@ -495,14 +497,13 @@ describe('suggestion transport budget', () => {
   };
 
   it('sends suggestions larger than the context-request budget', async () => {
-    const spy = stubFetch(() => json({ ok: true }));
+    const outcome = { status: 'applied', filePath: request.filePath, replacedLines: 1 };
+    const spy = stubFetch(() => json(outcome));
     const large = {
       ...request,
       suggestion: { ...request.suggestion, proposedCode: 'x'.repeat(70 * 1024) },
     };
-    await expect(createFetchAdapter(CAPABILITY).applySuggestion!(large)).resolves.toEqual({
-      ok: true,
-    });
+    await expect(createFetchAdapter(CAPABILITY).applySuggestion!(large)).resolves.toEqual(outcome);
     expect(JSON.parse(spy.mock.calls[0][1]!.body as string)).toEqual(large);
   });
 
@@ -610,4 +611,66 @@ it('exposes acknowledged publication separately while preserving legacy submit c
   await saving;
   expect(acknowledged).toHaveBeenCalledOnce();
   adapter.dispose();
+});
+
+it.each([
+  null,
+  {},
+  { status: 'applied', filePath: 'src/a.ts' },
+  { status: 'applied', filePath: 'other', replacedLines: 1 },
+  { status: 'applied', filePath: 'src/a.ts', replacedLines: -1 },
+  { status: 'applied', filePath: 'src/a.ts', replacedLines: 1.5 },
+  { status: 'applied', filePath: 'src/a.ts', replacedLines: '1' },
+  { status: 'refused', filePath: 'src/a.ts', reason: 'x' },
+  { status: 'refused', filePath: 'other', reason: 'x', detail: 'no' },
+  { status: 'unexpected', filePath: 'src/a.ts' },
+])('retains uncertainty for malformed Apply success %j without replay', async body => {
+  const fetch = stubFetch(() => json(body));
+  await expect(
+    createFetchAdapter(CAPABILITY).applySuggestion!({
+      filePath: 'src/a.ts',
+      lineRange: { side: 'new', start: 1, end: 1 },
+      suggestion: { originalCode: 'a', proposedCode: 'b' },
+    })
+  ).rejects.toMatchObject({ uncertain: true, code: 'outcome-unknown' });
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it('retains uncertainty for an empty Apply success', async () => {
+  stubFetch(() => new Response('', { status: 200 }));
+  await expect(
+    createFetchAdapter(CAPABILITY).applySuggestion!({
+      filePath: 'a',
+      lineRange: null,
+      suggestion: { originalCode: 'a', proposedCode: 'b' },
+    })
+  ).rejects.toMatchObject({ uncertain: true, code: 'outcome-unknown' });
+});
+
+it.each([400, 413, 500])('preserves attachment HTTP %i failures as errors', async status => {
+  stubFetch(() => json({ error: 'useful failure' }, status));
+  await expect(createFetchAdapter(CAPABILITY).readAttachment!('a')).rejects.toMatchObject({
+    status,
+    uncertain: false,
+  });
+});
+
+it('accepts the unchanged typed refusal shape and keeps precommit HTTP refusals retryable', async () => {
+  const request = {
+    filePath: 'a',
+    lineRange: null,
+    suggestion: { originalCode: 'a', proposedCode: 'b' },
+  };
+  const outcome = {
+    status: 'refused',
+    filePath: 'a',
+    reason: 'invalid-anchor',
+    detail: 'No line anchor.',
+  };
+  stubFetch(() => json(outcome));
+  await expect(createFetchAdapter(CAPABILITY).applySuggestion!(request)).resolves.toEqual(outcome);
+  stubFetch(() => json({ error: 'not reviewed' }, 400));
+  await expect(createFetchAdapter(CAPABILITY).applySuggestion!(request)).rejects.toMatchObject({
+    uncertain: false,
+  });
 });

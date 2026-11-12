@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 import * as core from '@self-review/core';
 import { resolveCompatibleStartupSource } from './startup-compatibility';
-import type { StartupHost } from './startup';
+import type { StartupHost } from './startup-resolver';
 
 export function createStartupHost(
   cwd = process.cwd(),

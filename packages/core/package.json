@@ -41,6 +41,15 @@
       },
       "import": "./dist/filesystem.js",
       "require": "./dist/filesystem.cjs"
+    },
+    "./validation": {
+      "types": {
+        "import": "./dist/validation.d.ts",
+        "require": "./dist/validation.d.cts",
+        "default": "./dist/validation.d.ts"
+      },
+      "import": "./dist/validation.js",
+      "require": "./dist/validation.cjs"
     }
   },
   "files": [

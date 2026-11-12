@@ -9,6 +9,7 @@ import type {
   ExpandContextRequest,
   SuggestionApplyRequest,
 } from '@self-review/core';
+import { ownedReviewState } from './source-ownership';
 import { applyCompatibleSuggestion } from './apply-compatibility';
 import type { SubmissionOperations } from './review-submission';
 
@@ -56,9 +57,10 @@ export function createReviewOperations(
     expandContext: (request, options) => core.expandContext(session, request, undefined, options),
     applySuggestionForSession: (request, options) =>
       applyCompatibleSuggestion(session, request, options),
-    submitReviewState: state => core.submitReviewState(session, state),
+    submitReviewState: state =>
+      core.submitReviewState(session, ownedReviewState(session, state, output.path)),
     publishReview: (state: ReviewState, options) =>
-      core.publishReview(state, output.path, {
+      core.publishReview(ownedReviewState(session, state, output.path), output.path, {
         ...core.publishOptionsFor(output, session.attachmentOrigins),
         signal: options?.signal,
       }),

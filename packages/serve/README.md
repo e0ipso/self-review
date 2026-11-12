@@ -110,13 +110,18 @@ have a 30-second deadline, and Apply and Finish Review have a 60-second deadline
 the response body. Failed initial diff loads can be retried; the retry also loads the walkthrough
 guide.
 
+An Apply acknowledgement must carry the existing applied/refused discriminator, the requested file
+path and all fields of that outcome. An applied result also needs a nonnegative integer
+`replacedLines`; a refusal needs string `reason` and `detail` fields. An empty or malformed 2xx
+reply keeps Apply locked behind the inspection step, including after collapsing the file.
+
 A timeout, lost connection, malformed acknowledgement, or unexpected server error after sending a
 mutation can leave its outcome unknown. The page says so instead of claiming that nothing was
-written. After an uncertain Finish Review, comments remain editable and the close warning stays, but
-Finish Review is unavailable to prevent a blind duplicate submission. Check the terminal and the
-output file, stop the original process, and restart with `--resume-from` if the review was saved. An
-uncertain Apply likewise requires checking the destination before continuing. Mutations are never
-retried automatically. A publisher's explicit refusal remains safely retryable.
+written. After an uncertain Finish Review, the submitted snapshot stays locked and the close warning
+stays, and Finish Review is unavailable to prevent a blind duplicate submission. Check the terminal
+and the output file, stop the original process, and restart with `--resume-from` if the review was
+saved. An uncertain Apply likewise requires checking the destination before continuing. Mutations
+are never retried automatically. A publisher's explicit refusal remains safely retryable.
 
 Closing the tab warns you after comments or viewed flags change, including deleting the last resumed
 comment or clearing a viewed flag. The warning stays until the server acknowledges the save. Your
@@ -157,12 +162,27 @@ filesystem calls and kernel socket buffers may finish after cancellation; cancel
 preempt native I/O.
 
 The server admits at most 32 operations and responses in total, with at most eight concurrent
-expensive image or attachment reads. Excess requests receive `503` with
+expensive DTO, image or attachment reads. Excess requests receive `503` with
 `{"error":"review server busy; retry after pending requests finish"}` before engine work starts.
 This refusal is safely retryable. Apply, context expansion and publication are mutually exclusive. A
 competing publication retains the existing `409` response above; a competing Apply or expansion gets
 `409` with `{"error":"review source mutation or publication already in progress"}`. Wait for the
 active operation before retrying. Publication cannot overtake an admitted source mutation.
+
+Diff, file, config, resume, image and context-expansion JSON responses use bounded data-only DTO
+encoding. Each response is limited to 64 MiB of encoded UTF-8, 2,000,000 visited values or object
+properties, and 128 nesting levels. Limits include escaping and repeated references. A measuring
+pass checks these bounds before successful headers; an over-limit DTO receives `413` without
+omitting hunks. Encoding checks cancellation and yields after 2,048 tokens or 256 KiB of encoded
+work. A second pass streams chunks to the socket and waits for backpressure. It applies the same
+bounds again, so concurrent growth cannot extend delivery indefinitely. An encoding failure after
+headers destroys the incomplete response. Admission stays owned until encoding and response cleanup
+settle. Small Apply/publication acknowledgements and errors use the separate small-response writer,
+which serializes before sending headers.
+
+These limits bound transport encoding, not the engine's existing loaded representation. Native
+string operations, object-key enumeration, JSON parsing and garbage collection cannot be preempted
+by a JavaScript deadline. The supported older engine also retains the synchronous limitations below.
 
 Each admitted request has a 60-second server deadline. Expiry cancels supported work and answers
 `503` with `{"error":"request deadline exceeded; operation outcome may be unknown"}` if headers have
@@ -195,17 +215,32 @@ they run. Serve checks cancellation before invoking legacy Apply and returns its
 afterward, including a committed success, without replay. If the response is lost, inspect the
 destination before continuing. A synchronous wrapper cannot add interruption to that writer.
 
-Serve's compatibility validator enforces the current attachment count and in-memory byte limits
-before session storage on both peers. It cannot bound old core's disk-derived publication reads or
-add cancellation inside the old writer. The compatibility modules must stay until a published
-minimum core provides the validator, request decoder, asynchronous startup/loading, asynchronous
-Apply and bounded cooperative publication. Then raise that minimum and remove the corresponding
-fallbacks together. No unpublished minimum is required today.
+Serve bundles the canonical pure DTO validator and request decoder from the focused
+`@self-review/core/validation` build entry. Only that entry is inlined; the root engine stays an
+installed runtime dependency, so core 2.0.4 needs no new export. Current installed validators and
+decoders are selected when present. Bundled validation failures are translated to the installed
+root's `ReviewXmlError` class so existing error handling keeps its class identity.
+
+This validator enforces the current attachment count and in-memory byte limits before session
+storage on both peers. It cannot bound old core's disk-derived publication reads or add cancellation
+inside the old writer. The runtime compatibility selectors must stay until a published minimum core
+provides asynchronous startup/loading, asynchronous Apply and bounded cooperative publication. Then
+raise that minimum and remove the corresponding fallbacks together. No unpublished minimum is
+required today.
 
 Apply's transport validation checks containers, primitive types and anchor side. A null anchor,
 zero/fractional line number or inverted numeric range reaches core and resolves as its typed refusal
 with HTTP 200, matching the desktop adapter. Reviewed-path authorization and the exact original-code
 check still apply. Context expansion retains its 99,999-line limit.
+
+A submitted source must match the loaded source kind and its required path, or its repository and
+git diff arguments. Property order and supported source extension metadata do not affect ownership.
+A mismatch receives a recoverable `422` validation refusal before cached state, XML or assets
+change. Remote provenance and resumed attachment origins always come from the owned session.
+
+Only missing attachment files receive `404` and become null in the browser. Unauthorized references,
+unsafe links and non-regular files receive `400`, oversized files receive `413`, and operational I/O
+failures receive `500`, preserving the useful read error.
 
 Nested review JSON is validated after attachment decoding and before it enters the session.
 Malformed containers, source kinds, anchors and optional metadata receive a recoverable `400`
