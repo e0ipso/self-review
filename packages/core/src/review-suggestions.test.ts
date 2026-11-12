@@ -66,6 +66,62 @@ function request(): SuggestionApplyRequest {
   };
 }
 
+describe('temporary clone path components', () => {
+  it.each(['..cache', '..cache/nested'])(
+    'refuses a selected %s directory inside the clone',
+    child => {
+      const clone = path.join(root, 'clone');
+      const destination = path.join(clone, child);
+      fs.mkdirSync(destination, { recursive: true });
+      const session = makeSession(clone, true);
+      expect(setApplyDestination(session, destination)).toMatchObject({
+        status: 'rejected',
+        reason: 'destination-inside-temporary-clone',
+      });
+      expect(session.applyDestinationRoot).toBeNull();
+    }
+  );
+
+  it('refuses a virtual alias into a dot-prefixed clone child', () => {
+    const session = makeSession('/virtual/clone', true);
+    expect(
+      setApplyDestination(session, '/virtual/alias', {
+        destinationInspection: {
+          isDirectory: () => true,
+          realpath: target => (target === '/virtual/alias' ? '/virtual/clone/..cache' : target),
+        },
+      })
+    ).toMatchObject({ status: 'rejected', reason: 'destination-inside-temporary-clone' });
+    expect(session.applyDestinationRoot).toBeNull();
+  });
+
+  it('refuses an unsafe directly assigned destination before async Apply writes', async () => {
+    const clone = path.join(root, 'clone');
+    const destination = path.join(clone, '..cache');
+    fs.mkdirSync(destination, { recursive: true });
+    fs.writeFileSync(path.join(destination, 'file'), 'old\n');
+    const session = makeSession(clone, true);
+    session.applyDestinationRoot = destination;
+    expect(await applySuggestionForSessionAsync(session, request())).toMatchObject({
+      status: 'refused',
+    });
+    expect(fs.readFileSync(path.join(destination, 'file'), 'utf8')).toBe('old\n');
+    expect(fs.readdirSync(destination)).toEqual(['file']);
+  });
+
+  it('still accepts a dot-prefixed sibling outside the clone', () => {
+    const clone = path.join(root, 'clone');
+    const destination = path.join(root, '..cache');
+    fs.mkdirSync(clone);
+    fs.mkdirSync(destination);
+    const session = makeSession(clone, true);
+    expect(setApplyDestination(session, destination)).toEqual({
+      status: 'chosen',
+      destinationRoot: destination,
+    });
+  });
+});
+
 /** Run an action after staging has synced, before the final authorization check. */
 function afterSync(action: () => void): AsyncFsLayer {
   return {

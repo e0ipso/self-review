@@ -73,7 +73,8 @@ function isWithin(
     canonicalize(root, inspection),
     canonicalize(candidate, inspection)
   );
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  const escapes = relative === '..' || relative.startsWith(`..${path.sep}`);
+  return relative === '' || (!escapes && !path.isAbsolute(relative));
 }
 
 /**
