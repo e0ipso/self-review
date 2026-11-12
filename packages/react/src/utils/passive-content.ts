@@ -119,6 +119,15 @@ export function rehypePassiveContent() {
           if (classNames.length > 0) node.properties.className = classNames;
           else delete node.properties.className;
         }
+        // Carry reviewed references as inert metadata. They must never be mounted as a raw
+        // resource URL, including on the first render before the authorized read settles.
+        if (node.tagName === 'img' && typeof node.properties.src === 'string') {
+          const source = node.properties.src;
+          if (!isPassiveImageUrl(source)) {
+            if (isLocalImageUrl(source)) node.properties['data-reviewed-image-source'] = source;
+            delete node.properties.src;
+          }
+        }
         // GFM task lists stay visible without allowing interactive form controls.
         if (node.tagName === 'input') {
           node.properties.type = 'checkbox';
@@ -169,8 +178,13 @@ export function isLocalImageUrl(url: string): boolean {
   return !/^[a-z][a-z\d+.-]*:/i.test(normalized);
 }
 
+/** Safe only as an image resource, never as injected SVG markup or an active document. */
+export function isPassiveImageUrl(url: string): boolean {
+  return isLocalImageUrl(url) && /^(?:data:image\/|blob:)/i.test(url.trim());
+}
+
 export const localContentUrlTransform: UrlTransform = (url, key, node) => {
   if (node.tagName === 'a' && key === 'href') return defaultUrlTransform(url);
-  if (node.tagName === 'img' && key === 'src' && isLocalImageUrl(url)) return url;
+  if (node.tagName === 'img' && key === 'src' && isPassiveImageUrl(url)) return url;
   return undefined;
 };

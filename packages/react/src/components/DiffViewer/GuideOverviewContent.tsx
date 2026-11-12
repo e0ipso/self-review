@@ -1,7 +1,8 @@
 import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useMemo, useContext } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { localContentUrlTransform } from '../../utils/passive-content';
+import { localContentUrlTransform, rehypePassiveContent } from '../../utils/passive-content';
+import { ReviewedImage, ReviewedMedia } from '../ReviewedMedia/ReviewedImage';
 import remarkGfm from 'remark-gfm';
 import { Map as MapIcon } from 'lucide-react';
 import type { DiffFile } from '@self-review/types';
@@ -116,13 +117,16 @@ function OverviewContent({
       </div>
 
       <div className='guide-overview-prose prose prose-sm dark:prose-invert mt-5 max-w-none'>
-        <ReactMarkdown
-          urlTransform={localContentUrlTransform}
-          remarkPlugins={[remarkGfm, remarkEmoji]}
-          components={{ code: MarkdownCode }}
-        >
-          {guide.overview}
-        </ReactMarkdown>
+        <ReviewedMedia>
+          <ReactMarkdown
+            urlTransform={localContentUrlTransform}
+            remarkPlugins={[remarkGfm, remarkEmoji]}
+            rehypePlugins={[rehypePassiveContent]}
+            components={{ code: MarkdownCode, img: ReviewedImage }}
+          >
+            {guide.overview}
+          </ReactMarkdown>
+        </ReviewedMedia>
       </div>
     </div>
   );

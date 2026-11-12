@@ -7,6 +7,7 @@ import CommentInput from '../Comments/CommentInput';
 import CommentDisplay from '../Comments/CommentDisplay';
 import { extractOriginalCode } from './diff-utils';
 import { parseFrontMatter } from '../../utils/front-matter';
+import { ReviewedMedia } from '../ReviewedMedia/ReviewedImage';
 import FrontMatterTable from './FrontMatterTable';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
 import { extractAddedFileLines, extractFileContent, getAddedLineNumber } from './rendered-source';
@@ -65,11 +66,13 @@ export default function RenderedMarkdownView({
         data-rendered-text-mode={contentMode}
       >
         {frontMatter && <FrontMatterTable metadata={frontMatter.metadata} />}
-        <PositionedTextContent
-          content={markdownBody}
-          contentMode={contentMode}
-          context={blockContext}
-        />
+        <ReviewedMedia documentPath={filePath}>
+          <PositionedTextContent
+            content={markdownBody}
+            contentMode={contentMode}
+            context={blockContext}
+          />
+        </ReviewedMedia>
       </div>
       {(comments.length > 0 || commentRange) && (
         <section

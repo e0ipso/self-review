@@ -210,7 +210,10 @@ describe('RenderedMarkdownView', () => {
 
     expect(screen.getByText('Safe heading')).toBeTruthy();
     expect(container.querySelector('h1')?.getAttribute('onclick')).toBeNull();
-    expect(container.querySelector('img')?.getAttribute('src')).toBeNull();
+    expect(container.querySelector('img[src]')).toBeNull();
+    expect(screen.getByRole('alert', { name: 'Image preview unavailable' }).textContent).toContain(
+      'External image'
+    );
     expect(container.querySelector('iframe')).toBeNull();
     expect(container.querySelector('script')).toBeNull();
   });

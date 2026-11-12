@@ -12,6 +12,7 @@ import {
   localContentUrlTransform,
   parsePassiveHtml,
 } from '../../utils/passive-content';
+import { ReviewedImage } from '../ReviewedMedia/ReviewedImage';
 import { CommentGutterButton } from './CommentGutterButton';
 import { MarkdownCode } from './MarkdownCode';
 import { remarkEmoji } from '../../utils/remark-emoji';
@@ -307,9 +308,13 @@ function createBlockComponents(
 const MARKDOWN_COMPONENTS: Components = {
   ...createBlockComponents(MARKDOWN_BLOCK_TAGS),
   code: MarkdownCode,
+  img: ReviewedImage,
 };
 
-const HTML_COMPONENTS: Components = createBlockComponents(HTML_BLOCK_TAGS, HTML_CONTAINER_TAGS);
+const HTML_COMPONENTS: Components = {
+  ...createBlockComponents(HTML_BLOCK_TAGS, HTML_CONTAINER_TAGS),
+  img: ReviewedImage,
+};
 
 const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkEmoji];
 const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, rehypePassiveContent];

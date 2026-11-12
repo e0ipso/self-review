@@ -1,7 +1,8 @@
 import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { localContentUrlTransform } from '../../utils/passive-content';
+import { localContentUrlTransform, rehypePassiveContent } from '../../utils/passive-content';
+import { ReviewedImage } from '../ReviewedMedia/ReviewedImage';
 import remarkGfm from 'remark-gfm';
 import type { Reply } from '@self-review/types';
 import { useReviewCommands } from '../../context/ReviewContext';
@@ -98,6 +99,8 @@ export default function ReplyDisplay({ commentId, reply }: ReplyDisplayProps) {
         <ReactMarkdown
           urlTransform={localContentUrlTransform}
           remarkPlugins={[remarkGfm, remarkEmoji]}
+          rehypePlugins={[rehypePassiveContent]}
+          components={{ img: ReviewedImage }}
         >
           {reply.body}
         </ReactMarkdown>
