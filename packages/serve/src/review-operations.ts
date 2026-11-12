@@ -49,6 +49,12 @@ export interface ReviewOperations extends SubmissionOperations {
 export type ReviewTransportOperations = Omit<ReviewOperations, keyof SubmissionOperations>;
 export type PublicationReviewOperations = ReviewTransportOperations & PublicationOperations;
 
+/** Complete first-party role. Original operation roles retain their optional validator. */
+export type ValidatedReviewOperations = ReviewTransportOperations & {
+  requestValidation: RequestValidation;
+};
+export type ValidatedPublicationOperations = ValidatedReviewOperations & PublicationOperations;
+
 /** The publication consumer needs reads, one writer and its peer's validation. */
 export type PublicationEngine = Pick<
   ServeEngine,
@@ -91,6 +97,16 @@ export function createPublicationOperations(
   engine: PublicationEngine = installedServeEngine,
   reportDiagnostic?: (message: string) => void
 ): PublicationReviewOperations {
+  return createValidatedPublicationOperations(session, output, engine, reportDiagnostic);
+}
+
+/** Bind validation and effects from exactly the same selected peer. */
+export function createValidatedPublicationOperations(
+  session: ReviewSession,
+  output: ReviewOutputTarget,
+  engine: PublicationEngine = installedServeEngine,
+  reportDiagnostic?: (message: string) => void
+): ValidatedPublicationOperations {
   const { core, applySuggestion } = engine;
   const report = reportDiagnostic && nonThrowingReporter(reportDiagnostic);
   return {

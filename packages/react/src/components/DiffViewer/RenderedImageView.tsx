@@ -1,5 +1,6 @@
 import { useLocalization } from '../../localization/LocalizationContext';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Button } from '../ui/button';
 import { Loader2 } from 'lucide-react';
 import type { ImageLoadResult } from '@self-review/types';
 import { useAdapter } from '../../context/ReviewAdapterContext';
@@ -16,57 +17,56 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
   const { t, number } = useLocalization();
   const adapter = useAdapter();
   const snapshot = useOptionalSnapshotKey();
-  const [dataUri, setDataUri] = useState<string | null>(null);
-  const [error, setError] = useState<{ unsupported?: boolean; detail?: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const request = useMemo(() => ({}), [filePath, onLoadImage, adapter, snapshot, attempt]);
+  const owner = useRef<object | null>(request);
+  // A replacement hides the old URL during render, before passive effect cleanup.
+  owner.current = request;
+  const [state, setState] = useState<{
+    request: object;
+    dataUri?: string;
+    error?: { unsupported?: boolean; detail?: string };
+    dimensions?: { w: number; h: number };
+  } | null>(null);
+  const current = state?.request === request ? state : null;
+  const { dataUri, error, dimensions } = current ?? {};
+  const loading = !current;
 
   useEffect(() => {
-    if (!onLoadImage && !adapter?.reads?.loadImage && !adapter?.loadImage) {
-      setError({ unsupported: true });
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
+    owner.current = request;
     const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    setDataUri(null);
-    setDimensions(null);
-
-    // Hosts may reject instead of returning `{ error }`; both settle into the error state.
-    // Explicit legacy props still work; first-party previews discover cancellable adapter reads.
-    const read =
-      onLoadImage && onLoadImage !== adapter?.loadImage
-        ? onLoadImage(filePath)
-        : loadImage(adapter, filePath, controller.signal);
-    read.then(
-      (result: ImageLoadResult) => {
-        if (cancelled) return;
-        if (!result) {
-          setError({});
-        } else if ('error' in result) {
-          setError({ detail: result.error });
-        } else if (typeof result.dataUri === 'string' && isPassiveImageUrl(result.dataUri)) {
-          setDataUri(result.dataUri);
-        } else {
-          setError({});
+    const currentRequest = () => !controller.signal.aborted && owner.current === request;
+    if (!onLoadImage && !adapter?.reads?.loadImage && !adapter?.loadImage) {
+      setState({ request, error: { unsupported: true } });
+    } else {
+      // An async boundary catches synchronous custom loader throws as well as rejections.
+      const read = async () =>
+        onLoadImage && onLoadImage !== adapter?.loadImage
+          ? onLoadImage(filePath)
+          : loadImage(adapter, filePath, controller.signal);
+      void read().then(
+        result => {
+          if (!currentRequest()) return;
+          if (!result) setState({ request, error: {} });
+          else if ('error' in result) setState({ request, error: { detail: result.error } });
+          else if (typeof result.dataUri === 'string' && isPassiveImageUrl(result.dataUri))
+            setState({ request, dataUri: result.dataUri });
+          else setState({ request, error: {} });
+        },
+        (reason: unknown) => {
+          if (currentRequest())
+            setState({
+              request,
+              error: { detail: reason instanceof Error ? reason.message : undefined },
+            });
         }
-        setLoading(false);
-      },
-      (reason: unknown) => {
-        if (cancelled) return;
-        setError({ detail: reason instanceof Error ? reason.message : undefined });
-        setLoading(false);
-      }
-    );
-
+      );
+    }
     return () => {
-      cancelled = true;
       controller.abort();
+      if (owner.current === request) owner.current = null;
     };
-  }, [filePath, onLoadImage, adapter, snapshot]);
+  }, [filePath, onLoadImage, adapter, request]);
 
   if (loading) {
     return (
@@ -96,6 +96,11 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
           )}
         </p>
         {error?.detail && <p>{error.detail}</p>}
+        {!error?.unsupported && (
+          <Button variant='outline' size='sm' onClick={() => setAttempt(value => value + 1)}>
+            {t('Retry')}
+          </Button>
+        )}
       </div>
     );
   }
@@ -105,11 +110,18 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
       <img
         src={dataUri}
         alt={filePath}
-        onError={() => setError({})}
+        onError={() => {
+          if (owner.current === request) setState({ request, error: {} });
+        }}
         style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
         onLoad={e => {
           const img = e.currentTarget;
-          setDimensions({ w: img.naturalWidth, h: img.naturalHeight });
+          if (owner.current === request)
+            setState({
+              request,
+              dataUri,
+              dimensions: { w: img.naturalWidth, h: img.naturalHeight },
+            });
         }}
       />
       {dimensions && (

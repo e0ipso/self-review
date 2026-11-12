@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { reviewElement, reviewElements } from '../utils/review-root';
+import { useReviewShortcutPolicy } from '../context/ReviewShortcutContext';
 import { usePortalContainer } from '../context/ConfigContext';
 import { useFileTreeExpansion } from '../context/FileTreeExpansionContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
@@ -38,9 +39,19 @@ export function isTextInputFocused(): boolean {
   if (!el) return false;
   const tag = el.tagName.toLowerCase();
   if (tag === 'input' || tag === 'textarea') return true;
-  if (el.getAttribute('contenteditable') === 'true') return true;
+  if (el.closest('[contenteditable]:not([contenteditable="false"])')) return true;
   if (el.closest('[class*="md-editor"]') || el.closest('[data-color-mode]')) return true;
   return false;
+}
+
+// Native and ARIA controls keep their own character navigation and activation keys.
+function isInteractiveControl(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    !!target.closest(
+      'input, textarea, select, button, a[href], [role="button"], [role="combobox"], [role="listbox"], [role="slider"], [role="spinbutton"], [role="menu"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="switch"], [role="tab"], [role="textbox"], [contenteditable]:not([contenteditable="false"])'
+    )
+  );
 }
 
 function scrollDiff(root: HTMLElement | null, direction: 1 | -1): void {
@@ -52,6 +63,10 @@ function scrollDiff(root: HTMLElement | null, direction: 1 | -1): void {
 
 export function useKeyboardNavigation() {
   const root = usePortalContainer();
+  const policy = useReviewShortcutPolicy();
+  const characterShortcuts = policy?.characterShortcuts ?? true;
+  const shortcutsEnabled = useRef(characterShortcuts);
+  shortcutsEnabled.current = characterShortcuts;
   const expansion = useFileTreeExpansion();
   const activeReview = useRef(false);
   const [mode, setMode] = useState<HintMode>('normal');
@@ -190,7 +205,16 @@ export function useKeyboardNavigation() {
     };
     document.addEventListener('pointerdown', activate, true);
     document.addEventListener('focusin', activate, true);
+    let composing = false;
+    const compositionStart = () => {
+      composing = true;
+      clearHintsRef.current();
+    };
+    const compositionEnd = () => {
+      composing = false;
+    };
     function handleKeyDown(e: KeyboardEvent) {
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || composing) return;
       const target = e.target;
       if (!document.querySelector('[data-review-active]'))
         setActive(document.querySelector('[data-review-shortcuts]') === root);
@@ -203,10 +227,15 @@ export function useKeyboardNavigation() {
       const currentHints = hintsRef.current;
       const currentBuffer = inputBufferRef.current;
 
+      if (isInteractiveControl(target) || isInteractiveControl(focused)) return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'Escape' && currentMode !== 'normal') {
+        e.preventDefault();
+        clearHintsRef.current();
+        return;
+      }
+      if (!shortcutsEnabled.current) return;
       if (currentMode === 'normal') {
-        // Don't handle single-key shortcuts when Ctrl/Cmd is held
-        if (e.ctrlKey || e.metaKey) return;
-
         switch (e.key) {
           case 'f':
             e.preventDefault();
@@ -227,13 +256,6 @@ export function useKeyboardNavigation() {
           default:
             return;
         }
-      }
-
-      // In hint mode
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        clearHintsRef.current();
-        return;
       }
 
       if (/^[a-z0-9]$/i.test(e.key)) {
@@ -259,14 +281,22 @@ export function useKeyboardNavigation() {
     }
 
     document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('compositionstart', compositionStart);
+    document.addEventListener('compositionend', compositionEnd);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('compositionstart', compositionStart);
+      document.removeEventListener('compositionend', compositionEnd);
       document.removeEventListener('pointerdown', activate, true);
       document.removeEventListener('focusin', activate, true);
       root.removeAttribute('data-review-shortcuts');
       root.removeAttribute('data-review-active');
     };
   }, [enterHintMode, activateHint, root]);
+
+  useEffect(() => {
+    if (!characterShortcuts) clearHints();
+  }, [characterShortcuts, clearHints]);
 
   // Dismiss hints on scroll
   useEffect(() => {

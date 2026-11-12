@@ -2,6 +2,13 @@ import { realpath, stat } from 'fs/promises';
 import type { IpcMainInvokeEvent } from 'electron';
 import type { ReviewTransition } from './review-transition';
 
+/** A supplied inspector is authoritative, including its failures and receiver. */
+export interface DirectoryInspection {
+  realpath(path: string): Promise<string>;
+  stat(path: string): Promise<{ dev: number; ino: number; isDirectory(): boolean }>;
+}
+export const nativeDirectoryInspection: DirectoryInspection = { realpath, stat };
+
 interface Selection {
   path: string;
   canonicalPath: string;
@@ -15,9 +22,21 @@ export class DirectorySelection {
   private selection: Selection | null = null;
   private choosing = false;
   constructor(
+    transition: ReviewTransition,
+    capturePeer: (event: IpcMainInvokeEvent) => () => void,
+    pick: (event: IpcMainInvokeEvent) => Promise<string | null>,
+    inspection: DirectoryInspection
+  );
+  constructor(
+    transition: ReviewTransition,
+    capturePeer: (event: IpcMainInvokeEvent) => () => void,
+    pick: (event: IpcMainInvokeEvent) => Promise<string | null>
+  );
+  constructor(
     private readonly transition: ReviewTransition,
     private readonly capturePeer: (event: IpcMainInvokeEvent) => () => void,
-    private readonly pick: (event: IpcMainInvokeEvent) => Promise<string | null>
+    private readonly pick: (event: IpcMainInvokeEvent) => Promise<string | null>,
+    private readonly inspection: DirectoryInspection = nativeDirectoryInspection
   ) {}
 
   async choose(event: IpcMainInvokeEvent): Promise<string | null> {
@@ -31,8 +50,8 @@ export class DirectorySelection {
       peer();
       welcome();
       if (path === null) return null;
-      const canonicalPath = await realpath(path);
-      const info = await stat(canonicalPath);
+      const canonicalPath = await this.inspection.realpath(path);
+      const info = await this.inspection.stat(canonicalPath);
       peer();
       welcome();
       if (!info.isDirectory()) throw new Error('Choose a directory to review.');
@@ -58,8 +77,8 @@ export class DirectorySelection {
     if (!selected || selected.path !== path)
       throw new Error('Choose the review directory using Browse first.');
     selected.assertCurrent();
-    const canonicalPath = await realpath(selected.canonicalPath);
-    const info = await stat(canonicalPath);
+    const canonicalPath = await this.inspection.realpath(selected.canonicalPath);
+    const info = await this.inspection.stat(canonicalPath);
     selected.assertCurrent();
     if (
       selected !== this.selection ||

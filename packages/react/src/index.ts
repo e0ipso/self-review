@@ -146,3 +146,15 @@ export { useInteractionLock } from './hooks/useInteractionLock';
 
 export { useReviewDraftWork, useReviewDraftGuard } from './hooks/useReviewDraft';
 export { UnfinishedReviewDraftError } from './context/review-drafts';
+
+export type { ReviewCommands } from './context/review-commands';
+export { useReviewLoadState } from './context/ReviewLoadContext';
+export type { ReviewLoadState } from './context/ReviewLoadContext';
+export { ReviewRecovery } from './components/ReviewRecovery';
+export { ReviewLoadRecovery } from './components/ReviewLoadRecovery';
+export { ReviewDraftRecovery } from './components/Comments/ReviewDraftRecovery';
+
+export { ReviewShortcutProvider, useReviewShortcutPolicy } from './context/ReviewShortcutContext';
+export type { ReviewShortcutPolicy } from './context/ReviewShortcutContext';
+export { ReviewShortcutToggle } from './components/ReviewShortcutToggle';
+export { KeyboardNavigationManager } from './components/KeyboardNavigationManager';

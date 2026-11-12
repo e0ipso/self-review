@@ -26,6 +26,7 @@ import {
   List,
 } from 'lucide-react';
 import { useCommentDisclosure } from '../context/ReviewDisplayContext';
+import { ReviewShortcutToggle } from './ReviewShortcutToggle';
 import ReviewProgress from './ReviewProgress';
 import { diffTotals } from '../utils/diff-totals';
 
@@ -195,6 +196,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
       </div>
 
       <div className='flex items-center gap-2'>
+        <ReviewShortcutToggle />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

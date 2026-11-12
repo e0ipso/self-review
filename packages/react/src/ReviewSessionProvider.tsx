@@ -28,9 +28,9 @@ import { ReviewDisplayProvider } from './context/ReviewDisplayContext';
 import { ReviewLifecycleContext } from './context/ReviewLifecycleContext';
 import { ReviewLoadContext } from './context/ReviewLoadContext';
 import { ApplyOperationsContext, createApplyOperations } from './context/apply-operation';
-import { ReviewDraftRecovery } from './components/Comments/ReviewDraftRecovery';
+import { ReviewShortcutProvider } from './context/ReviewShortcutContext';
+import { ReviewRecovery } from './components/ReviewRecovery';
 import { FileTreeExpansionProvider } from './context/FileTreeExpansionContext';
-import { ReviewLoadRecovery } from './components/ReviewLoadRecovery';
 
 const adapterIds = new WeakMap<object, number>();
 let nextAdapterId = 1;
@@ -56,7 +56,18 @@ export function ReviewProvider(props: ReviewProviderProps) {
     props.initialFiles ? 'static' : 'adapter',
     props.initialSource ? reviewSessionIdentity(props.initialSource) : '',
   ].join('|');
-  return <ReviewSessionProvider key={sessionKey} {...props} adapter={adapter} />;
+  return (
+    <ReviewShortcutProvider
+      key={sessionKey}
+      initialCharacterShortcuts={props.initialCharacterShortcuts}
+    >
+      <ReviewSessionProvider
+        {...props}
+        recovery={props.recovery === undefined ? <ReviewRecovery /> : props.recovery}
+        adapter={adapter}
+      />
+    </ReviewShortcutProvider>
+  );
 }
 
 function ReviewSessionProvider({
@@ -64,6 +75,7 @@ function ReviewSessionProvider({
   initialFiles,
   initialSource,
   initialComments,
+  recovery,
   adapter,
 }: ReviewProviderProps & { adapter: ReviewAdapter | null }) {
   const [store] = useState(() =>
@@ -107,6 +119,7 @@ function ReviewSessionProvider({
           <ReviewSessionProjection
             store={store}
             commands={commands}
+            recovery={recovery}
             retryLoad={host.retryLoad}
             retryResume={host.retryResume}
           >
@@ -124,12 +137,14 @@ function ReviewSessionProjection({
   commands,
   retryLoad,
   retryResume,
+  recovery,
   children,
 }: {
   store: ReviewSessionStore;
   commands: ReviewCommands;
   retryLoad: () => Promise<void>;
   retryResume: () => Promise<void>;
+  recovery?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -162,17 +177,16 @@ function ReviewSessionProjection({
   return (
     <ReviewContext.Provider value={value}>
       <ReviewLoadContext.Provider value={loading}>
-        <ReviewLoadRecovery />
+        <ReviewDisplayProvider
+          sessionId={state.sessionId}
+          files={diffFiles}
+          isLargePayload={state.isLargePayload}
+          reviewFiles={state.files}
+        >
+          {recovery}
+          {children}
+        </ReviewDisplayProvider>
       </ReviewLoadContext.Provider>
-      <ReviewDisplayProvider
-        sessionId={state.sessionId}
-        files={diffFiles}
-        isLargePayload={state.isLargePayload}
-        reviewFiles={state.files}
-      >
-        <ReviewDraftRecovery />
-        {children}
-      </ReviewDisplayProvider>
     </ReviewContext.Provider>
   );
 }

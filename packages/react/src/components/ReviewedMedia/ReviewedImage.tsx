@@ -3,10 +3,12 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  memo,
   useState,
   useSyncExternalStore,
 } from 'react';
 import type { ExtraProps } from 'react-markdown';
+import type { ReviewSessionStore } from '../../context/review-session';
 import type { DiffFile } from '@self-review/types';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import { ReviewContext, SessionStoreContext } from '../../context/review-context';
@@ -33,15 +35,6 @@ export function ReviewedMedia({
   );
 }
 
-const noSubscribe = () => () => {};
-
-function useReviewedMediaFiles(): DiffFile[] | undefined {
-  const store = useContext(SessionStoreContext);
-  const legacy = useContext(ReviewContext);
-  const read = () => store?.getSnapshot().allDiffFiles ?? legacy?.diffFiles;
-  return useSyncExternalStore(store?.subscribe ?? noSubscribe, read, read);
-}
-
 type ImageProps = React.ImgHTMLAttributes<HTMLImageElement> &
   ExtraProps & {
     'data-reviewed-image-source'?: string;
@@ -60,10 +53,56 @@ export function ReviewedImage({
   dir,
   'data-reviewed-image-source': reference,
 }: ImageProps) {
+  const props = {
+    src,
+    alt,
+    title,
+    width,
+    height,
+    className,
+    lang,
+    dir,
+    'data-reviewed-image-source': reference,
+  };
+  const store = useContext(SessionStoreContext);
+  return store ? (
+    <ModernReviewedImage {...props} store={store} />
+  ) : (
+    <LegacyReviewedImage {...props} />
+  );
+}
+
+const ModernReviewedImage = memo(function ModernReviewedImage({
+  store,
+  ...props
+}: ImageProps & { store: ReviewSessionStore }) {
+  const read = () => store.getSnapshot().allDiffFiles;
+  const files = useSyncExternalStore(store.subscribe, read, read);
+  const snapshot = useOptionalSnapshotKey();
+  return <ReviewedImageContent {...props} files={files} snapshot={snapshot} />;
+});
+
+function LegacyReviewedImage(props: ImageProps) {
+  const review = useContext(ReviewContext);
+  const snapshot = review ? `${review.sessionId}:${review.snapshotId ?? ''}` : '';
+  return <ReviewedImageContent {...props} files={review?.diffFiles} snapshot={snapshot} />;
+}
+
+function ReviewedImageContent({
+  src,
+  alt,
+  title,
+  width,
+  height,
+  className,
+  lang,
+  dir,
+  'data-reviewed-image-source': reference,
+  files,
+  snapshot,
+}: ImageProps & { files?: DiffFile[]; snapshot: string }) {
   const { t } = useLocalization();
   const adapter = useAdapter();
-  const files = useReviewedMediaFiles();
-  const snapshot = useOptionalSnapshotKey();
   const documentPath = useContext(DocumentPathContext);
   const [attempt, setAttempt] = useState(0);
   const directUrl = typeof src === 'string' && isPassiveImageUrl(src) ? src : undefined;

@@ -11,3 +11,14 @@ export function bindRouteValidation(
     validation ?? operations.requestValidation ?? createRequestValidation(installedServeEngine)
   );
 }
+
+/** Modern composition never borrows validation from the installed default peer. */
+export function bindSelectedRouteValidation(
+  operations: import('./review-operations').ValidatedReviewOperations
+): RequestValidation {
+  return {
+    parseExpandContextBody: body => operations.requestValidation.parseExpandContextBody(body),
+    parseSuggestionApplyBody: body => operations.requestValidation.parseSuggestionApplyBody(body),
+    parseReviewStateBody: body => operations.requestValidation.parseReviewStateBody(body),
+  };
+}

@@ -5,7 +5,7 @@ import { bindDesktopReviewOperations, type DesktopReviewOperations } from './rev
 import { createIpcBoundary, noArgument, stringArgument } from './ipc-boundary';
 import { DesktopOperations } from './desktop-operations';
 import { ReviewTransition } from './review-transition';
-import { DirectorySelection } from './directory-selection';
+import { DirectorySelection, nativeDirectoryInspection } from './directory-selection';
 import type { ReviewPresentation } from './presentation';
 import { registerContentHandlers } from './content-ipc';
 import { registerSuggestionHandlers } from './suggestion-ipc';
@@ -27,8 +27,11 @@ export function registerIpcHandlers(
   registerSuggestionHandlers(review, boundary, operations, presentation);
   registerApplicationHandlers(boundary, operations, presentation);
   registerFindHandlers(boundary, operations.signal);
-  const selection = new DirectorySelection(transition, boundary.capture, event =>
-    presentation.pickDirectory(boundary.assertPeer(event))
+  const selection = new DirectorySelection(
+    transition,
+    boundary.capture,
+    event => presentation.pickDirectory(boundary.assertPeer(event)),
+    nativeDirectoryInspection
   );
   boundary.handleCommand(IPC.DIALOG_PICK_DIRECTORY, noArgument, event =>
     operations.read(() => selection.choose(event), 10 * 60_000)
