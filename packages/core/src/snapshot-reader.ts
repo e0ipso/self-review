@@ -14,6 +14,8 @@ import { nodeReadFsLayer, type BoundedAsyncReadFsLayer } from './safe-fs-read';
 import {
   identityStamp,
   loadedSnapshot,
+  loadedReviewState,
+  type LoadedReview,
   sourceStamp,
   captureSourceReads,
   RELOAD_REVIEW,
@@ -21,6 +23,8 @@ import {
 import type { PhysicalCapture } from './loaded-snapshot';
 
 export interface ReviewedSnapshot {
+  /** Explicit load evidence. A logical identity copy alone has only legacy live semantics. */
+  loadedReview?: LoadedReview | null;
   sourceIdentity: ReviewSourceIdentity | null;
   reviewedPaths: ReadonlySet<string>;
 }
@@ -129,7 +133,10 @@ export async function readReviewedContent(
   const sides = identity.fileSources?.get(filePath) ?? identity;
   const descriptor = side === 'old' ? sides.oldSide : sides.newSide;
   const maxBytes = options.maxBytes ?? MAX_SOURCE_FILE_BYTES;
-  const captured = loadedSnapshot(identity);
+  const explicit = source.loadedReview ? loadedReviewState(source.loadedReview) : undefined;
+  if (explicit && (explicit.identity !== identity || !explicit.reviewedPaths.has(filePath)))
+    return failure('read-failed', RELOAD_REVIEW);
+  const captured = explicit?.snapshot ?? loadedSnapshot(identity);
   if (captured && captured.identityStamp !== identityStamp(identity)) {
     return failure('read-failed', RELOAD_REVIEW);
   }
@@ -171,6 +178,22 @@ export async function readReviewedContent(
   if (captured && captured.identityStamp !== identityStamp(identity))
     return failure('read-failed', RELOAD_REVIEW);
   return result;
+}
+
+/** Read through an original load capability; structural/serialized identities are not accepted. */
+export function readLoadedReviewContent(
+  loadedReview: LoadedReview,
+  filePath: string,
+  side: 'old' | 'new',
+  options: SnapshotReadOptions = {}
+): Promise<SnapshotReadResult> {
+  const state = loadedReviewState(loadedReview);
+  return readReviewedContent(
+    { sourceIdentity: state.identity, reviewedPaths: state.reviewedPaths, loadedReview },
+    filePath,
+    side,
+    options
+  );
 }
 
 async function readSide(

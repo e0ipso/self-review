@@ -133,3 +133,29 @@ it('carries desktop startup cancellation into pending guide loading', async () =
     await failure;
   }
 });
+
+it('commits the explicit local load capability while preserving public aliases', async () => {
+  const { loadLocalReview } = await vi.importActual<
+    typeof import('../../packages/core/src/startup')
+  >('../../packages/core/src/startup');
+  const root = await mkdtemp(join(tmpdir(), 'desktop-loaded-capability-'));
+  try {
+    await writeFile(join(root, 'source.txt'), 'reviewed\n');
+    const loaded = await loadLocalReview(
+      { mode: 'directory', sourcePath: root },
+      [],
+      { ignore: [] },
+      root,
+      () => {}
+    );
+    calls.source.mockResolvedValue({ mode: 'directory', sourcePath: root });
+    calls.load.mockResolvedValue(loaded);
+    const desktop = createDesktopSession(root);
+    await expect(initializeSession(desktop, undefined, async () => true)).resolves.toBe(true);
+    expect(desktop.review.loadedReview).toBe(loaded.loadedReview);
+    expect(desktop.review.sourceIdentity).toBe(loaded.identity);
+    expect(desktop.review.diffData).toBe(loaded.payload);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

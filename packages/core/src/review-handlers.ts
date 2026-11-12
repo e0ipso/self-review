@@ -3,6 +3,7 @@
 export {
   createReviewSession,
   commitDiffData,
+  commitLoadedReview,
   locateReviewedFile,
   preparePayload,
   getDiffLoad,

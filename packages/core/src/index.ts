@@ -427,3 +427,11 @@ export type { ApplyDestinationInspection, SuggestionOperationOptions } from './r
 
 export { loadGitReviewSnapshot } from './loaded-git-review';
 export type { GitSnapshotDependencies } from './loaded-git-review';
+
+export type { LoadedReview } from './loaded-snapshot';
+export { loadedReviewIdentity, loadedReviewPaths } from './loaded-snapshot';
+export { readLoadedReviewContent } from './snapshot-reader';
+export { commitLoadedReview } from './review-session';
+export type { LocalReviewDependencies, LocalReviewLoadOptions } from './startup';
+export { resolveLocalSourceIdentityAsync } from './source-identity';
+export type { LocalSourcePaths } from './source-identity';

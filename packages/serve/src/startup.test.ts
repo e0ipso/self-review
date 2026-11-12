@@ -111,6 +111,7 @@ describe('resolveSession', () => {
     );
     expect(process.cwd()).toBe(cwd);
     expect(session.sourceIdentity?.invocationCwd).toBe(repo);
+    expect(session.loadedReview).toBeDefined();
     expect(output).toEqual({
       path: path.join(repo, 'review.xml'),
       origin: 'inherited',

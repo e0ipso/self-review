@@ -1,16 +1,15 @@
 // Prepare directory/file reviews without committing until the host accepts their payload size.
-import { dirname, resolve } from 'node:path';
 import { nodeScanFsLayer } from './node-scan-fs';
-import { admitSyntheticSnapshot } from './loaded-snapshot';
+import { admitSyntheticSnapshot, type LoadedReview } from './loaded-snapshot';
 import { isolatedReporter } from './effect-diagnostics';
 import { checkLoadingCancelled } from './local-loading-lifetime';
 import type { SourceScanOptions } from './directory-scanner';
 import type { DiffLoadPayload, ReviewSourceIdentity, PayloadStats } from './types';
 import type { ReviewSession } from './review-session';
-import { commitDiffData, preparePayload } from './review-session';
+import { commitDiffData, commitLoadedReview, preparePayload } from './review-session';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { computePayloadStats, countTotalLines } from './payload-sizing';
-import { resolveLocalSourceIdentity } from './source-identity';
+import { resolveLocalSourceIdentityAsync } from './source-identity';
 
 /**
  * What a review start produced: the payload built from the scanned path, the
@@ -24,6 +23,8 @@ import { resolveLocalSourceIdentity } from './source-identity';
 export interface ReviewStartResult {
   payload: DiffLoadPayload;
   identity: ReviewSourceIdentity;
+  /** Host-local evidence to pass to commitLoadedReview. Never put this on a wire payload. */
+  loadedReview?: LoadedReview;
   stats: PayloadStats | null;
   exceedsThresholds: boolean;
 }
@@ -67,38 +68,24 @@ export async function prepareDirectoryReview(
     source: { type, sourcePath: directoryPath },
     ...(scan.diagnostics.length > 0 ? { diagnostics: scan.diagnostics } : {}),
   };
-  // A supplied scan owns path resolution as well as bytes; never consult the host disk for it.
-  let identity: ReviewSourceIdentity;
-  if (options.scanFs) {
-    const canonical = (target: string) => scanFs.realpath(target).catch(() => resolve(target));
-    identity = {
-      mode: type,
-      sourceRoot: await canonical(isFile ? dirname(directoryPath) : directoryPath),
-      invocationCwd: process.cwd(),
-      gitDiffArgv: [],
-      pathPrefix: '',
-      oldSide: { kind: 'none' },
-      newSide: isFile
-        ? { kind: 'file', path: await canonical(directoryPath) }
-        : { kind: 'directory' },
-    };
-  } else {
-    identity = resolveLocalSourceIdentity({ type, sourcePath: directoryPath });
-  }
+  const identity = await resolveLocalSourceIdentityAsync(
+    { type, sourcePath: directoryPath },
+    scanFs,
+    options.signal
+  );
   checkLoadingCancelled(options.signal);
-
-  admitSyntheticSnapshot(identity, scan.files);
+  const loadedReview = admitSyntheticSnapshot(identity, scan.files);
 
   // Large payload guard — skipped entirely when there is no config.
   if (!session.config) {
-    return { payload, identity, stats: null, exceedsThresholds: false };
+    return { payload, identity, loadedReview, stats: null, exceedsThresholds: false };
   }
   const stats = computePayloadStats(
     payload.files.length,
     countTotalLines(payload.files),
     session.config
   );
-  return { payload, identity, stats, exceedsThresholds: stats.exceedsAny };
+  return { payload, identity, loadedReview, stats, exceedsThresholds: stats.exceedsAny };
 }
 
 /**
@@ -106,10 +93,12 @@ export async function prepareDirectoryReview(
  * it should proceed. Returns the payload to hand to the transport.
  */
 export function commitReviewStart(
-  session: Pick<ReviewSession, 'diffData' | 'reviewedPaths' | 'sourceIdentity'>,
+  session: Pick<ReviewSession, 'diffData' | 'reviewedPaths' | 'sourceIdentity' | 'loadedReview'>,
   payload: DiffLoadPayload,
-  identity: ReviewSourceIdentity | null
+  identity: ReviewSourceIdentity | null,
+  loadedReview: LoadedReview | undefined = undefined
 ): DiffLoadPayload {
-  commitDiffData(session, payload, identity);
+  if (loadedReview) commitLoadedReview(session, payload, loadedReview);
+  else commitDiffData(session, payload, identity);
   return preparePayload(payload);
 }

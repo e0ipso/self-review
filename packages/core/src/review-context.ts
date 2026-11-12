@@ -16,7 +16,7 @@ import {
 import { readReviewedContent } from './snapshot-reader';
 import type { ReviewedSnapshot } from './snapshot-reader';
 import { rootRelativeReviewedPath } from './source-identity';
-import { loadedSnapshot, RELOAD_REVIEW } from './loaded-snapshot';
+import { loadedSnapshot, loadedReviewState, RELOAD_REVIEW } from './loaded-snapshot';
 import { verifyLoadedComparison } from './snapshot-verification';
 
 /** The effects expansion needs; callers and tests can supply runners/readers without module mocks. */
@@ -54,7 +54,10 @@ async function countReviewedLines(
   });
   if (!result.ok) {
     dependencies.report(`[review] Line count unavailable for ${filePath}: ${result.message}`);
-    return session.sourceIdentity && loadedSnapshot(session.sourceIdentity) ? null : 0;
+    return session.loadedReview ||
+      (session.sourceIdentity && loadedSnapshot(session.sourceIdentity))
+      ? null
+      : 0;
   }
   return countLines(result.content, options.signal);
 }
@@ -79,7 +82,7 @@ async function countLines(content: Buffer, signal?: AbortSignal): Promise<number
  * there is no git diff or tracked file, git's output lacks the file, or git fails.
  */
 export async function expandContext(
-  session: Pick<ReviewSession, 'diffData' | 'sourceIdentity' | 'reviewedPaths'>,
+  session: Pick<ReviewSession, 'diffData' | 'sourceIdentity' | 'reviewedPaths' | 'loadedReview'>,
   request: ExpandContextRequest,
   dependencies: ContextExpansionDependencies = nodeExpansionDependencies,
   options: GitExecutionOptions & { budgets?: Partial<SourceBudgets> } = {}
@@ -135,18 +138,30 @@ export async function expandContext(
 
   // commitDiffData installs a fresh authorization set even when the payload/identity are reused.
   const reviewedPaths = session.reviewedPaths;
-  const snapshot: ReviewedSnapshot = { sourceIdentity: identity, reviewedPaths };
+  const loadedReview = session.loadedReview;
+  const snapshot: ReviewedSnapshot = { sourceIdentity: identity, reviewedPaths, loadedReview };
   const isCurrent = () =>
-    session.reviewedPaths === reviewedPaths && session.sourceIdentity === identity;
+    session.reviewedPaths === reviewedPaths &&
+    session.sourceIdentity === identity &&
+    session.loadedReview === loadedReview;
   try {
     const verify = async () => {
-      if (await verifyLoadedComparison(identity, target, options.signal)) return true;
+      if (await verifyLoadedComparison(identity, target, options.signal, loadedReview)) return true;
       dependencies.report(`[review] Cannot expand ${request.filePath}: ${RELOAD_REVIEW}`);
       return false;
     };
-    if ((loadedSnapshot(identity) && !(await verify())) || !isCurrent()) return null;
+    if (((loadedReview || loadedSnapshot(identity)) && !(await verify())) || !isCurrent())
+      return null;
     const args = contextDiffArgs(identity, target, request.contextLines);
-    const rawDiff = await dependencies.runDiff(args, identity.sourceRoot, options);
+    const captured = loadedReview
+      ? loadedReviewState(loadedReview).snapshot
+      : loadedSnapshot(identity);
+    // The source runner survives the load; its per-load abort signal does not.
+    const { signal: _loadSignal, ...sourceEffects } = captured?.gitOptions ?? {};
+    const rawDiff = await dependencies.runDiff(args, identity.sourceRoot, {
+      ...sourceEffects,
+      ...options,
+    });
     checkCancelled();
     if (!isCurrent()) return null;
     const parsed = await parseDiffWithDiagnosticsAsync(rawDiff, {

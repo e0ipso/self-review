@@ -22,7 +22,8 @@
 // |
 
 import { resolve } from 'path';
-import type { GitExecutionOptions } from './git';
+import type { LoadGitDiffOptions } from './git-diff-loader';
+import type { BufferedCommandRunner } from './command-runner';
 import { checkLoadingCancelled } from './local-loading-lifetime';
 import type { AppConfig, DiffLoadPayload, ReviewSourceIdentity } from './types';
 import type { ConfigValueOrigin, LoadedConfig } from './config';
@@ -35,11 +36,13 @@ import {
   tokenizeGitDiffArgs,
 } from './git-diff-args';
 import { applyStagedUntrackedDefault } from './staged-untracked';
-import { loadGitReviewSnapshot } from './loaded-git-review';
-import { admitSyntheticSnapshot } from './loaded-snapshot';
+import { loadGitReviewSnapshot, type GitSnapshotDependencies } from './loaded-git-review';
+import { admitSyntheticSnapshot, restrictLoadedReview, type LoadedReview } from './loaded-snapshot';
 import { createIgnoreFilter } from './ignore-filter';
 import { scanDirectory, scanFile } from './directory-scanner';
-import { resolveLocalSourceIdentity } from './source-identity';
+import { resolveLocalSourceIdentityAsync } from './source-identity';
+import { nodeScanFsLayer } from './node-scan-fs';
+import type { ScanFsLayer } from './scan-fs';
 import type { StartupSource } from './startup-mode';
 import { parseReviewXml } from './xml-parser';
 import type { ParsedReview } from './xml-parser';
@@ -135,6 +138,19 @@ export function resolveStartupDiffArgs(
 export interface LoadedLocalReview {
   payload: DiffLoadPayload;
   identity: ReviewSourceIdentity | null;
+  /** Host-local capture; optional so original injected loaders remain source compatible. */
+  loadedReview?: LoadedReview | null;
+}
+
+/** Local source effects. A supplied scan owns paths, enumeration and bounded reads together. */
+export interface LocalReviewDependencies {
+  scanFs?: ScanFsLayer;
+  gitSnapshot?: GitSnapshotDependencies;
+}
+
+export interface LocalReviewLoadOptions extends LoadGitDiffOptions {
+  /** Binary blob runner belonging to a supplied Git source. */
+  snapshotRunner?: BufferedCommandRunner;
 }
 
 /**
@@ -147,23 +163,26 @@ export async function loadLocalReview(
   config: Pick<AppConfig, 'ignore'>,
   cwd: string,
   log: (message: string) => void,
-  options: GitExecutionOptions = {}
+  options: LocalReviewLoadOptions = {},
+  dependencies: LocalReviewDependencies = {}
 ): Promise<LoadedLocalReview> {
   const checkCancelled = () => checkLoadingCancelled(options.signal);
   checkCancelled();
   if (source.mode === 'git') {
     const shouldKeep = createIgnoreFilter(config.ignore);
-    const { files, repository, diagnostics, identity } = await loadGitReviewSnapshot(
+    const { files, repository, diagnostics, identity, loadedReview } = await loadGitReviewSnapshot(
       [...gitDiffArgs],
       cwd,
-      { ...options, shouldKeep }
+      { ...options, shouldKeep },
+      dependencies.gitSnapshot
     );
     checkCancelled();
     for (const diagnostic of diagnostics) log(`Diff diagnostic: ${diagnostic}`);
     checkCancelled();
+    const keptFiles = files.filter(f => shouldKeep(f.newPath || f.oldPath));
     return {
       payload: {
-        files: files.filter(f => shouldKeep(f.newPath || f.oldPath)),
+        files: keptFiles,
         source: {
           type: 'git',
           // Quoted so the argv is recoverable exactly from the document's git-diff-args.
@@ -173,25 +192,36 @@ export async function loadLocalReview(
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       },
       identity,
+      loadedReview: loadedReview ? restrictLoadedReview(loadedReview, keptFiles) : undefined,
     };
   }
 
   if (source.mode === 'file' || source.mode === 'directory') {
+    const scanFs = dependencies.scanFs ?? nodeScanFsLayer;
+    const scanOptions = {
+      scanFs,
+      budgets: options.budgets,
+      signal: options.signal,
+      reportDiagnostic: log,
+    };
     const scan =
       source.mode === 'file'
-        ? await scanFile(source.sourcePath, { signal: options.signal, reportDiagnostic: log })
-        : await scanDirectory(source.sourcePath, config.ignore, {
-            signal: options.signal,
-            reportDiagnostic: log,
-          });
+        ? await scanFile(source.sourcePath, scanOptions)
+        : await scanDirectory(source.sourcePath, config.ignore, scanOptions);
     checkCancelled();
     for (const diagnostic of scan.diagnostics) log(`Diff diagnostic: ${diagnostic}`);
     checkCancelled();
-    const identity = resolveLocalSourceIdentity({
-      type: source.mode,
-      sourcePath: source.sourcePath,
-    });
-    admitSyntheticSnapshot(identity, scan.files);
+    const identity = await resolveLocalSourceIdentityAsync(
+      {
+        type: source.mode,
+        sourcePath: source.sourcePath,
+        invocationCwd: dependencies.scanFs ? cwd : undefined,
+      },
+      scanFs,
+      options.signal
+    );
+    checkCancelled();
+    const loadedReview = admitSyntheticSnapshot(identity, scan.files);
     return {
       payload: {
         files: scan.files,
@@ -199,6 +229,7 @@ export async function loadLocalReview(
         ...(scan.diagnostics.length > 0 ? { diagnostics: scan.diagnostics } : {}),
       },
       identity,
+      loadedReview,
     };
   }
 

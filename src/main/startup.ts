@@ -1,6 +1,6 @@
 // Load the desktop session before exposing any renderer or IPC handlers.
 import { resolve } from 'path';
-import { commitDiffData } from '../../packages/core/src/review-handlers';
+import { commitDiffData, commitLoadedReview } from '../../packages/core/src/review-handlers';
 import { computeRemoteDrift, mergeRemoteThreads } from '../../packages/core/src/remote-mode';
 import { confirmPayload } from './presentation';
 import { updateOutputInfo, type DesktopSession } from './desktop-session';
@@ -46,7 +46,9 @@ export async function initializeSession(
   if (payload.source.type !== 'welcome' && !(await confirm(payload, config))) return false;
   signal.throwIfAborted();
   if (remote.closed) return false;
-  commitDiffData(review, payload, identity);
+  if ('loadedReview' in loaded && loaded.loadedReview)
+    commitLoadedReview(review, payload, loaded.loadedReview);
+  else commitDiffData(review, payload, identity);
   let recordedHead: string | undefined;
   if (plan.resumeFrom) {
     const parsed = await operations.resume(review, resolve(cwd, plan.resumeFrom), signal);

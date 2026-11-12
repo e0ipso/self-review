@@ -30,7 +30,7 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
  * source evidence; legacy injected identities retain live descriptor reads.
  */
 export async function loadImage(
-  session: Pick<ReviewSession, 'reviewedPaths' | 'diffData' | 'sourceIdentity'>,
+  session: Pick<ReviewSession, 'reviewedPaths' | 'diffData' | 'sourceIdentity' | 'loadedReview'>,
   filePath: string,
   options: { signal?: AbortSignal; timeoutMs?: number } = {}
 ): Promise<ImageLoadResult> {
@@ -43,10 +43,22 @@ export async function loadImage(
   const located = locateReviewedFile(session, filePath);
   const side = located?.side ?? 'new';
 
-  const result = await readReviewedContent(session, filePath, side, {
-    ...options,
-    maxBytes: MAX_IMAGE_BYTES,
-  });
+  const { sourceIdentity, reviewedPaths, loadedReview } = session;
+  const result = await readReviewedContent(
+    { sourceIdentity, reviewedPaths, loadedReview },
+    filePath,
+    side,
+    {
+      ...options,
+      maxBytes: MAX_IMAGE_BYTES,
+    }
+  );
+  if (
+    session.sourceIdentity !== sourceIdentity ||
+    session.reviewedPaths !== reviewedPaths ||
+    session.loadedReview !== loadedReview
+  )
+    return { error: 'Image preview unavailable — the loaded review changed.' };
   if (!result.ok) {
     if (result.reason === 'too-large') {
       return { error: 'File too large to preview (>10 MB)' };

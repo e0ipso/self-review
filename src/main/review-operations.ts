@@ -14,6 +14,7 @@ import {
   submitReviewState,
 } from '../../packages/core/src/review-handlers';
 import type { ReviewSession } from '../../packages/core/src/review-handlers';
+import type { LoadedReview } from '../../packages/core/src/operations';
 import { checkContentBudget } from './content-budget';
 import type {
   ReviewState,
@@ -83,9 +84,13 @@ export function bindDesktopReviewOperations(session: ReviewSession, canMutate = 
     },
     prepareDirectoryReview: (path: string, signal?: AbortSignal) =>
       prepareDirectoryReview(session, path, { signal }),
-    commitReviewStart: (payload: DiffLoadPayload, identity: ReviewSourceIdentity) => {
+    commitReviewStart: (
+      payload: DiffLoadPayload,
+      identity: ReviewSourceIdentity,
+      loadedReview?: LoadedReview
+    ) => {
       writable();
-      return commitReviewStart(session, payload, identity);
+      return commitReviewStart(session, payload, identity, loadedReview);
     },
   };
 }

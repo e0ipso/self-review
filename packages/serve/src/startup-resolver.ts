@@ -37,6 +37,8 @@ export interface StartupOperations {
   inspectOutput: (output: ReviewOutputTarget) => ReturnType<typeof core.inspectOutputPath>;
   resolveSource: typeof resolveCompatibleStartupSource;
   loadLocalReview: typeof core.loadLocalReview;
+  /** Selected once at composition; absent with Core 2.0.4 or original injected operations. */
+  commitLoadedReview?: typeof core.commitLoadedReview;
   loadResumeDocument: typeof core.loadResumeDocument;
   /** First-party cancellable parsing. Omitted by original injected operation sets. */
   loadResumeDocumentAsync?: typeof loadResumeDocumentAsync;
@@ -83,7 +85,7 @@ export async function resolveSessionWithHost(
         'Run self-review-serve inside a git repository, or pass a directory or file to review.'
     );
   }
-  const { payload: diffData, identity } = await operations.loadLocalReview(
+  const loadedReview = await operations.loadLocalReview(
     source,
     gitDiffArgs,
     config,
@@ -91,6 +93,7 @@ export async function resolveSessionWithHost(
     log,
     options
   );
+  const { payload: diffData, identity } = loadedReview;
   log(`Loaded ${diffData.files.length} files`);
 
   // Phase 4b (main.ts): large payload. Nobody to ask before the browser connects, so lazy loading just turns on.
@@ -143,7 +146,9 @@ export async function resolveSessionWithHost(
   // Phase 6 (main.ts) — assemble. Everything the routes read is on the
   // session before the caller opens the listener.
   // commitDiffData captures the reviewed paths that authorize every apply, and the source identity.
-  commitDiffData(session, diffData, identity);
+  if (loadedReview.loadedReview && operations.commitLoadedReview)
+    operations.commitLoadedReview(session, diffData, loadedReview.loadedReview);
+  else commitDiffData(session, diffData, identity);
   session.guideData = guideData;
   session.config = config;
   session.outputPathInfo = { resolvedOutputPath: output.path, outputPathWritable: true };

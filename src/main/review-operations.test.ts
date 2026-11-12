@@ -90,3 +90,53 @@ it('passes a directory operation cancellation through its bound engine before so
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('keeps the directory capture in the host while sending only the prepared payload', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-directory-capture-'));
+  try {
+    await writeFile(join(root, 'image.png'), Buffer.from([0, 255, 128]));
+    const session = createReviewSession();
+    session.diffData = { source: { type: 'welcome' }, files: [] };
+    const review = bindDesktopReviewOperations(session);
+    const prepared = await review.prepareDirectoryReview(root);
+    vi.spyOn(review, 'prepareDirectoryReview').mockResolvedValue(prepared);
+    const commit = vi.spyOn(review, 'commitReviewStart');
+    const transition = new ReviewTransition(session);
+    const capture = () => () => {};
+    const selection = new DirectorySelection(transition, capture, async () => root);
+    const event = {} as IpcMainInvokeEvent;
+    await selection.choose(event);
+    const send = vi.fn();
+    const boundary = {
+      capture,
+      assertPeer: () => ({ webContents: { send } }),
+    } as unknown as ReturnType<typeof createIpcBoundary>;
+    await startDirectoryReview(
+      event,
+      root,
+      new AbortController().signal,
+      review,
+      boundary,
+      transition,
+      selection,
+      { confirmPayload: vi.fn(async () => true) }
+    );
+    expect(session.loadedReview).toBe(prepared.loadedReview);
+    expect(commit).toHaveBeenCalledWith(prepared.payload, prepared.identity, prepared.loadedReview);
+    expect(session.diffData).toBe(prepared.payload);
+    expect(session.sourceIdentity).toBe(prepared.identity);
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0][0]).toBe(IPC.DIFF_LOAD);
+    expect(send.mock.calls[0][1]).not.toHaveProperty('loadedReview');
+    expect(send.mock.calls[0][1]).not.toHaveProperty('identity');
+    expect(await review.loadImage('image.png', new AbortController().signal)).toHaveProperty(
+      'dataUri'
+    );
+    await writeFile(join(root, 'image.png'), Buffer.from([0, 1, 2, 3]));
+    expect(await review.loadImage('image.png', new AbortController().signal)).toHaveProperty(
+      'error'
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

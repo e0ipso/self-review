@@ -23,7 +23,10 @@ export async function startDirectoryReview(
   const opening = transition.begin();
   try {
     const authorizedPath = await selection.authorize(event, directoryPath);
-    const { payload, identity } = await review.prepareDirectoryReview(authorizedPath, signal);
+    const { payload, identity, loadedReview } = await review.prepareDirectoryReview(
+      authorizedPath,
+      signal
+    );
     current();
     opening.assertCurrent();
     signal.throwIfAborted();
@@ -38,7 +41,7 @@ export async function startDirectoryReview(
     opening.assertCurrent();
     signal.throwIfAborted();
     // Update the cache and send to renderer
-    const outgoing = review.commitReviewStart(payload, identity);
+    const outgoing = review.commitReviewStart(payload, identity, loadedReview);
     boundary.assertPeer(event).webContents.send(IPC.DIFF_LOAD, outgoing);
 
     if (payload.source.type === 'file') {

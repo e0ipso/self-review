@@ -1,5 +1,7 @@
 // First-party git loading brackets mutable reads with bounded, read-only source evidence.
 import path from 'node:path';
+import type { SourceReadFsLayer } from './scan-fs';
+import { nodeScanFsLayer } from './node-scan-fs';
 import { captureIndex, verifyIndexCapture } from './index-capture';
 import { executeGit, getRepoRootAsync } from './git';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
@@ -13,6 +15,8 @@ import type { BoundedAsyncReadFsLayer } from './safe-fs-read';
 import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
 import {
   recordLoadedSnapshot,
+  createLoadedReview,
+  type LoadedReview,
   sourceStamp,
   sourceCapture,
   RELOAD_REVIEW,
@@ -97,11 +101,14 @@ export async function inspectPhysicalSource(
 /** Source loading and later physical reads must belong to the same supplied filesystem. */
 export interface GitSnapshotDependencies {
   readonly readFs: BoundedAsyncReadFsLayer;
+  /** Needed when the standard diff loader also reads untracked source/link content. */
+  readonly sourceFs?: SourceReadFsLayer;
   loadDiff: typeof loadGitDiffWithUntracked;
 }
 
 const nodeSnapshotDependencies: GitSnapshotDependencies = {
   readFs: nodeReadFsLayer,
+  sourceFs: nodeScanFsLayer,
   loadDiff: loadGitDiffWithUntracked,
 };
 
@@ -116,11 +123,13 @@ export async function loadGitReviewSnapshot(
     snapshotRunner?: import('./command-runner').BufferedCommandRunner;
   } = {},
   dependencies: GitSnapshotDependencies = nodeSnapshotDependencies
-): Promise<LoadGitDiffResult> {
+): Promise<LoadGitDiffResult & { loadedReview?: LoadedReview }> {
+  const readFs = options.readFs ?? dependencies.readFs;
+  const sourceFs = options.readFs ?? dependencies.sourceFs;
+  const loadOptions = { ...options, readFs: sourceFs, sourcePaths: options.sourcePaths ?? readFs };
   if (findUnsupportedGitDiffOptions(args).length > 0)
-    return dependencies.loadDiff(args, cwd, options);
+    return dependencies.loadDiff(args, cwd, loadOptions);
   const root = await getRepoRootAsync(cwd, options);
-  const { readFs } = dependencies;
   const sides = describeGitDiffSides(args);
   const usesIndex = [sides.oldSide, sides.newSide].some(side => side.kind === 'index');
   const usesWorking = [sides.oldSide, sides.newSide].some(side => side.kind === 'working-tree');
@@ -141,7 +150,7 @@ export async function loadGitReviewSnapshot(
       if (capture) physical.set(filePath, capture);
     }
   }
-  const result = await dependencies.loadDiff(args, cwd, options);
+  const result = await dependencies.loadDiff(args, cwd, loadOptions);
   const after = usesIndex ? await readIndexManifest(root, options, [...selected]) : before;
   if (indexCapture && !(await verifyIndexCapture(indexCapture, options.signal)))
     throw new Error(RELOAD_REVIEW);
@@ -167,7 +176,7 @@ export async function loadGitReviewSnapshot(
       }
     }
   }
-  recordLoadedSnapshot(
+  const snapshot = recordLoadedSnapshot(
     result.identity,
     admitted,
     index,
@@ -175,5 +184,5 @@ export async function loadGitReviewSnapshot(
     options.snapshotRunner,
     indexCapture
   );
-  return result;
+  return { ...result, loadedReview: createLoadedReview(result.identity, result.files, snapshot) };
 }
