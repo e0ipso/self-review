@@ -470,7 +470,10 @@ and names the option and the file. Your own arguments and user config are not re
   vendor/build dirs and lock files)
 - `categories`: custom comment tags (see example above)
 - `default-diff-args`: default arguments passed to `git diff`, split with shell quoting rules, so
-  `-- "my file.txt"` stays a single argument
+  `-- "my file.txt"` keeps the path as a single argument. An unmatched single or double quote, or a
+  trailing unquoted backslash, rejects that setting with a warning and keeps the inherited
+  user/default value. Other settings in the same file still apply. Persisted review argument strings
+  retain tolerant parsing for compatibility.
 - `show-untracked`: show new files not yet added to git (default: true)
 - `word-wrap`: wrap long lines in the diff viewer (default: true)
 - `max-files`: maximum number of files before the large payload guard triggers (default: 500). Set

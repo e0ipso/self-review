@@ -8,6 +8,7 @@ import { parse as parseYaml } from 'yaml';
 import { AppConfig } from './types';
 import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { createDefaultConfig } from '../../config/src/index';
+import { gitDiffArgsSyntaxError } from './git-argument-text';
 
 // Privately owned reference values, independent of the public compatibility snapshots.
 const defaults = createDefaultConfig();
@@ -184,7 +185,14 @@ function loadYamlConfig(
   }
 
   if ('default-diff-args' in raw && typeof raw['default-diff-args'] === 'string') {
-    config.defaultDiffArgs = raw['default-diff-args'];
+    const syntaxError = gitDiffArgsSyntaxError(raw['default-diff-args']);
+    if (syntaxError === null) {
+      config.defaultDiffArgs = raw['default-diff-args'];
+    } else {
+      reportDiagnostic(
+        `Warning: Invalid default-diff-args: ${syntaxError}; keeping the inherited value`
+      );
+    }
   }
 
   if ('show-untracked' in raw && typeof raw['show-untracked'] === 'boolean') {
