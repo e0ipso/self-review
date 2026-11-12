@@ -16,7 +16,7 @@ import type { ReviewTransportOperations } from './review-operations';
 import { nonThrowingReporter } from './diagnostic-reporter';
 import { ReviewSubmission } from './review-submission';
 import { createBoundApiRoutes } from './bound-api-routes';
-import { bindRouteValidation } from './route-composition';
+import { bindRouteValidation, bindSelectedRouteValidation } from './route-composition';
 export { MAX_EXPAND_CONTEXT_BODY_BYTES } from './api-routes';
 import {
   RequestAdmission,
@@ -26,6 +26,7 @@ import {
   type RequestKind,
 } from './request-admission';
 import { JsonResponseLimitError } from './json-response';
+import { JsonBodyProcessing } from './json-body-processing';
 import { REVIEW_PUBLISHED } from './lifecycle';
 
 export { MAX_REVIEW_BODY_BYTES } from './protocol';
@@ -38,6 +39,8 @@ export function defaultClientDir(): string {
 export interface ReviewTransportOptions extends AdmissionOptions {
   /** Bearer token required on every API request; never returned by the server. */
   capability: string;
+  /** Host-owned byte decoder. The default uses the bundled Node worker. */
+  jsonBodyProcessing?: JsonBodyProcessing;
   clientDir?: string;
   /** Accepted sockets, including idle peers and incomplete HTTP headers. */
   maxConnections?: number;
@@ -53,6 +56,22 @@ export interface PublicationReviewServerOptions extends ReviewTransportOptions {
 /** No session, output path or engine construction belongs to this transport. */
 export function createBoundReviewServer(
   options: PublicationReviewServerOptions
+): ManagedReviewServer {
+  return serveBoundReview(options, bindRouteValidation(options.operations));
+}
+
+/** Complete first-party composition, with no unrelated-engine validation fallback. */
+export function createValidatedReviewServer(
+  options: Omit<PublicationReviewServerOptions, 'operations'> & {
+    operations: import('./review-operations').ValidatedReviewOperations;
+  }
+): ManagedReviewServer {
+  return serveBoundReview(options, bindSelectedRouteValidation(options.operations));
+}
+
+function serveBoundReview(
+  options: PublicationReviewServerOptions,
+  validation: import('./validate').RequestValidation
 ): ManagedReviewServer {
   const { capability, clientDir = defaultClientDir(), operations } = options;
   const report = nonThrowingReporter(options.reportDiagnostic);
@@ -72,12 +91,8 @@ export function createBoundReviewServer(
   const published = (response: http.ServerResponse) =>
     server.emit(REVIEW_PUBLISHED, response, () => admission.drain());
 
-  const routes = createBoundApiRoutes(
-    operations,
-    submission,
-    published,
-    bindRouteValidation(operations)
-  );
+  const processing = options.jsonBodyProcessing ?? new JsonBodyProcessing();
+  const routes = createBoundApiRoutes(operations, submission, published, validation, processing);
   const routeMethods = new Map<string, string[]>();
   for (const key of Object.keys(routes)) {
     const [method, path] = key.split(' ');
@@ -202,7 +217,8 @@ export function createBoundReviewServer(
   const server = http.createServer((req, res) => {
     void dispatch(req, res);
   }) as ManagedReviewServer;
-  server[REQUEST_SHUTDOWN] = () => admission.shutdown();
+  server[REQUEST_SHUTDOWN] = () =>
+    Promise.all([admission.shutdown(), processing.shutdown()]).then(() => {});
   // node:net closes excess sockets before HTTP parses any request bytes.
   server.maxConnections = maxConnections;
   server.headersTimeout = 15_000;

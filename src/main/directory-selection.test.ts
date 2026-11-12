@@ -57,3 +57,55 @@ it('rejects picker completions after remote start or window/frame loss', async (
     await rejected;
   }
 });
+
+it('uses an authoritative virtual inspector with its receiver and exact picker path', async () => {
+  const transition = new ReviewTransition({ diffData: { files: [], source: { type: 'welcome' } } });
+  const inspection = {
+    canonical: '/virtual/physical',
+    inode: 42,
+    async realpath(path: string) {
+      expect(['/virtual/chosen', this.canonical]).toContain(path);
+      return this.canonical;
+    },
+    async stat(path: string) {
+      expect(path).toBe(this.canonical);
+      return { dev: 7, ino: this.inode, isDirectory: () => true };
+    },
+  };
+  const selection = new DirectorySelection(
+    transition,
+    () => () => {},
+    async () => '/virtual/chosen',
+    inspection
+  );
+  const event = {} as IpcMainInvokeEvent;
+  expect(await selection.choose(event)).toBe('/virtual/chosen');
+  await expect(selection.authorize(event, inspection.canonical)).rejects.toThrow(/Browse/);
+  expect(await selection.authorize(event, '/virtual/chosen')).toBe('/virtual/physical');
+  inspection.inode++;
+  await expect(selection.authorize(event, '/virtual/chosen')).rejects.toThrow(/changed/);
+});
+
+it('propagates inspection failures without native fallback and allows an explicit retry', async () => {
+  const failure = new Error('virtual inspection unavailable');
+  const inspection = {
+    realpath: vi
+      .fn<(path: string) => Promise<string>>()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValue('/virtual'),
+    stat: vi.fn(async () => ({ dev: 1, ino: 2, isDirectory: () => true })),
+  };
+  const transition = new ReviewTransition({ diffData: { files: [], source: { type: 'welcome' } } });
+  const selection = new DirectorySelection(
+    transition,
+    () => () => {},
+    async () => '/virtual',
+    inspection
+  );
+  const event = {} as IpcMainInvokeEvent;
+  await expect(selection.choose(event)).rejects.toBe(failure);
+  expect(inspection.stat).not.toHaveBeenCalled();
+  await expect(selection.choose(event)).resolves.toBe('/virtual');
+  inspection.stat.mockRejectedValueOnce(failure);
+  await expect(selection.authorize(event, '/virtual')).rejects.toBe(failure);
+});

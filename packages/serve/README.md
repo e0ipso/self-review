@@ -197,8 +197,9 @@ settle. Small Apply/publication acknowledgements and errors use the separate sma
 which serializes before sending headers.
 
 These limits bound transport encoding, not the engine's existing loaded representation. Native
-string operations, object-key enumeration, JSON parsing and garbage collection cannot be preempted
-by a JavaScript deadline. The supported older engine also retains the synchronous limitations below.
+string operations, object-key enumeration, small-body JSON parsing and garbage collection cannot be
+preempted by a JavaScript deadline. Large request decoding and parsing use the owned worker below.
+The supported older engine also retains the synchronous limitations below.
 
 Each admitted request has a 60-second server deadline. Expiry cancels supported work and answers
 `503` with `{"error":"request deadline exceeded; operation outcome may be unknown"}` if headers have
@@ -273,6 +274,28 @@ sequences receive the existing generic `400` `{"error":"body must be valid JSON"
 publication, Apply or other operation execution. Valid multibyte characters may span request chunks;
 encoded U+FFFD remains valid text. A leading UTF-8 BOM still receives the same refusal. Media type,
 byte caps and cancellation handling are unchanged.
+
+Bodies through 128 KiB decode and parse inline. Larger bodies use a one-shot Node worker for
+concatenation, fatal UTF-8 decoding and JSON parsing. Collection copies bytes incrementally into 64
+KiB transferable blocks, limiting transfer-list size even with tiny incoming chunks. A decoder
+admits at most two large bodies and 64 MiB of reserved input, including collection and termination,
+with no waiting queue. Saturation receives the existing busy error text and HTTP 503. The server's
+exclusive mutation/publication admission usually allows only one such body at a time. The 32 MiB
+per-request cap is unchanged. Disconnect, request expiry and shutdown cancel parsing and join worker
+termination before releasing admission. If termination fails, the worker remains owned until exit;
+shutdown does not claim a hard time bound.
+
+The existing tsup build emits `dist/json-body-worker.js` beside `cli.js`; the default factory
+resolves it relative to that module. Build it with `npm run build --workspace @self-review/serve`. A
+source host can supply `jsonBodyProcessing: new JsonBodyProcessing(createWorker)` with a factory for
+its built worker entry. Each server owns that processor through shutdown, so independently retiring
+servers must use separate processors. The four-argument `readJsonBody` form accepts an explicit
+processor; its original three-argument form remains available. Only byte decoding and JSON parsing
+cross the worker boundary. Returning the parsed object still requires host structured cloning;
+attachment decoding, injected validators and engine functions remain on the host and can block it.
+Cancellation cannot preempt those host functions. Deeply nested JSON uses a flat internal transfer
+form to avoid native message-clone recursion limits. It reconstructs the same containers and own
+properties and imposes no additional JSON depth limit; reconstruction also runs on the host.
 
 Nested review JSON is validated after attachment decoding and before it enters the session.
 Malformed containers, source kinds, anchors and optional metadata receive a recoverable `400`
@@ -401,13 +424,17 @@ Startup forwards its host reporter through `loadConfigWithProvenance` options. R
 rejections cannot change loaded configuration or provenance. Core 2.0.4 ignores this option and
 keeps its own configuration diagnostics on stderr, as it does for guide and image diagnostics.
 
-First-party transport construction uses `createBoundReviewServer` with bound read operations and an
-explicit publication role from `createPublicationOperations`. Publication owns its supplied state
-and does not first mutate the session's handoff cache. The existing `createReviewServer` overloads,
-`createReviewOperations`, `SubmissionOperations` and `ReviewSubmission` constructor retain the
-original submit-then-publish sequence, including custom handoff side effects. The transport and
-publication reporter contains both synchronous throws and asynchronous rejections; default route
-failure details still go to stderr.
+First-party transport construction uses `createValidatedReviewServer` with bound read operations and
+an explicit publication role from `createValidatedPublicationOperations`. These complete internal
+roles require the selected engine's request validation. Replacement operations and validator objects
+remain observable after route construction. There is no installed-engine fallback in that path.
+`createBoundReviewServer`, `createPublicationOperations` and their original reflected contracts
+remain available with optional validation and the existing compatibility default. Publication owns
+its supplied state and does not first mutate the session's handoff cache. The existing
+`createReviewServer` overloads, `createReviewOperations`, `SubmissionOperations` and
+`ReviewSubmission` constructor retain the original submit-then-publish sequence, including custom
+handoff side effects. The transport and publication reporter contains both synchronous throws and
+asynchronous rejections; default route failure details still go to stderr.
 
 Startup's original required synchronous `loadResumeDocument` operation keeps its type and behavior
 for injected operation sets. The optional `loadResumeDocumentAsync` takes the startup signal and

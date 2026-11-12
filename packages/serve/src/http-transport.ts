@@ -1,6 +1,13 @@
 // HTTP security, responses and bounded JSON decoding. No review policy lives here.
 
-import { TextDecoder } from 'node:util';
+import { decodeJsonBody, type JsonBodyResult } from './json-body-codec';
+import {
+  defaultJsonBodyProcessing,
+  INLINE_JSON_BODY_BYTES,
+  type JsonBodyProcessing,
+  type JsonBodyLease,
+} from './json-body-processing';
+import { SERVER_BUSY_ERROR } from './protocol';
 import type * as http from 'node:http';
 import { capabilityMatches } from './capability';
 import { CAPABILITY_SCHEME } from './protocol';
@@ -170,72 +177,124 @@ export function allowRequest(
   return true;
 }
 
-type BodyResult = { ok: true; value: unknown } | { ok: false; status: number; error: string };
+type BodyResult = JsonBodyResult;
 
-/**
- * The declared length is checked before a byte is read and the running total
- * during it, so a chunked body without a length is capped too.
- */
+/** Original reflected call contract remains the three-argument form. */
+export function readJsonBody(
+  req: http.IncomingMessage,
+  maxBytes: number,
+  signal: AbortSignal | undefined,
+  processing: JsonBodyProcessing
+): Promise<BodyResult>;
 export function readJsonBody(
   req: http.IncomingMessage,
   maxBytes: number,
   signal?: AbortSignal
+): Promise<BodyResult>;
+/** Length checks precede allocation; large bodies reserve worker ownership while collecting. */
+export async function readJsonBody(
+  req: http.IncomingMessage,
+  maxBytes: number,
+  signal?: AbortSignal,
+  processing: JsonBodyProcessing = defaultJsonBodyProcessing
 ): Promise<BodyResult> {
   const contentType = req.headers['content-type'] ?? '';
   if (contentType.split(';', 1)[0].trim().toLowerCase() !== 'application/json') {
-    return Promise.resolve({
-      ok: false,
-      status: 415,
-      error: 'content-type must be application/json',
-    });
+    return { ok: false, status: 415, error: 'content-type must be application/json' };
   }
   const declared = Number(req.headers['content-length']);
   if (Number.isFinite(declared) && declared > maxBytes) {
-    return Promise.resolve({ ok: false, status: 413, error: 'request body too large' });
+    return { ok: false, status: 413, error: 'request body too large' };
   }
-
-  return new Promise(resolve => {
-    const chunks: Buffer[] = [];
-    let received = 0;
-    const finish = (result: BodyResult) => {
-      req.off('data', onData);
-      req.off('end', onEnd);
-      req.off('error', onError);
-      req.off('aborted', onError);
-      signal?.removeEventListener('abort', onError);
-      chunks.length = 0;
-      resolve(result);
-    };
-    const onData = (chunk: Buffer) => {
-      received += chunk.length;
-      if (received > maxBytes) {
-        finish({ ok: false, status: 413, error: 'request body too large' });
-        return;
-      }
-      chunks.push(chunk);
-    };
-    const onEnd = () => {
-      try {
-        // Keep the BOM in the decoded text so JSON.parse retains its historical refusal.
-        const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
-          Buffer.concat(chunks)
-        );
-        const value: unknown = JSON.parse(text);
-        finish({ ok: true, value });
-      } catch {
-        finish({ ok: false, status: 400, error: 'body must be valid JSON' });
-      }
-    };
-    const onError = () =>
-      finish({ ok: false, status: 400, error: 'request body could not be read' });
-    if (signal?.aborted) {
-      onError();
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  let received = 0;
+  let tailBytes = 0;
+  const ownership: { lease: JsonBodyLease | null } = { lease: null };
+  const cancelled = new AbortController();
+  const unreadable: BodyResult = {
+    ok: false,
+    status: 400,
+    error: 'request body could not be read',
+  };
+  let collected!: (result: BodyResult | null) => void;
+  const collection = new Promise<BodyResult | null>(resolve => {
+    collected = resolve;
+  });
+  let reading = true;
+  const finishCollection = (result: BodyResult | null) => {
+    if (!reading) return;
+    reading = false;
+    req.off('data', onData);
+    req.off('end', onEnd);
+    collected(result);
+  };
+  const onError = () => {
+    cancelled.abort();
+    finishCollection(unreadable);
+  };
+  const onData = (chunk: Buffer) => {
+    received += chunk.length;
+    if (received > maxBytes) {
+      finishCollection({ ok: false, status: 413, error: 'request body too large' });
       return;
     }
+    if (!ownership.lease && received > INLINE_JSON_BODY_BYTES) {
+      ownership.lease = processing.reserve(maxBytes);
+      if (!ownership.lease) {
+        finishCollection({ ok: false, status: 503, error: SERVER_BUSY_ERROR });
+        return;
+      }
+      ownership.lease.signal.addEventListener('abort', onError, { once: true });
+      if (ownership.lease.signal.aborted) {
+        onError();
+        return;
+      }
+    }
+    // Fixed-size owned blocks bound the transfer list even for one-byte stream chunks.
+    // Copies are incremental; there is no main-thread full-body concatenation or clone.
+    let offset = 0;
+    while (offset < chunk.length) {
+      let tail = chunks[chunks.length - 1];
+      if (!tail || tailBytes === tail.length) {
+        tail = new Uint8Array(64 * 1024);
+        chunks.push(tail);
+        tailBytes = 0;
+      }
+      const length = Math.min(tail.length - tailBytes, chunk.length - offset);
+      tail.set(chunk.subarray(offset, offset + length), tailBytes);
+      tailBytes += length;
+      offset += length;
+    }
+  };
+  const onEnd = () => finishCollection(null);
+  try {
+    if (signal?.aborted) return unreadable;
     req.on('data', onData);
     req.once('end', onEnd);
-    req.once('error', onError);
+    req.on('error', onError);
     req.once('aborted', onError);
     signal?.addEventListener('abort', onError, { once: true });
-  });
+    const failure = await collection;
+    if (failure) return failure;
+    if (cancelled.signal.aborted) return unreadable;
+    const last = chunks.length - 1;
+    if (last >= 0 && tailBytes < chunks[last].length)
+      chunks[last] = chunks[last].slice(0, tailBytes);
+    const result = ownership.lease
+      ? await ownership.lease.parse(
+          chunks.map(chunk => chunk.buffer),
+          cancelled.signal
+        )
+      : decodeJsonBody(chunks);
+    return cancelled.signal.aborted ? unreadable : result;
+  } finally {
+    req.off('data', onData);
+    req.off('end', onEnd);
+    req.off('error', onError);
+    req.off('aborted', onError);
+    signal?.removeEventListener('abort', onError);
+    ownership.lease?.signal.removeEventListener('abort', onError);
+    ownership.lease?.release();
+    chunks.length = 0;
+  }
 }

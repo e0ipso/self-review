@@ -7,6 +7,7 @@ import { readJsonBody, sendJson, sendError, SECURITY_HEADERS } from './http-tran
 import type { ReviewTransportOperations as ReviewOperations } from './review-operations';
 import { ReviewSubmission, publishFailureStatus } from './review-submission';
 import { sendLargeJson } from './json-response';
+import { defaultJsonBodyProcessing, type JsonBodyProcessing } from './json-body-processing';
 import type { RequestKind } from './request-admission';
 
 export const MAX_EXPAND_CONTEXT_BODY_BYTES = 64 * 1024;
@@ -113,11 +114,12 @@ function createExpansionRoute(
     authorizeReviewedPath,
     expandContext,
   }: Pick<ReviewOperations, 'authorizeReviewedPath' | 'expandContext'>,
-  parseExpandContextBody: RequestValidation['parseExpandContextBody']
+  parseExpandContextBody: RequestValidation['parseExpandContextBody'],
+  processing: JsonBodyProcessing
 ): RouteHandler {
   return async ctx => {
     const { req, res } = ctx;
-    const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES, ctx.signal);
+    const body = await readJsonBody(req, MAX_EXPAND_CONTEXT_BODY_BYTES, ctx.signal, processing);
     if (!body.ok) {
       sendError(res, body.status, body.error);
       return;
@@ -140,11 +142,12 @@ function createApplyRoute(
     authorizeReviewedPath,
     applySuggestionForSession,
   }: Pick<ReviewOperations, 'authorizeReviewedPath' | 'applySuggestionForSession'>,
-  parseSuggestionApplyBody: RequestValidation['parseSuggestionApplyBody']
+  parseSuggestionApplyBody: RequestValidation['parseSuggestionApplyBody'],
+  processing: JsonBodyProcessing
 ): RouteHandler {
   return async ctx => {
     const { req, res } = ctx;
-    const body = await readJsonBody(req, MAX_APPLY_BODY_BYTES, ctx.signal);
+    const body = await readJsonBody(req, MAX_APPLY_BODY_BYTES, ctx.signal, processing);
     if (!body.ok) {
       sendError(res, body.status, body.error);
       return;
@@ -162,7 +165,8 @@ function createApplyRoute(
 function createSubmissionRoute(
   submission: Pick<ReviewSubmission, 'begin' | 'publish' | 'release'>,
   published: (response: http.ServerResponse) => void,
-  parseReviewStateBody: RequestValidation['parseReviewStateBody']
+  parseReviewStateBody: RequestValidation['parseReviewStateBody'],
+  processing: JsonBodyProcessing
 ): RouteHandler {
   return async ({ req, res, signal }) => {
     if (!submission.begin()) {
@@ -170,7 +174,7 @@ function createSubmissionRoute(
       return;
     }
     try {
-      const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES, signal);
+      const body = await readJsonBody(req, MAX_REVIEW_BODY_BYTES, signal, processing);
       if (!body.ok) {
         sendError(res, body.status, body.error);
         return;
@@ -203,7 +207,21 @@ export function createBoundApiRoutes(
   operations: ReviewOperations,
   submission: ReviewSubmission,
   published: (response: http.ServerResponse) => void,
+  validation: RequestValidation,
+  processing: JsonBodyProcessing
+): Record<string, ApiRoute>;
+export function createBoundApiRoutes(
+  operations: ReviewOperations,
+  submission: ReviewSubmission,
+  published: (response: http.ServerResponse) => void,
   validation: RequestValidation
+): Record<string, ApiRoute>;
+export function createBoundApiRoutes(
+  operations: ReviewOperations,
+  submission: ReviewSubmission,
+  published: (response: http.ServerResponse) => void,
+  validation: RequestValidation,
+  processing: JsonBodyProcessing = defaultJsonBodyProcessing
 ): Record<string, ApiRoute> {
   // Keep operation replacement observable for hosts using the existing injected test seam.
   const getDiffLoad = () => operations.getDiffLoad();
@@ -257,7 +275,8 @@ export function createBoundApiRoutes(
           authorizeReviewedPath,
           expandContext: (...args) => operations.expandContext(...args),
         },
-        validation.parseExpandContextBody
+        validation.parseExpandContextBody,
+        processing
       ),
     },
     'POST /api/apply-suggestion': {
@@ -267,12 +286,18 @@ export function createBoundApiRoutes(
           authorizeReviewedPath,
           applySuggestionForSession: (...args) => operations.applySuggestionForSession(...args),
         },
-        validation.parseSuggestionApplyBody
+        validation.parseSuggestionApplyBody,
+        processing
       ),
     },
     'POST /api/review': {
       kind: 'publication',
-      handle: createSubmissionRoute(submission, published, validation.parseReviewStateBody),
+      handle: createSubmissionRoute(
+        submission,
+        published,
+        validation.parseReviewStateBody,
+        processing
+      ),
     },
   };
 }

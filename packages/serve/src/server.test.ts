@@ -4,10 +4,14 @@ import * as os from 'os';
 import * as path from 'path';
 import * as http from 'http';
 import * as net from 'net';
+import { Worker } from 'node:worker_threads';
+import { JsonBodyProcessing } from './json-body-processing';
 import type { AddressInfo } from 'net';
 import * as core from '@self-review/core';
 import type { DiffFile, ReviewSession, ReviewState, AppConfig } from '@self-review/core';
 import { createReviewServer, listenLoopback } from './server';
+
+import { buildJsonBodyTestWorker } from './test-support/json-body-worker';
 
 import { createReviewOperations } from './review-operations';
 
@@ -22,6 +26,14 @@ import { createReviewOperations } from './review-operations';
 //     client/
 //       index.html
 //       assets/app.js
+let jsonWorker: Awaited<ReturnType<typeof buildJsonBodyTestWorker>>;
+beforeAll(async () => {
+  jsonWorker = await buildJsonBodyTestWorker();
+});
+afterAll(async () => {
+  await jsonWorker.processing.shutdown();
+  await jsonWorker.cleanup();
+});
 let tmp: string;
 let root: string;
 let clientDir: string;
@@ -208,7 +220,14 @@ beforeEach(async () => {
   const output = { path: path.join(root, 'review.xml'), origin: 'explicit' as const };
   operations = createReviewOperations(session, output);
   for (const name of OPERATION_SPIES) vi.spyOn(operations, name);
-  server = createReviewServer({ session, clientDir, output, capability: CAPABILITY, operations });
+  server = createReviewServer({
+    session,
+    clientDir,
+    output,
+    capability: CAPABILITY,
+    operations,
+    jsonBodyProcessing: new JsonBodyProcessing(() => new Worker(jsonWorker.path)),
+  });
   const { port } = await listenLoopback(server, 0);
   base = `http://127.0.0.1:${port}`;
 });
