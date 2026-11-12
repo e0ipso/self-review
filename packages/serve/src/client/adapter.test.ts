@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReviewState } from '@self-review/core';
 import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
+import { createServeRequester } from './requester';
 import { parseReviewStateBody } from '../validate';
 import {
   MAX_APPLY_BODY_BYTES,
@@ -237,6 +238,45 @@ describe('createFetchAdapter', () => {
     stubFetch(() => json({ error: 'attachment not found' }, 404));
     await expect(createFetchAdapter(CAPABILITY).readAttachment!('missing.png')).resolves.toBeNull();
   });
+
+  it.each([401, 403, 429, 500, 503])(
+    'preserves attachment HTTP failures as typed errors: %s',
+    async status => {
+      stubFetch(() => json({ error: 'attachment access failed' }, status));
+      await expect(createFetchAdapter(CAPABILITY).readAttachment!('a.png')).rejects.toMatchObject({
+        name: 'ServeRequestError',
+        status,
+        uncertain: false,
+        message: expect.stringContaining('attachment access failed'),
+      });
+    }
+  );
+
+  it.each(['timeout', 'disconnect'] as const)(
+    'preserves attachment %s failures instead of reporting missing content',
+    async reason => {
+      vi.useFakeTimers();
+      const requester = createServeRequester(CAPABILITY, {
+        fetch: vi.fn<typeof fetch>(() => new Promise(() => {})),
+        readTimeoutMs: 20,
+      });
+      const adapter = createFetchAdapter(CAPABILITY, requester);
+      try {
+        const failed = expect(adapter.readAttachment!('a.png')).rejects.toMatchObject({
+          name: 'ServeRequestError',
+          status: null,
+          code: 'request-failed',
+          uncertain: false,
+        });
+        if (reason === 'timeout') await vi.advanceTimersByTimeAsync(20);
+        else adapter.dispose();
+        await failed;
+      } finally {
+        adapter.dispose();
+        vi.useRealTimers();
+      }
+    }
+  );
 
   it('posts an expand-context request as JSON', async () => {
     const response = { hunks: [], totalLines: 12 };

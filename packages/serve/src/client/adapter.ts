@@ -96,10 +96,15 @@ async function requestError(
 function createClient(requester: ServeRequester) {
   return {
     getJson: <T>(path: string): Promise<T> =>
-      requester.request(path, {}, async response => {
-        if (!response.ok) throw await requestError(response, `GET ${path}`);
-        return response.json() as Promise<T>;
-      }),
+      requester.request(
+        path,
+        {},
+        async response => {
+          if (!response.ok) throw await requestError(response, `GET ${path}`);
+          return response.json() as Promise<T>;
+        },
+        'read'
+      ),
     postJsonText: <T>(path: string, text: string, read: (response: Response) => Promise<T>) =>
       requester.request(
         path,
@@ -108,7 +113,8 @@ function createClient(requester: ServeRequester) {
           headers: { 'content-type': 'application/json' },
           body: text,
         },
-        read
+        read,
+        'mutation'
       ),
     postJson: <T>(path: string, body: unknown): Promise<T> =>
       requester.request(
@@ -121,7 +127,8 @@ function createClient(requester: ServeRequester) {
         async response => {
           if (!response.ok) throw await requestError(response, `POST ${path}`);
           return response.json() as Promise<T>;
-        }
+        },
+        'read'
       ),
   };
 }
@@ -357,10 +364,16 @@ export function createFetchAdapter(
       // Bytes, not JSON: this route answers octet-stream, and 404 for an
       // attachment whose file is gone — which the image component renders
       // as "Image not found" rather than treating as an error.
-      return requester.request(withPath('/api/attachment', filePath), {}, async response => {
-        if (!response.ok) return null;
-        return response.arrayBuffer();
-      });
+      return requester.request(
+        withPath('/api/attachment', filePath),
+        {},
+        async response => {
+          if (response.status === 404) return null;
+          if (!response.ok) throw await requestError(response, 'Read attachment');
+          return response.arrayBuffer();
+        },
+        'read'
+      );
     },
 
     onGuideLoad: callback => subscribe(response => response.guide, callback),

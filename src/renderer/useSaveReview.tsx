@@ -3,7 +3,7 @@ import {
   useReviewSaveTransaction,
   useReviewSessionId,
   useReviewSnapshotId,
-} from '../../packages/react/src/context/ReviewContext';
+} from '../../packages/react/src';
 import type { ElectronAPI } from '../shared/types';
 import { Button } from '../../packages/react/src/components/ui/button';
 import { useDesktopLocalization } from './useDesktopLocalization';
@@ -17,7 +17,7 @@ type SaveAPI = Pick<
   | 'onSaveFailed'
   | 'getSaveResult'
 > &
-  Partial<Pick<ElectronAPI, 'discardAndQuit'>>;
+  Partial<Pick<ElectronAPI, 'discardAndQuit' | 'handoffReview'>>;
 type SaveState = 'reviewing' | 'saving' | 'unknown';
 interface SaveControl {
   save: () => void;
@@ -111,6 +111,48 @@ function useOwnedSave(api: SaveAPI, enabled = true): SaveControl {
     // Old counterparts retain their two ordered event calls; absence of a receipt never
     // becomes a fabricated success. Their failure push can restore editing.
     if (!api.saveReview || !api.acknowledgeReviewSave) {
+      if (api.handoffReview) {
+        // Acknowledged handoff is still not publication. Quit requests the write separately.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        void Promise.race([
+          Promise.resolve().then(() => (current() ? api.handoffReview!(owner.state) : undefined)),
+          new Promise<never>((_resolve, reject) => {
+            timer = deadline.current = setTimeout(
+              () => reject(new Error('State handoff unavailable')),
+              60_000
+            );
+          }),
+        ])
+          .then(() => {
+            if (!current()) return;
+            try {
+              api.saveAndQuit();
+            } catch {
+              /* Delivery is unacknowledged. */
+            }
+            setStatus('unknown');
+          })
+          .catch(error => {
+            if (!current()) return;
+            const known =
+              typeof error === 'object' &&
+              error !== null &&
+              'uncertain' in error &&
+              error.uncertain === false;
+            if (known) {
+              owner.unlock();
+              pending.current = false;
+            }
+            setStatus(known ? 'reviewing' : 'unknown');
+            setDetail(
+              t('The host could not accept the review state. {detail}', {
+                detail: error instanceof Error ? error.message : String(error),
+              })
+            );
+          })
+          .finally(() => clearTimeout(timer));
+        return;
+      }
       try {
         api.submitReview(owner.state);
         api.saveAndQuit();
@@ -122,8 +164,14 @@ function useOwnedSave(api: SaveAPI, enabled = true): SaveControl {
       return;
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let publication: ReturnType<NonNullable<SaveAPI['saveReview']>>;
+    try {
+      publication = api.saveReview(owner.state);
+    } catch (error) {
+      publication = Promise.reject(error);
+    }
     void Promise.race([
-      api.saveReview(owner.state),
+      publication,
       new Promise<never>((_resolve, reject) => {
         timer = deadline.current = setTimeout(
           () => reject(new Error('Save receipt unavailable')),

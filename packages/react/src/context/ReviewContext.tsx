@@ -16,6 +16,7 @@ import type {
   DiffSource,
   FileReviewState,
   Reply,
+  ReviewState,
   ReviewComment,
   RemoteDriftInfo,
   RemoteSessionInfo,
@@ -31,6 +32,7 @@ import {
   createReviewSession,
   createReviewSessionStore,
   reviewSessionIdentity,
+  reviewSessionReducer,
   type ReviewSessionStore,
 } from './review-session';
 import { ReviewLifecycleContext } from './ReviewLifecycleContext';
@@ -215,7 +217,12 @@ function ReviewSessionProvider({
   adapter,
 }: ReviewProviderProps & { adapter: ReviewAdapter | null }) {
   const [store] = useState(() =>
-    createReviewSessionStore(createReviewSession(initialFiles, initialSource))
+    createReviewSessionStore(
+      reviewSessionReducer(
+        createReviewSession(initialFiles, initialSource, !!adapter?.loadResumedReview),
+        { type: 'hydrate', comments: initialComments }
+      )
+    )
   );
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const { config } = useConfiguration();
@@ -252,8 +259,9 @@ function ReviewSessionProvider({
       type: 'payload',
       payload: { files: initialFiles, source: initialSource ?? state.diffSource },
       initialComments,
+      resumePending: !!adapter?.loadResumedReview,
     });
-  }, [initialFiles, initialSource, initialComments, store, state.diffSource]);
+  }, [initialFiles, initialSource, initialComments, store, state.diffSource, adapter]);
   useEffect(() => {
     store.dispatch({ type: 'hydrate', comments: initialComments });
   }, [initialComments, store]);
@@ -432,19 +440,47 @@ export function useOptionalApplySession() {
 }
 const emptySubscribe = () => () => {};
 
-/** Desktop publication freezes the synchronous state owner before capturing its snapshot.
+export interface ReviewSaveSnapshot {
+  /** One ready snapshot, captured from the synchronous owner rather than a render closure. */
+  state: ReviewState;
+  /** False after replacement or provider disposal. Ignore all late publication replies then. */
+  current: () => boolean;
+  /** Release only this save after a known refusal, or explicit inspection of an unknown outcome. */
+  unlock: () => void;
+}
+export interface ReviewSaveTransaction {
+  /** Throws while diff/resume loading failed or is pending, or another save owns the snapshot.
+   * Success and unknown outcomes retain the lock. Never retry a write automatically.
+   */
+  begin: () => ReviewSaveSnapshot;
+}
+
+/** Host publication freezes the synchronous state owner before capturing its snapshot.
  * A known failure unlocks this owner only; a replacement session is never unlocked by an old reply.
  */
-export function useReviewSaveTransaction() {
+export function useReviewSaveTransaction(): ReviewSaveTransaction {
   const store = useContext(SessionStoreContext);
   if (!store) throw new Error('Save transactions require ReviewProvider');
+  const live = useRef(true);
+  useLayoutEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
   return useMemo(
     () => ({
       begin() {
         const state = store.getSnapshot();
-        if (isPlaceholderSource(state.diffSource) || state.loadError || state.resumeError)
+        if (
+          !live.current ||
+          isPlaceholderSource(state.diffSource) ||
+          state.loadError !== null ||
+          state.resumeError !== null ||
+          state.resumePending
+        )
           throw new Error('The current review has not finished loading.');
-        store.lockMutations();
+        const owner = store.lockMutations();
         return {
           state: {
             timestamp: new Date().toISOString(),
@@ -452,10 +488,12 @@ export function useReviewSaveTransaction() {
             files: state.files,
           },
           current: () =>
+            live.current &&
+            store.ownsMutations(owner) &&
             store.getSnapshot().sessionId === state.sessionId &&
             store.getSnapshot().snapshotId === state.snapshotId,
           unlock: () => {
-            if (store.getSnapshot().sessionId === state.sessionId) store.unlockMutations();
+            store.unlockMutations(owner);
           },
         };
       },

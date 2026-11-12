@@ -45,8 +45,19 @@ export type {
 
 // Compatibility contexts for existing custom compositions.
 // Prefer supported feature hooks when a consumer needs only part of the state.
-export { ReviewProvider, useReview } from './context/ReviewContext';
-export type { ReviewContextValue, ReviewProviderProps } from './context/ReviewContext';
+export {
+  ReviewProvider,
+  useReview,
+  useReviewSaveTransaction,
+  useReviewSessionId,
+  useReviewSnapshotId,
+} from './context/ReviewContext';
+export type {
+  ReviewContextValue,
+  ReviewProviderProps,
+  ReviewSaveSnapshot,
+  ReviewSaveTransaction,
+} from './context/ReviewContext';
 export {
   ConfigProvider,
   useConfig,
