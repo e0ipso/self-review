@@ -314,7 +314,7 @@ function checkOutputPolicy(
     const physicalBase = guarded(base, 'resolve', () => fs.realpathSync(base));
     const physicalDir = guarded(outputDir, 'resolve', () => fs.realpathSync(outputDir));
     const rel = path.relative(physicalBase, physicalDir);
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
       throw new SafeFsError(
         'unsafe-link',
         target,

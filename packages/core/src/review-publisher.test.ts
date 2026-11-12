@@ -69,6 +69,23 @@ function withAttachment(bytes: Uint8Array = PNG): ReviewState {
 
 const explicit: PublishReviewOptions = { outputOrigin: 'explicit' };
 
+it.each(['native', 'legacy'] as const)(
+  'allows an inherited dot-prefixed child directory with %s publication',
+  async mode => {
+    const directory = path.join(tmp, '..reviews');
+    fs.mkdirSync(directory);
+    const target = path.join(directory, 'review.xml');
+    const options: PublishReviewOptions = {
+      outputOrigin: 'inherited',
+      baseDir: tmp,
+      fs: mode === 'native' ? nodeFsLayer : { ...nodeFsLayer },
+    };
+    expect(inspectOutputPath(target, options)).toBeNull();
+    await publishReview(review(), target, options);
+    expect(fs.readFileSync(target, 'utf8')).toContain('Looks wrong');
+  }
+);
+
 it('preserves asynchronous publication for the explicitly supplied native filesystem', async () => {
   const syncWrite = vi.spyOn(nodeFsLayer, 'writeSync');
   const syncRename = vi.spyOn(nodeFsLayer, 'renameSync');
