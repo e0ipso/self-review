@@ -10,6 +10,12 @@ import type { SafeFsErrorCode, FsLayer } from './safe-fs';
 import type { BoundedAsyncReadFsLayer } from './safe-fs-read';
 import { ASSET_DIR_NAME } from './attachment-planner';
 import type { Attachment, ReviewComment, ReviewState } from './types';
+import {
+  attachmentLists,
+  parseAttachmentReference,
+  resolveAttachmentOriginsAtDirectory,
+} from './attachment-origin-plan';
+export { parseAttachmentReference } from './attachment-origin-plan';
 
 /** Reference as the resumed document wrote it → absolute path beside that document. Session state only. */
 export type AttachmentOrigins = ReadonlyMap<string, string>;
@@ -26,51 +32,31 @@ export type AttachmentReadResult =
   | { ok: true; data: ArrayBuffer }
   | { ok: false; reason: AttachmentReadFailureReason; message: string };
 
-/** The bare name in `.self-review-assets/<name>`; null for any other shape. */
-export function parseAttachmentReference(reference: unknown): string | null {
-  if (typeof reference !== 'string') return null;
-  const prefix = `${ASSET_DIR_NAME}/`;
-  if (!reference.startsWith(prefix)) return null;
-  const name = reference.slice(prefix.length);
-  if (name === '' || name === '.' || name === '..') return null;
-  if (/[/\\\0]/.test(name)) return null;
-  return name;
-}
-
-function* attachmentLists(comments: readonly ReviewComment[]) {
-  for (const comment of comments) {
-    if (comment.attachments) yield { comment, attachments: comment.attachments };
-    for (const reply of comment.replies ?? []) {
-      if (reply.attachments) yield { comment, attachments: reply.attachments };
-    }
-  }
+/** A physical directory resolved by the host's own filesystem. No native lookup is made. */
+export interface ResolvedAttachmentLocation {
+  documentDirectory: string;
 }
 
 /** Origins resolve against the resumed document's directory; an unrecorded reference is never read. */
 export function resolveAttachmentOrigins(
   comments: readonly ReviewComment[],
+  resumeDocumentPath: string,
+  location: ResolvedAttachmentLocation
+): { origins: Map<string, string>; diagnostics: string[] };
+export function resolveAttachmentOrigins(
+  comments: readonly ReviewComment[],
   resumeDocumentPath: string
+): { origins: Map<string, string>; diagnostics: string[] };
+export function resolveAttachmentOrigins(
+  comments: readonly ReviewComment[],
+  resumeDocumentPath: string,
+  location: ResolvedAttachmentLocation | undefined = undefined
 ): { origins: Map<string, string>; diagnostics: string[] } {
-  const assetDir = path.join(
-    canonicalSourcePath(path.dirname(path.resolve(resumeDocumentPath))),
-    ASSET_DIR_NAME
-  );
-  const origins = new Map<string, string>();
-  const diagnostics: string[] = [];
-  for (const { comment, attachments } of attachmentLists(comments)) {
-    for (const attachment of attachments) {
-      const name = parseAttachmentReference(attachment.fileName);
-      if (name === null) {
-        diagnostics.push(
-          `${comment.filePath || '(review)'}: attachment "${attachment.fileName}" is not in the ` +
-            `document's ${ASSET_DIR_NAME} directory; it will not be loaded`
-        );
-        continue;
-      }
-      origins.set(attachment.fileName, path.join(assetDir, name));
-    }
-  }
-  return { origins, diagnostics };
+  const directory =
+    location === undefined
+      ? canonicalSourcePath(path.dirname(path.resolve(resumeDocumentPath)))
+      : location.documentDirectory;
+  return resolveAttachmentOriginsAtDirectory(comments, directory);
 }
 
 const READ_FAILURES: Partial<Record<SafeFsErrorCode, AttachmentReadFailureReason>> = {

@@ -1,6 +1,7 @@
 // Git command execution. Helpers reject rather than exit; front ends report failures.
 
-import { stderrReporter, type DiagnosticReporter } from './diagnostics';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 import { defaultGitRunner } from './command-runner';
 import { CommandCancelledError, isCommandCancelled } from './forge-provider';
 import type { ForgeCommandRunner } from './forge-provider';
@@ -71,11 +72,9 @@ export async function getRepoRootAsync(
     return stripTrailingNewline(stdout);
   } catch (error) {
     if (error instanceof Error) {
-      (options.reportDiagnostic ?? stderrReporter)(
-        `Error getting repository root: ${error.message}`
-      );
+      isolatedReporter(options.reportDiagnostic)(`Error getting repository root: ${error.message}`);
     } else {
-      (options.reportDiagnostic ?? stderrReporter)('Error getting repository root: unknown error');
+      isolatedReporter(options.reportDiagnostic)('Error getting repository root: unknown error');
     }
     throw error;
   }
@@ -136,9 +135,9 @@ export async function runGitDiffAsync(
     return stdout;
   } catch (error) {
     if (error instanceof Error) {
-      (options.reportDiagnostic ?? stderrReporter)(`Error running git diff: ${error.message}`);
+      isolatedReporter(options.reportDiagnostic)(`Error running git diff: ${error.message}`);
     } else {
-      (options.reportDiagnostic ?? stderrReporter)('Error running git diff: unknown error');
+      isolatedReporter(options.reportDiagnostic)('Error running git diff: unknown error');
     }
     throw error;
   }
@@ -179,7 +178,7 @@ export async function getUntrackedFilesAsync(
     return await listUntrackedFilesAsync(repoRoot, options);
   } catch (error) {
     if (isCommandCancelled(error) && error.reason === 'aborted') throw error;
-    (options.reportDiagnostic ?? stderrReporter)(
+    isolatedReporter(options.reportDiagnostic)(
       `Warning: Failed to list untracked files: ${error instanceof Error ? error.message : 'unknown error'}`
     );
     return [];

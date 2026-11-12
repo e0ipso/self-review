@@ -390,3 +390,51 @@ thrown or rejected effect means validation infrastructure is unavailable. The hi
 unvalidated document fallback remain. Diagnostic throws and rejected promises cannot replace either
 outcome. The guide parser keeps its separate fail-closed policy. Serialization performs no file I/O;
 the validator is its only supplied or default external effect.
+
+## Output inspection and resumed attachment locations
+
+`inspectOutputPathAsync(path, options)` from `@self-review/core/operations` is an awaited, read-only
+advisory probe for interactive hosts. It uses the same physical containment and output replacement
+policy as `inspectOutputPath`, with asynchronous native probes by default. Options carry
+`outputOrigin` and, for an inherited output, `baseDir`. An optional `inspection` provides
+`realpath`, `lstat` and `isWritable(directory)` promises over one filesystem. Its methods retain
+their receiver and own every probe. Errors never retry through native I/O. Legacy `fs` and
+`publicationFs` bags are refused by this API; keep using the original synchronous inspector for
+those providers, or supply the asynchronous read-only role explicitly.
+
+Ordinary failures return the existing `ReviewPublishError`, and an injected instance retains its
+identity. Cancellation rejects with the signal reason after any admitted probe settles. It cannot
+interrupt a provider that blocks or never settles. Native missing-path diagnostics can name a
+different underlying syscall than the synchronous implementation. Neither inspection writes files or
+replaces the final checks in `publishReview`.
+
+Resume hosts can pass a physically resolved `documentDirectory` to the additive overloads of
+`resolveAttachmentOrigins`, `recordResumedAttachments`, `adoptResumeDocument` and
+`loadResumeDocument`. With this option, origin recording performs path manipulation only and makes
+no native location lookup. The directory must be absolute. `loadResumeDocument` also accepts an
+authoritative `reader` and a signal in that option; read failures retain the parser's existing typed
+error contract. Cancellation is checked before loading and before adoption, without claiming to
+preempt synchronous reading or parsing. Parsed comments, viewed files and attachment provenance are
+adopted together only after location planning succeeds. Original call forms keep native directory
+resolution, reflected parameter lists, runtime arities and session aliases.
+
+For example, an asynchronous host first awaits its own filesystem's
+`realpath(dirname(resolve(resumePath)))`, checks cancellation and ownership, then calls
+`adoptResumeDocument(session, parsed, resumePath, { documentDirectory, signal })`. The host retains
+that filesystem method's receiver and propagates its failures before adopting anything. The pure
+`resolveAttachmentOriginsAtDirectory(comments, documentDirectory)` helper is also available from
+operations and its source module `attachment-origin-plan`. It returns the same origin map and
+reference diagnostics without parsing, reading, writing or importing runtime Core error classes. A
+host that supports older installed Core may bundle this pure policy while keeping acquisition,
+adoption and the installed Core root external.
+
+Actual published Core 2.0.4 predates these additive call forms and asynchronous inspection. Passing
+extra options to an old peer does not give it virtual filesystem support. Hosts must select an
+available capability explicitly. Existing native inspection, Apply, resume, startup and publication
+paths remain supported without a minimum-version change. The legacy optional `fs` attachment-read
+option remains supported; bounded read-only `readFs` remains preferred when both are supplied.
+
+Git root/diff diagnostics, untracked-list fallback diagnostics, config warnings, local-load messages
+and submitted-state summaries isolate reporter throws and rejected promises. Their original messages
+and callback arities remain unchanged. Reporter failure cannot replace a git error, discard valid
+configuration or stop a valid submitted state from being stored.

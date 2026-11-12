@@ -22,13 +22,14 @@
 // |
 
 import { resolve } from 'path';
+import { isolatedReporter } from './effect-diagnostics';
 import type { LoadGitDiffOptions } from './git-diff-loader';
 import type { BufferedCommandRunner } from './command-runner';
 import { checkLoadingCancelled } from './local-loading-lifetime';
 import type { AppConfig, DiffLoadPayload, ReviewSourceIdentity } from './types';
 import type { ConfigValueOrigin, LoadedConfig } from './config';
 import type { PublishReviewOptions, ReviewOutputTarget } from './review-publisher';
-import type { AttachmentOrigins } from './attachment-origins';
+import type { ResolvedAttachmentLocation, AttachmentOrigins } from './attachment-origins';
 import {
   findWriteCapableGitDiffOptions,
   formatGitDiffArgs,
@@ -45,7 +46,7 @@ import { nodeScanFsLayer } from './node-scan-fs';
 import type { ScanFsLayer } from './scan-fs';
 import type { StartupSource } from './startup-mode';
 import { parseReviewXml } from './xml-parser';
-import type { ParsedReview } from './xml-parser';
+import type { ParsedReview, ReviewXmlReader } from './xml-parser';
 import { recordResumedAttachments } from './review-handlers';
 import type { ReviewSession } from './review-handlers';
 
@@ -166,6 +167,7 @@ export async function loadLocalReview(
   options: LocalReviewLoadOptions = {},
   dependencies: LocalReviewDependencies = {}
 ): Promise<LoadedLocalReview> {
+  log = isolatedReporter(log);
   const checkCancelled = () => checkLoadingCancelled(options.signal);
   checkCancelled();
   if (source.mode === 'git') {
@@ -240,19 +242,60 @@ export async function loadLocalReview(
  * Throws `ReviewXmlError` for an unreadable document. Returns it for what the host still needs (the
  * remote head, for drift).
  */
-export function loadResumeDocument(session: ReviewSession, resumePath: string): ParsedReview {
-  const parsed = parseReviewXml(resumePath);
-  return adoptResumeDocument(session, parsed, resumePath);
+export interface ResumeDocumentOptions extends ResolvedAttachmentLocation {
+  reader?: ReviewXmlReader;
+  signal?: AbortSignal;
+}
+
+export function loadResumeDocument(
+  session: ReviewSession,
+  resumePath: string,
+  options: ResumeDocumentOptions
+): ParsedReview;
+export function loadResumeDocument(session: ReviewSession, resumePath: string): ParsedReview;
+export function loadResumeDocument(
+  session: ReviewSession,
+  resumePath: string,
+  options: ResumeDocumentOptions | undefined = undefined
+): ParsedReview {
+  options?.signal?.throwIfAborted();
+  let parsed: ParsedReview;
+  try {
+    parsed = parseReviewXml(resumePath, options);
+  } catch (error) {
+    options?.signal?.throwIfAborted();
+    throw error;
+  }
+  return options === undefined
+    ? adoptResumeDocument(session, parsed, resumePath)
+    : adoptResumeDocument(session, parsed, resumePath, options);
 }
 
 /** Adopt an already parsed document, retaining the same attachment provenance as sync loading. */
 export function adoptResumeDocument(
   session: ReviewSession,
   parsed: ParsedReview,
+  resumePath: string,
+  options: ResolvedAttachmentLocation & { signal?: AbortSignal }
+): ParsedReview;
+export function adoptResumeDocument(
+  session: ReviewSession,
+  parsed: ParsedReview,
   resumePath: string
+): ParsedReview;
+export function adoptResumeDocument(
+  session: ReviewSession,
+  parsed: ParsedReview,
+  resumePath: string,
+  options: (ResolvedAttachmentLocation & { signal?: AbortSignal }) | undefined = undefined
 ): ParsedReview {
+  options?.signal?.throwIfAborted();
   const attachments = { attachmentOrigins: session.attachmentOrigins };
-  const attachmentDiagnostics = recordResumedAttachments(attachments, parsed.comments, resumePath);
+  const attachmentDiagnostics =
+    options === undefined
+      ? recordResumedAttachments(attachments, parsed.comments, resumePath)
+      : recordResumedAttachments(attachments, parsed.comments, resumePath, options);
+  options?.signal?.throwIfAborted();
   session.attachmentOrigins = attachments.attachmentOrigins;
   session.resumeComments = parsed.comments;
   session.resumeViewedFiles = parsed.viewedFiles;
