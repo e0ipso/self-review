@@ -80,4 +80,33 @@ describe('RenderedImageView', () => {
 
     expect(await screen.findByText('Image too large')).toBeTruthy();
   });
+
+  it.each([
+    'https://outside.example/private.png',
+    'http://outside.example/private.png',
+    'file:///outside-private/not-reviewed.png',
+    '/outside-private/not-reviewed.png',
+    '../outside-private/not-reviewed.png',
+    'javascript:alert(1)',
+    'data:text/html;base64,PGgxPm5vdCBhbiBpbWFnZTwvaDE+',
+    'data:image/png2;base64,bm90LWEtc3VwcG9ydGVkLWltYWdl',
+  ])('rejects non-passive standalone image URL %s before mounting a resource', async dataUri => {
+    const onLoadImage = vi.fn(async () => ({ dataUri }));
+    const view = render(<RenderedImageView filePath='reviewed.png' onLoadImage={onLoadImage} />);
+    await act(async () => {});
+    expect(screen.getByRole('alert', { name: 'Image preview unavailable' })).toBeTruthy();
+    expect(view.container.querySelector('img[src]')).toBeNull();
+    expect(onLoadImage).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    'data:image/png;base64,aW1hZ2U=',
+    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+    'blob:https://review.example/owned-image',
+  ])('keeps passive standalone image URL %s', async dataUri => {
+    const onLoadImage = vi.fn(async () => ({ dataUri }));
+    render(<RenderedImageView filePath='reviewed.png' onLoadImage={onLoadImage} />);
+    expect((await screen.findByRole('img')).getAttribute('src')).toBe(dataUri);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });

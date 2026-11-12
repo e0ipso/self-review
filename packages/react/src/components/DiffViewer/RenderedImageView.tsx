@@ -5,6 +5,7 @@ import type { ImageLoadResult } from '@self-review/types';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { loadImage } from '../../read-service';
+import { isPassiveImageUrl } from '../../utils/passive-content';
 
 interface RenderedImageViewProps {
   filePath: string;
@@ -47,8 +48,10 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
           setError({});
         } else if ('error' in result) {
           setError({ detail: result.error });
-        } else {
+        } else if (typeof result.dataUri === 'string' && isPassiveImageUrl(result.dataUri)) {
           setDataUri(result.dataUri);
+        } else {
+          setError({});
         }
         setLoading(false);
       },

@@ -1,12 +1,28 @@
 import { shell, type WebContents } from 'electron';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-/** Only the development server may receive automatic renderer requests. */
+/** Forge emits the entry under renderer/main_window and shared chunks/assets under renderer. */
+function isBundledResource(resource: URL, entry: URL, rawUrl: string): boolean {
+  if (entry.protocol !== 'file:' || entry.host || resource.host) return false;
+  if (!entry.pathname.endsWith('/.webpack/renderer/main_window/index.html')) return false;
+  // Reject platform-dependent separators before decoding. URL parsing itself normalizes dot
+  // segments; the decoded path comparison below still bounds the normalized result.
+  if (rawUrl.split(/[?#]/, 1)[0].includes('\\') || /%2f|%5c|%00/i.test(rawUrl.split(/[?#]/, 1)[0]))
+    return false;
+  const root = fileURLToPath(new URL('../', entry));
+  const relative = path.relative(root, fileURLToPath(resource));
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+/** Only trusted bundle files and the development server receive automatic resource requests. */
 export function isAllowedRendererRequest(url: string, entryUrl: string): boolean {
   try {
     if (url === 'about:blank') return true;
     const resource = new URL(url);
-    if (['file:', 'data:', 'blob:'].includes(resource.protocol)) return true;
+    if (['data:', 'blob:'].includes(resource.protocol)) return true;
     const entry = new URL(entryUrl);
+    if (resource.protocol === 'file:') return isBundledResource(resource, entry, url);
     if (entry.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(entry.hostname))
       return false;
     return (
