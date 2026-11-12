@@ -1,6 +1,9 @@
 import { resolve } from 'path';
 import { createReviewSession } from '../../packages/core/src/review-handlers';
-import { inspectOutputPath } from '../../packages/core/src/review-publisher';
+import {
+  inspectOutputPath,
+  inspectOutputPathAsync,
+} from '../../packages/core/src/review-publisher';
 import { publishOptionsFor } from '../../packages/core/src/startup';
 import type { ReviewOutputTarget } from '../../packages/core/src/review-publisher';
 import type { RemoteSessionInfo } from '../shared/types';
@@ -26,6 +29,16 @@ export function createDesktopSession(cwd: string) {
   };
 }
 export type DesktopSession = ReturnType<typeof createDesktopSession>;
+
+/** Read-only advisory check; publication still revalidates the selected target. */
+export function inspectDesktopOutput(output: ReviewOutputTarget, signal?: AbortSignal) {
+  return inspectOutputPathAsync(output.path, {
+    ...(output.origin === 'explicit'
+      ? { outputOrigin: 'explicit' as const }
+      : { outputOrigin: 'inherited' as const, baseDir: output.baseDir }),
+    signal,
+  });
+}
 
 export function publicationOptions(
   desktop: Pick<DesktopSession, 'output'> & {

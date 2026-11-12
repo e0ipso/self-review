@@ -45,6 +45,11 @@ diagnostics. `loadLocalReview` routes scanner messages through its existing `log
 as reporting payload diagnostics. Hosts calling scanners directly can pass their own reporter. Each
 operation owns its reporter; there is no mutable global reporting setting.
 
+Git root/diff diagnostics, untracked-list fallback diagnostics, config warnings, local-load messages
+and submitted-state summaries isolate reporter throws and rejected promises. Their original messages
+and callback arities remain unchanged. Reporter failure cannot replace a git error, discard valid
+configuration or stop a valid submitted state from being stored.
+
 `loadGuide(outputPath, config, diffPaths, options)` accepts `reader?: BoundedGuideReader` and
 `reportDiagnostic`. The reader's `read(path, maxBytes, options?)` uses the existing
 `BoundedReadResult` and bounded-read options. It receives `MAX_GUIDE_BYTES` and the operation's
@@ -180,11 +185,13 @@ reads. They share decoding, source classification, aggregate accounting and omis
 `generateSyntheticDiffs` and `generateSyntheticDiffsAsync`, which still return the textual patch
 format. Structured loading avoids constructing a complete patch, splitting that patch and parsing
 its headers back into files. It retains per-file UTF-8 decoding and source line allocation. Async
-source reads yield between bounded reads and files. Projection uses one pure generator for both
-synchronous and asynchronous consumers. The asynchronous consumer yields while counting each 64 KiB
-of source bytes, before decoding or line allocation, and after emitting each 256 lines within one
-file. UTF-8 decoding, a single line slice, patch joining, allocation and garbage collection still
-run synchronously. Synchronous entry points retain synchronous execution.
+source reads yield between bounded reads and files. One pure generator selects the patch or
+structured emitter, then formats diagnostics separately. Both synchronous and asynchronous forms
+retain their output, omission wording and ordering, and cancellation checkpoints. The asynchronous
+consumer yields while counting each 64 KiB of source bytes, before decoding or line allocation, and
+after emitting each 256 lines within one file. UTF-8 decoding, a single line slice, patch joining,
+allocation and garbage collection still run synchronously. Synchronous entry points retain
+synchronous execution.
 
 The loaders preserve literal path ordering, no-follow reads, symlink target text, binary sniffing,
 CR characters, BOMs, UTF-8 replacement, empty hunks and omission diagnostics. The existing text
@@ -241,10 +248,15 @@ filesystem adapters retain the weaker guarantees documented above.
 
 ## Package entry point verification
 
-After `npm run build --workspace @self-review/core`, run
-`node --test scripts/test/core-entry-points.test.mjs` from the repository root. These checks
-exercise ESM and CommonJS imports and ensure facade errors retain the root entry's class identity
-and typed failure behavior. Generated shared chunks ship alongside each entry point in `dist`.
+After `npm run build --workspace @self-review/core`, run both built API tests from the repository
+root:
+
+```sh
+node --test scripts/test/core-entry-points.test.mjs scripts/test/core-loaded-review.test.mjs
+```
+
+These checks cover ESM/CommonJS root and operations aliases, typed error identity, explicit capture
+and the legacy bridge. Generated shared chunks ship alongside each entry point in `dist`.
 
 ## Host-owned resume workers
 
@@ -321,12 +333,6 @@ the load's Git runner with the current operation's signal. A supplied text Git r
 `snapshotRunner` for binary-safe blob reads; otherwise a captured blob read refuses. Selected
 comparison paths bound index evidence; unrelated tracked entries never consume untracked entry
 budgets.
-
-Synthetic projection shares source accounting and text budgets, selects a patch or structured
-emitter once, then formats diagnostics separately. Both public synchronous and asynchronous forms
-retain their patch bytes, structured data, omission wording and ordering, and cancellation
-checkpoints. `scripts/test/core-loaded-review.test.mjs` checks the additive capture API and the
-legacy bridge through both built ESM and CommonJS root/operations aliases.
 
 ## Session Apply and attachment effects
 
@@ -433,8 +439,3 @@ extra options to an old peer does not give it virtual filesystem support. Hosts 
 available capability explicitly. Existing native inspection, Apply, resume, startup and publication
 paths remain supported without a minimum-version change. The legacy optional `fs` attachment-read
 option remains supported; bounded read-only `readFs` remains preferred when both are supplied.
-
-Git root/diff diagnostics, untracked-list fallback diagnostics, config warnings, local-load messages
-and submitted-state summaries isolate reporter throws and rejected promises. Their original messages
-and callback arities remain unchanged. Reporter failure cannot replace a git error, discard valid
-configuration or stop a valid submitted state from being stored.

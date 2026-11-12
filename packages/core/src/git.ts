@@ -71,11 +71,10 @@ export async function getRepoRootAsync(
     const stdout = await executeGit(['rev-parse', '--show-toplevel'], cwd, options);
     return stripTrailingNewline(stdout);
   } catch (error) {
-    if (error instanceof Error) {
-      isolatedReporter(options.reportDiagnostic)(`Error getting repository root: ${error.message}`);
-    } else {
-      isolatedReporter(options.reportDiagnostic)('Error getting repository root: unknown error');
-    }
+    const knownError = error instanceof Error;
+    isolatedReporter(options.reportDiagnostic)(
+      `Error getting repository root: ${knownError ? error.message : 'unknown error'}`
+    );
     throw error;
   }
 }
@@ -126,19 +125,17 @@ export async function runGitDiffAsync(
   options: GitExecutionOptions = {}
 ): Promise<string> {
   try {
-    const stdout = await executeGit(
+    return await executeGit(
       [...PARSER_COMPATIBLE_GIT_CONFIG, 'diff', ...withParserCompatibleDiffArgs(args)],
       cwd,
       { ...options, timeoutMs: options.timeoutMs ?? 30_000 },
       maxOutputBytes
     );
-    return stdout;
   } catch (error) {
-    if (error instanceof Error) {
-      isolatedReporter(options.reportDiagnostic)(`Error running git diff: ${error.message}`);
-    } else {
-      isolatedReporter(options.reportDiagnostic)('Error running git diff: unknown error');
-    }
+    const knownError = error instanceof Error;
+    isolatedReporter(options.reportDiagnostic)(
+      `Error running git diff: ${knownError ? error.message : 'unknown error'}`
+    );
     throw error;
   }
 }

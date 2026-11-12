@@ -10,8 +10,8 @@ import {
 } from '../../packages/core/src/startup';
 import { bootstrapRemoteDiff } from '../../packages/core/src/remote-mode';
 import { loadGuide } from '../../packages/core/src/guide-loader';
-import { inspectOutputPath } from '../../packages/core/src/review-publisher';
-import { publishOptionsFor } from '../../packages/core/src/startup';
+import type { inspectOutputPath } from '../../packages/core/src/review-publisher';
+import { inspectDesktopOutput } from './desktop-session';
 import type { ReviewOutputTarget } from '../../packages/core/src/review-publisher';
 import type { ReviewSession } from '../../packages/core/src/review-session';
 import { loadResumeDocumentAsync } from './resume-document-loader';
@@ -66,8 +66,7 @@ export interface StartupOperations {
 }
 export const defaultStartupOperations: StartupOperations = {
   prepare,
-  inspectOutput: (output, origins) =>
-    inspectOutputPath(output.path, publishOptionsFor(output, origins)),
+  inspectOutput: (output, _origins) => inspectDesktopOutput(output),
   loadLocal: (plan, cwd, signal) => {
     if (plan.source.mode === 'remote')
       throw new Error('Remote startup requires its lifetime owner.');

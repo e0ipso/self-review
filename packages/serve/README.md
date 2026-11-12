@@ -444,9 +444,17 @@ in a worker emitted as `dist/resume-parser-worker.js` beside `cli.js`, resolved 
 module, before loading the guide or opening the listener. Every success, error, deadline and
 cancellation reaps that worker before adopting a result. Replacing an owner must abort its signal;
 an optional `isCurrent` guard also refuses stale replies. Termination may wait for a native syscall.
-Attachment-origin adoption still performs bounded synchronous metadata inspection on the host
-thread. For Core 2.0.4, a small compatibility projection uses its public `recordResumedAttachments`;
-no path or authorization policy is copied into serve.
+After worker release, the first-party loader resolves the document directory asynchronously and
+checks cancellation and ownership again before adopting comments, viewed files and attachment
+origins together. Its optional `paths.realpath(directory)` capability owns that lookup, retains its
+receiver and never retries a failure through the native filesystem. It controls directory lookup;
+XML reading remains in the owned worker. The native default preserves the original canonicalization
+policy, including a lexical fallback if native resolution fails.
+
+First-party adoption bundles Core's pure attachment-origin planner, so actual Core 2.0.4 also uses
+the supplied directory without a second runtime engine. The original
+`createResumeLoader(adopt, createWorker)` factory retains its three-argument adopter and its
+original native compatibility behavior, including a supplied adopter's side effects.
 
 Browser reads validate diff, guide, config, resume, lazy hunks, context and image DTOs before
 delivery. A malformed read rejects with `malformed-read-response`, preserving existing data and
