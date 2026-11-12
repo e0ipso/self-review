@@ -550,3 +550,37 @@ export interface ApplicationLocale {
 
 /** Chromium find-session actions. Desktop retains its legacy string bridge signature. */
 export type FindInPageAction = 'clearSelection' | 'keepSelection' | 'activateSelection';
+/** Optional per-operation read cancellation. Legacy adapter methods remain usable on old hosts. */
+export interface ReviewReads {
+  loadFileContent?: (filePath: string, signal: AbortSignal) => Promise<DiffHunk[] | null>;
+  loadImage?: (filePath: string, signal: AbortSignal) => Promise<ImageLoadResult>;
+  readAttachment?: (reference: string, signal: AbortSignal) => Promise<ArrayBuffer | null>;
+  expandContext?: (
+    request: ExpandContextRequest,
+    signal: AbortSignal
+  ) => Promise<ExpandContextResponse | null>;
+}
+
+/** Closed read allowlist. Signals stay in their process; cancellation names one request. */
+export type DesktopReadRequest = {
+  /** Positive decimal safe integer, monotonic across adapters in one renderer document. */
+  id: string;
+} & (
+  | { kind: 'file'; filePath: string }
+  | { kind: 'image'; filePath: string }
+  | { kind: 'attachment'; reference: string }
+  | { kind: 'context'; request: ExpandContextRequest }
+);
+
+export type DesktopReadResult =
+  | { kind: 'file'; hunks: DiffHunk[] | null }
+  | { kind: 'image'; image: ImageLoadResult }
+  | { kind: 'attachment'; data: ArrayBuffer | null }
+  | { kind: 'context'; context: ExpandContextResponse | null }
+  | { kind: 'error'; message: string; code: string };
+
+/** A rejected pushed load never substitutes an empty successful payload. */
+export interface ContentLoadRefusal {
+  kind: 'diff' | 'config' | 'resume';
+  message: string;
+}

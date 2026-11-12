@@ -3,10 +3,16 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRef } from 'react';
 import { useExpandContext } from './useExpandContext';
 import type { DiffFile, DiffHunk } from '@self-review/types';
+import type { ReviewAdapter } from '../../adapter';
 
 const ownership = vi.hoisted(() => ({ snapshotId: 1 }));
 const mockExpandFileContext = vi.fn();
 const mockUpdateFileHunks = vi.fn();
+const adapter: ReviewAdapter = {
+  loadDiff: async () => ({ source: { type: 'welcome' }, files: [] }),
+  expandContext: request => mockExpandFileContext(request.filePath, request.contextLines),
+};
+vi.mock('../../context/ReviewAdapterContext', () => ({ useAdapter: () => adapter }));
 
 vi.mock('../../context/ReviewContext', () => ({
   useReview: () => ({
@@ -53,6 +59,48 @@ describe('useExpandContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ownership.snapshotId = 1;
+    delete adapter.reads;
+  });
+
+  it('cancels context reads on collapse, ignores late errors and permits a new explicit request', async () => {
+    const signals: AbortSignal[] = [];
+    const finish: Array<(value: null) => void> = [];
+    adapter.reads = {
+      expandContext: vi.fn((_request, signal) => {
+        signals.push(signal);
+        return new Promise<null>(resolve => finish.push(resolve));
+      }),
+    };
+    const file = makeFile([makeHunk(4, 2)]);
+    const { result, rerender, unmount } = renderHook(
+      ({ expanded }) => {
+        const ref = useRef<HTMLDivElement>(null);
+        return useExpandContext({
+          file,
+          filePath: 'src/foo.ts',
+          isExpandable: true,
+          sectionRef: ref,
+          expanded,
+        });
+      },
+      { initialProps: { expanded: true } }
+    );
+    act(() => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    expect(signals[0].aborted).toBe(false);
+    expect(result.current.expandLoading).toBe(true);
+    rerender({ expanded: false });
+    expect(signals[0].aborted).toBe(true);
+    await act(async () => finish[0](null));
+    expect(result.current.expandError).toBe(false);
+    rerender({ expanded: true });
+    act(() => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    expect(signals).toHaveLength(2);
+    unmount();
+    expect(signals[1].aborted).toBe(true);
   });
 
   it('drops an expansion answer after unmount', async () => {

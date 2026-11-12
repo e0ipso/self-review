@@ -3,6 +3,103 @@ import { createServeRequester } from './requester';
 
 afterEach(() => vi.useRealTimers());
 
+it('does not call transport for a pre-aborted signal', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const transport = vi.fn<typeof fetch>();
+  const requester = createServeRequester('secret', { fetch: transport });
+  await expect(
+    requester.request(
+      '/api/file',
+      { signal: controller.signal },
+      response => response.json(),
+      'read'
+    )
+  ).rejects.toMatchObject({ uncertain: false });
+  expect(transport).not.toHaveBeenCalled();
+});
+
+it('cleans composed listeners and timers after a body deadline', async () => {
+  vi.useFakeTimers();
+  const caller = new AbortController();
+  const removedCaller = vi.spyOn(caller.signal, 'removeEventListener');
+  let signal!: AbortSignal;
+  let removedTransport!: ReturnType<typeof vi.spyOn>;
+  const requester = createServeRequester('secret', {
+    readTimeoutMs: 10,
+    fetch: async (_input, init) => {
+      signal = init!.signal!;
+      removedTransport = vi.spyOn(signal, 'removeEventListener');
+      return new Response('{}');
+    },
+  });
+  const reading = requester.request(
+    '/api/file',
+    { signal: caller.signal },
+    () => new Promise(() => {})
+  );
+  const rejected = expect(reading).rejects.toMatchObject({ uncertain: false });
+  await vi.advanceTimersByTimeAsync(10);
+  await rejected;
+  expect(signal.aborted).toBe(true);
+  expect(removedCaller).toHaveBeenCalledWith('abort', expect.any(Function));
+  expect(removedTransport).toHaveBeenCalledWith('abort', expect.any(Function));
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it.each(['headers', 'body'] as const)(
+  'composes caller cancellation during %s and releases listeners and timers',
+  async phase => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const add = vi.spyOn(controller.signal, 'addEventListener');
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    let transportSignal: AbortSignal | undefined;
+    const transport = vi.fn<typeof fetch>(async (_path, init) => {
+      transportSignal = init!.signal!;
+      if (phase === 'headers') return new Promise(() => {});
+      return new Response('{}');
+    });
+    const requester = createServeRequester('secret', { fetch: transport });
+    const reading = requester.request(
+      '/api/file',
+      { signal: controller.signal, headers: new Headers({ accept: 'application/json' }) },
+      () => new Promise(() => {}),
+      'read'
+    );
+    const rejected = expect(reading).rejects.toMatchObject({ uncertain: false });
+    await Promise.resolve();
+    controller.abort();
+    await rejected;
+    expect(transportSignal!.aborted).toBe(true);
+    expect(transport.mock.calls[0][1]!.headers).toMatchObject({
+      accept: 'application/json',
+      authorization: expect.any(String),
+    });
+    expect(remove.mock.calls[0]).toEqual(['abort', add.mock.calls[0][1]]);
+    expect(vi.getTimerCount()).toBe(0);
+  }
+);
+
+it.each(['success', 'error'] as const)('releases caller listeners on %s', async outcome => {
+  vi.useFakeTimers();
+  const controller = new AbortController();
+  const add = vi.spyOn(controller.signal, 'addEventListener');
+  const remove = vi.spyOn(controller.signal, 'removeEventListener');
+  const transport = vi.fn<typeof fetch>(async () => {
+    if (outcome === 'error') throw new Error('network failure');
+    return new Response('{}');
+  });
+  const requester = createServeRequester('secret', { fetch: transport });
+  const result = requester.request('/api/file', { signal: controller.signal }, response =>
+    response.json()
+  );
+  if (outcome === 'success') await expect(result).resolves.toEqual({});
+  else await expect(result).rejects.toThrow('network failure');
+  expect(remove.mock.calls[0]).toEqual(['abort', add.mock.calls[0][1]]);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
 describe('page request ownership', () => {
   it('bounds response body reads and aborts their transport', async () => {
     vi.useFakeTimers();

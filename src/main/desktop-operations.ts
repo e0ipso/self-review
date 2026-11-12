@@ -48,13 +48,27 @@ export class DesktopOperations {
   }
 
   read<T>(run: (signal: AbortSignal) => Promise<T>, timeoutMs = 30_000): Promise<T> {
+    return this.readOwned(run, undefined, timeoutMs);
+  }
+
+  /** A caller can cancel its own read without cancelling another operation or a source write. */
+  readOwned<T>(
+    run: (signal: AbortSignal) => Promise<T>,
+    owner?: AbortSignal,
+    timeoutMs = 30_000
+  ): Promise<T> {
     try {
       this.admit();
     } catch (error) {
       return Promise.reject(error);
     }
     const deadline = new AbortController();
-    const signal = AbortSignal.any([this.signal, this.window.signal, deadline.signal]);
+    const signal = AbortSignal.any([
+      this.signal,
+      this.window.signal,
+      deadline.signal,
+      ...(owner ? [owner] : []),
+    ]);
     const timer = setTimeout(
       () => deadline.abort(new Error('The desktop operation timed out.')),
       timeoutMs

@@ -90,6 +90,7 @@ export default function FileSection({
     filePath,
     isExpandable,
     sectionRef,
+    expanded,
   });
 
   // Effective view mode: added/deleted files are forced to unified view

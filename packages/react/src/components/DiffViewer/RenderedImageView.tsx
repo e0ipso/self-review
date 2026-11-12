@@ -2,6 +2,9 @@ import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { ImageLoadResult } from '@self-review/types';
+import { useAdapter } from '../../context/ReviewAdapterContext';
+import { useOptionalSnapshotKey } from '../../context/ReviewContext';
+import { loadImage } from '../../read-service';
 
 interface RenderedImageViewProps {
   filePath: string;
@@ -10,26 +13,34 @@ interface RenderedImageViewProps {
 
 export default function RenderedImageView({ filePath, onLoadImage }: RenderedImageViewProps) {
   const { t } = useLocalization();
+  const adapter = useAdapter();
+  const snapshot = useOptionalSnapshotKey();
   const [dataUri, setDataUri] = useState<string | null>(null);
   const [error, setError] = useState<{ unsupported?: boolean; detail?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
-    if (!onLoadImage) {
+    if (!onLoadImage && !adapter?.reads?.loadImage && !adapter?.loadImage) {
       setError({ unsupported: true });
       setLoading(false);
       return;
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     setDataUri(null);
     setDimensions(null);
 
     // Hosts may reject instead of returning `{ error }`; both settle into the error state.
-    onLoadImage(filePath).then(
+    // Explicit legacy props still work; first-party previews discover cancellable adapter reads.
+    const read =
+      onLoadImage && onLoadImage !== adapter?.loadImage
+        ? onLoadImage(filePath)
+        : loadImage(adapter, filePath, controller.signal);
+    read.then(
       (result: ImageLoadResult) => {
         if (cancelled) return;
         if (!result) {
@@ -50,8 +61,9 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [filePath, onLoadImage]);
+  }, [filePath, onLoadImage, adapter, snapshot]);
 
   if (loading) {
     return (

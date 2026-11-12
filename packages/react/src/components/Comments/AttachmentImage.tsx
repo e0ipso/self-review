@@ -6,6 +6,7 @@ import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription } from '../ui/dialog';
 import { ImageOff } from 'lucide-react';
+import { readAttachment } from '../../read-service';
 
 export interface AttachmentImageProps {
   attachment: Attachment;
@@ -16,15 +17,16 @@ export function AttachmentImage({ attachment }: AttachmentImageProps) {
   const snapshot = useOptionalSnapshotKey();
   const [retry, setRetry] = useState(0);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const adapter = useAdapter();
 
   useEffect(() => {
     // `active` goes false in cleanup, so a late read creates no blob URL the cleanup would miss.
     let active = true;
+    const controller = new AbortController();
     let url: string | null = null;
     setImageUrl(null);
-    setError(false);
+    setError(null);
 
     const show = (bytes: BlobPart) => {
       url = URL.createObjectURL(new Blob([bytes], { type: attachment.mediaType }));
@@ -33,26 +35,27 @@ export function AttachmentImage({ attachment }: AttachmentImageProps) {
 
     if (attachment.data) {
       show(attachment.data);
-    } else if (attachment.fileName && adapter?.readAttachment) {
-      adapter.readAttachment(attachment.fileName).then(
+    } else if (attachment.fileName && (adapter?.reads?.readAttachment || adapter?.readAttachment)) {
+      readAttachment(adapter, attachment.fileName, controller.signal).then(
         buffer => {
           if (!active) return;
           if (buffer) show(buffer);
-          else setError(true);
+          else setError(t('Image not found'));
         },
-        () => {
-          if (active) setError(true);
+        reason => {
+          if (active) setError(reason instanceof Error ? reason.message : t('Image not found'));
         }
       );
     } else {
-      setError(true);
+      setError(t('Image not found'));
     }
 
     return () => {
       active = false;
+      controller.abort();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [attachment.data, attachment.fileName, attachment.mediaType, adapter, snapshot, retry]);
+  }, [attachment.data, attachment.fileName, attachment.mediaType, adapter, snapshot, retry, t]);
 
   if (error) {
     return (
@@ -61,7 +64,7 @@ export function AttachmentImage({ attachment }: AttachmentImageProps) {
         className='flex items-center gap-1 text-muted-foreground text-sm p-2 border rounded bg-muted'
       >
         <ImageOff className='h-4 w-4' />
-        <span>{t('Image not found')}</span>
+        <span>{error}</span>
         <Button variant='outline' size='sm' onClick={() => setRetry(value => value + 1)}>
           {t('Retry')}
         </Button>
@@ -84,7 +87,7 @@ export function AttachmentImage({ attachment }: AttachmentImageProps) {
             src={imageUrl}
             alt={t('Attachment')}
             className='max-h-48 rounded border hover:opacity-80'
-            onError={() => setError(true)}
+            onError={() => setError(t('Image not found'))}
           />
         </Button>
       </DialogTrigger>
@@ -97,7 +100,7 @@ export function AttachmentImage({ attachment }: AttachmentImageProps) {
           src={imageUrl}
           alt={t('Attachment')}
           className='max-w-full max-h-[75vh] object-contain'
-          onError={() => setError(true)}
+          onError={() => setError(t('Image not found'))}
         />
       </DialogContent>
     </Dialog>

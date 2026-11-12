@@ -47,6 +47,32 @@ function fixture() {
 }
 afterEach(() => vi.useRealTimers());
 
+it('keeps old ElectronAPI reads usable and makes pre-aborted optional reads transport-free', async () => {
+  const f = fixture();
+  const abort = new AbortController();
+  abort.abort();
+  await expect(f.bridge.adapter.reads!.loadFileContent!('old.ts', abort.signal)).rejects.toThrow(
+    /cancelled/
+  );
+  expect(f.api.loadFileContent).not.toHaveBeenCalled();
+  f.api.loadFileContent.mockResolvedValue([]);
+  await expect(
+    f.bridge.adapter.reads!.loadFileContent!('old.ts', new AbortController().signal)
+  ).resolves.toEqual([]);
+  f.api.expandContext.mockResolvedValue({ hunks: [], totalLines: 1 });
+  await expect(
+    f.bridge.adapter.reads!.expandContext!(
+      { filePath: 'old.ts', contextLines: 1 },
+      new AbortController().signal
+    )
+  ).resolves.toEqual({ hunks: [], totalLines: 1 });
+  f.api.readAttachment.mockResolvedValue(new ArrayBuffer(1));
+  await expect(
+    f.bridge.adapter.reads!.readAttachment!('old.png', new AbortController().signal)
+  ).resolves.toHaveProperty('byteLength', 1);
+  f.bridge.dispose();
+});
+
 it('settles initial requests and distinguishes resume acknowledgements from later pushes', async () => {
   const f = fixture();
   const push = vi.fn();

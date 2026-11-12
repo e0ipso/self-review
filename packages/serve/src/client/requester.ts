@@ -56,9 +56,11 @@ export function createServeRequester(
           }
         );
       if (disposed) throw failure('This page has disconnected from the review server.');
+      if (init.signal?.aborted) throw failure('The request was cancelled.');
       active.add(controller);
       let timer: ReturnType<typeof setTimeout> | undefined;
       let onAbort = () => {};
+      const onExternalAbort = () => controller.abort(init.signal?.reason);
       try {
         const cancelled = new Promise<never>((_, reject) => {
           onAbort = () => reject(failure('The request was cancelled or timed out.'));
@@ -68,13 +70,18 @@ export function createServeRequester(
             mutation ? (options.mutationTimeoutMs ?? 60_000) : (options.readTimeoutMs ?? 30_000)
           );
         });
+        init.signal?.addEventListener('abort', onExternalAbort, { once: true });
+        if (init.signal?.aborted) onExternalAbort();
         return await Promise.race([
           cancelled,
           (async () => {
+            controller.signal.throwIfAborted();
+            const headers = new Headers(init.headers);
+            headers.set('authorization', authorization);
             const response = await transport(path, {
               ...init,
               signal: controller.signal,
-              headers: { ...(init.headers as Record<string, string> | undefined), authorization },
+              headers: Object.fromEntries(headers.entries()),
             });
             return read(response);
           })(),
@@ -85,6 +92,7 @@ export function createServeRequester(
       } finally {
         clearTimeout(timer);
         controller.signal.removeEventListener('abort', onAbort);
+        init.signal?.removeEventListener('abort', onExternalAbort);
         active.delete(controller);
       }
     },

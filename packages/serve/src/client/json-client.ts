@@ -47,10 +47,10 @@ export async function requestError(
 // Response consumption stays inside the request deadline, including error bodies.
 export function createClient(requester: ServeRequester) {
   return {
-    getJson: <T>(path: string): Promise<T> =>
+    getJson: <T>(path: string, signal?: AbortSignal): Promise<T> =>
       requester.request(
         path,
-        {},
+        { signal },
         async response => {
           if (!response.ok) throw await requestError(response, `GET ${path}`);
           return response.json() as Promise<T>;
@@ -68,13 +68,14 @@ export function createClient(requester: ServeRequester) {
         read,
         'mutation'
       ),
-    postJson: <T>(path: string, body: unknown): Promise<T> =>
+    postJson: <T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> =>
       requester.request(
         path,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(body),
+          signal,
         },
         async response => {
           if (!response.ok) throw await requestError(response, `POST ${path}`);

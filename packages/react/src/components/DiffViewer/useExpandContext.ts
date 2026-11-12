@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import type { DiffFile, DiffHunk } from '@self-review/types';
 import {
   useReviewCommands,
@@ -13,12 +13,15 @@ import {
   type HunkChangeRange,
   type HunkContextBudget,
 } from './diff-utils';
+import { useAdapter } from '../../context/ReviewAdapterContext';
+import { expandContext } from '../../read-service';
 
 interface UseExpandContextParams {
   file: DiffFile;
   filePath: string;
   isExpandable: boolean;
   sectionRef: React.RefObject<HTMLElement | null>;
+  expanded?: boolean;
 }
 
 interface UseExpandContextResult {
@@ -37,8 +40,10 @@ export function useExpandContext({
   filePath,
   isExpandable,
   sectionRef,
+  expanded = true,
 }: UseExpandContextParams): UseExpandContextResult {
-  const { expandFileContext, updateFileHunks } = useReviewCommands();
+  const { isCurrentSession, updateFileHunks } = useReviewCommands();
+  const adapter = useAdapter();
   const sessionId = useReviewSessionId();
   const snapshotId = useReviewSnapshotId();
   const [expandLoading, setExpandLoading] = useState(false);
@@ -52,8 +57,20 @@ export function useExpandContext({
   const rawHunksRef = useRef<DiffHunk[] | null>(null);
   const lastRequestedContextRef = useRef<number>(0);
 
-  const owner = `${sessionId}:${snapshotId}`;
+  const owner = useMemo(() => ({}), [sessionId, snapshotId, adapter, filePath]);
   const ownerRef = useRef(owner);
+  const requestRef = useRef<AbortController | null>(null);
+  const wanted = useRef(expanded);
+  wanted.current = expanded;
+  useEffect(
+    () => () => {
+      requestRef.current?.abort();
+      requestRef.current = null;
+      setExpandLoading(false);
+      expandLoadingRef.current = false;
+    },
+    [owner, expanded]
+  );
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -139,7 +156,7 @@ export function useExpandContext({
       hunkIndex: number,
       position: 'top' | 'between' | 'bottom'
     ) => {
-      if (!isExpandable || expandLoadingRef.current) return;
+      if (!isExpandable || !wanted.current || expandLoadingRef.current) return;
       setExpandError(false);
       const budgets = hunkBudgetsRef.current;
       const originalRanges = originalRangesRef.current;
@@ -267,6 +284,14 @@ export function useExpandContext({
       const maxBudget = Math.max(...budgets.flatMap(b => [b.above, b.below]), 0);
 
       const requestOwner = ownerRef.current;
+      const controller = new AbortController();
+      requestRef.current = controller;
+      const current = () =>
+        mounted.current &&
+        wanted.current &&
+        ownerRef.current === requestOwner &&
+        !controller.signal.aborted &&
+        (isCurrentSession?.() ?? true);
       expandLoadingRef.current = true;
       setExpandLoading(true);
 
@@ -275,11 +300,21 @@ export function useExpandContext({
 
       if (maxBudget > lastRequestedContextRef.current || !rawHunksRef.current) {
         // Need fresh data from git
-        const result = await expandFileContext(filePath, maxBudget);
-        if (!mounted.current || ownerRef.current !== requestOwner) return;
+        let result = null;
+        try {
+          result = await expandContext(
+            adapter,
+            { filePath, contextLines: maxBudget },
+            controller.signal
+          );
+        } catch {
+          // Genuine failures retain manual retry; obsolete requests never become errors.
+        }
+        if (!current()) return;
         if (!result) {
           setExpandError(true);
           setExpandLoading(false);
+          expandLoadingRef.current = false;
           scrollCompensationRef.current = null;
           return;
         }
@@ -292,13 +327,14 @@ export function useExpandContext({
         rawHunks = rawHunksRef.current;
       }
 
-      if (!mounted.current || ownerRef.current !== requestOwner) return;
+      if (!current()) return;
       const trimmed = trimHunkContext(rawHunks, originalRanges, budgets);
       updateFileHunks(filePath, trimmed);
       setTotalLines(newTotalLines);
       setExpandLoading(false);
+      expandLoadingRef.current = false;
     },
-    [isExpandable, filePath, expandFileContext, updateFileHunks]
+    [isExpandable, filePath, adapter, isCurrentSession, updateFileHunks]
   );
 
   return { expandLoading, expandError, totalLines, handleExpandContext };

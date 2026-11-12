@@ -1,6 +1,8 @@
 /** Renderer-owned requests. Reads have deadlines; writes retain an explicitly unknown outcome
  * on disposal and are never timed out or replayed. Admission bounds listeners and pending replies.
  */
+// Monotonic within a renderer document, including adapter replacements. Main refuses reused ids.
+let nextReadId = 0;
 export class ElectronRequests {
   private closed = false;
   private readonly pending = new Set<(error: Error) => void>();
@@ -11,9 +13,11 @@ export class ElectronRequests {
 
   run<T>(
     start: (resolve: (value: T) => void, reject: (error: unknown) => void) => (() => void) | void,
-    write = false
+    write = false,
+    signal?: AbortSignal
   ): Promise<T> {
     if (this.closed) return Promise.reject(new Error('The review window was disposed.'));
+    if (signal?.aborted) return Promise.reject(new Error('The desktop read was cancelled.'));
     if (this.pending.size >= this.limit)
       return Promise.reject(new Error('Too many pending desktop requests.'));
     return new Promise<T>((resolve, reject) => {
@@ -24,6 +28,7 @@ export class ElectronRequests {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
         this.pending.delete(cancel);
         cleanup?.();
         complete();
@@ -38,7 +43,9 @@ export class ElectronRequests {
               : error
           )
         );
+      const abort = () => cancel(new Error('The desktop read was cancelled.'));
       this.pending.add(cancel);
+      signal?.addEventListener('abort', abort, { once: true });
       if (!write)
         timer = setTimeout(
           () => finish(() => reject(new Error('The desktop request timed out.'))),
@@ -76,6 +83,41 @@ export class ElectronRequests {
     return this.run<T>((resolve, reject) => {
       void request().then(resolve, reject);
     }, write);
+  }
+
+  /** Cleanup cancels just this invocation on abort, deadline or adapter disposal. */
+  read<T>(
+    request: (id: string) => Promise<T>,
+    cancel?: (id: string) => void,
+    signal?: AbortSignal
+  ): Promise<T> {
+    const id = String(++nextReadId);
+    return this.run<T>(
+      (resolve, reject) => {
+        let completed = false;
+        void request(id).then(
+          value => {
+            completed = true;
+            resolve(value);
+          },
+          error => {
+            completed = true;
+            reject(error);
+          }
+        );
+        return () => {
+          if (!completed) {
+            try {
+              cancel?.(id);
+            } catch {
+              /* A closed peer already owns cancellation. */
+            }
+          }
+        };
+      },
+      false,
+      signal
+    );
   }
 
   dispose(): void {

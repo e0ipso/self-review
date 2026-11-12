@@ -13,6 +13,23 @@ const image = (id: string): Attachment => ({
   mediaType: 'image/png',
   data: new ArrayBuffer(4),
 });
+it('aborts a dismissed decoder without cancelling the next selected image', async () => {
+  const signals: AbortSignal[] = [];
+  const attached = vi.fn();
+  const process = vi.fn((_file: File | Blob, signal?: AbortSignal) => {
+    signals.push(signal!);
+    if (signals.length > 1) return Promise.resolve(image('wanted'));
+    return new Promise<Attachment>((_resolve, reject) =>
+      signal!.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })
+    );
+  });
+  const { result } = renderHook(() => useImageAttachments({ onAttach: attached, process }));
+  act(() => result.current.enqueue([file('obsolete'), file('wanted')]));
+  await act(async () => result.current.dismiss(result.current.jobs[0].id));
+  expect(signals[0].aborted).toBe(true);
+  expect(signals[1].aborted).toBe(false);
+  expect(attached).toHaveBeenCalledExactlyOnceWith([image('wanted')]);
+});
 it('retains each success, reports failures and retries only the failed image', async () => {
   const attached = vi.fn();
   let finish!: (value: Attachment) => void;

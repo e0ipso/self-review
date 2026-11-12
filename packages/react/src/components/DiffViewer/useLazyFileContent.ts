@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFile } from '@self-review/types';
-import { useReviewCommands, useReviewSessionId } from '../../context/ReviewContext';
+import {
+  useReviewCommands,
+  useReviewSessionId,
+  useReviewSnapshotId,
+} from '../../context/ReviewContext';
 import { useLocalization } from '../../localization/LocalizationContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
+import { canReadFileContent, loadFileContent } from '../../read-service';
 
 /** Only `idle` starts a request, so a failure stays until the reviewer retries. */
 export type LazyLoadState =
@@ -14,8 +19,7 @@ export type LazyLoadState =
 const IDLE: LazyLoadState = { kind: 'idle' };
 
 interface OwnedLoadState {
-  file: DiffFile;
-  sessionId: number;
+  owner: object;
   state: LazyLoadState;
 }
 
@@ -50,26 +54,34 @@ export function useLazyFileContent({
   const { t } = useLocalization();
   const { updateFileHunks } = useReviewCommands();
   const sessionId = useReviewSessionId();
+  const snapshotId = useReviewSnapshotId();
   const adapter = useAdapter();
-  const [owned, setOwned] = useState<OwnedLoadState>({ file, sessionId, state: IDLE });
-  const state = owned.file === file && owned.sessionId === sessionId ? owned.state : IDLE;
+  const owner = useMemo(() => ({}), [file, sessionId, snapshotId, adapter, filePath]);
+  const [owned, setOwned] = useState<OwnedLoadState>({ owner, state: IDLE });
+  const state = owned.owner === owner ? owned.state : IDLE;
+  const controllerRef = useRef<AbortController | null>(null);
+  const needsContent = expanded && file.contentLoaded === false;
 
   // Bumped when an in-flight answer stops being wanted; a request applies it only if unchanged.
   const generationRef = useRef(0);
   useEffect(() => {
     return () => {
       generationRef.current += 1;
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+      setOwned(previous =>
+        previous.owner === owner && previous.state.kind === 'loading'
+          ? { owner, state: IDLE }
+          : previous
+      );
     };
-  }, [file, sessionId]);
-
-  const needsContent = expanded && file.contentLoaded === false;
+  }, [owner, needsContent]);
 
   useEffect(() => {
     if (!needsContent || state.kind !== 'idle') return;
-    const settle = (next: LazyLoadState) => setOwned({ file, sessionId, state: next });
+    const settle = (next: LazyLoadState) => setOwned({ owner, state: next });
 
-    const loadFileContent = adapter?.loadFileContent;
-    if (!loadFileContent) {
+    if (!canReadFileContent(adapter)) {
       settle({
         kind: 'error',
         message: t('this review host cannot load file content on demand'),
@@ -78,10 +90,12 @@ export function useLazyFileContent({
     }
 
     const generation = ++generationRef.current;
-    const current = () => generation === generationRef.current;
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    const current = () => generation === generationRef.current && !controller.signal.aborted;
     settle({ kind: 'loading' });
 
-    loadFileContent(filePath).then(
+    loadFileContent(adapter, filePath, controller.signal).then(
       hunks => {
         if (!current()) return;
         if (hunks) {
@@ -99,15 +113,13 @@ export function useLazyFileContent({
         settle({ kind: 'error', message: describeFailure(error, t('the request failed')) });
       }
     );
-  }, [needsContent, state.kind, file, sessionId, filePath, adapter, updateFileHunks, t]);
+  }, [needsContent, state.kind, owner, filePath, adapter, updateFileHunks, t]);
 
   const retry = useCallback(() => {
     setOwned(prev =>
-      prev.file === file && prev.sessionId === sessionId && prev.state.kind === 'error'
-        ? { file, sessionId, state: IDLE }
-        : prev
+      prev.owner === owner && prev.state.kind === 'error' ? { owner, state: IDLE } : prev
     );
-  }, [file, sessionId]);
+  }, [owner]);
 
   return { state, retry };
 }
