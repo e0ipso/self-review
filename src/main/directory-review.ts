@@ -1,5 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import { IPC } from '../shared/ipc-channels';
+import { replaceReview } from './replacement-delivery';
 import type { createIpcBoundary } from './ipc-boundary';
 import type { DesktopReviewOperations } from './review-operations';
 import type { ReviewPresentation } from './presentation';
@@ -40,9 +40,18 @@ export async function startDirectoryReview(
     current();
     opening.assertCurrent();
     signal.throwIfAborted();
-    // Update the cache and send to renderer
-    const outgoing = review.commitReviewStart(payload, identity, loadedReview);
-    boundary.assertPeer(event).webContents.send(IPC.DIFF_LOAD, outgoing);
+    replaceReview(
+      { payload, guide: null, resume: { comments: [], viewedFiles: [] } },
+      {
+        signal,
+        assertCurrent: current,
+        send: (channel, value) => boundary.assertPeer(event).webContents.send(channel, value),
+      },
+      () => {
+        opening.assertCurrent();
+        review.commitReviewStart(payload, identity, loadedReview);
+      }
+    );
 
     if (payload.source.type === 'file') {
       console.error('[ipc] File review started:', payload.files.length, 'files');

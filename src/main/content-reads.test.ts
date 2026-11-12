@@ -503,3 +503,34 @@ it('propagates the renderer deadline through preload cancellation', async () => 
   bridge.dispose();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it.each(['guide', 'resume'] as const)(
+  'applies the same budget to requested and pushed %s without partial delivery',
+  async kind => {
+    const f = setup();
+    const { sendGuideLoad, sendResumeLoad } = await import('./ipc-delivery');
+    const huge = 'x'.repeat(MAX_CONTENT_TEXT_BYTES / 2 + 1);
+    const pushed = { webContents: { send: vi.fn() } } as unknown as BrowserWindow;
+    f.sender.send.mockClear();
+    if (kind === 'guide') {
+      const guide = { overview: huge, groups: [] };
+      f.session.guideData = guide;
+      expect(() => sendGuideLoad(pushed, guide)).toThrow(/delivery limits/);
+      await expect(f.bridge.adapter.loadDiff()).rejects.toThrow(/delivery limits/);
+      expect(f.sender.send.mock.calls.some(([channel]) => channel === IPC.DIFF_LOAD)).toBe(false);
+    } else {
+      const viewedFiles = [huge];
+      f.session.resumeViewedFiles = viewedFiles;
+      expect(() => sendResumeLoad(pushed, { comments: [], viewedFiles })).toThrow(
+        /delivery limits/
+      );
+      await expect(f.bridge.adapter.loadResumedReview!()).rejects.toThrow(/delivery limits/);
+      expect(f.sender.send.mock.calls.some(([channel]) => channel === IPC.RESUME_LOAD)).toBe(false);
+    }
+    expect(pushed.webContents.send).not.toHaveBeenCalled();
+    expect(f.sender.send).toHaveBeenCalledWith(
+      IPC.CONTENT_REFUSED,
+      expect.objectContaining({ message: 'Review content exceeds desktop delivery limits.' })
+    );
+  }
+);

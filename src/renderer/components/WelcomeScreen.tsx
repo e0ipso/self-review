@@ -1,4 +1,5 @@
 import { useDesktopLocalization } from '../useDesktopLocalization';
+import { remoteOpenFailure } from './remote-open-failure';
 import type { ElectronAPI } from '../../shared/types';
 import React, { useEffect, useState } from 'react';
 import { parseForgeUrl } from '../../../packages/core/src/browser';
@@ -85,9 +86,7 @@ export default function WelcomeScreen({ api = window.electronAPI }: { api?: Welc
     const url = remoteUrl.trim();
     if (!parseForgeUrl(url)) {
       setRemoteError(
-        t(
-          'Not a recognized PR/MR URL. Expected a GitHub pull request (…/pull/N) or GitLab merge request (…/-/merge_requests/N) URL.'
-        )
+        'Not a recognized PR/MR URL. Expected a GitHub pull request (…/pull/N) or GitLab merge request (…/-/merge_requests/N) URL.'
       );
       return;
     }
@@ -100,8 +99,7 @@ export default function WelcomeScreen({ api = window.electronAPI }: { api?: Welc
         setLoading(false);
       }
     } catch (err) {
-      console.error('[WelcomeScreen] Failed to open remote URL:', err);
-      setRemoteError(err instanceof Error ? err.message : t('Failed to open remote PR/MR'));
+      setRemoteError(err instanceof Error ? err.message : 'Failed to open remote PR/MR');
       setLoading(false);
     }
   };
@@ -191,7 +189,7 @@ export default function WelcomeScreen({ api = window.electronAPI }: { api?: Welc
                 data-testid='remote-url-error'
                 className='text-sm text-destructive'
               >
-                {remoteError}
+                {remoteOpenFailure(remoteError, t)}
               </p>
             )}
           </CardContent>

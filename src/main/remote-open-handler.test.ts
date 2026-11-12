@@ -12,16 +12,10 @@ import { createDesktopSession } from './desktop-session';
 import { DesktopOperations } from './desktop-operations';
 import type { createIpcBoundary } from './ipc-boundary';
 import { registerRemoteOpenHandler } from './remote-open-handler';
-import { sendDiffLoad, sendGuideLoad, sendResumeLoad } from './ipc-handlers';
 import type { RemoteOpenUrlResult } from '../shared/types';
 
 vi.mock('../../packages/core/src/remote-mode', () => ({ bootstrapRemoteDiff: vi.fn() }));
 vi.mock('../../packages/core/src/guide-loader', () => ({ loadGuide: vi.fn() }));
-vi.mock('./ipc-handlers', () => ({
-  sendDiffLoad: vi.fn(),
-  sendGuideLoad: vi.fn(),
-  sendResumeLoad: vi.fn(),
-}));
 afterEach(() => vi.clearAllMocks());
 
 it.each(['window', 'operation', 'deadline'] as const)(
@@ -75,7 +69,8 @@ it.each(['window', 'operation', 'deadline'] as const)(
       },
     };
     vi.mocked(bootstrapRemoteDiff).mockResolvedValue(result);
-    const window = new EventEmitter();
+    const send = vi.fn();
+    const window = Object.assign(new EventEmitter(), { webContents: { send } });
     let invoke!: (event: IpcMainInvokeEvent, url: string) => Promise<RemoteOpenUrlResult>;
     const boundary = {
       handleCommand(_channel: string, _decode: unknown, handler: typeof invoke) {
@@ -134,9 +129,7 @@ it.each(['window', 'operation', 'deadline'] as const)(
       expect(cleanup).toHaveBeenCalledOnce();
       expect(desktop.review.diffData.source.type).toBe('welcome');
       expect(desktop.remoteInfo).toBeNull();
-      expect(sendDiffLoad).not.toHaveBeenCalled();
-      expect(sendGuideLoad).not.toHaveBeenCalled();
-      expect(sendResumeLoad).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
       expect(window.listenerCount('closed')).toBe(0);
     } finally {
       finishCleanup();

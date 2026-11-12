@@ -6,6 +6,7 @@ type Bootstrap = (controller: AbortController) => Promise<RemoteBootstrapResult>
 export class RemoteLifetime {
   private pending: { controller: AbortController; settled: Promise<unknown> } | null = null;
   private release: (() => Promise<void>) | null = null;
+  private owned: RemoteBootstrapResult | null = null;
   private releaseForExit: (() => Promise<void>) | null = null;
   private exitPending: Promise<void> | null = null;
   private disposal: Promise<void> | null = null;
@@ -34,6 +35,7 @@ export class RemoteLifetime {
           throw new Error('Opening the PR/MR was cancelled.');
         }
         this.release = result.session.cleanup;
+        this.owned = result;
         return result;
       });
     this.pending = { controller, settled };
@@ -42,6 +44,10 @@ export class RemoteLifetime {
     } finally {
       this.pending = null;
     }
+  }
+
+  ownsOpen(result: RemoteBootstrapResult): boolean {
+    return !this.stopping && this.owned === result;
   }
 
   private runCleanup(release: () => Promise<void>): Promise<void> {
@@ -61,6 +67,7 @@ export class RemoteLifetime {
     const release = this.releaseForExit;
     if (!release) return Promise.resolve();
     this.release = null;
+    this.owned = null;
     this.releasing = this.runCleanup(release);
     return this.releasing
       .catch(() => console.error('[main] Remote cleanup failed'))
@@ -69,11 +76,19 @@ export class RemoteLifetime {
       });
   }
 
+  cancelOwnedOpen(expected: RemoteBootstrapResult): Promise<void> {
+    // An older continuation may finish after its resource was released and another open won.
+    // Scoped cancellation must never join or delete that newer owner's cleanup.
+    if (this.owned !== expected) return Promise.resolve();
+    return this.cancelOpen();
+  }
+
   /** Release a declined welcome-screen open and permit another attempt. */
   async cancelOpen(): Promise<void> {
     if (this.releasing) return this.releasing;
     const release = this.release;
     this.release = null;
+    this.owned = null;
     this.releasing = release ? this.runCleanup(release) : Promise.resolve();
     try {
       await this.releasing;
