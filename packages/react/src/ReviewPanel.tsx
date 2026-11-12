@@ -3,6 +3,7 @@ import type { AppConfig, ReviewComment } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
 import type { ReviewServices } from './context/ReviewServicesContext';
 import type { PreviewRenderingProviderProps } from './context/PreviewRenderingContext';
+import type { ReviewProviderProps } from './context/ReviewContext';
 import { ReviewProviders } from './ReviewProviders';
 import Layout from './components/Layout';
 import { KeyboardNavigationManager } from './components/KeyboardNavigationManager';
@@ -26,10 +27,10 @@ import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
  */
 export type ReviewPanelHandle = ReviewHandle;
 
-export interface ReviewPanelProps extends Pick<
-  PreviewRenderingProviderProps,
-  'previewRenderer' | 'diagramRenderer'
-> {
+export interface ReviewPanelProps
+  extends
+    Pick<ReviewProviderProps, 'recovery' | 'initialCharacterShortcuts'>,
+    Pick<PreviewRenderingProviderProps, 'previewRenderer' | 'diagramRenderer'> {
   /** A different adapter object starts a new session: define it at module scope or memoize it. */
   adapter: ReviewAdapter;
   /** Optional metadata dependencies scoped to this review. */
@@ -90,6 +91,8 @@ export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(funct
     previewRenderer,
     diagramRenderer,
     services,
+    recovery,
+    initialCharacterShortcuts,
   },
   ref
 ) {
@@ -101,6 +104,8 @@ export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(funct
       previewRenderer={previewRenderer}
       diagramRenderer={diagramRenderer}
       services={services}
+      recovery={recovery}
+      initialCharacterShortcuts={initialCharacterShortcuts}
     >
       <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
         {children}

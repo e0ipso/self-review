@@ -6,6 +6,7 @@ import type {
   ReviewComment,
   DiffLoadPayload,
 } from '@self-review/types';
+import type { ReviewProviderProps } from './context/ReviewContext';
 import type { ReviewAdapter } from './adapter';
 import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
 import { ConfigProvider } from './context/ConfigContext';
@@ -17,7 +18,10 @@ import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
 
 export type SingleFileReviewHandle = ReviewHandle;
 
-export interface SingleFileReviewProps {
+export interface SingleFileReviewProps extends Pick<
+  ReviewProviderProps,
+  'recovery' | 'initialCharacterShortcuts'
+> {
   /** A different path starts a fresh session; a new object for the same path keeps it. */
   file: DiffFile;
   /** Defaults to `{ type: 'file' }` at the file's path. Compared by value. */
@@ -62,14 +66,20 @@ const SingleFileReviewInner = forwardRef<ReviewHandle, SingleFileReviewInnerProp
   }
 );
 
-interface SingleFileSessionProps extends SingleFileReviewInnerProps {
+interface SingleFileSessionProps
+  extends
+    SingleFileReviewInnerProps,
+    Pick<ReviewProviderProps, 'recovery' | 'initialCharacterShortcuts'> {
   source: DiffSource;
   adapter?: Partial<ReviewAdapter>;
 }
 
 /** Keyed on path and source identity, so a different file never exports the previous one's state. */
 const SingleFileSession = forwardRef<ReviewHandle, SingleFileSessionProps>(
-  function SingleFileSession({ file, source, adapter, ...inner }, ref) {
+  function SingleFileSession(
+    { file, source, adapter, recovery, initialCharacterShortcuts, ...inner },
+    ref
+  ) {
     // Read at load time: a new adapter object would start a new session on a same-path update.
     const payloadRef = useRef<DiffLoadPayload>({ files: [file], source });
     payloadRef.current = { files: [file], source };
@@ -86,7 +96,12 @@ const SingleFileSession = forwardRef<ReviewHandle, SingleFileSessionProps>(
     const files = useMemo(() => [file], [file]);
     return (
       <ReviewAdapterProvider adapter={mergedAdapter}>
-        <ReviewProvider initialFiles={files} initialSource={source}>
+        <ReviewProvider
+          initialFiles={files}
+          initialSource={source}
+          recovery={recovery}
+          initialCharacterShortcuts={initialCharacterShortcuts}
+        >
           <DiffNavigationProvider>
             <TooltipProvider>
               <SingleFileReviewInner ref={ref} file={file} {...inner} />
@@ -122,6 +137,8 @@ export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
       onReviewChange,
       adapter,
       className,
+      recovery,
+      initialCharacterShortcuts,
       defaultViewMode = 'unified',
     },
     ref
@@ -146,6 +163,8 @@ export const SingleFileReview = forwardRef<ReviewHandle, SingleFileReviewProps>(
           viewMode={defaultViewMode}
           onReviewChange={onReviewChange}
           className={className}
+          recovery={recovery}
+          initialCharacterShortcuts={initialCharacterShortcuts}
         />
       </ConfigProvider>
     );

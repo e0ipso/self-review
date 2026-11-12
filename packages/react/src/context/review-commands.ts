@@ -1,7 +1,14 @@
 import { useLayoutEffect, useMemo } from 'react';
 import type { ReviewAdapter } from '../adapter';
 import type { UseReviewStateReturn } from '../hooks/useReviewState';
-import type { ReviewContextValue } from './review-context';
+import type {
+  Attachment,
+  DiffHunk,
+  LineRange,
+  Reply,
+  ReviewComment,
+  Suggestion,
+} from '@self-review/types';
 import type { ReviewSessionStore } from './review-session';
 import {
   createReviewSessionController,
@@ -9,20 +16,32 @@ import {
 } from './review-session-controller';
 import type { createReviewStateCommands } from './review-state-commands';
 
-export type ReviewCommands = Pick<
-  ReviewContextValue,
-  | 'addComment'
-  | 'editComment'
-  | 'deleteComment'
-  | 'addReply'
-  | 'updateReply'
-  | 'deleteReply'
-  | 'toggleViewed'
-  | 'expandFileContext'
-  | 'updateFileHunks'
-  | 'setApplyDestination'
-  | 'isCurrentSession'
->;
+/** Stable mutation contract shared by narrow consumers and the compatibility context. */
+export interface ReviewCommands {
+  addComment: (
+    filePath: string,
+    lineRange: LineRange | null,
+    body: string,
+    category: string,
+    suggestion: Suggestion | null,
+    attachments?: Attachment[]
+  ) => void;
+  editComment: (id: string, updates: Partial<ReviewComment>) => void;
+  deleteComment: (id: string) => void;
+  addReply: (commentId: string, body: string, author?: string, attachments?: Attachment[]) => void;
+  updateReply: (commentId: string, replyId: string, updates: Partial<Reply>) => void;
+  deleteReply: (commentId: string, replyId: string) => void;
+  toggleViewed: (filePath: string) => void;
+  expandFileContext: (
+    filePath: string,
+    contextLines: number
+  ) => Promise<{ hunks: DiffHunk[]; totalLines: number } | null>;
+  updateFileHunks: (filePath: string, hunks: DiffHunk[]) => void;
+  /** Record the destination the host accepted. */
+  setApplyDestination: (destinationRoot: string) => void;
+  /** Checks synchronously, including before a replacement has committed in React. */
+  isCurrentSession?: () => boolean;
+}
 
 /** Mutations keep their stable identities. Snapshot commands use the same request owner as loading. */
 export function createSessionCommands(

@@ -394,3 +394,49 @@ another review's tree. Custom compositions using the original keyboard hook stil
 `expand-file-tree` event fallback; first-party navigation does not dispatch that event. The hook's
 call form and synchronous return remain unchanged. Browser layout, native Find and screen reader
 integration still require host verification.
+
+## Recovery composition
+
+`ReviewProvider`, `ReviewProviders`, `ReviewPanel`, and `SingleFileReview` keep visible load
+failures, manual retry, and unfinished-draft recovery by default. Supply an optional `recovery` node
+to replace that presentation. The node runs inside the session and display providers. Use
+`ReviewRecovery` for the default controls, or place `ReviewLoadRecovery` and `ReviewDraftRecovery`
+independently. `useReviewLoadState()` exposes load/resume errors and their explicit retry commands
+to custom controls.
+
+For example, move the controls into host-owned content without mounting duplicate recovery UI:
+
+```tsx
+<ReviewProviders adapter={adapter} recovery={null}>
+  <HostHeader />
+  <ReviewLoadRecovery />
+  <Layout />
+  <ReviewDraftRecovery />
+</ReviewProviders>
+```
+
+A custom presentation must keep failures and draft recovery reachable. Changing presentation never
+clears feedback or drafts, makes an incomplete review saveable, or changes publication outcomes.
+
+## Character shortcuts
+
+The Toolbar's keyboard toggle enables or disables `f`, `g`, `j`, `k`, and hint letters for its own
+review. It starts enabled and keeps the preference in memory. Set
+`initialCharacterShortcuts={false}` on `ReviewProvider`, `ReviewProviders`, `ReviewPanel`, or
+`SingleFileReview` to start disabled. Custom chrome can place `ReviewShortcutToggle`, or use
+`useReviewShortcutPolicy()` to read and change the same scoped preference. Standalone compositions
+can supply `ReviewShortcutProvider` and `KeyboardNavigationManager` inside their
+configuration/navigation providers. `SingleFileReview` retains its existing behavior without a
+shortcut manager.
+
+Handled keyboard events, IME composition, editable content, and focused native or ARIA controls keep
+their own keys. Native Find and controls' Enter/space behavior are unaffected. Reviews on one page
+keep separate preferences and shortcut targets. The toggle uses the existing localized keyboard
+shortcuts label, followed by the literal key names, so existing language catalogs work unchanged.
+
+Raster preview failures offer a localized Retry button when a loader is available. Retry starts a
+fresh read; loader errors, rejected promises, synchronous throws, decode errors, and unsafe image
+URLs never cause automatic retries. Replacement files, adapters, and snapshots hide stale URLs
+during render and discard obsolete results. Modern adapter reads receive an AbortSignal;
+legacy/custom loaders without cancellation support can finish their work, but their late results
+cannot replace the active preview.
