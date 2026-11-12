@@ -26,8 +26,8 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
 };
 
 /**
- * Reads from the snapshot the review compared, never the current working tree; only reviewed,
- * previewable paths are read.
+ * Reads a reviewed, previewable path. First-party loads pin index blobs and verify physical
+ * source evidence; legacy injected identities retain live descriptor reads.
  */
 export async function loadImage(
   session: Pick<ReviewSession, 'reviewedPaths' | 'diffData' | 'sourceIdentity'>,

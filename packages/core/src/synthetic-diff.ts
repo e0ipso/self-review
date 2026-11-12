@@ -9,6 +9,8 @@ import { realpathSync } from 'fs';
 import { join, resolve } from 'path';
 import type { DiffFile, DiffLine } from './types';
 import { readSyntheticSource, readSyntheticSourceAsync } from './synthetic-source';
+import { captureSourceReads, recordSourceCapture, RELOAD_REVIEW } from './loaded-snapshot';
+import { nodeScanFsLayer } from './node-scan-fs';
 import type { SyntheticSource } from './synthetic-source';
 import type { SourceReadFsLayer } from './scan-fs';
 import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
@@ -170,6 +172,12 @@ async function projectSourcesAsync(
       })
     : syntheticRoot(rootDir);
   checkLoadingCancelled(options.signal);
+  const originalFs = options.readFs ?? nodeScanFsLayer;
+  const capture = captureSourceReads(originalFs, options.signal, 'record');
+  const readFs: SourceReadFsLayer = {
+    ...capture.readFs,
+    readlink: target => originalFs.readlink(target),
+  };
   const projection = createProjection(budgets, output);
   for (const filePath of paths) {
     await loadingCheckpoint(options.signal);
@@ -178,13 +186,20 @@ async function projectSourcesAsync(
       ? null
       : await readSyntheticSourceAsync(join(sourceRoot, filePath), {
           sourceRoot,
-          readFs: options.readFs,
+          readFs,
           followSymlinks: options.followSymlinks,
           maxFileBytes: budgets.maxFileBytes,
           remainingBytes: projection.remaining(),
           signal: options.signal,
         });
     checkLoadingCancelled(options.signal);
+    // Preserve existing omission diagnostics when growth already exceeded a source budget.
+    if (
+      source &&
+      (source.kind === 'text' || source.kind === 'binary') &&
+      capture.drifted.has(resolve(sourceRoot, filePath))
+    )
+      throw new Error(RELOAD_REVIEW);
     const steps = projection.add(filePath, source);
     try {
       while (!steps.next().done) await loadingCheckpoint(options.signal);
@@ -193,7 +208,14 @@ async function projectSourcesAsync(
     }
   }
   await loadingCheckpoint(options.signal);
-  return projection.finish();
+  const result = projection.finish();
+  for (const file of result.files) {
+    recordSourceCapture(
+      file,
+      capture.captures.get(resolve(sourceRoot, file.newPath || file.oldPath))
+    );
+  }
+  return result;
 }
 
 function syntheticRoot(rootDir: string): string {

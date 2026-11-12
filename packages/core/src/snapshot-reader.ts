@@ -1,14 +1,24 @@
 // packages/core/src/snapshot-reader.ts
-// The one place a reviewed path turns into bytes, read from the side the review compared (audit R13, A6).
+// Authorized side reads. First-party loaded evidence pins index objects and detects source drift.
 
 import { runBufferedCommand, type BufferedCommandRunner } from './command-runner';
 import { CommandCancelledError, isCommandCancelled } from './forge-provider';
 import * as path from 'path';
 import type { ReviewSourceIdentity, ReviewSourceSide } from './types';
 import { MAX_SOURCE_FILE_BYTES } from './input-budgets';
-import { errnoOf, readContainedFile, toSafeFsError } from './safe-fs';
+import { errnoOf, toSafeFsError } from './safe-fs';
 import type { SafeFsErrorCode } from './safe-fs';
 import { rootRelativeReviewedPath } from './source-identity';
+import { readContainedFileBounded } from './safe-fs-async';
+import { nodeReadFsLayer, type BoundedAsyncReadFsLayer } from './safe-fs-read';
+import {
+  identityStamp,
+  loadedSnapshot,
+  sourceStamp,
+  captureSourceReads,
+  RELOAD_REVIEW,
+} from './loaded-snapshot';
+import type { PhysicalCapture } from './loaded-snapshot';
 
 export interface ReviewedSnapshot {
   sourceIdentity: ReviewSourceIdentity | null;
@@ -90,6 +100,8 @@ export interface SnapshotReadOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
   runner?: BufferedCommandRunner;
+  /** Bounded reader for legacy identities. Captured reads require the load's own reader. */
+  readFs?: BoundedAsyncReadFsLayer;
 }
 
 function failure(reason: SnapshotReadFailure, message: string): SnapshotReadResult {
@@ -117,14 +129,47 @@ export async function readReviewedContent(
   const sides = identity.fileSources?.get(filePath) ?? identity;
   const descriptor = side === 'old' ? sides.oldSide : sides.newSide;
   const maxBytes = options.maxBytes ?? MAX_SOURCE_FILE_BYTES;
+  const captured = loadedSnapshot(identity);
+  if (captured && captured.identityStamp !== identityStamp(identity)) {
+    return failure('read-failed', RELOAD_REVIEW);
+  }
+  if (captured && (descriptor.kind === 'index' || descriptor.kind === 'commit')) {
+    if (captured.gitOptions?.runner && !captured.blobRunner && !options.runner) {
+      return failure(
+        'read-failed',
+        'The supplied git source needs a binary snapshot runner for blob reads.'
+      );
+    }
+    const spec =
+      descriptor.kind === 'index'
+        ? captured.index.get(filePath)
+        : `${descriptor.sha}:${authorized.relativePath}`;
+    const result = spec
+      ? await readGitBlob(authorized.sourceRoot, spec, maxBytes, {
+          ...options,
+          runner: options.runner ?? captured.blobRunner,
+        })
+      : failure('side-unavailable', 'No stage-zero blob was captured for this side of the review.');
+    throwIfAborted();
+    return captured.identityStamp === identityStamp(identity)
+      ? result
+      : failure('read-failed', RELOAD_REVIEW);
+  }
+  const physical = ['working-tree', 'directory', 'file'].includes(descriptor.kind);
+  if (captured && physical && !captured.physical.has(filePath)) {
+    return failure('read-failed', RELOAD_REVIEW);
+  }
   const result = await readSide(
     descriptor,
     authorized.sourceRoot,
     authorized.relativePath,
     maxBytes,
-    options
+    options,
+    captured?.physical.get(filePath)
   );
   throwIfAborted();
+  if (captured && captured.identityStamp !== identityStamp(identity))
+    return failure('read-failed', RELOAD_REVIEW);
   return result;
 }
 
@@ -133,16 +178,23 @@ async function readSide(
   sourceRoot: string,
   relativePath: string,
   maxBytes: number,
-  options: SnapshotReadOptions
+  options: SnapshotReadOptions,
+  capture?: PhysicalCapture
 ): Promise<SnapshotReadResult> {
   switch (descriptor.kind) {
     case 'working-tree':
     case 'directory':
-      return readPhysicalFile(sourceRoot, relativePath, maxBytes);
+      return readPhysicalFile(sourceRoot, relativePath, maxBytes, options, capture);
     case 'file': {
       // Walked from the filesystem root: the path was physical at load, so any link now is new.
       const fsRoot = path.parse(descriptor.path).root;
-      return readPhysicalFile(fsRoot, path.relative(fsRoot, descriptor.path), maxBytes);
+      return readPhysicalFile(
+        fsRoot,
+        path.relative(fsRoot, descriptor.path),
+        maxBytes,
+        options,
+        capture
+      );
     }
     case 'index':
       // `:path` alone would read a leading `<n>:` in the path as a stage number.
@@ -162,12 +214,41 @@ async function readSide(
 async function readPhysicalFile(
   root: string,
   relativePath: string,
-  maxBytes: number
+  maxBytes: number,
+  options: SnapshotReadOptions,
+  capture?: PhysicalCapture
 ): Promise<SnapshotReadResult> {
   try {
-    return { ok: true, content: await readContainedFile(root, relativePath, maxBytes) };
+    if (capture && options.readFs && options.readFs !== capture.readFs)
+      return failure('read-failed', RELOAD_REVIEW);
+    const layer = options.readFs ?? capture?.readFs ?? nodeReadFsLayer;
+    const target = path.join(root, relativePath);
+    const verify = async () => {
+      if (
+        capture &&
+        (capture.target !== target || sourceStamp(await layer.lstat(target)) !== capture.stamp)
+      ) {
+        throw new Error(RELOAD_REVIEW);
+      }
+    };
+    await verify();
+    const observation = captureSourceReads(layer, options.signal);
+    const content = await readContainedFileBounded(
+      root,
+      relativePath,
+      maxBytes,
+      observation.readFs,
+      options.signal
+    );
+    if (capture && observation.captures.get(target)?.stamp !== capture.stamp)
+      throw new Error(RELOAD_REVIEW);
+    await verify();
+    return { ok: true, content };
   } catch (error) {
+    if (options.signal?.aborted)
+      throw new CommandCancelledError('aborted', 'self-review', ['read-reviewed-content']);
     const fsError = toSafeFsError(error, relativePath, 'read');
+    if (capture && fsError.code !== 'too-large') return failure('read-failed', RELOAD_REVIEW);
     const [reason, message = fsError.message] = FS_FAILURES[fsError.code] ?? ['read-failed'];
     return failure(reason, message);
   }

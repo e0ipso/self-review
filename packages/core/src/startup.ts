@@ -35,7 +35,8 @@ import {
   tokenizeGitDiffArgs,
 } from './git-diff-args';
 import { applyStagedUntrackedDefault } from './staged-untracked';
-import { loadGitDiffWithUntracked } from './git-diff-loader';
+import { loadGitReviewSnapshot } from './loaded-git-review';
+import { admitSyntheticSnapshot } from './loaded-snapshot';
 import { createIgnoreFilter } from './ignore-filter';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { resolveLocalSourceIdentity } from './source-identity';
@@ -152,7 +153,7 @@ export async function loadLocalReview(
   checkCancelled();
   if (source.mode === 'git') {
     const shouldKeep = createIgnoreFilter(config.ignore);
-    const { files, repository, diagnostics, identity } = await loadGitDiffWithUntracked(
+    const { files, repository, diagnostics, identity } = await loadGitReviewSnapshot(
       [...gitDiffArgs],
       cwd,
       { ...options, shouldKeep }
@@ -186,13 +187,18 @@ export async function loadLocalReview(
     checkCancelled();
     for (const diagnostic of scan.diagnostics) log(`Diff diagnostic: ${diagnostic}`);
     checkCancelled();
+    const identity = resolveLocalSourceIdentity({
+      type: source.mode,
+      sourcePath: source.sourcePath,
+    });
+    admitSyntheticSnapshot(identity, scan.files);
     return {
       payload: {
         files: scan.files,
         source: { type: source.mode, sourcePath: source.sourcePath },
         ...(scan.diagnostics.length > 0 ? { diagnostics: scan.diagnostics } : {}),
       },
-      identity: resolveLocalSourceIdentity({ type: source.mode, sourcePath: source.sourcePath }),
+      identity,
     };
   }
 
