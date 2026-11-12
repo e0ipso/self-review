@@ -1,6 +1,9 @@
 import { expect, it, vi } from 'vitest';
 import {
   canReadFileContent,
+  canReadResumedReview,
+  loadInitialDiff,
+  loadInitialResumedReview,
   expandContext,
   loadFileContent,
   loadImage,
@@ -67,4 +70,42 @@ it('rejects obsolete legacy read results and never starts an already aborted rea
     readAttachment({ readAttachment: read }, 'asset', controller.signal)
   ).rejects.toMatchObject({ name: 'AbortError' });
   expect(read).toHaveBeenCalledOnce();
+});
+
+it('keeps initial reads additive, cancellable and separate from mutation capabilities', async () => {
+  const controller = new AbortController();
+  const payload = { files: [], source: { type: 'welcome' as const } };
+  const loadDiff = vi.fn(async () => payload);
+  const loadResumedReview = vi.fn(async () => ({ comments: [] }));
+  const ownedDiff = vi.fn(async () => payload);
+  const ownedResume = vi.fn(async () => ({ comments: [] }));
+  const applySuggestion = vi.fn();
+  const host = {
+    loadDiff,
+    loadResumedReview,
+    applySuggestion,
+    initialReads: { loadDiff: ownedDiff, loadResumedReview: ownedResume },
+  };
+  await expect(loadInitialDiff(host, controller.signal)).resolves.toBe(payload);
+  await expect(loadInitialResumedReview(host, controller.signal)).resolves.toEqual({
+    comments: [],
+  });
+  expect(ownedDiff).toHaveBeenCalledWith(controller.signal);
+  expect(ownedResume).toHaveBeenCalledWith(controller.signal);
+  expect(loadDiff).not.toHaveBeenCalled();
+  expect(loadResumedReview).not.toHaveBeenCalled();
+  expect(applySuggestion).not.toHaveBeenCalled();
+  expect(canReadResumedReview({ loadDiff })).toBe(false);
+  expect(canReadResumedReview(host)).toBe(true);
+  await expect(loadInitialDiff({ loadDiff }, controller.signal)).resolves.toBe(payload);
+  await expect(
+    loadInitialResumedReview({ loadDiff, loadResumedReview }, controller.signal)
+  ).resolves.toEqual({ comments: [] });
+  expect(loadDiff.mock.calls).toEqual([[]]);
+  expect(loadResumedReview.mock.calls).toEqual([[]]);
+  controller.abort();
+  await expect(loadInitialDiff(host, controller.signal)).rejects.toMatchObject({
+    name: 'AbortError',
+  });
+  expect(ownedDiff).toHaveBeenCalledOnce();
 });

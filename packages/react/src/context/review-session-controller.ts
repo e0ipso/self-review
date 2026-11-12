@@ -1,6 +1,11 @@
 import type { DiffFile, DiffLoadPayload, DiffSource, ReviewComment } from '@self-review/types';
 import type { ReviewAdapter } from '../adapter';
-import { expandContext } from '../read-service';
+import {
+  expandContext,
+  canReadResumedReview,
+  loadInitialDiff,
+  loadInitialResumedReview,
+} from '../read-service';
 import {
   isPlaceholderSource,
   reviewSessionIdentity,
@@ -15,7 +20,12 @@ function message(error: unknown): string {
 type ResumeOwner = { session: number; snapshot: number; settled: boolean };
 type SessionHost = Pick<
   ReviewAdapter,
-  'loadDiff' | 'loadResumedReview' | 'onDiffLoad' | 'onResumeLoad' | 'expandContext'
+  | 'loadDiff'
+  | 'loadResumedReview'
+  | 'initialReads'
+  | 'onDiffLoad'
+  | 'onResumeLoad'
+  | 'expandContext'
 > & { reads?: Pick<NonNullable<ReviewAdapter['reads']>, 'expandContext'> };
 
 /** Owns requests for one provider. Tickets and snapshot ownership are checked before every commit.
@@ -31,6 +41,13 @@ export function createReviewSessionController(
   let pushed: object = {};
   let loadTicket: object | null = null;
   let resumeOwner: ResumeOwner | null = null;
+  let diffRead: AbortController | null = null;
+  let resumeRead: AbortController | null = null;
+  // Cancellation requests do not settle a host promise. Each invocation awaits its admitted read.
+  const initialReads = new Set<AbortController>();
+  const cancelInitialReads = () => {
+    initialReads.forEach(controller => controller.abort());
+  };
   let initialLoadSettled = false;
   let resumeSnapshot: Pick<DiffLoadPayload, 'source' | 'remote'> | null = null;
   let initialComments: ReviewComment[] | undefined;
@@ -41,7 +58,7 @@ export function createReviewSessionController(
   };
 
   const resume = async (skipPushed = false) => {
-    if (!active || !host?.loadResumedReview) return;
+    if (!active || !host || !canReadResumedReview(host)) return;
     const state = store.getSnapshot();
     if (resumeSnapshot?.remote && !sameRemoteSnapshot(state, resumeSnapshot)) {
       if (!skipPushed)
@@ -63,6 +80,10 @@ export function createReviewSessionController(
       (resumeOwner.snapshot === state.snapshotId || (resumeOwner.settled && !state.resumePending))
     )
       return;
+    resumeRead?.abort();
+    const controller = new AbortController();
+    resumeRead = controller;
+    initialReads.add(controller);
     const owner = { session: state.sessionId, snapshot: state.snapshotId, settled: false };
     resumeOwner = owner;
     store.dispatch({ type: 'resume-start' });
@@ -72,7 +93,7 @@ export function createReviewSessionController(
       owner.session === store.getSnapshot().sessionId &&
       owner.snapshot === store.getSnapshot().snapshotId;
     try {
-      const resumed = await host.loadResumedReview();
+      const resumed = await loadInitialResumedReview(host, controller.signal);
       if (resumed === undefined) throw new Error('The host did not acknowledge saved feedback.');
       if (current()) {
         owner.settled = true;
@@ -83,6 +104,9 @@ export function createReviewSessionController(
         owner.settled = true;
         store.dispatch({ type: 'resume-error', message: message(error) });
       }
+    } finally {
+      initialReads.delete(controller);
+      if (resumeRead === controller) resumeRead = null;
     }
   };
 
@@ -99,7 +123,7 @@ export function createReviewSessionController(
       initialComments,
       resumePending: !!(
         (!fromPull && host?.onResumeLoad) ||
-        (host?.loadResumedReview &&
+        (canReadResumedReview(host) &&
           (fromPull ||
             !initialLoadSettled ||
             (isPlaceholderSource(previous.diffSource) && previous.resumePending)))
@@ -110,16 +134,29 @@ export function createReviewSessionController(
       resumeOwner.session = store.getSnapshot().sessionId;
       resumeOwner.snapshot = store.getSnapshot().snapshotId;
     }
+    const next = store.getSnapshot();
+    if (
+      resumeOwner &&
+      (resumeOwner.session !== next.sessionId || resumeOwner.snapshot !== next.snapshotId)
+    )
+      resumeRead?.abort();
   };
 
   const load = async () => {
-    if (!active || !host || staticDiff || loadTicket) return;
+    if (!active || !host || staticDiff) return;
+    if (loadTicket) {
+      if (!host.initialReads?.loadDiff) return;
+      diffRead?.abort();
+    }
+    const controller = new AbortController();
+    diffRead = controller;
+    initialReads.add(controller);
     const ticket = {};
     loadTicket = ticket;
     const arrival = pushed;
     store.dispatch({ type: 'load-error', message: null });
     try {
-      const payload = await host.loadDiff();
+      const payload = await loadInitialDiff(host, controller.signal);
       if (!active || loadTicket !== ticket) return;
       initialLoadSettled = true;
       // The pull identifies what the legacy loader can return, even if a newer push arrived first.
@@ -139,6 +176,8 @@ export function createReviewSessionController(
       if (active && loadTicket === ticket && pushed === arrival)
         store.dispatch({ type: 'load-error', message: message(error) });
     } finally {
+      initialReads.delete(controller);
+      if (diffRead === controller) diffRead = null;
       if (loadTicket === ticket) loadTicket = null;
     }
   };
@@ -166,6 +205,7 @@ export function createReviewSessionController(
         loadTicket = null;
         resumeOwner = null;
         unsubscribe();
+        cancelInitialReads();
         abortReads();
       };
     },
@@ -178,6 +218,17 @@ export function createReviewSessionController(
             if (!active || !connected) return;
             pushed = {};
             const previous = store.getSnapshot();
+            // Before the first response, a push may echo it or replace an unknown initial
+            // snapshot. Retain that response to identify what cached feedback belongs to.
+            const supersedesPull = !!(
+              initialLoadSettled &&
+              loadTicket &&
+              host?.initialReads?.loadDiff
+            );
+            if (supersedesPull) {
+              diffRead?.abort();
+              loadTicket = null;
+            }
             receive(payload);
             const state = store.getSnapshot();
             if (previous.sessionId !== state.sessionId || !previous.resumePending || !resumeOwner)
@@ -185,6 +236,7 @@ export function createReviewSessionController(
             if (sameRemoteSnapshot(previous, payload)) void resume(true);
             else {
               // Cached initial feedback cannot be reinterpreted against a newer PR snapshot.
+              resumeRead?.abort();
               resumeOwner = null;
               if (!host?.onResumeLoad) store.dispatch({ type: 'resume', resumed: null });
             }
@@ -193,6 +245,7 @@ export function createReviewSessionController(
       const unsubscribeResume = host?.onResumeLoad?.(resumed => {
         if (!active || !connected) return;
         const state = store.getSnapshot();
+        resumeRead?.abort();
         resumeOwner = { session: state.sessionId, snapshot: state.snapshotId, settled: true };
         store.dispatch({ type: 'resume', resumed });
       });

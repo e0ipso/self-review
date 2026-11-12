@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import { usePreviewRenderer } from '../../context/PreviewRenderingContext';
+import { resolveFilePreview, type FilePreviewDescriptor } from '../../services/content-preview';
 import type { PreviewRenderProps } from '../../services/preview-renderer';
 import RenderedMarkdownView from './RenderedMarkdownView';
 import RenderedImageView from './RenderedImageView';
@@ -9,6 +10,7 @@ import RenderedSvgView from './RenderedSvgView';
 
 interface FilePreviewProps extends PreviewRenderProps {
   mode: 'raw' | 'rendered';
+  descriptor?: FilePreviewDescriptor;
 }
 
 /** Chooses host or passive built-in preview, with raw content supplied as its fallback. */
@@ -16,6 +18,7 @@ export function FilePreview({
   file,
   filePath,
   preview,
+  descriptor,
   mode,
   commentRange,
   onCommentRange,
@@ -30,14 +33,16 @@ export function FilePreview({
     (start: number, end: number) => onCommentRange(start, end, 'new'),
     [onCommentRange]
   );
-  const hostPreview = file.changeType === 'added' && !!renderer?.supports(file, preview);
+  const resolved = descriptor ?? resolveFilePreview(file, renderer, preview);
+  const builtIn = resolved.builtIn;
+  const host = resolved.renderer;
   const renderPreview =
     mode === 'rendered' &&
-    (hostPreview ||
-      (preview.kind !== 'none' &&
-        (preview.kind !== 'text' || (!file.isBinary && file.hunks.length > 0))));
+    (host ||
+      (builtIn.kind !== 'none' &&
+        (builtIn.kind !== 'text' || (!file.isBinary && file.hunks.length > 0))));
   const builtInPreview = () => {
-    switch (preview.kind) {
+    switch (builtIn.kind) {
       case 'image':
         return (
           <RenderedImageView
@@ -53,7 +58,7 @@ export function FilePreview({
         return (
           <RenderedMarkdownView
             file={file}
-            contentMode={preview.mode}
+            contentMode={builtIn.mode}
             commentRange={commentRange}
             onCancelComment={onCancelComment}
             onCommentSaved={onCommentSaved}
@@ -64,13 +69,13 @@ export function FilePreview({
     return null;
   };
   if (renderPreview) {
-    if (hostPreview && renderer) {
-      const HostPreview = renderer.component;
+    if (host) {
+      const HostPreview = host.component;
       return (
         <HostPreview
           file={file}
           filePath={filePath}
-          preview={preview}
+          preview={builtIn}
           commentRange={commentRange}
           onCommentRange={onCommentRange}
           onCancelComment={onCancelComment}

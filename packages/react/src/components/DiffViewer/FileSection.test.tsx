@@ -16,7 +16,7 @@ import type { DiffFile } from '@self-review/types';
 import FileSection from './FileSection';
 import { PreviewRenderingProvider } from '../../context/PreviewRenderingContext';
 import type { FileSectionHeaderProps } from './FileSectionHeader';
-import type { DiffContentAreaProps } from './DiffContentArea';
+import type { PreviewRenderProps } from '../../services/preview-renderer';
 
 vi.mock('../../context/ReviewContext', () => ({
   useReviewSource: () => ({ type: 'git' }),
@@ -61,11 +61,11 @@ vi.mock('./FileSectionHeader', () => ({
   ),
 }));
 
-vi.mock('./DiffContentArea', () => ({
-  PreviewContentArea: (contentAreaProps: DiffContentAreaProps) => (
+vi.mock('./FilePreview', () => ({
+  FilePreview: (contentAreaProps: PreviewRenderProps & { mode: 'raw' | 'rendered' }) => (
     <div
       data-testid='mock-file-section-body'
-      data-render-view-mode={contentAreaProps.renderViewMode}
+      data-render-view-mode={contentAreaProps.mode}
       data-rendered-text-mode={
         contentAreaProps.preview?.kind === 'text' ? contentAreaProps.preview.mode : 'null'
       }

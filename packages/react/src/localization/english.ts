@@ -1,6 +1,9 @@
 import type { LocalizedMessage } from './LocalizationContext';
 
 export const ENGLISH = {
+  'Added line': 'Added line',
+  'Removed line': 'Removed line',
+  'Unchanged line': 'Unchanged line',
   Original: 'Original',
   Suggested: 'Suggested',
   'Enter your suggested code...': 'Enter your suggested code...',

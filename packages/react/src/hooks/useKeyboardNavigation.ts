@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { reviewElement, reviewElements } from '../utils/review-root';
 import { usePortalContainer } from '../context/ConfigContext';
+import { useFileTreeExpansion } from '../context/FileTreeExpansionContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 
 export type HintMode = 'normal' | 'hint-diff' | 'hint-file';
@@ -51,6 +52,7 @@ function scrollDiff(root: HTMLElement | null, direction: 1 | -1): void {
 
 export function useKeyboardNavigation() {
   const root = usePortalContainer();
+  const expansion = useFileTreeExpansion();
   const activeReview = useRef(false);
   const [mode, setMode] = useState<HintMode>('normal');
   const [hints, setHints] = useState<HintItem[]>([]);
@@ -130,14 +132,10 @@ export function useKeyboardNavigation() {
       if (newMode === 'hint-diff') {
         selector = `${CLICK_HINT_SELECTOR}, ${LINE_HINT_SELECTOR}`;
       } else {
-        // A collapsed file tree panel renders every entry at zero width, which
-        // the visibility filter below then discards, so hint-file mode would
-        // silently find nothing. Layout owns the collapse state; ask it to
-        // restore the panel before collecting candidates rather than reaching
-        // into its panel handle from here. The panel's expand() only schedules a
-        // render, so Layout's handler flushes it before returning; that flush,
-        // not expand() itself, is what makes the rects below the restored ones.
-        root?.dispatchEvent(new CustomEvent('expand-file-tree'));
+        const ready = expansion?.expand();
+        if (ready === false) return;
+        // Old custom layouts can still acknowledge synchronously through their root listener.
+        if (ready === undefined) root?.dispatchEvent(new CustomEvent('expand-file-tree'));
         selector =
           '.file-tree [data-file-path], [data-testid="file-tree"] [data-file-path], button[data-file-path]';
       }
@@ -173,7 +171,7 @@ export function useKeyboardNavigation() {
       setHints(hintItems);
       setInputBuffer('');
     },
-    [root]
+    [root, expansion]
   );
 
   useEffect(() => {

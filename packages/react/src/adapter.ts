@@ -22,6 +22,14 @@ import type {
 export interface ReviewAdapter {
   /** Optional cancellable reads. Omitted members fall back to their legacy counterparts. */
   reads?: import('@self-review/types').ReviewReads;
+  /** Optional owned initial reads. Signals request cancellation; the host retains admitted work
+   * until it settles. Missing members retain the legacy initial-response semantics below.
+   * Apply, handoff and publication must never use this read capability.
+   */
+  initialReads?: {
+    loadDiff?: (signal: AbortSignal) => Promise<DiffLoadPayload>;
+    loadResumedReview?: (signal: AbortSignal) => Promise<ResumeLoadPayload>;
+  };
   /** Load diff data. Called once on mount. */
   loadDiff: () => Promise<DiffLoadPayload>;
 
