@@ -111,3 +111,10 @@ format can report a blank separator after an empty file as a hunk-count diagnost
 follows. Direct loading retains that diagnostic for compatibility. Ignore filtering and entry limits
 stay with the calling scanner or git loader. Review publication and explicit Apply remain separate
 operations.
+
+## Package entry point verification
+
+After `npm run build --workspace @self-review/core`, run
+`node --test scripts/test/core-entry-points.test.mjs` from the repository root. These checks
+exercise ESM and CommonJS imports and ensure facade errors retain the root entry's class identity
+and typed failure behavior. Generated shared chunks ship alongside each entry point in `dist`.

@@ -89,6 +89,13 @@ export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
   return loadConfigWithProvenance(options).config;
 }
 
+// Do not invoke YAML mappings' coercion properties or expand aliased collections for a warning.
+function describeConfigValue(value: unknown): string {
+  return value !== null && typeof value === 'object'
+    ? Object.prototype.toString.call(value)
+    : String(value);
+}
+
 function loadYamlConfig(
   path: string,
   noFollow: boolean,
@@ -120,7 +127,9 @@ function loadYamlConfig(
     if (['light', 'dark', 'system'].includes(raw.theme)) {
       config.theme = raw.theme;
     } else {
-      reportDiagnostic(`Warning: Invalid theme value "${raw.theme}", using default`);
+      reportDiagnostic(
+        `Warning: Invalid theme value "${describeConfigValue(raw.theme)}", using default`
+      );
     }
   }
 
@@ -128,7 +137,9 @@ function loadYamlConfig(
     if (['split', 'unified'].includes(raw['diff-view'])) {
       config.diffView = raw['diff-view'];
     } else {
-      reportDiagnostic(`Warning: Invalid diff-view value "${raw['diff-view']}", using default`);
+      reportDiagnostic(
+        `Warning: Invalid diff-view value "${describeConfigValue(raw['diff-view'])}", using default`
+      );
     }
   }
 
@@ -201,7 +212,7 @@ function loadYamlConfig(
       config[property] = value;
     } else {
       reportDiagnostic(
-        `Warning: Invalid ${key} value "${String(value)}", expected a finite number between 0 and ${Number.MAX_SAFE_INTEGER}; keeping the inherited value`
+        `Warning: Invalid ${key} value "${describeConfigValue(value)}", expected a finite number between 0 and ${Number.MAX_SAFE_INTEGER}; keeping the inherited value`
       );
     }
   }
