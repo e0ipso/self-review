@@ -38,6 +38,16 @@ export function registerLifecycleHandlers(
 ): void {
   let receipt: { token: string; current: () => void } | null = null;
   let failed: { result: ReviewSaveResult; current: () => void } | null = null;
+  const recordFailure = (error: unknown, current: () => void): ReviewSaveResult => {
+    const failure = describeSaveFailure(error, desktop.output.path, messages);
+    const result: ReviewSaveResult = {
+      status: 'failed',
+      message: failure.message,
+      detail: failure.detail,
+    };
+    failed = { result, current };
+    return result;
+  };
   boundary.handle(IPC.REVIEW_SAVE_STATUS, noArgument, () => {
     if (!receipt) {
       if (!failed) return null;
@@ -47,51 +57,55 @@ export function registerLifecycleHandlers(
     receipt.current();
     return { status: 'saved', receipt: receipt.token } satisfies ReviewSaveResult;
   });
-  boundary.handle(IPC.REVIEW_SAVE, reviewState, (event, state): Promise<ReviewSaveResult> => {
-    if (controller.phase !== 'reviewing' || desktop.operations.finishing)
-      return Promise.resolve({ status: 'busy' });
-    const current = boundary.capture(event);
-    const source = desktop.review.diffData;
-    failed = null;
-    return desktop.operations.complete(
-      async signal => {
-        current();
-        if (!controller.beginSave()) return { status: 'busy' };
-        try {
-          // A state from another peer/snapshot must never replace the current review.
-          if (
-            !source ||
-            source.source.type === 'welcome' ||
-            source.source.type === 'loading' ||
-            desktop.review.diffData !== source ||
-            JSON.stringify(state.source) !== JSON.stringify(source.source)
-          )
-            throw new Error('The review state does not belong to the current review.');
-          signal.throwIfAborted();
-          submitReviewState(desktop.review, state);
-          const captured = takeReviewState(desktop.review);
-          if (!captured) throw new Error('The review window did not hand over its review state.');
-          await publication.publish(captured, signal);
-        } catch (error) {
-          controller.saveFailed();
-          const failure = describeSaveFailure(error, desktop.output.path, messages);
-          const result: ReviewSaveResult = {
-            status: 'failed',
-            message: failure.message,
-            detail: failure.detail,
-          };
-          failed = { result, current };
-          return result;
-        }
-        // Publication has committed. A stale peer cannot turn success into a retryable failure.
-        current();
-        receipt = { token: randomUUID(), current };
-        return { status: 'saved', receipt: receipt.token };
-      },
-      false,
-      () => controller.phase === 'saving'
-    );
-  });
+  boundary.handle(
+    IPC.REVIEW_SAVE,
+    value => value,
+    (event, value): Promise<ReviewSaveResult> => {
+      if (controller.phase !== 'reviewing' || desktop.operations.finishing)
+        return Promise.resolve({ status: 'busy' });
+      const current = boundary.capture(event);
+      let state: ReviewState;
+      try {
+        state = reviewState(value);
+      } catch (error) {
+        // This refusal precedes publication, so it has a known failed outcome.
+        return Promise.resolve(recordFailure(error, current));
+      }
+      const source = desktop.review.diffData;
+      failed = null;
+      return desktop.operations.complete(
+        async signal => {
+          current();
+          if (!controller.beginSave()) return { status: 'busy' };
+          try {
+            // A state from another peer/snapshot must never replace the current review.
+            if (
+              !source ||
+              source.source.type === 'welcome' ||
+              source.source.type === 'loading' ||
+              desktop.review.diffData !== source ||
+              JSON.stringify(state.source) !== JSON.stringify(source.source)
+            )
+              throw new Error('The review state does not belong to the current review.');
+            signal.throwIfAborted();
+            submitReviewState(desktop.review, state);
+            const captured = takeReviewState(desktop.review);
+            if (!captured) throw new Error('The review window did not hand over its review state.');
+            await publication.publish(captured, signal);
+          } catch (error) {
+            controller.saveFailed();
+            return recordFailure(error, current);
+          }
+          // Publication has committed. A stale peer cannot turn success into a retryable failure.
+          current();
+          receipt = { token: randomUUID(), current };
+          return { status: 'saved', receipt: receipt.token };
+        },
+        false,
+        () => controller.phase === 'saving'
+      );
+    }
+  );
   boundary.on(IPC.REVIEW_SAVE_RECEIVED, stringArgument, (_event, token) => {
     if (!receipt || token !== receipt.token) throw new Error('Unknown publication receipt.');
     receipt.current();

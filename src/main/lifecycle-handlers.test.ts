@@ -3,6 +3,8 @@ import { expect, it, vi } from 'vitest';
 import { createDesktopSession } from './desktop-session';
 import { createIpcBoundary } from './ipc-boundary';
 import { registerLifecycleHandlers } from './lifecycle-handlers';
+import { registerContentHandlers } from './content-ipc';
+import { bindDesktopReviewOperations } from './review-operations';
 import { QuitController } from './quit-controller';
 import { IPC } from '../shared/ipc-channels';
 import type { ReviewState } from '../shared/types';
@@ -19,6 +21,11 @@ function fixture() {
     () => window
   );
   const desktop = createDesktopSession('/review');
+  registerContentHandlers(
+    bindDesktopReviewOperations(desktop.review),
+    boundary,
+    desktop.operations
+  );
   const controller = new QuitController();
   const publish = vi.fn(async () => {});
   const shutdown = vi.fn(async () => {});
@@ -191,4 +198,40 @@ it('keeps a committed result after cancellation and never converts a replaced pe
   f.replacePeer();
   expect(() => f.invoke(IPC.REVIEW_SAVE_STATUS)).toThrow(/current review window/);
   expect(f.shutdown).not.toHaveBeenCalled();
+});
+
+it('refuses overloaded snapshots before publication and keeps review state and window open', async () => {
+  const f = fixture();
+  f.desktop.review.diffData = { files: [], source: state.source };
+  f.desktop.review.reviewState = state;
+  const overloaded = { ...state, timestamp: 'a'.repeat(16 * 1024 * 1024) };
+  expect(await f.invoke(IPC.REVIEW_SAVE, overloaded)).toMatchObject({
+    status: 'failed',
+    message: expect.stringContaining('limits'),
+  });
+  expect(await f.invoke(IPC.REVIEW_SAVE_STATUS)).toMatchObject({ status: 'failed' });
+  expect(f.desktop.review.reviewState).toBe(state);
+  expect(f.controller.phase).toBe('reviewing');
+  expect(f.desktop.operations.finishing).toBe(false);
+  expect(f.publish).not.toHaveBeenCalled();
+  expect(f.shutdown).not.toHaveBeenCalled();
+});
+
+it('admits busy saves before inspecting their payload', async () => {
+  const f = fixture();
+  f.controller.beginSave();
+  expect(await f.invoke(IPC.REVIEW_SAVE, null)).toEqual({ status: 'busy' });
+  expect(f.publish).not.toHaveBeenCalled();
+});
+
+it('never publishes an older legacy snapshot after an overloaded submission is refused', async () => {
+  const f = fixture();
+  f.desktop.review.diffData = { files: [], source: state.source };
+  f.desktop.review.reviewState = state;
+  f.invoke(IPC.REVIEW_SUBMIT, { ...state, files: new Array(50_001) });
+  f.invoke(IPC.APP_SAVE_AND_QUIT);
+  await vi.waitFor(() => expect(f.reportSaveFailure).toHaveBeenCalled());
+  expect(f.publish).not.toHaveBeenCalled();
+  expect(f.shutdown).not.toHaveBeenCalled();
+  expect(f.controller.phase).toBe('reviewing');
 });

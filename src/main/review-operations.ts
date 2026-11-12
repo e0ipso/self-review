@@ -39,6 +39,10 @@ export function bindDesktopReviewOperations(session: ReviewSession, canMutate = 
           throw new Error('The review session has changed.');
       };
     },
+    invalidateReviewState: () => {
+      writable();
+      session.reviewState = null;
+    },
     submitReviewState: (state: ReviewState) => {
       writable();
       submitReviewState(session, state);

@@ -1,66 +1,44 @@
 // Load the desktop session before exposing any renderer or IPC handlers.
 import { resolve } from 'path';
-import { parseCliArgs } from './cli';
-import { loadConfigWithProvenance } from '../../packages/core/src/config';
-import { resolveStartupSourceAsync } from '../../packages/core/src/startup-mode';
-import {
-  loadLocalReview,
-  loadResumeDocument,
-  resolveOutputTarget,
-  resolveStartupDiffArgs,
-} from '../../packages/core/src/startup';
 import { commitDiffData } from '../../packages/core/src/review-handlers';
-import {
-  bootstrapRemoteDiff,
-  computeRemoteDrift,
-  mergeRemoteThreads,
-} from '../../packages/core/src/remote-mode';
-import { loadGuide } from '../../packages/core/src/guide-loader';
+import { computeRemoteDrift, mergeRemoteThreads } from '../../packages/core/src/remote-mode';
 import { confirmPayload } from './presentation';
 import { updateOutputInfo, type DesktopSession } from './desktop-session';
 import type { ReviewComment } from '../shared/types';
+import { defaultStartupOperations, type StartupOperations } from './startup-operations';
 
 /** False means the reviewer declined a large payload. Errors are handled by main's shutdown. */
 export async function initializeSession(
   desktop: DesktopSession,
   signal = desktop.operations.signal,
-  confirm = confirmPayload
+  confirm = confirmPayload,
+  operations: StartupOperations = defaultStartupOperations
 ): Promise<boolean> {
   signal.throwIfAborted();
   const { review, cwd, remote } = desktop;
-  const cli = parseCliArgs();
-  const loadedConfig = loadConfigWithProvenance({ cwd });
-  desktop.output = resolveOutputTarget(null, loadedConfig, cwd);
+  const plan = await operations.prepare(cwd, signal);
+  signal.throwIfAborted();
+  if (remote.closed) return false;
+  const { config, source } = plan;
+  desktop.output = plan.output;
   updateOutputInfo(desktop);
-  const { config, gitDiffArgs } = resolveStartupDiffArgs(cli.gitDiffArgs, loadedConfig, cwd);
   review.config = config;
-  const source = cli.remoteUrl
-    ? { mode: 'remote' as const }
-    : await resolveStartupSourceAsync(gitDiffArgs, cwd, { signal, timeoutMs: 30_000 });
   let fetchedComments: ReviewComment[] = [];
-  let loaded: Awaited<ReturnType<typeof loadLocalReview>>;
+  let loaded: Awaited<ReturnType<StartupOperations['loadLocal']>>;
   if (source.mode === 'remote') {
     const result = await remote.open(controller =>
-      bootstrapRemoteDiff(
-        cli.remoteUrl!,
+      operations.loadRemote(
+        plan.remoteUrl!,
         cwd,
         config.ignore,
-        {},
-        { signal: AbortSignal.any([signal, controller.signal]) }
+        AbortSignal.any([signal, controller.signal])
       )
     );
     desktop.remoteInfo = result.session.remote;
     fetchedComments = result.session.fetchedComments;
     loaded = result;
   } else {
-    loaded = await loadLocalReview(
-      source,
-      gitDiffArgs,
-      config,
-      cwd,
-      message => console.error(`[main] ${message}`),
-      { signal, timeoutMs: 30_000 }
-    );
+    loaded = await operations.loadLocal(plan, cwd, signal);
   }
   signal.throwIfAborted();
   if (remote.closed) return false;
@@ -70,24 +48,26 @@ export async function initializeSession(
   if (remote.closed) return false;
   commitDiffData(review, payload, identity);
   let recordedHead: string | undefined;
-  if (cli.resumeFrom) {
-    const parsed = loadResumeDocument(review, resolve(cwd, cli.resumeFrom));
+  if (plan.resumeFrom) {
+    const parsed = await operations.resume(review, resolve(cwd, plan.resumeFrom), signal);
+    signal.throwIfAborted();
+    if (remote.closed) return false;
     review.resumeComments = parsed.comments;
     review.resumeViewedFiles = parsed.viewedFiles;
     recordedHead = parsed.remoteHeadSha;
     for (const diagnostic of review.resumeImportDiagnostics)
-      console.error(`[main] Resume import: ${diagnostic}`);
+      operations.reportDiagnostic(`[main] Resume import: ${diagnostic}`);
   }
   if (desktop.remoteInfo) {
     review.resumeComments = mergeRemoteThreads(review.resumeComments, fetchedComments);
     review.resumeRemoteDrift = computeRemoteDrift(recordedHead, desktop.remoteInfo.remoteHeadSha);
   }
   if (payload.source.type !== 'welcome') {
-    review.guideData = await loadGuide(
+    review.guideData = await operations.guide(
       desktop.output.path,
       config,
       payload.files.map(file => file.newPath || file.oldPath),
-      { cwd, reportDiagnostic: message => console.error(message) }
+      { cwd, reportDiagnostic: operations.reportDiagnostic }
     );
   }
   signal.throwIfAborted();

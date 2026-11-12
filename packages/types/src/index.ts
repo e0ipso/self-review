@@ -547,3 +547,6 @@ export interface ApplicationLocale {
   locale: string;
   direction: 'ltr' | 'rtl';
 }
+
+/** Chromium find-session actions. Desktop retains its legacy string bridge signature. */
+export type FindInPageAction = 'clearSelection' | 'keepSelection' | 'activateSelection';

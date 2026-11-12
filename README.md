@@ -519,3 +519,51 @@ See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
   reads its discussion threads — and even then, nothing is ever sent to the forge.
 - **AI-native output.** The XML format is designed to be parsed by LLMs, with an XSD schema they can
   reference for structure.
+
+### macOS release signing
+
+The macOS release workflow requires a Developer ID Application certificate and Apple notarization
+credentials. Configure these repository Actions secrets before dispatching a release:
+
+| Secret                         | Value                                                                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `APPLE_CERTIFICATE_P12_BASE64` | Base64 of an exported Developer ID Application certificate and its private key in a `.p12` file |
+| `APPLE_CERTIFICATE_PASSWORD`   | Password protecting that `.p12`                                                                 |
+| `APPLE_SIGNING_IDENTITY`       | Full `Developer ID Application: ... (TEAMID)` identity from the certificate                     |
+| `APPLE_ID`                     | Apple Developer account email                                                                   |
+| `APPLE_APP_SPECIFIC_PASSWORD`  | App-specific password for notarization, not the account password                                |
+| `APPLE_TEAM_ID`                | Apple Developer team identifier                                                                 |
+
+The build imports the certificate into a temporary keychain and removes it on success or failure.
+`SELF_REVIEW_MAC_RELEASE=1` makes Forge require signing and notarization. The workflow supplies
+`APPLE_SIGNING_KEYCHAIN` as the temporary keychain path. Ordinary local development and Linux
+packaging remain unsigned and require no Apple credentials. To sign locally, explicitly set release
+mode and the five `APPLE_*` values consumed by `macos-signing.ts`, using an existing unlocked
+keychain. Xcode with `notarytool` and an enrolled Apple Developer account are required.
+
+Release signing enables hardened runtime and only the JIT entitlement needed by Electron's V8
+runtime. It adds no camera, microphone, USB, unsigned-memory, or library-validation exemptions.
+Forge notarizes and staples the app during packaging. Before any archive is uploaded, the workflow
+extracts each ZIP and verifies its complete code signature, expected team, hardened runtime flag,
+stapled ticket, and Gatekeeper acceptance. Missing credentials or failed verification stops the
+release. A Linux configuration or unit check does not establish macOS signature or notarization
+validity. See
+[Forge's macOS signing guide](https://www.electronforge.io/guides/code-signing/code-signing-macos)
+for certificate and notarization setup.
+
+### Desktop review message limits
+
+Desktop submission, handoff, and save messages pass a workload check before detailed review
+validation. One message may contain at most 16 MiB of UTF-16 text, including property names and
+extension fields, 50,000 items in any collection, 800,000 visited values including repeated
+references, and 64 nesting levels. Attachment data retains the 10 MiB per-buffer and 64 MiB total
+publication limits, with the canonical limit of 1,000 attachment occurrences. These limits reuse the
+source-entry, resume-document, and publication budgets; they do not depend on configurable
+large-payload UI thresholds. Cyclic message structures are refused.
+
+A refused save leaves the review editable and the window open. A refused legacy submission clears
+the cached main-process snapshot so the following Save & Quit cannot publish older feedback; the
+renderer retains its comments and receives the existing save-failure flow. This check bounds
+validation work after receipt. It cannot prevent Electron from allocating the inbound structured
+clone. The legacy `stopFindInPage(action: string)` bridge signature remains supported; runtime
+validation accepts only `clearSelection`, `keepSelection`, and `activateSelection`.

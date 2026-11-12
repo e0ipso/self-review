@@ -3,7 +3,7 @@ import type { RendererFailure } from './renderer-recovery';
 import type { LifecyclePresentation } from './lifecycle-handlers';
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import type { AppConfig, DiffLoadPayload } from '../shared/types';
-import { computePayloadStats, countTotalLines } from './payload-sizing';
+import { computePayloadStats, countTotalLines } from '../../packages/core/src/payload-sizing';
 
 /** Cancel leaves the session untouched. The host commits only after this resolves true. */
 export async function confirmPayload(

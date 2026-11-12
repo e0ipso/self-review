@@ -29,6 +29,7 @@ it('registers content capabilities against supplied operations without engine mo
       getResumeLoad: () => null,
       getFileHunks: () => null,
       submitReviewState: vi.fn(),
+      invalidateReviewState: vi.fn(),
       expandContext: async () => null,
       readAttachment: async () => ({ ok: false, reason: 'not-authorized', message: 'missing' }),
       loadImage: read,

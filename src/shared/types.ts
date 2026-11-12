@@ -33,6 +33,7 @@ export type {
   OutputPathInfo,
   ExpandContextRequest,
   ExpandContextResponse,
+  FindInPageAction,
   FindInPageRequest,
   FindInPageResult,
   VersionUpdateInfo,
