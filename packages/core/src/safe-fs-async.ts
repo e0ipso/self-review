@@ -15,30 +15,20 @@ import {
   ownerToRestore,
   replacementIdentity,
 } from './safe-fs-policy';
-import type { AtomicReplaceOptions, AtomicReplaceResult, FsLayer } from './safe-fs';
+import type { AtomicReplaceOptions, AtomicReplaceResult } from './safe-fs';
 import { formatBytes } from './input-budgets';
-import { setImmediate as yieldToIo } from 'node:timers/promises';
+import { nodeReadFsLayer } from './safe-fs-read';
+import type { AsyncReadHandle, AsyncReadFsLayer, BoundedAsyncReadFsLayer } from './safe-fs-read';
 
 /** Only the handle operations these readers and writers use. Methods retain their receiver. */
-export interface AsyncFileHandle {
-  stat(): Promise<Stats>;
-  read(
-    buffer: Buffer,
-    offset: number,
-    length: number,
-    position: number | null
-  ): Promise<{ bytesRead: number }>;
+export interface AsyncFileHandle extends AsyncReadHandle {
   write(buffer: Uint8Array): Promise<{ bytesWritten: number }>;
   sync(): Promise<void>;
   chmod(mode: number): Promise<void>;
   chown(uid: number, gid: number): Promise<void>;
-  close(): Promise<void>;
 }
 
-export interface AsyncFsLayer {
-  open(target: string, flags: number, mode?: number): Promise<AsyncFileHandle>;
-  lstat(target: string): Promise<Stats>;
-  realpath(target: string): Promise<string>;
+export interface AsyncFsLayer extends AsyncReadFsLayer<AsyncFileHandle> {
   /** Resolve on commit; reject only if the rename did not commit. */
   rename(from: string, to: string): Promise<void>;
   unlink(target: string): Promise<void>;
@@ -52,80 +42,19 @@ export const nodeAsyncFsLayer: AsyncFsLayer = {
   unlink: target => fs.unlink(target),
 };
 
-/**
- * Compatibility for supplied synchronous adapters, including virtual descriptors. Each chunk yields
- * to cancellation. Without readSync, the caller's readFileSync allocates the whole file once: that
- * call cannot be preempted or bounded during allocation, so callers check size before and after.
- */
-export function asyncFsFromSync(layer: FsLayer, signal?: AbortSignal): AsyncFsLayer {
-  if (layer.asyncFs) return layer.asyncFs;
-  return {
-    async open(target, flags, mode) {
-      const fd = layer.openSync(target, flags, mode);
-      let cached: Buffer | undefined;
-      let cursor = 0;
-      return {
-        async stat() {
-          return layer.fstatSync(fd);
-        },
-        async read(buffer, offset, length, position) {
-          await yieldToIo();
-          signal?.throwIfAborted();
-          if (layer.readSync) {
-            return { bytesRead: layer.readSync(fd, buffer, offset, length, position) };
-          }
-          cached ??= layer.readFileSync(fd);
-          const start = position ?? cursor;
-          const bytesRead = cached.copy(
-            buffer,
-            offset,
-            start,
-            Math.min(start + length, cached.length)
-          );
-          if (position === null) cursor += bytesRead;
-          return { bytesRead };
-        },
-        async write(buffer) {
-          await yieldToIo();
-          signal?.throwIfAborted();
-          return { bytesWritten: layer.writeSync(fd, buffer) };
-        },
-        async sync() {
-          layer.fsyncSync(fd);
-        },
-        async chmod(mode) {
-          layer.fchmodSync(fd, mode);
-        },
-        async chown(uid, gid) {
-          layer.fchownSync(fd, uid, gid);
-        },
-        async close() {
-          cached = undefined;
-          layer.closeSync(fd);
-        },
-      };
-    },
-    async lstat(target) {
-      return layer.lstatSync(target);
-    },
-    async realpath(target) {
-      return layer.realpathSync(target);
-    },
-    async rename(from, to) {
-      layer.renameSync(from, to);
-    },
-    async unlink(target) {
-      layer.unlinkSync(target);
-    },
-  };
-}
+// Kept at the original module path for existing consumers.
+export { asyncFsFromSync } from './safe-fs-legacy';
 
-/** Bounded allocation and 64 KiB reads, including growth detection, under the shared no-follow policy. */
+/**
+ * Reads under the shared no-follow policy in at most 64 KiB chunks, including growth detection.
+ * A supplied adapter owns its read implementation; legacy compatibility may allocate a whole file.
+ * Use readContainedFileBounded when the adapter must explicitly promise bounded allocation.
+ */
 export async function readContainedFileAsync(
   root: string,
   rel: string,
   maxBytes: number,
-  layer: AsyncFsLayer = nodeAsyncFsLayer,
+  layer: AsyncReadFsLayer = nodeReadFsLayer,
   signal?: AbortSignal
 ): Promise<Buffer> {
   const { handle, stats } = await openContainedFileAsync(root, rel, layer, signal);
@@ -171,6 +100,20 @@ export async function readContainedFileAsync(
   }
 }
 
+/**
+ * Explicit bounded-read capability. Adapter reads must copy only the requested chunk, without
+ * whole-file allocation. Cancellation is checked between calls; in-flight I/O is not preempted.
+ */
+export function readContainedFileBounded(
+  root: string,
+  rel: string,
+  maxBytes: number,
+  layer: BoundedAsyncReadFsLayer = nodeReadFsLayer,
+  signal?: AbortSignal
+): Promise<Buffer> {
+  return readContainedFileAsync(root, rel, maxBytes, layer, signal);
+}
+
 export interface AtomicReplaceAsyncOptions extends Omit<AtomicReplaceOptions, 'fs'> {
   fs?: AsyncFsLayer;
   /** Reject with signal.reason before commit. An abort during a successful rename cannot undo it. */
@@ -200,12 +143,24 @@ async function inspectTarget(target: string, layer: Pick<AsyncFsLayer, 'lstat'>)
 }
 
 /** No-follow open, followed by descriptor/name/physical-containment checks. Caller owns close. */
+export function openContainedFileAsync<H extends AsyncReadHandle>(
+  root: string,
+  rel: string,
+  layer: AsyncReadFsLayer<H>,
+  signal?: AbortSignal
+): Promise<{ handle: H; stats: Stats }>;
+export function openContainedFileAsync(
+  root: string,
+  rel: string,
+  layer?: Pick<AsyncFsLayer, 'open' | 'lstat' | 'realpath'>,
+  signal?: AbortSignal
+): Promise<{ handle: AsyncFileHandle; stats: Stats }>;
 export async function openContainedFileAsync(
   root: string,
   rel: string,
-  layer: Pick<AsyncFsLayer, 'open' | 'lstat' | 'realpath'> = nodeAsyncFsLayer,
+  layer: AsyncReadFsLayer = nodeAsyncFsLayer,
   signal?: AbortSignal
-): Promise<{ handle: AsyncFileHandle; stats: Stats }> {
+): Promise<{ handle: AsyncReadHandle; stats: Stats }> {
   signal?.throwIfAborted();
   const normalized = path.normalize(rel);
   if (

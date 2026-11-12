@@ -15,6 +15,7 @@
 // talks to a forge API: head refs come from the forges' well-known git refs
 // (`refs/pull/N/head`, `refs/merge-requests/N/head`) over plain git.
 
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -62,6 +63,8 @@ export interface ExistingClone {
 }
 
 export interface MaterializeOptions {
+  /** Per-call progress and cleanup diagnostics. Defaults to stderr; must not throw. */
+  reportDiagnostic?: DiagnosticReporter;
   /**
    * Aborting kills the command in flight and rejects with {@link CommandCancelledError}; the temp
    * clone is removed first.
@@ -261,7 +264,8 @@ async function materializeIntoExistingClone(
   repoPath: string,
   remoteName: string
 ): Promise<MaterializeResult> {
-  console.error(`self-review: reusing existing clone at ${repoPath} (remote "${remoteName}")`);
+  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  reportDiagnostic(`self-review: reusing existing clone at ${repoPath} (remote "${remoteName}")`);
   const git = bindGit(runner, options);
   const refs = sessionRefs();
   const ownedRefs = [refs.base, refs.head];
@@ -277,7 +281,8 @@ async function materializeIntoExistingClone(
           gitEnvironment: 'isolated',
         });
         if (result.exitCode !== 0) {
-          console.error(
+          reportCleanupDiagnostic(
+            reportDiagnostic,
             `self-review: could not delete ${ref} in ${repoPath}: ${result.stderr.trim()}`
           );
         } else {
@@ -285,7 +290,10 @@ async function materializeIntoExistingClone(
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`self-review: could not delete ${ref} in ${repoPath}: ${message}`);
+        reportCleanupDiagnostic(
+          reportDiagnostic,
+          `self-review: could not delete ${ref} in ${repoPath}: ${message}`
+        );
       }
     }
   };
@@ -323,6 +331,7 @@ async function materializeIntoTempClone(
   baseBranch: string
 ): Promise<MaterializeResult> {
   const git = bindGit(runner, options);
+  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
   // This run creates the directory, so cleanup may only ever remove it; it is owned
   // from here on, before any git runs.
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'self-review-'));
@@ -334,12 +343,15 @@ async function materializeIntoTempClone(
       removed = true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`self-review: could not remove ${tempDir}: ${message}`);
+      reportCleanupDiagnostic(
+        reportDiagnostic,
+        `self-review: could not remove ${tempDir}: ${message}`
+      );
     }
   };
 
   try {
-    console.error(`self-review: created temporary blobless clone at ${tempDir}`);
+    reportDiagnostic(`self-review: created temporary blobless clone at ${tempDir}`);
     const cloneUrl = cloneUrlFor(url);
     // Blobless, never shallow: --depth would break merge-base computation.
     const clone = await git(['clone', '--filter=blob:none', cloneUrl, tempDir]);
@@ -439,4 +451,13 @@ export async function resolveRemoteDefaultBranch(
     );
   }
   return match[1];
+}
+
+// A presentation failure must never interrupt resource release or replace its primary outcome.
+function reportCleanupDiagnostic(report: DiagnosticReporter, message: string): void {
+  try {
+    report(message);
+  } catch {
+    /* Cleanup is best effort and never rejects. */
+  }
 }

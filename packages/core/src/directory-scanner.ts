@@ -3,6 +3,7 @@
 // hitting `maxEntries` yields no files rather than a shorter review that looks complete.
 // Only regular files are reviewed; links are never followed out of the tree.
 
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { opendir, stat } from 'fs/promises';
 import { basename, dirname, join } from 'path';
 import { lstatSync, realpathSync } from 'fs';
@@ -14,6 +15,8 @@ import { createIgnoreFilter } from './ignore-filter';
 import { resolveSourceBudgets, type SourceBudgets } from './input-budgets';
 
 export interface SourceScanOptions {
+  /** Defaults to stderr. Payload diagnostics are retained independently of presentation. */
+  reportDiagnostic?: DiagnosticReporter;
   budgets?: Partial<SourceBudgets>;
   /** Rejects with CommandCancelledError, including ordinary Error abort reasons. */
   signal?: AbortSignal;
@@ -44,12 +47,18 @@ export async function scanDirectory(
     const dirStat = await stat(directoryPath);
     checkLoadingCancelled(options.signal);
     if (!dirStat.isDirectory()) {
-      return failed(`Cannot review "${directoryPath}": it is not a directory.`);
+      return failed(
+        options.reportDiagnostic,
+        `Cannot review "${directoryPath}": it is not a directory.`
+      );
     }
     root = realpathSync(directoryPath);
   } catch (error) {
     checkLoadingCancelled(options.signal);
-    return failed(`Cannot read directory "${directoryPath}": ${messageOf(error)}`);
+    return failed(
+      options.reportDiagnostic,
+      `Cannot read directory "${directoryPath}": ${messageOf(error)}`
+    );
   }
 
   const shouldKeep = createIgnoreFilter(ignorePatterns);
@@ -58,12 +67,17 @@ export async function scanDirectory(
     walk = await walkDirectory(root, shouldKeep, budgets.maxEntries, options.signal);
   } catch (error) {
     checkLoadingCancelled(options.signal);
-    return failed(`Cannot read directory "${directoryPath}": ${messageOf(error)}`);
+    return failed(
+      options.reportDiagnostic,
+      `Cannot read directory "${directoryPath}": ${messageOf(error)}`
+    );
   }
 
   checkLoadingCancelled(options.signal);
   if (walk.limitExceeded) {
-    console.error(`[scan] Stopped scanning ${directoryPath} after ${budgets.maxEntries} entries`);
+    (options.reportDiagnostic ?? stderrReporter)(
+      `[scan] Stopped scanning ${directoryPath} after ${budgets.maxEntries} entries`
+    );
     return {
       files: [],
       diagnostics: [
@@ -102,11 +116,14 @@ export async function scanFile(
     const fileStat = await stat(filePath);
     checkLoadingCancelled(options.signal);
     if (!fileStat.isFile()) {
-      return failed(`Cannot review "${filePath}": it is not a regular file.`);
+      return failed(
+        options.reportDiagnostic,
+        `Cannot review "${filePath}": it is not a regular file.`
+      );
     }
   } catch (error) {
     checkLoadingCancelled(options.signal);
-    return failed(`Cannot read file "${filePath}": ${messageOf(error)}`);
+    return failed(options.reportDiagnostic, `Cannot read file "${filePath}": ${messageOf(error)}`);
   }
 
   const { files, diagnostics } = await loadSyntheticFilesAsync(
@@ -173,8 +190,11 @@ async function walkDirectory(
   return { files, limitExceeded: false };
 }
 
-function failed(message: string): SourceScanResult {
-  console.error(`[scan] ${message}`);
+function failed(
+  reportDiagnostic: DiagnosticReporter = stderrReporter,
+  message: string
+): SourceScanResult {
+  reportDiagnostic(`[scan] ${message}`);
   return { files: [], diagnostics: [message], entryLimitExceeded: false };
 }
 

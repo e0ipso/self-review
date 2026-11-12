@@ -188,6 +188,114 @@ describe('runFetchComments', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps concurrent operation diagnostics with their own reporter through cleanup', async () => {
+    const reporters = [vi.fn(), vi.fn()];
+    await Promise.all(
+      reporters.map((reportDiagnostic, index) => {
+        const marker = `operation-${index}`;
+        return runFetchComments(PR_URL, {
+          cwd: `/work/${marker}`,
+          reportDiagnostic,
+          deps: {
+            ...deps,
+            loadConfig(options) {
+              options?.reportDiagnostic?.(`config ${marker}`);
+              return deps.loadConfig(options);
+            },
+            async materialize(...args) {
+              const options = args[5];
+              options?.reportDiagnostic?.(`materialize ${marker}`);
+              return {
+                ...materializeResult(),
+                cleanup: async () => {
+                  options?.reportDiagnostic?.(`cleanup ${marker}`);
+                },
+              };
+            },
+            async loadDiff(_args, _cwd, options) {
+              options?.reportDiagnostic?.(`load ${marker}`);
+              return { files: [], repository: '/tmp/clone', diagnostics: [`diff ${marker}`] };
+            },
+          },
+        });
+      })
+    );
+    for (const [index, reportDiagnostic] of reporters.entries()) {
+      const messages = reportDiagnostic.mock.calls.map(([message]) => message).join('\n');
+      expect(messages).toContain('[remote] Base branch: main');
+      expect(messages).toContain('[fetch-comments] Fetched 2 threads');
+      for (const stage of ['config', 'materialize', 'cleanup', 'load', 'diff']) {
+        expect(messages).toContain(`${stage} operation-${index}`);
+      }
+      expect(messages).toContain('threads written to');
+      expect(messages).not.toContain(`operation-${1 - index}`);
+    }
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps validation infrastructure diagnostics with its reporter during real publication', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-fetch-report-'));
+    const { validateXML } = await import('xmllint-wasm');
+    const { publishReview } = await import('./review-publisher');
+    const reportDiagnostic = vi.fn();
+    vi.mocked(validateXML).mockRejectedValueOnce(new Error('validator unavailable'));
+    try {
+      await runFetchComments(PR_URL, {
+        cwd,
+        reportDiagnostic,
+        deps: { ...deps, publish: publishReview },
+      });
+      expect(reportDiagnostic).toHaveBeenCalledWith(
+        expect.stringContaining('validator unavailable')
+      );
+      expect(fs.existsSync(path.join(cwd, 'review.xml'))).toBe(true);
+      expect(console.error).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('retains validation failures and cleanup while routing schema diagnostics', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-fetch-invalid-'));
+    const { validateXML } = await import('xmllint-wasm');
+    const { publishReview } = await import('./review-publisher');
+    const reportDiagnostic = vi.fn();
+    vi.mocked(validateXML).mockResolvedValueOnce({
+      valid: false,
+      errors: [{ message: 'schema rejected', rawMessage: 'schema rejected', loc: null }],
+      rawOutput: 'schema rejected',
+      normalized: '',
+    });
+    try {
+      await expect(
+        runFetchComments(PR_URL, {
+          cwd,
+          reportDiagnostic,
+          deps: { ...deps, publish: publishReview },
+        })
+      ).rejects.toMatchObject({ code: 'validation-failed' });
+      expect(reportDiagnostic).toHaveBeenCalledWith('  schema rejected');
+      expect(fs.existsSync(path.join(cwd, 'review.xml'))).toBe(false);
+      expect(cleanup).toHaveBeenCalledOnce();
+      expect(console.error).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps publication successful when the completion reporter throws', async () => {
+    const reportDiagnostic = vi.fn((message: string) => {
+      if (message.includes('threads written to')) throw new Error('presentation failed');
+    });
+    await expect(
+      runFetchComments(PR_URL, { cwd: '/work', reportDiagnostic, deps })
+    ).resolves.toBeUndefined();
+    expect(written).toHaveLength(1);
+    expect(reportDiagnostic).toHaveBeenCalledWith(expect.stringContaining('threads written to'));
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
   it('publishes the review to the configured output path under the inherited policy', async () => {
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 

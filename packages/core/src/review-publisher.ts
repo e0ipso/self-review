@@ -2,6 +2,7 @@
 // The one way a review document reaches the disk. Order is the contract: build and validate,
 // stage new assets, then rename the XML into place; a failure before the rename leaves the old files.
 
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import * as path from 'node:path';
 import { validateReviewForSerialization } from './review-state-validation';
 import { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
@@ -77,6 +78,8 @@ export type ReviewOutputTarget =
   | { path: string; origin: 'inherited'; baseDir: string };
 
 interface PublishReviewCommonOptions {
+  /** Per-call diagnostics, including XML validation. Defaults to stderr. Must not throw. */
+  reportDiagnostic?: DiagnosticReporter;
   fs?: FsLayer;
   randomName?: () => string;
   /** Imported attachments whose origin is elsewhere are copied beside the output (`relocateAttachments`). */
@@ -145,7 +148,7 @@ export async function publishReview(
       targetAssetDir
     );
     assets = plan.assets;
-    xml = await serializePlannedReview(plan.state);
+    xml = await serializePlannedReview(plan.state, options.reportDiagnostic);
     assertActive();
     checkOutputPolicy(target, options, fs);
   } catch (error) {
@@ -222,7 +225,9 @@ export async function publishReview(
 
   if (staged.length > 0) {
     try {
-      console.error(`[main] Wrote ${staged.length} attachment file(s) to ${assetDir}`);
+      (options.reportDiagnostic ?? stderrReporter)(
+        `[main] Wrote ${staged.length} attachment file(s) to ${assetDir}`
+      );
     } catch {
       /* A diagnostic cannot change a committed publication's outcome. */
     }

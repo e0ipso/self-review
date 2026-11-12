@@ -1,6 +1,7 @@
 // src/main/xml-serializer.ts
 // Serialize ReviewState to XML and validate against XSD
 
+import type { DiagnosticReporter } from './diagnostics';
 import { validateReviewForSerialization } from './review-state-validation';
 import { ReviewState, FileReviewState, ReviewComment, Reply, Attachment } from './types';
 import { planAttachments, defaultAssetName } from './attachment-planner';
@@ -19,6 +20,8 @@ export { ASSET_DIR_NAME } from './attachment-planner';
 export type { PlannedAsset, AssetNamer, SerializedReview } from './attachment-planner';
 
 export interface SerializeOptions {
+  /** Defaults to stderr for validation diagnostics. */
+  reportDiagnostic?: DiagnosticReporter;
   assetName?: AssetNamer;
 }
 
@@ -37,12 +40,15 @@ export async function serializeReview(
 ): Promise<SerializedReview> {
   state = validateReviewForSerialization(state);
   const staged = planAttachments(state, outputFilePath, options.assetName ?? defaultAssetName);
-  const xml = await serializePlannedReview(staged.state);
+  const xml = await serializePlannedReview(staged.state, options.reportDiagnostic);
   return { xml, assets: staged.assets };
 }
 
 /** Internal publication path: references are already planned, so disk bytes never enter this module. */
-export async function serializePlannedReview(state: ReviewState): Promise<string> {
+export async function serializePlannedReview(
+  state: ReviewState,
+  reportDiagnostic?: DiagnosticReporter
+): Promise<string> {
   const xml = buildXml(state);
   // Publication appends one newline. Its complete UTF-8 document must fit the reader's budget.
   const bytes = Buffer.byteLength(xml, 'utf8') + 1;
@@ -52,7 +58,7 @@ export async function serializePlannedReview(state: ReviewState): Promise<string
       `${formatBytes(MAX_RESUME_XML_BYTES)} review document limit`;
     throw new ReviewXmlError('input-too-large', message, { details: [message] });
   }
-  await validateAgainstSchema(xml);
+  await validateAgainstSchema(xml, reportDiagnostic);
   return xml;
 }
 

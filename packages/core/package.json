@@ -23,6 +23,24 @@
       },
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./operations": {
+      "types": {
+        "import": "./dist/operations.d.ts",
+        "require": "./dist/operations.d.cts",
+        "default": "./dist/operations.d.ts"
+      },
+      "import": "./dist/operations.js",
+      "require": "./dist/operations.cjs"
+    },
+    "./filesystem": {
+      "types": {
+        "import": "./dist/filesystem.d.ts",
+        "require": "./dist/filesystem.d.cts",
+        "default": "./dist/filesystem.d.ts"
+      },
+      "import": "./dist/filesystem.js",
+      "require": "./dist/filesystem.cjs"
     }
   },
   "files": [

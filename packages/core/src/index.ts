@@ -397,3 +397,13 @@ export type {
 
 export { decodeSuggestionApplyRequest, MAX_CONTEXT_LINES } from './review-request-validation';
 export type { RequestDecodeResult } from './review-request-validation';
+
+// Focused read capabilities; all existing filesystem exports above remain available.
+export { readContainedFileBounded } from './safe-fs-async';
+export { nodeReadFsLayer, boundedReadFsFromSync } from './safe-fs-read';
+export type {
+  AsyncReadHandle,
+  AsyncReadFsLayer,
+  BoundedAsyncReadFsLayer,
+  SyncReadFsLayer,
+} from './safe-fs-read';

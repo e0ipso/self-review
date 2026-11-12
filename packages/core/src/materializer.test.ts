@@ -136,6 +136,56 @@ describe('materialize', () => {
     errorSpy.mockRestore();
   });
 
+  it('routes concurrent materialization and cleanup failures to the owning reporter', async () => {
+    const reports = [vi.fn(), vi.fn()];
+    const sessions = await Promise.all(
+      reports.map(reportDiagnostic => {
+        const { runner } = createRunner({
+          ...existingCloneHandlers(''),
+          'update-ref': fail('cleanup denied'),
+        });
+        return materialize(
+          githubUrl,
+          'main',
+          '/work',
+          runner,
+          { repoPath: '/virtual', remoteName: 'origin' },
+          { reportDiagnostic }
+        );
+      })
+    );
+    for (const session of sessions) await expect(session.cleanup()).resolves.toBeUndefined();
+    for (const report of reports) {
+      expect(report.mock.calls[0][0]).toContain('reusing existing clone');
+      expect(
+        report.mock.calls.filter(([message]) => message.includes('cleanup denied'))
+      ).toHaveLength(2);
+    }
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps cleanup nonrejecting and releases every ref when a diagnostic reporter throws', async () => {
+    const { runner, calls } = createRunner({
+      ...existingCloneHandlers(''),
+      'update-ref': fail('cleanup denied'),
+    });
+    const result = await materialize(
+      githubUrl,
+      'main',
+      '/work',
+      runner,
+      { repoPath: '/virtual', remoteName: 'origin' },
+      {
+        reportDiagnostic(message) {
+          if (message.includes('could not delete')) throw new Error('reporter failed');
+        },
+      }
+    );
+    await expect(result.cleanup()).resolves.toBeUndefined();
+    expect(findCalls(calls, 'update-ref')).toHaveLength(2);
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
   describe('existing-clone path', () => {
     it('matches an SSH (scp-style) remote and reuses the clone', async () => {
       const { runner, calls } = createRunner(
