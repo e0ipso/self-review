@@ -659,3 +659,42 @@ it('isolates validation diagnostics without changing the default message or succ
   ]);
   expect(fs.readFileSync(outputPath, 'utf8')).toContain('</review>');
 });
+
+it.each(['native', 'legacy'] as const)(
+  'rejects inconsistent comment ownership before %s staging and preserves the prior document',
+  async mode => {
+    const previous = await publishPrevious();
+    const state = withAttachment();
+    state.files[0].comments[0].filePath = 'another.ts';
+    const write = vi.fn(nodeFsLayer.writeSync);
+    const open = vi.fn(nodeFsLayer.openSync);
+    const asyncOpen = vi.fn(nodePublicationFileSystem.files.open);
+    const mkdir = vi.fn(nodeFsLayer.mkdirSync);
+    const asyncMkdir = vi.fn(nodePublicationFileSystem.mkdir);
+    const error = await publishError(state, outputPath, {
+      ...explicit,
+      ...(mode === 'legacy'
+        ? { fs: { ...nodeFsLayer, writeSync: write, openSync: open, mkdirSync: mkdir } }
+        : {
+            publicationFs: {
+              ...nodePublicationFileSystem,
+              files: { ...nodePublicationFileSystem.files, open: asyncOpen },
+              mkdir: asyncMkdir,
+            },
+          }),
+    });
+    expect(error.code).toBe('validation-failed');
+    expect(error.cause).toMatchObject({ name: 'ReviewXmlError', code: 'invalid-state' });
+    expect(write).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    expect(asyncOpen).not.toHaveBeenCalled();
+    expect(mkdir).not.toHaveBeenCalled();
+    expect(asyncMkdir).not.toHaveBeenCalled();
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe(previous.xml);
+    expect(listDir(tmp)).toEqual([ASSETS, 'review.xml']);
+    expect(listDir(path.join(tmp, ASSETS))).toEqual([previous.assetName]);
+    expect(fs.readFileSync(path.join(tmp, ASSETS, previous.assetName))).toEqual(
+      previous.assetBytes
+    );
+  }
+);

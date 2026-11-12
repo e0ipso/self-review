@@ -6,7 +6,7 @@ import { stat } from 'fs/promises';
 import { execFileSync } from 'child_process';
 import { repositoryEnvironment } from './command-runner';
 import { executeGit, type GitExecutionOptions } from './git';
-import { isCommandCancelled } from './forge-provider';
+import { CommandCancelledError, isCommandCancelled } from './forge-provider';
 import { resolve } from 'path';
 import { classifyGitDiffArgs } from './git-diff-args';
 
@@ -41,6 +41,7 @@ async function probeAsync(
     return true;
   } catch (error) {
     if (isCommandCancelled(error)) throw error;
+    checkCancellation(options, args);
     return false;
   }
 }
@@ -106,19 +107,59 @@ export function determineMode(gitDiffArgs: string[]): 'git' | 'directory' | 'fil
   return resolveStartupSource(gitDiffArgs).mode;
 }
 
+/** Classification metadata only; content loading uses its own filesystem roles. */
+export interface StartupPathStats {
+  isFile(): boolean;
+  isDirectory(): boolean;
+}
+
+/** An authoritative path probe. A refusal or failure never retries against the native filesystem. */
+export interface StartupPathProbe {
+  stat(path: string): Promise<StartupPathStats | null>;
+}
+
+export interface StartupSourceOptions extends GitExecutionOptions {
+  sourceProbe?: StartupPathProbe;
+}
+
+function checkCancellation(
+  options: GitExecutionOptions,
+  args: string[] = ['rev-parse', '--git-dir']
+): void {
+  if (options.signal?.aborted) throw new CommandCancelledError('aborted', 'git', args);
+}
+
+async function candidateStat(candidate: string, options: StartupSourceOptions) {
+  checkCancellation(options);
+  try {
+    const stats = options.sourceProbe
+      ? await options.sourceProbe.stat(candidate)
+      : await stat(candidate);
+    checkCancellation(options);
+    return stats;
+  } catch (error) {
+    if (isCommandCancelled(error)) throw error;
+    checkCancellation(options);
+    return null;
+  }
+}
+
 /**
  * Nonblocking startup probes for hosts. Commands use the shared bounded runner and its
  * explicit-repository environment, including a deliberately selected local alternate index.
  * Abort and timeout reject with CommandCancelledError; ordinary probe failures keep the
  * synchronous API's file/directory/welcome fallback. timeoutMs bounds each command.
+ * sourceProbe supplies classification metadata only and retains its receiver. Native stat and
+ * supplied probes are joined before cancellation propagates; neither can be forcibly preempted.
  */
 export async function resolveStartupSourceAsync(
   gitDiffArgs: readonly string[],
   cwd: string = process.cwd(),
-  options: GitExecutionOptions = {}
+  options: StartupSourceOptions = {}
 ): Promise<StartupSource> {
+  checkCancellation(options);
   const { positional, candidate } = firstCandidate(gitDiffArgs, cwd);
-  const candidateStats = candidate ? await stat(candidate).catch(() => null) : null;
+  const candidateStats = candidate ? await candidateStat(candidate, options) : null;
   const inRepository = await probeAsync(['rev-parse', '--git-dir'], cwd, options);
   if (candidate && positional && candidateStats?.isFile()) {
     const tracked =

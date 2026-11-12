@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runInNewContext } from 'node:vm';
-import { validateReviewState } from './review-state-validation';
+import { validateReviewState, validateReviewForSerialization } from './review-state-validation';
 import { ReviewXmlError } from './xml-errors';
 import { createReviewSession, submitReviewState } from './review-handlers';
 import type { ReviewState } from './types';
@@ -151,5 +151,84 @@ describe('validateReviewState', () => {
     { type: 'loading' },
   ])('accepts supported source $type', source => {
     expect(() => validateReviewState({ ...review(), source })).not.toThrow();
+  });
+});
+
+describe('comment ownership', () => {
+  it.each([validateReviewState, validateReviewForSerialization])(
+    'rejects a comment claiming a different owner before changing aliases',
+    validate => {
+      const state = review();
+      state.files[0].path = 'a.ts';
+      state.files[0].comments[0].filePath = 'b.ts';
+      const session = createReviewSession();
+      const previous = review();
+      submitReviewState(session, previous);
+      expect(() => validate(state)).toThrowError(
+        expect.objectContaining({
+          code: 'invalid-state',
+          message:
+            'Invalid review state: review.files[0].comments[0].filePath must match its containing file path',
+        })
+      );
+      expect(() => submitReviewState(session, state)).toThrow(ReviewXmlError);
+      expect(session.reviewState).toBe(previous);
+      expect(state.files[0].comments[0].filePath).toBe('b.ts');
+    }
+  );
+
+  it('does not include arbitrarily large supplied paths in the ownership diagnostic', () => {
+    const state = review();
+    state.files[0].path = 'x'.repeat(100_000);
+    state.files[0].comments[0].filePath = 'y'.repeat(100_000);
+    expect(() => validateReviewState(state)).toThrowError(
+      expect.objectContaining({
+        code: 'invalid-state',
+        details: [
+          'Invalid review state: review.files[0].comments[0].filePath must match its containing file path',
+        ],
+      })
+    );
+  });
+
+  it.each(['a.ts', '', 'new/renamed.ts', 'deleted.ts', 'café/雪😀.ts'])(
+    'retains exact valid ownership and all reference aliases for %s',
+    path => {
+      const state = review();
+      state.files[0].path = path;
+      state.files[0].comments[0].filePath = path;
+      state.files[0].changeType = path === 'deleted.ts' ? 'deleted' : 'renamed';
+      const extended = Object.assign(state.files[0].comments[0], { extension: {} });
+      expect(validateReviewState(state)).toBe(state);
+      expect(validateReviewForSerialization(state)).toBe(state);
+      expect(state.files[0].comments[0]).toBe(extended);
+      expect(state.files[0].comments[0].replies).toBe(extended.replies);
+    }
+  );
+
+  it.each(['a.ts', 'a.ts/', 'A.ts', './a.ts', 'café.ts', 'cafe\u0301.ts'])(
+    'compares ownership literally for %s',
+    path => {
+      const state = review();
+      state.files[0].path = path;
+      state.files[0].comments[0].filePath = path + '/';
+      expect(() => validateReviewState(state)).toThrow(ReviewXmlError);
+    }
+  );
+
+  it('keeps serialization compatible with absent transient IDs and nullable defaults', () => {
+    const state = review();
+    const comment = state.files[0].comments[0];
+    const { id: _id, lineRange: _line, suggestion: _suggestion, ...historical } = comment;
+    const legacy = { ...state, files: [{ ...state.files[0], comments: [historical] }] };
+    const normalized = validateReviewForSerialization(legacy as ReviewState);
+    expect(normalized.files[0].comments[0]).toEqual({
+      ...historical,
+      lineRange: null,
+      suggestion: null,
+    });
+    expect(normalized.files[0].comments[0].attachments).toBe(comment.attachments);
+    expect(normalized.files[0].comments[0].replies).toBe(comment.replies);
+    expect(legacy.files[0].comments[0]).not.toHaveProperty('lineRange');
   });
 });

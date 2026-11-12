@@ -162,3 +162,156 @@ describe('explicit repository environment', () => {
     });
   });
 });
+
+describe('authoritative startup path probes', () => {
+  const unavailable: ForgeCommandRunner = async () => ({ stdout: '', stderr: '', exitCode: 1 });
+  const file = { isFile: () => true, isDirectory: () => false };
+  const directory = { isFile: () => false, isDirectory: () => true };
+
+  it.each([
+    ['virtual.txt', file, 'file'],
+    ['virtual-dir', directory, 'directory'],
+  ] as const)('classifies %s without physical paths', async (name, metadata, mode) => {
+    const sourceProbe = {
+      metadata,
+      async stat(candidate: string) {
+        expect(candidate).toBe(join(root, name));
+        return this.metadata;
+      },
+    };
+    const options = { runner: unavailable, sourceProbe };
+    await expect(resolveStartupSourceAsync([name], root, options)).resolves.toEqual({
+      mode,
+      sourcePath: join(root, name),
+    });
+  });
+
+  it.each(['null', 'throw'] as const)(
+    'honors a supplied %s refusal over a physical file',
+    async refusal => {
+      writeFileSync(join(root, 'physical.txt'), 'text');
+      const stat = vi.fn(async () => {
+        if (refusal === 'throw') throw new Error('provider refused');
+        return null;
+      });
+      const options = { runner: unavailable, sourceProbe: { stat } };
+      await expect(resolveStartupSourceAsync(['physical.txt'], root, options)).resolves.toEqual({
+        mode: 'welcome',
+      });
+      expect(stat).toHaveBeenCalledExactlyOnceWith(join(root, 'physical.txt'));
+    }
+  );
+
+  it.each([
+    ['file', file, true, true, 'git'],
+    ['untracked', file, true, false, 'file'],
+    ['directory', directory, true, false, 'git'],
+    ['directory', directory, false, false, 'directory'],
+    ['missing', null, true, false, 'git'],
+  ] as const)('keeps %s mode precedence', async (name, stats, repository, tracked, mode) => {
+    const runner = vi.fn<ForgeCommandRunner>(async (_command, args) => ({
+      stdout: '',
+      stderr: '',
+      exitCode: (args[0] === 'rev-parse' ? repository : tracked) ? 0 : 1,
+    }));
+    const options = { runner, sourceProbe: { stat: vi.fn(async () => stats) } };
+    const result = await resolveStartupSourceAsync(['--', name], root, options);
+    expect(result).toEqual(mode === 'git' ? { mode } : { mode, sourcePath: join(root, name) });
+    expect(runner.mock.calls.every(([, , options]) => options?.cwd === root)).toBe(true);
+    expect(runner.mock.calls.map(([, args]) => args)).toEqual([
+      ['rev-parse', '--git-dir'],
+      ...(stats === file && repository ? [['ls-files', '--error-unmatch', '--', name]] : []),
+    ]);
+  });
+
+  it('does not probe option values or absent positionals', async () => {
+    const stat = vi.fn(async () => file);
+    for (const args of [[], ['-S', 'virtual.txt'], ['--staged']]) {
+      const options = { runner: unavailable, sourceProbe: { stat } };
+      expect(await resolveStartupSourceAsync(args, root, options)).toEqual({ mode: 'welcome' });
+    }
+    expect(stat).not.toHaveBeenCalled();
+  });
+
+  it('checks cancellation before starting any path or git probe', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const stat = vi.fn(async () => file);
+    const runner = vi.fn(ok);
+    const options = { runner, signal: controller.signal, sourceProbe: { stat } };
+    await expect(resolveStartupSourceAsync(['virtual'], root, options)).rejects.toMatchObject({
+      name: 'CommandCancelledError',
+      reason: 'aborted',
+    });
+    expect(stat).not.toHaveBeenCalled();
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'joins a pending provider %s before propagating cancellation',
+    async outcome => {
+      const controller = new AbortController();
+      let settle!: () => void;
+      let entered!: () => void;
+      const started = new Promise<void>(resolve => {
+        entered = resolve;
+      });
+      const stat = vi.fn(
+        () =>
+          new Promise<typeof file>((resolve, reject) => {
+            settle = () =>
+              outcome === 'resolve' ? resolve(file) : reject(new Error('probe failed'));
+            entered();
+          })
+      );
+      const runner = vi.fn(ok);
+      const options = { runner, signal: controller.signal, sourceProbe: { stat } };
+      const result = resolveStartupSourceAsync(['virtual'], root, options);
+      let settled = false;
+      const observed = result.then(
+        value => {
+          settled = true;
+          return { value };
+        },
+        error => {
+          settled = true;
+          return { error };
+        }
+      );
+      await Promise.race([started, observed]);
+      expect(stat).toHaveBeenCalledOnce();
+      controller.abort();
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      settle();
+      expect(await observed).toMatchObject({
+        error: { name: 'CommandCancelledError', reason: 'aborted' },
+      });
+      expect(runner).not.toHaveBeenCalled();
+    }
+  );
+
+  it('propagates typed provider cancellation without an aborted signal', async () => {
+    const error = new CommandCancelledError('timeout', 'probe', []);
+    const options = {
+      runner: unavailable,
+      sourceProbe: {
+        stat: async () => {
+          throw error;
+        },
+      },
+    };
+    await expect(resolveStartupSourceAsync(['virtual'], root, options)).rejects.toBe(error);
+  });
+
+  it('propagates cancellation if a git provider rejects an ordinary failure after abort', async () => {
+    const controller = new AbortController();
+    const runner: ForgeCommandRunner = async () => {
+      controller.abort();
+      throw new Error('ordinary failure after abort');
+    };
+    await expect(
+      resolveStartupSourceAsync([], root, { runner, signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+  });
+});

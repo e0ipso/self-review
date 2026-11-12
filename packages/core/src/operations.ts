@@ -2,7 +2,12 @@
 export { loadConfig, loadConfigWithProvenance } from './config';
 export type { LoadConfigOptions, LoadedConfig, ConfigProvenance } from './config';
 export { resolveStartupSourceAsync } from './startup-mode';
-export type { StartupSource } from './startup-mode';
+export type {
+  StartupSource,
+  StartupSourceOptions,
+  StartupPathProbe,
+  StartupPathStats,
+} from './startup-mode';
 export {
   resolveOutputTarget,
   publishOptionsFor,

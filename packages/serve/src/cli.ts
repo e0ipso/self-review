@@ -86,7 +86,10 @@ async function main(): Promise<void> {
 
   const host = createStartupHost(process.cwd(), message => console.error(message));
   reportCoreCompatibility(host.reportDiagnostic);
-  const lifetime = createServeLifecycle({ signals: process });
+  const lifetime = createServeLifecycle({
+    signals: process,
+    reportDiagnostic: host.reportDiagnostic,
+  });
   const startupTimer = setTimeout(() => {
     console.error('[serve] Startup deadline reached; stopping.');
     lifetime.stop(1);

@@ -1,5 +1,6 @@
 // HTTP security, responses and bounded JSON decoding. No review policy lives here.
 
+import { TextDecoder } from 'node:util';
 import type * as http from 'node:http';
 import { capabilityMatches } from './capability';
 import { CAPABILITY_SCHEME } from './protocol';
@@ -215,7 +216,11 @@ export function readJsonBody(
     };
     const onEnd = () => {
       try {
-        const value: unknown = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+        // Keep the BOM in the decoded text so JSON.parse retains its historical refusal.
+        const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
+          Buffer.concat(chunks)
+        );
+        const value: unknown = JSON.parse(text);
         finish({ ok: true, value });
       } catch {
         finish({ ok: false, status: 400, error: 'body must be valid JSON' });

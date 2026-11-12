@@ -68,6 +68,36 @@ Both operations and their option types are available from `@self-review/core/ope
 original root functions remain supported. Hosts must pass their own reporter into each operation to
 route these messages; callers that omit it retain stderr output.
 
+## Startup path classification
+
+`resolveStartupSourceAsync(argv, cwd, options)` accepts an optional `sourceProbe: StartupPathProbe`
+alongside its existing git execution options. The probe's `stat(path)` returns metadata with
+`isFile()` and `isDirectory()`, or null for an unavailable path. It receives the resolved first
+positional path and retains its receiver. A supplied refusal or ordinary probe error uses the
+existing git/directory/file/welcome classification rules without retrying native stat. Tracked files
+still use git, untracked files use file mode, and a repository in cwd takes precedence over
+directory mode. Option values never select a source.
+
+The probe supplies classification only. Virtual content loading separately requires the filesystem
+roles accepted by `loadLocalReview`. Omitting the probe retains native stat, and the original
+synchronous APIs and call forms remain supported. Probe and git cancellation propagate instead of
+becoming welcome mode. An aborted signal is checked before probing and after success or failure;
+in-flight native or supplied work is joined before rejection. `timeoutMs` bounds git commands, not
+stat or an arbitrary supplied probe. A promise or timer cannot preempt a native syscall.
+
+`StartupSourceOptions`, `StartupPathProbe` and `StartupPathStats` are available through
+`@self-review/core/operations`. Existing root imports remain supported.
+
+## Comment ownership validation
+
+Every comment's `filePath` must exactly match its containing file's `path`. The shared runtime and
+serialization validator refuses inconsistent ownership with `ReviewXmlError` code `invalid-state`;
+publication reports `validation-failed` before attachment preparation or staging. Diagnostics name
+the field without echoing supplied path values. The empty review-level path, Unicode paths, renamed
+and deleted files follow the same exact comparison. Paths are never rewritten to repair a mismatch.
+Valid DTOs retain their reference aliases and extension metadata. Historical nullable omissions and
+serialization's optional transient comment IDs keep their existing handling.
+
 ## Payload threshold validation
 
 `max-files` and `max-total-lines` accept finite numeric values from zero through
