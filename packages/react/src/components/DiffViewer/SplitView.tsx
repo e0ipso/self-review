@@ -12,6 +12,8 @@ import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
 import ExpandContextBar from './ExpandContextBar';
 import { getLineBg, getGutterBg } from '../../utils/diff-styles';
+import { buildSplitRows } from './split-rows';
+import { mergeLineComments } from './line-comments';
 import EmptyLinePane from './EmptyLinePane';
 
 export interface SplitViewProps {
@@ -33,11 +35,6 @@ export interface SplitViewProps {
   isExpandable?: boolean;
   expandLoading?: boolean;
   totalLines?: number | null;
-}
-
-interface SplitLineRow {
-  oldLine: DiffLine | null;
-  newLine: DiffLine | null;
 }
 
 export default function SplitView({
@@ -71,47 +68,10 @@ export default function SplitView({
     return false;
   };
 
-  const buildSplitRows = (lines: DiffLine[]): SplitLineRow[] => {
-    const rows: SplitLineRow[] = [];
-    let i = 0;
-
-    while (i < lines.length) {
-      const line = lines[i];
-
-      if (line.type === 'context') {
-        rows.push({ oldLine: line, newLine: line });
-        i++;
-      } else if (line.type === 'deletion') {
-        // Collect consecutive deletions
-        const deletions: DiffLine[] = [];
-        while (i < lines.length && lines[i].type === 'deletion') {
-          deletions.push(lines[i]);
-          i++;
-        }
-        // Collect consecutive additions that follow
-        const additions: DiffLine[] = [];
-        while (i < lines.length && lines[i].type === 'addition') {
-          additions.push(lines[i]);
-          i++;
-        }
-        // Zip deletions and additions into paired rows
-        const maxLen = Math.max(deletions.length, additions.length);
-        for (let j = 0; j < maxLen; j++) {
-          rows.push({
-            oldLine: j < deletions.length ? deletions[j] : null,
-            newLine: j < additions.length ? additions[j] : null,
-          });
-        }
-      } else if (line.type === 'addition') {
-        rows.push({ oldLine: null, newLine: line });
-        i++;
-      } else {
-        i++;
-      }
-    }
-
-    return rows;
-  };
+  const splitHunks = useMemo(
+    () => file.hunks.map(hunk => buildSplitRows(hunk.lines)),
+    [file.hunks]
+  );
 
   const originalCode = useMemo(
     () => (commentRange ? extractOriginalCode(file, commentRange) : undefined),
@@ -213,7 +173,7 @@ export default function SplitView({
             />
           )}
           <HunkHeader header={hunk.header} />
-          {buildSplitRows(hunk.lines).map((row, rowIndex) => {
+          {splitHunks[hunkIndex].map((row, rowIndex) => {
             const oldLineNumber = row.oldLine?.oldLineNumber;
             const newLineNumber = row.newLine?.newLineNumber;
             const oldCommentsToRender = commentIndex.endingAt(oldLineNumber, 'old');
@@ -243,18 +203,22 @@ export default function SplitView({
                   )}
                 </div>
 
-                <InlineCommentSlot
-                  commentsToRender={[...oldCommentsToRender, ...newCommentsToRender]}
-                  showCommentInput={!!showCommentInputHere}
-                  commentRange={commentRange}
-                  filePath={file.newPath || file.oldPath}
-                  originalCode={originalCode}
-                  onCancel={onCancelComment}
-                  onSaved={onCommentSaved}
-                  getOriginalCodeForComment={comment =>
-                    comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
-                  }
-                />
+                {(oldCommentsToRender.length > 0 ||
+                  newCommentsToRender.length > 0 ||
+                  showCommentInputHere) && (
+                  <InlineCommentSlot
+                    commentsToRender={mergeLineComments(oldCommentsToRender, newCommentsToRender)}
+                    showCommentInput={!!showCommentInputHere}
+                    commentRange={commentRange}
+                    filePath={file.newPath || file.oldPath}
+                    originalCode={originalCode}
+                    onCancel={onCancelComment}
+                    onSaved={onCommentSaved}
+                    getOriginalCodeForComment={comment =>
+                      comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
+                    }
+                  />
+                )}
               </React.Fragment>
             );
           })}

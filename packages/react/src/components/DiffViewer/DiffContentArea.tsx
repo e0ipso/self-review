@@ -12,6 +12,7 @@ import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
 import type { ContentPreview } from './content-preview';
+import { usePreviewRenderer } from '../../context/PreviewRenderingContext';
 import { normalizePreviewProps } from './preview-compat';
 import type { LazyLoadState } from './useLazyFileContent';
 
@@ -40,7 +41,7 @@ export interface PreviewContentAreaProps {
   ) => void;
 }
 
-/** Public 2.0.4 call forms are normalized here, before entering the content dispatcher. */
+/** @deprecated Prefer PreviewContentArea with one preview discriminator. Legacy flags remain supported. */
 export interface DiffContentAreaProps extends Omit<PreviewContentAreaProps, 'preview'> {
   preview?: ContentPreview;
   isEligibleForRenderedView: boolean;
@@ -73,6 +74,7 @@ export function PreviewContentArea({
 }: PreviewContentAreaProps) {
   const { t } = useLocalization();
   const adapter = useAdapter();
+  const renderer = usePreviewRenderer();
   const snapshotKey = useOptionalSnapshotKey();
   // Passed to rendered blocks through context; a stable identity keeps that value memoized.
   const handleGutterMouseDown = useCallback(
@@ -135,11 +137,13 @@ export function PreviewContentArea({
     );
   }
 
+  const hostPreview = file.changeType === 'added' && !!renderer?.supports(file, preview);
   const renderPreview =
     renderViewMode === 'rendered' &&
-    preview.kind !== 'none' &&
-    (preview.kind !== 'text' || (!file.isBinary && file.hunks.length > 0));
-  if (renderPreview) {
+    (hostPreview ||
+      (preview.kind !== 'none' &&
+        (preview.kind !== 'text' || (!file.isBinary && file.hunks.length > 0))));
+  const builtInPreview = () => {
     switch (preview.kind) {
       case 'image':
         return (
@@ -152,6 +156,7 @@ export function PreviewContentArea({
       case 'svg':
         return <RenderedSvgView file={file} />;
       case 'text':
+        if (file.isBinary || file.hunks.length === 0) return null;
         return (
           <RenderedMarkdownView
             file={file}
@@ -163,6 +168,26 @@ export function PreviewContentArea({
           />
         );
     }
+    return null;
+  };
+  if (renderPreview) {
+    if (hostPreview && renderer) {
+      const HostPreview = renderer.component;
+      return (
+        <HostPreview
+          file={file}
+          filePath={filePath}
+          preview={preview}
+          commentRange={commentRange}
+          onCommentRange={onCommentRange}
+          onCancelComment={onCancelComment}
+          onCommentSaved={onCommentSaved}
+        >
+          {builtInPreview()}
+        </HostPreview>
+      );
+    }
+    return builtInPreview();
   }
 
   if (file.isBinary) {

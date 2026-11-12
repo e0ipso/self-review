@@ -9,6 +9,7 @@ import SyntaxLine from './SyntaxLine';
 import { planHighlighting } from './highlight-budget';
 import { getLanguageFromPath } from '../../utils/file-type-utils';
 import { extractOriginalCode } from './diff-utils';
+import { mergeLineComments } from './line-comments';
 import { InlineCommentSlot } from './InlineCommentSlot';
 import ExpandContextBar from './ExpandContextBar';
 import { getLineBg, getGutterBg } from '../../utils/diff-styles';
@@ -116,10 +117,10 @@ export default function UnifiedView({
             const rowIndex = hunkRowOffsets[hunkIndex] + lineIndex;
             const lineNumber = line.type === 'deletion' ? line.oldLineNumber : line.newLineNumber;
             const side: 'old' | 'new' = line.type === 'deletion' ? 'old' : 'new';
-            const commentsToRender = [
-              ...commentIndex.endingAt(line.newLineNumber, 'new'),
-              ...commentIndex.endingAt(line.oldLineNumber, 'old'),
-            ];
+            const commentsToRender = mergeLineComments(
+              commentIndex.endingAt(line.newLineNumber, 'new'),
+              commentIndex.endingAt(line.oldLineNumber, 'old')
+            );
             const hasComment =
               commentIndex.covers(lineNumber, side) ||
               (line.type === 'context' && commentIndex.covers(line.oldLineNumber, 'old'));
@@ -202,19 +203,21 @@ export default function UnifiedView({
                   </div>
                 </div>
 
-                <InlineCommentSlot
-                  commentsToRender={commentsToRender}
-                  showCommentInput={!!showCommentInputHere}
-                  commentRange={commentRange}
-                  filePath={file.newPath || file.oldPath}
-                  originalCode={originalCode}
-                  onCancel={onCancelComment}
-                  onSaved={onCommentSaved}
-                  indentClass='ms-[100px]'
-                  getOriginalCodeForComment={comment =>
-                    comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
-                  }
-                />
+                {(commentsToRender.length > 0 || showCommentInputHere) && (
+                  <InlineCommentSlot
+                    commentsToRender={commentsToRender}
+                    showCommentInput={!!showCommentInputHere}
+                    commentRange={commentRange}
+                    filePath={file.newPath || file.oldPath}
+                    originalCode={originalCode}
+                    onCancel={onCancelComment}
+                    onSaved={onCommentSaved}
+                    indentClass='ms-[100px]'
+                    getOriginalCodeForComment={comment =>
+                      comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
+                    }
+                  />
+                )}
               </React.Fragment>
             );
           })}
