@@ -14,6 +14,7 @@ export {
   resolveStartupDiffArgs,
   loadLocalReview,
   loadResumeDocument,
+  adoptResumeDocument,
   ConfiguredDiffArgsError,
 } from './startup';
 export type { LoadedLocalReview, ResolvedDiffArgs } from './startup';
@@ -68,3 +69,13 @@ export { loadImage, readAttachment } from './review-content';
 export type { LoadImageOptions, ReadAttachmentOptions, AttachmentReader } from './review-content';
 
 export type { ReviewSchemaValidator } from './review-xml-validator';
+
+export type { ResumeDocumentOptions } from './startup';
+export { resolveAttachmentOrigins } from './attachment-origins';
+export type { ResolvedAttachmentLocation } from './attachment-origins';
+export { recordResumedAttachments } from './review-content';
+
+export { inspectOutputPathAsync, nodeOutputPathInspection } from './review-publisher';
+export type { OutputPathInspection, AsyncInspectOutputPathOptions } from './review-publisher';
+
+export { resolveAttachmentOriginsAtDirectory } from './attachment-origin-plan';

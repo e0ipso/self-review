@@ -12,7 +12,7 @@ import {
   readAssetFile,
   resolveAttachmentOrigins,
 } from './attachment-origins';
-import type { AttachmentReadResult } from './attachment-origins';
+import type { ResolvedAttachmentLocation, AttachmentReadResult } from './attachment-origins';
 import { ASSET_DIR_NAME } from './xml-serializer';
 import type { DiagnosticReporter } from './diagnostics';
 import { isolatedReporter } from './effect-diagnostics';
@@ -89,9 +89,24 @@ export async function loadImage(
 export function recordResumedAttachments(
   session: Pick<ReviewSession, 'attachmentOrigins'>,
   comments: readonly ReviewComment[],
+  resumeDocumentPath: string,
+  location: ResolvedAttachmentLocation
+): string[];
+export function recordResumedAttachments(
+  session: Pick<ReviewSession, 'attachmentOrigins'>,
+  comments: readonly ReviewComment[],
   resumeDocumentPath: string
+): string[];
+export function recordResumedAttachments(
+  session: Pick<ReviewSession, 'attachmentOrigins'>,
+  comments: readonly ReviewComment[],
+  resumeDocumentPath: string,
+  location: ResolvedAttachmentLocation | undefined = undefined
 ): string[] {
-  const { origins, diagnostics } = resolveAttachmentOrigins(comments, resumeDocumentPath);
+  const { origins, diagnostics } =
+    location === undefined
+      ? resolveAttachmentOrigins(comments, resumeDocumentPath)
+      : resolveAttachmentOrigins(comments, resumeDocumentPath, location);
   session.attachmentOrigins = origins;
   return diagnostics;
 }

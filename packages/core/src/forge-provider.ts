@@ -229,12 +229,14 @@ export function parseForgeUrl(url: string): ForgeUrl | null {
   for (const forge of Object.keys(FORGE_DEFINITIONS) as ForgeName[]) {
     const match = FORGE_DEFINITIONS[forge].urlPath.exec(parsed.pathname);
     if (match) {
+      const number = Number(match[3]);
+      if (!Number.isSafeInteger(number) || number <= 0) return null;
       return {
         forge,
         host: parsed.host,
         owner: match[1],
         repo: match[2],
-        number: Number.parseInt(match[3], 10),
+        number,
       };
     }
   }

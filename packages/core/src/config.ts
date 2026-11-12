@@ -3,7 +3,8 @@
 import { join } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { AppConfig } from './types';
-import { stderrReporter, type DiagnosticReporter } from './diagnostics';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 import { createDefaultConfig } from '../../config/src/index';
 import { gitDiffArgsSyntaxError } from './git-argument-text';
 import { nativeConfigEffects } from './config-reader';
@@ -58,7 +59,7 @@ const CONFIG_KEYS = Object.keys(defaults) as (keyof AppConfig)[];
  * produces XML. Unsupported values warn without rejecting the configuration or changing provenance.
  */
 export function loadConfigWithProvenance(options: LoadConfigOptions = {}): LoadedConfig {
-  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
   const effects = options.effects ?? nativeConfigEffects;
   let config = createDefaultConfig();
   const provenance = Object.fromEntries(CONFIG_KEYS.map(key => [key, 'default'])) as Record<

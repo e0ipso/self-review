@@ -15,6 +15,7 @@ import type {
 import { loadedReviewIdentity, type LoadedReview } from './loaded-snapshot';
 import type { AttachmentOrigins } from './attachment-origins';
 import { stderrReporter, type DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 import { validateReviewState } from './review-state-validation';
 
 /**
@@ -228,7 +229,7 @@ export function submitReviewState(
   reportDiagnostic: DiagnosticReporter = stderrReporter
 ): void {
   state = validateReviewState(state);
-  reportDiagnostic(
+  isolatedReporter(reportDiagnostic)(
     '[review] Review state submitted:',
     JSON.stringify({
       timestamp: state.timestamp,

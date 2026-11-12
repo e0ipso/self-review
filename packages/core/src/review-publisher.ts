@@ -7,6 +7,9 @@ import { isolatedReporter } from './effect-diagnostics';
 import { resolvePublicationFileSystem } from './publication-fs';
 import type { PublicationFileSystem, PublicationInspection } from './publication-fs';
 import * as path from 'node:path';
+import * as nativeInspection from 'node:fs/promises';
+import { constants as fsConstants, type Stats } from 'node:fs';
+import { errnoOf, replacementIdentity } from './safe-fs-policy';
 import { validateReviewForSerialization } from './review-state-validation';
 import { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
 import { checkWritability } from './fs-utils';
@@ -262,14 +265,130 @@ export function inspectOutputPath(
     return toPublishError(error, target);
   }
   if (!checkWritability(target, fs)) {
-    const dir = path.dirname(target);
-    return new ReviewPublishError(
-      'permission-denied',
-      target,
-      `Cannot write ${target}: ${dir} does not exist or is not writable`
-    );
+    return outputPermissionError(target);
   }
   return null;
+}
+
+/** Read-only location and permission effects. Every supplied method retains its receiver. */
+export interface OutputPathInspection {
+  realpath(target: string): Promise<string>;
+  lstat(target: string): Promise<Stats>;
+  /** Advisory permission check for the parent, without creating or opening an output file. */
+  isWritable(directory: string): Promise<boolean>;
+}
+
+export type AsyncInspectOutputPathOptions = (
+  | { outputOrigin: 'explicit' }
+  | { outputOrigin: 'inherited'; baseDir: string }
+) & {
+  /** Authoritative for all probes. No native retry or missing-method fallback. */
+  inspection?: OutputPathInspection;
+  signal?: AbortSignal;
+  /** Legacy synchronous providers must keep using inspectOutputPath. */
+  fs?: never;
+  publicationFs?: never;
+};
+
+export const nodeOutputPathInspection: OutputPathInspection = {
+  realpath: target => nativeInspection.realpath(target),
+  lstat: target => nativeInspection.lstat(target),
+  async isWritable(directory) {
+    try {
+      await nativeInspection.access(directory, fsConstants.W_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
+
+/**
+ * Asynchronous advisory inspection with the same path policy as inspectOutputPath. Cancellation
+ * rejects with the signal reason only after an admitted probe settles. Provider errors are mapped
+ * like publication errors; an existing ReviewPublishError retains its identity. Final publication
+ * still rechecks the path. Legacy synchronous providers cannot supply this asynchronous role.
+ */
+export async function inspectOutputPathAsync(
+  outputPath: string,
+  options: AsyncInspectOutputPathOptions
+): Promise<ReviewPublishError | null> {
+  const target = path.resolve(outputPath);
+  const outputDir = path.dirname(target);
+  const fs = options.inspection ?? nodeOutputPathInspection;
+  const checkCancelled = () => options.signal?.throwIfAborted();
+  const probe = async <T>(location: string, action: string, read: () => Promise<T>): Promise<T> => {
+    checkCancelled();
+    try {
+      const result = await read();
+      checkCancelled();
+      return result;
+    } catch (error) {
+      checkCancelled();
+      // Keep the host's typed error identity before translating raw filesystem failures.
+      if (error instanceof ReviewPublishError) throw error;
+      throw toSafeFsError(error, location, action);
+    }
+  };
+  checkCancelled();
+  try {
+    // JavaScript callers may pass old option bags. Refuse rather than inspect the native disk
+    // while their supplied filesystem is silently ignored.
+    if (options.fs !== undefined || options.publicationFs !== undefined) {
+      throw new ReviewPublishError(
+        'io-error',
+        target,
+        'Asynchronous output inspection requires the read-only inspection capability'
+      );
+    }
+    if (options.outputOrigin === 'inherited') {
+      const base = path.resolve(options.baseDir);
+      const physicalBase = await probe(base, 'resolve', () => fs.realpath(base));
+      const physicalDir = await probe(outputDir, 'resolve', () => fs.realpath(outputDir));
+      assertOutputDirectoryContained(target, physicalBase, physicalDir);
+    }
+    let stats: Stats | null;
+    try {
+      stats = await probe(target, 'inspect', () => fs.lstat(target));
+    } catch (error) {
+      if (error instanceof SafeFsError && errnoOf(error.cause) === 'ENOENT') stats = null;
+      else throw error;
+    }
+    if (stats !== null) replacementIdentity(target, stats);
+    const writable = await probe(outputDir, 'check writability', () => fs.isWritable(outputDir));
+    checkCancelled();
+    if (!writable) {
+      return outputPermissionError(target);
+    }
+    return null;
+  } catch (error) {
+    checkCancelled();
+    return toPublishError(error, target);
+  }
+}
+
+function outputPermissionError(target: string): ReviewPublishError {
+  return new ReviewPublishError(
+    'permission-denied',
+    target,
+    `Cannot write ${target}: ${path.dirname(target)} does not exist or is not writable`
+  );
+}
+
+function assertOutputDirectoryContained(
+  target: string,
+  physicalBase: string,
+  physicalDir: string
+): void {
+  const rel = path.relative(physicalBase, physicalDir);
+  if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+    throw new SafeFsError(
+      'unsafe-link',
+      target,
+      `Refusing to write ${target}: the configured output directory resolves to ${physicalDir}, outside ${physicalBase}. ` +
+        'Choose the output path explicitly to save there.'
+    );
+  }
 }
 
 /** A file at a drawn name means another draw; a link there is a trap and is refused. */
@@ -316,15 +435,7 @@ function checkOutputPolicy(
     const outputDir = path.dirname(target);
     const physicalBase = guarded(base, 'resolve', () => fs.realpathSync(base));
     const physicalDir = guarded(outputDir, 'resolve', () => fs.realpathSync(outputDir));
-    const rel = path.relative(physicalBase, physicalDir);
-    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
-      throw new SafeFsError(
-        'unsafe-link',
-        target,
-        `Refusing to write ${target}: the configured output directory resolves to ${physicalDir}, outside ${physicalBase}. ` +
-          'Choose the output path explicitly to save there.'
-      );
-    }
+    assertOutputDirectoryContained(target, physicalBase, physicalDir);
   }
   // Checked now as well as at write time, so no asset is staged for a document that cannot be published.
   inspectReplaceTarget(target, fs);
