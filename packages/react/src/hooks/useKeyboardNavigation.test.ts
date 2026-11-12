@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act, fireEvent, renderHook } from '@testing-library/react';
 import { generateLabels, isTextInputFocused, useKeyboardNavigation } from './useKeyboardNavigation';
 import { ConfigProvider } from '../context/ConfigContext';
@@ -153,5 +153,44 @@ describe('useKeyboardNavigation f hint', () => {
     document.removeEventListener('trigger-line-comment', onTrigger);
     expect(opened).not.toBeNull();
     expect(document.activeElement).toBe(opened);
+  });
+});
+
+describe('semantic keyboard hint actions', () => {
+  it.each([
+    'custom-action',
+    'toggle-viewed',
+    'add-file-comment',
+    'delete-comment',
+    'finish-review',
+  ])('discovers and activates %s from its marker without an action-name list', action => {
+    const click = vi.fn();
+    const button = document.createElement('button');
+    button.setAttribute('data-hint-action', action);
+    button.addEventListener('click', click);
+    button.getBoundingClientRect = () => new DOMRect(10, 10, 100, 20);
+    const hook = renderHook(() => useKeyboardNavigation(), {
+      wrapper: ({ children }) =>
+        React.createElement(
+          ConfigProvider,
+          null,
+          React.createElement(DiffNavigationProvider, null, children),
+          React.createElement('div', {
+            ref: (node: HTMLDivElement | null) => {
+              if (node && !node.contains(button)) node.appendChild(button);
+            },
+          })
+        ),
+    });
+    act(() => {
+      fireEvent.keyDown(document, { key: 'f' });
+    });
+    expect(hook.result.current.hints.map(hint => hint.element)).toEqual([button]);
+    act(() => {
+      fireEvent.keyDown(document, { key: hook.result.current.hints[0].label });
+    });
+    expect(click).toHaveBeenCalledOnce();
+    expect(hook.result.current.mode).toBe('normal');
+    hook.unmount();
   });
 });

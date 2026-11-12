@@ -29,6 +29,7 @@ export default function CategorySelector({ value, onChange }: CategorySelectorPr
                 variant='ghost'
                 size='sm'
                 data-testid={`category-option-${cat.name}`}
+                data-hint-action='select-category'
                 onClick={() => {
                   if (!isActive) onChange(cat.name);
                 }}

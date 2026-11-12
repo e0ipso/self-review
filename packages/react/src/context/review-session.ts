@@ -9,6 +9,7 @@ import type {
   ReviewComment,
 } from '@self-review/types';
 import type { SetStateAction } from 'react';
+import { reconcileRemoteFeedback } from './reconcile-remote-feedback';
 
 function groupCommentsByFile(comments: ReviewComment[]): Map<string, ReviewComment[]> {
   const byFile = new Map<string, ReviewComment[]>();
@@ -24,7 +25,9 @@ function groupCommentsByFile(comments: ReviewComment[]): Map<string, ReviewComme
 /**
  * Comparable identity of the review a payload describes: same identity updates the session,
  * a different one starts a new one. The remote head SHA is left out on purpose, so the same
- * PR at a newer head is the same review. The adapter is the other half (see {@link ReviewProvider}).
+ * PR at a newer head is the same review. Its forge, URL and source kind identify it; clone paths
+ * and SHA-based diff arguments identify its snapshot. Local git arguments remain identity-bearing.
+ * The adapter is the other half (see {@link ReviewProvider}).
  */
 export function reviewSessionIdentity(
   source: DiffSource,
@@ -33,7 +36,7 @@ export function reviewSessionIdentity(
   let parts: string[];
   switch (source.type) {
     case 'git':
-      parts = ['git', source.repository, source.gitDiffArgs];
+      parts = remote ? ['git'] : ['git', source.repository, source.gitDiffArgs];
       break;
     case 'directory':
     case 'file':
@@ -42,8 +45,27 @@ export function reviewSessionIdentity(
     default:
       parts = [source.type];
   }
-  if (remote) parts.push('remote', remote.remoteUrl);
+  if (remote) parts.push('remote', remote.remoteForge, remote.remoteUrl);
   return JSON.stringify(parts);
+}
+
+/** Local updates retain their existing semantics. Remote pulls must match the exact snapshot. */
+export function sameRemoteSnapshot(
+  previous: { remote?: RemoteSessionInfo | null; diffSource?: DiffSource; source?: DiffSource },
+  next: Pick<DiffLoadPayload, 'source' | 'remote'>
+): boolean {
+  if (!previous.remote && !next.remote) return true;
+  const source = previous.diffSource ?? previous.source;
+  const sameSource =
+    source?.type === 'git' &&
+    next.source.type === 'git' &&
+    source.repository === next.source.repository &&
+    source.gitDiffArgs === next.source.gitDiffArgs;
+  return (
+    previous.remote?.remoteHeadSha === next.remote?.remoteHeadSha &&
+    previous.remote?.remoteBaseSha === next.remote?.remoteBaseSha &&
+    sameSource
+  );
 }
 
 function isPlaceholderSource(source: DiffSource): boolean {
@@ -139,6 +161,7 @@ export interface ReviewSessionState {
   resumePending: boolean;
   deletedCommentIds: ReadonlySet<string>;
   viewedEdits: ReadonlySet<string>;
+  anchorDiagnostics: string[];
 }
 let nextSessionId = 1;
 export function createReviewSession(
@@ -167,6 +190,7 @@ export function createReviewSession(
     resumePending,
     deletedCommentIds: new Set(),
     viewedEdits: new Set(),
+    anchorDiagnostics: [],
   };
 }
 export type SessionAction =
@@ -233,6 +257,10 @@ export function reviewSessionReducer(
               state.acceptsInitialComments && isPlaceholderSource(state.diffSource),
             hydrated: state.hydrated,
           };
+      const remoteChanged = same && !!state.remote && !sameRemoteSnapshot(state, payload);
+      const reconciliation = remoteChanged
+        ? reconcileRemoteFeedback(state.files, state.allDiffFiles, payload.files)
+        : { files: state.files, diagnostics: [] };
       return hydrate(
         {
           ...next,
@@ -240,13 +268,16 @@ export function reviewSessionReducer(
           snapshotId: state.snapshotId + 1,
           diffSource: payload.source,
           allDiffFiles,
-          files: seedFileStates(allDiffFiles, same ? state.files : []),
+          files: seedFileStates(allDiffFiles, same ? reconciliation.files : []),
+          anchorDiagnostics: [...next.anchorDiagnostics, ...reconciliation.diagnostics],
           reviewedPaths: new Set(payload.files.map(pathOf)),
           remote: payload.remote ?? null,
           diagnostics: payload.diagnostics ?? [],
           isLargePayload: payload.isLargePayload === true,
           loadError: null,
-          resumePending: same ? state.resumePending : (action.resumePending ?? false),
+          resumePending:
+            same && !remoteChanged ? state.resumePending : (action.resumePending ?? false),
+          resumeError: remoteChanged ? null : next.resumeError,
         },
         action.initialComments
       );

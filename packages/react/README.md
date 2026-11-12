@@ -8,12 +8,40 @@ hooks. The provider adds no layout or keyboard manager. Keep adapter identity st
 suppress diff loading and diff subscriptions; initial comments hydrate once. `ReviewPanel` retains
 its children and imperative handle contracts.
 
+## Session updates
+
+The provider owns a single request controller for diff/resume ordering and snapshot-bound context
+reads. The complete `useReview` projection remains available; comment mutations and file/progress
+subscriptions do not depend on that projection. Standalone `ReviewProvider` compositions retain
+their load-error and saved-feedback Retry controls.
+
+A remote review's logical identity is its adapter object, source kind, forge and exact PR/MR URL. A
+newer base/head SHA or a new materialization directory updates that review instead of clearing
+comments and viewed flags. Local repository/diff-argument changes still replace a local review.
+Every external snapshot replacement invalidates pending reads, resume responses and Apply ownership.
+
+On remote snapshot changes, an existing line anchor survives only when the same path, side and
+complete range contain identical text in both loaded diffs. A suggestion's recorded original must
+also match exactly. Changed, moved, missing, unloaded or otherwise unverifiable anchors become
+orphaned file-level feedback. The proposal and original code remain in the body as inert text;
+replies, attachments, authors, classification and IDs stay intact. Diagnostics explain each
+downgrade. No anchor is searched for or moved to another line. Reviewed-path membership and host
+Apply checks continue to govern writes.
+
+`loadResumedReview` belongs to the initial snapshot. A changed remote snapshot must receive its
+feedback through `onResumeLoad` after its diff push; pending initial feedback is discarded rather
+than attached to the new snapshot. A manual resume retry refuses cached feedback from an earlier
+remote snapshot. Hosts with the push subscription must acknowledge the new snapshot before save,
+including an empty feedback payload. Existing hosts without it keep their human feedback and do not
+perform a cached initial resume pull for the new head.
+
 ## Read ownership
 
 `ReviewAdapter.reads` optionally supplies `loadFileContent`, `expandContext`, `loadImage` and
 `readAttachment` with an `AbortSignal` as their last argument. Each member is optional. The UI falls
 back to the corresponding original adapter method when a member is absent, including manual retry.
-The original members and their signatures remain supported.
+The original members and their signatures remain supported. Internal helpers accept just the
+corresponding modern/legacy read capability; callers can continue to pass their existing adapters.
 
 Lazy hunks belong to the file, session and adapter that requested them. Collapse, replacement and
 disposal abort pending work; reopening starts a new read. Ordinary loading rerenders keep the
@@ -51,6 +79,11 @@ after its owning diff push. It supersedes an outstanding initial resume request;
 subscriptions and late responses cannot mutate a replacement session. Existing adapters using only
 `loadResumedReview` continue to work. Hosts must not emit an old session's resume after a new
 session's diff, because the existing resume payload contains no session identifier.
+
+`submitReview` retains its host-specific legacy meaning: desktop state handoff and HTTP disk
+publication. Prefer `handoffReview` or `publishReview` when the completion guarantee matters.
+Neither mutation nor publication uses cancellable read handling, and an unknown write outcome is
+never turned into an automatically retryable read error.
 
 `ConfigAdapter` remains exported for source compatibility but is deprecated. Components never
 consumed it. Load configuration in the host and pass the result through a config prop or provider.

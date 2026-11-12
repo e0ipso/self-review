@@ -1,5 +1,15 @@
 import type { ReviewAdapter } from './adapter';
-import type { ExpandContextRequest } from '@self-review/types';
+import type { ReviewReads, ExpandContextRequest } from '@self-review/types';
+
+type ReadHost<K extends keyof ReviewReads & keyof ReviewAdapter> = Pick<ReviewAdapter, K> & {
+  reads?: Pick<ReviewReads, K>;
+};
+
+// Public helpers also accept old full-adapter object literals. Their implementations below
+// use only the matching read members; loadDiff and mutation capabilities are never required.
+type CompatibleReadHost<K extends keyof ReviewReads & keyof ReviewAdapter> =
+  | ReadHost<K>
+  | ReviewAdapter;
 
 /** Checks both sides of legacy work too: an old host cannot abort, but its result is obsolete. */
 async function read<T>(signal: AbortSignal, run: () => Promise<T> | undefined): Promise<T> {
@@ -11,11 +21,12 @@ async function read<T>(signal: AbortSignal, run: () => Promise<T> | undefined): 
   return result;
 }
 
-export const canReadFileContent = (adapter: ReviewAdapter | null | undefined) =>
-  !!(adapter?.reads?.loadFileContent || adapter?.loadFileContent);
+export const canReadFileContent = (
+  adapter: CompatibleReadHost<'loadFileContent'> | null | undefined
+) => !!(adapter?.reads?.loadFileContent || adapter?.loadFileContent);
 
 export const loadFileContent = (
-  adapter: ReviewAdapter | null | undefined,
+  adapter: CompatibleReadHost<'loadFileContent'> | null | undefined,
   path: string,
   signal: AbortSignal
 ) =>
@@ -25,13 +36,13 @@ export const loadFileContent = (
   );
 
 export const loadImage = (
-  adapter: ReviewAdapter | null | undefined,
+  adapter: CompatibleReadHost<'loadImage'> | null | undefined,
   path: string,
   signal: AbortSignal
 ) => read(signal, () => adapter?.reads?.loadImage?.(path, signal) ?? adapter?.loadImage?.(path));
 
 export const readAttachment = (
-  adapter: ReviewAdapter | null | undefined,
+  adapter: CompatibleReadHost<'readAttachment'> | null | undefined,
   reference: string,
   signal: AbortSignal
 ) =>
@@ -42,7 +53,7 @@ export const readAttachment = (
   );
 
 export const expandContext = (
-  adapter: ReviewAdapter | null | undefined,
+  adapter: CompatibleReadHost<'expandContext'> | null | undefined,
   request: ExpandContextRequest,
   signal: AbortSignal
 ) =>

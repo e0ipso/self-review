@@ -5,7 +5,7 @@ import type { LineRange, Suggestion, SuggestionApplyOutcome } from '@self-review
 import { Check, CircleAlert, FolderOpen, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAdapter } from '../../context/ReviewAdapterContext';
-import { useApplyOperation } from './apply-operation';
+import { useApplyOperation } from '../../context/apply-operation';
 import { useOptionalApplySession } from '../../context/ReviewContext';
 
 export interface SuggestionApplyControlProps {
