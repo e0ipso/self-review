@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { inspectOutputPath, publishReview, ReviewPublishError } from './review-publisher';
 import type { PublishReviewOptions } from './review-publisher';
 import { nodeFsLayer } from './safe-fs';
+import { nodePublicationFileSystem } from './publication-fs';
 import type { FsLayer } from './safe-fs';
 import type { ReviewComment, ReviewState } from './types';
 
@@ -596,4 +597,39 @@ describe('publication cancellation', () => {
     expect(fs.readFileSync(outputPath, 'utf8')).toBe('old document');
     expect(listDir(tmp)).toEqual(['review.xml']);
   });
+});
+
+it('uses asynchronous native handles through wrapped explicit publication roles', async () => {
+  const syncWrite = vi.spyOn(nodeFsLayer, 'writeSync').mockImplementation(() => {
+    throw new Error('blocking write');
+  });
+  const open = vi.fn(nodePublicationFileSystem.files.open);
+  await publishReview(withAttachment(new Uint8Array(200_000)), outputPath, {
+    outputOrigin: 'explicit',
+    publicationFs: {
+      ...nodePublicationFileSystem,
+      files: { ...nodePublicationFileSystem.files, open },
+    },
+    reportDiagnostic() {
+      throw new Error('presentation failed');
+    },
+  });
+  expect(syncWrite).not.toHaveBeenCalled();
+  expect(open).toHaveBeenCalled();
+  expect(fs.readFileSync(outputPath, 'utf8')).toContain('</review>');
+});
+
+it('isolates validation diagnostics without changing the default message or success', async () => {
+  const { validateXML } = await import('xmllint-wasm');
+  vi.mocked(validateXML).mockRejectedValueOnce(new Error('WASM load failed'));
+  const reportDiagnostic = vi.fn((_message: string) => {
+    throw new Error('reporter failed');
+  });
+  await publishReview(review(), outputPath, { ...explicit, reportDiagnostic });
+  expect(reportDiagnostic.mock.calls).toEqual([
+    [
+      '[main] XML validation infrastructure failed: WASM load failed - emitting XML without validation',
+    ],
+  ]);
+  expect(fs.readFileSync(outputPath, 'utf8')).toContain('</review>');
 });

@@ -417,3 +417,10 @@ export type {
 
 export type { SourceReadFsLayer, ScanFsLayer, ScanEntry, ScanDirectoryHandle } from './scan-fs';
 export { nodeScanFsLayer } from './node-scan-fs';
+
+export { nodePublicationFileSystem } from './publication-fs';
+export type { PublicationFileSystem, PublicationInspection } from './publication-fs';
+export { nodeTemporaryCloneStorage } from './materializer';
+export type { TemporaryCloneStorage } from './materializer';
+export { nodeApplyDestinationInspection } from './review-suggestions';
+export type { ApplyDestinationInspection, SuggestionOperationOptions } from './review-suggestions';

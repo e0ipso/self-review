@@ -2,7 +2,10 @@
 // The one way a review document reaches the disk. Order is the contract: build and validate,
 // stage new assets, then rename the XML into place; a failure before the rename leaves the old files.
 
-import { stderrReporter, type DiagnosticReporter } from './diagnostics';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
+import { resolvePublicationFileSystem } from './publication-fs';
+import type { PublicationFileSystem, PublicationInspection } from './publication-fs';
 import * as path from 'node:path';
 import { validateReviewForSerialization } from './review-state-validation';
 import { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
@@ -13,8 +16,7 @@ import type { PublicationAsset } from './attachment-planner';
 import { MAX_IMAGE_BYTES, MAX_PUBLICATION_ASSET_BYTES, formatBytes } from './input-budgets';
 import {
   atomicReplaceAsync,
-  asyncFsFromSync,
-  nodeAsyncFsLayer,
+  readContainedFileAsync,
   writeExclusiveNoFollowAsync,
 } from './safe-fs-async';
 import {
@@ -23,12 +25,10 @@ import {
   guarded,
   inspectReplaceTarget,
   lstatOrNull,
-  nodeFsLayer,
   toSafeFsError,
-  unlinkQuietly,
 } from './safe-fs';
 import type { FsLayer, SafeFsErrorCode } from './safe-fs';
-import { AttachmentRelocationError, readAssetFile } from './attachment-origins';
+import { AttachmentRelocationError } from './attachment-origins';
 import type { AttachmentOrigins } from './attachment-origins';
 import type { ReviewState } from './types';
 
@@ -81,6 +81,8 @@ interface PublishReviewCommonOptions {
   /** Per-call diagnostics, including XML validation. Defaults to stderr. Must not throw. */
   reportDiagnostic?: DiagnosticReporter;
   fs?: FsLayer;
+  /** Explicit asynchronous effects, authoritative over fs when both are supplied. */
+  publicationFs?: PublicationFileSystem;
   randomName?: () => string;
   /** Imported attachments whose origin is elsewhere are copied beside the output (`relocateAttachments`). */
   attachmentOrigins?: AttachmentOrigins;
@@ -113,8 +115,10 @@ export async function publishReview(
   outputPath: string,
   options: PublishReviewOptions
 ): Promise<PublishReviewResult> {
-  const fs = options.fs ?? nodeFsLayer;
-  const asyncFs = fs === nodeFsLayer ? nodeAsyncFsLayer : asyncFsFromSync(fs, options.signal);
+  const effects = resolvePublicationFileSystem(options);
+  const fs = effects.inspection;
+  const asyncFs = effects.files;
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
   const randomName = options.randomName ?? defaultRandomName;
   const target = path.resolve(outputPath);
   const outputDir = path.dirname(target);
@@ -148,7 +152,7 @@ export async function publishReview(
       targetAssetDir
     );
     assets = plan.assets;
-    xml = await serializePlannedReview(plan.state, options.reportDiagnostic);
+    xml = await serializePlannedReview(plan.state, reportDiagnostic);
     assertActive();
     checkOutputPolicy(target, options, fs);
   } catch (error) {
@@ -181,26 +185,33 @@ export async function publishReview(
       let bytes: Uint8Array;
       if ('data' in asset) bytes = inline.get(asset)!;
       else {
-        const outcome = await readAssetFile(asset.origin, {
-          fs,
-          signal: options.signal,
-          maxBytes: remaining,
-        });
-        assertActive();
-        if (!outcome.ok)
+        try {
+          const content = await readContainedFileAsync(
+            path.dirname(path.dirname(asset.origin)),
+            path.join(path.basename(path.dirname(asset.origin)), path.basename(asset.origin)),
+            Math.min(MAX_IMAGE_BYTES, remaining),
+            asyncFs,
+            options.signal
+          );
+          bytes = content;
+        } catch (error) {
+          assertActive();
+          const safe = toSafeFsError(error, asset.origin, 'read');
+          const reason = attachmentReadReason(safe.code);
           throw new AttachmentRelocationError(
             asset.reference,
             asset.origin,
-            outcome.reason,
-            outcome.reason === 'too-large' && remaining < MAX_IMAGE_BYTES
-              ? `The publication asset budget has ${formatBytes(remaining)} remaining. ${outcome.message}`
-              : outcome.message
+            reason,
+            reason === 'too-large' && remaining < MAX_IMAGE_BYTES
+              ? `The publication asset budget has ${formatBytes(remaining)} remaining. ${safe.message}`
+              : safe.message
           );
-        bytes = new Uint8Array(outcome.data);
+        }
+        assertActive();
         remaining -= bytes.byteLength;
       }
       assertActive();
-      ensureAssetDirectory(outputDir, fs);
+      await ensureAssetDirectory(outputDir, effects);
       await writeExclusiveNoFollowAsync(asset.absolutePath, bytes, {
         fs: asyncFs,
         signal: options.signal,
@@ -217,20 +228,20 @@ export async function publishReview(
       randomName,
     });
   } catch (error) {
-    for (const file of staged) unlinkQuietly(file, fs);
+    for (const file of staged) {
+      try {
+        await asyncFs.unlink(file);
+      } catch {
+        /* Rollback must not replace the primary failure. */
+      }
+    }
     // Async I/O may throw the signal reason directly. Preserve the public cancellation error.
     assertActive();
     throw toPublishError(error, target);
   }
 
   if (staged.length > 0) {
-    try {
-      (options.reportDiagnostic ?? stderrReporter)(
-        `[main] Wrote ${staged.length} attachment file(s) to ${assetDir}`
-      );
-    } catch {
-      /* A diagnostic cannot change a committed publication's outcome. */
-    }
+    reportDiagnostic(`[main] Wrote ${staged.length} attachment file(s) to ${assetDir}`);
   }
   return { outputPath: target, assetPaths: staged };
 }
@@ -240,7 +251,7 @@ export function inspectOutputPath(
   outputPath: string,
   options: PublishReviewOptions
 ): ReviewPublishError | null {
-  const fs = options.fs ?? nodeFsLayer;
+  const fs = resolvePublicationFileSystem(options).inspection;
   const target = path.resolve(outputPath);
   try {
     checkOutputPolicy(target, options, fs);
@@ -259,7 +270,11 @@ export function inspectOutputPath(
 }
 
 /** A file at a drawn name means another draw; a link there is a trap and is refused. */
-function uniqueAssetNamer(assetDir: string, fs: FsLayer, randomName: () => string) {
+function uniqueAssetNamer(
+  assetDir: string,
+  fs: Pick<PublicationInspection, 'lstatSync'>,
+  randomName: () => string
+) {
   const chosen = new Set<string>();
   return (idPrefix: string, _index: number, ext: string): string => {
     for (let attempt = 0; attempt < 16; attempt++) {
@@ -288,7 +303,11 @@ function uniqueAssetNamer(assetDir: string, fs: FsLayer, randomName: () => strin
 }
 
 /** The leaf and, for an inherited path, the containment checks. Reads only. */
-function checkOutputPolicy(target: string, options: PublishReviewOptions, fs: FsLayer): void {
+function checkOutputPolicy(
+  target: string,
+  options: PublishReviewOptions,
+  fs: PublicationInspection
+): void {
   if (options.outputOrigin === 'inherited') {
     const base = path.resolve(options.baseDir);
     const outputDir = path.dirname(target);
@@ -309,11 +328,17 @@ function checkOutputPolicy(target: string, options: PublishReviewOptions, fs: Fs
 }
 
 /** A real directory this user owns. `mkdir` is not recursive: a missing output directory fails the save anyway. */
-function ensureAssetDirectory(outputDir: string, fs: FsLayer): void {
+async function ensureAssetDirectory(
+  outputDir: string,
+  effects: PublicationFileSystem
+): Promise<void> {
+  const fs = effects.inspection;
   const assetDir = path.join(outputDir, ASSET_DIR_NAME);
   let stats = lstatOrNull(assetDir, fs);
   if (stats === null) {
-    guarded(assetDir, 'create attachment directory', () => fs.mkdirSync(assetDir, 0o755));
+    await effects.mkdir(assetDir, 0o755).catch(error => {
+      throw toSafeFsError(error, assetDir, 'create attachment directory');
+    });
     stats = guarded(assetDir, 'inspect', () => fs.lstatSync(assetDir));
   }
 
@@ -331,7 +356,7 @@ function ensureAssetDirectory(outputDir: string, fs: FsLayer): void {
       `Cannot write attachments: ${assetDir} exists but is not a directory`
     );
   }
-  const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
+  const uid = effects.currentUid();
   if (uid !== undefined && stats.uid !== uid) {
     throw new SafeFsError(
       'unsupported-target',
@@ -377,4 +402,18 @@ function toPublishError(error: unknown, target: string): ReviewPublishError {
   return new ReviewPublishError(code, fsError.path, fsError.message, {
     cause: fsError.cause ?? fsError,
   });
+}
+
+function attachmentReadReason(code: SafeFsErrorCode) {
+  switch (code) {
+    case 'not-found':
+    case 'unsafe-link':
+    case 'too-large':
+    case 'not-regular':
+      return code;
+    case 'output-is-directory':
+      return 'not-regular';
+    default:
+      return 'io-error';
+  }
 }

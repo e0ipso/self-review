@@ -1,5 +1,7 @@
 // Prepare directory/file reviews without committing until the host accepts their payload size.
-import { stat } from 'fs/promises';
+import { dirname, resolve } from 'node:path';
+import { nodeScanFsLayer } from './node-scan-fs';
+import { isolatedReporter } from './effect-diagnostics';
 import { checkLoadingCancelled } from './local-loading-lifetime';
 import type { SourceScanOptions } from './directory-scanner';
 import type { DiffLoadPayload, ReviewSourceIdentity, PayloadStats } from './types';
@@ -36,12 +38,14 @@ export async function prepareDirectoryReview(
   options: SourceScanOptions = {}
 ): Promise<ReviewStartResult> {
   checkLoadingCancelled(options.signal);
-  console.error('[review] Starting directory review for:', directoryPath);
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
+  const scanFs = options.scanFs ?? nodeScanFsLayer;
+  reportDiagnostic('[review] Starting directory review for:', directoryPath);
 
   // Check if the path is a file (not a directory)
   let isFile = false;
   try {
-    isFile = (await stat(directoryPath)).isFile();
+    isFile = (await scanFs.stat(directoryPath)).isFile();
   } catch {
     // Failed to stat — proceed as directory
   }
@@ -50,8 +54,11 @@ export async function prepareDirectoryReview(
 
   // Scan diagnostics ride on the payload so a failed load never looks empty.
   const scan = isFile
-    ? await scanFile(directoryPath, options)
-    : await scanDirectory(directoryPath, session.config?.ignore ?? [], options);
+    ? await scanFile(directoryPath, { ...options, reportDiagnostic })
+    : await scanDirectory(directoryPath, session.config?.ignore ?? [], {
+        ...options,
+        reportDiagnostic,
+      });
   checkLoadingCancelled(options.signal);
   const type = isFile ? 'file' : 'directory';
   const payload: DiffLoadPayload = {
@@ -59,7 +66,25 @@ export async function prepareDirectoryReview(
     source: { type, sourcePath: directoryPath },
     ...(scan.diagnostics.length > 0 ? { diagnostics: scan.diagnostics } : {}),
   };
-  const identity = resolveLocalSourceIdentity({ type, sourcePath: directoryPath });
+  // A supplied scan owns path resolution as well as bytes; never consult the host disk for it.
+  let identity: ReviewSourceIdentity;
+  if (options.scanFs) {
+    const canonical = (target: string) => scanFs.realpath(target).catch(() => resolve(target));
+    identity = {
+      mode: type,
+      sourceRoot: await canonical(isFile ? dirname(directoryPath) : directoryPath),
+      invocationCwd: process.cwd(),
+      gitDiffArgv: [],
+      pathPrefix: '',
+      oldSide: { kind: 'none' },
+      newSide: isFile
+        ? { kind: 'file', path: await canonical(directoryPath) }
+        : { kind: 'directory' },
+    };
+  } else {
+    identity = resolveLocalSourceIdentity({ type, sourcePath: directoryPath });
+  }
+  checkLoadingCancelled(options.signal);
 
   // Large payload guard — skipped entirely when there is no config.
   if (!session.config) {

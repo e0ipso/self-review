@@ -15,11 +15,13 @@
 // talks to a forge API: head refs come from the forges' well-known git refs
 // (`refs/pull/N/head`, `refs/merge-requests/N/head`) over plain git.
 
-import { stderrReporter, type DiagnosticReporter } from './diagnostics';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 import { randomUUID } from 'crypto';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { nodeTemporaryCloneStorage } from './remote-temp';
+import type { TemporaryCloneStorage } from './remote-temp';
+export { nodeTemporaryCloneStorage } from './remote-temp';
+export type { TemporaryCloneStorage } from './remote-temp';
 import { stripTrailingNewline } from './git';
 import { defaultGitRunner } from './command-runner';
 export { defaultGitRunner } from './command-runner';
@@ -52,8 +54,12 @@ export interface MaterializeResult {
    * Removes the temp clone (synchronously, before the first await, so an `exit`
    * handler that cannot wait still gets that far) and deletes the session's refs
    * from a reused clone. Idempotent, never rejects; a failed deletion goes to stderr.
+   * A caller that opts into cleanupAsync must await that disposal: while it is in flight,
+   * cleanup joins the same deletion rather than starting a competing synchronous removal.
    */
   cleanup: () => Promise<void>;
+  /** Nonblocking normal disposal; concurrent calls share one attempt and failures can be retried. */
+  cleanupAsync?: () => Promise<void>;
 }
 
 /** A local clone whose fetch remote matches the requested forge repository. */
@@ -63,6 +69,8 @@ export interface ExistingClone {
 }
 
 export interface MaterializeOptions {
+  /** Authoritative owner of temporary clone creation and both removal modes. */
+  temporaryClones?: TemporaryCloneStorage;
   /** Per-call progress and cleanup diagnostics. Defaults to stderr; must not throw. */
   reportDiagnostic?: DiagnosticReporter;
   /**
@@ -264,7 +272,7 @@ async function materializeIntoExistingClone(
   repoPath: string,
   remoteName: string
 ): Promise<MaterializeResult> {
-  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
   reportDiagnostic(`self-review: reusing existing clone at ${repoPath} (remote "${remoteName}")`);
   const git = bindGit(runner, options);
   const refs = sessionRefs();
@@ -331,23 +339,42 @@ async function materializeIntoTempClone(
   baseBranch: string
 ): Promise<MaterializeResult> {
   const git = bindGit(runner, options);
-  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
   // This run creates the directory, so cleanup may only ever remove it; it is owned
   // from here on, before any git runs.
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'self-review-'));
+  const storage = options.temporaryClones ?? nodeTemporaryCloneStorage;
+  const tempDir = await storage.create();
   let removed = false;
-  const cleanup = async (): Promise<void> => {
-    if (removed) return;
+  let removing: Promise<void> | undefined;
+  const failed = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    reportDiagnostic(`self-review: could not remove ${tempDir}: ${message}`);
+  };
+  const cleanupAsync = (): Promise<void> => {
+    if (removed) return Promise.resolve();
+    removing ??= Promise.resolve().then(async () => {
+      try {
+        await storage.remove(tempDir);
+        removed = true;
+      } catch (error) {
+        failed(error);
+      } finally {
+        removing = undefined;
+      }
+    });
+    return removing;
+  };
+  const cleanup = (): Promise<void> => {
+    if (removed) return Promise.resolve();
+    // Do not start a competing recursive deletion when normal disposal is already running.
+    if (removing) return removing;
     try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      storage.removeSync(tempDir);
       removed = true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      reportCleanupDiagnostic(
-        reportDiagnostic,
-        `self-review: could not remove ${tempDir}: ${message}`
-      );
+      failed(error);
     }
+    return Promise.resolve();
   };
 
   try {
@@ -367,9 +394,17 @@ async function materializeIntoTempClone(
       sessionRefs(),
       `fetch of ${headRefFor(url)}`
     );
-    return { repoPath: tempDir, baseSha, headSha, mode: 'temp-clone', ownedRefs: [], cleanup };
+    return {
+      repoPath: tempDir,
+      baseSha,
+      headSha,
+      mode: 'temp-clone',
+      ownedRefs: [],
+      cleanup,
+      cleanupAsync,
+    };
   } catch (error) {
-    await cleanup();
+    await cleanupAsync();
     throw error;
   }
 }
