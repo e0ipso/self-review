@@ -1,15 +1,13 @@
 import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useMemo } from 'react';
 import type { DiffFile } from '@self-review/types';
-import { CommentGutterButton } from './CommentGutterButton';
+import { RawDiffRow, useRawDragStart } from './RawDiffRow';
 import { useRawDiffAnnotations } from './useRawDiffAnnotations';
 import { HunkSeparator } from './HunkSeparator';
 import { useAppearance } from '../../context/ConfigContext';
-import SyntaxLine from './SyntaxLine';
 import { planHighlighting } from './highlight-budget';
 import { getLanguageFromPath } from '../../utils/file-type-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
-import { getLineBg, getGutterBg } from '../../utils/diff-styles';
 
 export interface UnifiedViewProps {
   file: DiffFile;
@@ -45,6 +43,7 @@ export default function UnifiedView({
   totalLines,
 }: UnifiedViewProps) {
   const { t } = useLocalization();
+  const startDrag = useRawDragStart(onDragStart);
   const { commentIndex, originalCode, rowOffsets, feedbackAt, getOriginalCodeForComment } =
     useRawDiffAnnotations(file, commentRange);
   const highlighting = useMemo(() => planHighlighting(file), [file]);
@@ -99,62 +98,20 @@ export default function UnifiedView({
 
             return (
               <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
-                <div
-                  className={`flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${hasComment ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}
-                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 26px' }}
-                  data-line-number={lineNumber || undefined}
-                  data-line-side={side}
-                  data-line-type={line.type}
-                  data-row-index={rowIndex}
-                >
-                  {/* Old line number */}
-                  <div
-                    className={`w-10 flex-shrink-0 text-end pe-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-old relative`}
-                    data-testid={
-                      line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined
-                    }
-                  >
-                    {line.oldLineNumber && (
-                      <CommentGutterButton
-                        className='absolute start-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/gutter-old:opacity-100'
-                        label={t('Comment on old line {line}', { line: line.oldLineNumber! })}
-                        onStartDrag={() => onDragStart(rowIndex, 'old')}
-                        onActivate={() => onDragStart(rowIndex, 'old', true)}
-                        data-testid={`comment-icon-old-${line.oldLineNumber}`}
-                      />
-                    )}
-                    <span className='pointer-events-none'>{line.oldLineNumber || ''}</span>
-                  </div>
-                  {/* New line number */}
-                  <div
-                    className={`w-10 flex-shrink-0 text-end pe-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-new relative`}
-                    data-testid={
-                      line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined
-                    }
-                  >
-                    {line.newLineNumber && (
-                      <CommentGutterButton
-                        className='absolute start-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/gutter-new:opacity-100'
-                        label={t('Comment on new line {line}', { line: line.newLineNumber! })}
-                        onStartDrag={() => onDragStart(rowIndex, 'new')}
-                        onActivate={() => onDragStart(rowIndex, 'new', true)}
-                        data-testid={`comment-icon-new-${line.newLineNumber}`}
-                      />
-                    )}
-                    <span className='pointer-events-none'>{line.newLineNumber || ''}</span>
-                  </div>
-                  {/* Code content */}
-                  <div
-                    className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}
-                  >
-                    <SyntaxLine
-                      content={line.content}
-                      language={highlighting.lines.has(line) ? language : 'plaintext'}
-                      lineType={line.type}
-                      wordWrap={config.wordWrap}
-                    />
-                  </div>
-                </div>
+                <RawDiffRow
+                  layout='unified'
+                  filePath={filePath}
+                  oldLineNumber={line.oldLineNumber}
+                  newLineNumber={line.newLineNumber}
+                  lineType={line.type}
+                  content={line.content}
+                  language={highlighting.lines.has(line) ? language : 'plaintext'}
+                  wordWrap={config.wordWrap}
+                  isSelected={isSelected}
+                  hasComment={hasComment}
+                  rowIndex={rowIndex}
+                  onDragStart={startDrag}
+                />
 
                 {(commentsToRender.length > 0 || showCommentInputHere) && (
                   <InlineCommentSlot

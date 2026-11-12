@@ -55,3 +55,29 @@ it('preserves disabled behavior and lets a caller consume a key', () => {
   fireEvent.keyDown(screen.getByRole('button'), { key: 'Enter' });
   expect(activate).not.toHaveBeenCalled();
 });
+
+it('ignores secondary pointer buttons and uses replacement callbacks', () => {
+  const first = vi.fn();
+  const latest = vi.fn();
+  const start = vi.fn();
+  const view = render(<CommentGutterButton label='First' onActivate={first} onStartDrag={start} />);
+  fireEvent.mouseDown(screen.getByRole('button'), { button: 2 });
+  expect(start).not.toHaveBeenCalled();
+  expect(first).not.toHaveBeenCalled();
+  view.rerender(<CommentGutterButton label='Latest' onActivate={latest} />);
+  const button = screen.getByRole('button', { name: 'Latest' });
+  (button as HTMLButtonElement).click();
+  expect(latest).toHaveBeenCalledTimes(1);
+  fireEvent.mouseDown(button, { button: 0 });
+  expect(latest).toHaveBeenCalledTimes(2);
+  expect(first).not.toHaveBeenCalled();
+  view.rerender(
+    <CommentGutterButton label='Disabled' onActivate={latest} onStartDrag={start} disabled />
+  );
+  const disabled = screen.getByRole('button', { name: 'Disabled' });
+  fireEvent.mouseDown(disabled, { button: 0 });
+  fireEvent.keyDown(disabled, { key: 'Enter' });
+  (disabled as HTMLButtonElement).click();
+  expect(start).not.toHaveBeenCalled();
+  expect(latest).toHaveBeenCalledTimes(2);
+});
