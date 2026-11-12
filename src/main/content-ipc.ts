@@ -12,6 +12,7 @@ export function registerContentHandlers(
     | 'getFileHunks'
     | 'getConfigLoad'
     | 'submitReviewState'
+    | 'invalidateReviewState'
     | 'readAttachment'
     | 'getResumeLoad'
     | 'expandContext'
@@ -52,8 +53,19 @@ export function registerContentHandlers(
     }
   });
 
+  const decodeSubmission = (value: unknown) => {
+    if (operations.finishing) throw new Error('The review is finishing.');
+    try {
+      return reviewState(value);
+    } catch (error) {
+      // A legacy submit/save pair must not publish an older cached snapshot after refusal.
+      review.invalidateReviewState();
+      throw error;
+    }
+  };
+
   // Handle review submission from renderer
-  boundary.on(IPC.REVIEW_SUBMIT, reviewState, (_event, state: ReviewState) => {
+  boundary.on(IPC.REVIEW_SUBMIT, decodeSubmission, (_event, state: ReviewState) => {
     if (operations.finishing) throw new Error('The review is finishing.');
     review.submitReviewState(state);
   });
@@ -83,7 +95,7 @@ export function registerContentHandlers(
       operations.apply(signal => review.expandContext(request, signal))
   );
 
-  boundary.handle(IPC.REVIEW_HANDOFF, reviewState, (_event, state) => {
+  boundary.handle(IPC.REVIEW_HANDOFF, decodeSubmission, (_event, state) => {
     if (operations.finishing) throw new Error('The review is finishing.');
     review.submitReviewState(state);
   });

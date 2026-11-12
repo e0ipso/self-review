@@ -4,10 +4,12 @@ import {
   decodeSuggestionApplyRequest,
   MAX_CONTEXT_LINES,
 } from '../../packages/core/src/review-request-validation';
+import { preflightReviewMessage } from './ipc-review-budget';
 import { validateReviewState } from '../../packages/core/src/review-state-validation';
 import type {
   ExpandContextRequest,
   FindInPageRequest,
+  FindInPageAction,
   SuggestionApplyRequest,
 } from '../shared/types';
 
@@ -97,9 +99,7 @@ export function findRequest(value: unknown): FindInPageRequest {
   }
   return value as FindInPageRequest;
 }
-export function findAction(
-  value: unknown
-): 'clearSelection' | 'keepSelection' | 'activateSelection' {
+export function findAction(value: unknown): FindInPageAction {
   if (value !== 'clearSelection' && value !== 'keepSelection' && value !== 'activateSelection')
     throw new Error('Invalid find action.');
   return value;
@@ -120,4 +120,7 @@ export function suggestionRequest(value: unknown): SuggestionApplyRequest {
   if (!decoded.ok) throw new Error(decoded.error);
   return decoded.value;
 }
-export const reviewState = validateReviewState;
+export function reviewState(value: unknown) {
+  preflightReviewMessage(value);
+  return validateReviewState(value);
+}

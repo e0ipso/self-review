@@ -1,12 +1,11 @@
 /** Browser-safe shell messages shared by native presentation and desktop React components.
  * The English source is the fallback; no locale or catalog is persisted in application config.
  */
-export type DesktopMessage =
-  | string
-  | {
-      plural: string;
-      forms: Partial<Record<Intl.LDMLPluralRule, DesktopMessage>> & { other: DesktopMessage };
-    };
+import {
+  createMessageFormatter,
+  type LocalizedMessage,
+} from '../../packages/react/src/localization/formatter';
+export type DesktopMessage = LocalizedMessage;
 export interface DesktopLocaleOptions {
   locale?: string;
   direction?: 'ltr' | 'rtl';
@@ -59,32 +58,14 @@ export function createDesktopLocalization({
   direction = 'ltr',
   messages = {},
 }: DesktopLocaleOptions = {}) {
-  const numbers = new Intl.NumberFormat(locale);
-  const plurals = new Intl.PluralRules(locale);
-  const render = (
-    message: DesktopMessage,
-    values: Readonly<Record<string, string | number>>
-  ): string => {
-    if (typeof message !== 'string') {
-      const count = values[message.plural];
-      if (typeof count !== 'number' || !Number.isFinite(count))
-        throw new Error(`Missing plural count: ${message.plural}`);
-      return render(message.forms[plurals.select(count)] ?? message.forms.other, values);
-    }
-    return message.replace(/\{(\w+)\}/g, (_, name: string) => {
-      const value = values[name];
-      if (value === undefined) throw new Error(`Missing message value: ${name}`);
-      return typeof value === 'number' ? numbers.format(value) : value;
-    });
-  };
+  const formatter = createMessageFormatter(locale);
   return {
     locale,
     direction,
     t: (source: string, values: Readonly<Record<string, string | number>> = {}) =>
-      render(messages[source] ?? ENGLISH[source] ?? source, values),
-    number: (value: number) => numbers.format(value),
-    date: (value: Date | number, options?: Intl.DateTimeFormatOptions) =>
-      new Intl.DateTimeFormat(locale, options).format(value),
+      formatter.render(messages[source] ?? ENGLISH[source] ?? source, values),
+    number: formatter.number,
+    date: formatter.date,
   };
 }
 export type DesktopLocalization = ReturnType<typeof createDesktopLocalization>;

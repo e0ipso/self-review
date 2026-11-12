@@ -1,3 +1,4 @@
+import { macosSigningOptions } from './macos-signing';
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { spawnSync } from 'child_process';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
@@ -43,6 +44,7 @@ const devLoggerPort = getAvailablePort(9000);
 
 const config: ForgeConfig = {
   packagerConfig: {
+    ...macosSigningOptions(),
     asar: true,
     // No asarUnpack key here. aab79af added `asarUnpack: ['**/xmllint.wasm']`
     // meaning to keep the wasm reachable outside the archive, but that name

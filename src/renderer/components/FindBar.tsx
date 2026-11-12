@@ -1,4 +1,4 @@
-import type { ElectronAPI } from '../../shared/types';
+import type { ElectronAPI, FindInPageAction } from '../../shared/types';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Input } from '../../../packages/react/src/components/ui/input';
@@ -10,7 +10,9 @@ import { FindInPageResult } from '../../shared/types';
 interface FindBarProps {
   isOpen: boolean;
   onClose: () => void;
-  api?: Pick<ElectronAPI, 'findInPage' | 'stopFindInPage' | 'onFindResult'>;
+  api?: Pick<ElectronAPI, 'findInPage' | 'onFindResult'> & {
+    stopFindInPage: (action: FindInPageAction) => void;
+  };
 }
 
 export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarProps) {

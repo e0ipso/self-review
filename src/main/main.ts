@@ -8,6 +8,7 @@ import { RendererRecovery } from './renderer-recovery';
 import { createDesktopLocalization, resolveApplicationLocale } from '../shared/localization';
 import { createReviewWindow, observeRendererHealth } from './desktop-window';
 import { initializeSession } from './startup';
+import { defaultStartupOperations } from './startup-operations';
 import { QuitController } from './quit-controller';
 import { bindDesktopReviewOperations } from './review-operations';
 import { registerIpcHandlers } from './ipc-handlers';
@@ -156,7 +157,13 @@ void app
       const presentation = createReviewPresentation(getAppIconDataUri, getVersionUpdate, messages);
       if (
         !(await desktop.operations.read(
-          signal => initializeSession(desktop, signal, presentation.confirmPayload),
+          signal =>
+            initializeSession(
+              desktop,
+              signal,
+              presentation.confirmPayload,
+              defaultStartupOperations
+            ),
           45_000
         ))
       ) {
