@@ -77,9 +77,22 @@ export function parseReviewXml(xmlPath: string): ParsedReview {
  * Namespace-blind by design: v1, v2 and v3 documents read identically.
  *
  * @throws ReviewXmlError `parse-failed`, `missing-root`, or `input-too-large`
- *   (over `MAX_REVIEW_ATTACHMENTS`).
+ *   (over `MAX_RESUME_XML_BYTES` in UTF-8, or `MAX_REVIEW_ATTACHMENTS`).
+ * Oversized strings are refused before XML validation or parsing, like file input.
+ * Parsing remains synchronous; this byte budget does not make it preemptible.
  */
 export function parseReviewXmlString(xmlContent: string): ParsedReview {
+  // UTF-8 needs at least one byte per UTF-16 code unit. Refuse obviously oversized strings
+  // immediately; byteLength counts the remaining bounded input without an encoding buffer.
+  if (
+    xmlContent.length > MAX_RESUME_XML_BYTES ||
+    Buffer.byteLength(xmlContent, 'utf8') > MAX_RESUME_XML_BYTES
+  ) {
+    throw new ReviewXmlError(
+      'input-too-large',
+      `The review document exceeds the ${formatBytes(MAX_RESUME_XML_BYTES)} UTF-8 limit`
+    );
+  }
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
@@ -272,7 +285,16 @@ function foldSuggestionIntoBody(body: string, code: SuggestionText, reason: stri
 }
 
 function fenced(code: string): string[] {
-  const longestRun = Math.max(0, ...(code.match(/`+/g) ?? []).map(run => run.length));
+  let longestRun = 0;
+  let run = 0;
+  for (let i = 0; i < code.length; i++) {
+    if (code.charCodeAt(i) === 96) {
+      run++;
+      if (run > longestRun) longestRun = run;
+    } else {
+      run = 0;
+    }
+  }
   const fence = '`'.repeat(Math.max(3, longestRun + 1));
   return [fence, code, fence];
 }
