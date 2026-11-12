@@ -125,3 +125,6 @@ export type {
   DiagramRenderService,
 } from './components/DiffViewer/diagram-service';
 export type { ContentPreview } from './components/DiffViewer/content-preview';
+
+export { ReviewServicesProvider, useReviewServices } from './context/ReviewServicesContext';
+export type { ReviewServices } from './context/ReviewServicesContext';

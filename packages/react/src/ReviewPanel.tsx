@@ -1,6 +1,7 @@
 import React, { forwardRef, type ReactNode } from 'react';
 import type { AppConfig, ReviewComment } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
+import type { ReviewServices } from './context/ReviewServicesContext';
 import type { PreviewRenderingProviderProps } from './context/PreviewRenderingContext';
 import { ReviewProviders } from './ReviewProviders';
 import Layout from './components/Layout';
@@ -31,6 +32,8 @@ export interface ReviewPanelProps extends Pick<
 > {
   /** A different adapter object starts a new session: define it at module scope or memoize it. */
   adapter: ReviewAdapter;
+  /** Optional metadata dependencies scoped to this review. */
+  services?: Partial<ReviewServices>;
   /** Initial configuration, merged once per mount. Later prop changes are ignored. */
   initialConfig?: Partial<AppConfig>;
   /** @deprecated Use initialConfig. Initial-only alias, ignored when initialConfig is supplied. */
@@ -86,6 +89,7 @@ export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(funct
     onReviewChange,
     previewRenderer,
     diagramRenderer,
+    services,
   },
   ref
 ) {
@@ -96,6 +100,7 @@ export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(funct
       initialConfig={initialConfig}
       previewRenderer={previewRenderer}
       diagramRenderer={diagramRenderer}
+      services={services}
     >
       <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
         {children}

@@ -10,6 +10,7 @@ import {
   PreviewRenderingProvider,
   type PreviewRenderingProviderProps,
 } from './context/PreviewRenderingContext';
+import { ReviewServicesProvider, type ReviewServices } from './context/ReviewServicesContext';
 import { TooltipProvider } from './components/ui/tooltip';
 
 export interface ReviewProvidersProps
@@ -17,6 +18,8 @@ export interface ReviewProvidersProps
     ReviewProviderProps,
     Pick<PreviewRenderingProviderProps, 'previewRenderer' | 'diagramRenderer'> {
   adapter: ReviewAdapter;
+  /** Optional per-review metadata services. Defaults retain browser UUIDs and wall-clock time. */
+  services?: Partial<ReviewServices>;
   /** Initial configuration, merged once per mount. Later prop changes are ignored. */
   initialConfig?: Partial<AppConfig>;
   /** @deprecated Use initialConfig. Initial-only alias, ignored when initialConfig is supplied. */
@@ -34,24 +37,30 @@ export function ReviewProviders({
   children,
   previewRenderer,
   diagramRenderer,
+  services,
   ...session
 }: ReviewProvidersProps) {
   return (
     <ReviewAdapterProvider adapter={adapter}>
-      <ConfigProvider initialConfig={initialConfig ?? config} initialOutputPath={initialOutputPath}>
-        <GuideProvider>
-          <ReviewProvider {...session}>
-            <DiffNavigationProvider>
-              <PreviewRenderingProvider
-                previewRenderer={previewRenderer}
-                diagramRenderer={diagramRenderer}
-              >
-                <TooltipProvider>{children}</TooltipProvider>
-              </PreviewRenderingProvider>
-            </DiffNavigationProvider>
-          </ReviewProvider>
-        </GuideProvider>
-      </ConfigProvider>
+      <ReviewServicesProvider services={services}>
+        <ConfigProvider
+          initialConfig={initialConfig ?? config}
+          initialOutputPath={initialOutputPath}
+        >
+          <GuideProvider>
+            <ReviewProvider {...session}>
+              <DiffNavigationProvider>
+                <PreviewRenderingProvider
+                  previewRenderer={previewRenderer}
+                  diagramRenderer={diagramRenderer}
+                >
+                  <TooltipProvider>{children}</TooltipProvider>
+                </PreviewRenderingProvider>
+              </DiffNavigationProvider>
+            </ReviewProvider>
+          </GuideProvider>
+        </ConfigProvider>
+      </ReviewServicesProvider>
     </ReviewAdapterProvider>
   );
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useReviewServices } from '../context/ReviewServicesContext';
 import type {
   Attachment,
   FileReviewState,
@@ -44,6 +45,7 @@ export function useReviewStateOperations(
   files: FileReviewState[],
   setFiles: UseReviewStateReturn['setFiles']
 ): UseReviewStateReturn {
+  const { createId } = useReviewServices();
   const commands = useMemo(() => {
     const changeThread = (
       commentId: string,
@@ -72,7 +74,7 @@ export function useReviewStateOperations(
       attachments?: Attachment[]
     ) => {
       const newComment: ReviewComment = {
-        id: crypto.randomUUID(),
+        id: createId(),
         filePath,
         lineRange,
         body,
@@ -103,7 +105,7 @@ export function useReviewStateOperations(
       attachments?: Attachment[]
     ) => {
       const newReply: Reply = {
-        id: crypto.randomUUID(),
+        id: createId(),
         body,
         ...(author ? { author } : {}),
         ...(attachments?.length ? { attachments } : {}),
@@ -144,7 +146,7 @@ export function useReviewStateOperations(
       deleteReply,
       toggleViewed,
     };
-  }, [setFiles]);
+  }, [setFiles, createId]);
 
   const byPath = useMemo(() => new Map(files.map(file => [file.path, file])), [files]);
 

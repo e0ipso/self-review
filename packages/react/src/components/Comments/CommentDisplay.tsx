@@ -1,5 +1,5 @@
 import { useLocalization, type MessageKey } from '../../localization/LocalizationContext';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
@@ -112,6 +112,7 @@ export default function CommentDisplay({
   const { deleteComment } = useReviewCommands();
   const categories = useCategories();
   const portalContainer = usePortalContainer();
+  const contentId = useId();
   const [isEditing, setIsEditing] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
@@ -169,6 +170,8 @@ export default function CommentDisplay({
             variant='ghost'
             size='sm'
             onClick={toggleCollapse}
+            aria-expanded={!isCollapsed}
+            aria-controls={contentId}
             className='h-5 w-5 p-0 -ms-1'
             data-testid={`comment-collapse-toggle-${comment.id}`}
           >
@@ -306,73 +309,67 @@ export default function CommentDisplay({
         )}
       </div>
 
-      {!isCollapsed && (
-        <>
-          <div className={`px-3 pb-3 text-sm text-foreground leading-relaxed ${PROSE_CLASSES}`}>
-            <ReactMarkdown
-              urlTransform={localContentUrlTransform}
-              remarkPlugins={[remarkGfm, remarkEmoji]}
-            >
-              {comment.body}
-            </ReactMarkdown>
+      <div id={contentId} hidden={isCollapsed}>
+        <div className={`px-3 pb-3 text-sm text-foreground leading-relaxed ${PROSE_CLASSES}`}>
+          <ReactMarkdown
+            urlTransform={localContentUrlTransform}
+            remarkPlugins={[remarkGfm, remarkEmoji]}
+          >
+            {comment.body}
+          </ReactMarkdown>
+        </div>
+
+        {comment.suggestion && (
+          <div className='px-3 pb-3'>
+            <SuggestionBlock
+              suggestion={comment.suggestion}
+              language='typescript'
+              filePath={comment.filePath}
+              lineRange={comment.lineRange}
+            />
           </div>
+        )}
 
-          {comment.suggestion && (
-            <div className='px-3 pb-3'>
-              <SuggestionBlock
-                suggestion={comment.suggestion}
-                language='typescript'
-                filePath={comment.filePath}
-                lineRange={comment.lineRange}
-              />
-            </div>
-          )}
+        {comment.attachments && comment.attachments.length > 0 && (
+          <div className='flex gap-2 flex-wrap px-3 pb-3'>
+            {comment.attachments.map(att => (
+              <AttachmentImage key={att.id} attachment={att} />
+            ))}
+          </div>
+        )}
 
-          {comment.attachments && comment.attachments.length > 0 && (
-            <div className='flex gap-2 flex-wrap px-3 pb-3'>
-              {comment.attachments.map(att => (
-                <AttachmentImage key={att.id} attachment={att} />
-              ))}
-            </div>
-          )}
+        {/* Keep thread editors and Apply state mounted while disclosure hides the region. */}
+        {comment.replies && comment.replies.length > 0 && (
+          <div className='ms-4 border-s-2 border-border/60' data-testid={`thread-${comment.id}`}>
+            {comment.replies.map(reply => (
+              <ReplyDisplay key={reply.id} commentId={comment.id} reply={reply} />
+            ))}
+          </div>
+        )}
 
-          {/*
-            The thread lives inside the `!isCollapsed` fragment on purpose: the
-            chevron toggle and the global `toggle-all-comments` event then hide
-            replies with the rest of the comment body, with no extra wiring.
-          */}
-          {comment.replies && comment.replies.length > 0 && (
-            <div className='ms-4 border-s-2 border-border/60' data-testid={`thread-${comment.id}`}>
-              {comment.replies.map(reply => (
-                <ReplyDisplay key={reply.id} commentId={comment.id} reply={reply} />
-              ))}
-            </div>
-          )}
-
-          {isReplying ? (
-            <div className='ms-4 px-3 pb-3 pt-2'>
-              <ReplyInput
-                commentId={comment.id}
-                onCancel={() => setIsReplying(false)}
-                onSubmit={() => setIsReplying(false)}
-              />
-            </div>
-          ) : (
-            <div className='px-3 pb-3'>
-              <Button
-                variant='ghost'
-                size='sm'
-                onClick={() => setIsReplying(true)}
-                data-testid={`reply-btn-${comment.id}`}
-                className='h-7 gap-1.5 text-xs text-muted-foreground'
-              >
-                <ReplyIcon className='h-3.5 w-3.5' />
-                {t('Reply')}
-              </Button>
-            </div>
-          )}
-        </>
-      )}
+        {isReplying ? (
+          <div className='ms-4 px-3 pb-3 pt-2'>
+            <ReplyInput
+              commentId={comment.id}
+              onCancel={() => setIsReplying(false)}
+              onSubmit={() => setIsReplying(false)}
+            />
+          </div>
+        ) : (
+          <div className='px-3 pb-3'>
+            <Button
+              variant='ghost'
+              size='sm'
+              onClick={() => setIsReplying(true)}
+              data-testid={`reply-btn-${comment.id}`}
+              className='h-7 gap-1.5 text-xs text-muted-foreground'
+            >
+              <ReplyIcon className='h-3.5 w-3.5' />
+              {t('Reply')}
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

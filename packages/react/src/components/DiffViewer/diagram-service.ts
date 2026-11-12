@@ -3,7 +3,7 @@ import { exceedsMermaidComplexity, MERMAID_MAX_EDGES } from './mermaid-budget';
 /** Longer diagram source is never handed to Mermaid; also pinned as its `maxTextSize`. */
 export const MERMAID_MAX_SOURCE_CHARS = 50_000;
 
-/** Layout is synchronous and cannot be interrupted; this only bounds the wait on a stall. */
+/** Bounds waiting after the event loop yields; it cannot interrupt synchronous layout. */
 export const MERMAID_RENDER_TIMEOUT_MS = 10_000;
 
 /**
