@@ -2,7 +2,7 @@ import { useLocalization, type MessageKey } from '../../localization/Localizatio
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import MDEditor, { commands, type ICommand } from '@uiw/react-md-editor';
 import type { Attachment } from '@self-review/types';
-import { useAppearance } from '../../context/ConfigContext';
+import { useResolvedTheme } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Paperclip } from 'lucide-react';
 import EmojiAutocomplete from './EmojiAutocomplete';
@@ -108,7 +108,7 @@ export function ComposerCore({
       })),
     [t]
   );
-  const config = useAppearance();
+  const resolvedTheme = useResolvedTheme();
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -138,13 +138,6 @@ export function ComposerCore({
     textarea?.focus();
   }, []);
 
-  const resolveIsDark = () => {
-    if (config.theme === 'system') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return config.theme === 'dark';
-  };
-
   return (
     <AttachmentProcessingContext.Provider value={ingestion}>
       <div
@@ -156,11 +149,7 @@ export function ComposerCore({
           isDragging={isDragging}
           onDragChange={setIsDragging}
         >
-          <div
-            className='p-1 relative'
-            data-color-mode={resolveIsDark() ? 'dark' : 'light'}
-            ref={editorContainerRef}
-          >
+          <div className='p-1 relative' data-color-mode={resolvedTheme} ref={editorContainerRef}>
             <MDEditor
               value={body}
               onChange={val => onBodyChange(val || '')}

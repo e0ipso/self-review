@@ -1,5 +1,5 @@
 import { useLocalization } from '../../localization/LocalizationContext';
-import React, { useState, useEffect, useRef, useMemo, useCallback, useId } from 'react';
+import React, { useState, useRef, useMemo, useCallback, useId } from 'react';
 import { effectiveDiffLayout } from './effective-layout';
 import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
@@ -9,9 +9,9 @@ import { useReviewCommands, useFileReview, useReviewSource } from '../../context
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import { usePreviewRenderer } from '../../context/PreviewRenderingContext';
-import { getContentPreview, initialPreviewMode } from './content-preview';
+import { getContentPreview, initialPreviewMode } from '../../services/content-preview';
 import { getGuideAccent } from '../../utils/guide-accents';
-import { useReviewExpansion } from '../../context/ReviewDisplayContext';
+import { useFileSectionExpansion } from './useFileSectionExpansion';
 import { FileSectionHeaderPresentation } from './FileSectionHeader';
 import { FileSectionBodyLayout } from './FileSectionBody';
 import { PreviewContentArea } from './DiffContentArea';
@@ -36,8 +36,6 @@ export default function FileSection({
   const diffSource = useReviewSource();
   const fileState = useFileReview(file.newPath || file.oldPath);
   const { mode: guideMode, getFileDescription, getFileGroupIndex } = useGuide();
-  const { expanded: expansion, setExpanded } = useReviewExpansion();
-  const expanded = controlledExpanded ?? expansion.get(file.newPath || file.oldPath) ?? false;
   const [commentRange, setCommentRange] = useState<{
     start: number;
     end: number;
@@ -67,6 +65,12 @@ export default function FileSection({
   const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
   const orphanedComments = comments.filter(c => !hasAnchor(c));
   const isViewed = fileState?.viewed || false;
+  const { expanded, changeExpanded } = useFileSectionExpansion(
+    filePath,
+    isViewed,
+    controlledExpanded,
+    onToggleExpanded
+  );
 
   // Registered by path so navigation never builds a CSS selector from the filename.
   const setSectionElement = useCallback(
@@ -116,17 +120,6 @@ export default function FileSection({
     onCommentRange: handleCommentRange,
   });
 
-  const changeExpanded = (next: boolean) => {
-    if (expanded === next) return;
-    if (onToggleExpanded) onToggleExpanded(filePath);
-    else setExpanded(filePath, next);
-  };
-  // Viewed changes from either the header or file tree share the expansion owner.
-  const previouslyViewed = useRef(false);
-  useEffect(() => {
-    if (previouslyViewed.current !== isViewed) changeExpanded(!isViewed);
-    previouslyViewed.current = isViewed;
-  }, [isViewed]);
   const handleViewedToggle = () => toggleViewed(filePath);
 
   return (

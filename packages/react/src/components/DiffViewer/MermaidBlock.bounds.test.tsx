@@ -4,7 +4,7 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import MermaidBlock, { MERMAID_RENDER_TIMEOUT_MS } from './MermaidBlock';
 
 vi.mock('../../context/ConfigContext', () => ({
-  useAppearance: () => ({ theme: 'light' }),
+  useResolvedTheme: () => 'light',
 }));
 
 // Stands in for the library; MermaidBlock.test.tsx runs the real one.

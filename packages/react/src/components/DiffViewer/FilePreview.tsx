@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react';
 import { useOptionalSnapshotKey } from '../../context/ReviewContext';
 import { useAdapter } from '../../context/ReviewAdapterContext';
-import { usePreviewRenderer, type PreviewRenderProps } from '../../context/PreviewRenderingContext';
+import { usePreviewRenderer } from '../../context/PreviewRenderingContext';
+import type { PreviewRenderProps } from '../../services/preview-renderer';
 import RenderedMarkdownView from './RenderedMarkdownView';
 import RenderedImageView from './RenderedImageView';
 import RenderedSvgView from './RenderedSvgView';

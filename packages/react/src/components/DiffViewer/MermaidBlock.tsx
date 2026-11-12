@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { useLocalization } from '../../localization/LocalizationContext';
 import { Button } from '../ui/button';
-import { exceedsMermaidComplexity } from './mermaid-budget';
-import { useAppearance } from '../../context/ConfigContext';
+import { exceedsMermaidComplexity } from '../../services/mermaid-budget';
+import { useResolvedTheme } from '../../context/ConfigContext';
 import { svgToDataUri } from '../../utils/svg-data-uri';
 
 import { useDiagramRenderer } from '../../context/PreviewRenderingContext';
@@ -10,27 +10,22 @@ import {
   DiagramImageError,
   MERMAID_MAX_SOURCE_CHARS,
   MERMAID_RENDER_TIMEOUT_MS,
-} from './diagram-service';
+} from '../../services/diagram-service';
 // Preserve existing imports from this component.
 export {
   MERMAID_MAX_SOURCE_CHARS,
   MERMAID_RENDER_TIMEOUT_MS,
   MERMAID_SECURE_KEYS,
   MERMAID_MAX_ADMITTED_RENDERS,
-} from './diagram-service';
+} from '../../services/diagram-service';
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
-
-function resolveIsDark(theme: 'light' | 'dark' | 'system'): boolean {
-  if (theme === 'system') {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }
-  return theme === 'dark';
-}
 
 interface DiagramImage {
   src: string;
   width: number | undefined;
   height: number | undefined;
+  title: string | undefined;
+  description: string | undefined;
 }
 
 /**
@@ -66,7 +61,15 @@ function toDiagramImage(svg: string): DiagramImage {
       width * height > 64_000_000)
   )
     throw new DiagramImageError('size');
+  // Read only bounded text from the inert XML document. No SVG nodes enter the live DOM.
+  const metadata = (name: string, limit: number) =>
+    Array.from(root.children)
+      .find(child => child.namespaceURI === SVG_NAMESPACE && child.localName === name)
+      ?.textContent?.trim()
+      .slice(0, limit) || undefined;
   return {
+    title: metadata('title', 1000),
+    description: metadata('desc', 4000),
     src: svgToDataUri(svg),
     width: sized ? Math.ceil(width) : undefined,
     height: sized ? Math.ceil(height) : undefined,
@@ -85,10 +88,10 @@ type BlockState =
 export default function MermaidBlock({ code }: { code: string }) {
   const [state, setState] = useState<BlockState>({ status: 'pending' });
   const [attempt, setAttempt] = useState(0);
-  const config = useAppearance();
+  const resolvedTheme = useResolvedTheme();
+  const descriptionId = useId();
   const diagramRenderer = useDiagramRenderer();
   const { t } = useLocalization();
-  const isDark = resolveIsDark(config.theme);
 
   useEffect(() => {
     if (code.length > MERMAID_MAX_SOURCE_CHARS) {
@@ -131,7 +134,7 @@ export default function MermaidBlock({ code }: { code: string }) {
       .then(() =>
         diagramRenderer.render({
           source: code,
-          theme: isDark ? 'dark' : 'light',
+          theme: resolvedTheme,
           signal: abort.signal,
         })
       )
@@ -159,7 +162,7 @@ export default function MermaidBlock({ code }: { code: string }) {
       abort.abort();
       window.clearTimeout(timer);
     };
-  }, [code, isDark, attempt, t, diagramRenderer]);
+  }, [code, resolvedTheme, attempt, t, diagramRenderer]);
 
   if (state.status === 'error')
     return (
@@ -183,14 +186,24 @@ export default function MermaidBlock({ code }: { code: string }) {
       </div>
     );
   return (
-    <div className='mermaid-block flex justify-center overflow-x-auto max-w-full rounded-lg border border-border bg-white dark:bg-muted/20 p-4'>
-      <img
-        src={state.image.src}
-        alt={t('Mermaid diagram')}
-        width={state.image.width}
-        height={state.image.height}
-        style={{ maxWidth: '100%', height: 'auto' }}
-      />
-    </div>
+    <figure className='mermaid-block max-w-full rounded-lg border border-border bg-white dark:bg-muted/20 p-4'>
+      <div className='flex justify-center overflow-x-auto'>
+        <img
+          src={state.image.src}
+          alt={state.image.title ?? t('Mermaid diagram')}
+          aria-describedby={state.image.description ? descriptionId : undefined}
+          width={state.image.width}
+          height={state.image.height}
+          style={{ maxWidth: '100%', height: 'auto' }}
+        />
+      </div>
+      <figcaption className='mt-2 text-sm'>
+        {state.image.description && <p id={descriptionId}>{state.image.description}</p>}
+        <details>
+          <summary>{t('Diagram source')}</summary>
+          <pre className='overflow-auto whitespace-pre-wrap'>{code}</pre>
+        </details>
+      </figcaption>
+    </figure>
   );
 }

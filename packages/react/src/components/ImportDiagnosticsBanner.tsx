@@ -1,12 +1,36 @@
 import { useLocalization } from '../localization/LocalizationContext';
-import React, { useState } from 'react';
+import React, { useState, useContext, useMemo, useSyncExternalStore } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { useReview } from '../context/ReviewContext';
+import { SessionStoreContext } from '../context/review-context';
+import type { ReviewSessionStore } from '../context/review-session';
+
+const NO_DIAGNOSTICS: string[] = [];
 
 /** Dismissible, non-blocking list of resumed comments the importer downgraded to file-level feedback. */
 export default function ImportDiagnosticsBanner() {
-  const { importDiagnostics } = useReview();
+  const store = useContext(SessionStoreContext);
+  return store ? <StoredDiagnostics store={store} /> : <LegacyDiagnostics />;
+}
+
+function StoredDiagnostics({ store }: { store: ReviewSessionStore }) {
+  const readImported = () => store.getSnapshot().resumedReview?.importDiagnostics ?? NO_DIAGNOSTICS;
+  const readAnchors = () => store.getSnapshot().anchorDiagnostics;
+  const readSession = () => store.getSnapshot().sessionId;
+  const imported = useSyncExternalStore(store.subscribe, readImported, readImported);
+  const anchors = useSyncExternalStore(store.subscribe, readAnchors, readAnchors);
+  const sessionId = useSyncExternalStore(store.subscribe, readSession, readSession);
+  const messages = useMemo(() => [...imported, ...anchors], [imported, anchors]);
+  return <DiagnosticsBanner key={sessionId} importDiagnostics={messages} />;
+}
+
+function LegacyDiagnostics() {
+  const { importDiagnostics, sessionId } = useReview();
+  return <DiagnosticsBanner key={sessionId} importDiagnostics={importDiagnostics} />;
+}
+
+function DiagnosticsBanner({ importDiagnostics }: { importDiagnostics: string[] }) {
   const { t } = useLocalization();
   const [dismissed, setDismissed] = useState(false);
 

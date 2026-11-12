@@ -17,6 +17,41 @@ function sources(directory: string): string[] {
   });
 }
 describe('browser package boundaries', () => {
+  it('keeps shared preview services and provider contracts independent of feature containers', () => {
+    const serviceRoot = path.join(root, 'services');
+    const files = [...sources(serviceRoot), path.join(root, 'context/PreviewRenderingContext.tsx')];
+    const errors: string[] = [];
+    for (const file of files) {
+      const parsed = ts.createSourceFile(
+        file,
+        fs.readFileSync(file, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true
+      );
+      const visit = (node: ts.Node) => {
+        if (
+          (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+          node.moduleSpecifier &&
+          ts.isStringLiteral(node.moduleSpecifier)
+        ) {
+          const specifier = node.moduleSpecifier.text;
+          if (specifier.startsWith('.')) {
+            const target = path.resolve(path.dirname(file), specifier);
+            if (
+              target.startsWith(path.join(root, 'components') + path.sep) ||
+              (file.startsWith(serviceRoot + path.sep) &&
+                target.startsWith(path.join(root, 'context') + path.sep))
+            )
+              errors.push(`${path.relative(root, file)} depends on ${specifier}`);
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(parsed);
+    }
+    expect(errors).toEqual([]);
+  });
+
   it('keeps runtime imports browser-safe and free of internal cycles', () => {
     const configRoot = path.resolve(root, '../../config/src');
     const files = [...sources(root), ...sources(configRoot)];

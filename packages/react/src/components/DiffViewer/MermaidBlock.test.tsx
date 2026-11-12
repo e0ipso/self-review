@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import MermaidBlock, { MERMAID_MAX_SOURCE_CHARS, MERMAID_SECURE_KEYS } from './MermaidBlock';
 
 vi.mock('../../context/ConfigContext', () => ({
-  useAppearance: () => ({ theme: 'light' }),
+  useResolvedTheme: () => 'light',
 }));
 
 // jsdom has no layout engine; give Mermaid's two geometry calls a fixed box.
@@ -52,6 +52,21 @@ describe('MermaidBlock isolation', () => {
     expect(decoded).toContain('<svg');
     expect(document.querySelector('svg')).toBeNull();
     expect(document.querySelector('style')).toBeNull();
+  }, 20000);
+
+  it('exposes the default renderer accessibility metadata and successful source', async () => {
+    const code =
+      'flowchart LR\n accTitle: Deployment path\n accDescr: Build then publish.\n A --> B';
+    renderWithSentinel(code);
+    const image = await findDiagramImage();
+    expect(image.alt).toBe('Deployment path');
+    expect(document.getElementById(image.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Build then publish.'
+    );
+    expect(
+      screen.getByText('Diagram source').closest('details')?.querySelector('pre')?.textContent
+    ).toBe(code);
+    expect(document.querySelector('svg, style')).toBeNull();
   }, 20000);
 
   it('keeps the global-selector CSS payload out of the application document', async () => {

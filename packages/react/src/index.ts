@@ -64,6 +64,7 @@ export {
   defaultConfig,
   useConfiguration,
   useAppearance,
+  useResolvedTheme,
   useCategories,
   useOutputPath,
   usePortalContainer,
@@ -130,12 +131,9 @@ export type {
   PreviewRenderProps,
   PreviewRenderingProviderProps,
 } from './context/PreviewRenderingContext';
-export { createDiagramRenderService } from './components/DiffViewer/diagram-service';
-export type {
-  DiagramRenderRequest,
-  DiagramRenderService,
-} from './components/DiffViewer/diagram-service';
-export type { ContentPreview } from './components/DiffViewer/content-preview';
+export { createDiagramRenderService } from './services/diagram-service';
+export type { DiagramRenderRequest, DiagramRenderService } from './services/diagram-service';
+export type { ContentPreview } from './services/content-preview';
 
 export { ReviewServicesProvider, useReviewServices } from './context/ReviewServicesContext';
 export type { ReviewServices } from './context/ReviewServicesContext';
