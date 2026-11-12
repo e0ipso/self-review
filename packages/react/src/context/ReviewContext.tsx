@@ -43,6 +43,7 @@ import {
   createApplyOperations,
 } from '../components/Comments/apply-operation';
 import { ReviewLoadRecovery } from '../components/ReviewLoadRecovery';
+import { useReviewServices } from './ReviewServicesContext';
 export { reviewSessionIdentity } from './review-session';
 
 export interface ReviewContextValue {
@@ -461,6 +462,9 @@ export interface ReviewSaveTransaction {
 export function useReviewSaveTransaction(): ReviewSaveTransaction {
   const store = useContext(SessionStoreContext);
   if (!store) throw new Error('Save transactions require ReviewProvider');
+  const { now } = useReviewServices();
+  const clock = useRef(now);
+  clock.current = now;
   const live = useRef(true);
   useLayoutEffect(() => {
     live.current = true;
@@ -480,10 +484,11 @@ export function useReviewSaveTransaction(): ReviewSaveTransaction {
           state.resumePending
         )
           throw new Error('The current review has not finished loading.');
+        const timestamp = clock.current().toISOString();
         const owner = store.lockMutations();
         return {
           state: {
-            timestamp: new Date().toISOString(),
+            timestamp,
             source: state.diffSource,
             files: state.files,
           },

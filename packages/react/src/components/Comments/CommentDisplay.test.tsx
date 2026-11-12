@@ -174,9 +174,9 @@ describe('CommentDisplay threads', () => {
 
     fireEvent.click(getByTestId('comment-collapse-toggle-c1'));
 
-    expect(queryByTestId('thread-c1')).toBeNull();
-    expect(queryByTestId('reply-r1')).toBeNull();
-    expect(queryByTestId('reply-btn-c1')).toBeNull();
+    expect(queryByTestId('thread-c1')?.closest('[hidden]')).toBeTruthy();
+    expect(queryByTestId('reply-r1')?.closest('[hidden]')).toBeTruthy();
+    expect(queryByTestId('reply-btn-c1')?.closest('[hidden]')).toBeTruthy();
   });
 
   it('hides the thread on the review toggle-all-comments event', () => {
@@ -187,8 +187,8 @@ describe('CommentDisplay threads', () => {
       new CustomEvent('toggle-all-comments', { detail: { collapsed: true } })
     );
 
-    expect(queryByTestId('thread-c1')).toBeNull();
-    expect(queryByTestId('reply-btn-c1')).toBeNull();
+    expect(queryByTestId('thread-c1')?.closest('[hidden]')).toBeTruthy();
+    expect(queryByTestId('reply-btn-c1')?.closest('[hidden]')).toBeTruthy();
   });
 
   it('gives replies no category, severity or confidence badges', () => {

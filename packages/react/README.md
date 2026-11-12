@@ -8,6 +8,25 @@ hooks. The provider adds no layout or keyboard manager. Keep adapter identity st
 suppress diff loading and diff subscriptions; initial comments hydrate once. `ReviewPanel` retains
 its children and imperative handle contracts.
 
+## Review metadata services
+
+`ReviewPanel` and `ReviewProviders` accept optional `services: Partial<ReviewServices>`. The
+`createId` factory supplies published comment and reply IDs; its browser default remains
+`crypto.randomUUID()`. `now` returns a valid `Date`, defaulting to `new Date()`, and supplies the
+timestamps for `getReviewState()` and atomic `beginSave()` captures. It is also available through
+`useReviewServices()`. Services inherit from an enclosing `ReviewServicesProvider`, so custom
+compositions and `SingleFileReview` can opt in through that provider too. Keep supplied factories
+stable and ensure IDs are unique within a review. Supplying services to one root does not change
+another root.
+
+```tsx
+<ReviewPanel adapter={adapter} services={{ createId: () => crypto.randomUUID() }} />
+```
+
+These dependencies generate review metadata only. They never supply HTTP capabilities, credential
+keys, attachment names or filesystem identifiers, and add no persisted configuration or browser
+storage.
+
 `ReviewAdapter.onResumeLoad(callback)` is an optional later-push subscription. Emit each payload
 after its owning diff push. It supersedes an outstanding initial resume request; disposed
 subscriptions and late responses cannot mutate a replacement session. Existing adapters using only
@@ -168,3 +187,16 @@ is manual. A Web Worker cannot run this renderer's `getBBox`/DOM measurements. A
 layout needs a separately owned document/process with locally bundled assets and verified host CSP
 and lifecycle handling in both Electron and the HTTP bundle. No CSP or Node integration changes are
 made here. This package does not claim a hard CPU deadline for Mermaid.
+
+## Comment disclosure and editor commands
+
+Comment disclosure buttons expose their expanded state and control a unique region in each mounted
+review. Collapsing a comment hides that region while retaining its editors, reply drafts and Apply
+controls. Bulk collapse uses the same behavior within the owning review. Markdown toolbar names and
+tooltips use the enclosing localization provider, with English fallback, while preserving the
+editor's native commands and shortcuts. IME composition and emoji key handling retain precedence.
+
+Raw unified and split layouts share hunk gap controls and source-derived comment placement. Their
+row markup, side ordering and selection geometry remain separate. The content dispatcher keeps
+loading, omission and manual retry outside preview/raw composition; neither branch mounts until
+content is available. Legacy public eligibility flags and preview services retain their contracts.

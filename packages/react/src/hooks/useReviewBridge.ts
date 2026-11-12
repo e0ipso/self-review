@@ -1,5 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, type ForwardedRef } from 'react';
 import type { ReviewComment, ReviewState } from '@self-review/types';
+import { useReviewServices } from '../context/ReviewServicesContext';
 import {
   useReview,
   useReviewSaveTransaction,
@@ -28,6 +29,9 @@ export function useReviewBridge(
 ): void {
   const { files, diffSource } = useReview();
   const transaction = useReviewSaveTransaction();
+  const { now } = useReviewServices();
+  const clock = useRef(now);
+  clock.current = now;
 
   // Stable refs so getReviewState() never closes over stale values
   const filesRef = useRef(files);
@@ -38,7 +42,7 @@ export function useReviewBridge(
   useImperativeHandle(ref, () => ({
     beginSave: transaction.begin,
     getReviewState: (): ReviewState => ({
-      timestamp: new Date().toISOString(),
+      timestamp: clock.current().toISOString(),
       source: diffSourceRef.current,
       files: filesRef.current,
     }),

@@ -1,6 +1,15 @@
 import type { LocalizedMessage } from './LocalizationContext';
 
 export const ENGLISH = {
+  'Add bold text (ctrl + b)': 'Add bold text (ctrl + b)',
+  'Add italic text (ctrl + i)': 'Add italic text (ctrl + i)',
+  'Insert a quote (ctrl + q)': 'Insert a quote (ctrl + q)',
+  'Insert code (ctrl + j)': 'Insert code (ctrl + j)',
+  'Add a link (ctrl + l)': 'Add a link (ctrl + l)',
+  'Add unordered list (ctrl + shift + u)': 'Add unordered list (ctrl + shift + u)',
+  'Add ordered list (ctrl + shift + o)': 'Add ordered list (ctrl + shift + o)',
+  'Add checked list (ctrl + shift + c)': 'Add checked list (ctrl + shift + c)',
+
   'Emoji suggestions': 'Emoji suggestions',
   'Emoji {name}': 'Emoji {name}',
   'Emoji suggestion {index} of {count}: {name}. Use Up and Down to choose, Enter or Tab to insert, Escape to close.':

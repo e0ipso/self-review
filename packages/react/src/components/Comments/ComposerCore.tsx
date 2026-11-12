@@ -1,6 +1,6 @@
-import { useLocalization } from '../../localization/LocalizationContext';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import MDEditor, { commands } from '@uiw/react-md-editor';
+import { useLocalization, type MessageKey } from '../../localization/LocalizationContext';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import MDEditor, { commands, type ICommand } from '@uiw/react-md-editor';
 import type { Attachment } from '@self-review/types';
 import { useAppearance } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
@@ -16,27 +16,19 @@ import {
 } from './AttachmentProcessing';
 import { AttachmentDropZone } from './AttachmentDropZone';
 
-// Toolbar buttons already carry names; their decorative SVGs must not announce as images.
-const EDITOR_COMMANDS = [
-  commands.bold,
-  commands.italic,
-  commands.divider,
-  commands.quote,
-  commands.code,
-  commands.link,
-  commands.divider,
-  commands.unorderedListCommand,
-  commands.orderedListCommand,
-  commands.checkedListCommand,
-].map(command => ({
-  ...command,
-  icon: command.icon
-    ? React.cloneElement(command.icon as React.ReactElement<React.SVGProps<SVGSVGElement>>, {
-        'aria-hidden': true,
-        focusable: false,
-      })
-    : undefined,
-}));
+// Preserve native execute, shortcuts and selection behavior while localizing presentation.
+const EDITOR_COMMANDS: ReadonlyArray<readonly [ICommand, MessageKey?]> = [
+  [commands.bold, 'Add bold text (ctrl + b)'],
+  [commands.italic, 'Add italic text (ctrl + i)'],
+  [commands.divider],
+  [commands.quote, 'Insert a quote (ctrl + q)'],
+  [commands.code, 'Insert code (ctrl + j)'],
+  [commands.link, 'Add a link (ctrl + l)'],
+  [commands.divider],
+  [commands.unorderedListCommand, 'Add unordered list (ctrl + shift + u)'],
+  [commands.orderedListCommand, 'Add ordered list (ctrl + shift + o)'],
+  [commands.checkedListCommand, 'Add checked list (ctrl + shift + c)'],
+];
 
 /**
  * Shared composer body used by every markdown editor in the review UI.
@@ -93,6 +85,23 @@ export function ComposerCore({
   children,
 }: ComposerCoreProps) {
   const { t } = useLocalization();
+  const editorCommands = useMemo(
+    () =>
+      EDITOR_COMMANDS.map(([command, label]) => ({
+        ...command,
+        buttonProps: label
+          ? { ...command.buttonProps, 'aria-label': t(label), title: t(label) }
+          : command.buttonProps,
+        // Toolbar buttons carry names; decorative SVGs must not announce as images.
+        icon: command.icon
+          ? React.cloneElement(command.icon as React.ReactElement<React.SVGProps<SVGSVGElement>>, {
+              'aria-hidden': true,
+              focusable: false,
+            })
+          : undefined,
+      })),
+    [t]
+  );
   const config = useAppearance();
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -148,7 +157,7 @@ export function ComposerCore({
               onChange={val => onBodyChange(val || '')}
               preview='edit'
               highlightEnable={false}
-              commands={EDITOR_COMMANDS}
+              commands={editorCommands}
               extraCommands={
                 headerLabel
                   ? [

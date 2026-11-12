@@ -64,8 +64,8 @@ it('keeps shortcuts and bulk actions inside the active review with overlapping p
   fireEvent.click(a.getByTestId('expand-all-btn'));
   fireEvent.click(a.getByText('Seed comment'));
   fireEvent.click(a.getByTestId('collapse-all-comments-btn'));
-  await waitFor(() => expect(a.queryByText('thread body')).toBeNull());
-  expect(b.getByText('thread body')).toBeTruthy();
+  await waitFor(() => expect(a.getByText('thread body').closest('[hidden]')).toBeTruthy());
+  expect(b.getByText('thread body').closest('[hidden]')).toBeNull();
   const ids = [...container.querySelectorAll('[id]')].map(element => element.id);
   expect(new Set(ids).size).toBe(ids.length);
 });
