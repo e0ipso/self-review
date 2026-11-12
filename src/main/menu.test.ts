@@ -24,3 +24,13 @@ it('preserves zoom and fullscreen without packaged reload accelerators', () => {
     expect(template.some(item => item.role === 'fileMenu')).toBe(true);
   }
 });
+
+it('uses the resolved Spanish catalog for native menu labels and preserves roles', async () => {
+  const { createDesktopLocalization } = await import('../shared/localization');
+  setupMenu(createDesktopLocalization({ locale: 'es-MX' }));
+  const template = vi.mocked(Menu.buildFromTemplate).mock.lastCall![0];
+  expect(template.find(item => item.label === 'Ver')).toBeDefined();
+  const help = template.find(item => item.role === 'help')!.submenu as MenuItemConstructorOptions[];
+  expect(help.map(item => item.label).filter(Boolean)).toEqual(['Documentación', 'Acerca de']);
+  expect(template.find(item => item.role === 'fileMenu')).toBeDefined();
+});

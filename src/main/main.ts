@@ -14,7 +14,8 @@ import { bindDesktopReviewOperations } from './review-operations';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createIpcBoundary } from './ipc-boundary';
 import { registerLifecycleHandlers } from './lifecycle-handlers';
-import { checkForUpdate, getVersionUpdate } from './version-checker';
+import { UpdateService } from './update-service';
+import { requestUpdate } from './electron-update-request';
 import { setupMenu } from './menu';
 import { getAppIconDataUri } from './app-assets';
 import {
@@ -28,6 +29,7 @@ import { registerRemoteOpenHandler } from './remote-open-handler';
 import { IPC } from '../shared/ipc-channels';
 
 const desktop = createDesktopSession(process.cwd());
+const updates = new UpdateService(app.getVersion(), requestUpdate);
 const startupOperations = createDesktopStartupOperations(desktop);
 const quit = new QuitController();
 let applicationLocale = resolveApplicationLocale('en');
@@ -72,6 +74,7 @@ const shutdownResources = createDesktopShutdown(
   {
     dispose: async (reason: string) => {
       windows.stop();
+      updates.dispose();
       await Promise.all([desktop.operations.dispose(reason), desktop.remote.dispose(reason)]);
     },
   },
@@ -155,7 +158,11 @@ void app
       void shutdown(1, 'initialization timeout');
     }, 45_000);
     try {
-      const presentation = createReviewPresentation(getAppIconDataUri, getVersionUpdate, messages);
+      const presentation = createReviewPresentation(
+        getAppIconDataUri,
+        updates.getVersionUpdate,
+        messages
+      );
       if (
         !(await desktop.operations.read(
           signal =>
@@ -206,9 +213,10 @@ void app
       setupMenu(messages);
       windows.initialize();
       // The check uses the default network session. Late completions target the current live window.
-      void checkForUpdate({ signal: desktop.operations.signal })
+      void updates
+        .checkForUpdate({ signal: desktop.operations.signal })
         .then(() => {
-          const update = getVersionUpdate();
+          const update = updates.getVersionUpdate();
           const window = windows.current;
           if (update && window && !desktop.operations.signal.aborted)
             window.webContents.send(IPC.VERSION_UPDATE_AVAILABLE, update);

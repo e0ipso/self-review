@@ -288,6 +288,19 @@ directory, the disk is full or the file is not writable, the window stays open w
 comments, a dialog says why, and any earlier `review.xml` is left exactly as it was. Fix the cause
 or pick another path from the footer of the file tree and save again.
 
+### Desktop language
+
+The desktop app uses the system locale for its native dialogs, shell, and shared review UI. Spanish
+is built in, including regional locales such as `es-ES` and `es-MX`. English is the fallback for
+other languages and missing messages. Invalid locale identifiers fall back to English. Numbers,
+dates, and text direction still follow the resolved system locale even when the messages use
+English. No language setting or locale data is saved.
+
+Review content, filenames, Git output, and engine or transport diagnostics keep their original text.
+Standard menu roles use Electron's native menu localization; the app's View, Documentation, and
+About labels use the same catalog as the renderer. Embedded users of `@self-review/react` can
+continue supplying their own messages through `LocalizationProvider`.
+
 ### Examples
 
 ```bash

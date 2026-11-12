@@ -25,3 +25,11 @@ it('localizes recovery guidance without translating engine diagnostics', () => {
   expect(failure.detail).toContain('Recovery guidance');
   expect(failure.detail).toContain('Path: /output.xml');
 });
+
+it('keeps Spanish recovery guidance separate from the original save error', () => {
+  const messages = createDesktopLocalization(resolveApplicationLocale('es-AR'));
+  const failure = describeSaveFailure(new Error('EIO at fsync'), '/output.xml', messages);
+  expect(failure.message).toBe('No se pudo guardar la revisión: EIO at fsync');
+  expect(failure.detail).toContain('La revisión sigue abierta.');
+  expect(failure.detail).toContain('Path: /output.xml');
+});
