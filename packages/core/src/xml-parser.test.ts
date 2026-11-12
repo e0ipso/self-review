@@ -1896,3 +1896,33 @@ describe('namespace prefix spelling', () => {
     });
   });
 });
+
+describe('unanchored suggestion fences', () => {
+  it.each([1, 2, 3])('keeps many backtick runs and decodes code once in v%i', version => {
+    const original = '`x'.repeat(150_000) + '&amp;#13;';
+    const proposed = 'é🙂\n' + '`'.repeat(123) + ' end';
+    const xml = `<review xmlns="urn:self-review:v${version}"><file path="a.ts"><comment remote-id="thread"><body>keep body</body><category>task</category><suggestion><original-code>${original}</original-code><proposed-code>${proposed}</proposed-code></suggestion></comment></file></review>`;
+    const parsed = parseReviewXmlString(xml);
+    expect(parsed.comments[0]).toMatchObject({
+      body: [
+        'keep body',
+        '',
+        '_Imported suggestion could not be anchored (suggestion has no line anchor)._',
+        'Original:',
+        '```',
+        '`x'.repeat(150_000) + '&#13;',
+        '```',
+        'Proposed:',
+        '`'.repeat(124),
+        proposed,
+        '`'.repeat(124),
+      ].join('\n'),
+      lineRange: null,
+      suggestion: null,
+      remoteId: 'thread',
+    });
+    expect(parsed.importDiagnostics).toEqual([
+      'a.ts: comment 1 (remote-id thread) anchor suggestion has no line anchor; kept as file-level feedback',
+    ]);
+  });
+});

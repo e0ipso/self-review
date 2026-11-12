@@ -8,6 +8,7 @@ import { publishReview } from './review-publisher';
 import { parseReviewXml } from './xml-parser';
 import { MAX_RESUME_XML_BYTES } from './input-budgets';
 import { validateAgainstSchema } from './review-xml-validator';
+import * as xmlText from './xml-text';
 
 // Exercise the shared byte boundary without allocating a full-size document or starting WASM.
 vi.mock('./input-budgets', async importOriginal => ({
@@ -100,3 +101,62 @@ it('preserves the previous XML and assets when encoded output would not be resum
   expect(fs.readdirSync(assets)).toEqual(previousAssets);
   expect(fs.readFileSync(path.join(assets, previousAssets[0]))).toEqual(previousBytes);
 });
+
+it.each(['body', 'author'] as const)(
+  'refuses escaped %s before allocating its escaped duplicate',
+  async field => {
+    const review = state('ordinary');
+    const value = '&'.repeat(MAX_RESUME_XML_BYTES / 4);
+    review.files[0].comments[0][field] = value;
+    const escape = vi.spyOn(xmlText, field === 'body' ? 'escapeXmlText' : 'escapeXmlAttribute');
+    try {
+      await expect(serializeReview(review, output)).rejects.toMatchObject({
+        code: 'input-too-large',
+      });
+      expect(escape).not.toHaveBeenCalledWith(value);
+      expect(validateAgainstSchema).not.toHaveBeenCalled();
+    } finally {
+      escape.mockRestore();
+    }
+  }
+);
+
+it('stops constructing a document when many individually valid fields exhaust the budget', async () => {
+  const review = state('x'.repeat(800));
+  const first = review.files[0].comments[0];
+  review.files[0].comments = Array.from({ length: 10 }, (_, index) => ({
+    ...first,
+    id: String(index),
+  }));
+  review.files[0].comments[9].body = 'last body must not be escaped';
+  const escape = vi.spyOn(xmlText, 'escapeXmlText');
+  try {
+    await expect(serializeReview(review, output)).rejects.toMatchObject({
+      code: 'input-too-large',
+    });
+    expect(escape).not.toHaveBeenCalledWith('last body must not be escaped');
+    expect(validateAgainstSchema).not.toHaveBeenCalled();
+  } finally {
+    escape.mockRestore();
+  }
+});
+
+it.each(['body', 'author'] as const)(
+  'charges escaped whitespace and Unicode exactly at the %s boundary',
+  async field => {
+    const empty = state('');
+    empty.files[0].comments[0][field] = 'seed';
+    const seeded = await serializeReview(empty, output);
+    const seed = `&<>"'\r\n\té中🙂`;
+    const encoded =
+      field === 'body' ? xmlText.escapeXmlText(seed) : xmlText.escapeXmlAttribute(seed);
+    const available = MAX_RESUME_XML_BYTES - Buffer.byteLength(seeded.xml + '\n') + 4;
+    const value = seed + 'x'.repeat(available - Buffer.byteLength(encoded));
+    empty.files[0].comments[0][field] = value;
+    const result = await serializeReview(empty, output);
+    expect(Buffer.byteLength(result.xml + '\n')).toBe(MAX_RESUME_XML_BYTES);
+    expect(result.xml).toContain(encoded);
+    empty.files[0].comments[0][field] += 'x';
+    await expect(serializeReview(empty, output)).rejects.toMatchObject({ code: 'input-too-large' });
+  }
+);
