@@ -6,6 +6,8 @@ type Bootstrap = (controller: AbortController) => Promise<RemoteBootstrapResult>
 export class RemoteLifetime {
   private pending: { controller: AbortController; settled: Promise<unknown> } | null = null;
   private release: (() => Promise<void>) | null = null;
+  private releaseForExit: (() => Promise<void>) | null = null;
+  private exitPending: Promise<void> | null = null;
   private disposal: Promise<void> | null = null;
   private stopping = false;
   private releasing: Promise<void> | null = null;
@@ -21,13 +23,14 @@ export class RemoteLifetime {
     bootstrap: Bootstrap,
     controller = new AbortController()
   ): Promise<RemoteBootstrapResult> {
-    if (this.stopping || this.pending || this.release || this.releasing)
+    if (this.stopping || this.pending || this.release || this.releasing || this.exitPending)
       throw new Error('A remote review is already open or closing.');
     const settled = Promise.resolve()
       .then(() => bootstrap(controller))
       .then(async result => {
+        this.releaseForExit = result.session.cleanupForExit ?? result.session.cleanup;
         if (this.stopping || controller.signal.aborted) {
-          await result.session.cleanup();
+          await this.runCleanup(result.session.cleanup);
           throw new Error('Opening the PR/MR was cancelled.');
         }
         this.release = result.session.cleanup;
@@ -41,12 +44,37 @@ export class RemoteLifetime {
     }
   }
 
+  private runCleanup(release: () => Promise<void>): Promise<void> {
+    const pending = Promise.resolve().then(() => release());
+    this.exitPending = pending;
+    return pending.finally(() => {
+      if (this.exitPending === pending) {
+        this.exitPending = null;
+        this.releaseForExit = null;
+      }
+    });
+  }
+
+  /** Close may finish at the drain deadline, but hard exit must retain deletion already owned. */
+  settleForExit(): Promise<void> {
+    if (this.exitPending) return this.exitPending.catch(() => {});
+    const release = this.releaseForExit;
+    if (!release) return Promise.resolve();
+    this.release = null;
+    this.releasing = this.runCleanup(release);
+    return this.releasing
+      .catch(() => console.error('[main] Remote cleanup failed'))
+      .finally(() => {
+        this.releasing = null;
+      });
+  }
+
   /** Release a declined welcome-screen open and permit another attempt. */
   async cancelOpen(): Promise<void> {
     if (this.releasing) return this.releasing;
     const release = this.release;
     this.release = null;
-    this.releasing = Promise.resolve().then(() => release?.());
+    this.releasing = release ? this.runCleanup(release) : Promise.resolve();
     try {
       await this.releasing;
     } finally {
@@ -86,9 +114,9 @@ async function bounded(run: () => Promise<void>, timeoutMs: number): Promise<voi
   }
 }
 
-/** All fatal, signal and explicit exits await the same bounded resource disposal. */
+/** Exit paths close after the bounded drain, then retain owned deletion until it settles. */
 export function createDesktopShutdown(
-  remote: Pick<RemoteLifetime, 'dispose'>,
+  remote: Pick<RemoteLifetime, 'dispose'> & Partial<Pick<RemoteLifetime, 'settleForExit'>>,
   exit: (code: number) => void,
   closeWindow: () => void
 ): (code: number, reason: string) => Promise<void> {
@@ -97,6 +125,7 @@ export function createDesktopShutdown(
     shutdown ??= Promise.resolve().then(async () => {
       await remote.dispose(reason);
       closeWindow();
+      await remote.settleForExit?.();
       exit(code);
     });
     return shutdown;

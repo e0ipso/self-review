@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { applySuggestionForSessionAsync, setApplyDestination } from './review-suggestions';
+import {
+  applySuggestionForSession,
+  applySuggestionForSessionAsync,
+  setApplyDestination,
+} from './review-suggestions';
 import { commitDiffData, createReviewSession } from './review-session';
 import type { ReviewSession } from './review-session';
 import type { SuggestionApplyRequest } from './types';
@@ -239,4 +243,130 @@ it('refuses a selected destination redirected into the temporary clone during re
   expect(staged).toBe(false);
   expect(fs.readFileSync(path.join(clone, 'file'), 'utf8')).toBe('old\n');
   expect(fs.readFileSync(path.join(moved, 'file'), 'utf8')).toBe('old\n');
+});
+
+describe('suggestion effect dependencies', () => {
+  it('selects a virtual destination using only supplied inspection and reports the old message', () => {
+    const session = makeSession('/virtual/clone', true);
+    const inspection = {
+      isDirectory: vi.fn(() => true),
+      realpath: vi.fn((value: string) =>
+        value === '/virtual/alias' ? '/virtual/clone/sub' : value
+      ),
+    };
+    const reportDiagnostic = vi.fn();
+    expect(
+      setApplyDestination(session, '/virtual/alias', {
+        destinationInspection: inspection,
+        reportDiagnostic,
+      })
+    ).toMatchObject({ status: 'rejected', reason: 'destination-inside-temporary-clone' });
+    expect(
+      setApplyDestination(session, '/virtual/output', {
+        destinationInspection: inspection,
+        reportDiagnostic,
+      })
+    ).toEqual({ status: 'chosen', destinationRoot: '/virtual/output' });
+    expect(reportDiagnostic.mock.calls).toEqual([
+      ['[suggestion:apply] destination set for this session'],
+    ]);
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it('isolates reporters from committed synchronous and asynchronous Apply results', async () => {
+    const reportDiagnostic = vi.fn((_message: string) => {
+      throw new Error('report failed');
+    });
+    const effects = { reportDiagnostic };
+    const session = makeSession();
+    fs.writeFileSync(path.join(root, 'file'), 'old\n');
+    expect(applySuggestionForSession(session, request(), effects)).toEqual({
+      status: 'applied',
+      filePath: 'file',
+      replacedLines: 1,
+    });
+    fs.writeFileSync(path.join(root, 'file'), 'old\n');
+    const destinationInspection = {
+      isDirectory: vi.fn(() => true),
+      realpath: vi.fn((v: string) => v),
+    };
+    expect(
+      await applySuggestionForSessionAsync(
+        session,
+        request(),
+        {},
+        {
+          reportDiagnostic,
+          destinationInspection,
+        }
+      )
+    ).toEqual({ status: 'applied', filePath: 'file', replacedLines: 1 });
+    expect(destinationInspection.realpath).toHaveBeenCalledWith(root);
+    expect(reportDiagnostic.mock.calls).toEqual([
+      ['[suggestion:apply] file: applied'],
+      ['[suggestion:apply] file: applied'],
+    ]);
+    expect(fs.readFileSync(path.join(root, 'file'), 'utf8')).toBe('new\n');
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps default diagnostic call order and cancellation even when a reporter throws', async () => {
+    const session = makeSession();
+    fs.writeFileSync(path.join(root, 'file'), 'old\n');
+    expect(applySuggestionForSession(session, { ...request(), filePath: 'other' })).toMatchObject({
+      reason: 'not-reviewed',
+    });
+    expect(applySuggestionForSession(session, request())).toMatchObject({ status: 'applied' });
+    expect(vi.mocked(console.error).mock.calls).toEqual([
+      ['[suggestion:apply] other: refused (not-reviewed)'],
+      ['[suggestion:apply] file: applied'],
+    ]);
+    const controller = new AbortController();
+    const reason = new Error('cancelled by diagnostic');
+    await expect(
+      applySuggestionForSessionAsync(
+        session,
+        { ...request(), filePath: 'other' },
+        {
+          signal: controller.signal,
+        },
+        {
+          reportDiagnostic() {
+            controller.abort(reason);
+            throw new Error('report failed');
+          },
+        }
+      )
+    ).rejects.toBe(reason);
+  });
+});
+
+it('propagates cancellation from refused-result diagnostics and retains a committed Apply', async () => {
+  for (const applied of [false, true]) {
+    const session = makeSession();
+    fs.writeFileSync(path.join(root, 'file'), applied ? 'old\n' : 'different\n');
+    const controller = new AbortController();
+    const reason = new Error('cancelled by result reporter');
+    const result = applySuggestionForSessionAsync(
+      session,
+      request(),
+      { signal: controller.signal },
+      {
+        reportDiagnostic() {
+          controller.abort(reason);
+          throw new Error('report failed');
+        },
+      }
+    );
+    if (applied)
+      await expect(result).resolves.toEqual({
+        status: 'applied',
+        filePath: 'file',
+        replacedLines: 1,
+      });
+    else await expect(result).rejects.toBe(reason);
+    expect(fs.readFileSync(path.join(root, 'file'), 'utf8')).toBe(
+      applied ? 'new\n' : 'different\n'
+    );
+  }
 });

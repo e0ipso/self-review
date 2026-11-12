@@ -54,7 +54,8 @@ import type {
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { formatGitDiffArgs } from './git-diff-args';
 import { canonicalSourcePath } from './source-identity';
-import { stderrReporter, type DiagnosticReporter } from './diagnostics';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 
 /**
  * The git-mode inputs plus the forge threads, before any diff is loaded (so nothing to anchor
@@ -69,6 +70,8 @@ export interface MaterializedRemoteSession {
   mode: MaterializeMode;
   /** Idempotent, never rejects; the receiver of the session must call it. */
   cleanup: () => Promise<void>;
+  /** Legacy synchronous-first removal, for an exit handler that cannot await normal disposal. */
+  cleanupForExit?: () => Promise<void>;
   /** Provenance + thread-sync status for payloads and the saved review. */
   remote: RemoteSessionInfo;
   /** Verbatim; empty when thread sync is unavailable. */
@@ -161,6 +164,8 @@ export const defaultRemoteSessionDeps: RemoteSessionDeps = {
 export interface RemoteLifetimeOptions {
   /** Defaults to stderr, with the existing remote diagnostic text and call form. */
   reportDiagnostic?: DiagnosticReporter;
+  /** Passed unchanged to materialization; no host storage is used when supplied. */
+  temporaryClones?: MaterializeOptions['temporaryClones'];
   /** Without one, the session is bounded only by the per-command timeout. */
   signal?: AbortSignal;
 }
@@ -191,11 +196,12 @@ export async function startRemoteSession(
   options: StartRemoteSessionOptions = {}
 ): Promise<MaterializedRemoteSession> {
   const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
-  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
   const threadsRequired = options.threads === 'required';
   const { signal } = options;
   const lifetime: MaterializeOptions = {
     signal,
+    ...(options.temporaryClones ? { temporaryClones: options.temporaryClones } : {}),
     ...(options.reportDiagnostic ? { reportDiagnostic } : {}),
   };
   throwIfAborted(signal, 'start');
@@ -278,7 +284,8 @@ export async function startRemoteSession(
       repoPath: materialized.repoPath,
       gitDiffArgs: [`${materialized.baseSha}...${materialized.headSha}`],
       mode: materialized.mode,
-      cleanup: materialized.cleanup,
+      cleanup: materialized.cleanupAsync ?? materialized.cleanup,
+      cleanupForExit: materialized.cleanup,
       remote: {
         remoteUrl: url,
         remoteBaseSha: materialized.baseSha,
@@ -292,7 +299,7 @@ export async function startRemoteSession(
       fetchedThreads,
     };
   } catch (error) {
-    await materialized.cleanup();
+    await (materialized.cleanupAsync ?? materialized.cleanup)();
     throw error;
   }
 }
@@ -380,9 +387,10 @@ export async function bootstrapRemoteDiff(
   options: RemoteLifetimeOptions = {}
 ): Promise<RemoteBootstrapResult> {
   const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
-  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
   const started = await startRemoteSession(url, cwd, d, {
     signal: options.signal,
+    temporaryClones: options.temporaryClones,
     reportDiagnostic,
   });
 

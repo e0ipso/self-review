@@ -16,6 +16,8 @@ import type {
   ApplySuggestionRequest,
 } from './apply-suggestion';
 import { SafeFsError } from './safe-fs';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 
 export type ApplySuggestionForSessionAsyncOptions = Omit<
   ApplySuggestionAsyncOptions,
@@ -27,6 +29,22 @@ type ApplySession = Pick<
   'diffData' | 'sourceIdentity' | 'applyDestinationRoot' | 'reviewedPaths'
 >;
 
+/** Read-only destination policy, independent of source writes. Methods retain their receiver. */
+export interface ApplyDestinationInspection {
+  realpath(target: string): string;
+  isDirectory(target: string): boolean;
+}
+
+export interface SuggestionOperationOptions {
+  destinationInspection?: ApplyDestinationInspection;
+  reportDiagnostic?: DiagnosticReporter;
+}
+
+export const nodeApplyDestinationInspection: ApplyDestinationInspection = {
+  realpath: target => fs.realpathSync(target),
+  isDirectory: target => fs.statSync(target).isDirectory(),
+};
+
 /**
  * True when this session reviews a remote PR/MR that was materialized into
  * a temporary clone. That clone is removed when the app exits, so a write
@@ -37,17 +55,24 @@ export function isTemporaryCloneSession(session: Pick<ReviewSession, 'diffData'>
 }
 
 /** Canonical form of a path, following symlinks when the path exists. */
-function canonicalize(target: string): string {
+function canonicalize(target: string, inspection: ApplyDestinationInspection): string {
   try {
-    return fs.realpathSync(target);
+    return inspection.realpath(target);
   } catch {
     return path.resolve(target);
   }
 }
 
 /** True when `candidate` is `root` itself or sits anywhere beneath it. */
-function isWithin(root: string, candidate: string): boolean {
-  const relative = path.relative(canonicalize(root), canonicalize(candidate));
+function isWithin(
+  root: string,
+  candidate: string,
+  inspection: ApplyDestinationInspection
+): boolean {
+  const relative = path.relative(
+    canonicalize(root, inspection),
+    canonicalize(candidate, inspection)
+  );
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
@@ -83,8 +108,10 @@ export function resolveApplyDestination(
  */
 export function setApplyDestination(
   session: Pick<ReviewSession, 'diffData' | 'sourceIdentity' | 'applyDestinationRoot'>,
-  directoryPath: string
+  directoryPath: string,
+  options: SuggestionOperationOptions = {}
 ): ApplyDestinationOutcome {
+  const inspection = options.destinationInspection ?? nodeApplyDestinationInspection;
   if (!path.isAbsolute(directoryPath)) {
     return {
       status: 'rejected',
@@ -95,7 +122,7 @@ export function setApplyDestination(
 
   let isDirectory = false;
   try {
-    isDirectory = fs.statSync(directoryPath).isDirectory();
+    isDirectory = inspection.isDirectory(directoryPath);
   } catch {
     isDirectory = false;
   }
@@ -108,7 +135,7 @@ export function setApplyDestination(
   }
 
   const clonePath = isTemporaryCloneSession(session) ? resolveSourceBaseDir(session) : null;
-  if (clonePath && isWithin(clonePath, directoryPath)) {
+  if (clonePath && isWithin(clonePath, directoryPath, inspection)) {
     return {
       status: 'rejected',
       reason: 'destination-inside-temporary-clone',
@@ -117,8 +144,8 @@ export function setApplyDestination(
     };
   }
 
-  session.applyDestinationRoot = canonicalize(directoryPath);
-  console.error(`[suggestion:apply] destination set for this session`);
+  session.applyDestinationRoot = canonicalize(directoryPath, inspection);
+  isolatedReporter(options.reportDiagnostic)(`[suggestion:apply] destination set for this session`);
   return { status: 'chosen', destinationRoot: session.applyDestinationRoot };
 }
 
@@ -140,7 +167,8 @@ export function setApplyDestination(
  */
 function prepareSessionApply(
   session: ApplySession,
-  request: SuggestionApplyRequest
+  request: SuggestionApplyRequest,
+  reportDiagnostic: DiagnosticReporter
 ): { engineRequest: ApplySuggestionRequest } | SuggestionApplyOutcome {
   const destinationRoot = resolveApplyDestination(session);
   const identity = session.sourceIdentity;
@@ -157,7 +185,7 @@ function prepareSessionApply(
   }
 
   if (!session.reviewedPaths.has(request.filePath)) {
-    console.error(`[suggestion:apply] ${request.filePath}: refused (not-reviewed)`);
+    reportDiagnostic(`[suggestion:apply] ${request.filePath}: refused (not-reviewed)`);
     return {
       status: 'refused',
       filePath: request.filePath,
@@ -179,11 +207,17 @@ function prepareSessionApply(
 /** Apply synchronously using the session's destination and reviewed-path authorization. */
 export function applySuggestionForSession(
   session: ApplySession,
-  request: SuggestionApplyRequest
+  request: SuggestionApplyRequest,
+  effects: SuggestionOperationOptions = {}
 ): SuggestionApplyOutcome {
-  const prepared = prepareSessionApply(session, request);
+  const reportDiagnostic = isolatedReporter(effects.reportDiagnostic);
+  const prepared = prepareSessionApply(session, request, reportDiagnostic);
   if ('status' in prepared) return prepared;
-  return projectApplyResult(request.filePath, applySuggestion(prepared.engineRequest));
+  return projectApplyResult(
+    request.filePath,
+    applySuggestion(prepared.engineRequest),
+    reportDiagnostic
+  );
 }
 
 /**
@@ -195,7 +229,8 @@ export function applySuggestionForSession(
 export async function applySuggestionForSessionAsync(
   session: ApplySession,
   request: SuggestionApplyRequest,
-  options: ApplySuggestionForSessionAsyncOptions = {}
+  options: ApplySuggestionForSessionAsyncOptions = {},
+  effects: SuggestionOperationOptions = {}
 ): Promise<SuggestionApplyOutcome> {
   options.signal?.throwIfAborted();
   request = {
@@ -203,7 +238,10 @@ export async function applySuggestionForSessionAsync(
     lineRange: request.lineRange && { ...request.lineRange },
     suggestion: { ...request.suggestion },
   };
-  const prepared = prepareSessionApply(session, request);
+  const reportDiagnostic = isolatedReporter(effects.reportDiagnostic);
+  const inspection = effects.destinationInspection ?? nodeApplyDestinationInspection;
+  const prepared = prepareSessionApply(session, request, reportDiagnostic);
+  options.signal?.throwIfAborted();
   if ('status' in prepared) return prepared;
   const identity = session.sourceIdentity;
   const paths = session.reviewedPaths;
@@ -215,8 +253,8 @@ export async function applySuggestionForSessionAsync(
     const destinationRoot = prepared.engineRequest.destinationRoot;
     if (
       physicalRoot !== path.resolve(destinationRoot) ||
-      canonicalize(destinationRoot) !== physicalRoot ||
-      (temporary && identity && isWithin(identity.sourceRoot, physicalRoot))
+      canonicalize(destinationRoot, inspection) !== physicalRoot ||
+      (temporary && identity && isWithin(identity.sourceRoot, physicalRoot, inspection))
     ) {
       throw new SafeFsError(
         'identity-changed',
@@ -248,14 +286,19 @@ export async function applySuggestionForSessionAsync(
       }
     },
   });
-  return projectApplyResult(request.filePath, result);
+  const outcome = projectApplyResult(request.filePath, result, reportDiagnostic);
+  // Reporting can trigger host cancellation. A refusal has not committed anything; an applied
+  // result must remain successful even when cancellation arrives during its diagnostic.
+  if (result.status !== 'applied') options.signal?.throwIfAborted();
+  return outcome;
 }
 
 function projectApplyResult(
   filePath: string,
-  result: ApplySuggestionResult
+  result: ApplySuggestionResult,
+  reportDiagnostic: DiagnosticReporter
 ): SuggestionApplyOutcome {
-  console.error(
+  reportDiagnostic(
     `[suggestion:apply] ${filePath}: ${
       result.status === 'applied' ? 'applied' : `refused (${result.reason})`
     }`

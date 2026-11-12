@@ -77,6 +77,9 @@ const shutdownResources = createDesktopShutdown(
       updates.dispose();
       await Promise.all([desktop.operations.dispose(reason), desktop.remote.dispose(reason)]);
     },
+    settleForExit: async () => {
+      await desktop.remote.settleForExit?.();
+    },
   },
   code => process.exit(code),
   () => {

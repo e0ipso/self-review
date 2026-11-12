@@ -14,6 +14,7 @@ import {
   defaultGitRunner,
   detectExistingClone,
   materialize,
+  nodeTemporaryCloneStorage,
   resolveRemoteDefaultBranch,
 } from './materializer';
 import type { MaterializeResult } from './materializer';
@@ -453,21 +454,20 @@ describe('materialize', () => {
         throw new Error('primary clone failure');
       };
       const { runner } = createRunner(handlers);
-      const original = fs.rmSync;
-      const remove = vi
-        .spyOn(fs, 'rmSync')
-        .mockClear()
-        .mockImplementationOnce(() => {
-          throw new Error('secondary removal failure');
-        });
       try {
-        await expect(materialize(githubUrl, 'main', '/not/a/repo', runner)).rejects.toThrow(
-          'primary clone failure'
-        );
+        await expect(
+          materialize(githubUrl, 'main', '/not/a/repo', runner, undefined, {
+            temporaryClones: {
+              ...nodeTemporaryCloneStorage,
+              async remove() {
+                throw new Error('secondary removal failure');
+              },
+            },
+          })
+        ).rejects.toThrow('primary clone failure');
         expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('secondary removal failure'));
       } finally {
-        remove.mockRestore();
-        if (ownedDir) original(ownedDir, { recursive: true, force: true });
+        if (ownedDir) fs.rmSync(ownedDir, { recursive: true, force: true });
       }
     });
 

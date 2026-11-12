@@ -33,3 +33,15 @@ export type { FetchCommentsOptions } from './fetch-comments';
 export { scanDirectory, scanFile } from './directory-scanner';
 export type { SourceScanOptions, SourceScanResult } from './directory-scanner';
 export type { DiagnosticReporter } from './diagnostics';
+export { prepareDirectoryReview, commitReviewStart } from './review-start';
+export {
+  setApplyDestination,
+  applySuggestionForSession,
+  applySuggestionForSessionAsync,
+} from './review-suggestions';
+export type {
+  ApplySuggestionForSessionAsyncOptions,
+  SuggestionOperationOptions,
+} from './review-suggestions';
+export type { PublicationFileSystem } from './publication-fs';
+export type { TemporaryCloneStorage } from './materializer';

@@ -17,7 +17,11 @@ const harness = vi.hoisted(() => ({
   requestUpdate: vi.fn(),
   presentation: vi.fn(),
   locale: 'ar-EG',
-  remote: { closed: false, dispose: vi.fn(async () => {}) },
+  remote: {
+    closed: false,
+    dispose: vi.fn(async () => {}),
+    settleForExit: vi.fn(async () => {}),
+  },
   session: { diffData: null as import('../shared/types').DiffLoadPayload | null },
 }));
 vi.mock('electron', () => ({
@@ -109,6 +113,7 @@ beforeEach(() => {
   harness.confirmPublished.mockResolvedValue(true);
   harness.publish.mockResolvedValue(undefined);
   harness.remote.dispose.mockResolvedValue(undefined);
+  harness.remote.settleForExit.mockResolvedValue(undefined);
   harness.initialize.mockResolvedValue(true);
   harness.createWindow.mockImplementation(window);
   harness.locale = 'ar-EG';
@@ -158,6 +163,24 @@ function completeUpdate() {
 }
 
 describe('desktop composition', () => {
+  it('retains the remote exit settlement seam in the actual shutdown composition', async () => {
+    const cleanup = deferred<void>();
+    harness.remote.settleForExit.mockReturnValueOnce(cleanup.promise);
+    await import('./main');
+    await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
+    const win = harness.createWindow.mock.results[0].value;
+    harness.signals.SIGTERM();
+    harness.signals.SIGINT();
+    try {
+      await vi.waitFor(() => expect(win.isDestroyed()).toBe(true));
+      expect(harness.remote.settleForExit).toHaveBeenCalledOnce();
+      expect(process.exit).not.toHaveBeenCalled();
+    } finally {
+      cleanup.resolve();
+    }
+    await vi.waitFor(() => expect(process.exit).toHaveBeenCalledExactlyOnceWith(0));
+  });
+
   it('ignores activation until deferred initialization completes and creates one window', async () => {
     const startup = deferred<boolean>();
     harness.initialize.mockReturnValue(startup.promise);

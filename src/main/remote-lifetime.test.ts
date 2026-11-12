@@ -12,8 +12,49 @@ function result(cleanup: () => Promise<void>) {
   return { session: { cleanup } } as RemoteBootstrapResult;
 }
 afterEach(() => vi.useRealTimers());
+const flush = async () => {
+  for (let i = 0; i < 12; i++) await Promise.resolve();
+};
 
 describe('desktop remote resource ownership', () => {
+  it.each(['loaded', 'late', 'cancelled'] as const)(
+    'closes on the deadline but awaits %s owned cleanup before hard exit',
+    async origin => {
+      vi.useFakeTimers();
+      const remote = new RemoteLifetime();
+      const done = deferred<void>();
+      const bootstrap = deferred<RemoteBootstrapResult>();
+      const cleanup = vi.fn(() => done.promise);
+      let opening: Promise<RemoteBootstrapResult> | undefined;
+      let rejected: Promise<void> | undefined;
+      let cancelled: Promise<void> | undefined;
+      if (origin === 'late') {
+        opening = remote.open(() => bootstrap.promise);
+        rejected = expect(opening).rejects.toThrow(/cancelled/);
+      } else {
+        await remote.open(async () => result(cleanup));
+        if (origin === 'cancelled') cancelled = remote.cancelOpen();
+      }
+      const exit = vi.fn();
+      const close = vi.fn();
+      const shutdown = createDesktopShutdown(remote, exit, close);
+      const shuttingDown = shutdown(0, 'SIGTERM');
+      expect(shutdown(1, 'second signal')).toBe(shuttingDown);
+      await flush();
+      if (origin === 'late') bootstrap.resolve(result(cleanup));
+      await flush();
+      expect(cleanup).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(close).toHaveBeenCalledOnce();
+      expect(exit).not.toHaveBeenCalled();
+      done.resolve();
+      await Promise.all([shuttingDown, rejected, cancelled]);
+      expect(cleanup).toHaveBeenCalledOnce();
+      expect(exit).toHaveBeenCalledExactlyOnceWith(0);
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
   it('aborts startup and awaits a late acquired cleanup before repeated signals exit once', async () => {
     const remote = new RemoteLifetime();
     const bootstrap = deferred<RemoteBootstrapResult>();
