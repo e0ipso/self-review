@@ -10,6 +10,7 @@ import { join, resolve } from 'path';
 import type { DiffFile, DiffLine } from './types';
 import { readSyntheticSource, readSyntheticSourceAsync } from './synthetic-source';
 import type { SyntheticSource } from './synthetic-source';
+import type { SourceReadFsLayer } from './scan-fs';
 import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
 export { readSyntheticSource } from './synthetic-source';
 export type { SyntheticSource } from './synthetic-source';
@@ -133,6 +134,8 @@ function projectSources(
 }
 
 export interface AsyncSyntheticDiffOptions extends SyntheticDiffOptions {
+  /** Used for root resolution and every source inspection/read. */
+  readFs?: SourceReadFsLayer;
   signal?: AbortSignal;
 }
 
@@ -159,7 +162,14 @@ async function projectSourcesAsync(
 ) {
   checkLoadingCancelled(options.signal);
   const budgets = resolveSourceBudgets(options.budgets);
-  const sourceRoot = syntheticRoot(rootDir);
+  const sourceRoot = options.readFs
+    ? await options.readFs.realpath(rootDir).catch(() => {
+        checkLoadingCancelled(options.signal);
+        // Preserve per-path read diagnostics without consulting the host filesystem.
+        return resolve(rootDir);
+      })
+    : syntheticRoot(rootDir);
+  checkLoadingCancelled(options.signal);
   const projection = createProjection(budgets, output);
   for (const filePath of paths) {
     await loadingCheckpoint(options.signal);
@@ -168,6 +178,7 @@ async function projectSourcesAsync(
       ? null
       : await readSyntheticSourceAsync(join(sourceRoot, filePath), {
           sourceRoot,
+          readFs: options.readFs,
           followSymlinks: options.followSymlinks,
           maxFileBytes: budgets.maxFileBytes,
           remainingBytes: projection.remaining(),

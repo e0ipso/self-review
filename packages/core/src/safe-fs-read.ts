@@ -4,6 +4,8 @@ import type { FileHandle } from 'node:fs/promises';
 import type { Stats } from 'node:fs';
 import { setImmediate as yieldToIo } from 'node:timers/promises';
 import type { FsLayer } from './safe-fs';
+import * as path from 'node:path';
+import { SafeFsError, errnoOf, toSafeFsError } from './safe-fs-policy';
 
 /** Methods retain their receiver. read copies at most length bytes into the caller's buffer. */
 export interface AsyncReadHandle {
@@ -80,4 +82,47 @@ export function boundedReadFsFromSync(
       return layer.realpathSync(target);
     },
   };
+}
+
+/** Inspect every parent without following links; the root is the caller's trust boundary. */
+export async function assertNoSymlinkAncestorsAsync(
+  root: string,
+  rel: string,
+  layer: Pick<AsyncReadFsLayer, 'lstat'>,
+  signal?: AbortSignal
+): Promise<void> {
+  signal?.throwIfAborted();
+  const normalized = path.normalize(rel);
+  if (
+    path.isAbsolute(normalized) ||
+    normalized === '..' ||
+    normalized.startsWith(`..${path.sep}`)
+  ) {
+    throw new SafeFsError(
+      'unsupported-target',
+      path.join(root, rel),
+      `Refusing ${rel}: it does not stay under ${root}`
+    );
+  }
+  let current = root;
+  for (const segment of path.dirname(normalized).split(path.sep)) {
+    if (!segment || segment === '.') continue;
+    current = path.join(current, segment);
+    let stats: Stats;
+    try {
+      stats = await layer.lstat(current);
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (errnoOf(error) === 'ENOENT') break;
+      throw toSafeFsError(error, current, 'inspect');
+    }
+    signal?.throwIfAborted();
+    if (stats.isSymbolicLink()) {
+      throw new SafeFsError(
+        'unsafe-link',
+        current,
+        `Refusing to go through ${current}: it is a symbolic link`
+      );
+    }
+  }
 }

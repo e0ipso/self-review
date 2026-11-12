@@ -7,6 +7,7 @@ import { validateReviewForSerialization } from './review-state-validation';
 import { readContainedFile, toSafeFsError } from './safe-fs';
 import { canonicalSourcePath } from './source-identity';
 import type { SafeFsErrorCode, FsLayer } from './safe-fs';
+import type { BoundedAsyncReadFsLayer } from './safe-fs-read';
 import { ASSET_DIR_NAME } from './attachment-planner';
 import type { Attachment, ReviewComment, ReviewState } from './types';
 
@@ -83,6 +84,8 @@ const READ_FAILURES: Partial<Record<SafeFsErrorCode, AttachmentReadFailureReason
 /** Read one asset the caller authorized: the asset directory must not be a link, nor the leaf. */
 export interface AttachmentReadOptions {
   fs?: FsLayer;
+  /** Bounded read-only adapter, preferred over the legacy fs when both are supplied. */
+  readFs?: BoundedAsyncReadFsLayer;
   signal?: AbortSignal;
   /** Remaining aggregate budget, in addition to the fixed per-image limit. */
   maxBytes?: number;
@@ -92,6 +95,7 @@ export async function readAssetFile(
   assetPath: string,
   options: AttachmentReadOptions = {}
 ): Promise<AttachmentReadResult> {
+  options.signal?.throwIfAborted();
   const assetDir = path.dirname(assetPath);
   const rel = path.join(path.basename(assetDir), path.basename(assetPath));
   try {
@@ -101,6 +105,7 @@ export async function readAssetFile(
       Math.min(MAX_IMAGE_BYTES, options.maxBytes ?? MAX_IMAGE_BYTES),
       options
     );
+    options.signal?.throwIfAborted();
     const data = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength);
     return { ok: true, data: data as ArrayBuffer };
   } catch (error) {
@@ -164,10 +169,16 @@ export async function relocateAttachments(
   state = validateReviewForSerialization(state);
   if (origins.size === 0) return state;
   const outputDir = path.dirname(path.resolve(outputPath));
-  const targetAssetDir = path.join(
-    options.fs ? options.fs.realpathSync(outputDir) : canonicalSourcePath(outputDir),
-    ASSET_DIR_NAME
-  );
+  const targetRoot = options.readFs
+    ? await options.readFs.realpath(outputDir).catch(error => {
+        options.signal?.throwIfAborted();
+        throw error;
+      })
+    : options.fs
+      ? options.fs.realpathSync(outputDir)
+      : canonicalSourcePath(outputDir);
+  options.signal?.throwIfAborted();
+  const targetAssetDir = path.join(targetRoot, ASSET_DIR_NAME);
   let remaining = MAX_PUBLICATION_ASSET_BYTES;
   for (const file of state.files) {
     for (const { attachments } of attachmentLists(file.comments)) {
@@ -225,5 +236,6 @@ export async function relocateAttachments(
     }
     files.push({ ...file, comments });
   }
+  options.signal?.throwIfAborted();
   return { ...state, files };
 }

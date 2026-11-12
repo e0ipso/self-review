@@ -414,3 +414,6 @@ export type {
   BoundedAsyncReadFsLayer,
   SyncReadFsLayer,
 } from './safe-fs-read';
+
+export type { SourceReadFsLayer, ScanFsLayer, ScanEntry, ScanDirectoryHandle } from './scan-fs';
+export { nodeScanFsLayer } from './node-scan-fs';

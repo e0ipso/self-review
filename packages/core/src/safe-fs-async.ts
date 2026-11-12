@@ -17,7 +17,7 @@ import {
 } from './safe-fs-policy';
 import type { AtomicReplaceOptions, AtomicReplaceResult } from './safe-fs';
 import { formatBytes } from './input-budgets';
-import { nodeReadFsLayer } from './safe-fs-read';
+import { assertNoSymlinkAncestorsAsync, nodeReadFsLayer } from './safe-fs-read';
 import type { AsyncReadHandle, AsyncReadFsLayer, BoundedAsyncReadFsLayer } from './safe-fs-read';
 
 /** Only the handle operations these readers and writers use. Methods retain their receiver. */
@@ -97,6 +97,7 @@ export async function readContainedFileAsync(
     throw toSafeFsError(error, target, 'read');
   } finally {
     await quietly(() => handle.close());
+    signal?.throwIfAborted();
   }
 }
 
@@ -162,32 +163,8 @@ export async function openContainedFileAsync(
   signal?: AbortSignal
 ): Promise<{ handle: AsyncReadHandle; stats: Stats }> {
   signal?.throwIfAborted();
-  const normalized = path.normalize(rel);
-  if (
-    path.isAbsolute(normalized) ||
-    normalized === '..' ||
-    normalized.startsWith(`..${path.sep}`)
-  ) {
-    throw new SafeFsError(
-      'unsupported-target',
-      path.join(root, rel),
-      `Refusing ${rel}: it does not stay under ${root}`
-    );
-  }
-  let current = root;
-  for (const segment of path.dirname(normalized).split(path.sep)) {
-    if (!segment || segment === '.') continue;
-    current = path.join(current, segment);
-    const stats = await lstatOrNull(current, layer);
-    signal?.throwIfAborted();
-    if (stats === null) break;
-    if (stats.isSymbolicLink())
-      throw new SafeFsError(
-        'unsafe-link',
-        current,
-        `Refusing to go through ${current}: it is a symbolic link`
-      );
-  }
+  await assertNoSymlinkAncestorsAsync(root, rel, layer, signal);
+  signal?.throwIfAborted();
   const target = path.join(root, rel);
   const handle = await layer.open(target, READ_FLAGS | constants.O_NOFOLLOW).catch(error => {
     signal?.throwIfAborted();
@@ -196,12 +173,15 @@ export async function openContainedFileAsync(
   try {
     signal?.throwIfAborted();
     const stats = await handle.stat();
+    signal?.throwIfAborted();
     if (stats.isDirectory())
       throw new SafeFsError('output-is-directory', target, `${target} is a directory`);
     if (!stats.isFile())
       throw new SafeFsError('not-regular', target, `${target} is not a regular file`);
     const named = await layer.lstat(target);
+    signal?.throwIfAborted();
     const physical = await layer.realpath(target);
+    signal?.throwIfAborted();
     const physicalRoot = await layer.realpath(root);
     signal?.throwIfAborted();
     if (!sameFile(named, stats) || physical !== path.join(physicalRoot, rel)) {

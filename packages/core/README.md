@@ -80,6 +80,31 @@ It is a legacy compatibility adapter, not a bounded-read capability. Without `re
 bound allocation or interrupt the call. Existing adapters remain supported; no new refusal or
 error/outcome-union member is introduced. A supplied `asyncFs` implementation retains precedence.
 
+`readAssetFile`, `relocateAttachments` and `readContainedFile` accept an optional `readFs`
+capability with the bounded read contract. Read-only adapters need no write, permission, ownership
+or replacement methods. The original `fs?: FsLayer` option remains supported, including its optional
+`asyncFs` and whole-file fallback. When both options are supplied, `readFs` takes precedence for
+reads and relocation root resolution. Asset authorization, 10 MiB per-asset and 64 MiB aggregate
+relocation limits are unchanged. Cancellation is checked across reads and close; no partial
+attachment data is returned after cancellation.
+
+`scanDirectory` and `scanFile` accept `scanFs?: ScanFsLayer`. This extends the bounded reader with
+`stat`, `readlink` and `opendir`; directory handles provide async iteration and `close`.
+`SourceReadFsLayer` is the smaller source-reader role, adding only `readlink` to the bounded reader.
+The async synthetic diff and file loaders accept it as `readFs`. These contracts and the default
+`nodeScanFsLayer` are exported from the root and filesystem entries. All root resolution,
+enumeration, ancestor/link inspection, descriptor identity checks and content reads use the supplied
+filesystem. Virtual paths never fall back to host filesystem reads. Adapters must supply Node-style
+metadata, errno codes and canonical paths, and bounded descriptor reads over that same filesystem.
+
+Ignored directories are pruned before opening. Scans retain deterministic file ordering, entry
+budgets, no-follow containment and cleanup after early return, failure and cancellation. Directory
+scans skip links; explicitly selected files still follow their leaf link, and synthetic git
+additions retain link target text. The existing async scan signatures and synchronous synthetic APIs
+remain. Native I/O calls in flight cannot be preempted, and portable name/identity checks cannot
+eliminate all path replacement races. Callers own adapters; each operation owns and closes its
+opened handles.
+
 ## Patch parsing and local additions
 
 `parseDiff(rawDiff)` and `parseDiffWithDiagnostics(rawDiff)` remain synchronous. They use the same
