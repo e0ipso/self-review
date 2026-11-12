@@ -26,8 +26,7 @@ import type {
   ForgeThread,
   ForgeUrl,
 } from './forge-provider';
-import { createGitHubProvider } from './github-provider';
-import { createGitLabProvider } from './gitlab-provider';
+import { createForgeProvider } from './forge-catalog';
 import {
   DEFAULT_GIT_COMMAND_TIMEOUT_MS,
   defaultGitRunner,
@@ -119,15 +118,6 @@ export interface RemoteSessionDeps {
   }>;
 }
 
-const providerFactories: Record<ForgeName, (runner: ForgeCommandRunner) => ForgeProvider> = {
-  github: createGitHubProvider,
-  gitlab: createGitLabProvider,
-};
-
-function defaultCreateProvider(forge: ForgeName, runner: ForgeCommandRunner): ForgeProvider {
-  return providerFactories[forge](runner);
-}
-
 /** Puts `gh`/`glab` under the session's bounds too, so a startup deadline can reach them. */
 function bindSessionRunner(runner: ForgeCommandRunner, signal?: AbortSignal): ForgeCommandRunner {
   return (command, args, options) => {
@@ -149,7 +139,7 @@ function throwIfAborted(signal: AbortSignal | undefined, stage: string): void {
 }
 
 export const defaultRemoteSessionDeps: RemoteSessionDeps = {
-  createProvider: defaultCreateProvider,
+  createProvider: createForgeProvider,
   detectExistingClone,
   materialize,
   resolveRemoteDefaultBranch,
@@ -204,7 +194,10 @@ export async function startRemoteSession(
   const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
   const threadsRequired = options.threads === 'required';
   const { signal } = options;
-  const lifetime: MaterializeOptions = { signal };
+  const lifetime: MaterializeOptions = {
+    signal,
+    ...(options.reportDiagnostic ? { reportDiagnostic } : {}),
+  };
   throwIfAborted(signal, 'start');
 
   const forgeUrl = parseForgeUrl(url);

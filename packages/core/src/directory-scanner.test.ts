@@ -31,6 +31,30 @@ describe('scanDirectory', () => {
     tempDirs.length = 0;
   });
 
+  it('keeps scan diagnostics with each caller without printing', async () => {
+    const dir = await createTempDir();
+    await writeFile(join(dir, 'one.txt'), 'one');
+    await writeFile(join(dir, 'two.txt'), 'two');
+    const reportLimit = vi.fn();
+    const reportMissing = vi.fn();
+    const terminal = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const [limited, missing] = await Promise.all([
+        scanDirectory(dir, [], { budgets: { maxEntries: 1 }, reportDiagnostic: reportLimit }),
+        scanFile(join(dir, 'missing.txt'), { reportDiagnostic: reportMissing }),
+      ]);
+      expect(limited.entryLimitExceeded).toBe(true);
+      expect(limited.diagnostics).toHaveLength(1);
+      expect(reportLimit).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining('Stopped scanning')
+      );
+      expect(reportMissing).toHaveBeenCalledExactlyOnceWith(`[scan] ${missing.diagnostics[0]}`);
+      expect(terminal).not.toHaveBeenCalled();
+    } finally {
+      terminal.mockRestore();
+    }
+  });
+
   it('refuses a queued directory replaced by a symlink during opendir', async () => {
     const root = await createTempDir();
     const outside = await createTempDir();

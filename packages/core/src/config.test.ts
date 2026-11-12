@@ -28,6 +28,54 @@ describe('config', () => {
     process.cwd = originalCwd;
   });
 
+  describe('payload thresholds', () => {
+    it.each(['max-files', 'max-total-lines'])(
+      'rejects nonfinite, unsafe and malformed %s overrides without losing user provenance',
+      key => {
+        for (const value of [
+          '.inf',
+          '-.inf',
+          '.nan',
+          '9007199254740992',
+          '-1',
+          'null',
+          'true',
+          '"12"',
+          '[]',
+        ]) {
+          vi.mocked(fs.existsSync).mockReturnValue(true);
+          vi.mocked(readFileWithinBudgetSync).mockImplementation(file => ({
+            kind: 'ok',
+            content: Buffer.from(`${key}: ${String(file).endsWith('config.yaml') ? 12 : value}\n`),
+          }));
+          const reportDiagnostic = vi.fn();
+          const loaded = loadConfigWithProvenance({ reportDiagnostic });
+          const property = key === 'max-files' ? 'maxFiles' : 'maxTotalLines';
+          expect(loaded.config[property], value).toBe(12);
+          expect(loaded.provenance[property], value).toBe('user');
+          expect(reportDiagnostic, value).toHaveBeenCalledWith(
+            expect.stringContaining(`Invalid ${key}`)
+          );
+          expect(console.error).not.toHaveBeenCalled();
+        }
+      }
+    );
+
+    it.each([0, 0.5, 12, Number.MAX_SAFE_INTEGER])('retains finite threshold %s', value => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+        kind: 'ok',
+        content: Buffer.from(`max-files: ${value}\nmax-total-lines: ${value}\n`),
+      });
+      const reportDiagnostic = vi.fn();
+      const loaded = loadConfigWithProvenance({ reportDiagnostic });
+      expect(loaded.config.maxFiles).toBe(value);
+      expect(loaded.config.maxTotalLines).toBe(value);
+      expect(loaded.provenance.maxFiles).toBe('project');
+      expect(reportDiagnostic).not.toHaveBeenCalled();
+    });
+  });
+
   describe('loadConfig', () => {
     it('returns the shared default configuration when no config files exist', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);

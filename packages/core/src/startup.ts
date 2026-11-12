@@ -178,8 +178,11 @@ export async function loadLocalReview(
   if (source.mode === 'file' || source.mode === 'directory') {
     const scan =
       source.mode === 'file'
-        ? await scanFile(source.sourcePath, { signal: options.signal })
-        : await scanDirectory(source.sourcePath, config.ignore, { signal: options.signal });
+        ? await scanFile(source.sourcePath, { signal: options.signal, reportDiagnostic: log })
+        : await scanDirectory(source.sourcePath, config.ignore, {
+            signal: options.signal,
+            reportDiagnostic: log,
+          });
     checkCancelled();
     for (const diagnostic of scan.diagnostics) log(`Diff diagnostic: ${diagnostic}`);
     checkCancelled();

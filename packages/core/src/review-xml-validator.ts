@@ -1,9 +1,13 @@
 // Review XML validation, including the historical infrastructure-failure fallback.
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { validateXML } from 'xmllint-wasm';
 import { XSD_SCHEMA } from './review-schema';
 import { ReviewXmlError } from './xml-errors';
 
-export async function validateAgainstSchema(xml: string): Promise<void> {
+export async function validateAgainstSchema(
+  xml: string,
+  reportDiagnostic: DiagnosticReporter = stderrReporter
+): Promise<void> {
   let validationResult: Awaited<ReturnType<typeof validateXML>>;
   try {
     validationResult = await validateXML({
@@ -13,11 +17,11 @@ export async function validateAgainstSchema(xml: string): Promise<void> {
   } catch (error) {
     // Infrastructure failure (e.g. WASM load): losing a finished review is the worse outcome.
     if (error instanceof Error) {
-      console.error(
+      reportDiagnostic(
         `[main] XML validation infrastructure failed: ${error.message} - emitting XML without validation`
       );
     } else {
-      console.error(
+      reportDiagnostic(
         '[main] XML validation infrastructure failed - emitting XML without validation'
       );
     }
@@ -26,8 +30,8 @@ export async function validateAgainstSchema(xml: string): Promise<void> {
 
   if (!validationResult.valid) {
     const details = (validationResult.errors || []).map(formatSchemaError);
-    console.error('XML validation failed:');
-    details.forEach(detail => console.error(`  ${detail}`));
+    reportDiagnostic('XML validation failed:');
+    details.forEach(detail => reportDiagnostic(`  ${detail}`));
     throw new ReviewXmlError(
       'schema-invalid',
       `Generated XML does not conform to schema${details.length ? `: ${details.join('; ')}` : ''}`,

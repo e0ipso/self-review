@@ -7,10 +7,11 @@
 // implementations (github-provider.ts, gitlab-provider.ts) do the CLI work
 // through an injectable command runner so they stay unit-testable.
 
+import type { RemoteForge } from './types';
 import { FORGE_DEFINITIONS } from './forge-definitions';
 
 /** Forges the app knows how to talk to. */
-export type ForgeName = 'github' | 'gitlab';
+export type ForgeName = RemoteForge;
 
 /**
  * A parsed pull-request / merge-request web URL.

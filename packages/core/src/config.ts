@@ -185,13 +185,25 @@ function loadYamlConfig(
     config.wordWrap = raw['word-wrap'];
   }
 
-  if ('max-files' in raw && typeof raw['max-files'] === 'number') {
-    config.maxFiles = raw['max-files'] >= 0 ? raw['max-files'] : defaults.maxFiles;
-  }
-
-  if ('max-total-lines' in raw && typeof raw['max-total-lines'] === 'number') {
-    config.maxTotalLines =
-      raw['max-total-lines'] >= 0 ? raw['max-total-lines'] : defaults.maxTotalLines;
+  for (const [key, property] of [
+    ['max-files', 'maxFiles'],
+    ['max-total-lines', 'maxTotalLines'],
+  ] as const) {
+    if (!(key in raw)) continue;
+    const value = raw[key];
+    // Threshold comparisons support fractions; only zero explicitly disables a dimension.
+    if (
+      typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= 0 &&
+      value <= Number.MAX_SAFE_INTEGER
+    ) {
+      config[property] = value;
+    } else {
+      reportDiagnostic(
+        `Warning: Invalid ${key} value "${String(value)}", expected a finite number between 0 and ${Number.MAX_SAFE_INTEGER}; keeping the inherited value`
+      );
+    }
   }
 
   if (
