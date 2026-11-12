@@ -339,6 +339,7 @@ export {
   resolveStartupDiffArgs,
   loadLocalReview,
   loadResumeDocument,
+  adoptResumeDocument,
   ConfiguredDiffArgsError,
 } from './startup';
 export type { ResolvedDiffArgs, LoadedLocalReview } from './startup';

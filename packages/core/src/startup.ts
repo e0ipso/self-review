@@ -205,11 +205,20 @@ export async function loadLocalReview(
  */
 export function loadResumeDocument(session: ReviewSession, resumePath: string): ParsedReview {
   const parsed = parseReviewXml(resumePath);
+  return adoptResumeDocument(session, parsed, resumePath);
+}
+
+/** Adopt an already parsed document, retaining the same attachment provenance as sync loading. */
+export function adoptResumeDocument(
+  session: ReviewSession,
+  parsed: ParsedReview,
+  resumePath: string
+): ParsedReview {
+  const attachments = { attachmentOrigins: session.attachmentOrigins };
+  const attachmentDiagnostics = recordResumedAttachments(attachments, parsed.comments, resumePath);
+  session.attachmentOrigins = attachments.attachmentOrigins;
   session.resumeComments = parsed.comments;
   session.resumeViewedFiles = parsed.viewedFiles;
-  session.resumeImportDiagnostics = [
-    ...parsed.importDiagnostics,
-    ...recordResumedAttachments(session, parsed.comments, resumePath),
-  ];
+  session.resumeImportDiagnostics = [...parsed.importDiagnostics, ...attachmentDiagnostics];
   return parsed;
 }
