@@ -424,3 +424,6 @@ export { nodeTemporaryCloneStorage } from './materializer';
 export type { TemporaryCloneStorage } from './materializer';
 export { nodeApplyDestinationInspection } from './review-suggestions';
 export type { ApplyDestinationInspection, SuggestionOperationOptions } from './review-suggestions';
+
+export { loadGitReviewSnapshot } from './loaded-git-review';
+export type { GitSnapshotDependencies } from './loaded-git-review';

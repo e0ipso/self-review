@@ -47,3 +47,6 @@ export { nodeTemporaryCloneStorage } from './materializer';
 export type { TemporaryCloneStorage } from './materializer';
 export { nodeApplyDestinationInspection } from './review-suggestions';
 export type { ApplyDestinationInspection } from './review-suggestions';
+
+export { readSuggestionBoundedSync } from './suggestion-read';
+export type { BoundedSuggestionReader } from './suggestion-read';

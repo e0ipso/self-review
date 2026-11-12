@@ -16,6 +16,8 @@ import {
 import { readReviewedContent } from './snapshot-reader';
 import type { ReviewedSnapshot } from './snapshot-reader';
 import { rootRelativeReviewedPath } from './source-identity';
+import { loadedSnapshot, RELOAD_REVIEW } from './loaded-snapshot';
+import { verifyLoadedComparison } from './snapshot-verification';
 
 /** The effects expansion needs; callers and tests can supply runners/readers without module mocks. */
 export interface ContextExpansionDependencies {
@@ -36,13 +38,13 @@ const nodeExpansionDependencies: ContextExpansionDependencies = {
   },
 };
 
-/** Zero when unreadable; the caller treats that as unknown. */
+/** Legacy read failures yield an unknown count; captured read failures abort expansion. */
 async function countReviewedLines(
   session: ReviewedSnapshot,
   file: DiffFile,
   dependencies: ContextExpansionDependencies,
   options: GitExecutionOptions
-): Promise<number> {
+): Promise<number | null> {
   const side = file.newPath ? 'new' : 'old';
   const filePath = side === 'new' ? file.newPath : file.oldPath;
   const result = await dependencies.readContent(session, filePath, side, {
@@ -52,7 +54,7 @@ async function countReviewedLines(
   });
   if (!result.ok) {
     dependencies.report(`[review] Line count unavailable for ${filePath}: ${result.message}`);
-    return 0;
+    return session.sourceIdentity && loadedSnapshot(session.sourceIdentity) ? null : 0;
   }
   return countLines(result.content, options.signal);
 }
@@ -137,6 +139,12 @@ export async function expandContext(
   const isCurrent = () =>
     session.reviewedPaths === reviewedPaths && session.sourceIdentity === identity;
   try {
+    const verify = async () => {
+      if (await verifyLoadedComparison(identity, target, options.signal)) return true;
+      dependencies.report(`[review] Cannot expand ${request.filePath}: ${RELOAD_REVIEW}`);
+      return false;
+    };
+    if ((loadedSnapshot(identity) && !(await verify())) || !isCurrent()) return null;
     const args = contextDiffArgs(identity, target, request.contextLines);
     const rawDiff = await dependencies.runDiff(args, identity.sourceRoot, options);
     checkCancelled();
@@ -170,7 +178,7 @@ export async function expandContext(
     // The reviewed side's length, for gap detection; zero keeps the bars visible.
     const totalLines = await countReviewedLines(snapshot, target, dependencies, options);
     checkCancelled();
-    if (!isCurrent() || !session.diffData) return null;
+    if (totalLines === null || !(await verify()) || !isCurrent() || !session.diffData) return null;
 
     let currentLines = 0;
     let currentHunks = 0;

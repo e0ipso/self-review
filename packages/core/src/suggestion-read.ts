@@ -40,6 +40,18 @@ export function* boundedChunks(
   }
 }
 
+/** Descriptor-only bounded role, independent of legacy whole-file readers and mutation methods. */
+export interface BoundedSuggestionReader {
+  readSync(
+    fd: number,
+    buffer: Uint8Array,
+    offset: number,
+    length: number,
+    position: number | null
+  ): number;
+}
+
+/** The compatibility boundary accepts the original optional readSync shape. */
 export function readSuggestionSync(
   fd: number,
   target: string,
@@ -56,15 +68,36 @@ export function readSuggestionSync(
     ) => number;
   }
 ): Buffer {
-  // Compatibility for FsLayer adapters authored before readSync existed. Keep until a major
-  // version can require chunk reads. The supplied reader owns its allocation; check both its
-  // advertised and returned sizes. Native/default adapters always take the bounded path below.
-  if (!layer.readSync) {
-    if (size > maxBytes) throw inputBudgetError(target, maxBytes);
-    const bytes = layer.readFileSync(fd);
-    if (bytes.length > maxBytes) throw inputBudgetError(target, maxBytes);
-    return bytes;
-  }
+  const read = layer.readSync;
+  return read
+    ? readSuggestionBoundedSync(fd, target, size, maxBytes, {
+        readSync: (...args) => read.call(layer, ...args),
+      })
+    : readLegacySuggestionSync(fd, target, size, maxBytes, layer);
+}
+
+/** Legacy adapters own whole-file allocation; before/after size checks cannot bound that call. */
+function readLegacySuggestionSync(
+  fd: number,
+  target: string,
+  size: number,
+  maxBytes: number,
+  layer: { readFileSync(fd: number): Buffer }
+): Buffer {
+  if (size > maxBytes) throw inputBudgetError(target, maxBytes);
+  const bytes = layer.readFileSync(fd);
+  if (bytes.length > maxBytes) throw inputBudgetError(target, maxBytes);
+  return bytes;
+}
+
+/** Native/default adapters and bounded embedders supply only descriptor reads. */
+export function readSuggestionBoundedSync(
+  fd: number,
+  target: string,
+  size: number,
+  maxBytes: number,
+  layer: BoundedSuggestionReader
+): Buffer {
   const chunks = boundedChunks(target, size, maxBytes);
   let step = chunks.next();
   while (!step.done) {

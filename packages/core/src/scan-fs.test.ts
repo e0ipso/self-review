@@ -2,6 +2,10 @@ import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { constants, Stats } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { scanDirectory, scanFile } from './directory-scanner';
+import { prepareDirectoryReview } from './review-start';
+import { createReviewSession, commitDiffData } from './review-session';
+import { readReviewedContent } from './snapshot-reader';
+import { loadGitReviewSnapshot } from './loaded-git-review';
 import type { SourceScanOptions, SourceScanResult } from './directory-scanner';
 import type { ScanEntry, ScanFsLayer } from './scan-fs';
 import type { BoundedAsyncReadFsLayer } from './safe-fs-read';
@@ -419,5 +423,97 @@ describe('injected scan and attachment reads', () => {
       reason: 'unsafe-link',
     });
     expect(v.closes.at(-1)).toHaveBeenCalledOnce();
+  });
+});
+
+it('keeps lazy reads on the supplied filesystem and refuses its changed snapshot', async () => {
+  const virtual = virtualFs({ 'image.png': Buffer.from([0, 0xff, 0x80]) });
+  const session = createReviewSession();
+  const result = await prepareDirectoryReview(session, root, { scanFs: virtual.layer });
+  commitDiffData(session, result.payload, result.identity);
+  expect(await readReviewedContent(session, 'image.png', 'new')).toEqual({
+    ok: true,
+    content: Buffer.from([0, 0xff, 0x80]),
+  });
+  virtual.files.set(join(root, 'image.png'), Buffer.from([0, 0xfe, 0x80, 1]));
+  expect(await readReviewedContent(session, 'image.png', 'new')).toMatchObject({
+    ok: false,
+    reason: 'read-failed',
+    message: expect.stringContaining('Reload the review'),
+  });
+  expect(virtual.closes.every(close => close.mock.calls.length === 1)).toBe(true);
+});
+
+it('captures git reads with supplied text, binary and filesystem dependencies only', async () => {
+  const bytes = Buffer.from([0, 0xff, 0x80]);
+  const virtual = virtualFs({ 'image.png': bytes, '.git/index': 'virtual index' });
+  const oid = 'a'.repeat(40);
+  const binaryRunner = vi.fn(async () => ({ stdout: bytes, stderr: Buffer.alloc(0), exitCode: 0 }));
+  const result = await loadGitReviewSnapshot(
+    [],
+    root,
+    {
+      runner: async (_command, args) => {
+        if (args.includes('--name-status'))
+          return { stdout: 'M\0image.png\0', stderr: '', exitCode: 0 };
+        if (args[0] === 'ls-files')
+          return { stdout: `100644 ${oid} 0\timage.png\0`, stderr: '', exitCode: 0 };
+        if (args[0] === 'rev-parse')
+          return {
+            stdout: args.includes('--git-path') ? join(root, '.git/index') + '\n' : root + '\n',
+            stderr: '',
+            exitCode: 0,
+          };
+        throw new Error('Unexpected git command');
+      },
+      snapshotRunner: binaryRunner,
+    },
+    {
+      readFs: virtual.readFs,
+      async loadDiff() {
+        return {
+          files: [
+            {
+              oldPath: 'image.png',
+              newPath: 'image.png',
+              changeType: 'modified',
+              hunks: [],
+              isBinary: true,
+            },
+          ],
+          repository: root,
+          diagnostics: [],
+          identity: {
+            mode: 'git',
+            sourceRoot: root,
+            invocationCwd: root,
+            gitDiffArgv: [],
+            pathPrefix: '',
+            oldSide: { kind: 'index' },
+            newSide: { kind: 'working-tree' },
+          },
+        };
+      },
+    }
+  );
+  const session = createReviewSession();
+  commitDiffData(
+    session,
+    { files: result.files, source: { type: 'git', repository: root, gitDiffArgs: '' } },
+    result.identity
+  );
+  expect(await readReviewedContent(session, 'image.png', 'old')).toEqual({
+    ok: true,
+    content: bytes,
+  });
+  expect(binaryRunner).toHaveBeenCalledWith('git', ['cat-file', 'blob', oid], expect.any(Object));
+  expect(await readReviewedContent(session, 'image.png', 'new')).toEqual({
+    ok: true,
+    content: bytes,
+  });
+  virtual.files.set(join(root, 'image.png'), Buffer.from([0, 1, 2, 3]));
+  expect(await readReviewedContent(session, 'image.png', 'new')).toMatchObject({
+    ok: false,
+    reason: 'read-failed',
   });
 });

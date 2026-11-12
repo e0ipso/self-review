@@ -45,3 +45,6 @@ export type {
 } from './review-suggestions';
 export type { PublicationFileSystem } from './publication-fs';
 export type { TemporaryCloneStorage } from './materializer';
+
+export { loadGitReviewSnapshot } from './loaded-git-review';
+export type { GitSnapshotDependencies } from './loaded-git-review';

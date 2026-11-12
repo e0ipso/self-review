@@ -1,6 +1,7 @@
 // Prepare directory/file reviews without committing until the host accepts their payload size.
 import { dirname, resolve } from 'node:path';
 import { nodeScanFsLayer } from './node-scan-fs';
+import { admitSyntheticSnapshot } from './loaded-snapshot';
 import { isolatedReporter } from './effect-diagnostics';
 import { checkLoadingCancelled } from './local-loading-lifetime';
 import type { SourceScanOptions } from './directory-scanner';
@@ -85,6 +86,8 @@ export async function prepareDirectoryReview(
     identity = resolveLocalSourceIdentity({ type, sourcePath: directoryPath });
   }
   checkLoadingCancelled(options.signal);
+
+  admitSyntheticSnapshot(identity, scan.files);
 
   // Large payload guard — skipped entirely when there is no config.
   if (!session.config) {
