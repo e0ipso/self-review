@@ -11,7 +11,12 @@ export const mainConfig: Configuration = {
    * that runs in the main process.
    */
   context: path.resolve(__dirname),
-  entry: './src/index.ts',
+  entry: {
+    index: './src/index.ts',
+    'resume-parser-worker': './src/main/resume-parser-worker.ts',
+  },
+  // Forge defaults to index.js for every entry; retain that name for the app.
+  output: { filename: '[name].js' },
   // Put your normal webpack config below here
   module: {
     rules,
