@@ -43,6 +43,23 @@ back to the corresponding original adapter method when a member is absent, inclu
 The original members and their signatures remain supported. Internal helpers accept just the
 corresponding modern/legacy read capability; callers can continue to pass their existing adapters.
 
+`ReviewAdapter.initialReads` optionally supplies `loadDiff(signal)` and `loadResumedReview(signal)`.
+These are initial responses, with the same payloads and ownership as `loadDiff()` and
+`loadResumedReview()`. Either member can be supplied independently. The original `loadDiff` remains
+required and the original resume member remains optional. Neither signature changes. The controller
+prefers each supplied initial member and requests cancellation on disposal and explicit retry. A
+push can cancel a pending owned diff retry after the initial source is known. Before the first diff
+response settles, a push could echo it or replace it with different provenance. That first pull
+remains owned until settlement so cached feedback can be matched to its original snapshot; retry and
+disposal can still cancel it. A resume push or manual resume retry supersedes a pending resume read.
+A welcome-to-real diff preserves its pending resume acknowledgement. Cached initial feedback never
+moves to a different remote snapshot.
+
+Hosts must retain ownership of admitted work until settlement, even after receiving an abort signal.
+The helpers await the host promise and check cancellation before accepting its result. They do not
+race it against an artificial deadline. Legacy reads receive no signal and can keep running; only
+their results are suppressed. Apply, handoff and publication never use `initialReads`.
+
 Lazy hunks belong to the file, session and adapter that requested them. Collapse, replacement and
 disposal abort pending work; reopening starts a new read. Ordinary loading rerenders keep the
 request alive. Context expansion and image previews have the same ownership, and attachment reads
@@ -128,7 +145,12 @@ renderer objects and component identities stable to preserve local UI state.
 A `PreviewRenderer` contains a pure `supports(file, builtIn)` predicate and a React `component`.
 Matching runs only for added files. Existing format eligibility and initial modes remain the
 default. A host-only format starts in raw mode unless the renderer sets `defaultMode: 'rendered'`.
-Loading, omission and load-failure states precede preview dispatch, and Raw remains available.
+Loading, omission and load-failure states precede preview dispatch, and Raw remains available. The
+section resolves one descriptor for its mode controls and rendered branch. Its comment selection
+owner supplies raw drag and rendered gutter callbacks; drafts remain in their composers. Preview
+mode resets when the file path, source text or rendering policy changes. Feedback edits and
+equivalent metadata replacements preserve the chosen mode, expansion and file draft. The original
+`PreviewRenderer`, `PreviewRenderProps` and legacy preview imports remain supported.
 
 ```tsx
 const previewRenderer: PreviewRenderer = {
@@ -233,6 +255,10 @@ for Prism's grammar implementation.
 Raw rows use `content-visibility: auto` with an intrinsic line height to let supporting browsers
 defer offscreen layout/paint. Every source row, gutter and comment remains mounted, preserving the
 native Find/full-document contract and existing line anchors, keyboard actions and drag handling.
+Added, removed and context rows carry text-free plus, minus and equals symbols, each with a
+localized accessible type label. These labels leave code text, line anchors and gutter button names
+intact. The symbols are non-selectable and add no text to native Find or copied source.
+
 Unsupported browsers render normally. DOM creation, indexing and text transfer remain proportional
 to total source size and can still pause on extremely large expanded files. Ordinary virtualization
 would remove searchable source. Incremental DOM insertion would also make Find/navigation depend on
@@ -358,3 +384,13 @@ count their supplied hunks. This does not request content or change expansion st
 Review loading recovery translates the application's known failure messages when displayed.
 Controller error strings and external host diagnostics keep their original values. Retry stays
 manual and belongs to the same session and snapshot as before.
+
+## File tree expansion for hints
+
+`Layout` registers a synchronous expansion operation in its enclosing review. File hints request
+that operation and collect rectangles only after it acknowledges committed panel geometry and the
+removed `inert` attribute. The operation is scoped to the provider, so an active panel cannot expand
+another review's tree. Custom compositions using the original keyboard hook still retain the scoped
+`expand-file-tree` event fallback; first-party navigation does not dispatch that event. The hook's
+call form and synchronous return remain unchanged. Browser layout, native Find and screen reader
+integration still require host verification.

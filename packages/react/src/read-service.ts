@@ -61,3 +61,21 @@ export const expandContext = (
     signal,
     () => adapter?.reads?.expandContext?.(request, signal) ?? adapter?.expandContext?.(request)
   );
+
+/** Initial-response capabilities stay local to ReviewAdapter, outside the canonical ReviewReads. */
+export type InitialReadHost = Pick<
+  ReviewAdapter,
+  'loadDiff' | 'loadResumedReview' | 'initialReads'
+>;
+export const canReadResumedReview = (host: InitialReadHost | null | undefined) =>
+  !!(host?.initialReads?.loadResumedReview || host?.loadResumedReview);
+export const loadInitialDiff = (host: InitialReadHost, signal: AbortSignal) =>
+  read(signal, () =>
+    host.initialReads?.loadDiff ? host.initialReads.loadDiff(signal) : host.loadDiff()
+  );
+export const loadInitialResumedReview = (host: InitialReadHost, signal: AbortSignal) =>
+  read(signal, () =>
+    host.initialReads?.loadResumedReview
+      ? host.initialReads.loadResumedReview(signal)
+      : host.loadResumedReview?.()
+  );

@@ -36,6 +36,7 @@ export interface ConfigApiResponse {
 
 import { ServeRequestError } from './request-error';
 import { createServeRequester } from './requester';
+import { createSharedDiff } from './shared-diff';
 export { ServeRequestError } from './request-error';
 
 import { createClient, requestError } from './json-client';
@@ -116,31 +117,24 @@ export function createFetchAdapter(
         'read'
       ),
   };
-  let diffRequest: Promise<DiffApiResponse> | null = null;
   let loaded: DiffApiResponse | null = null;
   let disposed = false;
   const subscriptions = new Set<(response: DiffApiResponse) => void>();
-
-  function requestDiff(): Promise<DiffApiResponse> {
-    if (diffRequest) return diffRequest;
-    const request = getJson('/api/diff', undefined, decodeDiffResponse)
-      .then(response => {
-        if (response === null) throw new Error('The server has no diff to review');
-        if (!disposed) {
-          loaded = response;
-          for (const deliver of [...subscriptions]) {
-            if (subscriptions.has(deliver)) deliver(response);
-          }
+  const diff = createSharedDiff(
+    async signal => {
+      const response = await getJson('/api/diff', signal, decodeDiffResponse);
+      if (response === null) throw new Error('The server has no diff to review');
+      return response;
+    },
+    response => {
+      if (!disposed) {
+        loaded = response;
+        for (const deliver of [...subscriptions]) {
+          if (subscriptions.has(deliver)) deliver(response);
         }
-        return response;
-      })
-      .catch(error => {
-        if (diffRequest === request) diffRequest = null;
-        throw error;
-      });
-    diffRequest = request;
-    return request;
-  }
+      }
+    }
+  );
 
   function subscribe<T>(
     select: (response: DiffApiResponse) => T | null,
@@ -158,7 +152,7 @@ export function createFetchAdapter(
       });
     } else {
       // loadDiff exposes errors. Keep subscribers for an explicit retry.
-      void requestDiff().catch(() => {});
+      void diff.prefetch().catch(() => {});
     }
     return () => {
       subscriptions.delete(deliver);
@@ -187,9 +181,18 @@ export function createFetchAdapter(
     dispose: () => {
       disposed = true;
       subscriptions.clear();
+      diff.dispose();
       requester.dispose();
     },
-    loadDiff: async (): Promise<DiffLoadPayload> => (await requestDiff()).diff,
+    initialReads: {
+      loadDiff: async signal => (await diff.read(signal)).diff,
+      loadResumedReview: async signal =>
+        (await getJson('/api/resume', signal, decodeResumeResponse)) ?? {
+          comments: [],
+          viewedFiles: [],
+        },
+    },
+    loadDiff: async (): Promise<DiffLoadPayload> => (await diff.read()).diff,
 
     loadResumedReview: async (): Promise<ResumeLoadPayload> =>
       // The route answers null when there is nothing to resume; an empty

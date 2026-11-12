@@ -1,6 +1,7 @@
 import React, { useContext, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { FileReviewState } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
+import { canReadResumedReview } from './read-service';
 import { useReviewHost } from './hooks/useReviewHost';
 import { useAdapter } from './context/ReviewAdapterContext';
 import { useConfiguration } from './context/ConfigContext';
@@ -28,6 +29,7 @@ import { ReviewLifecycleContext } from './context/ReviewLifecycleContext';
 import { ReviewLoadContext } from './context/ReviewLoadContext';
 import { ApplyOperationsContext, createApplyOperations } from './context/apply-operation';
 import { ReviewDraftRecovery } from './components/Comments/ReviewDraftRecovery';
+import { FileTreeExpansionProvider } from './context/FileTreeExpansionContext';
 import { ReviewLoadRecovery } from './components/ReviewLoadRecovery';
 
 const adapterIds = new WeakMap<object, number>();
@@ -67,7 +69,7 @@ function ReviewSessionProvider({
   const [store] = useState(() =>
     createReviewSessionStore(
       reviewSessionReducer(
-        createReviewSession(initialFiles, initialSource, !!adapter?.loadResumedReview),
+        createReviewSession(initialFiles, initialSource, canReadResumedReview(adapter)),
         { type: 'hydrate', comments: initialComments }
       )
     )
@@ -108,7 +110,7 @@ function ReviewSessionProvider({
             retryLoad={host.retryLoad}
             retryResume={host.retryResume}
           >
-            {children}
+            <FileTreeExpansionProvider>{children}</FileTreeExpansionProvider>
           </ReviewSessionProjection>
         </ApplyOperationsContext.Provider>
       </CommandsContext.Provider>

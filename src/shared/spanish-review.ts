@@ -3,6 +3,9 @@ import type { LocalizedMessage } from '../../packages/react/src/localization/for
 
 /** Built-in translations for the shared review UI used by desktop. */
 export const SPANISH_REVIEW = {
+  'Added line': 'Línea añadida',
+  'Removed line': 'Línea eliminada',
+  'Unchanged line': 'Línea sin cambios',
   Original: 'Original',
   Suggested: 'Propuesto',
   'Enter your suggested code...': 'Escribe el código propuesto...',

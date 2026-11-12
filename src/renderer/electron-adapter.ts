@@ -3,7 +3,7 @@ import type { ElectronAPI, ResumeLoadPayload } from '../shared/types';
 import { ElectronRequests } from './electron-requests';
 import { createDesktopReads } from './desktop-reads';
 import { createDesktopPublicationClient } from './desktop-publication-client';
-import { receiveDesktopContent } from './desktop-content';
+import { receiveDesktopContent, receiveOwnedDesktopContent } from './desktop-content';
 
 type ReviewAPI = Pick<
   ElectronAPI,
@@ -69,6 +69,19 @@ export function createElectronAdapter(api: ReviewAPI, requests = new ElectronReq
   const reads = createDesktopReads(api, requests);
   const adapter: ReviewAdapter = {
     reads,
+    initialReads: {
+      loadDiff: signal =>
+        receiveOwnedDesktopContent(
+          requests,
+          api,
+          'diff',
+          api.onDiffLoad,
+          api.requestDiffData,
+          signal
+        ),
+      // Resume uses an uncorrelated reply/push channel. Keep its original owner until
+      // acknowledgement so cancelling a waiter cannot reinterpret a late reply as a push.
+    },
     loadDiff: () => receiveContent('diff', api.onDiffLoad, api.requestDiffData),
     loadResumedReview: () => {
       resumeLoad ??= receiveContent<ResumeLoadPayload>(

@@ -1,6 +1,6 @@
 import React from 'react';
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import type { DiffFile } from '@self-review/types';
 
 import { installBrowserApiStubs } from '../test-helpers';
@@ -240,3 +240,49 @@ describe('expand-file-tree request', () => {
     expect(fileTreePanel().style.flexGrow).toBe('0');
   });
 });
+
+// Keep the legacy event tests above for external compositions. First-party navigation uses
+// the scoped operation and must commit panel geometry before collecting any hint rectangle.
+it('acknowledges first-party expansion before measurements without a string event', () => {
+  const view = renderLayout(<KeyboardNavigationManager />);
+  const toggle = screen.getByTestId('file-tree-toggle');
+  fireEvent.click(toggle);
+  const root = view.container.querySelector<HTMLElement>('.self-review')!;
+  const dispatch = vi.spyOn(root, 'dispatchEvent');
+  const entry = screen.getByTestId('file-tree').querySelector<HTMLElement>('[data-file-path]')!;
+  let measured = false;
+  vi.spyOn(entry, 'getBoundingClientRect').mockImplementation(() => {
+    expect(fileTreePanel().style.flexGrow).not.toBe('0');
+    expect(sidebar().hasAttribute('inert')).toBe(false);
+    measured = true;
+    return { top: 10, left: 10, bottom: 30, right: 210, width: 200, height: 20 } as DOMRect;
+  });
+  fireEvent.keyDown(document, { key: 'g' });
+  expect(measured).toBe(true);
+  expect(dispatch.mock.calls.some(([event]) => event.type === 'expand-file-tree')).toBe(false);
+});
+
+it.each(['ltr', 'rtl'] as const)(
+  'keeps typed expansion scoped to the active %s panel',
+  direction => {
+    const a = renderLayout(<KeyboardNavigationManager />);
+    const b = renderLayout(<KeyboardNavigationManager />);
+    a.container.dir = direction;
+    b.container.dir = direction;
+    const first = within(a.container).getByTestId('file-tree-toggle');
+    const second = within(b.container).getByTestId('file-tree-toggle');
+    fireEvent.click(first);
+    fireEvent.click(second);
+    fireEvent.pointerDown(second);
+    fireEvent.keyDown(document, { key: 'g' });
+    expect(first.getAttribute('aria-expanded')).toBe('false');
+    expect(second.getAttribute('aria-expanded')).toBe('true');
+    expect(b.container.querySelector('[inert]')).toBeNull();
+    expect(a.container.querySelector('[inert]')).toBeTruthy();
+    fireEvent.click(second);
+    const input = within(b.container).getByPlaceholderText('Filter files...');
+    act(() => input.focus());
+    fireEvent.keyDown(input, { key: 'g' });
+    expect(second.getAttribute('aria-expanded')).toBe('false');
+  }
+);

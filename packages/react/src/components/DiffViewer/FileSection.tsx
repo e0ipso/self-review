@@ -1,7 +1,8 @@
 import { useLocalization } from '../../localization/LocalizationContext';
-import React, { useState, useRef, useMemo, useCallback, useId } from 'react';
+import React, { useRef, useMemo, useCallback, useId } from 'react';
 import { effectiveDiffLayout } from './effective-layout';
-import { useDragSelection } from './useDragSelection';
+import { useFileCommentSelection } from './useFileCommentSelection';
+import { useFilePreviewMode } from './useFilePreviewMode';
 import { useExpandContext } from './useExpandContext';
 import { useLazyFileContent } from './useLazyFileContent';
 import type { DiffFile } from '@self-review/types';
@@ -9,12 +10,14 @@ import { useReviewCommands, useFileReview, useReviewSource } from '../../context
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import { usePreviewRenderer } from '../../context/PreviewRenderingContext';
-import { getContentPreview, initialPreviewMode } from '../../services/content-preview';
+import { resolveFilePreview } from '../../services/content-preview';
 import { getGuideAccent } from '../../utils/guide-accents';
 import { useFileSectionExpansion } from './useFileSectionExpansion';
 import { FileSectionHeaderPresentation } from './FileSectionHeader';
 import { FileSectionBodyLayout } from './FileSectionBody';
-import { PreviewContentArea } from './DiffContentArea';
+import { ContentStatusBoundary } from './ContentStatusBoundary';
+import { FilePreview } from './FilePreview';
+import { RawDiffContent } from './RawDiffContent';
 import PreviewErrorBoundary from './PreviewErrorBoundary';
 import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 
@@ -36,27 +39,15 @@ export default function FileSection({
   const diffSource = useReviewSource();
   const fileState = useFileReview(file.newPath || file.oldPath);
   const { mode: guideMode, getFileDescription, getFileGroupIndex } = useGuide();
-  const [commentRange, setCommentRange] = useState<{
-    start: number;
-    end: number;
-    side: 'old' | 'new';
-  } | null>(null);
-  const [showingFileComment, setShowingFileComment] = useState(false);
   const bodyId = useId();
   const sectionRef = useRef<HTMLDivElement | null>(null);
   const navigation = useOptionalDiffNavigation();
   const registerFileElement = navigation?.registerFileElement;
   const unregisterFileElement = navigation?.unregisterFileElement;
 
-  const preview = getContentPreview(file);
   const renderer = usePreviewRenderer();
-  const hostPreview = file.changeType === 'added' && !!renderer?.supports(file, preview);
-  const isPreviewable = preview.kind !== 'none' || hostPreview;
-  const initialViewMode =
-    preview.kind === 'none' && hostPreview
-      ? (renderer?.defaultMode ?? 'raw')
-      : initialPreviewMode(preview);
-  const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
+  const preview = resolveFilePreview(file, renderer);
+  const { renderViewMode, setRenderViewMode } = useFilePreviewMode(file, preview);
 
   const filePath = file.newPath || file.oldPath;
   const guideDescription = guideMode === 'guided' ? getFileDescription(filePath) : undefined;
@@ -102,30 +93,18 @@ export default function FileSection({
 
   const effectiveViewMode = effectiveDiffLayout(viewMode, file.changeType);
 
-  // Stable identities: the rendered view hands these to every block through context.
-  const handleCommentRange = useCallback((start: number, end: number, side: 'old' | 'new') => {
-    setCommentRange({
-      start: Math.min(start, end),
-      end: Math.max(start, end),
-      side,
-    });
-  }, []);
-  const clearCommentRange = useCallback(() => setCommentRange(null), []);
-
-  const { dragState, handleDragStart } = useDragSelection({
-    sectionRef,
-    effectiveViewMode,
+  const { lineComments, rawSelection, onCommentRange, fileComment } = useFileCommentSelection(
     file,
-    filePath,
-    onCommentRange: handleCommentRange,
-  });
+    sectionRef,
+    effectiveViewMode
+  );
 
   const handleViewedToggle = () => toggleViewed(filePath);
 
   return (
     <div
       ref={setSectionElement}
-      className={`mx-2 mt-2 border border-border rounded-lg shadow-sm${dragState ? ' select-none' : ''}`}
+      className={`mx-2 mt-2 border border-border rounded-lg shadow-sm${rawSelection.dragState ? ' select-none' : ''}`}
       data-file-path={filePath}
       data-testid={`file-section-${filePath}`}
     >
@@ -135,14 +114,14 @@ export default function FileSection({
         filePath={filePath}
         expanded={expanded}
         isViewed={isViewed}
-        isPreviewable={isPreviewable}
+        isPreviewable={preview.available}
         renderViewMode={renderViewMode}
         commentCount={comments.length}
         onToggle={() => changeExpanded(!expanded)}
         onViewedToggle={handleViewedToggle}
         onAddFileComment={() => {
           changeExpanded(true);
-          setShowingFileComment(true);
+          fileComment.openFileComment();
         }}
         onRenderViewModeChange={setRenderViewMode}
       />
@@ -175,33 +154,41 @@ export default function FileSection({
             filePath={filePath}
             fileComments={fileComments}
             orphanedComments={orphanedComments}
-            showingFileComment={showingFileComment}
-            onCancelFileComment={() => setShowingFileComment(false)}
-            onFileCommentSubmit={() => setShowingFileComment(false)}
+            showingFileComment={fileComment.showingFileComment}
+            onCancelFileComment={fileComment.closeFileComment}
+            onFileCommentSubmit={fileComment.closeFileComment}
           >
             <PreviewErrorBoundary
               filePath={filePath}
               resetKeys={[file, renderViewMode, effectiveViewMode]}
             >
-              <PreviewContentArea
-                file={file}
-                preview={preview}
-                filePath={filePath}
-                viewMode={effectiveViewMode}
-                renderViewMode={renderViewMode}
+              <ContentStatusBoundary
+                omittedReason={file.omittedReason}
+                contentLoaded={file.contentLoaded}
                 contentLoad={contentLoad}
                 onRetry={retryContentLoad}
-                commentRange={commentRange}
-                dragState={dragState}
-                onDragStart={handleDragStart}
-                onCancelComment={clearCommentRange}
-                onCommentSaved={clearCommentRange}
-                onCommentRange={handleCommentRange}
-                isExpandable={isExpandable}
-                expandLoading={expandLoading}
-                totalLines={totalLines}
-                handleExpandContext={handleExpandContext}
-              />
+              >
+                <FilePreview
+                  file={file}
+                  preview={preview.builtIn}
+                  descriptor={preview}
+                  filePath={filePath}
+                  mode={renderViewMode}
+                  {...lineComments}
+                  onCommentRange={onCommentRange}
+                >
+                  <RawDiffContent
+                    file={file}
+                    viewMode={effectiveViewMode}
+                    {...lineComments}
+                    {...rawSelection}
+                    isExpandable={isExpandable}
+                    expandLoading={expandLoading}
+                    totalLines={totalLines}
+                    onExpandContext={isExpandable ? handleExpandContext : undefined}
+                  />
+                </FilePreview>
+              </ContentStatusBoundary>
             </PreviewErrorBoundary>
           </FileSectionBodyLayout>
         )}

@@ -87,6 +87,34 @@ export const RawDiffRow = React.memo(function RawDiffRow({
     >
       {(unified || side === 'old') && gutter('old', oldLineNumber)}
       {(unified || side === 'new') && gutter('new', newLineNumber)}
+      <span
+        role='img'
+        aria-label={t(
+          lineType === 'addition'
+            ? 'Added line'
+            : lineType === 'deletion'
+              ? 'Removed line'
+              : 'Unchanged line'
+        )}
+        className='w-4 shrink-0 select-none text-center leading-[26px] font-mono'
+        style={{ userSelect: 'none' }}
+      >
+        <svg
+          aria-hidden='true'
+          viewBox='0 0 16 16'
+          className='inline-block size-3'
+          fill='none'
+          stroke='currentColor'
+        >
+          {lineType === 'addition' ? (
+            <path d='M8 3v10M3 8h10' />
+          ) : lineType === 'deletion' ? (
+            <path d='M3 8h10' />
+          ) : (
+            <path d='M3 6h10M3 10h10' />
+          )}
+        </svg>
+      </span>
       <div
         className={`flex-1 px-3 py-0.5 leading-[22px]${wordWrap ? '' : ' [overflow-x:overlay]'}`}
       >
