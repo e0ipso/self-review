@@ -1,15 +1,13 @@
 import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useMemo } from 'react';
 import type { DiffFile, DiffLine } from '@self-review/types';
-import { CommentGutterButton } from './CommentGutterButton';
+import { RawDiffRow, useRawDragStart } from './RawDiffRow';
 import { useRawDiffAnnotations } from './useRawDiffAnnotations';
 import { HunkSeparator } from './HunkSeparator';
 import { useAppearance } from '../../context/ConfigContext';
-import SyntaxLine from './SyntaxLine';
 import { planHighlighting } from './highlight-budget';
 import { getLanguageFromPath } from '../../utils/file-type-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
-import { getLineBg, getGutterBg } from '../../utils/diff-styles';
 import { buildSplitRows } from './split-rows';
 import EmptyLinePane from './EmptyLinePane';
 
@@ -47,6 +45,7 @@ export default function SplitView({
   totalLines,
 }: SplitViewProps) {
   const { t } = useLocalization();
+  const startDrag = useRawDragStart(onDragStart);
   const { commentIndex, originalCode, feedbackAt, getOriginalCodeForComment } =
     useRawDiffAnnotations(file, commentRange);
   const highlighting = useMemo(() => planHighlighting(file), [file]);
@@ -79,48 +78,20 @@ export default function SplitView({
     const lineNumber = side === 'old' ? line.oldLineNumber : line.newLineNumber;
     const isSelected = lineNumber ? isLineSelected(lineNumber, side) : false;
 
-    const lineTestId = lineNumber
-      ? `${side === 'old' ? 'old' : 'new'}-line-${filePath}-${lineNumber}`
-      : undefined;
-
     return (
-      <div
-        className={`split-half w-1/2 flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${hasComment ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}
-        data-line-number={lineNumber || undefined}
-        data-line-side={side}
-        data-line-type={line.type}
-      >
-        {/* Line number gutter */}
-        <div
-          className={`w-10 flex-shrink-0 text-end pe-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter relative`}
-          data-testid={lineTestId}
-        >
-          {lineNumber && (
-            <CommentGutterButton
-              className='absolute start-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/gutter:opacity-100'
-              label={t(
-                side === 'old' ? 'Comment on old line {line}' : 'Comment on new line {line}',
-                { line: lineNumber! }
-              )}
-              onStartDrag={() => onDragStart(lineNumber!, side)}
-              onActivate={() => onDragStart(lineNumber!, side, true)}
-              data-testid={`comment-icon-${side}-${lineNumber}`}
-            />
-          )}
-          <span className='pointer-events-none'>{lineNumber || ''}</span>
-        </div>
-        {/* Code content */}
-        <div
-          className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}
-        >
-          <SyntaxLine
-            content={line.content}
-            language={highlighting.lines.has(line) ? language : 'plaintext'}
-            lineType={line.type}
-            wordWrap={config.wordWrap}
-          />
-        </div>
-      </div>
+      <RawDiffRow
+        layout={side}
+        filePath={filePath}
+        oldLineNumber={line.oldLineNumber}
+        newLineNumber={line.newLineNumber}
+        lineType={line.type}
+        content={line.content}
+        language={highlighting.lines.has(line) ? language : 'plaintext'}
+        wordWrap={config.wordWrap}
+        isSelected={isSelected}
+        hasComment={hasComment}
+        onDragStart={startDrag}
+      />
     );
   };
 

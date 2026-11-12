@@ -1,5 +1,4 @@
 import React from 'react';
-import { MessageSquarePlus } from 'lucide-react';
 import { Button, type ButtonProps } from '../ui/button';
 
 interface CommentGutterButtonProps extends Omit<ButtonProps, 'onMouseDown' | 'onClick'> {
@@ -44,8 +43,7 @@ export function CommentGutterButton({
         event.stopPropagation();
         onActivate();
       }}
-    >
-      <MessageSquarePlus className='h-4 w-4' aria-hidden='true' />
-    </Button>
+      children={null}
+    />
   );
 }
