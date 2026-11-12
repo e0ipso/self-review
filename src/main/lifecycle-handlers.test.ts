@@ -21,6 +21,7 @@ function fixture() {
     () => window
   );
   const desktop = createDesktopSession('/review');
+  desktop.review.diffData = { files: [], source: { type: 'directory', sourcePath: '/review' } };
   registerContentHandlers(
     bindDesktopReviewOperations(desktop.review),
     boundary,
@@ -169,6 +170,7 @@ it('returns a known failure with retained renderer state and accepts a fresh sna
 
 it('refuses missing and stale state without writing', async () => {
   const f = fixture();
+  f.desktop.review.diffData = null;
   expect(await f.invoke(IPC.REVIEW_SAVE, state)).toMatchObject({ status: 'failed' });
   f.desktop.review.diffData = { files: [], source: { type: 'directory', sourcePath: '/another' } };
   expect(await f.invoke(IPC.REVIEW_SAVE, state)).toMatchObject({ status: 'failed' });
@@ -271,3 +273,139 @@ it('consumes a publication receipt only once', async () => {
   expect(f.shutdown).toHaveBeenCalledExactlyOnceWith(0, 'saved');
   expect(f.invoke(IPC.REVIEW_SAVE_STATUS)).toBeNull();
 });
+
+it.each([IPC.REVIEW_SAVE, IPC.APP_SAVE_AND_QUIT])(
+  '%s refuses missing/welcome/loading/foreign loaded sources and retains cached work',
+  async channel => {
+    for (const source of [
+      null,
+      { type: 'welcome' as const },
+      { type: 'loading' as const },
+      { type: 'directory' as const, sourcePath: '/foreign' },
+    ]) {
+      const f = fixture();
+      f.desktop.review.diffData = source ? { files: [], source } : null;
+      f.desktop.review.reviewState = state;
+      const response = f.invoke(channel, ...(channel === IPC.REVIEW_SAVE ? [state] : []));
+      if (channel === IPC.REVIEW_SAVE) expect(await response).toMatchObject({ status: 'failed' });
+      else await vi.waitFor(() => expect(f.reportSaveFailure).toHaveBeenCalledOnce());
+      expect(f.publish).not.toHaveBeenCalled();
+      expect(f.shutdown).not.toHaveBeenCalled();
+      expect(f.desktop.review.reviewState).toBe(state);
+      expect(f.controller.phase).toBe('reviewing');
+    }
+  }
+);
+
+it.each([IPC.REVIEW_SAVE, IPC.APP_SAVE_AND_QUIT])(
+  '%s captures the admitted load and cached state before waiting for Apply',
+  async channel => {
+    const f = fixture();
+    f.desktop.review.reviewState = state;
+    let finish!: () => void;
+    const applying = f.desktop.operations.apply(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        })
+    );
+    await Promise.resolve();
+    const response = f.invoke(channel, ...(channel === IPC.REVIEW_SAVE ? [state] : []));
+    // Even equal descriptors belong to a new admitted load. Do not take the new cache's state.
+    f.desktop.review.diffData = { files: [], source: state.source };
+    const replacement = { ...state, timestamp: 'replacement' };
+    f.desktop.review.reviewState = replacement;
+    finish();
+    await applying;
+    if (channel === IPC.REVIEW_SAVE) expect(await response).toMatchObject({ status: 'failed' });
+    else await vi.waitFor(() => expect(f.reportSaveFailure).toHaveBeenCalledOnce());
+    expect(f.desktop.review.reviewState).toBe(replacement);
+    expect(f.publish).not.toHaveBeenCalled();
+    expect(f.shutdown).not.toHaveBeenCalled();
+    expect(f.controller.phase).toBe('reviewing');
+  }
+);
+
+it.each([IPC.REVIEW_SAVE, IPC.APP_SAVE_AND_QUIT])(
+  '%s normalizes local provenance and retains cached work on publication failure',
+  async channel => {
+    const f = fixture();
+    const submitted = {
+      ...state,
+      remoteUrl: 'forged',
+      remoteForge: 'github' as const,
+      remoteBaseSha: 'forged-base',
+      remoteHeadSha: 'forged-head',
+    };
+    f.desktop.review.reviewState = submitted;
+    f.publish.mockRejectedValueOnce(new Error('disk full'));
+    const response = f.invoke(channel, ...(channel === IPC.REVIEW_SAVE ? [submitted] : []));
+    if (channel === IPC.REVIEW_SAVE) expect(await response).toMatchObject({ status: 'failed' });
+    else await vi.waitFor(() => expect(f.reportSaveFailure).toHaveBeenCalledOnce());
+    expect(f.publish).toHaveBeenCalledExactlyOnceWith(state, expect.any(AbortSignal));
+    expect(f.desktop.review.reviewState).toMatchObject({
+      timestamp: state.timestamp,
+      files: state.files,
+    });
+    expect(f.controller.phase).toBe('reviewing');
+    expect(f.shutdown).not.toHaveBeenCalled();
+  }
+);
+
+it('keeps committed receipt outcomes unknown to a replaced peer without allowing replay', async () => {
+  const f = fixture();
+  let finish!: () => void;
+  f.publish.mockImplementationOnce(
+    () =>
+      new Promise<void>(resolve => {
+        finish = resolve;
+      })
+  );
+  const response = f.invoke(IPC.REVIEW_SAVE, state) as Promise<unknown>;
+  await vi.waitFor(() => expect(f.publish).toHaveBeenCalledOnce());
+  f.replacePeer();
+  finish();
+  await expect(response).rejects.toThrow(/current review window/);
+  expect(f.desktop.operations.finishing).toBe(true);
+  expect(f.controller.phase).toBe('saving');
+  expect(f.controller.beginSave()).toBe(false);
+  expect(f.publish).toHaveBeenCalledOnce();
+  expect(f.shutdown).not.toHaveBeenCalled();
+});
+
+it.each([IPC.REVIEW_SAVE, IPC.APP_SAVE_AND_QUIT])(
+  '%s uses all owned remote values before reaching publication',
+  async channel => {
+    const f = fixture();
+    const remote = {
+      remoteUrl: 'https://github.com/o/r/pull/1',
+      remoteForge: 'github' as const,
+      remoteBaseSha: 'aaa',
+      remoteHeadSha: 'bbb',
+      threadSyncAvailable: true,
+      temporaryClone: false,
+    };
+    f.desktop.review.diffData!.remote = remote;
+    const submitted = {
+      ...state,
+      remoteUrl: 'forged',
+      remoteForge: 'gitlab' as const,
+      remoteBaseSha: 'forged',
+      remoteHeadSha: 'forged',
+    };
+    f.desktop.review.reviewState = submitted;
+    const response = f.invoke(channel, ...(channel === IPC.REVIEW_SAVE ? [submitted] : []));
+    if (channel === IPC.REVIEW_SAVE) expect(await response).toMatchObject({ status: 'saved' });
+    else await vi.waitFor(() => expect(f.shutdown).toHaveBeenCalledOnce());
+    expect(f.publish).toHaveBeenCalledExactlyOnceWith(
+      {
+        ...state,
+        remoteUrl: remote.remoteUrl,
+        remoteForge: remote.remoteForge,
+        remoteBaseSha: remote.remoteBaseSha,
+        remoteHeadSha: remote.remoteHeadSha,
+      },
+      expect.any(AbortSignal)
+    );
+  }
+);

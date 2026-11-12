@@ -1,10 +1,11 @@
-import { sameDiffSource } from '../../packages/core/src/same-diff-source';
+import { captureDesktopPublication } from './publication';
+import { saveReview } from './save-transaction';
 import { PublicationReceipts } from './publication-receipts';
 import { registerOutputSelection } from './output-selection';
 import { createDesktopLocalization, type DesktopLocalization } from '../shared/localization';
 import { IPC } from '../shared/ipc-channels';
 import type { ReviewState, ReviewSaveResult } from '../shared/types';
-import { takeReviewState, submitReviewState } from '../../packages/core/src/review-handlers';
+import { submitReviewState } from '../../packages/core/src/review-handlers';
 import { saveAndQuit, describeSaveFailure, type QuitController } from './quit-controller';
 import { type DesktopSession } from './desktop-session';
 import { createIpcBoundary, noArgument, reviewState, stringArgument } from './ipc-boundary';
@@ -62,30 +63,29 @@ export function registerLifecycleHandlers(
         // This refusal precedes publication, so it has a known failed outcome.
         return Promise.resolve(recordFailure(error, current));
       }
-      const source = desktop.review.diffData;
+      const prepare = captureDesktopPublication(desktop.review, desktop.output.path);
       receipts.clearFailure();
       return desktop.operations.complete(
         async signal => {
           current();
-          if (!controller.beginSave()) return { status: 'busy' };
-          try {
-            // A state from another peer/snapshot must never replace the current review.
-            if (
-              !source ||
-              source.source.type === 'welcome' ||
-              source.source.type === 'loading' ||
-              desktop.review.diffData !== source ||
-              !sameDiffSource(source.source, state.source)
-            )
-              throw new Error('The review state does not belong to the current review.');
-            signal.throwIfAborted();
-            submitReviewState(desktop.review, state);
-            const captured = takeReviewState(desktop.review);
-            if (!captured) throw new Error('The review window did not hand over its review state.');
-            await publication.publish(captured, signal);
-          } catch (error) {
-            controller.saveFailed();
-            return recordFailure(error, current);
+          const result = await saveReview({
+            controller,
+            messages,
+            outputPath: desktop.output.path,
+            takeState: () => {
+              signal.throwIfAborted();
+              const owned = prepare(state);
+              submitReviewState(desktop.review, owned);
+              return owned;
+            },
+            publish: captured => publication.publish(captured, signal),
+          });
+          if (result.status === 'busy') return result;
+          if (result.status === 'failed') {
+            return receipts.recordFailure(
+              { status: 'failed', message: result.failure.message, detail: result.failure.detail },
+              current
+            );
           }
           // Publication has committed. A stale peer cannot turn success into a retryable failure.
           current();
@@ -107,13 +107,15 @@ export function registerLifecycleHandlers(
   boundary.onCommand(IPC.APP_SAVE_AND_QUIT, noArgument, event => {
     const window = boundary.assertPeer(event);
     const current = boundary.capture(event);
-    if (controller.phase !== 'reviewing') return;
+    if (controller.phase !== 'reviewing' || desktop.operations.finishing) return;
+    const prepare = captureDesktopPublication(desktop.review, desktop.output.path);
+    const state = desktop.review.reviewState;
     return desktop.operations.complete(async signal => {
       current();
       const result = await saveAndQuit({
         controller,
         messages,
-        takeState: () => takeReviewState(desktop.review),
+        takeState: () => (state ? prepare(state) : null),
         publish: state => publication.publish(state, signal),
         reportFailure: failure => presentation.reportSaveFailure(window, failure),
         quit: () => {
