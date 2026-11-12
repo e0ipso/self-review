@@ -127,6 +127,21 @@ export const SPANISH_SHELL = {
   'Not a recognized PR/MR URL. Expected a GitHub pull request (…/pull/N) or GitLab merge request (…/-/merge_requests/N) URL.':
     'URL de PR/MR no reconocida. Se esperaba una URL de pull request de GitHub (…/pull/N) o de merge request de GitLab (…/-/merge_requests/N).',
   'Failed to open remote PR/MR': 'No se pudo abrir el PR/MR remoto',
+  'Review cancelled.': 'Revisión cancelada.',
+  'Opening the PR/MR was cancelled.': 'Se canceló la apertura del PR/MR.',
+  'Enter a GitHub PR or GitLab MR URL.': 'Introduce una URL de PR de GitHub o MR de GitLab.',
+  'The desktop operation timed out.': 'Se agotó el tiempo de la operación de escritorio.',
+  'opening the PR/MR took longer than 10 minutes': 'La apertura del PR/MR tardó más de 10 minutos.',
+  'the review window closed': 'Se cerró la ventana de revisión.',
+  'The review window closed.': 'Se cerró la ventana de revisión.',
+  'The review window was replaced.': 'Se reemplazó la ventana de revisión.',
+  'A remote review is already open or closing.': 'Ya hay una revisión remota abierta o cerrándose.',
+  'A review is already open.': 'Ya hay una revisión abierta.',
+  'A review is already being opened.': 'Ya se está abriendo una revisión.',
+  'The review session has changed.': 'La sesión de revisión ha cambiado.',
+  'The review is finishing.': 'La revisión está finalizando.',
+  'Review content exceeds desktop delivery limits.':
+    'El contenido de la revisión supera los límites de entrega al escritorio.',
   'Failed to start review': 'No se pudo iniciar la revisión',
   'GitHub-style PR review UI for local git diffs. Designed for solo developers reviewing AI-generated code.':
     'Interfaz de revisión al estilo de GitHub para diferencias locales de git. Diseñada para desarrolladores que revisan por su cuenta código generado por IA.',

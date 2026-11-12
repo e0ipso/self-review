@@ -94,7 +94,14 @@ export function bindDesktopReviewOperations(
       loadedReview?: LoadedReview
     ) => {
       writable();
-      return commitReviewStart(session, payload, identity, loadedReview);
+      const wire = commitReviewStart(session, payload, identity, loadedReview);
+      session.guideData = null;
+      session.resumeComments = [];
+      session.resumeViewedFiles = [];
+      session.resumeRemoteDrift = null;
+      session.resumeImportDiagnostics = [];
+      session.reviewState = null;
+      return wire;
     },
   };
 }

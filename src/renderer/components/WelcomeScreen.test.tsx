@@ -123,3 +123,46 @@ it('restores controls after native large-payload cancellation and allows retry',
   await waitFor(() => expect(api.startDirectoryReview).toHaveBeenCalledTimes(2));
   expect((screen.getByTestId('browse-button') as HTMLButtonElement).disabled).toBe(false);
 });
+
+it.each([
+  ['Review cancelled.', 'Revisión cancelada.'],
+  ['Opening the PR/MR was cancelled.', 'Se canceló la apertura del PR/MR.'],
+  ['Enter a GitHub PR or GitLab MR URL.', 'Introduce una URL de PR de GitHub o MR de GitLab.'],
+  ['The desktop operation timed out.', 'Se agotó el tiempo de la operación de escritorio.'],
+  [
+    'opening the PR/MR took longer than 10 minutes',
+    'La apertura del PR/MR tardó más de 10 minutos.',
+  ],
+])('translates the known application failure %s at presentation', async (error, expected) => {
+  const { LocalizationProvider } =
+    await import('../../../packages/react/src/localization/LocalizationContext');
+  installElectronApiStub({ openRemoteUrl: vi.fn(async () => ({ ok: false as const, error })) });
+  render(
+    <LocalizationProvider locale='es'>
+      <WelcomeScreen />
+    </LocalizationProvider>
+  );
+  submitUrl('https://github.com/owner/repo/pull/42');
+  expect((await screen.findByRole('alert')).textContent).toBe(expected);
+});
+
+it('relocalizes a returned application error when the presentation locale changes', async () => {
+  const { LocalizationProvider } =
+    await import('../../../packages/react/src/localization/LocalizationContext');
+  installElectronApiStub({
+    openRemoteUrl: vi.fn(async () => ({ ok: false as const, error: 'Review cancelled.' })),
+  });
+  const view = render(
+    <LocalizationProvider locale='en'>
+      <WelcomeScreen />
+    </LocalizationProvider>
+  );
+  submitUrl('https://github.com/owner/repo/pull/42');
+  expect((await screen.findByRole('alert')).textContent).toBe('Review cancelled.');
+  view.rerender(
+    <LocalizationProvider locale='es'>
+      <WelcomeScreen />
+    </LocalizationProvider>
+  );
+  expect(screen.getByRole('alert').textContent).toBe('Revisión cancelada.');
+});

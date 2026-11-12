@@ -26,6 +26,7 @@ import {
 } from './presentation';
 import { createDesktopPublication } from './publication';
 import { registerRemoteOpenHandler } from './remote-open-handler';
+import { bindRemoteOpening } from './remote-opening-binding';
 import { IPC } from '../shared/ipc-channels';
 
 const desktop = createDesktopSession(process.cwd());
@@ -212,7 +213,7 @@ void app
         createLifecyclePresentation(messages),
         messages
       );
-      registerRemoteOpenHandler(desktop, boundary, presentation);
+      registerRemoteOpenHandler(desktop, boundary, presentation, bindRemoteOpening(desktop));
       setupMenu(messages);
       windows.initialize();
       // The check uses the default network session. Late completions target the current live window.

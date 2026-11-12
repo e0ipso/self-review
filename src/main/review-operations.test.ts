@@ -125,7 +125,8 @@ it('keeps the directory capture in the host while sending only the prepared payl
     expect(commit).toHaveBeenCalledWith(prepared.payload, prepared.identity, prepared.loadedReview);
     expect(session.diffData).toBe(prepared.payload);
     expect(session.sourceIdentity).toBe(prepared.identity);
-    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls.map(([channel]) => channel)).toEqual([IPC.DIFF_LOAD, IPC.RESUME_LOAD]);
+    expect(send.mock.calls[1][1]).toEqual({ comments: [], viewedFiles: [] });
     expect(send.mock.calls[0][0]).toBe(IPC.DIFF_LOAD);
     expect(send.mock.calls[0][1]).not.toHaveProperty('loadedReview');
     expect(send.mock.calls[0][1]).not.toHaveProperty('identity');
