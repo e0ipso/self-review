@@ -27,6 +27,7 @@ import { ReviewDisplayProvider } from './context/ReviewDisplayContext';
 import { ReviewLifecycleContext } from './context/ReviewLifecycleContext';
 import { ReviewLoadContext } from './context/ReviewLoadContext';
 import { ApplyOperationsContext, createApplyOperations } from './context/apply-operation';
+import { ReviewDraftRecovery } from './components/Comments/ReviewDraftRecovery';
 import { ReviewLoadRecovery } from './components/ReviewLoadRecovery';
 
 const adapterIds = new WeakMap<object, number>();
@@ -71,6 +72,7 @@ function ReviewSessionProvider({
       )
     )
   );
+  useLayoutEffect(() => () => store.drafts.abortPending(), [store]);
   const host = useReviewHost(store, adapter, initialFiles !== undefined, initialComments, {
     files: initialFiles,
     source: initialSource,
@@ -172,6 +174,7 @@ function ReviewSessionProjection({
         isLargePayload={state.isLargePayload}
         reviewFiles={state.files}
       >
+        <ReviewDraftRecovery />
         {children}
       </ReviewDisplayProvider>
     </ReviewContext.Provider>

@@ -1,12 +1,14 @@
 import { useLocalization } from '../../localization/LocalizationContext';
-import React, { useState, useEffect, useRef } from 'react';
-import type { Attachment, LineRange, ReviewComment, Suggestion } from '@self-review/types';
-import { useReviewCommands } from '../../context/ReviewContext';
+import React, { useRef } from 'react';
+import type { LineRange, ReviewComment, Suggestion } from '@self-review/types';
+import { useReviewCommands } from '../../context/review-session-hooks';
 import { useCategories } from '../../context/ConfigContext';
 import { isUsableCategory } from '../../utils/category-utils';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { Code2 } from 'lucide-react';
+import { useReviewDraft } from '../../hooks/useReviewDraft';
+import { DraftStatus } from './DraftStatus';
 import CategorySelector from './CategorySelector';
 import { ComposerCore, AttachButton } from './ComposerCore';
 import { SuggestionPanel } from './SuggestionPanel';
@@ -32,51 +34,47 @@ export default function CommentInput({
   const { addComment, editComment } = useReviewCommands();
   const categories = useCategories();
   const defaultCategory = categories?.find(isUsableCategory)?.name ?? '';
-  const [body, setBody] = useState('');
-  const [category, setCategory] = useState(defaultCategory);
-  const [showSuggestion, setShowSuggestion] = useState(false);
-  const [proposedCode, setProposedCode] = useState('');
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const actionsRef = useRef<HTMLDivElement>(null);
-  const processing = useRef(false);
-  const [attachmentsPending, setAttachmentsPending] = useState(false);
-  const onProcessingChange = React.useCallback((pending: boolean) => {
-    processing.current = pending;
-    setAttachmentsPending(pending);
-  }, []);
-
-  useEffect(() => {
-    if (existingComment) {
-      setBody(existingComment.body);
-      setCategory(existingComment.category || defaultCategory);
-      if (existingComment.suggestion) {
-        setShowSuggestion(true);
-        setProposedCode(existingComment.suggestion.proposedCode);
-      }
-      if (existingComment.attachments) {
-        setAttachments(existingComment.attachments);
-      }
+  const editor = useReviewDraft(
+    { filePath, lineRange, existingComment, originalCode },
+    {
+      body: existingComment?.body ?? '',
+      category: existingComment?.category || defaultCategory,
+      showSuggestion: !!existingComment?.suggestion,
+      proposedCode: existingComment?.suggestion?.proposedCode ?? '',
+      attachments: existingComment?.attachments ?? [],
     }
-  }, [existingComment]);
+  );
+  const {
+    content: { body, category, showSuggestion, proposedCode, attachments },
+    setBody,
+    setCategory,
+    setShowSuggestion,
+    setProposedCode,
+    setAttachments,
+  } = editor;
+  const location = editor.draft.target ?? editor.draft.location;
+  const suggestionOriginal = location.originalCode;
+  const actionsRef = useRef<HTMLDivElement>(null);
 
   const hasContent =
-    body.trim().length > 0 || (showSuggestion && !!originalCode) || attachments.length > 0;
+    body.trim().length > 0 || (showSuggestion && !!suggestionOriginal) || attachments.length > 0;
   const isValid = hasContent && category.length > 0;
 
   const handleSubmit = () => {
-    if (!isValid || processing.current) return;
+    if (!isValid || !editor.current() || editor.draft.pending || editor.draft.interrupted) return;
 
     const suggestion: Suggestion | null =
-      showSuggestion && originalCode
+      showSuggestion && suggestionOriginal
         ? {
-            originalCode,
+            originalCode: suggestionOriginal,
             proposedCode,
           }
         : null;
 
-    if (existingComment) {
+    if (location.existingComment) {
       // Always send `attachments`: editComment merges, so omitting it would keep the old list.
-      editComment(existingComment.id, {
+      editComment(location.existingComment.id, {
+        ...(editor.draft.target ? { lineRange: location.lineRange } : {}),
         body,
         category,
         suggestion,
@@ -84,8 +82,8 @@ export default function CommentInput({
       });
     } else {
       addComment(
-        filePath,
-        lineRange,
+        location.filePath,
+        location.lineRange,
         body,
         category,
         suggestion,
@@ -93,40 +91,35 @@ export default function CommentInput({
       );
     }
 
-    setBody('');
-    setCategory(defaultCategory);
-    setShowSuggestion(false);
-    setProposedCode('');
-    setAttachments([]);
+    editor.clear();
     onSubmit?.();
   };
 
   const handleCancel = () => {
-    setBody('');
-    setCategory(defaultCategory);
-    setShowSuggestion(false);
-    setProposedCode('');
-    setAttachments([]);
+    editor.clear();
     onCancel();
   };
 
   return (
     <ComposerCore
-      attachmentOwner={JSON.stringify([filePath, lineRange, existingComment?.id])}
-      onProcessingChange={onProcessingChange}
+      key={editor.draft.key}
+      attachmentOwner={editor.draft.key}
+      attachmentSignal={editor.draft.controller.signal}
+      onAttachmentsAborted={editor.onAttachmentsAborted}
+      onAttachmentWorkChange={editor.onProcessingChange}
       body={body}
       onBodyChange={setBody}
       attachments={attachments}
       setAttachments={setAttachments}
       placeholder={t('Add your review comment... (paste or drop images here)')}
       headerLabel={
-        lineRange ? (
+        location.lineRange ? (
           <span className='text-xs font-medium text-muted-foreground whitespace-nowrap'>
-            {lineRange.start === lineRange.end
-              ? t('Comment on line {line}', { line: lineRange.start })
+            {location.lineRange.start === location.lineRange.end
+              ? t('Comment on line {line}', { line: location.lineRange.start })
               : t('Comment on lines {start} to {end}', {
-                  start: lineRange.start,
-                  end: lineRange.end,
+                  start: location.lineRange.start,
+                  end: location.lineRange.end,
                 })}
           </span>
         ) : undefined
@@ -135,9 +128,10 @@ export default function CommentInput({
       testId='comment-input'
       actionsRef={actionsRef}
     >
-      {showSuggestion && originalCode && (
+      <DraftStatus editor={editor} />
+      {showSuggestion && suggestionOriginal && (
         <SuggestionPanel
-          originalCode={originalCode}
+          originalCode={suggestionOriginal}
           proposedCode={proposedCode}
           onProposedChange={setProposedCode}
           onSubmit={handleSubmit}
@@ -155,7 +149,7 @@ export default function CommentInput({
       >
         <div className='flex items-center gap-2'>
           <CategorySelector value={category} onChange={setCategory} />
-          {originalCode && (
+          {suggestionOriginal && (
             <Button
               type='button'
               variant={showSuggestion ? 'secondary' : 'ghost'}
@@ -163,7 +157,7 @@ export default function CommentInput({
               data-testid='add-suggestion-btn'
               onClick={() => {
                 if (!showSuggestion && proposedCode.length === 0) {
-                  setProposedCode(originalCode);
+                  setProposedCode(suggestionOriginal);
                 }
                 setShowSuggestion(!showSuggestion);
               }}
@@ -193,10 +187,12 @@ export default function CommentInput({
             data-hint-action='submit-comment'
             size='sm'
             onClick={handleSubmit}
-            disabled={!isValid || attachmentsPending}
+            disabled={
+              !isValid || editor.draft.pending || editor.draft.stale || editor.draft.interrupted
+            }
             className='h-7 text-xs gap-1.5'
           >
-            {t(existingComment ? 'Update' : 'Comment')}
+            {t(location.existingComment ? 'Update' : 'Comment')}
             <kbd className='pointer-events-none inline-flex items-center rounded border border-current/20 px-1 font-mono text-[10px] font-medium opacity-60'>
               {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl'}
               {'\u21B5'}

@@ -44,6 +44,9 @@ const EDITOR_COMMANDS: ReadonlyArray<readonly [ICommand, MessageKey?]> = [
 export interface ComposerCoreProps {
   body: string;
   attachmentOwner?: string;
+  attachmentSignal?: AbortSignal;
+  onAttachmentsAborted?: () => void;
+  onAttachmentWorkChange?: (unfinished: boolean) => void;
   onProcessingChange?: (pending: boolean) => void;
   onBodyChange: (body: string) => void;
   attachments: Attachment[];
@@ -72,6 +75,9 @@ export interface ComposerCoreProps {
 export function ComposerCore({
   body,
   attachmentOwner,
+  attachmentSignal,
+  onAttachmentsAborted,
+  onAttachmentWorkChange,
   onProcessingChange,
   onBodyChange,
   attachments,
@@ -119,6 +125,9 @@ export function ComposerCore({
     onAttach: handleAttach,
     attachments,
     owner: attachmentOwner,
+    signal: attachmentSignal,
+    onAbort: onAttachmentsAborted,
+    onWorkChange: onAttachmentWorkChange,
     onProcessingChange,
   });
 

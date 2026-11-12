@@ -145,3 +145,6 @@ export { useReviewExpansion, useCommentDisclosure } from './context/ReviewDispla
 export { useNavigationReview } from './context/ReviewContext';
 
 export { useInteractionLock } from './hooks/useInteractionLock';
+
+export { useReviewDraftWork, useReviewDraftGuard } from './hooks/useReviewDraft';
+export { UnfinishedReviewDraftError } from './context/review-drafts';

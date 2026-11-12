@@ -7,6 +7,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  UnfinishedReviewDraftError,
   useReviewSaveTransaction,
   useReviewSessionId,
   useReviewSnapshotId,
@@ -123,12 +124,14 @@ function useOwnedSave(api: SaveAPI, enabled = true): SaveControl {
     let owner: ReturnType<typeof transaction.begin>;
     try {
       owner = transaction.begin();
-    } catch {
+    } catch (error) {
       pending.current = false;
       setDetail(
-        t(
-          'The review is still loading or could not be restored. Resolve the loading error before saving.'
-        )
+        error instanceof UnfinishedReviewDraftError
+          ? error.message
+          : t(
+              'The review is still loading or could not be restored. Resolve the loading error before saving.'
+            )
       );
       return;
     }

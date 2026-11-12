@@ -1,9 +1,11 @@
 import { useContext, useSyncExternalStore, useMemo, useRef, useLayoutEffect } from 'react';
 import type { ReviewState } from '@self-review/types';
-import { ReviewContext, SessionStoreContext, CommandsContext } from './review-context';
+import { ReviewContext, SessionStoreContext } from './review-context';
 import type { ReviewSessionStore } from './review-session';
 import { isPlaceholderSource } from './review-session';
 import { useConfiguration } from './ConfigContext';
+import { useLocalization } from '../localization/LocalizationContext';
+import { UnfinishedReviewDraftError } from './review-drafts';
 import { useReviewServices } from './ReviewServicesContext';
 export type { ReviewContextValue, ReviewProviderProps } from './review-context';
 export { ReviewProvider } from '../ReviewSessionProvider';
@@ -16,11 +18,6 @@ export function useReview() {
 }
 export function useOptionalReview() {
   return useContext(ReviewContext);
-}
-export function useReviewCommands() {
-  const commands = useContext(CommandsContext);
-  if (!commands) throw new Error('useReviewCommands must be used within ReviewProvider');
-  return commands;
 }
 function useSessionSelection<T>(
   select: (state: ReturnType<ReviewSessionStore['getSnapshot']>) => T
@@ -67,13 +64,6 @@ export function useReviewSnapshotId() {
   return useSessionSelection(state => state.snapshotId);
 }
 
-export function useOptionalSnapshotKey() {
-  const store = useContext(SessionStoreContext);
-  const read = () =>
-    store ? `${store.getSnapshot().sessionId}:${store.getSnapshot().snapshotId}` : '';
-  return useSyncExternalStore(store?.subscribe ?? (() => () => {}), read, read);
-}
-
 /** The diff stream does not subscribe to comment mutations. */
 export function useDiffReview() {
   const all = useSessionSelection(state => state.allDiffFiles);
@@ -91,64 +81,6 @@ export function useDiffReview() {
   };
 }
 
-/** Apply controls depend on session ownership and destination, never on comment bodies. */
-export function useOptionalApplySession() {
-  const store = useContext(SessionStoreContext);
-  const commands = useContext(CommandsContext);
-  const subscribe = store?.subscribe ?? emptySubscribe;
-  const read = () => store?.getSnapshot();
-  // Each selected value retains its identity across unrelated file/comment updates.
-  const select =
-    <T,>(selector: (state: ReturnType<ReviewSessionStore['getSnapshot']>) => T) =>
-    () => {
-      const state = read();
-      return state ? selector(state) : undefined;
-    };
-  const sessionId = useSyncExternalStore(
-    subscribe,
-    select(s => s.sessionId),
-    select(s => s.sessionId)
-  );
-  const snapshotId = useSyncExternalStore(
-    subscribe,
-    select(s => s.snapshotId),
-    select(s => s.snapshotId)
-  );
-  const diffSource = useSyncExternalStore(
-    subscribe,
-    select(s => s.diffSource),
-    select(s => s.diffSource)
-  );
-  const reviewedPaths = useSyncExternalStore(
-    subscribe,
-    select(s => s.reviewedPaths),
-    select(s => s.reviewedPaths)
-  );
-  const remote = useSyncExternalStore(
-    subscribe,
-    select(s => s.remote),
-    select(s => s.remote)
-  );
-  const applyDestination = useSyncExternalStore(
-    subscribe,
-    select(s => s.applyDestination),
-    select(s => s.applyDestination)
-  );
-  return store && commands && diffSource && reviewedPaths
-    ? {
-        sessionId,
-        snapshotId,
-        diffSource,
-        reviewedPaths,
-        remote,
-        applyDestination,
-        isCurrentSession: commands.isCurrentSession,
-        setApplyDestination: commands.setApplyDestination,
-      }
-    : null;
-}
-const emptySubscribe = () => () => {};
-
 export interface ReviewSaveSnapshot {
   /** One ready snapshot, captured from the synchronous owner rather than a render closure. */
   state: ReviewState;
@@ -159,6 +91,7 @@ export interface ReviewSaveSnapshot {
 }
 export interface ReviewSaveTransaction {
   /** Throws while diff/resume loading failed or is pending, or another save owns the snapshot.
+   * Unfinished drafts must be submitted or cancelled before capture.
    * Success and unknown outcomes retain the lock. Never retry a write automatically.
    */
   begin: () => ReviewSaveSnapshot;
@@ -171,6 +104,7 @@ export function useReviewSaveTransaction(): ReviewSaveTransaction {
   const store = useContext(SessionStoreContext);
   if (!store) throw new Error('Save transactions require ReviewProvider');
   const { now } = useReviewServices();
+  const { t } = useLocalization();
   const clock = useRef(now);
   clock.current = now;
   const live = useRef(true);
@@ -184,6 +118,10 @@ export function useReviewSaveTransaction(): ReviewSaveTransaction {
     () => ({
       begin() {
         const state = store.getSnapshot();
+        if (store.drafts.hasWork())
+          throw new UnfinishedReviewDraftError(
+            t('Finish or cancel unfinished drafts before saving the review.')
+          );
         if (
           !live.current ||
           isPlaceholderSource(state.diffSource) ||
@@ -211,6 +149,12 @@ export function useReviewSaveTransaction(): ReviewSaveTransaction {
         };
       },
     }),
-    [store]
+    [store, t]
   );
 }
+
+export {
+  useReviewCommands,
+  useOptionalSnapshotKey,
+  useOptionalApplySession,
+} from './review-session-hooks';

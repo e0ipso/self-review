@@ -3,6 +3,22 @@ import type { LocalizedMessage } from '../../packages/react/src/localization/for
 
 /** Built-in translations for the shared review UI used by desktop. */
 export const SPANISH_REVIEW = {
+  Original: 'Original',
+  Suggested: 'Propuesto',
+  'Enter your suggested code...': 'Escribe el código propuesto...',
+  'Finish or cancel unfinished drafts before saving the review.':
+    'Termina o cancela los borradores pendientes antes de guardar la revisión.',
+  'The reviewed content changed. Check this draft against the current diff before continuing.':
+    'El contenido revisado ha cambiado. Comprueba este borrador con el diff actual antes de continuar.',
+  'Use current location': 'Usar la ubicación actual',
+  'Keep as file comment': 'Conservar como comentario de archivo',
+  'Attachment preparation was interrupted. Attach the image again before saving.':
+    'La preparación del adjunto se interrumpió. Vuelve a adjuntar la imagen antes de guardar.',
+  'Unfinished drafts': 'Borradores pendientes',
+  'Unfinished draft: {path}': 'Borrador pendiente: {path}',
+  'Continue draft': 'Continuar borrador',
+  'Cancel draft': 'Cancelar borrador',
+
   'Front matter too complex to display: it refers to itself. The document body is shown below.':
     'Los metadatos se refieren a sí mismos. El cuerpo del documento se muestra debajo.',
   'Front matter too complex to display: it is nested too deeply. The document body is shown below.':

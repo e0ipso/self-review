@@ -13,6 +13,8 @@ import {
   Toolbar,
   useConfig,
   useReview,
+  useReviewDraftWork,
+  useReviewDraftGuard,
 } from '@self-review/react';
 import type { ReviewPanelHandle } from '@self-review/react';
 import type { OutputPathInfo } from '@self-review/core';
@@ -71,11 +73,21 @@ function OutputPath({ info }: { info: OutputPathInfo | null }) {
 /** Observe persisted state without changing the library's comments-only callback. */
 function UnsavedWork({ onChange }: { onChange: () => void }) {
   const { files } = useReview();
+  const drafts = useReviewDraftWork();
+  const hasDraftWork = useReviewDraftGuard();
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (hasDraftWork()) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasDraftWork]);
   const previous = useRef(files);
   useEffect(() => {
     const before = previous.current;
     previous.current = files;
     if (
+      drafts ||
       files.some(file => file.viewed || file.comments.length > 0) ||
       before.some(file => {
         const next = files.find(candidate => candidate.path === file.path);
@@ -83,7 +95,7 @@ function UnsavedWork({ onChange }: { onChange: () => void }) {
       })
     )
       onChange();
-  }, [files, onChange]);
+  }, [files, drafts, onChange]);
   return null;
 }
 

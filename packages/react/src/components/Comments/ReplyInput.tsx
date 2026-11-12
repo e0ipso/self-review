@@ -1,7 +1,9 @@
 import { useLocalization } from '../../localization/LocalizationContext';
-import React, { useState, useEffect, useRef } from 'react';
-import type { Attachment, Reply } from '@self-review/types';
-import { useReviewCommands } from '../../context/ReviewContext';
+import React, { useRef } from 'react';
+import type { Reply } from '@self-review/types';
+import { useReviewCommands } from '../../context/review-session-hooks';
+import { useReviewDraft } from '../../hooks/useReviewDraft';
+import { DraftStatus } from './DraftStatus';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { ComposerCore, AttachButton } from './ComposerCore';
@@ -24,29 +26,28 @@ export default function ReplyInput({
 }: ReplyInputProps) {
   const { t } = useLocalization();
   const { addReply, updateReply } = useReviewCommands();
-  const [body, setBody] = useState('');
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const actionsRef = useRef<HTMLDivElement>(null);
-  const processing = useRef(false);
-  const [attachmentsPending, setAttachmentsPending] = useState(false);
-  const onProcessingChange = React.useCallback((pending: boolean) => {
-    processing.current = pending;
-    setAttachmentsPending(pending);
-  }, []);
-
-  useEffect(() => {
-    if (existingReply) {
-      setBody(existingReply.body);
-      if (existingReply.attachments) {
-        setAttachments(existingReply.attachments);
-      }
+  const editor = useReviewDraft(
+    { filePath: '', lineRange: null, commentId, existingReply },
+    {
+      body: existingReply?.body ?? '',
+      category: '',
+      showSuggestion: false,
+      proposedCode: '',
+      attachments: existingReply?.attachments ?? [],
     }
-  }, [existingReply]);
+  );
+  const {
+    content: { body, attachments },
+    setBody,
+    setAttachments,
+  } = editor;
+  const actionsRef = useRef<HTMLDivElement>(null);
 
   const hasContent = body.trim().length > 0 || attachments.length > 0;
 
   const handleSubmit = () => {
-    if (!hasContent || processing.current) return;
+    if (!hasContent || !editor.current() || editor.draft.pending || editor.draft.interrupted)
+      return;
 
     if (existingReply) {
       updateReply(commentId, existingReply.id, {
@@ -58,21 +59,22 @@ export default function ReplyInput({
       addReply(commentId, body, undefined, attachments.length ? attachments : undefined);
     }
 
-    setBody('');
-    setAttachments([]);
+    editor.clear();
     onSubmit?.();
   };
 
   const handleCancel = () => {
-    setBody('');
-    setAttachments([]);
+    editor.clear();
     onCancel();
   };
 
   return (
     <ComposerCore
-      attachmentOwner={JSON.stringify([commentId, existingReply?.id])}
-      onProcessingChange={onProcessingChange}
+      key={editor.draft.key}
+      attachmentOwner={editor.draft.key}
+      attachmentSignal={editor.draft.controller.signal}
+      onAttachmentsAborted={editor.onAttachmentsAborted}
+      onAttachmentWorkChange={editor.onProcessingChange}
       body={body}
       onBodyChange={setBody}
       attachments={attachments}
@@ -83,6 +85,7 @@ export default function ReplyInput({
       actionsRef={actionsRef}
       height={REPLY_EDITOR_HEIGHT}
     >
+      <DraftStatus editor={editor} />
       <Separator />
 
       {/* Actions bar */}
@@ -111,7 +114,9 @@ export default function ReplyInput({
             data-testid='add-reply-btn'
             size='sm'
             onClick={handleSubmit}
-            disabled={!hasContent || attachmentsPending}
+            disabled={
+              !hasContent || editor.draft.pending || editor.draft.stale || editor.draft.interrupted
+            }
             className='h-7 text-xs gap-1.5'
           >
             {t(existingReply ? 'Update' : 'Reply')}

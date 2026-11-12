@@ -61,8 +61,8 @@ vi.mock('./FileSectionHeader', () => ({
   ),
 }));
 
-vi.mock('./FileSectionBody', () => ({
-  FileSectionBody: ({ contentAreaProps }: { contentAreaProps: DiffContentAreaProps }) => (
+vi.mock('./DiffContentArea', () => ({
+  PreviewContentArea: (contentAreaProps: DiffContentAreaProps) => (
     <div
       data-testid='mock-file-section-body'
       data-render-view-mode={contentAreaProps.renderViewMode}

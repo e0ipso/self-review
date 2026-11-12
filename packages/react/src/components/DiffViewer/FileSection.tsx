@@ -13,7 +13,9 @@ import { getContentPreview, initialPreviewMode } from './content-preview';
 import { getGuideAccent } from '../../utils/guide-accents';
 import { useReviewExpansion } from '../../context/ReviewDisplayContext';
 import { FileSectionHeaderPresentation } from './FileSectionHeader';
-import { FileSectionBody } from './FileSectionBody';
+import { FileSectionBodyLayout } from './FileSectionBody';
+import { PreviewContentArea } from './DiffContentArea';
+import PreviewErrorBoundary from './PreviewErrorBoundary';
 import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 
 export interface FileSectionProps {
@@ -114,22 +116,18 @@ export default function FileSection({
     onCommentRange: handleCommentRange,
   });
 
-  // Sync viewed state with expansion: when viewed is checked, collapse the file
-  useEffect(() => {
-    if (isViewed && expanded && onToggleExpanded) {
-      onToggleExpanded(filePath);
-    }
-  }, [isViewed]);
-
-  const handleViewedToggle = () => {
-    toggleViewed(filePath);
-    if (!isViewed && expanded && onToggleExpanded) {
-      onToggleExpanded(filePath);
-    }
-    if (isViewed && !expanded && onToggleExpanded) {
-      onToggleExpanded(filePath);
-    }
+  const changeExpanded = (next: boolean) => {
+    if (expanded === next) return;
+    if (onToggleExpanded) onToggleExpanded(filePath);
+    else setExpanded(filePath, next);
   };
+  // Viewed changes from either the header or file tree share the expansion owner.
+  const previouslyViewed = useRef(false);
+  useEffect(() => {
+    if (previouslyViewed.current !== isViewed) changeExpanded(!isViewed);
+    previouslyViewed.current = isViewed;
+  }, [isViewed]);
+  const handleViewedToggle = () => toggleViewed(filePath);
 
   return (
     <div
@@ -147,19 +145,10 @@ export default function FileSection({
         isPreviewable={isPreviewable}
         renderViewMode={renderViewMode}
         commentCount={comments.length}
-        onToggle={() => {
-          if (onToggleExpanded) {
-            onToggleExpanded(filePath);
-          } else {
-            setExpanded(filePath, !expanded);
-          }
-        }}
+        onToggle={() => changeExpanded(!expanded)}
         onViewedToggle={handleViewedToggle}
         onAddFileComment={() => {
-          if (!expanded) {
-            if (onToggleExpanded) onToggleExpanded(filePath);
-            else setExpanded(filePath, true);
-          }
+          changeExpanded(true);
           setShowingFileComment(true);
         }}
         onRenderViewModeChange={setRenderViewMode}
@@ -189,33 +178,39 @@ export default function FileSection({
           </p>
         )}
         {expanded && (
-          <FileSectionBody
+          <FileSectionBodyLayout
             filePath={filePath}
             fileComments={fileComments}
             orphanedComments={orphanedComments}
             showingFileComment={showingFileComment}
             onCancelFileComment={() => setShowingFileComment(false)}
             onFileCommentSubmit={() => setShowingFileComment(false)}
-            contentAreaProps={{
-              file,
-              preview,
-              filePath,
-              viewMode: effectiveViewMode,
-              renderViewMode,
-              contentLoad,
-              onRetry: retryContentLoad,
-              commentRange,
-              dragState,
-              onDragStart: handleDragStart,
-              onCancelComment: clearCommentRange,
-              onCommentSaved: clearCommentRange,
-              onCommentRange: handleCommentRange,
-              isExpandable,
-              expandLoading,
-              totalLines,
-              handleExpandContext,
-            }}
-          />
+          >
+            <PreviewErrorBoundary
+              filePath={filePath}
+              resetKeys={[file, renderViewMode, effectiveViewMode]}
+            >
+              <PreviewContentArea
+                file={file}
+                preview={preview}
+                filePath={filePath}
+                viewMode={effectiveViewMode}
+                renderViewMode={renderViewMode}
+                contentLoad={contentLoad}
+                onRetry={retryContentLoad}
+                commentRange={commentRange}
+                dragState={dragState}
+                onDragStart={handleDragStart}
+                onCancelComment={clearCommentRange}
+                onCommentSaved={clearCommentRange}
+                onCommentRange={handleCommentRange}
+                isExpandable={isExpandable}
+                expandLoading={expandLoading}
+                totalLines={totalLines}
+                handleExpandContext={handleExpandContext}
+              />
+            </PreviewErrorBoundary>
+          </FileSectionBodyLayout>
         )}
       </div>
     </div>

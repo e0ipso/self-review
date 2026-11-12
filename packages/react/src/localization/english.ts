@@ -1,6 +1,22 @@
 import type { LocalizedMessage } from './LocalizationContext';
 
 export const ENGLISH = {
+  Original: 'Original',
+  Suggested: 'Suggested',
+  'Enter your suggested code...': 'Enter your suggested code...',
+  'Finish or cancel unfinished drafts before saving the review.':
+    'Finish or cancel unfinished drafts before saving the review.',
+  'The reviewed content changed. Check this draft against the current diff before continuing.':
+    'The reviewed content changed. Check this draft against the current diff before continuing.',
+  'Use current location': 'Use current location',
+  'Keep as file comment': 'Keep as file comment',
+  'Attachment preparation was interrupted. Attach the image again before saving.':
+    'Attachment preparation was interrupted. Attach the image again before saving.',
+  'Unfinished drafts': 'Unfinished drafts',
+  'Unfinished draft: {path}': 'Unfinished draft: {path}',
+  'Continue draft': 'Continue draft',
+  'Cancel draft': 'Cancel draft',
+
   'Front matter too complex to display: it refers to itself. The document body is shown below.':
     'Front matter too complex to display: it refers to itself. The document body is shown below.',
   'Front matter too complex to display: it is nested too deeply. The document body is shown below.':
