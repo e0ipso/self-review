@@ -106,6 +106,7 @@ async function main(): Promise<void> {
         const server = createReviewServer({
           capability,
           operations: createReviewOperations(session, output),
+          reportDiagnostic: host.reportDiagnostic,
         });
         lifetime.attach(server);
         const { url } = await listenLoopback(server, 0, { signal: lifetime.signal });

@@ -16,7 +16,18 @@ export interface SubmissionOperations {
 export class ReviewSubmission {
   private state: 'open' | 'publishing' | 'published' = 'open';
 
-  constructor(private readonly operations: SubmissionOperations) {}
+  constructor(
+    private readonly operations: SubmissionOperations,
+    private readonly reportDiagnostic: (message: string) => void = message => console.error(message)
+  ) {}
+
+  private report(message: string): void {
+    try {
+      void Promise.resolve(this.reportDiagnostic(message)).catch(() => {});
+    } catch {
+      // Diagnostics cannot change a committed result or hide a publication refusal.
+    }
+  }
 
   get completed(): boolean {
     return this.state === 'published';
@@ -42,13 +53,13 @@ export class ReviewSubmission {
     try {
       const { outputPath } = await this.operations.publishReview(state, options);
       this.state = 'published';
-      console.error(`[serve] Review written to ${outputPath}`);
+      this.report(`[serve] Review written to ${outputPath}`);
       return { ok: true, outputPath };
     } catch (error) {
       if (!(error instanceof ReviewPublishError)) throw error;
-      console.error(`[serve] Review not saved (${error.code}): ${error.message}`);
-      for (const detail of error.details) console.error(`[serve]   ${detail}`);
-      console.error(
+      this.report(`[serve] Review not saved (${error.code}): ${error.message}`);
+      for (const detail of error.details) this.report(`[serve]   ${detail}`);
+      this.report(
         '[serve] The review is still open in the browser. Fix the problem and press Finish Review again.'
       );
       return { ok: false, code: error.code, message: error.message, details: [...error.details] };

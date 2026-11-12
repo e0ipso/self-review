@@ -137,6 +137,25 @@ independent of the HTTP body limit. Cancellation does not roll back a committed 
 Synchronous/native work can still delay event-loop callbacks; the grace period is not hard
 preemption of arbitrary code.
 
+The listener accepts at most 64 TCP connections, including idle keepalive connections and peers that
+have not finished sending HTTP headers. Excess connections close before parsing a request or logging
+its bytes. Programmatic `createReviewServer` callers may supply a positive integer `maxConnections`;
+the CLI uses 64. Normal keepalive, the 15-second header deadline and the 60-second request deadline
+remain in effect.
+
+Static bundle files stream from one opened regular-file descriptor per request in chunks of at most
+64 KiB, waiting for response backpressure before reading more. Each asset is limited to 32 MiB; a
+larger file receives `413` with `{"error":"static asset exceeds 32 MiB limit"}` before successful
+headers. This limit accommodates the bundled scripts, styles, fonts and diagrams. The original file
+size fixes both Content-Length and the read range, so file growth cannot extend the response. A
+failed or shortened read after headers closes the response as incomplete. Missing files,
+directories, unsafe paths and initial read failures retain the `404` response. Descriptor opens use
+no-follow and nonblocking flags, reject non-regular files, and recheck containment and inode
+identity. Disconnect, request expiry and shutdown cancel reads and backpressure waits. Admission
+retains the operation until the descriptor closes and the response settles. Already issued
+filesystem calls and kernel socket buffers may finish after cancellation; cancellation does not
+preempt native I/O.
+
 The server admits at most 32 operations and responses in total, with at most eight concurrent
 expensive image or attachment reads. Excess requests receive `503` with
 `{"error":"review server busy; retry after pending requests finish"}` before engine work starts.
@@ -161,6 +180,12 @@ each 5,242,880 bytes, independent of the HTTP budget; exceeding either resolves 
 refusal. With core 2.0.4, serve uses the existing synchronous writer, which blocks and cannot
 interrupt an in-progress write. The compatibility shim can be removed once the published minimum
 core dependency provides the async operation. Context expansion requests retain their 64 KiB bound.
+
+Programmatic `createReviewServer` callers may supply a per-instance `reportDiagnostic(message)`
+callback for submission success and known publication refusals. `ReviewSubmission` also accepts it
+as an optional second constructor argument. Defaults retain the existing stderr messages, and the
+CLI supplies its diagnostic reporter explicitly. A throwing reporter cannot change a committed
+success, hide the underlying refusal, reopen completed admission or retry a write.
 
 Core 2.0.4 remains a supported installed peer. On that peer, startup prints diagnostics for the
 synchronous startup probe and Apply, local loading without signal support, and publication without
