@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { createRef } from 'react';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   ConfigProvider,
@@ -51,6 +51,10 @@ function fixture() {
     return (
       <>
         <output>{submission.status}</output>
+        <input aria-label='Review editor' />
+        <div data-save-recovery>
+          <button>Inspect save</button>
+        </div>
         <ConfigProvider>
           <ReviewProvider
             initialFiles={files}
@@ -70,6 +74,7 @@ function fixture() {
     publishReview,
     review: () => review,
     finish: () => finish(),
+    unmount: view.unmount,
     replace: () => view.rerender(<Host source='/next' />),
   };
 }
@@ -132,3 +137,36 @@ it.each(['resolve', 'reject'] as const)(
     expect(f.review().files[0].viewed).toBe(true);
   }
 );
+
+it('blocks the actual HTTP host capture scope until recovery and removes listeners on disposal', async () => {
+  const f = fixture();
+  const names = [
+    'keydown',
+    'click',
+    'beforeinput',
+    'input',
+    'change',
+    'submit',
+    'trigger-line-comment',
+  ];
+  const editor = screen.getByLabelText('Review editor');
+  act(() => {
+    void f.finish();
+    for (const name of names) {
+      const event = new Event(name, { bubbles: true, cancelable: true });
+      fireEvent(editor, event);
+      expect(event.defaultPrevented).toBe(true);
+    }
+    const recovery = new Event('click', { bubbles: true, cancelable: true });
+    fireEvent(screen.getByText('Inspect save'), recovery);
+    expect(recovery.defaultPrevented).toBe(false);
+  });
+  await act(async () => f.first.reject(new Error('lost acknowledgement')));
+  const unknown = new Event('beforeinput', { bubbles: true, cancelable: true });
+  fireEvent(editor, unknown);
+  expect(unknown.defaultPrevented).toBe(true);
+  f.unmount();
+  const disposed = new Event('keydown', { bubbles: true, cancelable: true });
+  window.dispatchEvent(disposed);
+  expect(disposed.defaultPrevented).toBe(false);
+});

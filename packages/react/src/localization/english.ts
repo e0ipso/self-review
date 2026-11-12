@@ -1,6 +1,42 @@
 import type { LocalizedMessage } from './LocalizationContext';
 
 export const ENGLISH = {
+  'Front matter too complex to display: it refers to itself. The document body is shown below.':
+    'Front matter too complex to display: it refers to itself. The document body is shown below.',
+  'Front matter too complex to display: it is nested too deeply. The document body is shown below.':
+    'Front matter too complex to display: it is nested too deeply. The document body is shown below.',
+  'Front matter too complex to display: it has too many values. The document body is shown below.':
+    'Front matter too complex to display: it has too many values. The document body is shown below.',
+  null: 'null',
+  'A line range is required to apply this suggestion.':
+    'A line range is required to apply this suggestion.',
+  'Deleted lines cannot be applied to the working file.':
+    'Deleted lines cannot be applied to the working file.',
+  'The suggestion has an invalid line range.': 'The suggestion has an invalid line range.',
+  'The destination must be an absolute path.': 'The destination must be an absolute path.',
+  'The destination does not exist.': 'The destination does not exist.',
+  'The file path is outside the destination.': 'The file path is outside the destination.',
+  'Git control files cannot be changed.': 'Git control files cannot be changed.',
+  'The destination file cannot be replaced safely.':
+    'The destination file cannot be replaced safely.',
+  'Replacing the file would change its owner.': 'Replacing the file would change its owner.',
+  'The file is missing from the destination.': 'The file is missing from the destination.',
+  'The destination file could not be read.': 'The destination file could not be read.',
+  'The destination file is not valid UTF-8.': 'The destination file is not valid UTF-8.',
+  'The line range is outside the destination file.':
+    'The line range is outside the destination file.',
+  'The original code no longer matches the destination.':
+    'The original code no longer matches the destination.',
+  'The file changed while the suggestion was being applied.':
+    'The file changed while the suggestion was being applied.',
+  'The suggestion could not be written.': 'The suggestion could not be written.',
+  'Choose a destination before applying this suggestion.':
+    'Choose a destination before applying this suggestion.',
+  'This review has no writable destination.': 'This review has no writable destination.',
+  'This file is not in the reviewed diff.': 'This file is not in the reviewed diff.',
+  'The destination must be a directory.': 'The destination must be a directory.',
+  'Choose a destination outside the temporary clone.':
+    'Choose a destination outside the temporary clone.',
   'Add bold text (ctrl + b)': 'Add bold text (ctrl + b)',
   'Add italic text (ctrl + i)': 'Add italic text (ctrl + i)',
   'Insert a quote (ctrl + q)': 'Insert a quote (ctrl + q)',

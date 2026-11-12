@@ -7,6 +7,7 @@ import { useDiffReview } from '../../context/ReviewContext';
 import { useAppearance, usePortalContainer } from '../../context/ConfigContext';
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
+import { keyDiffEntries } from '../../utils/diff-entry-keys';
 import { buildGuideDisplaySections } from '../../utils/guide-display';
 import FileSection from './FileSection';
 import PreviewErrorBoundary from './PreviewErrorBoundary';
@@ -28,7 +29,11 @@ export default function DiffViewer() {
   // render in guide order, grouped into chapters. Flat mode (or no guide)
   // yields a single headerless section in diff order — today's stream.
   const displaySections = useMemo(
-    () => buildGuideDisplaySections(diffFiles, guide?.groups ?? null, guideMode),
+    () =>
+      keyDiffEntries(
+        diffFiles,
+        buildGuideDisplaySections(diffFiles, guide?.groups ?? null, guideMode)
+      ),
     [diffFiles, guide, guideMode]
   );
   const totalStops = displaySections.filter(section => section.header).length;
@@ -117,12 +122,12 @@ export default function DiffViewer() {
               entries={section.entries}
             />
           )}
-          {section.entries.map(({ file }) => {
+          {section.entries.map(({ file, key }) => {
             const filePath = file.newPath || file.oldPath;
             // Net for failures outside FileSection's own preview boundary.
             return (
               <PreviewErrorBoundary
-                key={`${sessionId}:${filePath}`}
+                key={`${sessionId}:${key}`}
                 filePath={filePath}
                 resetKeys={[file]}
               >

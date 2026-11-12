@@ -1,7 +1,7 @@
 import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useEffect, useRef } from 'react';
 import type { Attachment, Reply } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { useReviewCommands } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { ComposerCore, AttachButton } from './ComposerCore';
@@ -23,7 +23,7 @@ export default function ReplyInput({
   onSubmit,
 }: ReplyInputProps) {
   const { t } = useLocalization();
-  const { addReply, updateReply } = useReview();
+  const { addReply, updateReply } = useReviewCommands();
   const [body, setBody] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const actionsRef = useRef<HTMLDivElement>(null);

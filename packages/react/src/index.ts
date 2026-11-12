@@ -143,3 +143,5 @@ export type { ReviewServices } from './context/ReviewServicesContext';
 // Scoped display commands, supplied automatically by ReviewProvider.
 export { useReviewExpansion, useCommentDisclosure } from './context/ReviewDisplayContext';
 export { useNavigationReview } from './context/ReviewContext';
+
+export { useInteractionLock } from './hooks/useInteractionLock';

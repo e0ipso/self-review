@@ -1,5 +1,6 @@
 import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useEffect, useRef, useMemo, useCallback, useId } from 'react';
+import { effectiveDiffLayout } from './effective-layout';
 import { useDragSelection } from './useDragSelection';
 import { useExpandContext } from './useExpandContext';
 import { useLazyFileContent } from './useLazyFileContent';
@@ -93,11 +94,7 @@ export default function FileSection({
     expanded,
   });
 
-  // Effective view mode: added/deleted files are forced to unified view
-  const effectiveViewMode =
-    viewMode === 'split' && (file.changeType === 'added' || file.changeType === 'deleted')
-      ? 'unified'
-      : viewMode;
+  const effectiveViewMode = effectiveDiffLayout(viewMode, file.changeType);
 
   // Stable identities: the rendered view hands these to every block through context.
   const handleCommentRange = useCallback((start: number, end: number, side: 'old' | 'new') => {
