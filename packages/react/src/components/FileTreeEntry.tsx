@@ -18,7 +18,7 @@ export interface FileTreeEntryProps {
   onToggleViewed: (filePath: string) => void;
 }
 
-export function FileTreeEntry({
+export const FileTreeEntry = React.memo(function FileTreeEntry({
   file,
   isActive,
   commentCount,
@@ -122,4 +122,4 @@ export function FileTreeEntry({
       </TooltipContent>
     </Tooltip>
   );
-}
+});

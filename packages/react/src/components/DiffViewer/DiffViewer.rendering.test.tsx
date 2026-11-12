@@ -8,7 +8,7 @@ import { installBrowserApiStubs } from '../../test-helpers';
 installBrowserApiStubs();
 const renders = vi.hoisted(() => new Map<string, number>());
 vi.mock('./FileSectionHeader', () => ({
-  FileSectionHeader: ({ filePath }: { filePath: string }) => {
+  FileSectionHeaderPresentation: ({ filePath }: { filePath: string }) => {
     renders.set(filePath, (renders.get(filePath) ?? 0) + 1);
     return <div>{filePath}</div>;
   },

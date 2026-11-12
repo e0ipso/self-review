@@ -56,7 +56,7 @@ const SingleFileReviewInner = forwardRef<ReviewHandle, SingleFileReviewInnerProp
     const currentFile = useReviewedFile(file.newPath || file.oldPath);
     return (
       <div className={className}>
-        <>{currentFile && <FileSection file={currentFile} viewMode={viewMode} expanded={true} />}</>
+        <>{currentFile && <FileSection file={currentFile} viewMode={viewMode} />}</>
       </div>
     );
   }

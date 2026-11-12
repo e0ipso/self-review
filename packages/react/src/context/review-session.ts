@@ -309,13 +309,56 @@ export function reviewSessionReducer(
   }
 }
 
+export interface FileReviewSummary {
+  readonly viewed: boolean;
+  readonly commentCount: number;
+}
+
 /** One synchronous owner also lets async callbacks check ownership before React commits. */
 export function createReviewSessionStore(initial: ReviewSessionState) {
   let state = initial;
   const listeners = new Set<() => void>();
+  let indexedFiles: FileReviewState[] | undefined;
+  let filesByPath = new Map<string, FileReviewState>();
+  let summaries: ReadonlyMap<string, FileReviewSummary> = new Map();
+  let indexedDiff: DiffFile[] | undefined;
+  let diffByPath = new Map<string, DiffFile>();
+  const indexFiles = () => {
+    if (indexedFiles === state.files) return;
+    indexedFiles = state.files;
+    filesByPath = new Map(state.files.map(file => [file.path, file]));
+    const next = new Map<string, FileReviewSummary>();
+    let changed = summaries.size !== state.files.length;
+    const previousPaths = summaries.keys();
+    for (const file of state.files) {
+      const before = summaries.get(file.path);
+      const summary =
+        before?.viewed === file.viewed && before.commentCount === file.comments.length
+          ? before
+          : { viewed: file.viewed, commentCount: file.comments.length };
+      next.set(file.path, summary);
+      if (before !== summary || previousPaths.next().value !== file.path) changed = true;
+    }
+    if (changed) summaries = next;
+  };
   let mutationLock: symbol | null = null;
   return {
     getSnapshot: () => state,
+    getFile: (path: string) => {
+      indexFiles();
+      return filesByPath.get(path);
+    },
+    getNavigation: () => {
+      indexFiles();
+      return summaries;
+    },
+    getDiffFile: (path: string) => {
+      if (indexedDiff !== state.allDiffFiles) {
+        indexedDiff = state.allDiffFiles;
+        diffByPath = new Map(state.allDiffFiles.map(file => [pathOf(file), file]));
+      }
+      return diffByPath.get(path);
+    },
     lockMutations: () => {
       if (mutationLock) throw new Error('A save already owns this review.');
       mutationLock = Symbol('review-save');

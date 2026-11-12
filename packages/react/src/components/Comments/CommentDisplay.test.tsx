@@ -1,6 +1,17 @@
 import React from 'react';
+import { ReviewDisplayProvider } from '../../context/ReviewDisplayContext';
+function render(ui: React.ReactElement) {
+  return testingRender(ui, {
+    wrapper: ({ children }) => (
+      <ReviewDisplayProvider files={[]} reviewFiles={[]} isLargePayload={false}>
+        {children}
+      </ReviewDisplayProvider>
+    ),
+  });
+}
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, within } from '@testing-library/react';
+import { fireEvent, render as testingRender, within } from '@testing-library/react';
 import type { ReviewComment, Reply } from '@self-review/types';
 import CommentDisplay from './CommentDisplay';
 
@@ -183,7 +194,7 @@ describe('CommentDisplay threads', () => {
     const { queryByTestId } = render(<CommentDisplay comment={makeComment({ replies })} />);
 
     fireEvent(
-      document.body,
+      document.querySelector('[data-review-display-root]')!,
       new CustomEvent('toggle-all-comments', { detail: { collapsed: true } })
     );
 

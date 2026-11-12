@@ -35,6 +35,7 @@ import {
   reviewSessionReducer,
   type ReviewSessionStore,
 } from './review-session';
+import { ReviewDisplayProvider } from './ReviewDisplayContext';
 import { ReviewLifecycleContext } from './ReviewLifecycleContext';
 import { isPlaceholderSource } from './review-session';
 import { ReviewLoadContext } from './ReviewLoadContext';
@@ -146,14 +147,25 @@ function useSessionSelection<T>(
     () => select(store.getSnapshot())
   );
 }
-/** Subscribes only to this file's review state, preserving references for unrelated files. */
+function useStoreSelection<T>(select: (store: ReviewSessionStore) => T): T {
+  const store = useContext(SessionStoreContext);
+  if (!store) throw new Error('Session selection must be used within ReviewProvider');
+  return useSyncExternalStore(
+    store.subscribe,
+    () => select(store),
+    () => select(store)
+  );
+}
+/** Indexed reads preserve canonical references and avoid one array scan per subscriber. */
 export function useFileReview(filePath: string) {
-  return useSessionSelection(state => state.files.find(file => file.path === filePath));
+  return useStoreSelection(store => store.getFile(filePath));
 }
 export function useReviewedFile(filePath: string) {
-  return useSessionSelection(state =>
-    state.allDiffFiles.find(file => (file.newPath || file.oldPath) === filePath)
-  );
+  return useStoreSelection(store => store.getDiffFile(filePath));
+}
+/** Counts and viewed flags only. Comment/reply body edits retain this projection's identity. */
+export function useNavigationReview() {
+  return useStoreSelection(store => store.getNavigation());
 }
 export function useReviewSource() {
   return useSessionSelection(state => state.diffSource);
@@ -351,7 +363,14 @@ function ReviewSessionProvider({
             <ReviewLoadContext.Provider value={loadingState}>
               <ReviewLoadRecovery />
             </ReviewLoadContext.Provider>
-            {children}
+            <ReviewDisplayProvider
+              sessionId={state.sessionId}
+              files={diffFiles}
+              isLargePayload={state.isLargePayload}
+              reviewFiles={state.files}
+            >
+              {children}
+            </ReviewDisplayProvider>
           </ReviewContext.Provider>
         </CommandsContext.Provider>
       </ApplyOperationsContext.Provider>

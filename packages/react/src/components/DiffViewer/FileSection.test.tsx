@@ -1,6 +1,17 @@
 import React from 'react';
+import { ReviewDisplayProvider } from '../../context/ReviewDisplayContext';
+function render(ui: React.ReactElement) {
+  return testingRender(ui, {
+    wrapper: ({ children }) => (
+      <ReviewDisplayProvider files={[]} reviewFiles={[]} isLargePayload={false}>
+        {children}
+      </ReviewDisplayProvider>
+    ),
+  });
+}
+
 import { describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render as testingRender, screen } from '@testing-library/react';
 import type { DiffFile } from '@self-review/types';
 import FileSection from './FileSection';
 import { PreviewRenderingProvider } from '../../context/PreviewRenderingContext';
@@ -40,7 +51,7 @@ vi.mock('./useExpandContext', () => ({
 }));
 
 vi.mock('./FileSectionHeader', () => ({
-  FileSectionHeader: ({ isPreviewable, renderViewMode }: FileSectionHeaderProps) => (
+  FileSectionHeaderPresentation: ({ isPreviewable, renderViewMode }: FileSectionHeaderProps) => (
     <div
       data-testid='mock-file-section-header'
       data-previewable={String(isPreviewable)}

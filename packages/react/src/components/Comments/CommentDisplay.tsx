@@ -1,11 +1,12 @@
 import { useLocalization, type MessageKey } from '../../localization/LocalizationContext';
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useId } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
 import type { ReviewComment, CommentSeverity, CommentConfidence } from '@self-review/types';
+import { useCommentDisclosure } from '../../context/ReviewDisplayContext';
 import { useReviewCommands } from '../../context/ReviewContext';
-import { useCategories, usePortalContainer } from '../../context/ConfigContext';
+import { useCategories } from '../../context/ConfigContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -111,26 +112,13 @@ export default function CommentDisplay({
   const { t } = useLocalization();
   const { deleteComment } = useReviewCommands();
   const categories = useCategories();
-  const portalContainer = usePortalContainer();
   const contentId = useId();
   const [isEditing, setIsEditing] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { isCollapsed: getCollapsed, setCollapsed } = useCommentDisclosure();
+  const isCollapsed = getCollapsed(comment.id);
   const [isReplying, setIsReplying] = useState(false);
 
   const categoryDef = categories?.find(cat => cat.name === comment.category);
-
-  // Bulk commands belong to the enclosing review.
-  useEffect(() => {
-    const handleToggleAllComments = (event: Event) => {
-      const customEvent = event as CustomEvent<{ collapsed: boolean }>;
-      setIsCollapsed(customEvent.detail.collapsed);
-    };
-
-    portalContainer?.addEventListener('toggle-all-comments', handleToggleAllComments);
-    return () => {
-      portalContainer?.removeEventListener('toggle-all-comments', handleToggleAllComments);
-    };
-  }, [portalContainer]);
 
   const handleDelete = () => {
     deleteComment(comment.id);
@@ -141,7 +129,7 @@ export default function CommentDisplay({
   };
 
   const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
+    setCollapsed(comment.id, !isCollapsed);
   };
 
   const originalCode = originalCodeProp ?? comment.suggestion?.originalCode;
