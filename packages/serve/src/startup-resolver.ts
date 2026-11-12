@@ -132,7 +132,7 @@ export async function resolveSessionWithHost(
     output.path,
     config,
     diffData.files.map(f => f.newPath || f.oldPath),
-    { cwd, reportDiagnostic }
+    { cwd, reportDiagnostic, signal: options.signal }
   );
   if (guideData) {
     log(`Walkthrough guide loaded: ${guideData.groups.length} groups`);

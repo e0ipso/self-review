@@ -177,6 +177,7 @@ describe('resolveSession', () => {
       expect(guide.mock.calls[0][3]).toEqual({
         cwd: repo,
         reportDiagnostic: host.reportDiagnostic,
+        signal: controller.signal,
       });
     } finally {
       release();

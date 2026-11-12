@@ -67,7 +67,7 @@ export async function initializeSession(
       desktop.output.path,
       config,
       payload.files.map(file => file.newPath || file.oldPath),
-      { cwd, reportDiagnostic: operations.reportDiagnostic }
+      { cwd, reportDiagnostic: operations.reportDiagnostic, signal }
     );
   }
   signal.throwIfAborted();

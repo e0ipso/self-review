@@ -4,8 +4,8 @@
 // The guide is orientation garnish on a deterministic tool (see
 // docs/intent/llm-review-guide.md): a missing file is a silent no-op, and
 // an unreadable or invalid one produces exactly one stderr warning and no
-// guide. Nothing in this module may throw out of it — every failure mode
-// resolves to null.
+// guide. Ordinary guide failures resolve to null; cancellation through an
+// explicitly supplied startup signal propagates to its owner.
 //
 // Note on startup cost: loadGuide IS awaited before window creation
 // (main.ts Phase 5b), deliberately — `guide:load` piggybacks on the
@@ -22,7 +22,8 @@ import { readFileWithinBudget } from './bounded-read';
 import { parseGuideXml, reconcileGuide } from './guide-parser';
 import { formatBytes, MAX_GUIDE_BYTES } from './input-budgets';
 import { AppConfig, GuideLoadPayload } from './types';
-import { stderrReporter, type DiagnosticReporter } from './diagnostics';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 
 /**
  * Derive the guide sidecar path from the resolved output path: strip the
@@ -57,6 +58,8 @@ export interface LoadGuideOptions {
   cwd?: string;
   /** Defaults to stderr; missing guides are always silent. */
   reportDiagnostic?: DiagnosticReporter;
+  /** Cancels bounded reading and refuses obsolete validation; shared validation is not preempted. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -64,7 +67,8 @@ export interface LoadGuideOptions {
  *
  * Returns the display-ready payload, or null when there is no usable
  * guide. Missing file: silent. Unreadable or invalid file: exactly one
- * `reportDiagnostic()` line (guide path + reason class). Never throws.
+ * `reportDiagnostic()` line (guide path + reason class). An explicitly supplied
+ * startup signal propagates cancellation; ordinary guide failures never throw.
  */
 export async function loadGuide(
   outputPath: string,
@@ -72,11 +76,13 @@ export async function loadGuide(
   diffFilePaths: string[],
   options: LoadGuideOptions = {}
 ): Promise<GuideLoadPayload | null> {
-  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
+  options.signal?.throwIfAborted();
   let guidePath: string;
   try {
     guidePath = resolveGuidePath(outputPath, config, options.cwd);
   } catch {
+    options.signal?.throwIfAborted();
     return null;
   }
 
@@ -84,7 +90,10 @@ export async function loadGuide(
     // Refused on fstat size / non-regular file before any read, so a FIFO cannot block.
     let content: string;
     try {
-      const read = await readFileWithinBudget(guidePath, MAX_GUIDE_BYTES);
+      const read = await (options.signal
+        ? readFileWithinBudget(guidePath, MAX_GUIDE_BYTES, { signal: options.signal })
+        : readFileWithinBudget(guidePath, MAX_GUIDE_BYTES));
+      options.signal?.throwIfAborted();
       if (read.kind === 'too-large') {
         reportDiagnostic(
           `[guide] Ignoring guide at ${guidePath}: too large (${formatBytes(read.size)}, ` +
@@ -98,6 +107,7 @@ export async function loadGuide(
       }
       content = read.content.toString('utf-8');
     } catch (error) {
+      options.signal?.throwIfAborted();
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
         // No sidecar next to the output path — the normal case.
@@ -110,6 +120,7 @@ export async function loadGuide(
     }
 
     const result = await parseGuideXml(content);
+    options.signal?.throwIfAborted();
     // Explicit comparison: with strictNullChecks off (see tsconfig),
     // truthiness alone does not narrow the discriminated union.
     if (result.ok === false) {
@@ -125,7 +136,8 @@ export async function loadGuide(
     }
     return payload;
   } catch (error) {
-    // Belt and braces: no failure mode of the guide loader may escape.
+    options.signal?.throwIfAborted();
+    // Optional-guide failures remain nonfatal; cancellation belongs to startup.
     const message = error instanceof Error ? error.message : String(error);
     reportDiagnostic(`[guide] Ignoring guide at ${guidePath}: invalid (${message})`);
     return null;

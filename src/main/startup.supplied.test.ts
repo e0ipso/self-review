@@ -126,12 +126,14 @@ it('commits the supplied identity and loads read-only guide paths using the laun
     },
     identity,
   });
-  await initializeSession(desktop, undefined, async () => true, operations);
+  const owner = new AbortController();
+  await initializeSession(desktop, owner.signal, async () => true, operations);
   expect(desktop.review.sourceIdentity).toBe(identity);
   expect(desktop.review.reviewedPaths.has('a.ts')).toBe(true);
   expect(operations.guide).toHaveBeenCalledWith(plan.output.path, plan.config, ['a.ts'], {
     cwd,
     reportDiagnostic: operations.reportDiagnostic,
+    signal: owner.signal,
   });
 });
 it('keeps remote cleanup owned through confirmation, resume drift, and guide loading', async () => {

@@ -31,6 +31,7 @@ vi.mock('../../packages/core/src/startup', async importOriginal => ({
 }));
 import { initializeSession } from './startup';
 import { createDesktopSession } from './desktop-session';
+import { defaultStartupOperations } from './startup-operations';
 it('uses asynchronous probes and threads the startup owner through the sixth load argument', async () => {
   const desktop = createDesktopSession(process.cwd());
   calls.source.mockResolvedValue({ mode: 'welcome' });
@@ -93,5 +94,42 @@ it('loads a configured relative guide from the session launch directory', async 
   } finally {
     delete calls.config.guideFile;
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+it('carries desktop startup cancellation into pending guide loading', async () => {
+  const cwd = process.cwd();
+  calls.source.mockResolvedValue({ mode: 'directory', path: cwd });
+  calls.load.mockResolvedValue({
+    payload: { files: [], source: { type: 'directory', sourcePath: cwd } },
+    identity: null,
+  });
+  const desktop = createDesktopSession(cwd);
+  const owner = new AbortController();
+  const reason = new Error('Desktop startup closed');
+  let release: () => void = () => {};
+  const guide = vi.fn<typeof defaultStartupOperations.guide>(
+    (_path, _config, _files, options) =>
+      new Promise((resolve, reject) => {
+        release = () => resolve(null);
+        options?.signal?.addEventListener('abort', () => reject(options.signal!.reason), {
+          once: true,
+        });
+      })
+  );
+  const pending = initializeSession(desktop, owner.signal, async () => true, {
+    ...defaultStartupOperations,
+    guide,
+  });
+  const failure = pending.catch((error: unknown) => error);
+  try {
+    await vi.waitFor(() => expect(guide).toHaveBeenCalledOnce());
+    expect(guide.mock.calls[0][3]?.signal).toBe(owner.signal);
+    owner.abort(reason);
+    expect(await failure).toBe(reason);
+    expect(desktop.review.guideData).toBeNull();
+  } finally {
+    release();
+    await failure;
   }
 });
