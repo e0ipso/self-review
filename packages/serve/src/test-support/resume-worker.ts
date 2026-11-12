@@ -11,9 +11,10 @@ export async function buildResumeTestWorker(output: string): Promise<void> {
     platform: 'node',
     format: 'esm',
     alias: {
-      '@self-review/core': fileURLToPath(
-        new URL('../../../core/src/xml-parser.ts', import.meta.url)
+      '@self-review/core/resume-worker': fileURLToPath(
+        new URL('../../../core/src/resume-worker.ts', import.meta.url)
       ),
+      '@self-review/core': fileURLToPath(new URL('./resume-worker-core.ts', import.meta.url)),
     },
   });
 }

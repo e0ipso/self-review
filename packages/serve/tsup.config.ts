@@ -5,6 +5,6 @@ export default defineConfig({
   format: ['esm'],
   clean: true,
   sourcemap: true,
-  noExternal: ['@self-review/core/validation'],
+  noExternal: ['@self-review/core/validation', '@self-review/core/resume-worker'],
   external: ['@self-review/core', '@self-review/react'],
 });

@@ -15,6 +15,7 @@
     "resolveJsonModule": true,
     "paths": {
       "@self-review/types": ["../types/src/index.ts"],
+      "@self-review/core/resume-worker": ["../core/src/resume-worker.ts"],
       "@self-review/core/validation": ["../core/src/validation.ts"],
       "@self-review/core": ["../core/src/index.ts"],
       "@self-review/react": ["../react/src/index.ts"]

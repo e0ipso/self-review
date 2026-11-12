@@ -192,3 +192,30 @@ After `npm run build --workspace @self-review/core`, run
 `node --test scripts/test/core-entry-points.test.mjs` from the repository root. These checks
 exercise ESM and CommonJS imports and ensure facade errors retain the root entry's class identity
 and typed failure behavior. Generated shared chunks ship alongside each entry point in `dist`.
+
+## Host-owned resume workers
+
+`@self-review/core/resume-worker` shares one-shot ownership and reply validation between hosts. It
+has no runtime Core, parser or filesystem dependencies. The host constructs the worker, supplies an
+owned request ID and input path, and injects failure reconstruction using its own Core error
+constructors. Parser byte and attachment budgets remain in the parser. Parsed metadata is retained.
+Legacy failures need only a message, with optional code and details; name, stack and native read
+cause diagnostics are additive. Unknown failure codes remain strings on this internal wire and do
+not extend the installed peer's public error-code union.
+
+Ownership includes admission, delivery and termination. Results settle only after termination; abort
+listeners and the deadline stay active during termination, and freshness is checked again before
+returning. Hosts must abort replaced operations and check ownership before adopting into session
+state. Omitted or zero timeout uses 30,000 ms, positive fractions round up, and values above
+2,147,483,647 clamp to that limit. Negative and nonfinite values reject after worker cleanup.
+
+Cancellation retains the original abort reason, including falsy values. If termination rejects,
+release is unconfirmed: a successful parse rejects with that termination error; an owned failure or
+cancellation rejects with `ResumeWorkerTerminationError`, carrying the original reason as `cause`
+and the cleanup rejection as `terminationError`. Listeners and timers are still removed. This does
+not report cancellation as successfully releasing a potentially running worker. Native syscalls may
+delay termination.
+
+Hosts supporting older installed Core versions must bundle this subpath from their build input,
+while retaining the runtime Core root as external. Serve does this with its `noExternal` binding, so
+Core 2.0.4 needs no new export and its error classes keep their identity.

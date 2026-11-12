@@ -171,3 +171,18 @@ describe('resume worker ownership', () => {
     expectReleased(op.worker);
   });
 });
+
+it.each([0, 0.5, 10.5, 2 ** 40])('accepts shared bounded timeout form %s', async timeoutMs => {
+  vi.useFakeTimers();
+  try {
+    const op = operation({ timeoutMs });
+    reply(op.worker);
+    await expect(op.result).resolves.toBe(parsed);
+    expect(op.postMessage).toHaveBeenCalledOnce();
+    expect(op.terminate).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    expectReleased(op.worker);
+  } finally {
+    vi.useRealTimers();
+  }
+});
