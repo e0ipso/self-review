@@ -140,3 +140,82 @@ describe('context expansion dependency contract', () => {
     expect(deps.report).toHaveBeenCalledWith(expect.stringContaining('Failed to expand'), failure);
   });
 });
+
+describe('context representation limits', () => {
+  it('refuses an omitted target before any git or snapshot work', async () => {
+    const state = session();
+    state.diffData!.files[0].hunks = [];
+    state.diffData!.files[0].omittedReason = 'Not loaded: representation budget exceeded.';
+    const deps = dependencies();
+    const payload = state.diffData;
+    expect(await expandContext(state, request, deps)).toBeNull();
+    expect(state.diffData).toBe(payload);
+    expect(deps.runDiff).not.toHaveBeenCalled();
+    expect(deps.readContent).not.toHaveBeenCalled();
+    expect(deps.report).toHaveBeenCalledWith(expect.stringContaining('Cannot expand'));
+  });
+
+  it('accepts exact aggregate replacement limits and refuses one extra line without mutation', async () => {
+    const exact = session();
+    expect(
+      await expandContext(exact, request, dependencies(), {
+        budgets: { maxTotalLines: 5, maxDiffHunks: 2 },
+      })
+    ).not.toBeNull();
+    const over = session();
+    const payload = over.diffData;
+    const deps = dependencies();
+    expect(await expandContext(over, request, deps, { budgets: { maxTotalLines: 4 } })).toBeNull();
+    expect(over.diffData).toBe(payload);
+    expect(deps.readContent).not.toHaveBeenCalled();
+    expect(deps.report).toHaveBeenCalledWith(expect.stringContaining('2-line total'));
+  });
+
+  it('bounds aggregate hunk growth as well as line growth', async () => {
+    const state = session();
+    const deps = dependencies();
+    const payload = state.diffData;
+    expect(await expandContext(state, request, deps, { budgets: { maxDiffHunks: 1 } })).toBeNull();
+    expect(state.diffData).toBe(payload);
+    expect(deps.report).toHaveBeenCalledWith(expect.stringContaining('0-hunk total'));
+  });
+
+  it('rechecks aggregate replacement after overlapping expansions finish reading', async () => {
+    const state = session();
+    const deps = dependencies();
+    deps.runDiff = vi.fn(async (args: string[]) =>
+      diff(args.some(arg => arg.endsWith('b.txt')) ? 'b.txt' : 'a.txt', true)
+    );
+    const a = deferred<SnapshotReadResult>();
+    const b = deferred<SnapshotReadResult>();
+    deps.readContent = vi.fn((_snapshot, path) => (path === 'a.txt' ? a.promise : b.promise));
+    const resultA = expandContext(state, request, deps, { budgets: { maxTotalLines: 5 } });
+    const resultB = expandContext(state, { ...request, filePath: 'b.txt' }, deps, {
+      budgets: { maxTotalLines: 5 },
+    });
+    await vi.waitFor(() => expect(deps.readContent).toHaveBeenCalledTimes(2));
+    a.resolve({ ok: true, content: Buffer.from('after\n') });
+    expect(await resultA).not.toBeNull();
+    const payload = state.diffData;
+    b.resolve({ ok: true, content: Buffer.from('after\n') });
+    expect(await resultB).toBeNull();
+    expect(state.diffData).toBe(payload);
+    expect(state.diffData!.files.flatMap(f => f.hunks.flatMap(h => h.lines))).toHaveLength(5);
+  });
+
+  it('cancels during one large rediff without updating the review or reading the snapshot', async () => {
+    const state = session();
+    const deps = dependencies();
+    const controller = new AbortController();
+    deps.runDiff = vi.fn(async () => {
+      setImmediate(() => setImmediate(() => controller.abort(new Error('stop'))));
+      return 'diff --git a/a.txt b/a.txt\n@@ -1,20000 +1,20000 @@\n' + ' same\n'.repeat(20000);
+    });
+    const payload = state.diffData;
+    await expect(
+      expandContext(state, request, deps, { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'CommandCancelledError' });
+    expect(state.diffData).toBe(payload);
+    expect(deps.readContent).not.toHaveBeenCalled();
+  });
+});

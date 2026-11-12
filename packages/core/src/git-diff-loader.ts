@@ -109,6 +109,7 @@ export async function loadGitDiffWithUntracked(
   checkLoadingCancelled(options.signal);
   const { files, diagnostics } = await parseDiffWithDiagnosticsAsync(rawDiff, {
     signal: options.signal,
+    budgets,
   });
   checkLoadingCancelled(options.signal);
 
@@ -153,7 +154,19 @@ export async function loadGitDiffWithUntracked(
   if (untrackedPaths.length > 0) {
     const untracked = await loadSyntheticFilesAsync(untrackedPaths, repository, {
       followSymlinks: false,
-      budgets: options.budgets,
+      budgets: {
+        ...budgets,
+        maxDiffFiles: Math.max(0, budgets.maxDiffFiles - files.length),
+        maxDiffHunks: Math.max(
+          0,
+          budgets.maxDiffHunks - files.reduce((n, f) => n + f.hunks.length, 0)
+        ),
+        maxTotalLines: Math.max(
+          0,
+          budgets.maxTotalLines -
+            files.reduce((n, f) => n + f.hunks.reduce((m, h) => m + h.lines.length, 0), 0)
+        ),
+      },
       signal: options.signal,
     });
     diagnostics.push(...untracked.diagnostics);

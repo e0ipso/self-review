@@ -103,7 +103,13 @@ export async function readAttachment(
       message: `Attachments are read only from the review's ${ASSET_DIR_NAME} directory`,
     };
   }
-  const result = await readAssetFile(assetPath);
+  let result: AttachmentReadResult;
+  try {
+    result = await readAssetFile(assetPath, { signal: options.signal });
+  } catch (error) {
+    checkCancelled();
+    throw error;
+  }
   checkCancelled();
   if (!result.ok) {
     console.error(`[attachment:read] ${result.reason}: ${result.message}`);

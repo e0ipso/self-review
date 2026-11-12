@@ -7,13 +7,20 @@
 
 import { realpathSync } from 'fs';
 import { join, resolve } from 'path';
-import type { DiffFile } from './types';
+import type { DiffFile, DiffLine } from './types';
 import { readSyntheticSource, readSyntheticSourceAsync } from './synthetic-source';
 import type { SyntheticSource } from './synthetic-source';
 import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
 export { readSyntheticSource } from './synthetic-source';
 export type { SyntheticSource } from './synthetic-source';
-import { formatBytes, resolveSourceBudgets, type SourceBudgets } from './input-budgets';
+import {
+  formatBytes,
+  resolveSourceBudgets,
+  createRepresentationBudget,
+  RepresentationLimitError,
+  type SourceBudgets,
+  type ResolvedSourceBudgets,
+} from './input-budgets';
 
 // C-style escapes git emits for the characters that have one.
 const C_STYLE_ESCAPES: Record<number, string> = {
@@ -106,7 +113,8 @@ function projectSources(
   const sourceRoot = syntheticRoot(rootDir);
   const projection = createProjection(budgets, output);
   for (const filePath of paths) {
-    projection.add(
+    if (!projection.beginFile()) break;
+    const steps = projection.add(
       filePath,
       projection.exhausted()
         ? null
@@ -117,6 +125,9 @@ function projectSources(
             remainingBytes: projection.remaining(),
           })
     );
+    while (!steps.next().done) {
+      /* Synchronous compatibility consumer. */
+    }
   }
   return projection.finish();
 }
@@ -152,6 +163,7 @@ async function projectSourcesAsync(
   const projection = createProjection(budgets, output);
   for (const filePath of paths) {
     await loadingCheckpoint(options.signal);
+    if (!projection.beginFile()) break;
     const source = projection.exhausted()
       ? null
       : await readSyntheticSourceAsync(join(sourceRoot, filePath), {
@@ -162,7 +174,12 @@ async function projectSourcesAsync(
           signal: options.signal,
         });
     checkLoadingCancelled(options.signal);
-    projection.add(filePath, source);
+    const steps = projection.add(filePath, source);
+    try {
+      while (!steps.next().done) await loadingCheckpoint(options.signal);
+    } finally {
+      steps.return(undefined);
+    }
   }
   await loadingCheckpoint(options.signal);
   return projection.finish();
@@ -178,7 +195,10 @@ function syntheticRoot(rootDir: string): string {
 }
 
 /** The shared, I/O-free projection owns aggregate accounting and all omission diagnostics. */
-function createProjection(budgets: SourceBudgets, output: 'patch' | 'files') {
+function createProjection(budgets: ResolvedSourceBudgets, output: 'patch' | 'files') {
+  const representation = createRepresentationBudget(budgets);
+  let representationExhausted: string | undefined;
+  const representationOmissions: string[] = [];
   const diffs: string[] = [];
   const files: DiffFile[] = [];
   const omitted = new Map<string, string>();
@@ -190,20 +210,45 @@ function createProjection(budgets: SourceBudgets, output: 'patch' | 'files') {
   let totalRead = 0;
   let totalExhausted = false;
 
-  function emit(
+  function* emit(
     filePath: string,
-    source?: Extract<SyntheticSource, { kind: 'text' | 'symlink' | 'binary' }>
-  ): void {
+    source?: Extract<SyntheticSource, { kind: 'text' | 'symlink' | 'binary' }>,
+    mode = source?.kind === 'symlink' ? '120000' : '100644'
+  ): Generator<void> {
     // The textual format leaves an empty line after a zero-line hunk when another file
     // follows. Preserve its existing parser diagnostic without reparsing the patch.
+    const text =
+      source && source.kind !== 'binary'
+        ? yield* projectText(source.content, representation)
+        : undefined;
+    if (text) representation.addHunk();
     if (emptyBeforeNextFile !== undefined) {
-      projectionDiagnostics.push(
-        `${emptyBeforeNextFile}: line beyond the counts of hunk @@ -0,0 +1,0 @@: ""`
-      );
+      if (projectionDiagnostics.length < budgets.maxDiagnostics)
+        projectionDiagnostics.push(
+          `${emptyBeforeNextFile}: line beyond the counts of hunk @@ -0,0 +1,0 @@: ""`
+        );
+      else if (projectionDiagnostics.length === budgets.maxDiagnostics)
+        projectionDiagnostics.push(
+          'Further synthetic separator diagnostics omitted: diagnostic representation budget exceeded.'
+        );
     }
-    const mode = source?.kind === 'symlink' ? '120000' : '100644';
-    const text = source && source.kind !== 'binary' ? projectText(source.content) : undefined;
-    emptyBeforeNextFile = text?.lines.length === 0 ? filePath : undefined;
+    emptyBeforeNextFile = text?.lineCount === 0 ? filePath : undefined;
+    const lines: DiffLine[] = [];
+    const patch: string[] = [];
+    if (text) {
+      let start = 0;
+      for (let index = 0; index < text.lineCount; index++) {
+        const end = text.text.indexOf('\n', start);
+        const content = text.text.slice(start, end === -1 ? undefined : end);
+        start = end + 1;
+        if (output === 'files') {
+          lines.push({ type: 'addition', oldLineNumber: null, newLineNumber: index + 1, content });
+        } else {
+          patch.push(`+${content}`);
+        }
+        if ((index + 1) % 256 === 0) yield;
+      }
+    }
     if (output === 'files') {
       files.push({
         oldPath: '',
@@ -217,13 +262,8 @@ function createProjection(budgets: SourceBudgets, output: 'patch' | 'files') {
                 oldStart: 0,
                 oldLines: 0,
                 newStart: 1,
-                newLines: text.lines.length,
-                lines: text.lines.map((content, index) => ({
-                  type: 'addition',
-                  oldLineNumber: null,
-                  newLineNumber: index + 1,
-                  content,
-                })),
+                newLines: text.lineCount,
+                lines,
               },
             ]
           : [],
@@ -237,7 +277,7 @@ function createProjection(budgets: SourceBudgets, output: 'patch' | 'files') {
     diffs.push(
       text
         ? `${header}\n--- /dev/null\n+++ ${newHeaderPath}\n${text.header}\n` +
-            text.lines.map(line => `+${line}`).join('\n') +
+            patch.join('\n') +
             (text.missingNewline ? '\n\\ No newline at end of file' : '')
         : source?.kind === 'binary'
           ? `${header}\nBinary files /dev/null and ${newHeaderPath} differ`
@@ -245,12 +285,18 @@ function createProjection(budgets: SourceBudgets, output: 'patch' | 'files') {
     );
   }
 
-  function add(filePath: string, source: SyntheticSource | null): void {
+  function* addSource(filePath: string, source: SyntheticSource | null): Generator<void> {
+    if (representationExhausted) {
+      representationOmissions.push(filePath);
+      omitted.set(filePath, representationExhausted);
+      yield* emit(filePath);
+      return;
+    }
     if (source === null) {
       // Nothing more is read once the aggregate is spent: the cut is one point in the list.
       overTotal.push(filePath);
       omitted.set(filePath, overTotalReason(budgets.maxTotalBytes));
-      emit(filePath);
+      yield* emit(filePath);
       return;
     }
 
@@ -263,7 +309,7 @@ function createProjection(budgets: SourceBudgets, output: 'patch' | 'files') {
         unreadable.push(`${filePath} (${source.code})`);
         return;
       case 'binary':
-        emit(filePath, source);
+        yield* emit(filePath, source);
         return;
       case 'too-large':
         tooLarge.push(filePath);
@@ -272,23 +318,41 @@ function createProjection(budgets: SourceBudgets, output: 'patch' | 'files') {
           `Not loaded: this file is ${formatBytes(source.size)}, over the ` +
             `${formatBytes(budgets.maxFileBytes)} per-file read budget.`
         );
-        emit(filePath);
+        yield* emit(filePath);
         return;
       case 'over-total':
         totalExhausted = true;
         overTotal.push(filePath);
         omitted.set(filePath, overTotalReason(budgets.maxTotalBytes));
-        emit(filePath);
+        yield* emit(filePath);
         return;
       case 'symlink':
       case 'text':
-        emit(filePath, source);
+        yield* emit(filePath, source);
         return;
+    }
+  }
+
+  function* add(filePath: string, source: SyntheticSource | null): Generator<void> {
+    try {
+      yield* addSource(filePath, source);
+    } catch (error) {
+      if (!(error instanceof RepresentationLimitError)) throw error;
+      if (error.aggregate) representationExhausted = error.message;
+      representationOmissions.push(filePath);
+      omitted.set(filePath, error.message);
+      yield* emit(filePath, undefined, source?.kind === 'symlink' ? '120000' : '100644');
     }
   }
 
   function finish() {
     const diagnostics: string[] = [];
+    if (representationOmissions.length > 0) {
+      diagnostics.push(
+        `${countFiles(representationOmissions.length)} listed without content because a representation budget ran out: ${listPaths(representationOmissions)}`
+      );
+    }
+    if (representationExhausted) diagnostics.push(representationExhausted);
     if (tooLarge.length > 0) {
       diagnostics.push(
         `${countFiles(tooLarge.length)} over the ${formatBytes(budgets.maxFileBytes)} per-file ` +
@@ -322,10 +386,20 @@ function createProjection(budgets: SourceBudgets, output: 'patch' | 'files') {
     };
   }
   return {
+    beginFile: () => {
+      try {
+        representation.beginFile();
+        return true;
+      } catch (error) {
+        if (!(error instanceof RepresentationLimitError)) throw error;
+        representationExhausted = `${error.message} Loading stopped; remaining paths were not loaded.`;
+        return false;
+      }
+    },
     add,
     finish,
     remaining: () => budgets.maxTotalBytes - totalRead,
-    exhausted: () => totalExhausted,
+    exhausted: () => totalExhausted || representationExhausted !== undefined,
   };
 }
 
@@ -350,15 +424,31 @@ export async function loadSyntheticFilesAsync(
 }
 
 /** Decode once for either output; retain CR, BOM and UTF-8 replacement semantics. */
-function projectText(content: Buffer) {
-  const text = content.toString('utf-8');
-  const lines = text.split('\n');
-  // The trailing empty split element is not a source line, including for an empty file.
-  if (lines[lines.length - 1] === '') lines.pop();
+function* projectText(
+  content: Buffer,
+  representation: ReturnType<typeof createRepresentationBudget>
+) {
+  let lineCount = 0;
+  // Count before decoding or allocating any line strings/objects. A byte chunk also bounds
+  // checkpoint spacing for a single long line. UTF-8 never embeds LF in a multibyte sequence.
+  for (let start = 0; start < content.length; start += 64 * 1024) {
+    let count = 0;
+    const end = Math.min(start + 64 * 1024, content.length);
+    for (let i = start; i < end; i++) if (content[i] === 0x0a) count++;
+    representation.addLines(count);
+    lineCount += count;
+    yield;
+  }
+  const missingNewline = content.length > 0 && content[content.length - 1] !== 0x0a;
+  if (missingNewline) {
+    representation.addLines(1);
+    lineCount++;
+  }
   return {
-    lines,
-    header: `@@ -0,0 +1,${lines.length} @@`,
-    missingNewline: text.length > 0 && !text.endsWith('\n'),
+    text: content.toString('utf-8'),
+    lineCount,
+    header: `@@ -0,0 +1,${lineCount} @@`,
+    missingNewline,
   };
 }
 

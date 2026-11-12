@@ -6,8 +6,13 @@ import type { ReviewSession } from './review-session';
 import { singleFileRediffArgs } from './git-diff-args';
 import { pinnedGitDiffArgs } from './pinned-comparison';
 import { runGitDiffAsync } from './git';
-import { parseDiff } from './diff-parser';
-import { MAX_GIT_DIFF_OUTPUT_BYTES } from './input-budgets';
+import { parseDiffWithDiagnosticsAsync } from './diff-parser-async';
+import { loadingCheckpoint } from './local-loading-lifetime';
+import {
+  MAX_GIT_DIFF_OUTPUT_BYTES,
+  resolveSourceBudgets,
+  type SourceBudgets,
+} from './input-budgets';
 import { readReviewedContent } from './snapshot-reader';
 import type { ReviewedSnapshot } from './snapshot-reader';
 import { rootRelativeReviewedPath } from './source-identity';
@@ -49,13 +54,14 @@ async function countReviewedLines(
     dependencies.report(`[review] Line count unavailable for ${filePath}: ${result.message}`);
     return 0;
   }
-  return countLines(result.content);
+  return countLines(result.content, options.signal);
 }
 
-function countLines(content: Buffer): number {
+async function countLines(content: Buffer, signal?: AbortSignal): Promise<number> {
   let newlines = 0;
-  for (const byte of content) {
-    if (byte === 0x0a) newlines++;
+  for (let i = 0; i < content.length; i++) {
+    if (i % (64 * 1024) === 0) await loadingCheckpoint(signal);
+    if (content[i] === 0x0a) newlines++;
   }
   return content.length > 0 && content[content.length - 1] === 0x0a ? newlines : newlines + 1;
 }
@@ -74,7 +80,7 @@ export async function expandContext(
   session: Pick<ReviewSession, 'diffData' | 'sourceIdentity' | 'reviewedPaths'>,
   request: ExpandContextRequest,
   dependencies: ContextExpansionDependencies = nodeExpansionDependencies,
-  options: GitExecutionOptions = {}
+  options: GitExecutionOptions & { budgets?: Partial<SourceBudgets> } = {}
 ): Promise<{ hunks: DiffHunk[]; totalLines: number } | null> {
   const checkCancelled = () => {
     if (options.signal?.aborted)
@@ -100,6 +106,29 @@ export async function expandContext(
     return null;
   }
 
+  if (target.omittedReason) {
+    dependencies.report(`[review] Cannot expand ${request.filePath}: ${target.omittedReason}`);
+    return null;
+  }
+  const budgets = resolveSourceBudgets(options.budgets);
+  let otherLines = 0;
+  let otherHunks = 0;
+  for (const file of diffData.files) {
+    if (file === target) continue;
+    otherHunks += file.hunks.length;
+    for (const hunk of file.hunks) otherLines += hunk.lines.length;
+  }
+  if (
+    otherLines > budgets.maxTotalLines ||
+    otherHunks > budgets.maxDiffHunks ||
+    diffData.files.length > budgets.maxDiffFiles
+  ) {
+    dependencies.report(
+      `[review] Cannot expand ${request.filePath}: review exceeds the aggregate representation budget`
+    );
+    return null;
+  }
+
   // commitDiffData installs a fresh authorization set even when the payload/identity are reused.
   const reviewedPaths = session.reviewedPaths;
   const snapshot: ReviewedSnapshot = { sourceIdentity: identity, reviewedPaths };
@@ -110,9 +139,25 @@ export async function expandContext(
     const rawDiff = await dependencies.runDiff(args, identity.sourceRoot, options);
     checkCancelled();
     if (!isCurrent()) return null;
-    const expandedFile = parseDiff(rawDiff).find(
+    const parsed = await parseDiffWithDiagnosticsAsync(rawDiff, {
+      signal: options.signal,
+      budgets: {
+        ...budgets,
+        maxTotalLines: budgets.maxTotalLines - otherLines,
+        maxDiffHunks: budgets.maxDiffHunks - otherHunks,
+      },
+    });
+    checkCancelled();
+    if (!isCurrent()) return null;
+    const expandedFile = parsed.files.find(
       f => f.oldPath === target.oldPath && f.newPath === target.newPath
     );
+    if (expandedFile?.omittedReason) {
+      dependencies.report(
+        `[review] Cannot expand ${request.filePath}: ${expandedFile.omittedReason}`
+      );
+      return null;
+    }
     if (!expandedFile) {
       dependencies.report(
         `[review] Expanded diff for ${request.filePath} did not contain the file`
@@ -125,6 +170,21 @@ export async function expandContext(
     checkCancelled();
     if (!isCurrent() || !session.diffData) return null;
 
+    let currentLines = 0;
+    let currentHunks = 0;
+    for (const file of session.diffData.files) {
+      if (file.oldPath === target.oldPath && file.newPath === target.newPath) continue;
+      currentHunks += file.hunks.length;
+      for (const hunk of file.hunks) currentLines += hunk.lines.length;
+    }
+    currentHunks += expandedFile.hunks.length;
+    for (const hunk of expandedFile.hunks) currentLines += hunk.lines.length;
+    if (currentLines > budgets.maxTotalLines || currentHunks > budgets.maxDiffHunks) {
+      dependencies.report(
+        `[review] Cannot expand ${request.filePath}: aggregate representation budget exceeded`
+      );
+      return null;
+    }
     session.diffData = {
       ...session.diffData,
       files: session.diffData.files.map(f =>
