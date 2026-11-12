@@ -1,0 +1,255 @@
+// Execute the installed historical package, not a projection of today's exports.
+// The small emitted host bundles pure policies exactly as serve does; Core stays external.
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { build } from 'esbuild';
+import * as fs from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import * as currentCore from '@self-review/core';
+import { createPublicationOperations, createReviewOperations } from './review-operations';
+import { installedServeEngine } from './engine-contract';
+import { validateCompatibleReviewState } from './core-compatibility';
+import { ReviewSubmission } from './review-submission';
+import type { ReviewState } from '@self-review/core';
+
+type Host = {
+  core: typeof currentCore;
+  createPublicationOperations: typeof createPublicationOperations;
+  createReviewOperations: typeof createReviewOperations;
+  installedServeEngine: typeof installedServeEngine;
+  validateCompatibleReviewState: typeof validateCompatibleReviewState;
+  ReviewSubmission: typeof ReviewSubmission;
+};
+let directory: string;
+let previous: Host;
+const current: Host = {
+  core: currentCore,
+  createPublicationOperations,
+  createReviewOperations,
+  installedServeEngine,
+  validateCompatibleReviewState,
+  ReviewSubmission,
+};
+
+beforeAll(async () => {
+  const stateDir = join(
+    process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
+    'self-review-tests'
+  );
+  fs.mkdirSync(stateDir, { recursive: true });
+  directory = fs.mkdtempSync(join(stateDir, 'published-core-'));
+  const output = join(directory, 'host.mjs');
+  const sourceDir = dirname(fileURLToPath(import.meta.url));
+  const historical = fileURLToPath(import.meta.resolve('published-core-2-0-4'));
+  const manifest = JSON.parse(
+    fs.readFileSync(join(dirname(historical), '..', 'package.json'), 'utf8')
+  );
+  expect(manifest.name).toBe('@self-review/core');
+  expect(manifest.version).toBe('2.0.4');
+  await build({
+    stdin: {
+      contents: `
+        export * as core from '@self-review/core';
+        export { createPublicationOperations, createReviewOperations } from './review-operations';
+        export { installedServeEngine } from './engine-contract';
+        export { validateCompatibleReviewState } from './core-compatibility';
+        export { ReviewSubmission } from './review-submission';
+      `,
+      resolveDir: sourceDir,
+    },
+    outfile: output,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    packages: 'external',
+    plugins: [
+      {
+        name: 'installed-core-with-bundled-validation',
+        setup(plugin) {
+          plugin.onResolve({ filter: /^@self-review\/core$/ }, () => ({
+            path: historical,
+            external: true,
+          }));
+          plugin.onResolve({ filter: /^@self-review\/core\/validation$/ }, () => ({
+            path: join(sourceDir, '../../core/src/validation.ts'),
+          }));
+        },
+      },
+    ],
+  });
+  previous = await import(/* @vite-ignore */ pathToFileURL(output).href);
+}, 10_000);
+afterAll(() => {
+  if (directory) fs.rmSync(directory, { recursive: true, force: true });
+});
+
+for (const peer of ['published 2.0.4', 'current source'] as const) {
+  describe(peer, () => {
+    function fixture() {
+      const host = peer === 'published 2.0.4' ? previous : current;
+      const root = fs.mkdtempSync(join(directory, 'review-'));
+      fs.writeFileSync(join(root, 'a.txt'), 'old\n');
+      const session = host.core.createReviewSession();
+      const source = { type: 'directory' as const, sourcePath: root };
+      const identity = host.core.resolveLocalSourceIdentity({ ...source, invocationCwd: root });
+      const payload = {
+        source,
+        files: [
+          {
+            oldPath: 'a.txt',
+            newPath: 'a.txt',
+            changeType: 'modified' as const,
+            isBinary: false,
+            hunks: [],
+          },
+        ],
+      };
+      host.core.commitDiffData(session, payload, identity);
+      const output = { path: join(root, 'review.xml'), origin: 'explicit' as const };
+      const state: ReviewState = { timestamp: '2026-01-01T00:00:00Z', source, files: [] };
+      return { host, root, session, source, identity, payload, output, state };
+    }
+
+    it('keeps installed error identity for validation and ownership refusals before writes', async () => {
+      const { host, root, session, output, state } = fixture();
+      if (peer === 'published 2.0.4') {
+        expect(host.core).not.toHaveProperty('validateReviewState');
+        expect(host.core).not.toHaveProperty('applySuggestionForSessionAsync');
+        expect(host.core.ReviewPublishError).not.toBe(currentCore.ReviewPublishError);
+      }
+      expect(() => host.validateCompatibleReviewState({ ...state, files: null })).toThrow(
+        host.core.ReviewXmlError
+      );
+      const operations = host.createPublicationOperations(session, output);
+      const submission = new host.ReviewSubmission({ publication: operations }, () => {});
+      expect(submission.begin()).toBe(true);
+      const refusal = await submission.publish({
+        ...state,
+        source: { ...state.source, sourcePath: '/foreign' } as ReviewState['source'],
+      });
+      expect(refusal).toMatchObject({ ok: false, code: 'validation-failed' });
+      expect(submission.completed).toBe(false);
+      expect(fs.readdirSync(root)).toEqual(['a.txt']);
+      session.diffData = null;
+      expect(() => operations.publishReview(state)).toThrow(host.core.ReviewPublishError);
+    });
+
+    it('preserves source aliases, real Apply outcomes, publication and resumed attachment origins', async () => {
+      const { host, root, session, payload, identity, output, state } = fixture();
+      expect(session.diffData).toBe(payload);
+      expect(session.sourceIdentity).toBe(identity);
+      const operations = host.createPublicationOperations(session, output);
+      expect(operations.authorizeReviewedPath('a.txt').ok).toBe(true);
+      expect(operations.authorizeReviewedPath('../outside').ok).toBe(false);
+      const applied = await operations.applySuggestionForSession({
+        filePath: 'a.txt',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        suggestion: { originalCode: 'old', proposedCode: 'new' },
+      });
+      expect(applied).toMatchObject({ status: 'applied', filePath: 'a.txt' });
+      expect(fs.readFileSync(join(root, 'a.txt'), 'utf8')).toBe('new\n');
+      const refused = await operations.applySuggestionForSession({
+        filePath: 'a.txt',
+        lineRange: { side: 'new', start: 1, end: 1 },
+        suggestion: { originalCode: 'old', proposedCode: 'another' },
+      });
+      expect(refused.status).toBe('refused');
+      const review: ReviewState = {
+        ...state,
+        remoteUrl: 'spoof',
+        remoteHeadSha: 'spoof',
+        files: [
+          {
+            path: 'a.txt',
+            changeType: 'modified',
+            viewed: true,
+            comments: [
+              {
+                id: 'c',
+                filePath: 'a.txt',
+                lineRange: null,
+                suggestion: null,
+                body: 'keep this',
+                category: 'note',
+                attachments: [
+                  {
+                    id: 'image',
+                    fileName: 'pic.png',
+                    mediaType: 'image/png',
+                    data: new Uint8Array([1, 2, 3]).buffer,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const submission = new host.ReviewSubmission({ publication: operations }, () => {});
+      expect(submission.begin()).toBe(true);
+      expect(await submission.publish(review)).toEqual({ ok: true, outputPath: output.path });
+      expect(submission.completed).toBe(true);
+      expect(submission.begin()).toBe(false);
+      const xml = fs.readFileSync(output.path, 'utf8');
+      expect(xml).not.toContain('remote-');
+      expect(xml).toContain('keep this');
+      const resumed = host.core.createReviewSession();
+      const parsed = host.core.loadResumeDocument(resumed, output.path);
+      expect(host.core.getResumeLoad(resumed)).toMatchObject({
+        viewedFiles: ['a.txt'],
+        comments: [{ body: 'keep this' }],
+      });
+      const asset = parsed.comments[0].attachments![0].fileName;
+      expect(resumed.attachmentOrigins.has(asset)).toBe(true);
+      const adopted = host.core.createReviewSession();
+      host.installedServeEngine.adoptResume(adopted, parsed, output.path);
+      expect(adopted.attachmentOrigins.has(asset)).toBe(true);
+      fs.mkdirSync(join(root, 'relocated'));
+      const nextOutput = { path: join(root, 'relocated', 'next.xml'), origin: 'explicit' as const };
+      host.core.commitDiffData(adopted, payload, identity);
+      const legacy = new host.ReviewSubmission(
+        host.createReviewOperations(adopted, nextOutput),
+        () => {}
+      );
+      expect(legacy.begin()).toBe(true);
+      expect(
+        await legacy.publish({
+          ...review,
+          files: [{ ...review.files[0], comments: parsed.comments }],
+        })
+      ).toEqual({ ok: true, outputPath: nextOutput.path });
+      expect(adopted.reviewState?.files[0].comments[0].body).toBe('keep this');
+      expect(fs.readFileSync(nextOutput.path, 'utf8')).toContain('keep this');
+      const relocatedAsset = host.core.parseReviewXml(nextOutput.path).comments[0].attachments![0]
+        .fileName;
+      expect(fs.readFileSync(join(dirname(nextOutput.path), relocatedAsset))).toEqual(
+        Buffer.from([1, 2, 3])
+      );
+    });
+
+    it('replaces every supplied remote value using owned session metadata', async () => {
+      const { host, session, state, output } = fixture();
+      session.diffData!.remote = {
+        remoteUrl: 'https://github.com/o/r/pull/1',
+        remoteForge: 'github',
+        remoteBaseSha: 'aaa',
+        remoteHeadSha: 'bbb',
+        temporaryClone: false,
+        threadSyncAvailable: true,
+      };
+      await host.createPublicationOperations(session, output).publishReview({
+        ...state,
+        remoteUrl: 'spoof',
+        remoteForge: 'gitlab',
+        remoteBaseSha: 'spoof',
+        remoteHeadSha: 'spoof',
+      });
+      const xml = fs.readFileSync(output.path, 'utf8');
+      expect(xml).toContain('remote-url="https://github.com/o/r/pull/1"');
+      expect(xml).toContain('remote-forge="github"');
+      expect(xml).toContain('remote-base-sha="aaa"');
+      expect(xml).toContain('remote-head-sha="bbb"');
+      expect(xml).not.toContain('spoof');
+    });
+  });
+}

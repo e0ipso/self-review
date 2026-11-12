@@ -1,62 +1,30 @@
-// src/main/menu.ts
-// Builds the application menu. Standard menus (File/Edit/View/Window) use
-// Electron's built-in role submenus where they preserve review state. View excludes
-// destructive reload actions in packaged builds.
-//
-// Quit stays the built-in role: main.ts intercepts its `app.quit()` in `before-quit`. A custom click that
-// exited directly would reopen the data-loss path.
-
-import { app, Menu, shell, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+// Native composition stays at the edge; template policy has no Electron globals.
+import { app, Menu, shell, BrowserWindow } from 'electron';
 import { createDesktopLocalization } from '../shared/localization';
 import { IPC } from '../shared/ipc-channels';
+import { createMenuTemplate } from './menu-template';
+import { runMenuAction } from './action-failure';
 
 const DOCUMENTATION_URL = 'https://github.com/e0ipso/self-review#self-review-';
 
 export function setupMenu(messages = createDesktopLocalization()): void {
-  const isMac = process.platform === 'darwin';
-
-  const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [{ role: 'appMenu' as const }] : []),
-    { role: 'fileMenu' },
-    { role: 'editMenu' },
+  const template = createMenuTemplate(
+    { isMac: process.platform === 'darwin', isPackaged: app.isPackaged },
     {
-      label: messages.t('View'),
-      submenu: [
-        ...(!app.isPackaged
-          ? [
-              { role: 'reload' as const },
-              { role: 'forceReload' as const },
-              { role: 'toggleDevTools' as const },
-              { type: 'separator' as const },
-            ]
-          : []),
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
-      ],
-    },
-    { role: 'windowMenu' },
-    {
-      role: 'help',
-      submenu: [
-        {
-          label: messages.t('Documentation'),
-          click: () => {
-            shell.openExternal(DOCUMENTATION_URL);
-          },
-        },
-        { type: 'separator' },
-        {
-          label: messages.t('About'),
-          click: () => {
+      documentation: () =>
+        runMenuAction(
+          () => shell.openExternal(DOCUMENTATION_URL),
+          () => console.error('[main] Could not open Documentation.')
+        ),
+      about: () =>
+        runMenuAction(
+          () => {
             BrowserWindow.getFocusedWindow()?.webContents.send(IPC.APP_SHOW_ABOUT);
           },
-        },
-      ],
+          () => console.error('[main] Could not show About.')
+        ),
     },
-  ];
-
+    messages
+  );
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

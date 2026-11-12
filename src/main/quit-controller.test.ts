@@ -191,3 +191,30 @@ describe('describeSaveFailure', () => {
     expect(failure.message).toContain('boom');
   });
 });
+
+it.each(['take', 'report'] as const)(
+  'keeps state-machine ownership after a %s callback throws',
+  async failure => {
+    const controller = new QuitController();
+    const quit = vi.fn();
+    const publish = vi.fn(async () => {
+      throw new Error('disk full');
+    });
+    expect(
+      await saveAndQuit({
+        controller,
+        takeState: () => {
+          if (failure === 'take') throw new Error('stale state');
+          return { timestamp: '', source: { type: 'directory', sourcePath: '/review' }, files: [] };
+        },
+        publish,
+        reportFailure: async () => {
+          throw new Error('presentation unavailable');
+        },
+        quit,
+      })
+    ).toBe('failed');
+    expect(controller.phase).toBe('reviewing');
+    expect(quit).not.toHaveBeenCalled();
+  }
+);
