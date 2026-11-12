@@ -5,6 +5,7 @@ import { closeSync, constants, fstatSync, openSync, read, readSync } from 'fs';
 import type { Stats } from 'fs';
 import { open } from 'fs/promises';
 import { promisify } from 'util';
+import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
 
 /** Filesystem errors (ENOENT, EACCES, ...) throw. */
 export type BoundedReadResult =
@@ -21,6 +22,10 @@ export interface BoundedReadOptions {
   noFollow?: boolean;
 }
 
+export interface AsyncBoundedReadOptions extends BoundedReadOptions {
+  signal?: AbortSignal;
+}
+
 const readAsync = promisify(read);
 
 function openFlags(options: BoundedReadOptions): number {
@@ -30,15 +35,22 @@ function openFlags(options: BoundedReadOptions): number {
 export async function readFileWithinBudget(
   path: string,
   maxBytes: number,
-  options: BoundedReadOptions = {}
+  options: AsyncBoundedReadOptions = {}
 ): Promise<BoundedReadResult> {
+  checkLoadingCancelled(options.signal);
   const handle = await open(path, openFlags(options));
   try {
+    checkLoadingCancelled(options.signal);
     const stats = await handle.stat();
+    checkLoadingCancelled(options.signal);
     if (!stats.isFile()) return { kind: 'not-regular' };
-    return await readDescriptorWithinBudget(handle.fd, stats, maxBytes);
+    return await readDescriptorWithinBudget(handle.fd, stats, maxBytes, options);
   } finally {
-    await handle.close();
+    try {
+      await handle.close();
+    } finally {
+      checkLoadingCancelled(options.signal);
+    }
   }
 }
 
@@ -46,14 +58,24 @@ export async function readFileWithinBudget(
 export async function readDescriptorWithinBudget(
   fd: number,
   stats: Stats,
-  maxBytes: number
+  maxBytes: number,
+  options: Pick<AsyncBoundedReadOptions, 'signal'> = {}
 ): Promise<Exclude<BoundedReadResult, { kind: 'not-regular' }>> {
+  checkLoadingCancelled(options.signal);
   if (stats.size > maxBytes) return { kind: 'too-large', size: stats.size };
 
   let buffer: Buffer = Buffer.alloc(initialCapacity(stats.size, maxBytes));
   let filled = 0;
   for (;;) {
-    const { bytesRead } = await readAsync(fd, buffer, filled, buffer.length - filled, null);
+    await loadingCheckpoint(options.signal);
+    const { bytesRead } = await readAsync(
+      fd,
+      buffer,
+      filled,
+      Math.min(buffer.length - filled, 64 * 1024),
+      null
+    );
+    checkLoadingCancelled(options.signal);
     if (bytesRead === 0) break;
     filled += bytesRead;
     if (filled === buffer.length) {
@@ -107,6 +129,38 @@ export function readInto(fd: number, buffer: Buffer, offset: number, length: num
   let filled = 0;
   while (filled < length) {
     const bytesRead = readSync(fd, buffer, offset + filled, length - filled, null);
+    if (bytesRead === 0) break;
+    filled += bytesRead;
+  }
+  return filled;
+}
+
+/** Read only through the supplied handle, never a native read on an embedder's descriptor. */
+export async function readIntoAsync(
+  reader: {
+    read(
+      buffer: Buffer,
+      offset: number,
+      length: number,
+      position: number | null
+    ): Promise<{ bytesRead: number }>;
+  },
+  buffer: Buffer,
+  offset: number,
+  length: number,
+  signal?: AbortSignal
+): Promise<number> {
+  checkLoadingCancelled(signal);
+  let filled = 0;
+  while (filled < length) {
+    await loadingCheckpoint(signal);
+    const { bytesRead } = await reader.read(
+      buffer,
+      offset + filled,
+      Math.min(length - filled, 64 * 1024),
+      null
+    );
+    checkLoadingCancelled(signal);
     if (bytesRead === 0) break;
     filled += bytesRead;
   }

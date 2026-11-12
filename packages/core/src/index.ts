@@ -157,8 +157,17 @@ export type {
 } from './forge-provider';
 
 // Synthetic diffs (for non-git files/directories)
-export { generateSyntheticDiffs, loadSyntheticFiles } from './synthetic-diff';
-export type { SyntheticDiffOptions, SyntheticDiffResult } from './synthetic-diff';
+export {
+  generateSyntheticDiffs,
+  loadSyntheticFiles,
+  generateSyntheticDiffsAsync,
+  loadSyntheticFilesAsync,
+} from './synthetic-diff';
+export type {
+  SyntheticDiffOptions,
+  SyntheticDiffResult,
+  AsyncSyntheticDiffOptions,
+} from './synthetic-diff';
 
 // Directory/file scanning
 export { scanDirectory, scanFile } from './directory-scanner';

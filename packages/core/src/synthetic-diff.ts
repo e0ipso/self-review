@@ -5,26 +5,16 @@
 // Reads are bounded first (input-budgets.ts). A file over budget is still listed, with no
 // content and an `omittedReason`, and named in the diagnostics.
 
-import {
-  closeSync,
-  constants,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readlinkSync,
-  realpathSync,
-} from 'fs';
-import { dirname, join, relative, resolve } from 'path';
-import { assertNoSymlinkAncestors, openContainedFile } from './safe-fs';
+import { realpathSync } from 'fs';
+import { join, resolve } from 'path';
 import type { DiffFile } from './types';
 import { parseDiffWithDiagnostics } from './diff-parser';
-import { readInto } from './bounded-read';
-import {
-  BINARY_SNIFF_BYTES,
-  formatBytes,
-  resolveSourceBudgets,
-  type SourceBudgets,
-} from './input-budgets';
+import { readSyntheticSource, readSyntheticSourceAsync } from './synthetic-source';
+import type { SyntheticSource } from './synthetic-source';
+import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
+export { readSyntheticSource } from './synthetic-source';
+export type { SyntheticSource } from './synthetic-source';
+import { formatBytes, resolveSourceBudgets, type SourceBudgets } from './input-budgets';
 
 // C-style escapes git emits for the characters that have one.
 const C_STYLE_ESCAPES: Record<number, string> = {
@@ -90,115 +80,6 @@ export interface SyntheticDiffResult {
 }
 
 /**
- * What a bounded look at one path found. `skip` is gone, a directory or a special file; `symlink`
- * carries its own text, as git stores it.
- */
-export type SyntheticSource =
-  | { kind: 'skip'; bytesRead: 0 }
-  | { kind: 'unreadable'; code: string; bytesRead: number }
-  | { kind: 'symlink'; content: Buffer; bytesRead: number }
-  | { kind: 'binary'; bytesRead: number }
-  | { kind: 'text'; content: Buffer; bytesRead: number }
-  | { kind: 'too-large'; size: number; bytesRead: number }
-  | { kind: 'over-total'; size: number; bytesRead: number };
-
-const FOLLOW_FLAGS = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0);
-
-/**
- * Nothing past the sniff prefix is read unless the file is text and fits `maxFileBytes` and
- * `remainingBytes`.
- */
-export function readSyntheticSource(
-  fullPath: string,
-  options: {
-    followSymlinks?: boolean;
-    maxFileBytes?: number;
-    remainingBytes?: number;
-    sourceRoot?: string;
-  } = {}
-): SyntheticSource {
-  const budgets = resolveSourceBudgets();
-  const {
-    followSymlinks = false,
-    maxFileBytes = budgets.maxFileBytes,
-    remainingBytes = budgets.maxTotalBytes,
-  } = options;
-
-  const root = options.sourceRoot ?? dirname(fullPath);
-  const rel = relative(root, fullPath);
-  if (!followSymlinks) {
-    let linkSize: number | undefined;
-    try {
-      assertNoSymlinkAncestors(root, rel);
-      const stats = lstatSync(fullPath);
-      if (stats.isSymbolicLink()) linkSize = stats.size;
-    } catch (error) {
-      return failure(error);
-    }
-    if (linkSize !== undefined) {
-      if (linkSize > maxFileBytes) return { kind: 'too-large', size: linkSize, bytesRead: 0 };
-      if (linkSize > remainingBytes) return { kind: 'over-total', size: linkSize, bytesRead: 0 };
-      // Git stores a link as its target path; never read what it points at.
-      try {
-        const content = readlinkSync(fullPath, { encoding: 'buffer' });
-        assertNoSymlinkAncestors(root, rel);
-        if (realpathSync(dirname(fullPath)) !== join(realpathSync(root), dirname(rel))) {
-          return { kind: 'unreadable', code: 'unsafe-link', bytesRead: 0 };
-        }
-        return { kind: 'symlink', content, bytesRead: content.length };
-      } catch (error) {
-        return failure(error);
-      }
-    }
-  }
-
-  let fd: number;
-  try {
-    fd = followSymlinks ? openSync(fullPath, FOLLOW_FLAGS) : openContainedFile(root, rel).fd;
-  } catch (error) {
-    return failure(error);
-  }
-  let bytesRead = 0;
-  try {
-    // Decide on the open descriptor, so a path swapped after lstat cannot differ.
-    const stats = fstatSync(fd);
-    if (!stats.isFile()) return { kind: 'skip', bytesRead: 0 };
-    const size = stats.size;
-
-    const sniffLength = Math.min(size, BINARY_SNIFF_BYTES);
-    if (sniffLength > remainingBytes) return { kind: 'over-total', size, bytesRead };
-    const sniff = Buffer.alloc(sniffLength);
-    bytesRead = readInto(fd, sniff, 0, sniffLength);
-    if (sniff.subarray(0, bytesRead).includes(0)) return { kind: 'binary', bytesRead };
-
-    if (size > maxFileBytes) return { kind: 'too-large', size, bytesRead };
-    if (size > remainingBytes) return { kind: 'over-total', size, bytesRead };
-
-    // Read no more than the fstat size: a growing file is reviewed as measured.
-    const content = Buffer.alloc(size);
-    sniff.copy(content, 0, 0, bytesRead);
-    bytesRead += readInto(fd, content, bytesRead, size - bytesRead);
-    return { kind: 'text', content: content.subarray(0, bytesRead), bytesRead };
-  } catch (error) {
-    return failure(error, bytesRead);
-  } finally {
-    closeSync(fd);
-  }
-}
-
-function failure(error: unknown, bytesRead = 0): SyntheticSource {
-  const wrapped = error as { cause?: NodeJS.ErrnoException; code?: string } | undefined;
-  const code = wrapped?.cause?.code ?? wrapped?.code ?? 'unknown error';
-  // Gone or no longer a directory between listing and reading, or a link swapped in (O_NOFOLLOW).
-  if (
-    ['ENOENT', 'ENOTDIR', 'ELOOP', 'not-found', 'not-regular', 'output-is-directory'].includes(code)
-  ) {
-    return { kind: 'skip', bytesRead: 0 };
-  }
-  return { kind: 'unreadable', code, bytesRead };
-}
-
-/**
  * Generate synthetic unified diffs for a list of file paths so they can be
  * parsed by the existing diff parser. Each file is treated as a new addition.
  *
@@ -213,13 +94,67 @@ export function generateSyntheticDiffs(
   options: SyntheticDiffOptions = {}
 ): SyntheticDiffResult {
   const budgets = resolveSourceBudgets(options.budgets);
-  let sourceRoot: string;
+  const sourceRoot = syntheticRoot(rootDir);
+  const projection = createProjection(budgets);
+  for (const filePath of paths) {
+    projection.add(
+      filePath,
+      projection.exhausted()
+        ? null
+        : readSyntheticSource(join(sourceRoot, filePath), {
+            sourceRoot,
+            followSymlinks: options.followSymlinks,
+            maxFileBytes: budgets.maxFileBytes,
+            remainingBytes: projection.remaining(),
+          })
+    );
+  }
+  return projection.finish();
+}
+
+export interface AsyncSyntheticDiffOptions extends SyntheticDiffOptions {
+  signal?: AbortSignal;
+}
+
+/** Async counterpart with the same ordering, budgets and projection as generateSyntheticDiffs. */
+export async function generateSyntheticDiffsAsync(
+  paths: string[],
+  rootDir: string,
+  options: AsyncSyntheticDiffOptions = {}
+): Promise<SyntheticDiffResult> {
+  checkLoadingCancelled(options.signal);
+  const budgets = resolveSourceBudgets(options.budgets);
+  const sourceRoot = syntheticRoot(rootDir);
+  const projection = createProjection(budgets);
+  for (const filePath of paths) {
+    await loadingCheckpoint(options.signal);
+    const source = projection.exhausted()
+      ? null
+      : await readSyntheticSourceAsync(join(sourceRoot, filePath), {
+          sourceRoot,
+          followSymlinks: options.followSymlinks,
+          maxFileBytes: budgets.maxFileBytes,
+          remainingBytes: projection.remaining(),
+          signal: options.signal,
+        });
+    checkLoadingCancelled(options.signal);
+    projection.add(filePath, source);
+  }
+  await loadingCheckpoint(options.signal);
+  return projection.finish();
+}
+
+function syntheticRoot(rootDir: string): string {
   try {
-    sourceRoot = realpathSync(rootDir);
+    return realpathSync(rootDir);
   } catch {
     // Preserve per-path disappearance diagnostics when a root vanishes before the read.
-    sourceRoot = resolve(rootDir);
+    return resolve(rootDir);
   }
+}
+
+/** The shared, I/O-free projection owns aggregate accounting and all omission diagnostics. */
+function createProjection(budgets: SourceBudgets) {
   const diffs: string[] = [];
   const omitted = new Map<string, string>();
   const tooLarge: string[] = [];
@@ -228,39 +163,33 @@ export function generateSyntheticDiffs(
   let totalRead = 0;
   let totalExhausted = false;
 
-  for (const filePath of paths) {
+  function add(filePath: string, source: SyntheticSource | null): void {
     // Git quotes the prefixed path as a whole ("a/name"), not the name alone.
     const oldHeaderPath = quoteGitPath(`a/${filePath}`);
     const newHeaderPath = quoteGitPath(`b/${filePath}`);
     const header = `diff --git ${oldHeaderPath} ${newHeaderPath}\n`;
 
-    if (totalExhausted) {
+    if (source === null) {
       // Nothing more is read once the aggregate is spent: the cut is one point in the list.
       overTotal.push(filePath);
       omitted.set(filePath, overTotalReason(budgets.maxTotalBytes));
       diffs.push(`${header}new file mode 100644`);
-      continue;
+      return;
     }
 
-    const source = readSyntheticSource(join(sourceRoot, filePath), {
-      sourceRoot,
-      followSymlinks: options.followSymlinks,
-      maxFileBytes: budgets.maxFileBytes,
-      remainingBytes: budgets.maxTotalBytes - totalRead,
-    });
     totalRead += source.bytesRead;
 
     switch (source.kind) {
       case 'skip':
-        continue;
+        return;
       case 'unreadable':
         unreadable.push(`${filePath} (${source.code})`);
-        continue;
+        return;
       case 'binary':
         diffs.push(
           `${header}new file mode 100644\n` + `Binary files /dev/null and ${newHeaderPath} differ`
         );
-        continue;
+        return;
       case 'too-large':
         tooLarge.push(filePath);
         omitted.set(
@@ -269,45 +198,53 @@ export function generateSyntheticDiffs(
             `${formatBytes(budgets.maxFileBytes)} per-file read budget.`
         );
         diffs.push(`${header}new file mode 100644`);
-        continue;
+        return;
       case 'over-total':
         totalExhausted = true;
         overTotal.push(filePath);
         omitted.set(filePath, overTotalReason(budgets.maxTotalBytes));
         diffs.push(`${header}new file mode 100644`);
-        continue;
+        return;
       case 'symlink':
         diffs.push(addedTextDiff(header, newHeaderPath, '120000', source.content));
-        continue;
+        return;
       case 'text':
         diffs.push(addedTextDiff(header, newHeaderPath, '100644', source.content));
-        continue;
+        return;
     }
   }
 
-  const diagnostics: string[] = [];
-  if (tooLarge.length > 0) {
-    diagnostics.push(
-      `${countFiles(tooLarge.length)} over the ${formatBytes(budgets.maxFileBytes)} per-file ` +
-        `read budget ${tooLarge.length === 1 ? 'is' : 'are'} listed without content: ` +
-        listPaths(tooLarge)
-    );
-  }
-  if (overTotal.length > 0) {
-    diagnostics.push(
-      `The ${formatBytes(budgets.maxTotalBytes)} total read budget for this review ran out; ` +
-        `${countFiles(overTotal.length)} ${overTotal.length === 1 ? 'is' : 'are'} listed ` +
-        `without content: ${listPaths(overTotal)}`
-    );
-  }
-  if (unreadable.length > 0) {
-    diagnostics.push(
-      `${countFiles(unreadable.length)} could not be read and ` +
-        `${unreadable.length === 1 ? 'is' : 'are'} not shown: ${listPaths(unreadable)}`
-    );
-  }
+  function finish(): SyntheticDiffResult {
+    const diagnostics: string[] = [];
+    if (tooLarge.length > 0) {
+      diagnostics.push(
+        `${countFiles(tooLarge.length)} over the ${formatBytes(budgets.maxFileBytes)} per-file ` +
+          `read budget ${tooLarge.length === 1 ? 'is' : 'are'} listed without content: ` +
+          listPaths(tooLarge)
+      );
+    }
+    if (overTotal.length > 0) {
+      diagnostics.push(
+        `The ${formatBytes(budgets.maxTotalBytes)} total read budget for this review ran out; ` +
+          `${countFiles(overTotal.length)} ${overTotal.length === 1 ? 'is' : 'are'} listed ` +
+          `without content: ${listPaths(overTotal)}`
+      );
+    }
+    if (unreadable.length > 0) {
+      diagnostics.push(
+        `${countFiles(unreadable.length)} could not be read and ` +
+          `${unreadable.length === 1 ? 'is' : 'are'} not shown: ${listPaths(unreadable)}`
+      );
+    }
 
-  return { diff: diffs.join('\n'), omitted, diagnostics };
+    return { diff: diffs.join('\n'), omitted, diagnostics };
+  }
+  return {
+    add,
+    finish,
+    remaining: () => budgets.maxTotalBytes - totalRead,
+    exhausted: () => totalExhausted,
+  };
 }
 
 /** Builds and parses in one step, setting `omittedReason` on files listed without content. */
@@ -316,7 +253,26 @@ export function loadSyntheticFiles(
   rootDir: string,
   options: SyntheticDiffOptions = {}
 ): { files: DiffFile[]; diagnostics: string[] } {
-  const { diff, omitted, diagnostics } = generateSyntheticDiffs(paths, rootDir, options);
+  return parseSyntheticDiffs(generateSyntheticDiffs(paths, rootDir, options));
+}
+
+/** Async build; cancellation never returns a partial set of files. */
+export async function loadSyntheticFilesAsync(
+  paths: string[],
+  rootDir: string,
+  options: AsyncSyntheticDiffOptions = {}
+): Promise<{ files: DiffFile[]; diagnostics: string[] }> {
+  const result = await generateSyntheticDiffsAsync(paths, rootDir, options);
+  checkLoadingCancelled(options.signal);
+  const parsed = parseSyntheticDiffs(result);
+  await loadingCheckpoint(options.signal);
+  return parsed;
+}
+
+function parseSyntheticDiffs({ diff, omitted, diagnostics }: SyntheticDiffResult): {
+  files: DiffFile[];
+  diagnostics: string[];
+} {
   const parsed = parseDiffWithDiagnostics(diff);
   for (const file of parsed.files) {
     const reason = omitted.get(file.newPath);

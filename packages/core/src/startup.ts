@@ -23,7 +23,7 @@
 
 import { resolve } from 'path';
 import type { GitExecutionOptions } from './git';
-import { CommandCancelledError } from './forge-provider';
+import { checkLoadingCancelled } from './local-loading-lifetime';
 import type { AppConfig, DiffLoadPayload, ReviewSourceIdentity } from './types';
 import type { ConfigValueOrigin, LoadedConfig } from './config';
 import type { PublishReviewOptions, ReviewOutputTarget } from './review-publisher';
@@ -148,10 +148,7 @@ export async function loadLocalReview(
   log: (message: string) => void,
   options: GitExecutionOptions = {}
 ): Promise<LoadedLocalReview> {
-  const checkCancelled = () => {
-    if (options.signal?.aborted)
-      throw new CommandCancelledError('aborted', 'self-review', ['load-local-review']);
-  };
+  const checkCancelled = () => checkLoadingCancelled(options.signal);
   checkCancelled();
   if (source.mode === 'git') {
     const shouldKeep = createIgnoreFilter(config.ignore);
@@ -162,6 +159,7 @@ export async function loadLocalReview(
     );
     checkCancelled();
     for (const diagnostic of diagnostics) log(`Diff diagnostic: ${diagnostic}`);
+    checkCancelled();
     return {
       payload: {
         files: files.filter(f => shouldKeep(f.newPath || f.oldPath)),
@@ -180,10 +178,11 @@ export async function loadLocalReview(
   if (source.mode === 'file' || source.mode === 'directory') {
     const scan =
       source.mode === 'file'
-        ? await scanFile(source.sourcePath)
-        : await scanDirectory(source.sourcePath, config.ignore);
+        ? await scanFile(source.sourcePath, { signal: options.signal })
+        : await scanDirectory(source.sourcePath, config.ignore, { signal: options.signal });
     checkCancelled();
     for (const diagnostic of scan.diagnostics) log(`Diff diagnostic: ${diagnostic}`);
+    checkCancelled();
     return {
       payload: {
         files: scan.files,

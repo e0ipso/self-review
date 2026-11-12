@@ -1,5 +1,7 @@
 // Prepare directory/file reviews without committing until the host accepts their payload size.
-import * as fs from 'fs';
+import { stat } from 'fs/promises';
+import { checkLoadingCancelled } from './local-loading-lifetime';
+import type { SourceScanOptions } from './directory-scanner';
 import type { DiffLoadPayload, ReviewSourceIdentity, PayloadStats } from './types';
 import type { ReviewSession } from './review-session';
 import { commitDiffData, preparePayload } from './review-session';
@@ -30,22 +32,27 @@ export interface ReviewStartResult {
  */
 export async function prepareDirectoryReview(
   session: Pick<ReviewSession, 'config'>,
-  directoryPath: string
+  directoryPath: string,
+  options: SourceScanOptions = {}
 ): Promise<ReviewStartResult> {
+  checkLoadingCancelled(options.signal);
   console.error('[review] Starting directory review for:', directoryPath);
 
   // Check if the path is a file (not a directory)
   let isFile = false;
   try {
-    isFile = fs.statSync(directoryPath).isFile();
+    isFile = (await stat(directoryPath)).isFile();
   } catch {
     // Failed to stat — proceed as directory
   }
 
+  checkLoadingCancelled(options.signal);
+
   // Scan diagnostics ride on the payload so a failed load never looks empty.
   const scan = isFile
-    ? await scanFile(directoryPath)
-    : await scanDirectory(directoryPath, session.config?.ignore ?? []);
+    ? await scanFile(directoryPath, options)
+    : await scanDirectory(directoryPath, session.config?.ignore ?? [], options);
+  checkLoadingCancelled(options.signal);
   const type = isFile ? 'file' : 'directory';
   const payload: DiffLoadPayload = {
     files: scan.files,
