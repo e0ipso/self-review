@@ -1,7 +1,8 @@
 // Composition of the core engine for one HTTP session. Tests can replace individual
 // operations with deferred or failing implementations without patching package imports.
 
-import * as core from '@self-review/core';
+import type * as core from '@self-review/core';
+import { installedServeEngine, type ServeEngine } from './engine-contract';
 import type {
   ReviewSession,
   ReviewState,
@@ -10,8 +11,8 @@ import type {
   SuggestionApplyRequest,
 } from '@self-review/core';
 import { ownedReviewState } from './source-ownership';
-import { applyCompatibleSuggestion } from './apply-compatibility';
-import type { SubmissionOperations } from './review-submission';
+import type { SubmissionOperations, PublicationOperations } from './review-submission';
+import { nonThrowingReporter } from './diagnostic-reporter';
 
 export interface OperationOptions {
   signal?: AbortSignal;
@@ -42,10 +43,18 @@ export interface ReviewOperations extends SubmissionOperations {
     | Promise<ReturnType<typeof core.applySuggestionForSession>>;
 }
 
-export function createReviewOperations(
+export type ReviewTransportOperations = Omit<ReviewOperations, keyof SubmissionOperations>;
+export type PublicationReviewOperations = ReviewTransportOperations & PublicationOperations;
+
+/** First-party operations publish the supplied state without a redundant handoff. */
+export function createPublicationOperations(
   session: ReviewSession,
-  output: ReviewOutputTarget
-): ReviewOperations {
+  output: ReviewOutputTarget,
+  engine: ServeEngine = installedServeEngine,
+  reportDiagnostic?: (message: string) => void
+): PublicationReviewOperations {
+  const { core, applySuggestion } = engine;
+  const report = reportDiagnostic && nonThrowingReporter(reportDiagnostic);
   return {
     authorizeReviewedPath: path => core.authorizeReviewedPath(session, path),
     getDiffLoad: () => core.getDiffLoad(session),
@@ -55,14 +64,38 @@ export function createReviewOperations(
     loadImage: (path, options) => core.loadImage(session, path, options),
     readAttachment: (path, options) => core.readAttachment(session, path, options),
     expandContext: (request, options) => core.expandContext(session, request, undefined, options),
-    applySuggestionForSession: (request, options) =>
-      applyCompatibleSuggestion(session, request, options),
-    submitReviewState: state =>
-      core.submitReviewState(session, ownedReviewState(session, state, output.path)),
-    publishReview: (state: ReviewState, options) =>
-      core.publishReview(ownedReviewState(session, state, output.path), output.path, {
+    applySuggestionForSession: (request, options) => applySuggestion(session, request, options),
+    publishReview: (state: ReviewState, options) => {
+      const owned = ownedReviewState(session, state, output.path);
+      // Preserve the CLI diagnostic without recreating the handoff cache mutation.
+      if (report)
+        report(
+          '[review] Review state submitted:',
+          JSON.stringify({
+            timestamp: owned.timestamp,
+            source: owned.source,
+            fileCount: owned.files.length,
+          })
+        );
+      return core.publishReview(owned, output.path, {
         ...core.publishOptionsFor(output, session.attachmentOrigins),
         signal: options?.signal,
-      }),
+      });
+    },
+  };
+}
+
+/** Compatibility factory retains the original state-handoff operation. */
+export function createReviewOperations(
+  session: ReviewSession,
+  output: ReviewOutputTarget
+): ReviewOperations {
+  return {
+    ...createPublicationOperations(session, output),
+    submitReviewState: state =>
+      installedServeEngine.core.submitReviewState(
+        session,
+        ownedReviewState(session, state, output.path)
+      ),
   };
 }

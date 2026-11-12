@@ -11,18 +11,15 @@
 // capability token lives only in this closure, never in storage or a URL.
 
 // Type-only, erased at build time: no runtime dependency on either package.
-import type { ReviewAdapter, GuideLoadPayload } from '@self-review/react';
+import type { ReviewAdapter } from '@self-review/react';
 import type {
   AppConfig,
-  DiffHunk,
   DiffLoadPayload,
   ExpandContextRequest,
-  ExpandContextResponse,
-  ImageLoadResult,
   OutputPathInfo,
   ResumeLoadPayload,
   ReviewState,
-} from '@self-review/core';
+} from '@self-review/types';
 import {
   MAX_REVIEW_BODY_BYTES,
   MAX_APPLY_BODY_BYTES,
@@ -30,12 +27,6 @@ import {
   REVIEW_TOO_LARGE_CODE,
   formatMegabytes,
 } from '../protocol';
-
-/** What `GET /api/diff` answers: both halves of the initial session. */
-interface DiffApiResponse {
-  diff: DiffLoadPayload;
-  guide: GuideLoadPayload | null;
-}
 
 /** What `GET /api/config` answers. */
 export interface ConfigApiResponse {
@@ -48,6 +39,15 @@ import { createServeRequester } from './requester';
 export { ServeRequestError } from './request-error';
 
 import { createClient, requestError } from './json-client';
+import {
+  decodeDiffResponse,
+  decodeConfigResponse,
+  decodeResumeResponse,
+  decodeFileResponse,
+  decodeContextResponse,
+  decodeImageResponse,
+  type DiffApiResponse,
+} from './read-response';
 import { encodeReviewStateForWire } from './review-codec';
 import { decodeApplyResponse, decodePublicationResponse } from './mutation-response';
 export { encodeReviewStateForWire } from './review-codec';
@@ -78,7 +78,7 @@ export async function loadServeConfig(
   capability: string,
   requester = createServeRequester(capability)
 ): Promise<ConfigApiResponse | null> {
-  return createClient(requester).getJson<ConfigApiResponse | null>('/api/config');
+  return createClient(requester).getJson('/api/config', undefined, decodeConfigResponse);
 }
 
 /**
@@ -99,11 +99,11 @@ export function createFetchAdapter(
   const { getJson, postJson, postJsonText } = createClient(requester);
   const reads = {
     expandContext: (request: ExpandContextRequest, signal?: AbortSignal) =>
-      postJson<ExpandContextResponse | null>('/api/expand-context', request, signal),
+      postJson('/api/expand-context', request, signal, decodeContextResponse),
     loadFileContent: (filePath: string, signal?: AbortSignal) =>
-      getJson<DiffHunk[] | null>(withPath('/api/file', filePath), signal),
+      getJson(withPath('/api/file', filePath), signal, decodeFileResponse),
     loadImage: (filePath: string, signal?: AbortSignal) =>
-      getJson<ImageLoadResult>(withPath('/api/image', filePath), signal),
+      getJson(withPath('/api/image', filePath), signal, decodeImageResponse),
     readAttachment: (filePath: string, signal?: AbortSignal): Promise<ArrayBuffer | null> =>
       requester.request(
         withPath('/api/attachment', filePath),
@@ -123,7 +123,7 @@ export function createFetchAdapter(
 
   function requestDiff(): Promise<DiffApiResponse> {
     if (diffRequest) return diffRequest;
-    const request = getJson<DiffApiResponse | null>('/api/diff')
+    const request = getJson('/api/diff', undefined, decodeDiffResponse)
       .then(response => {
         if (response === null) throw new Error('The server has no diff to review');
         if (!disposed) {
@@ -194,7 +194,7 @@ export function createFetchAdapter(
     loadResumedReview: async (): Promise<ResumeLoadPayload> =>
       // The route answers null when there is nothing to resume; an empty
       // payload says the same thing in the shape the interface promises.
-      (await getJson<ResumeLoadPayload | null>('/api/resume')) ?? {
+      (await getJson('/api/resume', undefined, decodeResumeResponse)) ?? {
         comments: [],
         viewedFiles: [],
       },

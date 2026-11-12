@@ -2,8 +2,9 @@
 // compiler checked; over HTTP the body is whatever the socket delivered.
 
 import { ReviewXmlError } from '@self-review/core';
-import { requestContract } from './request-contract-compatibility';
-import { validateCompatibleReviewState } from './core-compatibility';
+import { installedServeEngine } from './engine-contract';
+const { requestContract, validateReviewState: validateCompatibleReviewState } =
+  installedServeEngine;
 import { decodeFileAttachments } from './attachment-codec';
 
 // Compatibility for callers that imported containment from this module.

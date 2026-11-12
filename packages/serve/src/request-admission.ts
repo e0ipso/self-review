@@ -1,7 +1,7 @@
 // Bounded ownership of admitted work and its response. A disconnected response
 // does not release a slot until its underlying operation also settles.
 import type * as http from 'node:http';
-import { SERVER_BUSY_ERROR } from './protocol';
+import { SERVER_BUSY_ERROR, SERVER_BUSY_CODE } from './protocol';
 
 export const REQUEST_SHUTDOWN = Symbol('review-request-shutdown');
 export interface ManagedReviewServer extends http.Server {
@@ -33,7 +33,7 @@ export class RequestAdmission {
     }
   }
 
-  rejection(kind: RequestKind): { status: number; error: string } | null {
+  rejection(kind: RequestKind): { status: number; error: string; code?: string } | null {
     if (this.stopping) return { status: 503, error: 'review complete; server is stopping' };
     if ((kind === 'publication' || kind === 'mutation') && this.exclusive) {
       return {
@@ -48,7 +48,7 @@ export class RequestAdmission {
       this.active.size >= (this.options.maxRequests ?? 32) ||
       (kind === 'expensive-read' && this.expensiveReads >= (this.options.maxExpensiveReads ?? 8))
     ) {
-      return { status: 503, error: SERVER_BUSY_ERROR };
+      return { status: 503, error: SERVER_BUSY_ERROR, code: SERVER_BUSY_CODE };
     }
     return null;
   }

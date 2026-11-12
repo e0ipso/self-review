@@ -6,6 +6,7 @@
 // stubbed; the round trip against a running server is covered by the
 // end-to-end project.
 
+import { DEFAULT_CONFIG } from '../../../react/src/config-defaults';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReviewState } from '@self-review/core';
 import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
@@ -89,7 +90,22 @@ describe('createFetchAdapter', () => {
         ? new Response(new Uint8Array([1]), { status: 200 })
         : url === '/api/apply-suggestion'
           ? json({ status: 'applied', filePath: 'src/a.ts', replacedLines: 1 })
-          : json({ diff: DIFF_PAYLOAD, guide: null, ok: true, outputPath: '/r/review.xml' })
+          : url === '/api/resume'
+            ? json(null)
+            : url.startsWith('/api/file?')
+              ? json([])
+              : url.startsWith('/api/image?')
+                ? json({ error: 'unavailable' })
+                : url === '/api/expand-context'
+                  ? json(null)
+                  : url === '/api/config'
+                    ? json(null)
+                    : json({
+                        diff: DIFF_PAYLOAD,
+                        guide: null,
+                        ok: true,
+                        outputPath: '/r/review.xml',
+                      })
     );
     const adapter = createFetchAdapter(CAPABILITY);
 
@@ -386,7 +402,7 @@ describe('createFetchAdapter', () => {
 
   it('reads the config and its output path from GET /api/config', async () => {
     const payload = {
-      config: { theme: 'dark' },
+      config: { ...DEFAULT_CONFIG, theme: 'dark' },
       outputPathInfo: { resolvedOutputPath: '/repo/review.xml', outputPathWritable: true },
     };
     const spy = stubRoutes({ '/api/config': payload });

@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createReviewSession, commitDiffData, resolveLocalSourceIdentity } from '@self-review/core';
-import { createReviewOperations } from './review-operations';
+import { createReviewOperations, createPublicationOperations } from './review-operations';
 
 let root: string;
 beforeEach(() => {
@@ -177,4 +177,24 @@ it('publishes owned remote provenance instead of submitted metadata', async () =
   expect(xml).toContain('remote-url="https://github.com/o/r/pull/1"');
   expect(xml).toContain('remote-head-sha="bbb"');
   expect(xml).not.toContain('forged');
+});
+
+it('retains the CLI submission diagnostic without mutating its handoff cache', async () => {
+  const report = vi.fn();
+  const session = createReviewSession();
+  const source = { type: 'directory' as const, sourcePath: root };
+  commitDiffData(session, { source, files: [] }, resolveLocalSourceIdentity(source));
+  const state = { timestamp: '2026-01-01T00:00:00Z', source, files: [] };
+  const operations = createPublicationOperations(
+    session,
+    { path: join(root, 'review.xml'), origin: 'explicit' },
+    undefined,
+    report
+  );
+  await operations.publishReview(state);
+  expect(report).toHaveBeenCalledExactlyOnceWith(
+    '[review] Review state submitted: ' +
+      JSON.stringify({ timestamp: state.timestamp, source, fileCount: 0 })
+  );
+  expect(session.reviewState).toBeNull();
 });

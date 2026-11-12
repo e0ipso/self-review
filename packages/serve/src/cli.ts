@@ -15,8 +15,9 @@ import { resolveSession } from './startup';
 import { createStartupHost } from './startup-composition';
 import { reportCoreCompatibility } from './core-capabilities';
 import { createServeLifecycle } from './lifecycle';
-import { createReviewServer, listenLoopback } from './server';
-import { createReviewOperations } from './review-operations';
+import { createBoundReviewServer, listenLoopback } from './bound-server';
+import { createPublicationOperations } from './review-operations';
+import { installedServeEngine } from './engine-contract';
 import { generateCapability } from './capability';
 import { formatLaunchUrl } from './protocol';
 
@@ -103,9 +104,16 @@ async function main(): Promise<void> {
         );
         if (lifetime.signal.aborted) throw lifetime.signal.reason;
         const capability = generateCapability();
-        const server = createReviewServer({
+        const operations = createPublicationOperations(
+          session,
+          output,
+          installedServeEngine,
+          host.reportDiagnostic
+        );
+        const server = createBoundReviewServer({
           capability,
-          operations: createReviewOperations(session, output),
+          operations,
+          publication: operations,
           reportDiagnostic: host.reportDiagnostic,
         });
         lifetime.attach(server);

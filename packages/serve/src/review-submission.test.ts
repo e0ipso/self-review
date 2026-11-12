@@ -154,3 +154,26 @@ describe('submission diagnostics', () => {
     }
   });
 });
+
+it('keeps legacy handoff ordering when a custom operation set carries extension properties', async () => {
+  const order: string[] = [];
+  const legacy = {
+    submitReviewState: vi.fn(() => {
+      order.push('submit');
+    }),
+    publishReview: vi.fn(async () => {
+      order.push('publish');
+      return { outputPath: '/review.xml' };
+    }),
+    publication: {
+      publishReview: vi.fn(async () => {
+        throw new Error('unrelated extension');
+      }),
+    },
+  };
+  const submission = new ReviewSubmission(legacy, vi.fn());
+  submission.begin();
+  await expect(submission.publish(state)).resolves.toEqual({ ok: true, outputPath: '/review.xml' });
+  expect(order).toEqual(['submit', 'publish']);
+  expect(legacy.publication.publishReview).not.toHaveBeenCalled();
+});
