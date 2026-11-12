@@ -9,12 +9,16 @@ import { createReviewServer, listenLoopback } from './server';
 import { REQUEST_SHUTDOWN } from './request-admission';
 import { MAX_STATIC_ASSET_BYTES, STATIC_READ_CHUNK_BYTES, serveStatic } from './static-assets';
 
+// Keep real filesystem behavior while allowing one containment syscall to fail.
+vi.mock('node:fs', async original => ({ ...(await original<typeof import('node:fs')>()) }));
+
 let root: string;
 let server: ReturnType<typeof createReviewServer>;
 let url: string;
 const requests: http.ClientRequest[] = [];
 const releaseCleanup: (() => void)[] = [];
 const capability = 'test-capability';
+const reportDiagnostic = vi.fn<(message: string) => void>();
 
 function makeServer(requestTimeoutMs?: number) {
   return createReviewServer({
@@ -24,9 +28,11 @@ function makeServer(requestTimeoutMs?: number) {
     clientDir: root,
     maxRequests: 1,
     requestTimeoutMs,
+    reportDiagnostic,
   });
 }
 beforeEach(async () => {
+  reportDiagnostic.mockReset();
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'static-stream-')));
   fs.writeFileSync(path.join(root, 'index.html'), 'hello');
   server = makeServer();
@@ -133,16 +139,25 @@ describe('bounded static file delivery', () => {
     expect(await literal.text()).toBe('literal');
   });
 
-  it.each(['missing', '%E0%A4%A', '..%2Fsecret', 'folder', 'escape'])(
-    'keeps %s unavailable as 404',
-    async name => {
-      fs.mkdirSync(path.join(root, 'folder'));
-      fs.symlinkSync(os.tmpdir(), path.join(root, 'escape'));
-      const response = await fetch(url + name);
-      expect(response.status).toBe(404);
-      expect(await response.json()).toEqual({ error: 'not found' });
-    }
-  );
+  it.each([
+    'missing',
+    '%E0%A4%A',
+    '..%2Fsecret',
+    'folder',
+    'escape',
+    'loop',
+    'index.html/child',
+    '%00',
+    'x'.repeat(256),
+  ])('keeps %s unavailable as 404', async name => {
+    fs.mkdirSync(path.join(root, 'folder'));
+    fs.symlinkSync(os.tmpdir(), path.join(root, 'escape'));
+    fs.symlinkSync('loop', path.join(root, 'loop'));
+    const response = await fetch(url + name);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'not found' });
+    expect(reportDiagnostic).not.toHaveBeenCalled();
+  });
 
   it('refuses a FIFO without waiting for a writer', async () => {
     execFileSync('mkfifo', [path.join(root, 'fifo')]);
@@ -207,6 +222,7 @@ describe('bounded static file delivery', () => {
     const response = await paused('shutdown.js');
     await server[REQUEST_SHUTDOWN]();
     expect(observed.closed).toBe(true);
+    expect(reportDiagnostic).not.toHaveBeenCalled();
     expect(observed.readBytes).toBeLessThan(size);
     response.destroy();
     expect((await config()).status).toBe(503);
@@ -221,18 +237,55 @@ describe('bounded static file delivery', () => {
     const response = await paused('deadline.js');
     await vi.waitFor(() => expect(observed.closed).toBe(true));
     expect(observed.readBytes).toBeLessThan(size);
+    expect(reportDiagnostic).not.toHaveBeenCalled();
     response.destroy();
     await vi.waitFor(async () => expect((await config()).status).toBe(200));
   });
 
-  it('returns 404 on a failed initial read without sending successful headers', async () => {
-    observeFile(path.join(root, 'index.html'), () => {
-      throw new Error('read failed');
-    });
-    const response = await fetch(url);
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: 'not found' });
-  });
+  it.each(['capture', 'throw', 'reject'])(
+    'reports an initial read failure through a non-throwing %s reporter',
+    async kind => {
+      reportDiagnostic.mockImplementation(() => {
+        if (kind === 'throw') throw new Error('reporter failed');
+        if (kind === 'reject') return Promise.reject(new Error('reporter failed'));
+      });
+      const observed = observeFile(path.join(root, 'index.html'), () => {
+        throw new Error('read failed');
+      });
+      const response = await fetch(url);
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: 'internal error' });
+      expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining('GET / failed: Error: read failed')
+      );
+      await vi.waitFor(() => expect(observed.closed).toBe(true));
+      expect((await config()).status).toBe(200);
+    }
+  );
+
+  it.each(['open', 'lstat', 'containment', 'root containment'] as const)(
+    'reports unexpected %s I/O failures without returning details to the client',
+    async operation => {
+      const failure = Object.assign(new Error('private filesystem detail'), { code: 'EIO' });
+      if (operation === 'containment' || operation === 'root containment') {
+        const original = fs.realpathSync;
+        vi.spyOn(fs, 'realpathSync').mockImplementation((...args) => {
+          if (args[0] === (operation === 'containment' ? path.join(root, 'index.html') : root))
+            throw failure;
+          return original(...args);
+        });
+      } else {
+        vi.spyOn(fs.promises, operation).mockRejectedValueOnce(failure);
+      }
+      const response = await fetch(url);
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: 'internal error' });
+      expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining('private filesystem detail')
+      );
+      expect((await config()).status).toBe(200);
+    }
+  );
 
   it('closes an opened file when its name is swapped to an escaping symlink', async () => {
     const target = path.join(root, 'index.html');
@@ -270,6 +323,9 @@ describe('bounded static file delivery', () => {
     const result = fetch(url + 'shrinking.js').then(response => response.arrayBuffer());
     await expect(result).rejects.toThrow();
     await vi.waitFor(() => expect(observed.closed).toBe(true));
+    expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('Static asset shortened during delivery.')
+    );
   });
 
   it('delivers the largest allowed asset completely with bounded descriptor reads', async () => {

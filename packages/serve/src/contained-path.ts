@@ -3,6 +3,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+/** Missing names and invalid path components are ordinary unavailable assets. */
+export function isUnavailablePathError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  return code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP' || code === 'ENAMETOOLONG';
+}
+
 /** Realpath the deepest existing ancestor, so a deleted file still resolves. */
 function realpathDeepestExisting(absolute: string): string | null {
   const missing: string[] = [];
@@ -11,7 +17,9 @@ function realpathDeepestExisting(absolute: string): string | null {
     try {
       const real = fs.realpathSync(current);
       return missing.length === 0 ? real : path.join(real, ...missing);
-    } catch {
+    } catch (error) {
+      if (!isUnavailablePathError(error)) throw error;
+      if ((error as NodeJS.ErrnoException).code === 'ELOOP') return null;
       const parent = path.dirname(current);
       if (parent === current) {
         return null;
@@ -33,7 +41,8 @@ export function containPath(root: string, candidate: string): string | null {
   let resolvedRoot: string;
   try {
     resolvedRoot = fs.realpathSync(root);
-  } catch {
+  } catch (error) {
+    if (!isUnavailablePathError(error)) throw error;
     return null;
   }
 

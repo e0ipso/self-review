@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as http from 'node:http';
 import { once } from 'node:events';
-import { containPath } from './contained-path';
+import { containPath, isUnavailablePathError } from './contained-path';
 import { SECURITY_HEADERS, sendError } from './http-transport';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -40,6 +40,10 @@ export async function serveStatic(
   try {
     decoded = decodeURIComponent(pathname);
   } catch {
+    sendError(res, 404, 'not found');
+    return;
+  }
+  if (decoded.includes('\0')) {
     sendError(res, 404, 'not found');
     return;
   }
@@ -108,10 +112,16 @@ export async function serveStatic(
         ...SECURITY_HEADERS,
       });
     }
-  } catch {
+  } catch (error) {
     // A failed stream must never end as a successful, truncated response.
-    if (signal.aborted || res.headersSent) res.destroy();
-    else sendError(res, 404, 'not found');
+    if (signal.aborted) res.destroy();
+    else if (isUnavailablePathError(error)) {
+      if (res.headersSent) res.destroy();
+      else sendError(res, 404, 'not found');
+    } else {
+      // The transport owns reporting and its generic 500 response.
+      throw error;
+    }
   } finally {
     options.signal?.removeEventListener('abort', abort);
     res.off('close', abort);

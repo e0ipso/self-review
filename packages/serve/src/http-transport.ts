@@ -181,7 +181,7 @@ export function readJsonBody(
   signal?: AbortSignal
 ): Promise<BodyResult> {
   const contentType = req.headers['content-type'] ?? '';
-  if (!contentType.toLowerCase().startsWith('application/json')) {
+  if (contentType.split(';', 1)[0].trim().toLowerCase() !== 'application/json') {
     return Promise.resolve({
       ok: false,
       status: 415,

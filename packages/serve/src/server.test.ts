@@ -506,6 +506,35 @@ describe('POST /api/expand-context', () => {
     expectNoCoreCall();
   });
 
+  it.each([
+    'application/jsonp',
+    'application/json-seq',
+    'application/json+custom',
+    'application/json garbage',
+  ])('refuses the different media type %s before reaching core', async contentType => {
+    const res = await postJson(
+      '/api/expand-context',
+      { filePath: 'src/index.ts', contextLines: 3 },
+      { headers: { 'content-type': contentType } }
+    );
+    expect(res.status).toBe(415);
+    expectNoCoreCall();
+  });
+
+  it.each([
+    'application/json; charset=utf-8',
+    'Application/JSON; Charset=UTF-8',
+    'application/json ; charset=utf-8',
+  ])('accepts the JSON media type with supported parameters: %s', async contentType => {
+    const res = await postJson(
+      '/api/expand-context',
+      { filePath: 'src/index.ts', contextLines: 3 },
+      { headers: { 'content-type': contentType } }
+    );
+    expect(res.status).toBe(200);
+    expect(operations.expandContext).toHaveBeenCalledOnce();
+  });
+
   it('rejects a body over the size cap with 413 before reaching core', async () => {
     const res = await postJson('/api/expand-context', {
       filePath: 'x'.repeat(1024 * 1024),
