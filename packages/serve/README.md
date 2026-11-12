@@ -225,10 +225,13 @@ Programmatic `createReviewServer` callers may supply a per-instance `reportDiagn
 callback for submission success, known publication refusals, transport failures and deadlines.
 `createPublicationOperations` also forwards its supplied reporter to Core publication diagnostics.
 An installed older Core may still send its own diagnostics to stderr if it ignores that option.
-`ReviewSubmission` also accepts it as an optional second constructor argument. Defaults retain the
-existing stderr messages, and the CLI supplies its diagnostic reporter explicitly. A throwing
-reporter cannot change a committed success, hide the underlying refusal, reopen completed admission
-or retry a write.
+`ReviewSubmission` also accepts it as an optional second constructor argument.
+`createServeLifecycle` and `completeReviewOnSubmit` accept `reportDiagnostic` for completion and
+shutdown-deadline messages; the CLI binds the same host reporter to its lifecycle. Defaults retain
+the existing stderr messages and argument shapes. Reporter throws, rejected promises and pending
+thenables are observational: they cannot change a committed success or interrupt exit code, delay
+connection closing or owned cleanup, reopen completed admission or retry a write. Synchronous
+reporter code must return control to the host; it cannot be preempted.
 
 Core 2.0.4 remains a supported installed peer. On that peer, startup prints diagnostics for the
 synchronous startup probe and Apply, local loading without signal support, and publication without
@@ -265,9 +268,18 @@ Only missing attachment files receive `404` and become null in the browser. Unau
 unsafe links and non-regular files receive `400`, oversized files receive `413`, and operational I/O
 failures receive `500`, preserving the useful read error.
 
+Request JSON is decoded as strict UTF-8 after the complete bounded body arrives. Invalid byte
+sequences receive the existing generic `400` `{"error":"body must be valid JSON"}` before review
+publication, Apply or other operation execution. Valid multibyte characters may span request chunks;
+encoded U+FFFD remains valid text. A leading UTF-8 BOM still receives the same refusal. Media type,
+byte caps and cancellation handling are unchanged.
+
 Nested review JSON is validated after attachment decoding and before it enters the session.
 Malformed containers, source kinds, anchors and optional metadata receive a recoverable `400`
-`{"error":"Invalid review state: ..."}`; publication still performs XML validation.
+`{"error":"Invalid review state: ..."}`; publication still performs XML validation. Each comment's
+`filePath` must exactly match its containing file's `path`, including the empty review-level path.
+This check also runs through the bundled pure validator when the installed peer is Core 2.0.4; its
+failures retain that peer's error class.
 
 The desktop application asks the same question with better options, offering to save on the way out.
 A browser will not let a page do that: `beforeunload` is a yes or no prompt whose wording belongs to

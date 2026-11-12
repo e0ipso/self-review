@@ -63,7 +63,13 @@ function validateState(value: unknown, requireCommentIds: boolean): void {
     );
     boolean(file.viewed, `${at}.viewed`);
     array(file.comments, `${at}.comments`).forEach((comment, index) =>
-      validateComment(comment, `${at}.comments[${index}]`, requireCommentIds, budget)
+      validateComment(
+        comment,
+        `${at}.comments[${index}]`,
+        file.path as string,
+        requireCommentIds,
+        budget
+      )
     );
   });
 }
@@ -71,12 +77,15 @@ function validateState(value: unknown, requireCommentIds: boolean): void {
 function validateComment(
   value: unknown,
   at: string,
+  ownerPath: string,
   requireId: boolean,
   budget: AttachmentBudget
 ): void {
   const comment = record(value, at);
   if (requireId || comment.id !== undefined) string(comment.id, `${at}.id`);
   for (const key of ['filePath', 'body', 'category']) string(comment[key], `${at}.${key}`);
+  if (comment.filePath !== ownerPath)
+    invalid(`${at}.filePath`, 'must match its containing file path');
   for (const key of ['author', 'remoteId']) optionalString(comment, key, at);
   optionalEnum(comment, 'severity', ['critical', 'major', 'minor', 'info'], at);
   optionalEnum(comment, 'confidence', ['high', 'medium', 'low'], at);

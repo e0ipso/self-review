@@ -1,6 +1,7 @@
 // One shutdown owner for startup, publication and signals. Publication is an
 // explicit event; a response status cannot prove that a file was committed.
 import type * as http from 'node:http';
+import { nonThrowingReporter } from './diagnostic-reporter';
 import { REQUEST_SHUTDOWN, type ManagedReviewServer } from './request-admission';
 
 export const REVIEW_PUBLISHED = 'review-published';
@@ -15,6 +16,8 @@ interface SignalSource {
   off(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
 }
 export interface LifecycleOptions {
+  /** Observational only. Throws and rejected or pending promises never delay cleanup. */
+  reportDiagnostic?: (message: string) => void;
   exit?: (code: number) => void;
   scheduleDeadline?: ScheduleDeadline;
   signals?: SignalSource;
@@ -25,6 +28,7 @@ export interface CompletionOptions extends LifecycleOptions {
 
 export function createServeLifecycle(options: LifecycleOptions = {}) {
   const { exit = process.exit, scheduleDeadline: schedule = scheduleDeadline, signals } = options;
+  const report = nonThrowingReporter(options.reportDiagnostic);
   const controller = new AbortController();
   const pending = new Set<Promise<unknown>>();
   let server: http.Server | undefined;
@@ -81,7 +85,7 @@ export function createServeLifecycle(options: LifecycleOptions = {}) {
     // Cancellation never rolls back a publication that has already committed.
     controller.abort(new Error('Review server is stopping.'));
     cancelDeadline = schedule(() => {
-      console.error(
+      report(
         '[serve] Shutdown deadline reached; closing remaining connections and waiting for owned work.'
       );
       server?.closeAllConnections();
@@ -107,7 +111,7 @@ export function createServeLifecycle(options: LifecycleOptions = {}) {
     };
     const complete = () => {
       cleanup();
-      console.error('[serve] Review complete; stopping.');
+      report('[serve] Review complete; stopping.');
       // Older servers hand ownership over through the event instead of the symbol.
       if (drain && !(server as Partial<ManagedReviewServer> | undefined)?.[REQUEST_SHUTDOWN])
         track(drain());

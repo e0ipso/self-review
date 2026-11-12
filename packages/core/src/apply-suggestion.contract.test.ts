@@ -333,3 +333,37 @@ it('refuses an unpaired-surrogate original instead of matching its lossy UTF-8 e
   });
   expect(fs.readFileSync(target, 'utf8')).toBe('\uFFFD\n');
 });
+
+for (const variant of variants) {
+  describe(variant.name + ' proposal Unicode', () => {
+    it.each([
+      ['a lone high surrogate', String.fromCharCode(0xd800)],
+      ['a lone low surrogate', String.fromCharCode(0xdc00)],
+      ['an interior lone surrogate', 'left' + String.fromCharCode(0xd800) + 'right'],
+    ])('refuses %s without repairing or replacing the file', async (_name, proposed) => {
+      const target = path.join(root, 'file');
+      fs.writeFileSync(target, 'old\n');
+      const before = fs.statSync(target);
+      expect(await variant.apply(request('old', proposed))).toMatchObject({
+        status: 'refused',
+        reason: 'write-failed',
+      });
+      expect(fs.readFileSync(target, 'utf8')).toBe('old\n');
+      expect(fs.statSync(target).ino).toBe(before.ino);
+      expect(fs.readdirSync(root)).toEqual(['file']);
+    });
+
+    it.each([
+      ['astral and combining text', 'caf' + String.fromCodePoint(0x65, 0x301, 0x20, 0x1f600)],
+      ['an explicit replacement character', String.fromCodePoint(0xfffd)],
+      ['a literal source-code escape', String.fromCharCode(92) + 'ud800'],
+      ['a supported NUL code unit', String.fromCharCode(0)],
+    ])('preserves %s byte for byte', async (_name, proposed) => {
+      const target = path.join(root, 'file');
+      fs.writeFileSync(target, 'old\n');
+      expect(await variant.apply(request('old', proposed))).toMatchObject({ status: 'applied' });
+      expect(fs.readFileSync(target)).toEqual(Buffer.from(proposed + '\n'));
+      expect(fs.readdirSync(root)).toEqual(['file']);
+    });
+  });
+}

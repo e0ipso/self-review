@@ -2,6 +2,7 @@
 import { isUtf8 } from 'node:buffer';
 import type { Suggestion } from './types';
 import type { ApplyRefusalReason } from './apply-suggestion';
+import { isWellFormedUnicode } from './unicode-text';
 
 export interface PreparedSuggestion {
   bytes: Buffer;
@@ -79,6 +80,11 @@ export function prepareSuggestionContent(
   const body = proposalBody(suggestion.proposedCode);
   if (body.length > maxOutputBytes || Buffer.byteLength(body) > maxOutputBytes)
     return outputBudgetRefusal(maxOutputBytes);
+  if (!isWellFormedUnicode(body))
+    return {
+      reason: 'write-failed',
+      detail: 'The proposed code contains an unpaired Unicode surrogate, so nothing was written.',
+    };
   const proposed = Buffer.from(body);
   let extraCrs = 0;
   if (hasReplacement && anchor.crlf) {

@@ -1,6 +1,7 @@
 // Transport-neutral request structure. Anchor usability belongs to the engine,
 // which returns typed refusals before reading or changing reviewed source.
 import type { SuggestionApplyRequest } from './types';
+import { isWellFormedUnicode } from './unicode-text';
 
 export const MAX_CONTEXT_LINES = 99_999;
 export type RequestDecodeResult<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -30,5 +31,7 @@ export function decodeSuggestionApplyRequest(
     if (typeof value.suggestion[key] !== 'string')
       return { ok: false, error: `suggestion.${key} must be a string` };
   }
+  if (!isWellFormedUnicode(value.suggestion.proposedCode as string))
+    return { ok: false, error: 'suggestion.proposedCode must be well-formed Unicode text' };
   return { ok: true, value: value as unknown as SuggestionApplyRequest };
 }

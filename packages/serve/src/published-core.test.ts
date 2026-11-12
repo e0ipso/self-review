@@ -13,6 +13,8 @@ import { validateCompatibleReviewState } from './core-compatibility';
 import { ReviewSubmission } from './review-submission';
 import { createRequestValidation } from './validate';
 import type { ReviewState } from '@self-review/core';
+import { createBoundReviewServer, listenLoopback } from './bound-server';
+import { REQUEST_SHUTDOWN } from './request-admission';
 
 type Host = {
   core: typeof currentCore;
@@ -22,6 +24,9 @@ type Host = {
   validateCompatibleReviewState: typeof validateCompatibleReviewState;
   ReviewSubmission: typeof ReviewSubmission;
   createRequestValidation: typeof createRequestValidation;
+  createBoundReviewServer: typeof createBoundReviewServer;
+  listenLoopback: typeof listenLoopback;
+  REQUEST_SHUTDOWN: typeof REQUEST_SHUTDOWN;
 };
 let directory: string;
 let previous: Host;
@@ -33,6 +38,9 @@ const current: Host = {
   validateCompatibleReviewState,
   ReviewSubmission,
   createRequestValidation,
+  createBoundReviewServer,
+  listenLoopback,
+  REQUEST_SHUTDOWN,
 };
 
 beforeAll(async () => {
@@ -59,6 +67,8 @@ beforeAll(async () => {
         export { validateCompatibleReviewState } from './core-compatibility';
         export { ReviewSubmission } from './review-submission';
         export { createRequestValidation } from './validate';
+        export { createBoundReviewServer, listenLoopback } from './bound-server';
+        export { REQUEST_SHUTDOWN } from './request-admission';
       `,
       resolveDir: sourceDir,
     },
@@ -158,6 +168,70 @@ for (const peer of ['published 2.0.4', 'current source'] as const) {
       expect(fs.readdirSync(root)).toEqual(['a.txt']);
       session.diffData = null;
       expect(() => operations.publishReview(state)).toThrow(host.core.ReviewPublishError);
+    });
+
+    it('rejects inconsistent comment ownership with the installed error class before publication', async () => {
+      const { host, root, session, output, state } = fixture();
+      const malformed: ReviewState = {
+        ...state,
+        files: [
+          {
+            path: 'a.txt',
+            changeType: 'modified',
+            viewed: false,
+            comments: [
+              {
+                id: 'c',
+                filePath: 'b.txt',
+                body: 'feedback',
+                category: 'bug',
+                lineRange: null,
+                suggestion: null,
+              },
+            ],
+          },
+        ],
+      };
+      expect(() => host.validateCompatibleReviewState(malformed)).toThrow(host.core.ReviewXmlError);
+      expect(() => host.validateCompatibleReviewState(malformed)).toThrowError(
+        expect.objectContaining({ code: 'invalid-state' })
+      );
+      expect(
+        host.createRequestValidation(host.installedServeEngine).parseReviewStateBody(malformed)
+      ).toEqual({
+        ok: false,
+        error:
+          'Invalid review state: review.files[0].comments[0].filePath must match its containing file path',
+      });
+      const operations = host.createPublicationOperations(session, output);
+      const publish = vi.spyOn(operations, 'publishReview');
+      const server = host.createBoundReviewServer({
+        operations,
+        publication: operations,
+        capability: 'key',
+      });
+      try {
+        const { url } = await host.listenLoopback(server);
+        const response = await fetch(url + 'api/review', {
+          method: 'POST',
+          headers: { authorization: 'Bearer key', 'content-type': 'application/json' },
+          body: JSON.stringify(malformed),
+        });
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({
+          error:
+            'Invalid review state: review.files[0].comments[0].filePath must match its containing file path',
+        });
+        expect(publish).not.toHaveBeenCalled();
+      } finally {
+        const drain = server[host.REQUEST_SHUTDOWN]();
+        server.closeAllConnections();
+        await new Promise<void>(resolve => server.close(() => resolve()));
+        await drain;
+      }
+      expect(session.reviewState).toBeNull();
+      expect(fs.readdirSync(root)).toEqual(['a.txt']);
+      expect(malformed.files[0].comments[0].filePath).toBe('b.txt');
     });
 
     it('preserves source aliases, real Apply outcomes, publication and resumed attachment origins', async () => {

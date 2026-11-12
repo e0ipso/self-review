@@ -38,6 +38,38 @@ describe('transport-neutral request structure', () => {
   });
 });
 
+describe('proposal Unicode admission', () => {
+  it.each([
+    ['a lone high surrogate', String.fromCharCode(0xd800)],
+    ['a lone low surrogate', String.fromCharCode(0xdc00)],
+    ['an interior lone surrogate', 'left' + String.fromCharCode(0xd800) + 'right'],
+  ])('rejects JSON-escaped %s before execution', (_name, proposedCode) => {
+    const body = JSON.parse(
+      JSON.stringify({ ...request, suggestion: { originalCode: 'old', proposedCode } })
+    );
+    expect(decodeSuggestionApplyRequest(body).ok).toBe(false);
+  });
+
+  it.each([
+    ['astral and combining text', 'caf' + String.fromCodePoint(0x65, 0x301, 0x20, 0x1f600)],
+    ['an explicit replacement character', String.fromCodePoint(0xfffd)],
+    ['a literal source-code escape', String.fromCharCode(92) + 'ud800'],
+    ['a supported NUL code unit', String.fromCharCode(0)],
+  ])('retains %s and input aliases', (_name, proposedCode) => {
+    const body = {
+      ...request,
+      suggestion: { originalCode: 'old', proposedCode },
+      extension: { retained: true },
+    };
+    const decoded = decodeSuggestionApplyRequest(body);
+    expect(decoded).toEqual({ ok: true, value: body });
+    if (decoded.ok) {
+      expect(decoded.value).toBe(body);
+      expect(decoded.value.suggestion).toBe(body.suggestion);
+    }
+  });
+});
+
 function session() {
   const state = createReviewSession();
   commitDiffData(
