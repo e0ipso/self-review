@@ -86,7 +86,8 @@ export async function initializeSession(
     review.guideData = await loadGuide(
       desktop.output.path,
       config,
-      payload.files.map(file => file.newPath || file.oldPath)
+      payload.files.map(file => file.newPath || file.oldPath),
+      { cwd, reportDiagnostic: message => console.error(message) }
     );
   }
   signal.throwIfAborted();

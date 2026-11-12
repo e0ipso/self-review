@@ -62,7 +62,8 @@ export function registerRemoteOpenHandler(
             ? await loadGuide(
                 desktop.output.path,
                 config,
-                payload.files.map(file => file.newPath || file.oldPath)
+                payload.files.map(file => file.newPath || file.oldPath),
+                { cwd: desktop.cwd, reportDiagnostic: message => console.error(message) }
               )
             : null;
           current();

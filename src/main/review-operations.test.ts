@@ -1,3 +1,11 @@
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { IpcMainInvokeEvent } from 'electron';
+import { CommandCancelledError } from '../../packages/core/src/forge-provider';
+import { startDirectoryReview } from './directory-review';
+import { DirectorySelection } from './directory-selection';
+import { ReviewTransition } from './review-transition';
 import { expect, it, vi } from 'vitest';
 import { createReviewSession } from '../../packages/core/src/review-handlers';
 import { bindDesktopReviewOperations } from './review-operations';
@@ -47,4 +55,37 @@ it('binds current snapshot ownership and refuses mutations while publication own
     operations.submitReviewState({ timestamp: '', source: { type: 'welcome' }, files: [] })
   ).toThrow(/finishing/);
   expect(session.reviewState).toBeNull();
+});
+
+it('passes a directory operation cancellation through its bound engine before source loading', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-cancel-scan-'));
+  try {
+    await writeFile(join(root, 'a.ts'), 'unchanged\n');
+    const session = createReviewSession();
+    session.diffData = { source: { type: 'welcome' }, files: [] };
+    const transition = new ReviewTransition(session);
+    const capture = () => () => {};
+    const selection = new DirectorySelection(transition, capture, async () => root);
+    const event = {} as IpcMainInvokeEvent;
+    await selection.choose(event);
+    const boundary = { capture } as unknown as ReturnType<typeof createIpcBoundary>;
+    const abort = new AbortController();
+    abort.abort(new Error('window replaced'));
+    await expect(
+      startDirectoryReview(
+        event,
+        root,
+        abort.signal,
+        bindDesktopReviewOperations(session),
+        boundary,
+        transition,
+        selection,
+        { confirmPayload: vi.fn(async () => true) }
+      )
+    ).rejects.toBeInstanceOf(CommandCancelledError);
+    expect(session.diffData.source.type).toBe('welcome');
+    expect(session.reviewedPaths.size).toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

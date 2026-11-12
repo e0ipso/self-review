@@ -59,7 +59,8 @@ export function bindDesktopReviewOperations(session: ReviewSession, canMutate = 
       writable();
       return expandContext(session, request, undefined, { signal, timeoutMs: 30_000 });
     },
-    prepareDirectoryReview: (path: string) => prepareDirectoryReview(session, path),
+    prepareDirectoryReview: (path: string, signal?: AbortSignal) =>
+      prepareDirectoryReview(session, path, { signal }),
     commitReviewStart: (payload: DiffLoadPayload, identity: ReviewSourceIdentity) => {
       writable();
       return commitReviewStart(session, payload, identity);

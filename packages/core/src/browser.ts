@@ -1,5 +1,5 @@
 // @self-review/core — Browser-safe subset (no Node.js APIs)
-// Internal: aliased by the renderer build; everything here must run with no Node globals.
+// Explicit source entry for browser consumers; everything here must run with no Node globals.
 
 // Types
 export type {

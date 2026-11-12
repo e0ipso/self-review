@@ -24,7 +24,7 @@ import type {
 } from '@self-review/types';
 import { useReviewStateOperations } from '../hooks/useReviewState';
 import { useReviewHost } from '../hooks/useReviewHost';
-import { useConfig } from './ConfigContext';
+import { useConfiguration } from './ConfigContext';
 import { useAdapter } from './ReviewAdapterContext';
 import type { ReviewAdapter } from '../adapter';
 import {
@@ -218,7 +218,7 @@ function ReviewSessionProvider({
     createReviewSessionStore(createReviewSession(initialFiles, initialSource))
   );
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  const { config } = useConfig();
+  const { config } = useConfiguration();
   const notifyIdentity = useContext(ReviewLifecycleContext);
   useLayoutEffect(() => {
     if (state.identity && !isPlaceholderSource(state.diffSource)) notifyIdentity?.(state.identity);
@@ -360,7 +360,7 @@ export function useOptionalSnapshotKey() {
 /** The diff stream does not subscribe to comment mutations. */
 export function useDiffReview() {
   const all = useSessionSelection(state => state.allDiffFiles);
-  const { config } = useConfig();
+  const { config } = useConfiguration();
   const diffFiles = useMemo(
     () => (config.showUntracked ? all : all.filter(file => !file.isUntracked)),
     [all, config.showUntracked]

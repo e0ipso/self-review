@@ -23,7 +23,7 @@ export async function startDirectoryReview(
   const opening = transition.begin();
   try {
     const authorizedPath = await selection.authorize(event, directoryPath);
-    const { payload, identity } = await review.prepareDirectoryReview(authorizedPath);
+    const { payload, identity } = await review.prepareDirectoryReview(authorizedPath, signal);
     current();
     opening.assertCurrent();
     signal.throwIfAborted();
