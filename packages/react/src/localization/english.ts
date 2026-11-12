@@ -1,6 +1,13 @@
 import type { LocalizedMessage } from './LocalizationContext';
 
 export const ENGLISH = {
+  'The host rejected the request before applying the proposal.':
+    'The host rejected the request before applying the proposal.',
+  'The apply outcome is unknown. Inspect the destination file before allowing another attempt. Nothing is retried automatically.':
+    'The apply outcome is unknown. Inspect the destination file before allowing another attempt. Nothing is retried automatically.',
+  'I inspected the destination file and confirmed this proposal was not applied.':
+    'I inspected the destination file and confirmed this proposal was not applied.',
+  'Allow a separate retry': 'Allow a separate retry',
   'Suggested change': 'Suggested change',
   'this review host cannot load file content on demand':
     'this review host cannot load file content on demand',

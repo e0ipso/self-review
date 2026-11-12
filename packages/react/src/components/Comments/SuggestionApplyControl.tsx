@@ -4,6 +4,7 @@ import type { LineRange, Suggestion, SuggestionApplyOutcome } from '@self-review
 import { Check, CircleAlert, FolderOpen, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAdapter } from '../../context/ReviewAdapterContext';
+import { useApplyOperation } from './apply-operation';
 import { useOptionalApplySession } from '../../context/ReviewContext';
 
 export interface SuggestionApplyControlProps {
@@ -53,11 +54,14 @@ function OwnedSuggestionApplyControl({
   const review = useOptionalApplySession();
   const applySuggestion = adapter?.applySuggestion;
   const chooseApplyDestination = adapter?.chooseApplyDestination;
-  const [outcome, setOutcome] = useState<SuggestionApplyOutcome | null>(null);
-  const [isApplying, setIsApplying] = useState(false);
+  const operation = useApplyOperation(JSON.stringify([filePath, lineRange, suggestion]));
+  const { outcome, pending: isApplying, unknown } = operation.state;
+  const [inspected, setInspected] = useState(false);
+  const setOutcome = (outcome: SuggestionApplyOutcome) =>
+    operation.write({ pending: false, outcome, unknown: false });
 
   const mounted = useRef(false);
-  const pending = useRef(false);
+
   useLayoutEffect(() => {
     mounted.current = true;
     return () => {
@@ -100,38 +104,36 @@ function OwnedSuggestionApplyControl({
     try {
       if (!current()) return;
       const result = await applySuggestion({ filePath, lineRange, suggestion });
-      if (current()) setOutcome(result);
-    } catch {
-      if (!current()) return;
-      // A throw means the host failed to answer, which is a different
-      // thing from the engine refusing. Report it in the same shape, so
-      // the reviewer reads one vocabulary, and leak nothing about why.
-      setOutcome({
-        status: 'refused',
-        filePath,
-        reason: 'host-unavailable',
-        detail: t('The apply request could not be completed.'),
-      });
+      if (review?.isCurrentSession?.() ?? mounted.current) setOutcome(result);
+    } catch (error) {
+      // No answer is evidence of neither refusal nor rollback. The host may have renamed.
+      if (!(review?.isCurrentSession?.() ?? mounted.current)) return;
+      if (error && typeof error === 'object' && 'uncertain' in error && error.uncertain === false) {
+        setOutcome({
+          status: 'refused',
+          filePath,
+          reason: 'request-rejected',
+          detail: t('The host rejected the request before applying the proposal.'),
+        });
+      } else operation.write({ pending: false, outcome: null, unknown: true });
     }
   };
 
   const handleApply = async () => {
-    if (pending.current || !current()) return;
-    pending.current = true;
-    setIsApplying(true);
+    if (operation.read().pending || operation.read().unknown || !current()) return;
+    operation.write({ ...operation.read(), pending: true });
     try {
       await runApply();
     } finally {
-      pending.current = false;
-      if (current()) setIsApplying(false);
+      if (review?.isCurrentSession?.() ?? mounted.current)
+        operation.write({ ...operation.read(), pending: false });
     }
   };
 
   const handleChooseAndApply = async () => {
     if (!chooseApplyDestination) return;
-    if (pending.current || !current()) return;
-    pending.current = true;
-    setIsApplying(true);
+    if (operation.read().pending || operation.read().unknown || !current()) return;
+    operation.write({ ...operation.read(), pending: true });
     try {
       const chosen = await chooseApplyDestination();
       if (!current()) return;
@@ -156,8 +158,8 @@ function OwnedSuggestionApplyControl({
         detail: t('The destination could not be chosen.'),
       });
     } finally {
-      pending.current = false;
-      if (current()) setIsApplying(false);
+      if (review?.isCurrentSession?.() ?? mounted.current)
+        operation.write({ ...operation.read(), pending: false });
     }
   };
 
@@ -166,7 +168,34 @@ function OwnedSuggestionApplyControl({
       className='flex items-center justify-between gap-3 px-3 py-1.5 border-t border-border bg-muted/40 font-sans text-[11px]'
       data-testid='suggestion-apply'
     >
-      {outcome ? (
+      {unknown ? (
+        <div role='status' data-testid='suggestion-apply-outcome' data-status='unknown'>
+          <p>
+            {t(
+              'The apply outcome is unknown. Inspect the destination file before allowing another attempt. Nothing is retried automatically.'
+            )}
+          </p>
+          <label>
+            <input
+              type='checkbox'
+              checked={inspected}
+              onChange={event => setInspected(event.target.checked)}
+            />
+            {t('I inspected the destination file and confirmed this proposal was not applied.')}
+          </label>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={!inspected}
+            onClick={() => {
+              operation.write({ pending: false, outcome: null, unknown: false });
+              setInspected(false);
+            }}
+          >
+            {t('Allow a separate retry')}
+          </Button>
+        </div>
+      ) : outcome ? (
         <span
           className={`flex items-start gap-1.5 ${
             applied
@@ -200,7 +229,7 @@ function OwnedSuggestionApplyControl({
             : t('Write the proposal into the working file.')}
         </span>
       )}
-      {!applied && (
+      {!applied && !unknown && (
         <Button
           variant='outline'
           size='sm'

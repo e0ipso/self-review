@@ -13,7 +13,7 @@ function fixture() {
   };
   const mainFrame = {};
   const sender = { mainFrame, isDestroyed: () => false, send: vi.fn() };
-  const window = { isDestroyed: () => false, webContents: sender } as unknown as BrowserWindow;
+  let window = { isDestroyed: () => false, webContents: sender } as unknown as BrowserWindow;
   const boundary = createIpcBoundary(
     { on: register, handle: register } as unknown as IpcMain,
     () => window
@@ -38,10 +38,21 @@ function fixture() {
     publish,
     shutdown,
     reportSaveFailure,
-    invoke: (channel: string) => handlers[channel]({ sender, senderFrame: mainFrame }),
+    replacePeer: () => {
+      window = {
+        isDestroyed: () => false,
+        webContents: { isDestroyed: () => false },
+      } as unknown as BrowserWindow;
+    },
+    invoke: (channel: string, ...args: unknown[]) =>
+      handlers[channel]({ sender, senderFrame: mainFrame }, ...args),
   };
 }
-const state: ReviewState = { timestamp: 'now', source: { type: 'welcome' }, files: [] };
+const state: ReviewState = {
+  timestamp: 'now',
+  source: { type: 'directory', sourcePath: '/review' },
+  files: [],
+};
 it('waits for Apply before saving, ignores competing discard/save, and supplies owned cancellation', async () => {
   const f = fixture();
   f.desktop.review.reviewState = state;
@@ -100,4 +111,84 @@ it('reports missing state and publication failure without exiting, then accepts 
   f.desktop.review.reviewState = state;
   f.invoke(IPC.APP_SAVE_AND_QUIT);
   await vi.waitFor(() => expect(f.shutdown).toHaveBeenCalledOnce());
+});
+
+it('acknowledges disk publication before permitting close and deduplicates overlapping saves', async () => {
+  const f = fixture();
+  f.desktop.review.diffData = { files: [], source: state.source };
+  let finish!: () => void;
+  f.publish.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        finish = resolve;
+      })
+  );
+  const saving = f.invoke(IPC.REVIEW_SAVE, state) as Promise<
+    import('../shared/types').ReviewSaveResult
+  >;
+  await vi.waitFor(() => expect(f.publish).toHaveBeenCalledOnce());
+  expect(await f.invoke(IPC.REVIEW_SAVE, state)).toEqual({ status: 'busy' });
+  f.invoke(IPC.APP_DISCARD_AND_QUIT);
+  expect(f.controller.closeRequested(true)).toBe('ignore');
+  expect(f.shutdown).not.toHaveBeenCalled();
+  finish();
+  const result = await saving;
+  expect(result.status).toBe('saved');
+  expect(f.desktop.operations.finishing).toBe(true);
+  expect(f.shutdown).not.toHaveBeenCalled();
+  expect(f.invoke(IPC.REVIEW_SAVE_STATUS)).toEqual(result);
+  if (result.status !== 'saved') throw new Error('expected receipt');
+  f.invoke(IPC.REVIEW_SAVE_RECEIVED, 'stale');
+  expect(f.shutdown).not.toHaveBeenCalled();
+  f.invoke(IPC.REVIEW_SAVE_RECEIVED, result.receipt);
+  await vi.waitFor(() => expect(f.shutdown).toHaveBeenCalledExactlyOnceWith(0, 'saved'));
+  expect(f.controller.mayQuit).toBe(true);
+});
+
+it('returns a known failure with retained renderer state and accepts a fresh snapshot', async () => {
+  const f = fixture();
+  f.desktop.review.diffData = { files: [], source: state.source };
+  f.publish.mockRejectedValueOnce(new Error('disk full'));
+  expect(await f.invoke(IPC.REVIEW_SAVE, state)).toMatchObject({
+    status: 'failed',
+    message: expect.stringContaining('disk full'),
+  });
+  expect(f.controller.phase).toBe('reviewing');
+  expect(f.desktop.operations.finishing).toBe(false);
+  expect(f.shutdown).not.toHaveBeenCalled();
+  expect(await f.invoke(IPC.REVIEW_SAVE, state)).toMatchObject({ status: 'saved' });
+  expect(f.publish).toHaveBeenCalledTimes(2);
+});
+
+it('refuses missing and stale state without writing', async () => {
+  const f = fixture();
+  expect(await f.invoke(IPC.REVIEW_SAVE, state)).toMatchObject({ status: 'failed' });
+  f.desktop.review.diffData = { files: [], source: { type: 'directory', sourcePath: '/another' } };
+  expect(await f.invoke(IPC.REVIEW_SAVE, state)).toMatchObject({ status: 'failed' });
+  f.desktop.review.diffData = { files: [], source: { type: 'welcome' } };
+  expect(await f.invoke(IPC.REVIEW_SAVE, { ...state, source: { type: 'welcome' } })).toMatchObject({
+    status: 'failed',
+  });
+  expect(f.publish).not.toHaveBeenCalled();
+});
+
+it('keeps a committed result after cancellation and never converts a replaced peer into a refusal', async () => {
+  const f = fixture();
+  f.desktop.review.diffData = { files: [], source: state.source };
+  let finish!: () => void;
+  f.publish.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        finish = resolve;
+      })
+  );
+  const saving = f.invoke(IPC.REVIEW_SAVE, state) as Promise<unknown>;
+  await vi.waitFor(() => expect(f.publish).toHaveBeenCalledOnce());
+  const disposal = f.desktop.operations.dispose('signal');
+  finish();
+  expect(await saving).toMatchObject({ status: 'saved' });
+  await disposal;
+  f.replacePeer();
+  expect(() => f.invoke(IPC.REVIEW_SAVE_STATUS)).toThrow(/current review window/);
+  expect(f.shutdown).not.toHaveBeenCalled();
 });

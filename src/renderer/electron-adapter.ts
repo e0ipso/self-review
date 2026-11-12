@@ -9,6 +9,9 @@ type ReviewAPI = Pick<
   | 'onResumeLoad'
   | 'requestResumeData'
   | 'submitReview'
+  | 'handoffReview'
+  | 'saveReview'
+  | 'acknowledgeReviewSave'
   | 'expandContext'
   | 'loadFileContent'
   | 'readAttachment'
@@ -79,6 +82,24 @@ export function createElectronAdapter(api: ReviewAPI, requests = new ElectronReq
       };
     },
     submitReview: state => api.submitReview(state),
+    ...(api.handoffReview && {
+      handoffReview: (state: import('../shared/types').ReviewState) =>
+        requests.invoke(() => api.handoffReview!(state)),
+    }),
+    ...(api.saveReview &&
+      api.acknowledgeReviewSave && {
+        publishReview: async (state: import('../shared/types').ReviewState) => {
+          const result = await requests.invoke(() => api.saveReview!(state), true);
+          if (result.status === 'failed')
+            throw Object.assign(new Error(result.message), {
+              uncertain: false,
+              details: [result.detail],
+            });
+          if (result.status === 'busy')
+            throw Object.assign(new Error('Another save is in progress.'), { uncertain: true });
+          api.acknowledgeReviewSave!(result.receipt);
+        },
+      }),
     expandContext: request => requests.invoke(() => api.expandContext(request)),
     loadFileContent: path => requests.invoke(() => api.loadFileContent(path)),
     readAttachment: path => requests.invoke(() => api.readAttachment(path)),

@@ -314,7 +314,7 @@ function ReviewApp({ capability }: AppProps) {
     setStatus('submitting');
     setFailure(null);
     try {
-      await adapter.submitReview?.(state);
+      await (adapter.publishReview ?? adapter.submitReview)?.(state);
       submissionPending.current = false;
       setStatus('submitted');
     } catch (error) {

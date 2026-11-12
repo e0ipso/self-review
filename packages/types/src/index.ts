@@ -533,3 +533,17 @@ export type ApplyDestinationOutcome =
   | ApplyDestinationChosen
   | ApplyDestinationCancelled
   | ApplyDestinationRejected;
+
+/** Optional desktop publication protocol. Success is sent before the caller acknowledges receipt
+ * and allows shutdown. A rejection is not a promise that publication did not commit.
+ */
+export type ReviewSaveResult =
+  | { status: 'saved'; receipt: string }
+  | { status: 'failed'; message: string; detail: string }
+  | { status: 'busy' };
+
+/** Resolved once by the host, shared by native and renderer presentation. */
+export interface ApplicationLocale {
+  locale: string;
+  direction: 'ltr' | 'rtl';
+}

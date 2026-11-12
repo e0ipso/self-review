@@ -99,7 +99,11 @@ export class DesktopOperations {
 
   /** Reserve completion admission even when reads are full. Apply settles before save/discard;
    * reads are cancelled and drained by shutdown after the decision. Explicit discard cancels Apply. */
-  complete<T>(run: (signal: AbortSignal) => Promise<T>, cancelApply = false): Promise<T> {
+  complete<T>(
+    run: (signal: AbortSignal) => Promise<T>,
+    cancelApply = false,
+    retainCompletion?: () => boolean
+  ): Promise<T> {
     try {
       this.signal.throwIfAborted();
       this.window.signal.throwIfAborted();
@@ -117,9 +121,14 @@ export class DesktopOperations {
         signal.throwIfAborted();
         return await run(signal);
       } finally {
-        this.completing = false;
+        this.completing = retainCompletion?.() ?? false;
       }
     });
+  }
+
+  /** Receipt confirmation happens after the publication operation settled, before shutdown drains. */
+  releaseCompletion(): void {
+    this.completing = false;
   }
 
   dispose(reason: string, timeoutMs = 10_000): Promise<void> {

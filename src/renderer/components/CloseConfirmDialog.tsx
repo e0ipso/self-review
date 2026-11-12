@@ -16,7 +16,13 @@ import { useSaveReview } from '../useSaveReview';
 
 type CloseConfirmDialogAPI = Pick<
   ElectronAPI,
-  'onCloseRequested' | 'discardAndQuit' | 'submitReview' | 'saveAndQuit'
+  | 'onCloseRequested'
+  | 'discardAndQuit'
+  | 'submitReview'
+  | 'saveAndQuit'
+  | 'saveReview'
+  | 'acknowledgeReviewSave'
+  | 'onSaveFailed'
 >;
 
 export default function CloseConfirmDialog({

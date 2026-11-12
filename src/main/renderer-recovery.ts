@@ -36,6 +36,13 @@ export class RendererRecovery {
     this.generation++;
   }
 
+  /** Native publication recovery must still belong to this confirmed failure when it answers. */
+  captureFailure(): (() => boolean) | null {
+    if (!this.unavailable || !this.effects.isCurrent()) return null;
+    const generation = this.generation;
+    return () => this.unavailable && this.effects.isCurrent() && this.generation === generation;
+  }
+
   requestClose(): boolean {
     if (!this.failure || this.disposed || !this.effects.isCurrent()) return false;
     if (this.prompt) return true;

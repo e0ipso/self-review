@@ -1,5 +1,6 @@
 // The one close/quit/save state machine, free of Electron so tests can drive it directly.
 
+import { createDesktopLocalization, type DesktopLocalization } from '../shared/localization';
 import { ReviewPublishError } from '../../packages/core/src/review-publisher';
 import type { ReviewPublishErrorCode } from '../../packages/core/src/review-publisher';
 import type { ReviewState } from '../shared/types';
@@ -73,6 +74,7 @@ export interface SaveAndQuitDeps {
   reportFailure: (failure: SaveFailure) => Promise<void> | void;
   /** Called only after the document is on disk. */
   quit: () => void;
+  messages?: DesktopLocalization;
 }
 
 export type SaveAndQuitOutcome = 'quit' | 'failed' | 'busy';
@@ -80,6 +82,7 @@ export type SaveAndQuitOutcome = 'quit' | 'failed' | 'busy';
 /** A missing pushed state is a failure that writes nothing, never an empty review. Any failure returns to `reviewing`. */
 export async function saveAndQuit(deps: SaveAndQuitDeps): Promise<SaveAndQuitOutcome> {
   const { controller } = deps;
+  const messages = deps.messages ?? createDesktopLocalization();
   if (!controller.beginSave()) return 'busy';
 
   const state = deps.takeState();
@@ -87,8 +90,10 @@ export async function saveAndQuit(deps: SaveAndQuitDeps): Promise<SaveAndQuitOut
     controller.saveFailed();
     await deps.reportFailure({
       code: 'no-review-state',
-      message: 'The review window did not hand over its review state, so nothing was written.',
-      detail: 'Code: no-review-state\n\nThe review is still open. Try saving again.',
+      message: messages.t(
+        'The review window did not hand over its review state, so nothing was written.'
+      ),
+      detail: `Code: no-review-state\n\n${messages.t('The review is still open. Try saving again.')}`,
     });
     return 'failed';
   }
@@ -97,7 +102,7 @@ export async function saveAndQuit(deps: SaveAndQuitDeps): Promise<SaveAndQuitOut
   try {
     await deps.publish(state);
   } catch (error) {
-    failure = describeSaveFailure(error, null);
+    failure = describeSaveFailure(error, null, messages);
   }
 
   if (failure) {
@@ -130,20 +135,24 @@ const NEXT_STEP: Record<SaveFailureCode, string> = {
 };
 
 /** `outputPath` names the file when the error carries no path of its own. */
-export function describeSaveFailure(error: unknown, outputPath: string | null): SaveFailure {
+export function describeSaveFailure(
+  error: unknown,
+  outputPath: string | null,
+  messages = createDesktopLocalization()
+): SaveFailure {
   if (error instanceof ReviewPublishError) {
     const lines = [`Code: ${error.code}`, `Path: ${error.path}`];
     if (error.details.length > 0) lines.push('', ...error.details);
-    lines.push('', NEXT_STEP[error.code]);
+    lines.push('', messages.t(NEXT_STEP[error.code]));
     return { code: error.code, message: error.message, detail: lines.join('\n') };
   }
   const message = error instanceof Error ? error.message : String(error);
   const lines = ['Code: io-error'];
   if (outputPath) lines.push(`Path: ${outputPath}`);
-  lines.push('', NEXT_STEP['io-error']);
+  lines.push('', messages.t(NEXT_STEP['io-error']));
   return {
     code: 'io-error',
-    message: `Could not save the review: ${message}`,
+    message: messages.t('Could not save the review: {message}', { message }),
     detail: lines.join('\n'),
   };
 }

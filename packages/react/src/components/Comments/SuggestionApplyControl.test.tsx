@@ -163,7 +163,7 @@ describe('SuggestionApplyControl', () => {
     expect(screen.getByTestId('suggestion-apply-button')).toBeTruthy();
   });
 
-  it('reports a host that throws as a refusal, leaking nothing', async () => {
+  it('reports a missing host reply as unknown, leaking nothing', async () => {
     renderControl({
       ...noopAdapter,
       applySuggestion: async () => {
@@ -174,9 +174,9 @@ describe('SuggestionApplyControl', () => {
     fireEvent.click(screen.getByTestId('suggestion-apply-button'));
 
     const outcome = await screen.findByTestId('suggestion-apply-outcome');
-    expect(outcome.getAttribute('data-status')).toBe('refused');
-    expect(outcome.getAttribute('data-reason')).toBe('host-unavailable');
-    expect(outcome.textContent).toBe('Not applied. The apply request could not be completed.');
+    expect(outcome.getAttribute('data-status')).toBe('unknown');
+    expect(outcome.textContent).toContain('The apply outcome is unknown');
+    expect(screen.queryByTestId('suggestion-apply-button')).toBeNull();
     expect(outcome.textContent).not.toContain('EACCES');
   });
 
@@ -301,4 +301,81 @@ describe('SuggestionApplyControl: reviewed-path gating', () => {
     expect(await screen.findByTestId('suggestion-apply-button')).toBeTruthy();
     expect(screen.queryByTestId('suggestion-apply-unreviewed')).toBeNull();
   });
+});
+
+it('retains a committed write with a lost reply across collapse and requires inspection before a separate retry', async () => {
+  let destination = SUGGESTION.originalCode;
+  let loseReply!: () => void;
+  const applySuggestion = vi.fn(
+    () =>
+      new Promise<SuggestionApplyOutcome>((_resolve, reject) => {
+        destination = SUGGESTION.proposedCode;
+        loseReply = () => reject(Object.assign(new Error('disconnected'), { uncertain: true }));
+      })
+  );
+  const adapter = { ...noopAdapter, applySuggestion };
+  function Harness({ open }: { open: boolean }) {
+    return (
+      <ReviewAdapterProvider adapter={adapter}>
+        <ConfigProvider initialConfig={{}}>
+          <ReviewProvider>
+            {open && (
+              <SuggestionApplyControl
+                filePath={FILE_PATH}
+                lineRange={LINE_RANGE}
+                suggestion={SUGGESTION}
+              />
+            )}
+          </ReviewProvider>
+        </ConfigProvider>
+      </ReviewAdapterProvider>
+    );
+  }
+  const view = render(<Harness open />);
+  await waitFor(() => expect(screen.queryByTestId('suggestion-apply-unreviewed')).toBeNull());
+  fireEvent.click(screen.getByTestId('suggestion-apply-button'));
+  expect(destination).toBe(SUGGESTION.proposedCode);
+  view.rerender(<Harness open={false} />);
+  await act(async () => loseReply());
+  view.rerender(<Harness open />);
+  expect(screen.getByTestId('suggestion-apply-outcome').getAttribute('data-status')).toBe(
+    'unknown'
+  );
+  expect(screen.queryByTestId('suggestion-apply-button')).toBeNull();
+  const allow = screen.getByRole('button', { name: 'Allow a separate retry' });
+  expect(allow.hasAttribute('disabled')).toBe(true);
+  fireEvent.click(allow);
+  expect(applySuggestion).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(allow);
+  expect(applySuggestion).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('suggestion-apply-button')).toBeTruthy();
+});
+
+it('keeps an explicitly uncommitted host rejection retryable and distinguishes picker cancellation', async () => {
+  const applySuggestion = vi.fn(async () => {
+    throw Object.assign(new Error('local size limit'), { uncertain: false });
+  });
+  const view = renderControl({ ...noopAdapter, applySuggestion });
+  fireEvent.click(screen.getByTestId('suggestion-apply-button'));
+  expect((await screen.findByTestId('suggestion-apply-outcome')).getAttribute('data-status')).toBe(
+    'refused'
+  );
+  expect(screen.getByTestId('suggestion-apply-button')).toBeTruthy();
+  view.unmount();
+  const chooseApplyDestination = vi.fn(async () => ({ status: 'cancelled' as const }));
+  const otherApply = vi.fn();
+  renderInSession({
+    loadDiff: async () => remotePayload(true),
+    applySuggestion: otherApply,
+    chooseApplyDestination,
+  });
+  fireEvent.click(await screen.findByTestId('suggestion-apply-choose-destination'));
+  await waitFor(() =>
+    expect(screen.getByTestId('suggestion-apply-choose-destination').hasAttribute('disabled')).toBe(
+      false
+    )
+  );
+  expect(otherApply).not.toHaveBeenCalled();
+  expect(screen.queryByTestId('suggestion-apply-outcome')).toBeNull();
 });

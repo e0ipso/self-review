@@ -13,11 +13,12 @@ import WelcomeScreen from './components/WelcomeScreen';
 import UpdateBanner from './components/UpdateBanner';
 import RemoteDriftBanner from '../../packages/react/src/components/RemoteDriftBanner';
 import ImportDiagnosticsBanner from '../../packages/react/src/components/ImportDiagnosticsBanner';
-import type { AppConfig, OutputPathInfo } from '../shared/types';
+import type { AppConfig, OutputPathInfo, ApplicationLocale } from '../shared/types';
 
+import { ElectronRequests } from './electron-requests';
 import { createElectronAdapter } from './electron-adapter';
 import { useDesktopLocalization } from './useDesktopLocalization';
-import { useSaveReview } from './useSaveReview';
+import { useSaveReview, SaveReviewBoundary } from './useSaveReview';
 import {
   LocalizationProvider,
   useLocalization,
@@ -175,14 +176,38 @@ function DesktopApp() {
       config={host.config}
       initialOutputPath={host.outputPathInfo}
     >
-      <AppContent />
+      <SaveReviewBoundary>
+        <AppContent />
+      </SaveReviewBoundary>
     </ReviewProviders>
   );
 }
 
 export default function App() {
+  const [locale, setLocale] = useState<ApplicationLocale | null>(null);
+  useEffect(() => {
+    let active = true;
+    const requests = new ElectronRequests();
+    const request =
+      (window.electronAPI.getApplicationLocale
+        ? requests.invoke(() => window.electronAPI.getApplicationLocale!())
+        : undefined) ?? Promise.resolve({ locale: 'en', direction: 'ltr' as const });
+    void request.then(
+      value => {
+        if (active) setLocale(value);
+      },
+      () => {
+        if (active) setLocale({ locale: 'en', direction: 'ltr' });
+      }
+    );
+    return () => {
+      active = false;
+      requests.dispose();
+    };
+  }, []);
+  if (!locale) return null;
   return (
-    <LocalizationProvider>
+    <LocalizationProvider locale={locale.locale} direction={locale.direction}>
       <DesktopApp />
     </LocalizationProvider>
   );

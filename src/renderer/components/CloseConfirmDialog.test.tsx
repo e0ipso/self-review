@@ -6,7 +6,22 @@ const context = vi.hoisted(() => ({
   files: [] as FileReviewState[],
   diffSource: { type: 'directory' as const, sourcePath: '/picked' },
 }));
-vi.mock('../../../packages/react/src/context/ReviewContext', () => ({ useReview: () => context }));
+vi.mock('../../../packages/react/src/context/ReviewContext', () => ({
+  useReview: () => context,
+  useReviewSessionId: () => 1,
+  useReviewSnapshotId: () => 0,
+  useReviewSaveTransaction: () => ({
+    begin: () => ({
+      state: {
+        timestamp: new Date().toISOString(),
+        source: context.diffSource,
+        files: context.files,
+      },
+      current: () => true,
+      unlock: () => {},
+    }),
+  }),
+}));
 import CloseConfirmDialog from './CloseConfirmDialog';
 
 function api() {

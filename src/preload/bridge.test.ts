@@ -82,3 +82,29 @@ it('preserves method names, payloads, null file results and final write ownershi
   expect(await applying).toBe(outcome);
   expect(invoke).toHaveBeenLastCalledWith(IPC.SUGGESTION_APPLY, suggestion);
 });
+
+it('keeps publication receipt and handoff separate from the legacy event methods', async () => {
+  const emitter = new EventEmitter();
+  const send = vi.fn();
+  const invoke = vi.fn(async () => ({ status: 'saved', receipt: 'receipt' }));
+  const api = createElectronAPI({
+    on: emitter.on.bind(emitter),
+    removeListener: emitter.removeListener.bind(emitter),
+    send,
+    invoke,
+  } as unknown as IpcRenderer);
+  const state = { timestamp: 'now', source: { type: 'welcome' as const }, files: [] };
+  api.submitReview(state);
+  api.saveAndQuit();
+  expect(send.mock.calls).toEqual([[IPC.REVIEW_SUBMIT, state], [IPC.APP_SAVE_AND_QUIT]]);
+  await api.handoffReview!(state);
+  const saved = await api.saveReview!(state);
+  expect(invoke.mock.calls).toEqual([
+    [IPC.REVIEW_HANDOFF, state],
+    [IPC.REVIEW_SAVE, state],
+  ]);
+  expect(send).toHaveBeenCalledTimes(2);
+  if (saved.status !== 'saved') throw new Error('expected receipt');
+  api.acknowledgeReviewSave!(saved.receipt);
+  expect(send).toHaveBeenLastCalledWith(IPC.REVIEW_SAVE_RECEIVED, 'receipt');
+});

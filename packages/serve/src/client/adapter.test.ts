@@ -551,3 +551,23 @@ it('keeps a pre-admission busy refusal retryable and an unexpected mutation fail
   const uncertain = await rejectionOf(createFetchAdapter(CAPABILITY).submitReview!(REVIEW_STATE));
   expect(uncertain).toMatchObject({ uncertain: true, code: 'outcome-unknown' });
 });
+
+it('exposes acknowledged publication separately while preserving legacy submit completion', async () => {
+  let answer!: (response: Response) => void;
+  stubFetch(
+    () =>
+      new Promise<Response>(resolve => {
+        answer = resolve;
+      })
+  );
+  const adapter = createFetchAdapter(CAPABILITY);
+  expect(adapter.publishReview).toBe(adapter.submitReview);
+  const acknowledged = vi.fn();
+  const saving = adapter.publishReview!(REVIEW_STATE).then(acknowledged);
+  await Promise.resolve();
+  expect(acknowledged).not.toHaveBeenCalled();
+  answer(json({ ok: true, outputPath: '/review.xml' }));
+  await saving;
+  expect(acknowledged).toHaveBeenCalledOnce();
+  adapter.dispose();
+});

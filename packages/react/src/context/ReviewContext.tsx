@@ -36,6 +36,10 @@ import {
 import { ReviewLifecycleContext } from './ReviewLifecycleContext';
 import { isPlaceholderSource } from './review-session';
 import { ReviewLoadContext } from './ReviewLoadContext';
+import {
+  ApplyOperationsContext,
+  createApplyOperations,
+} from '../components/Comments/apply-operation';
 import { ReviewLoadRecovery } from '../components/ReviewLoadRecovery';
 export { reviewSessionIdentity } from './review-session';
 
@@ -307,6 +311,7 @@ function ReviewSessionProvider({
     review.deleteReply,
     review.toggleViewed,
   ]);
+  const applyOperations = useMemo(createApplyOperations, [state.sessionId, state.snapshotId]);
   const value: ReviewContextValue = {
     ...commands,
     files: state.files,
@@ -331,14 +336,16 @@ function ReviewSessionProvider({
   };
   return (
     <SessionStoreContext.Provider value={store}>
-      <CommandsContext.Provider value={commands}>
-        <ReviewContext.Provider value={value}>
-          <ReviewLoadContext.Provider value={loadingState}>
-            <ReviewLoadRecovery />
-          </ReviewLoadContext.Provider>
-          {children}
-        </ReviewContext.Provider>
-      </CommandsContext.Provider>
+      <ApplyOperationsContext.Provider value={applyOperations}>
+        <CommandsContext.Provider value={commands}>
+          <ReviewContext.Provider value={value}>
+            <ReviewLoadContext.Provider value={loadingState}>
+              <ReviewLoadRecovery />
+            </ReviewLoadContext.Provider>
+            {children}
+          </ReviewContext.Provider>
+        </CommandsContext.Provider>
+      </ApplyOperationsContext.Provider>
     </SessionStoreContext.Provider>
   );
 }
@@ -424,3 +431,35 @@ export function useOptionalApplySession() {
     : null;
 }
 const emptySubscribe = () => () => {};
+
+/** Desktop publication freezes the synchronous state owner before capturing its snapshot.
+ * A known failure unlocks this owner only; a replacement session is never unlocked by an old reply.
+ */
+export function useReviewSaveTransaction() {
+  const store = useContext(SessionStoreContext);
+  if (!store) throw new Error('Save transactions require ReviewProvider');
+  return useMemo(
+    () => ({
+      begin() {
+        const state = store.getSnapshot();
+        if (isPlaceholderSource(state.diffSource) || state.loadError || state.resumeError)
+          throw new Error('The current review has not finished loading.');
+        store.lockMutations();
+        return {
+          state: {
+            timestamp: new Date().toISOString(),
+            source: state.diffSource,
+            files: state.files,
+          },
+          current: () =>
+            store.getSnapshot().sessionId === state.sessionId &&
+            store.getSnapshot().snapshotId === state.snapshotId,
+          unlock: () => {
+            if (store.getSnapshot().sessionId === state.sessionId) store.unlockMutations();
+          },
+        };
+      },
+    }),
+    [store]
+  );
+}

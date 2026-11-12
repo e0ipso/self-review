@@ -2,7 +2,7 @@ import type { RendererRecovery } from './renderer-recovery';
 import { BrowserWindow, nativeImage } from 'electron';
 import { installRendererContentPolicy } from './renderer-content-policy';
 import { getAppIconPath } from './app-assets';
-import { registerFindInPageForWindow } from './ipc-handlers';
+import { registerFindInPageForWindow } from './find-in-page';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;

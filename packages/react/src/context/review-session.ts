@@ -271,8 +271,15 @@ export function reviewSessionReducer(
 export function createReviewSessionStore(initial: ReviewSessionState) {
   let state = initial;
   const listeners = new Set<() => void>();
+  let mutationLock = false;
   return {
     getSnapshot: () => state,
+    lockMutations: () => {
+      mutationLock = true;
+    },
+    unlockMutations: () => {
+      mutationLock = false;
+    },
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => {
@@ -280,7 +287,14 @@ export function createReviewSessionStore(initial: ReviewSessionState) {
       };
     },
     dispatch: (action: SessionAction) => {
+      if (
+        mutationLock &&
+        ['files', 'resume', 'hydrate', 'diff-files', 'destination'].includes(action.type)
+      )
+        return;
       const next = reviewSessionReducer(state, action);
+      if (next.sessionId !== state.sessionId || next.snapshotId !== state.snapshotId)
+        mutationLock = false;
       if (next === state) return;
       state = next;
       listeners.forEach(listener => listener());
