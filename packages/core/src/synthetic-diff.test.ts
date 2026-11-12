@@ -17,12 +17,14 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   generateSyntheticDiffs,
+  generateSyntheticDiffsAsync,
+  loadSyntheticFilesAsync,
   loadSyntheticFiles,
   quoteGitPath,
   readSyntheticSource,
 } from './synthetic-diff';
 import { BINARY_SNIFF_BYTES, MAX_SOURCE_FILE_BYTES } from './input-budgets';
-import { parseDiff } from './diff-parser';
+import { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
 import { gitSync } from './test-support/git-env';
 
 // Names git writes verbatim, names git quotes, and names that would run past
@@ -71,6 +73,40 @@ describe('generateSyntheticDiffs', () => {
     mkdirSync(join(full, '..'), { recursive: true });
     writeFileSync(full, content);
   }
+
+  it.each([{}, { maxFileBytes: 4 }, { maxTotalBytes: 12 }])(
+    'keeps direct and textual projections equivalent for real source bytes, budgets %o',
+    async budgets => {
+      const contents = [
+        Buffer.alloc(0),
+        Buffer.from('one\r\ntwo\r\n'),
+        Buffer.from('\ufeffBOM\nlast'),
+        Buffer.from([0x61, 0xff, 0xc3, 0x28, 0x0a]),
+        Buffer.from('\n\n'),
+        Buffer.from('no newline'),
+        Buffer.from([0, 0xff]),
+        Buffer.from('--- fake header\n+++ another\n@@ -0,0 +1 @@\n'),
+      ];
+      for (let i = 0; i < LITERAL_NAMES.length; i++) {
+        write(LITERAL_NAMES[i], contents[i % contents.length]);
+      }
+      symlinkSync('missing-target', join(root, 'link'));
+      const paths = [...LITERAL_NAMES, 'link', 'disappeared'];
+      const patch = generateSyntheticDiffs(paths, root, { budgets });
+      expect(await generateSyntheticDiffsAsync(paths, root, { budgets })).toEqual(patch);
+      const parsed = parseDiffWithDiagnostics(patch.diff);
+      for (const file of parsed.files) {
+        const reason = patch.omitted.get(file.newPath);
+        if (reason !== undefined) file.omittedReason = reason;
+      }
+      const expected = {
+        files: parsed.files,
+        diagnostics: [...patch.diagnostics, ...parsed.diagnostics],
+      };
+      expect(loadSyntheticFiles(paths, root, { budgets })).toEqual(expected);
+      expect(await loadSyntheticFilesAsync(paths, root, { budgets })).toEqual(expected);
+    }
+  );
 
   it('refuses an enumerated ancestor replaced with an outside symlink before reading', () => {
     const outside = mkdtempSync(join(tmpdir(), 'self-review-test-outside-'));

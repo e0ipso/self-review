@@ -5,6 +5,8 @@ import { join } from 'path';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import * as identityModule from './source-identity';
 import { gitSync } from './test-support/git-env';
+import { defaultGitRunner } from './command-runner';
+import type { ForgeCommandRunner } from './forge-provider';
 
 describe('loadGitDiffWithUntracked', () => {
   let root: string;
@@ -39,6 +41,25 @@ describe('loadGitDiffWithUntracked', () => {
         .map(file => [file.newPath, file.hunks[0]?.lines[0]?.content])
     );
   }
+
+  it('cancels cooperatively after a real tracked patch is captured', async () => {
+    writeFileSync(join(root, 'tracked.txt'), 'changed\n'.repeat(20_000));
+    const controller = new AbortController();
+    const runner: ForgeCommandRunner = async (command, args, options) => {
+      const result = await defaultGitRunner(command, args, options);
+      if (args.includes('diff')) {
+        setImmediate(() => setImmediate(() => controller.abort(new Error('stop parsing'))));
+      }
+      return result;
+    };
+    await expect(
+      loadGitDiffWithUntracked([], root, {
+        includeUntracked: false,
+        signal: controller.signal,
+        runner,
+      })
+    ).rejects.toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+  });
 
   it.each([
     ['the repository root', ''],

@@ -8,7 +8,6 @@
 import { realpathSync } from 'fs';
 import { join, resolve } from 'path';
 import type { DiffFile } from './types';
-import { parseDiffWithDiagnostics } from './diff-parser';
 import { readSyntheticSource, readSyntheticSourceAsync } from './synthetic-source';
 import type { SyntheticSource } from './synthetic-source';
 import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
@@ -93,9 +92,19 @@ export function generateSyntheticDiffs(
   rootDir: string,
   options: SyntheticDiffOptions = {}
 ): SyntheticDiffResult {
+  const { diff, omitted, diagnostics } = projectSources(paths, rootDir, options, 'patch');
+  return { diff, omitted, diagnostics };
+}
+
+function projectSources(
+  paths: string[],
+  rootDir: string,
+  options: SyntheticDiffOptions,
+  output: 'patch' | 'files'
+) {
   const budgets = resolveSourceBudgets(options.budgets);
   const sourceRoot = syntheticRoot(rootDir);
-  const projection = createProjection(budgets);
+  const projection = createProjection(budgets, output);
   for (const filePath of paths) {
     projection.add(
       filePath,
@@ -122,10 +131,25 @@ export async function generateSyntheticDiffsAsync(
   rootDir: string,
   options: AsyncSyntheticDiffOptions = {}
 ): Promise<SyntheticDiffResult> {
+  const { diff, omitted, diagnostics } = await projectSourcesAsync(
+    paths,
+    rootDir,
+    options,
+    'patch'
+  );
+  return { diff, omitted, diagnostics };
+}
+
+async function projectSourcesAsync(
+  paths: string[],
+  rootDir: string,
+  options: AsyncSyntheticDiffOptions,
+  output: 'patch' | 'files'
+) {
   checkLoadingCancelled(options.signal);
   const budgets = resolveSourceBudgets(options.budgets);
   const sourceRoot = syntheticRoot(rootDir);
-  const projection = createProjection(budgets);
+  const projection = createProjection(budgets, output);
   for (const filePath of paths) {
     await loadingCheckpoint(options.signal);
     const source = projection.exhausted()
@@ -154,26 +178,79 @@ function syntheticRoot(rootDir: string): string {
 }
 
 /** The shared, I/O-free projection owns aggregate accounting and all omission diagnostics. */
-function createProjection(budgets: SourceBudgets) {
+function createProjection(budgets: SourceBudgets, output: 'patch' | 'files') {
   const diffs: string[] = [];
+  const files: DiffFile[] = [];
   const omitted = new Map<string, string>();
+  const projectionDiagnostics: string[] = [];
+  let emptyBeforeNextFile: string | undefined;
   const tooLarge: string[] = [];
   const overTotal: string[] = [];
   const unreadable: string[] = [];
   let totalRead = 0;
   let totalExhausted = false;
 
-  function add(filePath: string, source: SyntheticSource | null): void {
+  function emit(
+    filePath: string,
+    source?: Extract<SyntheticSource, { kind: 'text' | 'symlink' | 'binary' }>
+  ): void {
+    // The textual format leaves an empty line after a zero-line hunk when another file
+    // follows. Preserve its existing parser diagnostic without reparsing the patch.
+    if (emptyBeforeNextFile !== undefined) {
+      projectionDiagnostics.push(
+        `${emptyBeforeNextFile}: line beyond the counts of hunk @@ -0,0 +1,0 @@: ""`
+      );
+    }
+    const mode = source?.kind === 'symlink' ? '120000' : '100644';
+    const text = source && source.kind !== 'binary' ? projectText(source.content) : undefined;
+    emptyBeforeNextFile = text?.lines.length === 0 ? filePath : undefined;
+    if (output === 'files') {
+      files.push({
+        oldPath: '',
+        newPath: filePath,
+        changeType: 'added',
+        isBinary: source?.kind === 'binary',
+        hunks: text
+          ? [
+              {
+                header: text.header,
+                oldStart: 0,
+                oldLines: 0,
+                newStart: 1,
+                newLines: text.lines.length,
+                lines: text.lines.map((content, index) => ({
+                  type: 'addition',
+                  oldLineNumber: null,
+                  newLineNumber: index + 1,
+                  content,
+                })),
+              },
+            ]
+          : [],
+      });
+      return;
+    }
     // Git quotes the prefixed path as a whole ("a/name"), not the name alone.
     const oldHeaderPath = quoteGitPath(`a/${filePath}`);
     const newHeaderPath = quoteGitPath(`b/${filePath}`);
-    const header = `diff --git ${oldHeaderPath} ${newHeaderPath}\n`;
+    const header = `diff --git ${oldHeaderPath} ${newHeaderPath}\nnew file mode ${mode}`;
+    diffs.push(
+      text
+        ? `${header}\n--- /dev/null\n+++ ${newHeaderPath}\n${text.header}\n` +
+            text.lines.map(line => `+${line}`).join('\n') +
+            (text.missingNewline ? '\n\\ No newline at end of file' : '')
+        : source?.kind === 'binary'
+          ? `${header}\nBinary files /dev/null and ${newHeaderPath} differ`
+          : header
+    );
+  }
 
+  function add(filePath: string, source: SyntheticSource | null): void {
     if (source === null) {
       // Nothing more is read once the aggregate is spent: the cut is one point in the list.
       overTotal.push(filePath);
       omitted.set(filePath, overTotalReason(budgets.maxTotalBytes));
-      diffs.push(`${header}new file mode 100644`);
+      emit(filePath);
       return;
     }
 
@@ -186,9 +263,7 @@ function createProjection(budgets: SourceBudgets) {
         unreadable.push(`${filePath} (${source.code})`);
         return;
       case 'binary':
-        diffs.push(
-          `${header}new file mode 100644\n` + `Binary files /dev/null and ${newHeaderPath} differ`
-        );
+        emit(filePath, source);
         return;
       case 'too-large':
         tooLarge.push(filePath);
@@ -197,24 +272,22 @@ function createProjection(budgets: SourceBudgets) {
           `Not loaded: this file is ${formatBytes(source.size)}, over the ` +
             `${formatBytes(budgets.maxFileBytes)} per-file read budget.`
         );
-        diffs.push(`${header}new file mode 100644`);
+        emit(filePath);
         return;
       case 'over-total':
         totalExhausted = true;
         overTotal.push(filePath);
         omitted.set(filePath, overTotalReason(budgets.maxTotalBytes));
-        diffs.push(`${header}new file mode 100644`);
+        emit(filePath);
         return;
       case 'symlink':
-        diffs.push(addedTextDiff(header, newHeaderPath, '120000', source.content));
-        return;
       case 'text':
-        diffs.push(addedTextDiff(header, newHeaderPath, '100644', source.content));
+        emit(filePath, source);
         return;
     }
   }
 
-  function finish(): SyntheticDiffResult {
+  function finish() {
     const diagnostics: string[] = [];
     if (tooLarge.length > 0) {
       diagnostics.push(
@@ -237,7 +310,16 @@ function createProjection(budgets: SourceBudgets) {
       );
     }
 
-    return { diff: diffs.join('\n'), omitted, diagnostics };
+    for (const file of files) {
+      const reason = omitted.get(file.newPath);
+      if (reason !== undefined) file.omittedReason = reason;
+    }
+    return {
+      diff: diffs.join('\n'),
+      files,
+      omitted,
+      diagnostics: output === 'files' ? [...diagnostics, ...projectionDiagnostics] : diagnostics,
+    };
   }
   return {
     add,
@@ -247,13 +329,14 @@ function createProjection(budgets: SourceBudgets) {
   };
 }
 
-/** Builds and parses in one step, setting `omittedReason` on files listed without content. */
+/** Build structured additions directly, with the same projection and budgets as patch output. */
 export function loadSyntheticFiles(
   paths: string[],
   rootDir: string,
   options: SyntheticDiffOptions = {}
 ): { files: DiffFile[]; diagnostics: string[] } {
-  return parseSyntheticDiffs(generateSyntheticDiffs(paths, rootDir, options));
+  const { files, diagnostics } = projectSources(paths, rootDir, options, 'files');
+  return { files, diagnostics };
 }
 
 /** Async build; cancellation never returns a partial set of files. */
@@ -262,55 +345,21 @@ export async function loadSyntheticFilesAsync(
   rootDir: string,
   options: AsyncSyntheticDiffOptions = {}
 ): Promise<{ files: DiffFile[]; diagnostics: string[] }> {
-  const result = await generateSyntheticDiffsAsync(paths, rootDir, options);
-  checkLoadingCancelled(options.signal);
-  const parsed = parseSyntheticDiffs(result);
-  await loadingCheckpoint(options.signal);
-  return parsed;
+  const { files, diagnostics } = await projectSourcesAsync(paths, rootDir, options, 'files');
+  return { files, diagnostics };
 }
 
-function parseSyntheticDiffs({ diff, omitted, diagnostics }: SyntheticDiffResult): {
-  files: DiffFile[];
-  diagnostics: string[];
-} {
-  const parsed = parseDiffWithDiagnostics(diff);
-  for (const file of parsed.files) {
-    const reason = omitted.get(file.newPath);
-    if (reason !== undefined) file.omittedReason = reason;
-  }
-  return { files: parsed.files, diagnostics: [...diagnostics, ...parsed.diagnostics] };
-}
-
-function addedTextDiff(
-  header: string,
-  newHeaderPath: string,
-  mode: string,
-  content: Buffer
-): string {
+/** Decode once for either output; retain CR, BOM and UTF-8 replacement semantics. */
+function projectText(content: Buffer) {
   const text = content.toString('utf-8');
   const lines = text.split('\n');
-
-  // Remove trailing empty string from split if file ends with newline
-  if (lines.length > 0 && lines[lines.length - 1] === '') {
-    lines.pop();
-  }
-
-  const lineCount = lines.length;
-  const addedLines = lines.map(line => `+${line}`).join('\n');
-
-  let diff =
-    header +
-    `new file mode ${mode}\n` +
-    `--- /dev/null\n` +
-    `+++ ${newHeaderPath}\n` +
-    `@@ -0,0 +1,${lineCount} @@\n` +
-    addedLines;
-
-  // Indicate missing newline at end of file
-  if (text.length > 0 && !text.endsWith('\n')) {
-    diff += '\n\\ No newline at end of file';
-  }
-  return diff;
+  // The trailing empty split element is not a source line, including for an empty file.
+  if (lines[lines.length - 1] === '') lines.pop();
+  return {
+    lines,
+    header: `@@ -0,0 +1,${lines.length} @@`,
+    missingNewline: text.length > 0 && !text.endsWith('\n'),
+  };
 }
 
 function overTotalReason(maxTotalBytes: number): string {
