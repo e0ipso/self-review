@@ -2,7 +2,7 @@ import type { DiffFile } from '@self-review/types';
 import type { ReviewContextValue } from './ReviewContext';
 import type { ReviewCommands } from './review-commands';
 import type { ReviewSessionStore } from './review-session';
-import type { UseReviewStateReturn } from '../hooks/useReviewState';
+import type { createReviewStateQueries } from './review-state-queries';
 
 /** Legacy projection remains complete while first-party features select their own data. */
 export function projectReviewContext(
@@ -10,7 +10,7 @@ export function projectReviewContext(
   state: ReturnType<ReviewSessionStore['getSnapshot']>,
   diffFiles: DiffFile[],
   commands: ReviewCommands,
-  review: UseReviewStateReturn,
+  review: ReturnType<typeof createReviewStateQueries>,
   retryLoad: () => Promise<void>,
   retryResume: () => Promise<void>
 ): ReviewContextValue {

@@ -340,3 +340,21 @@ subscribes to import/anchor diagnostics and session identity. Comment changes le
 quiet in store-backed reviews. Legacy context-only compositions still update through their complete
 context. A replacement session resets the banner's dismissal. Overview route completion uses any
 viewed duplicate path, while chapter counts retain first-entry semantics.
+
+## Editing identity and incomplete totals
+
+`useReviewState().updateComment` and `useReview().editComment` retain the targeted comment's ID and
+file path. Attempts to change either field through their existing `Partial<ReviewComment>` argument
+are ignored; valid edits and extension metadata still merge. `updateReply` likewise retains the
+targeted reply's ID and its position in the conversation. Wholesale state setters retain their
+replacement semantics.
+
+The toolbar and walkthrough overview show line totals only when every displayed text entry has
+complete content. An explicit `contentLoaded: false` or omitted file suppresses the totals and shows
+a localized "Line totals unavailable" label. Binary files have no text totals. Duplicate paths still
+count as separate diff entries. Older static payloads without the optional loading flag continue to
+count their supplied hunks. This does not request content or change expansion state.
+
+Review loading recovery translates the application's known failure messages when displayed.
+Controller error strings and external host diagnostics keep their original values. Retry stays
+manual and belongs to the same session and snapshot as before.

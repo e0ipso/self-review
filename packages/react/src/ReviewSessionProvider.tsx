@@ -105,8 +105,6 @@ function ReviewSessionProvider({
           <ReviewSessionProjection
             store={store}
             commands={commands}
-            operations={operations}
-            setFiles={setFiles}
             retryLoad={host.retryLoad}
             retryResume={host.retryResume}
           >
@@ -122,16 +120,12 @@ function ReviewSessionProvider({
 function ReviewSessionProjection({
   store,
   commands,
-  operations,
-  setFiles,
   retryLoad,
   retryResume,
   children,
 }: {
   store: ReviewSessionStore;
   commands: ReviewCommands;
-  operations: ReturnType<typeof createReviewStateCommands>;
-  setFiles: React.Dispatch<React.SetStateAction<FileReviewState[]>>;
   retryLoad: () => Promise<void>;
   retryResume: () => Promise<void>;
   children: React.ReactNode;
@@ -155,7 +149,7 @@ function ReviewSessionProjection({
     state,
     diffFiles,
     commands,
-    { ...operations, ...queries, files: state.files, setFiles },
+    queries,
     retryLoad,
     retryResume
   );

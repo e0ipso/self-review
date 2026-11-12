@@ -13,6 +13,7 @@ import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import { GuideRouteMap } from '../GuideRouteMap';
 import { remarkEmoji } from '../../utils/remark-emoji';
 import { MarkdownCode } from './MarkdownCode';
+import { diffTotals } from '../../utils/diff-totals';
 
 export interface GuideOverviewContentProps {
   /**
@@ -68,23 +69,7 @@ function OverviewContent({
   const { guide } = useGuide();
   const navigation = useOptionalDiffNavigation();
 
-  // In large-payload mode files arrive with empty hunks until they are
-  // lazily loaded, so these totals come out 0/0 and the masthead simply
-  // omits the +/− spans there; DiffLoadPayload carries no precomputed
-  // totals to fall back on.
-  const { additions, deletions } = useMemo(() => {
-    let additions = 0;
-    let deletions = 0;
-    for (const file of diffFiles) {
-      for (const hunk of file.hunks) {
-        for (const line of hunk.lines) {
-          if (line.type === 'addition') additions++;
-          else if (line.type === 'deletion') deletions++;
-        }
-      }
-    }
-    return { additions, deletions };
-  }, [diffFiles]);
+  const { additions, deletions, complete } = useMemo(() => diffTotals(diffFiles), [diffFiles]);
 
   if (!guide?.overview) return null;
 
@@ -105,6 +90,7 @@ function OverviewContent({
         </span>
         <span className='font-mono text-[11px] tabular-nums text-muted-foreground'>
           {t('walkthrough totals', { stops: groups.length, files: totalFiles })}
+          {!complete && <span> · {t('Line totals unavailable')}</span>}
           {additions > 0 && (
             <span className='text-emerald-600 dark:text-emerald-400'> +{number(additions)}</span>
           )}

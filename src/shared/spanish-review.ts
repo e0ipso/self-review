@@ -257,6 +257,12 @@ export const SPANISH_REVIEW = {
       other: 'Aplicado a {path}. Se reemplazaron {count} líneas.',
     },
   },
+  'Line totals unavailable': 'Totales de líneas no disponibles',
+  'The host request failed.': 'La solicitud al anfitrión falló.',
+  'The host did not acknowledge saved feedback.':
+    'El anfitrión no confirmó los comentarios guardados.',
+  'Saved feedback belongs to an earlier remote snapshot. The host must supply feedback for the current snapshot.':
+    'Los comentarios guardados pertenecen a una versión remota anterior. El anfitrión debe proporcionar los comentarios de la versión actual.',
   'Retry loading review': 'Reintentar cargar la revisión',
   'Retry loading saved feedback': 'Reintentar cargar los comentarios guardados',
   'The review could not be loaded. {detail}': 'No se pudo cargar la revisión. {detail}',
