@@ -1,4 +1,11 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   useReviewSaveTransaction,
   useReviewSessionId,
@@ -7,6 +14,11 @@ import {
 import type { ElectronAPI } from '../shared/types';
 import { Button } from '../../packages/react/src/components/ui/button';
 import { useDesktopLocalization } from './useDesktopLocalization';
+import {
+  createDesktopPublicationClient,
+  DesktopPublicationError,
+} from './desktop-publication-client';
+import { useInteractionLock } from './useInteractionLock';
 
 type SaveAPI = Pick<
   ElectronAPI,
@@ -33,64 +45,80 @@ function useOwnedSave(api: SaveAPI, enabled = true): SaveControl {
   const [status, setStatus] = useState<SaveState>('reviewing');
   const [detail, setDetail] = useState<string | null>(null);
   const pending = useRef(false);
-  const deadline = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const live = useRef(true);
   const active = useRef<ReturnType<typeof transaction.begin> | null>(null);
   const session = useReviewSessionId();
   const snapshot = useReviewSnapshotId();
-  useEffect(() => {
+  const protocol = useRef<{
+    api: SaveAPI;
+    client: ReturnType<typeof createDesktopPublicationClient>;
+  } | null>(null);
+  useInteractionLock(pending, enabled);
+
+  useLayoutEffect(() => {
     if (!enabled) return;
-    live.current = true;
+    const client = createDesktopPublicationClient(api);
+    protocol.current = { api, client };
+    // An API replacement cannot release a snapshot whose write may already have committed.
+    if (pending.current) setStatus('unknown');
     return () => {
-      live.current = false;
-      clearTimeout(deadline.current);
+      client.dispose();
+      if (protocol.current?.client === client) protocol.current = null;
     };
-  }, [enabled]);
-  useEffect(() => {
+  }, [api, enabled]);
+  useLayoutEffect(() => {
     if (!enabled) return;
-    clearTimeout(deadline.current);
+    protocol.current?.client.stopWaiting();
     pending.current = false;
     active.current = null;
     setStatus('reviewing');
     setDetail(null);
   }, [enabled, session, snapshot]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) return;
+    const client = protocol.current?.client;
     return api.onSaveFailed?.(() => {
-      if (!active.current?.current()) return;
-      active.current.unlock();
+      const owner = active.current;
+      if (protocol.current?.client !== client || !owner?.current()) return;
+      active.current = null;
+      client?.stopWaiting();
+      owner.unlock();
       pending.current = false;
       setStatus('reviewing');
+      setDetail(null);
     });
   }, [api, enabled]);
 
-  // Capture protects document-level shortcuts and the interval before React sets inert.
-  useEffect(() => {
-    if (!enabled) return;
-    const block = (event: Event) => {
-      if (
-        !pending.current ||
-        (event.target instanceof Element && event.target.closest('[data-save-recovery]'))
-      )
+  const settleFailure = useCallback(
+    (
+      error: unknown,
+      owner: ReturnType<typeof transaction.begin>,
+      client: ReturnType<typeof createDesktopPublicationClient>
+    ) => {
+      if (protocol.current?.client !== client || active.current !== owner || !owner.current())
         return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    };
-    const names = [
-      'keydown',
-      'click',
-      'beforeinput',
-      'input',
-      'change',
-      'submit',
-      'trigger-line-comment',
-    ];
-    names.forEach(name => window.addEventListener(name, block, true));
-    return () => names.forEach(name => window.removeEventListener(name, block, true));
-  }, [enabled]);
+      if (error instanceof DesktopPublicationError && !error.uncertain) {
+        active.current = null;
+        client.stopWaiting();
+        owner.unlock();
+        pending.current = false;
+        setStatus('reviewing');
+      } else {
+        setStatus('unknown');
+      }
+      if (error instanceof DesktopPublicationError) {
+        if (error.handoff)
+          setDetail(
+            t('The host could not accept the review state. {detail}', { detail: error.message })
+          );
+        else if (!error.uncertain) setDetail([error.message, ...error.details].join('\n\n'));
+      }
+    },
+    [t]
+  );
 
   const save = useCallback(() => {
-    if (!enabled || pending.current) return;
+    const client = protocol.current?.client;
+    if (!enabled || pending.current || !client || protocol.current?.api !== api) return;
     pending.current = true;
     let owner: ReturnType<typeof transaction.begin>;
     try {
@@ -107,112 +135,20 @@ function useOwnedSave(api: SaveAPI, enabled = true): SaveControl {
     active.current = owner;
     setStatus('saving');
     setDetail(null);
-    const current = () => live.current && active.current === owner && owner.current();
-    // Old counterparts retain their two ordered event calls; absence of a receipt never
-    // becomes a fabricated success. Their failure push can restore editing.
-    if (!api.saveReview || !api.acknowledgeReviewSave) {
-      if (api.handoffReview) {
-        // Acknowledged handoff is still not publication. Quit requests the write separately.
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        void Promise.race([
-          Promise.resolve().then(() => (current() ? api.handoffReview!(owner.state) : undefined)),
-          new Promise<never>((_resolve, reject) => {
-            timer = deadline.current = setTimeout(
-              () => reject(new Error('State handoff unavailable')),
-              60_000
-            );
-          }),
-        ])
-          .then(() => {
-            if (!current()) return;
-            try {
-              api.saveAndQuit();
-            } catch {
-              /* Delivery is unacknowledged. */
-            }
-            setStatus('unknown');
-          })
-          .catch(error => {
-            if (!current()) return;
-            const known =
-              typeof error === 'object' &&
-              error !== null &&
-              'uncertain' in error &&
-              error.uncertain === false;
-            if (known) {
-              owner.unlock();
-              pending.current = false;
-            }
-            setStatus(known ? 'reviewing' : 'unknown');
-            setDetail(
-              t('The host could not accept the review state. {detail}', {
-                detail: error instanceof Error ? error.message : String(error),
-              })
-            );
-          })
-          .finally(() => clearTimeout(timer));
-        return;
-      }
-      try {
-        api.submitReview(owner.state);
-        api.saveAndQuit();
-        // A legacy host has no publication receipt. Never leave it looking acknowledged.
-        if (current()) setStatus('unknown');
-      } catch {
-        if (current()) setStatus('unknown');
-      }
-      return;
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let publication: ReturnType<NonNullable<SaveAPI['saveReview']>>;
-    try {
-      publication = api.saveReview(owner.state);
-    } catch (error) {
-      publication = Promise.reject(error);
-    }
-    void Promise.race([
-      publication,
-      new Promise<never>((_resolve, reject) => {
-        timer = deadline.current = setTimeout(
-          () => reject(new Error('Save receipt unavailable')),
-          60_000
-        );
-      }),
-    ])
-      .then(result => {
-        if (!current()) return;
-        if (result.status === 'saved') {
-          api.acknowledgeReviewSave!(result.receipt);
-        } else if (result.status === 'failed') {
-          owner.unlock();
-          pending.current = false;
-          setDetail(`${result.message}\n\n${result.detail}`);
-          setStatus('reviewing');
-        } else {
-          // Another transaction owns the write. Do not unlock or replay this snapshot.
-          setStatus('unknown');
-        }
-      })
-      .catch(() => {
-        if (current()) setStatus('unknown');
-      })
-      .finally(() => clearTimeout(timer));
-  }, [api, transaction, enabled, t]);
+    const current = () =>
+      protocol.current?.client === client && active.current === owner && owner.current();
+    void client
+      .finish(owner.state, api, current)
+      .catch(error => settleFailure(error, owner, client));
+  }, [api, transaction, enabled, t, settleFailure]);
   const check = api.getSaveResult
     ? () => {
         const owner = active.current;
-        void api.getSaveResult!()
-          .then(result => {
-            if (!live.current || !owner?.current() || active.current !== owner) return;
-            if (result?.status === 'saved') api.acknowledgeReviewSave?.(result.receipt);
-            if (result?.status === 'failed') {
-              owner.unlock();
-              pending.current = false;
-              setDetail(`${result.message}\n\n${result.detail}`);
-              setStatus('reviewing');
-            }
-          })
-          .catch(() => {});
+        const client = protocol.current?.client;
+        if (!owner?.current() || !client || protocol.current?.api !== api) return;
+        const current = () =>
+          protocol.current?.client === client && active.current === owner && owner.current();
+        void client.inspect(current).catch(error => settleFailure(error, owner, client));
       }
     : undefined;
   return { save, status, detail, check };

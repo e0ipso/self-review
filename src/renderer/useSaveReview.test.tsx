@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { ConfigProvider } from '../../packages/react/src/context/ConfigContext';
 import { ReviewProvider, useReview } from '../../packages/react/src/context/ReviewContext';
 import { ReviewAdapterProvider } from '../../packages/react/src/context/ReviewAdapterContext';
@@ -22,13 +22,18 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
-function fixture() {
+function fixture(strict = false) {
+  let failed: (() => void) | undefined;
   const publication = deferred<ReviewSaveResult>();
   const saveReview = vi.fn((_state: ReviewState) => publication.promise);
   const acknowledgeReviewSave = vi.fn();
   const api = {
     submitReview: vi.fn(),
     saveAndQuit: vi.fn(),
+    onSaveFailed: vi.fn((callback: () => void) => {
+      failed = callback;
+      return vi.fn();
+    }),
     saveReview,
     acknowledgeReviewSave,
     getSaveResult: vi.fn(async () => ({ status: 'saved', receipt: 'disk-receipt' }) as const),
@@ -56,17 +61,20 @@ function fixture() {
       </>
     );
   }
-  const view = render(
+  const tree = (boundaryAPI: Parameters<typeof useSaveReview>[0] = api) => (
     <ConfigProvider initialConfig={{}}>
       <ReviewProvider initialFiles={payload.files} initialSource={payload.source}>
-        <SaveReviewBoundary api={api}>
+        <SaveReviewBoundary api={boundaryAPI}>
           <Controls />
         </SaveReviewBoundary>
       </ReviewProvider>
     </ConfigProvider>
   );
+  const view = render(tree(), { wrapper: strict ? React.StrictMode : undefined });
   return {
     ...view,
+    replaceAPI: (next: Parameters<typeof useSaveReview>[0]) => view.rerender(tree(next)),
+    fail: () => failed?.(),
     api,
     publication,
     shortcut,
@@ -136,44 +144,53 @@ it('acknowledges a received receipt without unlocking the saved snapshot', async
   expect(screen.getByText('Unviewed')).toBeTruthy();
 });
 
-it('drops an old publication reply when the review session is replaced', async () => {
-  const publication = deferred<ReviewSaveResult>();
-  const api = {
-    submitReview: vi.fn(),
-    saveAndQuit: vi.fn(),
-    saveReview: () => publication.promise,
-    acknowledgeReviewSave: vi.fn(),
-  };
-  let push!: (value: DiffLoadPayload) => void;
-  const adapter = {
-    loadDiff: async () => payload,
-    onDiffLoad: (callback: typeof push) => {
-      push = callback;
-      return () => {};
-    },
-  };
-  function Finish() {
-    const save = useSaveReview(api);
-    return <button onClick={save}>Finish</button>;
+it.each(['session', 'snapshot'])(
+  'drops an old publication reply when the review %s is replaced',
+  async mode => {
+    const publication = deferred<ReviewSaveResult>();
+    const api = {
+      submitReview: vi.fn(),
+      saveAndQuit: vi.fn(),
+      saveReview: () => publication.promise,
+      acknowledgeReviewSave: vi.fn(),
+    };
+    let push!: (value: DiffLoadPayload) => void;
+    const adapter = {
+      loadDiff: async () => payload,
+      onDiffLoad: (callback: typeof push) => {
+        push = callback;
+        return () => {};
+      },
+    };
+    function Finish() {
+      const save = useSaveReview(api);
+      return <button onClick={save}>Finish</button>;
+    }
+    render(
+      <ReviewAdapterProvider adapter={adapter}>
+        <ConfigProvider initialConfig={{}}>
+          <ReviewProvider>
+            <SaveReviewBoundary api={api}>
+              <Finish />
+            </SaveReviewBoundary>
+          </ReviewProvider>
+        </ConfigProvider>
+      </ReviewAdapterProvider>
+    );
+    await waitFor(() => expect(push).toBeTypeOf('function'));
+    fireEvent.click(screen.getByText('Finish'));
+    await act(async () =>
+      push(
+        mode === 'session'
+          ? { ...payload, source: { type: 'directory', sourcePath: '/new' } }
+          : { ...payload, files: [{ ...payload.files[0], hunks: [] }] }
+      )
+    );
+    await act(async () => publication.resolve({ status: 'saved', receipt: 'stale' }));
+    expect(api.acknowledgeReviewSave).not.toHaveBeenCalled();
+    expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(false);
   }
-  render(
-    <ReviewAdapterProvider adapter={adapter}>
-      <ConfigProvider initialConfig={{}}>
-        <ReviewProvider>
-          <SaveReviewBoundary api={api}>
-            <Finish />
-          </SaveReviewBoundary>
-        </ReviewProvider>
-      </ConfigProvider>
-    </ReviewAdapterProvider>
-  );
-  await waitFor(() => expect(push).toBeTypeOf('function'));
-  fireEvent.click(screen.getByText('Finish'));
-  await act(async () => push({ ...payload, source: { type: 'directory', sourcePath: '/new' } }));
-  await act(async () => publication.resolve({ status: 'saved', receipt: 'stale' }));
-  expect(api.acknowledgeReviewSave).not.toHaveBeenCalled();
-  expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(false);
-});
+);
 
 it('hands one acknowledged snapshot to the host and freezes direct mutations before it answers', async () => {
   const publication = deferred<ReviewSaveResult>();
@@ -236,7 +253,7 @@ it('keeps a legacy save visibly unacknowledged and restores editing on an explic
   fireEvent.click(screen.getByText('Legacy finish'));
   expect(api.submitReview).toHaveBeenCalledTimes(1);
   expect(api.saveAndQuit).toHaveBeenCalledTimes(1);
-  expect(screen.getByText(/The save outcome is unknown/)).toBeTruthy();
+  await screen.findByText(/The save outcome is unknown/);
   act(() => failed());
   expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(false);
 });
@@ -418,4 +435,206 @@ it('keeps a synchronously thrown save failure in the unknown-outcome flow', asyn
   });
   expect(screen.getByText('Unviewed')).toBeTruthy();
   expect(f.api.saveReview).toHaveBeenCalledOnce();
+});
+
+afterEach(() => vi.useRealTimers());
+
+it.each([
+  null,
+  [],
+  { status: 'mystery' },
+  { status: 'saved' },
+  { status: 'saved', receipt: '' },
+  { status: 'failed', message: 'Incomplete' },
+  { status: 'busy' },
+])('retains the frozen review for a malformed or busy reply: %j', async reply => {
+  const f = fixture();
+  act(() => f.comment('Keep me'));
+  fireEvent.click(screen.getByText('Finish'));
+  await act(async () => f.publication.resolve(reply as ReviewSaveResult));
+  expect(screen.getByText(/The save outcome is unknown/)).toBeTruthy();
+  expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(true);
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  act(() => {
+    f.save();
+    f.comment('Blocked');
+  });
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+  expect(screen.getByText('Comments: 1')).toBeTruthy();
+});
+
+it('rejects a late successful receipt after the shell deadline until explicit inspection', async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  fireEvent.click(screen.getByText('Finish'));
+  await act(async () => vi.advanceTimersByTimeAsync(60_000));
+  expect(screen.getByText(/The save outcome is unknown/)).toBeTruthy();
+  await act(async () => f.publication.resolve({ status: 'saved', receipt: 'late' }));
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  act(() => {
+    f.save();
+    f.edit();
+  });
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+  expect(screen.getByText('Unviewed')).toBeTruthy();
+  await act(async () => fireEvent.click(screen.getByText('Check publication status')));
+  expect(f.api.acknowledgeReviewSave).toHaveBeenCalledExactlyOnceWith('disk-receipt');
+  f.unmount();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('invalidates late replies and timers after explicit host failure, preserving comments and retry', async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  act(() => f.comment('Before'));
+  fireEvent.click(screen.getByText('Finish'));
+  act(() => f.fail());
+  expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(false);
+  act(() => f.comment('After'));
+  await act(async () => f.publication.resolve({ status: 'saved', receipt: 'obsolete' }));
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  expect(screen.getByText('Comments: 2')).toBeTruthy();
+  expect(vi.getTimerCount()).toBe(0);
+  f.api.saveReview.mockResolvedValueOnce({ status: 'saved', receipt: 'retry' });
+  await act(async () => fireEvent.click(screen.getByText('Finish')));
+  expect(f.api.acknowledgeReviewSave).toHaveBeenCalledExactlyOnceWith('retry');
+  expect(f.api.saveReview.mock.calls[1][0].files[0].comments.map(comment => comment.body)).toEqual([
+    'Before',
+    'After',
+  ]);
+});
+
+it('does not acknowledge replies after boundary disposal and removes input capture', async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  fireEvent.click(screen.getByText('Finish'));
+  f.unmount();
+  await act(async () => f.publication.resolve({ status: 'saved', receipt: 'disposed' }));
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  const listener = vi.fn();
+  document.addEventListener('keydown', listener);
+  try {
+    fireEvent.keyDown(document, { key: 'f' });
+    expect(listener).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    document.removeEventListener('keydown', listener);
+  }
+});
+
+it('retains the frozen snapshot across API replacement and ignores both obsolete replies and callbacks', async () => {
+  const f = fixture();
+  fireEvent.click(screen.getByText('Finish'));
+  const oldFailure = f.api.onSaveFailed.mock.calls[0][0];
+  const next = {
+    ...f.api,
+    acknowledgeReviewSave: vi.fn(),
+    getSaveResult: vi.fn(async () => ({ status: 'saved', receipt: 'inspected' }) as const),
+  };
+  f.replaceAPI(next);
+  act(() => oldFailure());
+  await act(async () => f.publication.resolve({ status: 'saved', receipt: 'replaced' }));
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  expect(next.acknowledgeReviewSave).not.toHaveBeenCalled();
+  expect(screen.getByText(/The save outcome is unknown/)).toBeTruthy();
+  act(() => {
+    f.save();
+    f.edit();
+  });
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+  expect(screen.getByText('Unviewed')).toBeTruthy();
+  await act(async () => fireEvent.click(screen.getByText('Check publication status')));
+  expect(next.acknowledgeReviewSave).toHaveBeenCalledExactlyOnceWith('inspected');
+});
+
+it.each([
+  null,
+  { status: 'busy' },
+  { status: 'saved', receipt: 4 },
+  { status: 'failed', detail: 'Missing message' },
+])('keeps inspection of %j locked without resending state', async reply => {
+  const f = fixture();
+  fireEvent.click(screen.getByText('Finish'));
+  await act(async () => f.publication.reject(new Error('Lost reply')));
+  f.api.getSaveResult.mockResolvedValueOnce(reply as never);
+  await act(async () => fireEvent.click(screen.getByText('Check publication status')));
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(true);
+  act(() => f.save());
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+});
+
+it('recovers on an inspected known failure and preserves feedback for explicit retry', async () => {
+  const f = fixture();
+  act(() => f.comment('Preserved'));
+  fireEvent.click(screen.getByText('Finish'));
+  await act(async () => f.publication.reject(new Error('Lost reply')));
+  f.api.getSaveResult.mockResolvedValueOnce({
+    status: 'failed',
+    message: 'Cannot save',
+    detail: 'Disk full',
+  } as never);
+  await act(async () => fireEvent.click(screen.getByText('Check publication status')));
+  expect(screen.getByRole('alert').textContent).toContain('Disk full');
+  expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(false);
+  expect(screen.getByText('Comments: 1')).toBeTruthy();
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+});
+
+it('contains synchronous inspection and acknowledgement failures', async () => {
+  const f = fixture();
+  f.api.acknowledgeReviewSave.mockImplementation(() => {
+    throw new Error('Ack lost');
+  });
+  fireEvent.click(screen.getByText('Finish'));
+  await act(async () => f.publication.resolve({ status: 'saved', receipt: 'committed' }));
+  expect(screen.getByText(/The save outcome is unknown/)).toBeTruthy();
+  f.api.getSaveResult.mockImplementationOnce(() => {
+    throw new Error('Inspection disconnected');
+  });
+  await act(async () => fireEvent.click(screen.getByText('Check publication status')));
+  expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(true);
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+});
+
+it('creates a live protocol owner after StrictMode effect replay', async () => {
+  const f = fixture(true);
+  fireEvent.click(screen.getByText('Finish'));
+  await act(async () => f.publication.resolve({ status: 'saved', receipt: 'strict' }));
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+  expect(f.api.acknowledgeReviewSave).toHaveBeenCalledExactlyOnceWith('strict');
+});
+
+it('blocks keyboard and duplicate Finish input in the synchronous interval before inert commits', async () => {
+  const f = fixture();
+  act(() => {
+    f.save();
+    expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(false);
+    fireEvent.keyDown(document, { key: 'f' });
+    fireEvent.click(screen.getByText('Finish'));
+    f.edit();
+  });
+  expect(f.shortcut).not.toHaveBeenCalled();
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+  expect(screen.getByText('Unviewed')).toBeTruthy();
+  await act(async () =>
+    f.publication.resolve({ status: 'failed', message: 'Refused', detail: 'Retry explicitly' })
+  );
+});
+
+it('bounds status inspection and ignores its late saved receipt without resending', async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const inspection = deferred<ReviewSaveResult>();
+  f.api.getSaveResult.mockReturnValueOnce(inspection.promise as never);
+  fireEvent.click(screen.getByText('Finish'));
+  await act(async () => f.publication.reject(new Error('Lost reply')));
+  fireEvent.click(screen.getByText('Check publication status'));
+  await act(async () => vi.advanceTimersByTimeAsync(60_000));
+  await act(async () => inspection.resolve({ status: 'saved', receipt: 'late inspection' }));
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(true);
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+  f.unmount();
+  expect(vi.getTimerCount()).toBe(0);
 });
