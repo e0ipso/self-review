@@ -105,6 +105,8 @@ export const SPANISH_SHELL = {
   'Save & Quit': 'Guardar y salir',
   '{active} of {total}': '{active} de {total}',
   'No results': 'Sin resultados',
+  'Search is too long. Use at most {limit} characters.':
+    'La búsqueda es demasiado larga. Usa como máximo {limit} caracteres.',
   'Find in page': 'Buscar en la página',
   'Find...': 'Buscar...',
   'Previous match': 'Coincidencia anterior',

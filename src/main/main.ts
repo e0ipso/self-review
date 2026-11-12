@@ -180,7 +180,7 @@ void app
       const boundary = createIpcBoundary(ipcMain, () =>
         recovery?.unavailable ? null : windows.current
       );
-      boundary.handle(
+      boundary.handleCommand(
         IPC.APP_LOCALE,
         value => {
           if (value !== undefined) throw new Error('No payload expected.');

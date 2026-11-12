@@ -235,3 +235,39 @@ it('never publishes an older legacy snapshot after an overloaded submission is r
   expect(f.shutdown).not.toHaveBeenCalled();
   expect(f.controller.phase).toBe('reviewing');
 });
+
+it.each([false, true])(
+  'publishes equivalent source fields in a different insertion order with extensions=%s',
+  async extension => {
+    const f = fixture();
+    f.desktop.review.diffData = {
+      files: [],
+      source: { type: 'git', repository: '/repo', gitDiffArgs: '--staged' },
+    };
+    const submitted: ReviewState = {
+      ...state,
+      source: {
+        gitDiffArgs: '--staged',
+        repository: '/repo',
+        type: 'git',
+        ...(extension ? { extension: 'keep' } : {}),
+      } as ReviewState['source'],
+    };
+    expect(await f.invoke(IPC.REVIEW_SAVE, submitted)).toMatchObject({ status: 'saved' });
+    expect(f.publish).toHaveBeenCalledExactlyOnceWith(submitted, expect.any(AbortSignal));
+  }
+);
+
+it('consumes a publication receipt only once', async () => {
+  const f = fixture();
+  f.desktop.review.diffData = { files: [], source: state.source };
+  const saved = (await f.invoke(
+    IPC.REVIEW_SAVE,
+    state
+  )) as import('../shared/types').ReviewSaveResult;
+  if (saved.status !== 'saved') throw new Error('expected receipt');
+  f.invoke(IPC.REVIEW_SAVE_RECEIVED, saved.receipt);
+  f.invoke(IPC.REVIEW_SAVE_RECEIVED, saved.receipt);
+  expect(f.shutdown).toHaveBeenCalledExactlyOnceWith(0, 'saved');
+  expect(f.invoke(IPC.REVIEW_SAVE_STATUS)).toBeNull();
+});

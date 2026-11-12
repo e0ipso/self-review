@@ -1,5 +1,6 @@
-import type { ElectronAPI, FindInPageAction } from '../../shared/types';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { MAX_FIND_QUERY_LENGTH } from '../../shared/find-limits';
+import type { DesktopFindAPI } from '../../shared/types';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { Input } from '../../../packages/react/src/components/ui/input';
 import { Button } from '../../../packages/react/src/components/ui/button';
@@ -10,9 +11,7 @@ import { FindInPageResult } from '../../shared/types';
 interface FindBarProps {
   isOpen: boolean;
   onClose: () => void;
-  api?: Pick<ElectronAPI, 'findInPage' | 'onFindResult'> & {
-    stopFindInPage: (action: FindInPageAction) => void;
-  };
+  api?: DesktopFindAPI;
 }
 
 export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarProps) {
@@ -22,10 +21,16 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
   const [totalMatches, setTotalMatches] = useState(0);
   const lastSearchedQueryRef = useRef('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(() => {});
+  const latestApi = useRef(api);
+  latestApi.current = api;
+  const statusId = useId();
+  const queryRefused = query.length > MAX_FIND_QUERY_LENGTH;
 
   // Declare all callbacks first
   const findNext = useCallback(() => {
-    if (!query) return;
+    if (!query || queryRefused) return;
 
     // Check if this is a new search or cycling through existing results
     const isNewSearch = query !== lastSearchedQueryRef.current;
@@ -37,10 +42,10 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
 
     // Update the last searched query after initiating search
     lastSearchedQueryRef.current = query;
-  }, [query, api]);
+  }, [query, queryRefused, api]);
 
   const findPrevious = useCallback(() => {
-    if (!query) return;
+    if (!query || queryRefused) return;
 
     // Check if this is a new search or cycling through existing results
     const isNewSearch = query !== lastSearchedQueryRef.current;
@@ -51,10 +56,11 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
 
     // Update the last searched query after initiating search
     lastSearchedQueryRef.current = query;
-  }, [query, api]);
+  }, [query, queryRefused, api]);
 
   const handleClose = useCallback(() => {
     api.stopFindInPage('clearSelection');
+    restoreFocusRef.current();
     onClose();
   }, [onClose, api]);
 
@@ -75,12 +81,37 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
     [handleClose, findNext, findPrevious]
   );
 
-  // Auto-focus input when opened
-  useEffect(() => {
-    if (isOpen) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
+  // Capture focus before the portal takes it. A connected external target selected later
+  // becomes the return target; closing must not steal focus from another active control.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const owner = api;
+    const bar = barRef.current;
+    let prior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (prior === document.body || bar?.contains(prior)) prior = null;
+    const remember = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target !== document.body && !bar?.contains(target))
+        prior = target;
+    };
+    const restore = () => {
+      if (latestApi.current !== owner || !prior?.isConnected) return;
+      const active = document.activeElement;
+      if (active !== document.body && active !== null && !bar?.contains(active)) return;
+      if (prior.closest('[inert], [hidden], [aria-hidden="true"]') || prior.matches(':disabled'))
+        return;
+      prior.focus({ preventScroll: true });
+    };
+    restoreFocusRef.current = restore;
+    document.addEventListener('focusin', remember);
+    inputRef.current?.focus();
+    inputRef.current?.select();
+    return () => {
+      document.removeEventListener('focusin', remember);
+      owner.stopFindInPage('clearSelection');
+      restore();
+      restoreFocusRef.current = () => {};
+    };
   }, [isOpen, api]);
 
   // Subscribe to find results from main process
@@ -136,13 +167,13 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
 
   // Clear highlights when query is emptied
   useEffect(() => {
-    if (!query && lastSearchedQueryRef.current) {
+    if ((!query || queryRefused) && lastSearchedQueryRef.current) {
       api.stopFindInPage('clearSelection');
       setActiveMatch(0);
       setTotalMatches(0);
       lastSearchedQueryRef.current = '';
     }
-  }, [query, api]);
+  }, [query, queryRefused, api]);
 
   // Clear highlights when closing
   useEffect(() => {
@@ -163,14 +194,17 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
   const adjustedTotal = Math.max(0, totalMatches - 1);
   const adjustedActive = Math.min(activeMatch, adjustedTotal);
   const searched = query && lastSearchedQueryRef.current === query;
-  const matchDisplay = searched
-    ? adjustedTotal > 0
-      ? t('{active} of {total}', { active: adjustedActive, total: adjustedTotal })
-      : t('No results')
-    : '';
+  const matchDisplay = queryRefused
+    ? t('Search is too long. Use at most {limit} characters.', { limit: MAX_FIND_QUERY_LENGTH })
+    : searched
+      ? adjustedTotal > 0
+        ? t('{active} of {total}', { active: adjustedActive, total: adjustedTotal })
+        : t('No results')
+      : '';
 
   return createPortal(
     <div
+      ref={barRef}
       className='fixed flex items-center gap-1 rounded-md border bg-background p-1.5 shadow-lg'
       style={{ top: 44, insetInlineEnd: 16, zIndex: 9998 }}
     >
@@ -180,10 +214,18 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
         onChange={e => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
         aria-label={t('Find in page')}
+        aria-invalid={queryRefused || undefined}
+        aria-describedby={statusId}
         placeholder={t('Find...')}
         className='h-7 w-52 text-sm'
       />
-      <span className='min-w-[5rem] px-1.5 text-center text-xs text-muted-foreground'>
+      <span
+        id={statusId}
+        role='status'
+        aria-live='polite'
+        aria-atomic='true'
+        className='min-w-[5rem] px-1.5 text-center text-xs text-muted-foreground'
+      >
         {matchDisplay}
       </span>
       <Button
@@ -191,7 +233,7 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
         size='icon'
         className='h-7 w-7'
         onClick={findPrevious}
-        disabled={!query || adjustedTotal === 0}
+        disabled={!query || queryRefused || adjustedTotal === 0}
         aria-label={t('Previous match')}
         title={t('Previous match (Shift+Enter)')}
       >
@@ -202,7 +244,7 @@ export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarPr
         size='icon'
         className='h-7 w-7'
         onClick={findNext}
-        disabled={!query || adjustedTotal === 0}
+        disabled={!query || queryRefused || adjustedTotal === 0}
         aria-label={t('Next match')}
         title={t('Next match (Enter)')}
       >

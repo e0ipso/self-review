@@ -19,7 +19,7 @@ export function registerSuggestionHandlers(
   presentation: Pick<ReviewPresentation, 'pickDirectory'>
 ) {
   // Handle applying one suggestion to the reviewed working file
-  boundary.handle(
+  boundary.handleCommand(
     IPC.SUGGESTION_APPLY,
     suggestionRequest,
     (event, request: SuggestionApplyRequest): Promise<SuggestionApplyOutcome> => {
@@ -37,7 +37,7 @@ export function registerSuggestionHandlers(
   // Handle the reviewer naming a destination directory for applies. Only a
   // temporary-clone remote review needs one; the picker is opened here, so
   // the renderer never names a directory the app then writes into.
-  boundary.handle(
+  boundary.handleCommand(
     IPC.SUGGESTION_CHOOSE_DESTINATION,
     noArgument,
     async (event): Promise<ApplyDestinationOutcome> =>

@@ -18,7 +18,7 @@ it('registers content capabilities against supplied operations without engine mo
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const register = (name: string, _decode: unknown, handler: (...args: unknown[]) => unknown) =>
     handlers.set(name, handler);
-  const boundary = { on: register, handle: register } as unknown as ReturnType<
+  const boundary = { onCommand: register, handleCommand: register } as unknown as ReturnType<
     typeof createIpcBoundary
   >;
   const read = vi.fn(async () => ({ dataUri: 'data:image/png;base64,AA==' }));

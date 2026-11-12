@@ -1,33 +1,19 @@
 // A submission describes the loaded review; the browser cannot select a new source.
+import { sameDiffSource } from '@self-review/core/validation';
 import { ReviewPublishError } from '@self-review/core';
-import type { DiffSource, ReviewSession, ReviewState } from '@self-review/core';
-
-function sameSource(loaded: DiffSource, submitted: DiffSource): boolean {
-  if (loaded.type !== submitted.type) return false;
-  switch (loaded.type) {
-    case 'git':
-      return (
-        submitted.type === 'git' &&
-        submitted.repository === loaded.repository &&
-        submitted.gitDiffArgs === loaded.gitDiffArgs
-      );
-    case 'directory':
-    case 'file':
-      return (
-        (submitted.type === 'directory' || submitted.type === 'file') &&
-        submitted.sourcePath === loaded.sourcePath
-      );
-    default:
-      return false;
-  }
-}
+import type { ReviewSession, ReviewState } from '@self-review/core';
 
 export function ownedReviewState(
   session: ReviewSession,
   state: ReviewState,
   outputPath: string
 ): ReviewState {
-  if (!session.diffData || !sameSource(session.diffData.source, state.source)) {
+  if (
+    !session.diffData ||
+    session.diffData.source.type === 'welcome' ||
+    session.diffData.source.type === 'loading' ||
+    !sameDiffSource(session.diffData.source, state.source)
+  ) {
     throw new ReviewPublishError(
       'validation-failed',
       outputPath,

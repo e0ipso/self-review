@@ -26,14 +26,14 @@ export function registerIpcHandlers(
   registerContentHandlers(review, boundary, operations);
   registerSuggestionHandlers(review, boundary, operations, presentation);
   registerApplicationHandlers(boundary, operations, presentation);
-  registerFindHandlers(boundary);
+  registerFindHandlers(boundary, operations.signal);
   const selection = new DirectorySelection(transition, boundary.capture, event =>
     presentation.pickDirectory(boundary.assertPeer(event))
   );
-  boundary.handle(IPC.DIALOG_PICK_DIRECTORY, noArgument, event =>
+  boundary.handleCommand(IPC.DIALOG_PICK_DIRECTORY, noArgument, event =>
     operations.read(() => selection.choose(event), 10 * 60_000)
   );
-  boundary.handle(IPC.REVIEW_START_DIRECTORY, stringArgument, (event, directoryPath) =>
+  boundary.handleCommand(IPC.REVIEW_START_DIRECTORY, stringArgument, (event, directoryPath) =>
     operations.read(
       signal =>
         startDirectoryReview(

@@ -92,7 +92,7 @@ export function registerReadHandlers(
     if (mainFrame) reset();
   };
   operations.signal.addEventListener('abort', disposePeer, { once: true });
-  boundary.on(IPC.CONTENT_CANCEL, readId, (event, id) => {
+  boundary.onCommand(IPC.CONTENT_CANCEL, readId, (event, id) => {
     const entry = pending.get(id);
     if (
       entry &&
@@ -103,7 +103,7 @@ export function registerReadHandlers(
       entry.owner.abort();
     }
   });
-  boundary.handle(
+  boundary.handleCommand(
     IPC.CONTENT_READ,
     readRequest,
     async (event, request): Promise<DesktopReadResult> => {

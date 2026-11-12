@@ -1,3 +1,5 @@
+import { MAX_FIND_QUERY_LENGTH } from '../shared/find-limits';
+import type { CommandChannel, CommandInput, CommandResult } from '../shared/ipc-contract';
 // Every desktop command enters through the current window's main frame.
 import type { BrowserWindow, IpcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import {
@@ -44,7 +46,7 @@ export function createIpcBoundary(
     };
   }
 
-  return {
+  const boundary = {
     assertPeer,
     capture,
     on<T>(channel: string, decode: Decode<T>, run: (event: IpcMainEvent, value: T) => unknown) {
@@ -72,6 +74,42 @@ export function createIpcBoundary(
       });
     },
   };
+  return {
+    ...boundary,
+    onCommand<C extends CommandChannel<'send'>, T extends CommandInput<NoInfer<C>>>(
+      channel: C,
+      decode: Decode<T>,
+      run: (event: IpcMainEvent, value: T) => unknown
+    ) {
+      boundary.on(channel, decode, run);
+    },
+    handleCommand<C extends CommandChannel<'invoke'>, T extends CommandInput<NoInfer<C>>>(
+      channel: C,
+      decode: Decode<T>,
+      run: (
+        event: IpcMainInvokeEvent,
+        value: T
+      ) => CommandResult<NoInfer<C>> | Promise<CommandResult<NoInfer<C>>>
+    ) {
+      boundary.handle(channel, decode, run);
+    },
+    // Save must reserve admission before inspecting an untrusted snapshot. The decoder
+    // remains typed, but its failure is projected by the save protocol as a known refusal.
+    handleDeferredCommand<C extends CommandChannel<'invoke'>, T extends CommandInput<NoInfer<C>>>(
+      channel: C,
+      decode: Decode<T>,
+      run: (
+        event: IpcMainInvokeEvent,
+        decode: () => T
+      ) => CommandResult<NoInfer<C>> | Promise<CommandResult<NoInfer<C>>>
+    ) {
+      boundary.handle(
+        channel,
+        value => value,
+        (event, value) => run(event, () => decode(value))
+      );
+    },
+  };
 }
 
 function decodeArgument<T>(decode: Decode<T>, args: unknown[]): T {
@@ -93,7 +131,9 @@ function object(value: unknown): Record<string, unknown> {
 }
 export function findRequest(value: unknown): FindInPageRequest {
   const request = object(value);
-  stringArgument(request.text);
+  const text = stringArgument(request.text);
+  if (text.length > MAX_FIND_QUERY_LENGTH)
+    throw new Error('Find query exceeds desktop request limits.');
   for (const key of ['forward', 'findNext']) {
     if (typeof request[key] !== 'boolean') throw new Error('Invalid find options.');
   }

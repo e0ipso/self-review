@@ -17,7 +17,7 @@ export function registerRemoteOpenHandler(
   boundary: ReturnType<typeof createIpcBoundary>,
   presentation: Pick<ReviewPresentation, 'confirmPayload'>
 ): void {
-  boundary.handle(
+  boundary.handleCommand(
     IPC.REMOTE_OPEN_URL,
     stringArgument,
     async (event, url): Promise<RemoteOpenUrlResult> =>

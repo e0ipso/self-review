@@ -1,3 +1,4 @@
+import { isNewerRelease } from './release-version';
 import type { EventEmitter } from 'node:events';
 import type { VersionUpdateInfo } from '../shared/types';
 
@@ -32,14 +33,8 @@ function releaseInfo(body: string, current: string): VersionUpdateInfo | null {
   const tag = data.tag_name;
   if (typeof tag !== 'string') return null;
   const latestVersion = tag.replace(/^v/, '');
-  // Validate metadata separately so the exported legacy comparator keeps its call semantics.
-  if (
-    !/^\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(
-      latestVersion
-    )
-  )
-    return null;
-  if (!compareVersions(current, latestVersion)) return null;
+  // Release interpretation is separate from the exported legacy numeric comparator.
+  if (!isNewerRelease(current, latestVersion)) return null;
   const url = 'html_url' in data ? data.html_url : undefined;
   if (url !== undefined && url !== null && url !== '' && typeof url !== 'string') return null;
   return {

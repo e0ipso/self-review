@@ -1,3 +1,14 @@
+/** A scheduled deadline returns its idempotent cancellation. Callbacks run asynchronously. */
+export interface DesktopScheduler {
+  schedule: (run: () => void, delayMs: number) => () => void;
+}
+const nativeScheduler: DesktopScheduler = {
+  schedule: (run, delayMs) => {
+    const timer = setTimeout(run, delayMs);
+    return () => clearTimeout(timer);
+  },
+};
+
 /** Main-thread ownership of startup and window work. No queue and no write retries.
  * A cancelled operation keeps its admission until it settles, including noninterruptible I/O.
  */
@@ -9,7 +20,10 @@ export class DesktopOperations {
   private mutationAbort: AbortController | null = null;
   private completing = false;
   private disposal: Promise<void> | null = null;
-  constructor(private readonly limit = 32) {}
+  constructor(
+    private readonly limit = 32,
+    private readonly scheduler: DesktopScheduler = nativeScheduler
+  ) {}
 
   get signal(): AbortSignal {
     return this.lifetime.signal;
@@ -69,10 +83,12 @@ export class DesktopOperations {
       deadline.signal,
       ...(owner ? [owner] : []),
     ]);
-    const timer = setTimeout(
+    const cancelTimer = this.scheduler.schedule(
       () => deadline.abort(new Error('The desktop operation timed out.')),
       timeoutMs
     );
+    signal.addEventListener('abort', cancelTimer, { once: true });
+    if (signal.aborted) cancelTimer();
     return this.track(async () => {
       try {
         signal.throwIfAborted();
@@ -80,7 +96,8 @@ export class DesktopOperations {
         signal.throwIfAborted();
         return value;
       } finally {
-        clearTimeout(timer);
+        cancelTimer();
+        signal.removeEventListener('abort', cancelTimer);
       }
     });
   }
@@ -150,19 +167,19 @@ export class DesktopOperations {
     this.lifetime.abort(new Error(reason));
     const pending = [...this.pending];
     this.disposal = (async () => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
+      let cancelTimer: (() => void) | undefined;
       try {
         await Promise.race([
           Promise.allSettled(pending),
           new Promise<void>(resolve => {
-            timer = setTimeout(() => {
+            cancelTimer = this.scheduler.schedule(() => {
               console.error('[main] Operation drain deadline reached; exiting');
               resolve();
             }, timeoutMs);
           }),
         ]);
       } finally {
-        clearTimeout(timer);
+        cancelTimer?.();
       }
     })();
     return this.disposal;
