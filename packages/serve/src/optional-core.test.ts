@@ -117,3 +117,33 @@ describe('optional core capabilities', () => {
     expect(requestContractFor({}).decode(value)).toEqual(core.decodeSuggestionApplyRequest(value));
   });
 });
+
+it('does not relabel a legacy Apply committed during a signal as a refusal', async () => {
+  const controller = new AbortController();
+  const applied: SuggestionApplyOutcome = {
+    status: 'applied',
+    filePath: 'a.txt',
+    replacedLines: 1,
+  };
+  const write = vi.fn(() => {
+    controller.abort(new Error('signal observed while synchronous writer ran'));
+    return applied;
+  });
+  await expect(
+    applyFor({ applySuggestionForSession: write })(core.createReviewSession(), request, {
+      signal: controller.signal,
+    })
+  ).resolves.toBe(applied);
+  expect(write).toHaveBeenCalledOnce();
+});
+
+it('does not invoke legacy Apply after cancellation was already observed', async () => {
+  const reason = new Error('cancelled before invocation');
+  const write = vi.fn(() => refusal);
+  await expect(
+    applyFor({ applySuggestionForSession: write })(core.createReviewSession(), request, {
+      signal: AbortSignal.abort(reason),
+    })
+  ).rejects.toBe(reason);
+  expect(write).not.toHaveBeenCalled();
+});

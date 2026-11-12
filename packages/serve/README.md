@@ -129,10 +129,13 @@ listener stops accepting connections and drains admitted operations and their re
 five seconds before closing remaining connections and exiting 0. SIGINT and SIGTERM use the same
 shutdown owner, including during startup and listener creation, and exit with 130 and 143
 respectively. An observed signal takes precedence over completion success. Startup has a 45-second
-deadline, and its git commands have a 30-second timeout. Cancellation reaches supported git and
-snapshot operations. Local directory scanning, attachment filesystem reads, publication and
-previous-core synchronous operations cannot be interrupted while in progress; they are drained until
-the grace period expires. Cancellation does not roll back a committed file.
+deadline, and its git commands have a 30-second timeout. With the current core, cancellation reaches
+git, snapshot reads, directory and file loading, attachment preparation, and asynchronous asset
+staging. Publication accepts at most 1,000 attachment occurrences, 10 MiB per image and 64 MiB of
+newly staged assets, including resumed references that need copying. These disk-derived limits are
+independent of the HTTP body limit. Cancellation does not roll back a committed file.
+Synchronous/native work can still delay event-loop callbacks; the grace period is not hard
+preemption of arbitrary code.
 
 The server admits at most 32 operations and responses in total, with at most eight concurrent
 expensive image or attachment reads. Excess requests receive `503` with
@@ -159,6 +162,21 @@ refusal. With core 2.0.4, serve uses the existing synchronous writer, which bloc
 interrupt an in-progress write. The compatibility shim can be removed once the published minimum
 core dependency provides the async operation. Context expansion requests retain their 64 KiB bound.
 
+Core 2.0.4 remains a supported installed peer. On that peer, startup prints diagnostics for the
+synchronous startup probe and Apply, local loading without signal support, and publication without
+an aggregate disk-asset budget or cooperative staging cancellation. The old startup probe and Apply
+block the event loop. A deadline or signal cannot interrupt them or enforce the shutdown grace while
+they run. Serve checks cancellation before invoking legacy Apply and returns its actual outcome
+afterward, including a committed success, without replay. If the response is lost, inspect the
+destination before continuing. A synchronous wrapper cannot add interruption to that writer.
+
+Serve's compatibility validator enforces the current attachment count and in-memory byte limits
+before session storage on both peers. It cannot bound old core's disk-derived publication reads or
+add cancellation inside the old writer. The compatibility modules must stay until a published
+minimum core provides the validator, request decoder, asynchronous startup/loading, asynchronous
+Apply and bounded cooperative publication. Then raise that minimum and remove the corresponding
+fallbacks together. No unpublished minimum is required today.
+
 Apply's transport validation checks containers, primitive types and anchor side. A null anchor,
 zero/fractional line number or inverted numeric range reaches core and resolves as its typed refusal
 with HTTP 200, matching the desktop adapter. Reviewed-path authorization and the exact original-code
@@ -183,7 +201,12 @@ starts and the file tree opens in guided mode. Generate one with the `self-revie
 before starting the server.
 
 The guide is read once at startup. Writing a sidecar while the server is already running has no
-effect until you restart it.
+effect until you restart it. Programmatic startup may supply a launch directory, diagnostic reporter
+and the six startup effect operations as the optional third `resolveSession` argument; existing one-
+and two-argument calls still use process cwd and stderr. The CLI supplies these explicitly.
+Configured guide paths resolve against that launch directory, including with core 2.0.4, whose
+loader ignores the optional fourth argument. That peer still sends its own guide diagnostics to
+stderr rather than the injected reporter.
 
 ## Access control
 

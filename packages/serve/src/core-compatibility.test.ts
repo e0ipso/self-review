@@ -112,3 +112,47 @@ function changeComment(state: ReturnType<typeof review>, changes: Record<string,
     files: [{ ...state.files[0], comments: [{ ...state.files[0].comments[0], ...changes }] }],
   };
 }
+
+function validationResult(validate: ReturnType<typeof reviewStateValidatorFor>, value: unknown) {
+  try {
+    validate(value);
+    return { ok: true };
+  } catch (error) {
+    if (!(error instanceof ReviewXmlError)) throw error;
+    return { ok: false, code: error.code, message: error.message, details: error.details };
+  }
+}
+
+const asset = { id: 'a', fileName: '.self-review-assets/a.png', mediaType: 'image/png' };
+const sharedImage = new ArrayBuffer(10 * 1024 * 1024);
+
+it.each([
+  ['exact document count', { attachments: Array(1000).fill(asset), replies: [] }, true],
+  [
+    'document count across replies',
+    {
+      attachments: Array(999).fill(asset),
+      replies: [{ id: 'r', body: '', attachments: [asset, asset] }],
+    },
+    false,
+  ],
+  ['exact image bound', { attachments: [{ ...asset, data: sharedImage }] }, true],
+  [
+    'image over bound',
+    { attachments: [{ ...asset, data: new ArrayBuffer(10 * 1024 * 1024 + 1) }] },
+    false,
+  ],
+  [
+    'aggregate bytes across replies',
+    {
+      attachments: Array(6).fill({ ...asset, data: sharedImage }),
+      replies: [{ id: 'r', body: '', attachments: [{ ...asset, data: sharedImage }] }],
+    },
+    false,
+  ],
+] as const)('keeps canonical attachment validation parity at %s', (_name, comment, ok) => {
+  const value = changeComment(review(), comment);
+  const canonical = validationResult(validateReviewState, value);
+  expect(canonical.ok).toBe(ok);
+  expect(validationResult(reviewStateValidatorFor({}), value)).toEqual(canonical);
+});

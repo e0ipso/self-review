@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as http from 'node:http';
-import { containPath } from './validate';
+import { containPath } from './contained-path';
 import { SECURITY_HEADERS, sendError } from './http-transport';
 
 const CONTENT_TYPES: Record<string, string> = {
