@@ -1,31 +1,34 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { loadConfig, loadConfigWithProvenance } from './config';
-import { readFileWithinBudgetSync } from './bounded-read';
+import {
+  loadConfig as loadNativeConfig,
+  loadConfigWithProvenance as loadNativeConfigWithProvenance,
+  type ConfigEffects,
+  type LoadConfigOptions,
+} from './config';
 import { DEFAULT_CONFIG } from '../../config/src/index';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 
-vi.mock('fs');
-vi.mock('./bounded-read');
-vi.mock('os');
-vi.mock('path');
+const configExists = vi.fn<ConfigEffects['exists']>();
+const readConfig = vi.fn<ConfigEffects['read']>();
+const effects: ConfigEffects = {
+  exists: configExists,
+  read: readConfig,
+  homeDir: () => '/home/user',
+  cwd: () => '/workspace/project',
+};
+const loadConfig = (options: LoadConfigOptions = {}) => loadNativeConfig({ ...options, effects });
+const loadConfigWithProvenance = (options: LoadConfigOptions = {}) =>
+  loadNativeConfigWithProvenance({ ...options, effects });
 
 describe('config', () => {
   const mockHomedir = '/home/user';
   const mockCwd = '/workspace/project';
-  const originalCwd = process.cwd;
 
   beforeEach(() => {
-    vi.mocked(os.homedir).mockReturnValue(mockHomedir);
-    process.cwd = vi.fn().mockReturnValue(mockCwd);
-    vi.mocked(path.join).mockImplementation((...args) => args.join('/'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.clearAllMocks();
-    process.cwd = originalCwd;
   });
 
   describe('payload thresholds', () => {
@@ -43,8 +46,8 @@ describe('config', () => {
           '"12"',
           '[]',
         ]) {
-          vi.mocked(fs.existsSync).mockReturnValue(true);
-          vi.mocked(readFileWithinBudgetSync).mockImplementation(file => ({
+          vi.mocked(configExists).mockReturnValue(true);
+          vi.mocked(readConfig).mockImplementation(file => ({
             kind: 'ok',
             content: Buffer.from(`${key}: ${String(file).endsWith('config.yaml') ? 12 : value}\n`),
           }));
@@ -62,8 +65,8 @@ describe('config', () => {
     );
 
     it.each([0, 0.5, 12, Number.MAX_SAFE_INTEGER])('retains finite threshold %s', value => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(`max-files: ${value}\nmax-total-lines: ${value}\n`),
       });
@@ -78,7 +81,7 @@ describe('config', () => {
 
   describe('loadConfig', () => {
     it('returns the shared default configuration when no config files exist', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(configExists).mockReturnValue(false);
 
       const config = loadConfig();
 
@@ -100,10 +103,10 @@ describe('config', () => {
 theme: dark
 font-size: 16
 `;
-      vi.mocked(fs.existsSync).mockImplementation(filepath => {
+      vi.mocked(configExists).mockImplementation(filepath => {
         return filepath === `${mockHomedir}/.config/self-review/config.yaml`;
       });
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -120,10 +123,10 @@ font-size: 16
 diff-view: unified
 show-untracked: false
 `;
-      vi.mocked(fs.existsSync).mockImplementation(filepath => {
+      vi.mocked(configExists).mockImplementation(filepath => {
         return filepath === `${mockCwd}/.self-review.yaml`;
       });
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -137,7 +140,7 @@ show-untracked: false
     });
 
     it('keeps showUntrackedExplicit false when show-untracked is absent', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(configExists).mockReturnValue(false);
 
       const config = loadConfig();
 
@@ -147,8 +150,8 @@ show-untracked: false
 
     it('sets showUntrackedExplicit true when show-untracked: true', () => {
       const mockYaml = `show-untracked: true`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -161,8 +164,8 @@ show-untracked: false
 
     it('keeps showUntrackedExplicit false when show-untracked has invalid type', () => {
       const mockYaml = `show-untracked: "yes"`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -183,8 +186,8 @@ diff-view: unified
 theme: light
 font-size: 18
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => {
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockImplementation(filepath => {
         if (String(filepath).includes('.config/self-review')) {
           return { kind: 'ok', content: Buffer.from(userYaml) };
         }
@@ -209,8 +212,8 @@ categories:
     description: Performance issue
     color: '#00ff00'
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -232,8 +235,8 @@ categories:
     color: '#00ff00'
   - invalid: true
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -246,8 +249,8 @@ categories:
 
     it('falls back to default categories when the configured list is empty', () => {
       const mockYaml = `categories: []`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -265,8 +268,8 @@ categories:
   - invalid: true
   - also-invalid: 1
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -284,8 +287,8 @@ categories:
     description: Nameless
     color: '#ff0000'
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -306,8 +309,8 @@ categories:
     description: A real category
     color: '#00ff00'
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -323,8 +326,8 @@ categories:
       const mockYaml = `
 theme: invalid-theme
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -339,8 +342,8 @@ theme: invalid-theme
       const mockYaml = `
 diff-view: invalid-view
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -355,8 +358,8 @@ diff-view: invalid-view
 
     it('handles invalid YAML gracefully', () => {
       const mockYaml = `this is not: valid: yaml: syntax:::`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -371,8 +374,8 @@ diff-view: invalid-view
     });
 
     it('treats an empty config file as "use defaults" without warning', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({ kind: 'ok', content: Buffer.from('') });
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({ kind: 'ok', content: Buffer.from('') });
 
       const config = loadConfig();
 
@@ -382,8 +385,8 @@ diff-view: invalid-view
     });
 
     it('treats a config file containing only `null` as "use defaults" without warning', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from('null\n'),
       });
@@ -395,8 +398,8 @@ diff-view: invalid-view
     });
 
     it('warns when YAML parses to a non-object (e.g. an array at the top level)', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from('- one\n- two\n'),
       });
@@ -414,8 +417,8 @@ ignore:
   - 'dist/**'
   - 'node_modules/**'
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -435,8 +438,8 @@ ignore:
   - true
   - 'valid-pattern'
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -452,8 +455,8 @@ ignore:
       const mockYaml = `
 default-diff-args: '--staged --ignore-space-change'
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -470,8 +473,8 @@ categories:
     description: Only category
     color: '#ff0000'
 `;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -485,8 +488,8 @@ categories:
 
     it('loads word-wrap from config', () => {
       const mockYaml = `word-wrap: false`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -498,8 +501,8 @@ categories:
 
     it('ignores non-boolean word-wrap values', () => {
       const mockYaml = `word-wrap: "yes"`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -511,8 +514,8 @@ categories:
 
     it('loads output-file from config', () => {
       const mockYaml = `output-file: './custom-output.xml'`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -525,8 +528,8 @@ categories:
     it('project config output-file takes precedence over user config', () => {
       const userYaml = `output-file: './user.xml'`;
       const projectYaml = `output-file: './project.xml'`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => {
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockImplementation(filepath => {
         if (String(filepath).includes('.config/self-review')) {
           return { kind: 'ok', content: Buffer.from(userYaml) };
         }
@@ -540,8 +543,8 @@ categories:
 
     it('ignores empty output-file and uses default', () => {
       const mockYaml = `output-file: ''`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -552,7 +555,7 @@ categories:
     });
 
     it('leaves guide-file unset by default (derived at discovery time)', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(configExists).mockReturnValue(false);
 
       const config = loadConfig();
 
@@ -561,8 +564,8 @@ categories:
 
     it('loads guide-file from config', () => {
       const mockYaml = `guide-file: './walkthrough.guide.xml'`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -575,8 +578,8 @@ categories:
     it('project config guide-file takes precedence over user config', () => {
       const userYaml = `guide-file: './user.guide.xml'`;
       const projectYaml = `guide-file: './project.guide.xml'`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => {
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockImplementation(filepath => {
         if (String(filepath).includes('.config/self-review')) {
           return { kind: 'ok', content: Buffer.from(userYaml) };
         }
@@ -590,8 +593,8 @@ categories:
 
     it('ignores empty guide-file and leaves it unset', () => {
       const mockYaml = `guide-file: ''`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(mockYaml),
       });
@@ -608,8 +611,8 @@ categories:
     it('records where output-file and default-diff-args came from', () => {
       const userYaml = `output-file: /home/user/reviews/out.xml\ntheme: dark\n`;
       const projectYaml = `default-diff-args: "--staged"\n`;
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => ({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockImplementation(filepath => ({
         kind: 'ok',
         content: Buffer.from(
           String(filepath).includes('.config/self-review') ? userYaml : projectYaml
@@ -630,8 +633,8 @@ categories:
     });
 
     it('attributes a value both files set to the project, which wins the merge', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(readFileWithinBudgetSync).mockImplementation(filepath => ({
+      vi.mocked(configExists).mockReturnValue(true);
+      vi.mocked(readConfig).mockImplementation(filepath => ({
         kind: 'ok',
         content: Buffer.from(
           String(filepath).includes('.config/self-review')
@@ -647,22 +650,22 @@ categories:
     });
 
     it('marks every value default when no file exists, and reads the given directories', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(configExists).mockReturnValue(false);
 
       const loaded = loadConfigWithProvenance({ cwd: '/elsewhere', homeDir: '/other-home' });
 
       expect(loaded.provenance.outputFile).toBe('default');
       expect(loaded.provenance.defaultDiffArgs).toBe('default');
       expect(loaded.sources).toEqual([]);
-      expect(fs.existsSync).toHaveBeenCalledWith('/other-home/.config/self-review/config.yaml');
-      expect(fs.existsSync).toHaveBeenCalledWith('/elsewhere/.self-review.yaml');
+      expect(configExists).toHaveBeenCalledWith('/other-home/.config/self-review/config.yaml');
+      expect(configExists).toHaveBeenCalledWith('/elsewhere/.self-review.yaml');
     });
 
     it('does not attribute a value a file set invalidly, which kept the default', () => {
-      vi.mocked(fs.existsSync).mockImplementation(filepath =>
+      vi.mocked(configExists).mockImplementation(filepath =>
         String(filepath).endsWith('.self-review.yaml')
       );
-      vi.mocked(readFileWithinBudgetSync).mockReturnValue({
+      vi.mocked(readConfig).mockReturnValue({
         kind: 'ok',
         content: Buffer.from(`theme: neon\noutput-file: ''\n`),
       });
@@ -677,7 +680,7 @@ categories:
 
 describe('configuration ownership', () => {
   it('owns nested defaults independently across loads and public snapshots', () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(configExists).mockReturnValue(false);
     const first = loadConfig({ cwd: '/project', homeDir: '/home' });
     const expected = structuredClone(first);
     const saved = structuredClone(DEFAULT_CONFIG);

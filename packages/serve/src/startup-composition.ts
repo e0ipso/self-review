@@ -1,7 +1,9 @@
 // Environment and installed-engine choices for the CLI and legacy programmatic defaults.
 import { resolve } from 'node:path';
+import { normalizeConfigFontSize } from '@self-review/core/validation';
 import { installedServeEngine } from './engine-contract';
 import { loadResumeDocumentAsync } from './resume-document-loader';
+import { nonThrowingReporter } from './diagnostic-reporter';
 import type { StartupHost } from './startup-resolver';
 
 export function createStartupHost(
@@ -13,7 +15,17 @@ export function createStartupHost(
     cwd,
     reportDiagnostic,
     operations: {
-      loadConfigWithProvenance: core.loadConfigWithProvenance,
+      loadConfigWithProvenance: options => {
+        const loaded = core.loadConfigWithProvenance(options);
+        const normalized = normalizeConfigFontSize(loaded.config);
+        if (!normalized.diagnostic) return loaded;
+        nonThrowingReporter(options?.reportDiagnostic ?? reportDiagnostic)(normalized.diagnostic);
+        return {
+          ...loaded,
+          config: normalized.config,
+          provenance: { ...loaded.provenance, fontSize: 'default' },
+        };
+      },
       inspectOutput: output => core.inspectOutputPath(output.path, core.publishOptionsFor(output)),
       resolveSource,
       loadLocalReview: core.loadLocalReview,
