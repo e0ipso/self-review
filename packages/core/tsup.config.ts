@@ -1,7 +1,13 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/operations.ts', 'src/filesystem.ts', 'src/validation.ts'],
+  entry: [
+    'src/index.ts',
+    'src/operations.ts',
+    'src/filesystem.ts',
+    'src/validation.ts',
+    'src/resume-worker.ts',
+  ],
   format: ['esm', 'cjs'],
   // Subpaths must share error classes and module state with the original entry.
   splitting: true,

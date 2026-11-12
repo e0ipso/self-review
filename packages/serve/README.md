@@ -386,3 +386,12 @@ remain available. Admission busy responses preserve their original error text an
 `code: "server-busy"`. Modern clients classify that code only on HTTP 503. The exact old uncoded
 busy response remains supported by an isolated legacy policy; other failures keep mutation outcomes
 uncertain and are never replayed.
+
+The one-shot owner and resume reply policy are bundled from the build's
+`@self-review/core/resume-worker` subpath. The installed Core root stays external, including with
+Core 2.0.4; workers and hosts reconstruct detailed XML failures with that peer's constructors.
+Timeouts omitted or set to zero use 30 seconds. Positive fractions round up to milliseconds and
+large values clamp at 2,147,483,647 ms; negative and nonfinite values reject. The desktop host now
+accepts these same forms. Cancellation never settles before termination. If termination itself
+rejects, release is unconfirmed and the owner reports a termination failure retaining the original
+failure/cancellation as its cause. Native syscalls can delay worker termination.

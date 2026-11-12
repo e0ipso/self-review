@@ -50,6 +50,15 @@
       },
       "import": "./dist/validation.js",
       "require": "./dist/validation.cjs"
+    },
+    "./resume-worker": {
+      "types": {
+        "import": "./dist/resume-worker.d.ts",
+        "require": "./dist/resume-worker.d.cts",
+        "default": "./dist/resume-worker.d.ts"
+      },
+      "import": "./dist/resume-worker.js",
+      "require": "./dist/resume-worker.cjs"
     }
   },
   "files": [
