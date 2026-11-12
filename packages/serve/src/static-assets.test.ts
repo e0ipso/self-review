@@ -237,9 +237,12 @@ describe('bounded static file delivery', () => {
     const response = await paused('deadline.js');
     await vi.waitFor(() => expect(observed.closed).toBe(true));
     expect(observed.readBytes).toBeLessThan(size);
-    expect(reportDiagnostic).not.toHaveBeenCalled();
+    expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/^\[serve\] Request deadline exceeded: kind=read elapsedMs=\d+$/)
+    );
     response.destroy();
     await vi.waitFor(async () => expect((await config()).status).toBe(200));
+    expect(reportDiagnostic).toHaveBeenCalledOnce();
   });
 
   it.each(['capture', 'throw', 'reject'])(

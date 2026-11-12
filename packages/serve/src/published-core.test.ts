@@ -1,6 +1,6 @@
 // Execute the installed historical package, not a projection of today's exports.
 // The small emitted host bundles pure policies exactly as serve does; Core stays external.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { build } from 'esbuild';
 import * as fs from 'node:fs';
 import { homedir } from 'node:os';
@@ -226,6 +226,69 @@ for (const peer of ['published 2.0.4', 'current source'] as const) {
         Buffer.from([1, 2, 3])
       );
     });
+
+    it.each(['capture', 'throw', 'reject'] as const)(
+      'keeps actual publication committed with a %s diagnostic reporter',
+      async behavior => {
+        const { host, session, output, state } = fixture();
+        const report = vi.fn(() => {
+          if (behavior === 'throw') throw new Error('report failed');
+          if (behavior === 'reject') return Promise.reject(new Error('report failed'));
+        });
+        const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+          const operations = host.createPublicationOperations(session, output, undefined, report);
+          const result = await operations.publishReview({
+            ...state,
+            files: [
+              {
+                path: 'a.txt',
+                changeType: 'modified',
+                viewed: true,
+                comments: [
+                  {
+                    id: 'c',
+                    filePath: 'a.txt',
+                    lineRange: null,
+                    suggestion: null,
+                    body: 'retained',
+                    category: 'note',
+                    attachments: [
+                      {
+                        id: 'a',
+                        fileName: 'a.png',
+                        mediaType: 'image/png',
+                        data: new Uint8Array([1, 2]).buffer,
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          });
+          expect(result.outputPath).toBe(output.path);
+          const parsed = host.core.parseReviewXml(output.path);
+          expect(parsed.comments[0].body).toBe('retained');
+          expect(
+            fs.readFileSync(join(dirname(output.path), parsed.comments[0].attachments![0].fileName))
+          ).toEqual(Buffer.from([1, 2]));
+          expect(session.reviewState).toBeNull();
+          if (peer === 'current source') {
+            expect(report).toHaveBeenCalledWith(
+              expect.stringContaining('Wrote 1 attachment file(s)')
+            );
+            expect(stderr).not.toHaveBeenCalled();
+          } else {
+            // 2.0.4 ignores per-publication reporters; keep that engine's stderr behavior.
+            expect(stderr).toHaveBeenCalledWith(
+              expect.stringContaining('Wrote 1 attachment file(s)')
+            );
+          }
+        } finally {
+          stderr.mockRestore();
+        }
+      }
+    );
 
     it('replaces every supplied remote value using owned session metadata', async () => {
       const { host, session, state, output } = fixture();

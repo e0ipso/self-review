@@ -61,7 +61,8 @@ export function createPublicationOperations(
     getConfigLoad: () => core.getConfigLoad(session),
     getResumeLoad: () => core.getResumeLoad(session),
     getFileHunks: path => core.getFileHunks(session, path),
-    loadImage: (path, options) => core.loadImage(session, path, options),
+    loadImage: (path, options) =>
+      core.loadImage(session, path, report ? { ...options, reportDiagnostic: report } : options),
     readAttachment: (path, options) => core.readAttachment(session, path, options),
     expandContext: (request, options) => core.expandContext(session, request, undefined, options),
     applySuggestionForSession: (request, options) => applySuggestion(session, request, options),
@@ -80,6 +81,7 @@ export function createPublicationOperations(
       return core.publishReview(owned, output.path, {
         ...core.publishOptionsFor(output, session.attachmentOrigins),
         signal: options?.signal,
+        reportDiagnostic: report,
       });
     },
   };

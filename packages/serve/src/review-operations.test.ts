@@ -198,3 +198,127 @@ it('retains the CLI submission diagnostic without mutating its handoff cache', a
   );
   expect(session.reviewState).toBeNull();
 });
+
+it.each(['capture', 'throw', 'reject'])(
+  'forwards the bound %s reporter to publication without changing outcomes or ownership',
+  async behavior => {
+    const { installedServeEngine } = await import('./engine-contract');
+    const report = vi.fn(() => {
+      if (behavior === 'throw') throw new Error('report failed');
+      if (behavior === 'reject') return Promise.reject(new Error('report failed'));
+    });
+    const session = createReviewSession();
+    const source = { type: 'directory' as const, sourcePath: root };
+    commitDiffData(session, { source, files: [] }, resolveLocalSourceIdentity(source));
+    const state = { timestamp: '2026-01-01T00:00:00Z', source, files: [] };
+    const receipt = { outputPath: join(root, 'review.xml'), assetPaths: [] };
+    const refusal = new installedServeEngine.core.ReviewPublishError(
+      'permission-denied',
+      receipt.outputPath,
+      'denied'
+    );
+    const unknown = new Error('outcome unknown');
+    const publish = vi.fn<typeof installedServeEngine.core.publishReview>(
+      async (_state, _path, options) => {
+        expect(options?.reportDiagnostic).toBeTypeOf('function');
+        options!.reportDiagnostic!('publisher diagnostic');
+        return receipt;
+      }
+    );
+    const engine = {
+      ...installedServeEngine,
+      core: { ...installedServeEngine.core, publishReview: publish },
+    };
+    const operations = createPublicationOperations(
+      session,
+      { path: receipt.outputPath, origin: 'explicit' },
+      engine,
+      report
+    );
+    expect(() =>
+      operations.publishReview({ ...state, source: { ...source, sourcePath: root + '/foreign' } })
+    ).toThrow(/does not match/);
+    expect(publish).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+    await expect(operations.publishReview(state)).resolves.toBe(receipt);
+    expect(report).toHaveBeenCalledWith('publisher diagnostic');
+    publish.mockRejectedValueOnce(refusal);
+    await expect(operations.publishReview(state)).rejects.toBe(refusal);
+    publish.mockRejectedValueOnce(unknown);
+    await expect(operations.publishReview(state)).rejects.toBe(unknown);
+    expect(session.reviewState).toBeNull();
+    expect(fs.readdirSync(root)).toEqual([]);
+  }
+);
+
+it('leaves an absent publication reporter undefined for the engine stderr default', async () => {
+  const { installedServeEngine } = await import('./engine-contract');
+  const session = createReviewSession();
+  const source = { type: 'directory' as const, sourcePath: root };
+  commitDiffData(session, { source, files: [] }, resolveLocalSourceIdentity(source));
+  const output = { path: join(root, 'review.xml'), origin: 'explicit' as const };
+  const publish = vi.fn<typeof installedServeEngine.core.publishReview>(
+    async (_state, _path, options) => {
+      expect(options?.reportDiagnostic).toBeUndefined();
+      return { outputPath: output.path, assetPaths: [] };
+    }
+  );
+  await createPublicationOperations(session, output, {
+    ...installedServeEngine,
+    core: { ...installedServeEngine.core, publishReview: publish },
+  }).publishReview({ timestamp: '2026-01-01T00:00:00Z', source, files: [] });
+});
+
+it.each(['capture', 'throw', 'reject', 'default'] as const)(
+  'routes current Core image diagnostics through the host %s reporter',
+  async mode => {
+    const session = createReviewSession();
+    const source = { type: 'directory' as const, sourcePath: root };
+    commitDiffData(
+      session,
+      {
+        source,
+        files: [
+          { oldPath: '', newPath: 'image.png', changeType: 'added', hunks: [], isBinary: true },
+        ],
+      },
+      {
+        ...resolveLocalSourceIdentity(source),
+        newSide: { kind: 'unknown', reason: 'host image unavailable' },
+      }
+    );
+    const diagnostic =
+      '[review] Image preview unavailable for image.png: This side of the review could not be identified: host image unavailable.';
+    const report = vi.fn(() => {
+      if (mode === 'throw') throw new Error('host reporter failed');
+      if (mode === 'reject') return Promise.reject(new Error('host reporter rejected'));
+    });
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const operations = createPublicationOperations(
+        session,
+        { path: join(root, 'review.xml'), origin: 'explicit' },
+        undefined,
+        mode === 'default' ? undefined : report
+      );
+      const controller = new AbortController();
+      expect(
+        await operations.loadImage('image.png', { signal: controller.signal, timeoutMs: 1000 })
+      ).toEqual({
+        error:
+          'Image preview unavailable — This side of the review could not be identified: host image unavailable.',
+      });
+      expect(controller.signal.aborted).toBe(false);
+      if (mode === 'default') {
+        expect(stderr).toHaveBeenCalledExactlyOnceWith(diagnostic);
+        expect(report).not.toHaveBeenCalled();
+      } else {
+        expect(report).toHaveBeenCalledExactlyOnceWith(diagnostic);
+        expect(stderr).not.toHaveBeenCalled();
+      }
+      expect(session.reviewState).toBeNull();
+    } finally {
+      stderr.mockRestore();
+    }
+  }
+);

@@ -22,6 +22,7 @@ import {
   REQUEST_SHUTDOWN,
   type AdmissionOptions,
   type ManagedReviewServer,
+  type RequestKind,
 } from './request-admission';
 import { JsonResponseLimitError } from './json-response';
 import { REVIEW_PUBLISHED } from './lifecycle';
@@ -71,7 +72,15 @@ export function createBoundReviewServer(
     server.emit(REVIEW_PUBLISHED, response, () => admission.drain());
 
   const routes = createApiRoutes(operations, submission, published);
-  const routePaths = new Set(Object.keys(routes).map(key => key.split(' ')[1]));
+  const routeMethods = new Map<string, string[]>();
+  for (const key of Object.keys(routes)) {
+    const [method, path] = key.split(' ');
+    const methods = routeMethods.get(path) ?? [];
+    methods.push(method);
+    routeMethods.set(path, methods);
+  }
+  const reportDeadline = (kind: RequestKind, elapsedMs: number) =>
+    report(`[serve] Request deadline exceeded: kind=${kind} elapsedMs=${elapsedMs}`);
 
   const dispatch = async (req: http.IncomingMessage, res: http.ServerResponse) => {
     const method = req.method ?? 'GET';
@@ -121,7 +130,8 @@ export function createBoundReviewServer(
               else if (!res.writableEnded) res.destroy();
             }
           },
-          () => {
+          (elapsedMs = 0) => {
+            reportDeadline(kind, elapsedMs);
             if (!res.headersSent && !res.destroyed)
               sendJson(
                 res,
@@ -132,8 +142,13 @@ export function createBoundReviewServer(
             else if (!res.writableEnded) res.destroy();
           }
         );
-      } else if (routePaths.has(url.pathname)) {
-        sendError(res, 405, 'method not allowed');
+      } else if (routeMethods.has(url.pathname)) {
+        sendJson(
+          res,
+          405,
+          { error: 'method not allowed' },
+          { allow: routeMethods.get(url.pathname)!.join(', ') }
+        );
       } else if (url.pathname.startsWith('/api/')) {
         sendError(res, 404, 'not found');
       } else if (method === 'GET') {
@@ -160,7 +175,10 @@ export function createBoundReviewServer(
               else res.destroy();
             }
           },
-          () => res.destroy()
+          (elapsedMs = 0) => {
+            reportDeadline('read', elapsedMs);
+            res.destroy();
+          }
         );
       } else {
         sendError(res, 404, 'not found');
