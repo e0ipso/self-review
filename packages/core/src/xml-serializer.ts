@@ -6,7 +6,12 @@ import { ReviewState, FileReviewState, ReviewComment, Reply, Attachment } from '
 import { planAttachments, defaultAssetName } from './attachment-planner';
 import type { AssetNamer, SerializedReview } from './attachment-planner';
 import { validateAgainstSchema } from './review-xml-validator';
-import { XmlIllegalCharacterError, XmlIllegalCharacterLocation } from './xml-errors';
+import {
+  ReviewXmlError,
+  XmlIllegalCharacterError,
+  XmlIllegalCharacterLocation,
+} from './xml-errors';
+import { MAX_RESUME_XML_BYTES, formatBytes } from './input-budgets';
 import { escapeXmlAttribute, escapeXmlText, findIllegalXmlCharacter } from './xml-text';
 
 export { XSD_SCHEMA } from './review-schema';
@@ -39,6 +44,14 @@ export async function serializeReview(
 /** Internal publication path: references are already planned, so disk bytes never enter this module. */
 export async function serializePlannedReview(state: ReviewState): Promise<string> {
   const xml = buildXml(state);
+  // Publication appends one newline. Its complete UTF-8 document must fit the reader's budget.
+  const bytes = Buffer.byteLength(xml, 'utf8') + 1;
+  if (bytes > MAX_RESUME_XML_BYTES) {
+    const message =
+      `The serialized review is ${formatBytes(bytes)} including its final newline, over the ` +
+      `${formatBytes(MAX_RESUME_XML_BYTES)} review document limit`;
+    throw new ReviewXmlError('input-too-large', message, { details: [message] });
+  }
   await validateAgainstSchema(xml);
   return xml;
 }
