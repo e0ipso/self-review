@@ -1,4 +1,4 @@
-import { parseDiffSteps, type DiffParseResult } from './diff-parser-core';
+import { parseDiffSteps, type DiffParseResult, type DiffParseOptions } from './diff-parser-core';
 import { loadingCheckpoint, checkLoadingCancelled } from './local-loading-lifetime';
 
 /**
@@ -9,10 +9,10 @@ import { loadingCheckpoint, checkLoadingCancelled } from './local-loading-lifeti
  */
 export async function parseDiffWithDiagnosticsAsync(
   rawDiff: string,
-  options: { signal?: AbortSignal } = {}
+  options: DiffParseOptions & { signal?: AbortSignal } = {}
 ): Promise<DiffParseResult> {
   checkLoadingCancelled(options.signal);
-  const parser = parseDiffSteps(rawDiff);
+  const parser = parseDiffSteps(rawDiff, options);
   try {
     let step = parser.next();
     while (!step.done) {

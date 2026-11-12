@@ -406,7 +406,7 @@ describe('GET /api/attachment', () => {
     fs.symlinkSync(path.join(tmp, 'outside', 'secret.txt'), link);
     try {
       const res = await apiFetch(`${base}/api/attachment?path=.self-review-assets%2Flink.png`);
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(400);
       expect(await res.text()).not.toContain('secret');
     } finally {
       fs.unlinkSync(link);
@@ -522,6 +522,10 @@ describe('POST /api/review', () => {
     source: { type: 'git', gitDiffArgs: '--staged', repository: '/repo' },
     files: [{ path: 'src/index.ts', changeType: 'added', viewed: true, comments: [] }],
   };
+
+  beforeEach(() => {
+    state.source = session.diffData!.source;
+  });
 
   it('records a valid review state and acknowledges it only once it is published', async () => {
     const outputPath = path.join(root, 'review.xml');
@@ -1148,4 +1152,106 @@ it.each([
   expect(response.status).toBe(200);
   expect(await response.json()).toMatchObject({ status: 'refused', reason: 'invalid-anchor' });
   expect(operations.applySuggestionForSession).toHaveBeenCalledOnce();
+});
+
+it.each([
+  { type: 'git', gitDiffArgs: '--staged', repository: '/other' },
+  { type: 'git', gitDiffArgs: '--staged', repository: 'loaded' },
+  { type: 'directory', sourcePath: '/other' },
+  { type: 'file', sourcePath: '/other' },
+  { type: 'welcome' },
+  { type: 'loading' },
+])(
+  'refuses foreign publication source %j before caching or publishing and permits repair',
+  async source => {
+    const previous: ReviewState = {
+      timestamp: '2026-01-01T00:00:00Z',
+      source: session.diffData!.source,
+      files: [],
+    };
+    session.reviewState = previous;
+    const outputPath = path.join(root, 'review.xml');
+    fs.writeFileSync(outputPath, 'previous document');
+    const assets = fs.readdirSync(path.join(root, '.self-review-assets'));
+    const publisher = vi.spyOn(operations, 'publishReview');
+    const submittedSource =
+      source.type === 'git' && source.repository === 'loaded'
+        ? { ...source, repository: root }
+        : source;
+    const res = await postJson('/api/review', { ...previous, source: submittedSource });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ ok: false, code: 'validation-failed' });
+    expect(session.reviewState).toBe(previous);
+    expect(publisher).not.toHaveBeenCalled();
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe('previous document');
+    expect(fs.readdirSync(path.join(root, '.self-review-assets'))).toEqual(assets);
+    expect((await apiFetch(`${base}/api/diff`)).status).toBe(200);
+    const repair = await postJson('/api/review', {
+      ...previous,
+      source: { repository: root, extension: { preserved: true }, gitDiffArgs: '', type: 'git' },
+    });
+    expect(repair.status).toBe(200);
+    expect(session.reviewState!.source).toMatchObject({ extension: { preserved: true } });
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain(root);
+  }
+);
+
+it.each([
+  ['not-authorized', 400],
+  ['unsafe-link', 400],
+  ['not-regular', 400],
+  ['too-large', 413],
+  ['io-error', 500],
+  ['not-found', 404],
+] as const)('retains attachment failure %s as HTTP %s', async (reason, status) => {
+  vi.mocked(operations.readAttachment).mockResolvedValue({
+    ok: false,
+    reason,
+    message: `read failed: ${reason}`,
+  });
+  const res = await apiFetch(`${base}/api/attachment?path=${ATTACH}`);
+  expect(res.status).toBe(status);
+  expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+  expect(await res.json()).toEqual({
+    error: reason === 'not-found' ? 'attachment not found' : `read failed: ${reason}`,
+  });
+});
+
+it('publishes a multi-megabyte valid upload without changing attachment bytes or provenance', async () => {
+  const data = Buffer.alloc(2 * 1024 * 1024, 0x67);
+  const body = 'Feedback é '.repeat(48 * 1024);
+  const res = await postJson('/api/review', {
+    timestamp: '2026-01-01T00:00:00Z',
+    source: session.diffData!.source,
+    files: [
+      {
+        path: 'src/index.ts',
+        changeType: 'added',
+        viewed: true,
+        comments: [
+          {
+            id: 'large-upload',
+            filePath: 'src/index.ts',
+            lineRange: null,
+            suggestion: null,
+            body,
+            category: 'note',
+            attachments: [
+              {
+                id: 'large',
+                fileName: 'large.png',
+                mediaType: 'image/png',
+                dataBase64: data.toString('base64'),
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  expect(res.status).toBe(200);
+  const document = core.parseReviewXml(path.join(root, 'review.xml'));
+  expect(document.comments[0].body).toBe(body);
+  const reference = document.comments[0].attachments![0].fileName;
+  expect(fs.readFileSync(path.join(root, reference)).equals(data)).toBe(true);
 });

@@ -1,6 +1,17 @@
 // Shared browser-safe parsing state machine. Drivers choose whether checkpoints yield to the host.
 
 import type { DiffFile, DiffHunk, ChangeType } from './types';
+import {
+  MAX_DIFF_DIAGNOSTIC_CHARS,
+  createRepresentationBudget,
+  resolveSourceBudgets,
+  RepresentationLimitError,
+  type SourceBudgets,
+} from './input-budgets';
+
+export interface DiffParseOptions {
+  budgets?: Partial<SourceBudgets>;
+}
 
 /**
  * The files parsed, plus one diagnostic per piece of input that could not be represented
@@ -18,8 +29,21 @@ export interface DiffParseResult {
  * leniency (`git apply` reads them as empty context). Combined output
  * (`diff --cc`) is reported and skipped.
  */
-export function* parseDiffSteps(rawDiff: string): Generator<void, DiffParseResult> {
+export function* parseDiffSteps(
+  rawDiff: string,
+  options: DiffParseOptions = {},
+  refuse?: (message: string) => never
+): Generator<void, DiffParseResult> {
+  const budgets = resolveSourceBudgets(options.budgets);
+  const representation = createRepresentationBudget(budgets);
   const diagnostics: string[] = [];
+  function diagnose(message: string) {
+    if (diagnostics.length >= budgets.maxDiagnostics)
+      throw new RepresentationLimitError(true, `${budgets.maxDiagnostics}-diagnostic`);
+    if (message.length > MAX_DIFF_DIAGNOSTIC_CHARS)
+      throw new RepresentationLimitError(true, `${MAX_DIFF_DIAGNOSTIC_CHARS}-character diagnostic`);
+    diagnostics.push(message);
+  }
   const files: DiffFile[] = [];
   let currentFile: Partial<DiffFile> | null = null;
   let currentHunk: Partial<DiffHunk> | null = null;
@@ -38,7 +62,7 @@ export function* parseDiffSteps(rawDiff: string): Generator<void, DiffParseResul
   function flushHunk(): void {
     if (currentHunk && currentHunk.header && currentFile) {
       if (remainingOld > 0 || remainingNew > 0) {
-        diagnostics.push(
+        diagnose(
           `${fileLabel()}: hunk ${currentHunk.header} ended ${remainingOld} old and ` +
             `${remainingNew} new lines short of its declared counts`
         );
@@ -58,7 +82,8 @@ export function* parseDiffSteps(rawDiff: string): Generator<void, DiffParseResul
       (currentFile.isBinary ||
         currentFile.hunks!.length > 0 ||
         currentFile.changeType !== 'modified' ||
-        hasModeChange)
+        hasModeChange ||
+        currentFile.omittedReason)
     ) {
       files.push(currentFile as DiffFile);
     }
@@ -73,200 +98,252 @@ export function* parseDiffSteps(rawDiff: string): Generator<void, DiffParseResul
       continue;
     }
 
-    // Start of a new file
-    if (line.startsWith('diff --git ')) {
-      flushFile();
+    try {
+      // Start of a new file
+      if (line.startsWith('diff --git ')) {
+        flushFile();
 
-      // Extract paths from "diff --git a/<old> b/<new>" as fallback
-      // for binary files that lack --- / +++ lines
-      const gitPaths = parseGitDiffHeader(line);
+        representation.beginFile();
 
-      currentFile = {
-        oldPath: gitPaths.oldPath,
-        newPath: gitPaths.newPath,
-        changeType: 'modified' as ChangeType,
-        isBinary: false,
-        hunks: [],
-      };
-      continue;
-    }
+        // Extract paths from "diff --git a/<old> b/<new>" as fallback
+        // for binary files that lack --- / +++ lines
+        const gitPaths = parseGitDiffHeader(line);
 
-    // Two parents against one result: no DiffFile can carry it.
-    const combined = line.match(/^diff --(?:cc|combined) (.*)$/);
-    if (combined) {
-      flushFile();
-      const path = stripPrefix(decodeGitPath(combined[1]));
-      diagnostics.push(`${path}: combined (merge conflict) diff output is not supported`);
-      skippingSection = true;
-      continue;
-    }
-
-    if (skippingSection || !currentFile) continue;
-
-    // Detect file mode changes
-    if (line.startsWith('new file mode')) {
-      currentFile.changeType = 'added';
-      currentFile.oldPath = '';
-      continue;
-    }
-
-    if (line.startsWith('deleted file mode')) {
-      currentFile.changeType = 'deleted';
-      currentFile.newPath = '';
-      continue;
-    }
-
-    if (line.startsWith('new mode ')) {
-      hasModeChange = true;
-      continue;
-    }
-
-    if (line.startsWith('rename from ')) {
-      currentFile.changeType = 'renamed';
-      currentFile.oldPath = decodeGitPath(line.substring('rename from '.length));
-      continue;
-    }
-
-    if (line.startsWith('rename to ')) {
-      currentFile.newPath = decodeGitPath(line.substring('rename to '.length));
-      continue;
-    }
-
-    if (line.startsWith('copy from ')) {
-      currentFile.changeType = 'copied';
-      currentFile.oldPath = decodeGitPath(line.substring('copy from '.length));
-      continue;
-    }
-
-    if (line.startsWith('copy to ')) {
-      currentFile.newPath = decodeGitPath(line.substring('copy to '.length));
-      continue;
-    }
-
-    // Parse old file path
-    if (!currentHunk && line.startsWith('--- ')) {
-      const path = decodeGitPath(line.substring(4).split('\t')[0]);
-      currentFile.oldPath = path === '/dev/null' ? '' : stripPrefix(path);
-      continue;
-    }
-
-    // Parse new file path
-    if (!currentHunk && line.startsWith('+++ ')) {
-      const path = decodeGitPath(line.substring(4).split('\t')[0]);
-      currentFile.newPath = path === '/dev/null' ? '' : stripPrefix(path);
-      continue;
-    }
-
-    // Detect binary files
-    if (line.startsWith('Binary files ')) {
-      currentFile.isBinary = true;
-      continue;
-    }
-
-    // `--binary` emits a base85 body after this marker; skip it.
-    if (line === 'GIT binary patch') {
-      currentFile.isBinary = true;
-      skippingSection = true;
-      continue;
-    }
-
-    // Parse hunk header
-    if (line.startsWith('@@')) {
-      flushHunk();
-
-      // Parse hunk header: @@ -oldStart,oldLines +newStart,newLines @@ context
-      const match = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
-      if (!match) {
-        diagnostics.push(`${fileLabel()}: unrecognized hunk header "${line}"`);
+        currentFile = {
+          oldPath: gitPaths.oldPath,
+          newPath: gitPaths.newPath,
+          changeType: 'modified' as ChangeType,
+          isBinary: false,
+          hunks: [],
+        };
         continue;
       }
-      const oldStart = parseInt(match[1], 10);
-      const oldLines = match[2] ? parseInt(match[2], 10) : 1;
-      const newStart = parseInt(match[3], 10);
-      const newLines = match[4] ? parseInt(match[4], 10) : 1;
 
-      currentHunk = {
-        header: line,
-        oldStart,
-        oldLines,
-        newStart,
-        newLines,
-        lines: [],
-      };
+      // Two parents against one result: no DiffFile can carry it.
+      const combined = line.match(/^diff --(?:cc|combined) (.*)$/);
+      if (combined) {
+        flushFile();
+        const path = stripPrefix(decodeGitPath(combined[1]));
+        diagnose(`${path}: combined (merge conflict) diff output is not supported`);
+        skippingSection = true;
+        continue;
+      }
 
-      oldLineNumber = oldStart;
-      newLineNumber = newStart;
-      remainingOld = oldLines;
-      remainingNew = newLines;
-      continue;
-    }
+      if (skippingSection || !currentFile || currentFile.omittedReason) continue;
 
-    // Before the first hunk: file metadata.
-    if (!currentHunk || !currentHunk.lines) continue;
+      // Detect file mode changes
+      if (line.startsWith('new file mode')) {
+        currentFile.changeType = 'added';
+        currentFile.oldPath = '';
+        continue;
+      }
 
-    if (line.startsWith('\\')) {
-      continue;
-    }
+      if (line.startsWith('deleted file mode')) {
+        currentFile.changeType = 'deleted';
+        currentFile.newPath = '';
+        continue;
+      }
 
-    const marker = line.length === 0 ? ' ' : line[0];
-    const content = line.length === 0 ? '' : line.substring(1);
+      if (line.startsWith('new mode ')) {
+        hasModeChange = true;
+        continue;
+      }
 
-    if (marker === '+') {
-      if (remainingNew <= 0) {
+      if (line.startsWith('rename from ')) {
+        currentFile.changeType = 'renamed';
+        currentFile.oldPath = decodeGitPath(line.substring('rename from '.length));
+        continue;
+      }
+
+      if (line.startsWith('rename to ')) {
+        currentFile.newPath = decodeGitPath(line.substring('rename to '.length));
+        continue;
+      }
+
+      if (line.startsWith('copy from ')) {
+        currentFile.changeType = 'copied';
+        currentFile.oldPath = decodeGitPath(line.substring('copy from '.length));
+        continue;
+      }
+
+      if (line.startsWith('copy to ')) {
+        currentFile.newPath = decodeGitPath(line.substring('copy to '.length));
+        continue;
+      }
+
+      // Parse old file path
+      if (!currentHunk && line.startsWith('--- ')) {
+        const path = decodeGitPath(line.substring(4).split('\t')[0]);
+        currentFile.oldPath = path === '/dev/null' ? '' : stripPrefix(path);
+        continue;
+      }
+
+      // Parse new file path
+      if (!currentHunk && line.startsWith('+++ ')) {
+        const path = decodeGitPath(line.substring(4).split('\t')[0]);
+        currentFile.newPath = path === '/dev/null' ? '' : stripPrefix(path);
+        continue;
+      }
+
+      // Detect binary files
+      if (line.startsWith('Binary files ')) {
+        currentFile.isBinary = true;
+        continue;
+      }
+
+      // `--binary` emits a base85 body after this marker; skip it.
+      if (line === 'GIT binary patch') {
+        currentFile.isBinary = true;
+        skippingSection = true;
+        continue;
+      }
+
+      // Parse hunk header
+      if (line.startsWith('@@')) {
+        flushHunk();
+
+        // Parse hunk header: @@ -oldStart,oldLines +newStart,newLines @@ context
+        const match = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
+        if (!match) {
+          diagnose(`${fileLabel()}: unrecognized hunk header "${line}"`);
+          continue;
+        }
+        const oldStart = parseInt(match[1], 10);
+        const oldLines = match[2] ? parseInt(match[2], 10) : 1;
+        const newStart = parseInt(match[3], 10);
+        const newLines = match[4] ? parseInt(match[4], 10) : 1;
+
+        if (
+          ![oldStart, oldLines, newStart, newLines, oldStart + oldLines, newStart + newLines].every(
+            Number.isSafeInteger
+          )
+        ) {
+          throw new RepresentationLimitError(false, 'safe-integer hunk coordinate');
+        }
+        if (Math.max(oldLines, newLines) > budgets.maxFileLines) {
+          throw new RepresentationLimitError(false, `${budgets.maxFileLines}-line per-file`);
+        }
+        representation.addHunk();
+        currentHunk = {
+          header: line,
+          oldStart,
+          oldLines,
+          newStart,
+          newLines,
+          lines: [],
+        };
+
+        oldLineNumber = oldStart;
+        newLineNumber = newStart;
+        remainingOld = oldLines;
+        remainingNew = newLines;
+        continue;
+      }
+
+      // Before the first hunk: file metadata.
+      if (!currentHunk || !currentHunk.lines) continue;
+
+      if (line.startsWith('\\')) {
+        continue;
+      }
+
+      const marker = line.length === 0 ? ' ' : line[0];
+      const content = line.length === 0 ? '' : line.substring(1);
+
+      if (marker === '+') {
+        if (remainingNew <= 0) {
+          diagnose(
+            `${fileLabel()}: line beyond the counts of hunk ${currentHunk.header}: "${line}"`
+          );
+          continue;
+        }
+        representation.addLines(1);
+        currentHunk.lines.push({
+          type: 'addition',
+          oldLineNumber: null,
+          newLineNumber: newLineNumber,
+          content,
+        });
+        newLineNumber++;
+        remainingNew--;
+      } else if (marker === '-') {
+        if (remainingOld <= 0) {
+          diagnose(
+            `${fileLabel()}: line beyond the counts of hunk ${currentHunk.header}: "${line}"`
+          );
+          continue;
+        }
+        representation.addLines(1);
+        currentHunk.lines.push({
+          type: 'deletion',
+          oldLineNumber: oldLineNumber,
+          newLineNumber: null,
+          content,
+        });
+        oldLineNumber++;
+        remainingOld--;
+      } else if (marker === ' ') {
+        if (remainingOld <= 0 || remainingNew <= 0) {
+          diagnose(
+            `${fileLabel()}: line beyond the counts of hunk ${currentHunk.header}: "${line}"`
+          );
+          continue;
+        }
+        representation.addLines(1);
+        currentHunk.lines.push({
+          type: 'context',
+          oldLineNumber: oldLineNumber,
+          newLineNumber: newLineNumber,
+          content,
+        });
+        oldLineNumber++;
+        newLineNumber++;
+        remainingOld--;
+        remainingNew--;
+      } else {
+        diagnose(`${fileLabel()}: unrecognized line inside hunk ${currentHunk.header}: "${line}"`);
+      }
+    } catch (error) {
+      if (!(error instanceof RepresentationLimitError)) throw error;
+      refuse?.(error.message);
+      // Never retain a partial file as if its hunks were complete.
+      currentHunk = null;
+      remainingOld = remainingNew = 0;
+      if (currentFile) {
+        currentFile.hunks = [];
+        currentFile.omittedReason = error.message;
+      }
+      if (error.aggregate) {
+        diagnostics.push(`${error.message} Parsing stopped; remaining input was not loaded.`);
+        break;
+      }
+      if (
+        diagnostics.length >= budgets.maxDiagnostics ||
+        fileLabel().length + error.message.length + 2 > MAX_DIFF_DIAGNOSTIC_CHARS
+      ) {
         diagnostics.push(
-          `${fileLabel()}: line beyond the counts of hunk ${currentHunk.header}: "${line}"`
+          'Not loaded: diagnostic representation budget exceeded. Parsing stopped; remaining input was not loaded.'
         );
-        continue;
+        break;
       }
-      currentHunk.lines.push({
-        type: 'addition',
-        oldLineNumber: null,
-        newLineNumber: newLineNumber,
-        content,
-      });
-      newLineNumber++;
-      remainingNew--;
-    } else if (marker === '-') {
-      if (remainingOld <= 0) {
-        diagnostics.push(
-          `${fileLabel()}: line beyond the counts of hunk ${currentHunk.header}: "${line}"`
-        );
-        continue;
-      }
-      currentHunk.lines.push({
-        type: 'deletion',
-        oldLineNumber: oldLineNumber,
-        newLineNumber: null,
-        content,
-      });
-      oldLineNumber++;
-      remainingOld--;
-    } else if (marker === ' ') {
-      if (remainingOld <= 0 || remainingNew <= 0) {
-        diagnostics.push(
-          `${fileLabel()}: line beyond the counts of hunk ${currentHunk.header}: "${line}"`
-        );
-        continue;
-      }
-      currentHunk.lines.push({
-        type: 'context',
-        oldLineNumber: oldLineNumber,
-        newLineNumber: newLineNumber,
-        content,
-      });
-      oldLineNumber++;
-      newLineNumber++;
-      remainingOld--;
-      remainingNew--;
-    } else {
-      diagnostics.push(
-        `${fileLabel()}: unrecognized line inside hunk ${currentHunk.header}: "${line}"`
-      );
+      diagnose(`${fileLabel()}: ${error.message}`);
     }
   }
 
   // Save the last hunk and file
-  flushFile();
+  try {
+    flushFile();
+  } catch (error) {
+    if (!(error instanceof RepresentationLimitError)) throw error;
+    refuse?.(error.message);
+    if (currentFile) {
+      currentFile.hunks = [];
+      currentFile.omittedReason = error.message;
+    }
+    currentHunk = null;
+    diagnostics.push(`${error.message} Parsing stopped; remaining input was not loaded.`);
+    flushFile();
+  }
 
   return { files, diagnostics };
 }
@@ -337,11 +414,14 @@ function decodeGitPath(path: string): string {
   return path.slice(1, -1).replace(/(?:\\[0-7]{1,3})+|\\[abfnrtv"\\]/g, escape => {
     if (/^\\[0-7]/.test(escape)) {
       // Git quotes UTF-8 bytes as octal, so decode each run together.
-      const bytes = escape
-        .slice(1)
-        .split('\\')
-        .map(byte => parseInt(byte, 8));
-      return OCTAL_PATH_DECODER.decode(Uint8Array.from(bytes));
+      let count = 0;
+      for (let i = 0; i < escape.length; i++) if (escape[i] === '\\') count++;
+      const bytes = new Uint8Array(count);
+      const octals = /\\([0-7]{1,3})/g;
+      let match: RegExpExecArray | null;
+      let index = 0;
+      while ((match = octals.exec(escape)) !== null) bytes[index++] = parseInt(match[1], 8);
+      return OCTAL_PATH_DECODER.decode(bytes);
     }
     return escapes[escape[1]];
   });
@@ -365,18 +445,27 @@ function parseGitDiffHeader(line: string): {
 
   // Unquoted names can contain spaces. Prefer a boundary whose two paths
   // agree; rename headers supply the exact paths when they differ.
-  const separators = [...paths.matchAll(/ [bwico]\//g)];
-  const boundary =
-    separators.find(
-      match =>
-        stripPrefix(paths.substring(0, match.index)) ===
-        stripPrefix(paths.substring(match.index! + 1))
-    ) || separators[0];
+  let boundary: RegExpExecArray | null = null;
+  const separators = / [bwico]\//g;
+  let match: RegExpExecArray | null;
+  while ((match = separators.exec(paths)) !== null) {
+    boundary ??= match;
+    if (
+      stripPrefix(paths.substring(0, match.index)) === stripPrefix(paths.substring(match.index + 1))
+    ) {
+      boundary = match;
+      break;
+    }
+  }
   if (!boundary) {
     // diff.noprefix: unambiguous only as two bare tokens naming the same path.
-    const bare = paths.split(' ');
-    if (bare.length === 2 && bare[0] === bare[1]) {
-      return { oldPath: bare[0], newPath: bare[1] };
+    const space = paths.indexOf(' ');
+    if (
+      space > 0 &&
+      space === paths.lastIndexOf(' ') &&
+      paths.slice(0, space) === paths.slice(space + 1)
+    ) {
+      return { oldPath: paths.slice(0, space), newPath: paths.slice(space + 1) };
     }
     return { oldPath: '', newPath: '' };
   }

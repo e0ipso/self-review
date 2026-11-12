@@ -120,7 +120,8 @@ describe('HTTP operation ownership', () => {
     const first = get('image?path=a.txt', controller.signal).catch(error => error);
     await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
     expect((await get('image?path=a.txt')).status).toBe(503);
-    expect((await get('config')).status).toBe(200);
+    expect((await get('config')).status).toBe(503);
+    expect((await get('unknown')).status).toBe(404);
     controller.abort();
     await first;
     await vi.waitFor(() => expect(ownedSignal?.aborted).toBe(true));
@@ -129,7 +130,7 @@ describe('HTTP operation ownership', () => {
     await vi.waitFor(async () => expect((await get('image?path=a.txt')).status).toBe(200));
   });
 
-  it('bounds aggregate admission, including cheap requests, while authentication still runs first', async () => {
+  it('bounds aggregate admission, including JSON requests, while authentication still runs first', async () => {
     const { get, operations, server } = await setup({ maxRequests: 1 });
     const pending = gate();
     const read = vi.spyOn(operations, 'loadImage').mockImplementation(async () => {

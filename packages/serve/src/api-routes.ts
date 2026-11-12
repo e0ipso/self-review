@@ -6,6 +6,7 @@ import { MAX_REVIEW_BODY_BYTES, MAX_APPLY_BODY_BYTES } from './protocol';
 import { readJsonBody, sendJson, sendError, SECURITY_HEADERS } from './http-transport';
 import type { ReviewOperations } from './review-operations';
 import { ReviewSubmission, publishFailureStatus } from './review-submission';
+import { sendLargeJson } from './json-response';
 import type { RequestKind } from './request-admission';
 
 export const MAX_EXPAND_CONTEXT_BODY_BYTES = 64 * 1024;
@@ -56,7 +57,7 @@ function createFileRoute({
     const filePath = requireReviewedQueryPath(ctx, authorizeReviewedPath);
     if (filePath === null) return;
     // Diff paths are source-relative strings; core matches on them as sent.
-    sendJson(ctx.res, 200, getFileHunks(filePath));
+    await sendLargeJson(ctx.res, getFileHunks(filePath), { signal: ctx.signal });
   };
 }
 
@@ -68,7 +69,9 @@ function createImageRoute({
     const filePath = requireReviewedQueryPath(ctx, authorizeReviewedPath);
     if (filePath === null) return;
     // Core reads the reviewed snapshot under the same identity it just authorized.
-    sendJson(ctx.res, 200, await loadImage(filePath, { signal: ctx.signal }));
+    await sendLargeJson(ctx.res, await loadImage(filePath, { signal: ctx.signal }), {
+      signal: ctx.signal,
+    });
   };
 }
 
@@ -85,7 +88,13 @@ function createAttachmentRoute({
     const result = await readAttachment(raw, { signal: ctx.signal });
     if (!result.ok) {
       const status =
-        result.reason === 'not-authorized' ? 400 : result.reason === 'too-large' ? 413 : 404;
+        result.reason === 'not-found'
+          ? 404
+          : result.reason === 'too-large'
+            ? 413
+            : result.reason === 'io-error'
+              ? 500
+              : 400;
       sendError(ctx.res, status, status === 404 ? 'attachment not found' : result.message);
       return;
     }
@@ -117,7 +126,9 @@ function createExpansionRoute({
     }
     // Becomes a git pathspec; authorized as a reviewed path, then passed through as sent.
     if (!requireReviewedPath(ctx, authorizeReviewedPath, parsed.value.filePath, 'filePath')) return;
-    sendJson(res, 200, await expandContext(parsed.value, { signal: ctx.signal }));
+    await sendLargeJson(res, await expandContext(parsed.value, { signal: ctx.signal }), {
+      signal: ctx.signal,
+    });
   };
 }
 
@@ -194,25 +205,25 @@ export function createApiRoutes(
     operations.authorizeReviewedPath(path);
   return {
     'GET /api/diff': {
-      kind: 'read',
-      handle: async ({ res }) => {
-        sendJson(res, 200, getDiffLoad());
+      kind: 'expensive-read',
+      handle: async ({ res, signal }) => {
+        await sendLargeJson(res, getDiffLoad(), { signal });
       },
     },
     'GET /api/config': {
-      kind: 'read',
-      handle: async ({ res }) => {
-        sendJson(res, 200, getConfigLoad());
+      kind: 'expensive-read',
+      handle: async ({ res, signal }) => {
+        await sendLargeJson(res, getConfigLoad(), { signal });
       },
     },
     'GET /api/resume': {
-      kind: 'read',
-      handle: async ({ res }) => {
-        sendJson(res, 200, getResumeLoad());
+      kind: 'expensive-read',
+      handle: async ({ res, signal }) => {
+        await sendLargeJson(res, getResumeLoad(), { signal });
       },
     },
     'GET /api/file': {
-      kind: 'read',
+      kind: 'expensive-read',
       handle: createFileRoute({
         authorizeReviewedPath,
         getFileHunks: (...args) => operations.getFileHunks(...args),

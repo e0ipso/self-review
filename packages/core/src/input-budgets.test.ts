@@ -17,3 +17,17 @@ describe('source budget boundary', () => {
     });
   });
 });
+
+describe('additive representation budgets', () => {
+  it.each([
+    'maxFileLines',
+    'maxTotalLines',
+    'maxDiffFiles',
+    'maxDiffHunks',
+    'maxDiagnostics',
+  ] as const)('validates %s and keeps zero as a real refusal limit', name => {
+    expect(() => resolveSourceBudgets({ [name]: -1 })).toThrow(RangeError);
+    expect(resolveSourceBudgets({ [name]: 0 })[name]).toBe(0);
+    expect(resolveSourceBudgets({ [name]: undefined })[name]).toBe(DEFAULT_SOURCE_BUDGETS[name]);
+  });
+});

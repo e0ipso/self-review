@@ -44,7 +44,7 @@ export type {
 // Diff parsing
 export { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
 export { parseDiffWithDiagnosticsAsync } from './diff-parser-async';
-export type { DiffParseResult } from './diff-parser';
+export type { DiffParseResult, DiffParseOptions } from './diff-parser';
 
 // Transport-neutral runtime review DTO validation
 export { validateReviewState } from './review-state-validation';
@@ -180,6 +180,12 @@ export {
   BINARY_SNIFF_BYTES,
   MAX_SOURCE_FILE_BYTES,
   MAX_SOURCE_TOTAL_BYTES,
+  MAX_SOURCE_FILE_LINES,
+  MAX_SOURCE_TOTAL_LINES,
+  MAX_DIFF_FILES,
+  MAX_DIFF_HUNKS,
+  MAX_DIFF_DIAGNOSTICS,
+  MAX_DIFF_DIAGNOSTIC_CHARS,
   MAX_GIT_DIFF_OUTPUT_BYTES,
   MAX_GUIDE_BYTES,
   MAX_RESUME_XML_BYTES,

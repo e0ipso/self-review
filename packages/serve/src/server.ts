@@ -26,6 +26,7 @@ import {
   type AdmissionOptions,
   type ManagedReviewServer,
 } from './request-admission';
+import { JsonResponseLimitError } from './json-response';
 import { REVIEW_PUBLISHED } from './lifecycle';
 
 export { MAX_REVIEW_BODY_BYTES } from './protocol';
@@ -125,8 +126,13 @@ export function createReviewServer(
             } catch (error) {
               if (!signal.aborted)
                 console.error(`[serve] ${method} ${url.pathname} failed:`, error);
-              if (!res.headersSent && !res.destroyed) sendError(res, 500, 'internal error');
-              else if (!res.writableEnded) res.end();
+              if (!res.headersSent && !res.destroyed)
+                sendError(
+                  res,
+                  error instanceof JsonResponseLimitError ? 413 : 500,
+                  error instanceof JsonResponseLimitError ? error.message : 'internal error'
+                );
+              else if (!res.writableEnded) res.destroy();
             }
           },
           () => {

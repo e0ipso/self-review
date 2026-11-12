@@ -30,7 +30,7 @@ export type {
 } from './types';
 
 // Diff parsing (pure JS, no Node.js deps)
-export { parseDiff } from './diff-parser';
+export { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
 
 // Forge URL parsing (pure JS, no Node.js deps)
 export { parseForgeUrl } from './forge-provider';
@@ -38,3 +38,6 @@ export type { ForgeUrl, ForgeName } from './forge-provider';
 
 // Ignore filter (uses `ignore` package, browser-safe)
 export { createIgnoreFilter } from './ignore-filter';
+
+export type { DiffParseResult, DiffParseOptions } from './diff-parser';
+export type { SourceBudgets } from './input-budgets';

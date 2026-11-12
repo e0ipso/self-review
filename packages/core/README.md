@@ -102,8 +102,11 @@ reads. They share decoding, source classification, aggregate accounting and omis
 `generateSyntheticDiffs` and `generateSyntheticDiffsAsync`, which still return the textual patch
 format. Structured loading avoids constructing a complete patch, splitting that patch and parsing
 its headers back into files. It retains per-file UTF-8 decoding and source line allocation. Async
-source reads yield between bounded reads and files; projecting one bounded source file remains
-synchronous.
+source reads yield between bounded reads and files. Projection uses one pure generator for both
+synchronous and asynchronous consumers. The asynchronous consumer yields while counting each 64 KiB
+of source bytes, before decoding or line allocation, and after emitting each 256 lines within one
+file. UTF-8 decoding, a single line slice, patch joining, allocation and garbage collection still
+run synchronously. Synchronous entry points retain synchronous execution.
 
 The loaders preserve literal path ordering, no-follow reads, symlink target text, binary sniffing,
 CR characters, BOMs, UTF-8 replacement, empty hunks and omission diagnostics. The existing text
@@ -111,6 +114,52 @@ format can report a blank separator after an empty file as a hunk-count diagnost
 follows. Direct loading retains that diagnostic for compatibility. Ignore filtering and entry limits
 stay with the calling scanner or git loader. Review publication and explicit Apply remain separate
 operations.
+
+Representation safety limits apply before line arrays, hunk objects and file objects grow, including
+when payload thresholds are zero. The defaults are 100,000 line objects per file, 250,000 total line
+objects, 10,000 file-header attempts or synthetic paths, and 50,000 total hunks. A context line is
+one object; an addition and deletion are two. Empty hunks and metadata-only files consume their own
+budgets. Patch diagnostic output retains at most 1,000 individual messages plus one stop summary,
+and refuses individual patch diagnostics longer than 8,192 characters. These limits complement the
+existing file, aggregate-read and git-output byte budgets.
+
+`SourceBudgets` keeps its four original required fields. New `maxFileLines`, `maxTotalLines`,
+`maxDiffFiles`, `maxDiffHunks` and `maxDiagnostics` fields are optional. `resolveSourceBudgets`
+fills absent values with defaults. Limits must be nonnegative safe integers; zero refuses that kind
+of representation. They are optional embedding/test controls, not YAML settings or CLI flags. All
+three parsers accept an optional `{ budgets }` argument; the asynchronous parser also retains
+`signal`. Existing calls and result shapes are unchanged. The legacy `parseDiff` result cannot carry
+an aggregate diagnostic, so representation refusals throw `RangeError` instead of returning an
+incomplete list. Ordinary malformed-input diagnostics remain discarded by that legacy API; use
+`parseDiffWithDiagnostics` to inspect omitted content and aggregate stops without throwing. The
+browser-safe source entry also exports `parseDiffWithDiagnostics` and the parser option/result
+types.
+
+A per-file refusal discards that file's entire hunk list and sets `omittedReason`, retaining its
+path, change type and binary status. It never returns a truncated hunk as complete. The parser
+reports the refusal and continues with the next file; aggregate exhaustion stops parsing and reports
+that remaining input was not loaded. Synthetic projection lists omitted files without reading
+further content after aggregate exhaustion, stopping with a diagnostic at the file limit. Unsafe
+hunk coordinates and coordinate sums outside the safe integer range are refused explicitly.
+Malformed headers and repeated empty hunks cannot bypass file, hunk or diagnostic accounting. Small
+patches, source encodings and textual/direct projection semantics stay unchanged.
+
+Tracked git and untracked additions share the retained file, hunk and line limits. Lazy delivery
+returns the stored, already bounded hunks. Context expansion refuses an already omitted file, parses
+cooperatively within the remaining review budget, and rechecks aggregate replacement after
+concurrent reads. Refused expansion returns `null`, reports the reason and preserves existing hunks.
+Source membership, snapshot selection and Apply authorization remain unchanged.
+
+`readAttachment` forwards its existing optional signal through the bounded, authorized asset reader.
+Aborting stops further chunks and closes the acquired handle, then rejects with the existing
+`CommandCancelledError` contract. Origin and no-follow checks and read failure results are
+unchanged.
+
+These limits bound representation counts, not a universal memory or latency ceiling. Captured git
+text, one decoded source buffer, path/header strings, patch output, retained ASTs and temporary
+replacement representations still consume memory. Pure parser callers already own their input
+string. Native I/O, regular expressions, string operations and GC cannot be preempted. Legacy
+filesystem adapters retain the weaker guarantees documented above.
 
 ## Package entry point verification
 

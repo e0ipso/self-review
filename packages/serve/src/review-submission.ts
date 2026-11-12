@@ -49,8 +49,8 @@ export class ReviewSubmission {
     state: ReviewState,
     options?: { signal?: AbortSignal }
   ): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
-    this.operations.submitReviewState(state);
     try {
+      this.operations.submitReviewState(state);
       const { outputPath } = await this.operations.publishReview(state, options);
       this.state = 'published';
       this.report(`[serve] Review written to ${outputPath}`);

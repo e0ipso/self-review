@@ -60,7 +60,11 @@ it('forwards publication cancellation and preserves the previous review document
   const reason = new Error('request cancelled');
   await expect(
     bound().publishReview(
-      { timestamp: new Date().toISOString(), source: { type: 'welcome' }, files: [] },
+      {
+        timestamp: new Date().toISOString(),
+        source: { type: 'directory', sourcePath: root },
+        files: [],
+      },
       { signal: AbortSignal.abort(reason) }
     )
   ).rejects.toMatchObject({ name: 'ReviewPublishError', code: 'io-error', cause: reason });
@@ -78,6 +82,8 @@ it('binds the real publisher budget for disk-derived resumed assets and cleans p
   const session = createReviewSession();
   const origins = new Map<string, string>();
   session.attachmentOrigins = origins;
+  const source = { type: 'directory' as const, sourcePath: root };
+  commitDiffData(session, { source, files: [] }, resolveLocalSourceIdentity(source));
   const attachments = Array.from({ length: 7 }, (_, index) => {
     const fileName = `.self-review-assets/${index}.png`;
     const origin = join(prior, `${index}.png`);
@@ -117,4 +123,58 @@ it('binds the real publisher budget for disk-derived resumed assets and cleans p
   expect(fs.readFileSync(output, 'utf8')).toBe('previous review');
   expect(fs.readdirSync(join(outputDir, '.self-review-assets'))).toEqual([]);
   expect(fs.readdirSync(prior)).toHaveLength(7);
+});
+
+it.each(['directory', 'file'] as const)(
+  'binds %s publication to its loaded path before direct writes',
+  async type => {
+    const session = createReviewSession();
+    const source = { type, sourcePath: root };
+    commitDiffData(session, { source, files: [] }, resolveLocalSourceIdentity(source));
+    const output = join(root, 'review.xml');
+    fs.writeFileSync(output, 'previous');
+    const operations = createReviewOperations(session, { path: output, origin: 'explicit' });
+    const foreign = {
+      timestamp: '2026-01-01T00:00:00Z',
+      source: { ...source, sourcePath: root + '/other' },
+      files: [],
+    };
+    expect(() => operations.submitReviewState(foreign)).toThrow(/does not match/);
+    await expect(
+      Promise.resolve().then(() => operations.publishReview(foreign))
+    ).rejects.toMatchObject({ code: 'validation-failed' });
+    expect(session.reviewState).toBeNull();
+    expect(fs.readFileSync(output, 'utf8')).toBe('previous');
+    expect(fs.readdirSync(root)).toEqual(['review.xml']);
+  }
+);
+
+it('publishes owned remote provenance instead of submitted metadata', async () => {
+  const session = createReviewSession();
+  const source = { type: 'git' as const, repository: root, gitDiffArgs: 'base...head' };
+  session.diffData = {
+    source,
+    files: [],
+    remote: {
+      remoteUrl: 'https://github.com/o/r/pull/1',
+      remoteForge: 'github',
+      remoteBaseSha: 'aaa',
+      remoteHeadSha: 'bbb',
+      threadSyncAvailable: true,
+      temporaryClone: false,
+    },
+  };
+  const output = join(root, 'review.xml');
+  const operations = createReviewOperations(session, { path: output, origin: 'explicit' });
+  const state = { timestamp: '2026-01-01T00:00:00Z', source, files: [], remoteUrl: 'forged' };
+  operations.submitReviewState(state);
+  await operations.publishReview(state);
+  expect(session.reviewState).toMatchObject({
+    remoteUrl: 'https://github.com/o/r/pull/1',
+    remoteHeadSha: 'bbb',
+  });
+  const xml = fs.readFileSync(output, 'utf8');
+  expect(xml).toContain('remote-url="https://github.com/o/r/pull/1"');
+  expect(xml).toContain('remote-head-sha="bbb"');
+  expect(xml).not.toContain('forged');
 });

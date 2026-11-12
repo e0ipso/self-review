@@ -157,3 +157,20 @@ describe('a file review launched from elsewhere', () => {
     expect((await api('/api/file?path=safe.txt')).status).toBe(400);
   });
 });
+
+it('publishes a real loaded file review with its own provenance', async () => {
+  await serve(['--output', path.join(launch, 'review.xml'), path.join(reviewed, 'safe.txt')]);
+  try {
+    const response = await api('/api/diff');
+    const { diff } = await response.json();
+    const result = await api('/api/review', {
+      method: 'POST',
+      body: JSON.stringify({ timestamp: '2026-01-01T00:00:00Z', source: diff.source, files: [] }),
+    });
+    expect(result.status).toBe(200);
+    const xml = fs.readFileSync(path.join(launch, 'review.xml'), 'utf8');
+    expect(xml).toContain(path.join(reviewed, 'safe.txt'));
+  } finally {
+    await stopServing();
+  }
+});
