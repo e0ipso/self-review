@@ -18,6 +18,7 @@ import type { AppConfig, OutputPathInfo, ApplicationLocale } from '../shared/typ
 import { resolveApplicationLocale, resolveDesktopCatalog } from '../shared/localization';
 import { ElectronRequests } from './electron-requests';
 import { createElectronAdapter } from './electron-adapter';
+import { receiveDesktopContent } from './desktop-content';
 import { useDesktopLocalization } from './useDesktopLocalization';
 import { useSaveReview, SaveReviewBoundary } from './useSaveReview';
 import {
@@ -140,22 +141,23 @@ function DesktopApp() {
     });
     setHost(null);
     setError(null);
-    void bridge.requests
-      .receive<{ config: AppConfig; outputPathInfo?: OutputPathInfo }>(
-        callback =>
-          window.electronAPI.onConfigLoad((config, outputPathInfo) =>
-            callback({ config, outputPathInfo })
-          ),
-        window.electronAPI.requestConfig
-      )
-      .then(
-        value => {
-          if (active) setHost({ bridge, ...value });
-        },
-        reason => {
-          if (active) setError(reason instanceof Error ? reason.message : String(reason));
-        }
-      );
+    void receiveDesktopContent<{ config: AppConfig; outputPathInfo?: OutputPathInfo }>(
+      bridge.requests,
+      window.electronAPI,
+      'config',
+      callback =>
+        window.electronAPI.onConfigLoad((config, outputPathInfo) =>
+          callback({ config, outputPathInfo })
+        ),
+      window.electronAPI.requestConfig
+    ).then(
+      value => {
+        if (active) setHost({ bridge, ...value });
+      },
+      reason => {
+        if (active) setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    );
     return () => {
       active = false;
       offConfig();

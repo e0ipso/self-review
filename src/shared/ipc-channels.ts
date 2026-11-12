@@ -2,6 +2,9 @@
 // IPC channel names — used by main, preload, and renderer.
 
 export const IPC = {
+  CONTENT_READ: 'content:read',
+  CONTENT_CANCEL: 'content:cancel',
+  CONTENT_REFUSED: 'content:refused',
   DIFF_LOAD: 'diff:load',
   DIFF_REQUEST: 'diff:request',
   REVIEW_SUBMIT: 'review:submit',

@@ -1,6 +1,9 @@
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
-import type { ElectronAPI, ResumeLoadPayload } from '../shared/types';
+import type { DesktopReadRequest, ElectronAPI, ResumeLoadPayload } from '../shared/types';
 import { ElectronRequests } from './electron-requests';
+import { decodeReadResult } from './read-result';
+import { createDesktopPublicationClient } from './desktop-publication-client';
+import { receiveDesktopContent } from './desktop-content';
 
 type ReviewAPI = Pick<
   ElectronAPI,
@@ -20,6 +23,9 @@ type ReviewAPI = Pick<
   | 'applySuggestion'
   | 'chooseApplyDestination'
   | 'onGuideLoad'
+  | 'readContent'
+  | 'cancelContentRead'
+  | 'onContentRefused'
 >;
 
 /** Initial resume acknowledgements and later hydration share the old channel but have distinct
@@ -27,6 +33,7 @@ type ReviewAPI = Pick<
  */
 export function createElectronAdapter(api: ReviewAPI, requests = new ElectronRequests()) {
   let disposed = false;
+  const publication = createDesktopPublicationClient(api);
   const subscriptions = new Set<() => void>();
   function subscribe<T>(
     on: (callback: (value: T) => void) => () => void,
@@ -54,25 +61,73 @@ export function createElectronAdapter(api: ReviewAPI, requests = new ElectronReq
     if (resumeReply) resumeReply(value);
     else for (const callback of resumePushes) callback(value);
   });
+  const receiveContent = <T>(
+    kind: 'diff' | 'resume',
+    on: (callback: (value: T) => void) => () => void,
+    request: () => void
+  ) => receiveDesktopContent(requests, api, kind, on, request);
+  type ReadInput<T> = T extends unknown ? Omit<T, 'id'> : never;
+  const read = (request: ReadInput<DesktopReadRequest>, signal?: AbortSignal) =>
+    requests.read(
+      async id => {
+        const result = decodeReadResult(
+          await api.readContent!({ ...request, id } as DesktopReadRequest)
+        );
+        if (result.kind !== request.kind) throw new Error('Unexpected desktop read response.');
+        return result;
+      },
+      api.cancelContentRead,
+      signal
+    );
+  const reads = {
+    loadFileContent: async (filePath: string, signal: AbortSignal) => {
+      if (!api.readContent || !api.cancelContentRead)
+        return requests.read(() => api.loadFileContent(filePath), undefined, signal);
+      const result = await read({ kind: 'file', filePath }, signal);
+      if (result.kind !== 'file') throw new Error('Unexpected desktop read response.');
+      return result.hunks;
+    },
+    loadImage: async (filePath: string, signal: AbortSignal) => {
+      if (!api.readContent || !api.cancelContentRead)
+        return requests.read(() => api.loadImage(filePath), undefined, signal);
+      const result = await read({ kind: 'image', filePath }, signal);
+      if (result.kind !== 'image') throw new Error('Unexpected desktop read response.');
+      return result.image;
+    },
+    readAttachment: async (reference: string, signal: AbortSignal) => {
+      if (!api.readContent || !api.cancelContentRead)
+        return requests.read(() => api.readAttachment(reference), undefined, signal);
+      const result = await read({ kind: 'attachment', reference }, signal);
+      if (result.kind !== 'attachment') throw new Error('Unexpected desktop read response.');
+      return result.data;
+    },
+    expandContext: async (
+      request: import('../shared/types').ExpandContextRequest,
+      signal: AbortSignal
+    ) => {
+      if (!api.readContent || !api.cancelContentRead)
+        return requests.read(() => api.expandContext(request), undefined, signal);
+      const result = await read({ kind: 'context', request }, signal);
+      if (result.kind !== 'context') throw new Error('Unexpected desktop read response.');
+      return result.context;
+    },
+  };
   const adapter: ReviewAdapter = {
-    loadDiff: () => requests.receive(api.onDiffLoad, api.requestDiffData),
+    reads,
+    loadDiff: () => receiveContent('diff', api.onDiffLoad, api.requestDiffData),
     loadResumedReview: () => {
-      resumeLoad ??= requests
-        .run<ResumeLoadPayload>(resolve => {
+      resumeLoad ??= receiveContent<ResumeLoadPayload>(
+        'resume',
+        resolve => {
           resumeReply = resolve;
-          try {
-            api.requestResumeData();
-          } catch (error) {
-            resumeReply = null;
-            throw error;
-          }
           return () => {
             resumeReply = null;
           };
-        })
-        .finally(() => {
-          resumeLoad = null;
-        });
+        },
+        api.requestResumeData
+      ).finally(() => {
+        resumeLoad = null;
+      });
       return resumeLoad;
     },
     onResumeLoad: callback => {
@@ -86,25 +141,21 @@ export function createElectronAdapter(api: ReviewAPI, requests = new ElectronReq
       handoffReview: (state: import('../shared/types').ReviewState) =>
         requests.invoke(() => api.handoffReview!(state)),
     }),
-    ...(api.saveReview &&
-      api.acknowledgeReviewSave && {
-        publishReview: async (state: import('../shared/types').ReviewState) => {
-          const result = await requests.invoke(() => api.saveReview!(state), true);
-          if (result.status === 'failed')
-            throw Object.assign(new Error(result.message), {
-              uncertain: false,
-              details: [result.detail],
-            });
-          if (result.status === 'busy')
-            throw Object.assign(new Error('Another save is in progress.'), { uncertain: true });
-          api.acknowledgeReviewSave!(result.receipt);
-        },
-      }),
-    expandContext: request => requests.invoke(() => api.expandContext(request)),
-    loadFileContent: path => requests.invoke(() => api.loadFileContent(path)),
-    readAttachment: path => requests.invoke(() => api.readAttachment(path)),
+    ...(publication.modern && {
+      publishReview: (state: import('../shared/types').ReviewState) =>
+        requests.run<void>((resolve, reject) => {
+          let current = true;
+          void publication.publish(state, () => current && !disposed).then(resolve, reject);
+          return () => {
+            current = false;
+          };
+        }, true),
+    }),
+    expandContext: request => reads.expandContext(request, new AbortController().signal),
+    loadFileContent: path => reads.loadFileContent(path, new AbortController().signal),
+    readAttachment: path => reads.readAttachment(path, new AbortController().signal),
     changeOutputPath: () => requests.invoke(() => api.changeOutputPath(), true),
-    loadImage: path => requests.invoke(() => api.loadImage(path)),
+    loadImage: path => reads.loadImage(path, new AbortController().signal),
     applySuggestion: request => requests.invoke(() => api.applySuggestion(request), true),
     chooseApplyDestination: () => requests.invoke(() => api.chooseApplyDestination(), true),
     onGuideLoad: callback => subscribe(api.onGuideLoad, callback),
@@ -116,6 +167,7 @@ export function createElectronAdapter(api: ReviewAPI, requests = new ElectronReq
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      publication.dispose();
       requests.dispose();
       offResume();
       for (const release of subscriptions) release();

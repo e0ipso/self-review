@@ -97,6 +97,25 @@ export function createFetchAdapter(
   requester = createServeRequester(capability)
 ): FetchReviewAdapter {
   const { getJson, postJson, postJsonText } = createClient(requester);
+  const reads = {
+    expandContext: (request: ExpandContextRequest, signal?: AbortSignal) =>
+      postJson<ExpandContextResponse | null>('/api/expand-context', request, signal),
+    loadFileContent: (filePath: string, signal?: AbortSignal) =>
+      getJson<DiffHunk[] | null>(withPath('/api/file', filePath), signal),
+    loadImage: (filePath: string, signal?: AbortSignal) =>
+      getJson<ImageLoadResult>(withPath('/api/image', filePath), signal),
+    readAttachment: (filePath: string, signal?: AbortSignal): Promise<ArrayBuffer | null> =>
+      requester.request(
+        withPath('/api/attachment', filePath),
+        { signal },
+        async response => {
+          if (response.status === 404) return null;
+          if (!response.ok) throw await requestError(response, 'Read attachment');
+          return response.arrayBuffer();
+        },
+        'read'
+      ),
+  };
   let diffRequest: Promise<DiffApiResponse> | null = null;
   let loaded: DiffApiResponse | null = null;
   let disposed = false;
@@ -164,6 +183,7 @@ export function createFetchAdapter(
   };
 
   return {
+    reads,
     dispose: () => {
       disposed = true;
       subscriptions.clear();
@@ -199,28 +219,17 @@ export function createFetchAdapter(
     submitReview: publishReview,
     publishReview,
 
-    expandContext: (request: ExpandContextRequest) =>
-      postJson<ExpandContextResponse | null>('/api/expand-context', request),
+    expandContext: (request: ExpandContextRequest) => reads.expandContext(request),
 
-    loadFileContent: (filePath: string) =>
-      getJson<DiffHunk[] | null>(withPath('/api/file', filePath)),
+    loadFileContent: (filePath: string) => reads.loadFileContent(filePath),
 
-    loadImage: (filePath: string) => getJson<ImageLoadResult>(withPath('/api/image', filePath)),
+    loadImage: (filePath: string) => reads.loadImage(filePath),
 
     readAttachment: async (filePath: string): Promise<ArrayBuffer | null> => {
       // Bytes, not JSON: this route answers octet-stream, and 404 for an
       // attachment whose file is gone — which the image component renders
       // as "Image not found" rather than treating as an error.
-      return requester.request(
-        withPath('/api/attachment', filePath),
-        {},
-        async response => {
-          if (response.status === 404) return null;
-          if (!response.ok) throw await requestError(response, 'Read attachment');
-          return response.arrayBuffer();
-        },
-        'read'
-      );
+      return reads.readAttachment(filePath);
     },
 
     onGuideLoad: callback => subscribe(response => response.guide, callback),

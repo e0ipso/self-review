@@ -22,6 +22,7 @@ vi.mock('../../context/ReviewContext', () => ({
   useReviewSource: () => ({ type: 'git' }),
   useFileReview: () => undefined,
   useReviewSessionId: () => 1,
+  useReviewSnapshotId: () => 1,
   useReviewCommands: () => ({
     toggleViewed: vi.fn(),
     getCommentsForFile: vi.fn(() => []),

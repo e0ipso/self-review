@@ -14,6 +14,7 @@ import {
   submitReviewState,
 } from '../../packages/core/src/review-handlers';
 import type { ReviewSession } from '../../packages/core/src/review-handlers';
+import { checkContentBudget } from './content-budget';
 import type {
   ReviewState,
   SuggestionApplyRequest,
@@ -27,10 +28,27 @@ export function bindDesktopReviewOperations(session: ReviewSession, canMutate = 
     if (!canMutate()) throw new Error('The review is finishing.');
   };
   return {
-    getDiffLoad: () => getDiffLoad(session),
+    getDiffLoad: () => {
+      checkContentBudget(session.diffData, session.diffData?.isLargePayload);
+      checkContentBudget(session.guideData);
+      return getDiffLoad(session);
+    },
     getConfigLoad: () => getConfigLoad(session),
     getResumeLoad: () => getResumeLoad(session),
     getConfig: () => session.config,
+    captureReadSnapshot: () => {
+      const identity = session.sourceIdentity;
+      const paths = session.reviewedPaths;
+      const source = session.diffData?.source;
+      return () => {
+        if (
+          session.sourceIdentity !== identity ||
+          session.reviewedPaths !== paths ||
+          session.diffData?.source !== source
+        )
+          throw new Error('The review session has changed.');
+      };
+    },
     captureSnapshot: () => {
       const original = session.sourceIdentity;
       const diff = session.diffData;

@@ -1,6 +1,10 @@
 // Re-export all types from the canonical source in @self-review/types.
 // This file exists for backward compatibility — all src/ code imports from here.
 export type {
+  ReviewReads,
+  DesktopReadRequest,
+  DesktopReadResult,
+  ContentLoadRefusal,
   ReviewSaveResult,
   ApplicationLocale,
   ChangeType,
@@ -61,6 +65,9 @@ export interface AppInfo {
 }
 
 import type {
+  DesktopReadRequest,
+  DesktopReadResult,
+  ContentLoadRefusal,
   ReviewSaveResult,
   ApplicationLocale,
   DiffLoadPayload,
@@ -86,6 +93,10 @@ import type {
  * Writes keep their main-process owner until the final result, without a retryable timeout.
  */
 export interface ElectronAPI {
+  /** Optional correlated reads. No AbortSignal crosses structured clone. */
+  readContent?: (request: DesktopReadRequest) => Promise<DesktopReadResult>;
+  cancelContentRead?: (requestId: string) => void;
+  onContentRefused?: (callback: (failure: ContentLoadRefusal) => void) => () => void;
   requestDiffData: () => void;
   onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => () => void;
   requestConfig: () => void;

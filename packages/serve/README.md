@@ -7,6 +7,18 @@ It is the same review engine (`@self-review/core`) and the same UI (`@self-revie
 desktop application. Only the transport differs: HTTP and a browser tab in place of IPC and a
 window.
 
+## Client read cancellation
+
+The browser adapter supplies the optional `ReviewAdapter.reads` capability for lazy hunks, context
+expansion, reviewed images and comment attachments. Caller cancellation composes with the page
+lifetime and the read deadline, including response-body consumption. A pre-aborted read sends no
+HTTP request. Disposal, success, failure and cancellation release listeners and deadline timers. The
+capability remains in memory and authorization headers are preserved.
+
+The original adapter methods and the requester's three- and four-argument call forms remain
+supported. Read failures require an explicit retry. Publication and source Apply retain their
+mutation semantics, including unknown outcomes and no automatic replay.
+
 ## Run it
 
 ```bash

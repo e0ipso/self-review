@@ -226,7 +226,7 @@ describe('ipc-handlers', () => {
   });
 
   describe('DIFF_REQUEST handler (preparePayload)', () => {
-    it('strips hunks and sets contentLoaded=false for large payloads', () => {
+    it('strips hunks and sets contentLoaded=false for large payloads', async () => {
       const file = makeFile('src/app.ts');
       const payload: DiffLoadPayload = {
         files: [file],
@@ -238,6 +238,7 @@ describe('ipc-handlers', () => {
       const mockSend = sender.send;
       const handler = onHandlers[IPC.DIFF_REQUEST];
       handler(peer());
+      await Promise.resolve();
 
       expect(mockSend).toHaveBeenCalledWith(
         IPC.DIFF_LOAD,
@@ -254,7 +255,7 @@ describe('ipc-handlers', () => {
       );
     });
 
-    it('sets contentLoaded=true for normal payloads', () => {
+    it('sets contentLoaded=true for normal payloads', async () => {
       const file = makeFile('src/app.ts');
       const payload: DiffLoadPayload = {
         files: [file],
@@ -265,6 +266,7 @@ describe('ipc-handlers', () => {
       const mockSend = sender.send;
       const handler = onHandlers[IPC.DIFF_REQUEST];
       handler(peer());
+      await Promise.resolve();
 
       expect(mockSend).toHaveBeenCalledWith(
         IPC.DIFF_LOAD,
@@ -593,8 +595,8 @@ describe('ipc-handlers', () => {
         const read = handlers[IPC.ATTACHMENT_READ];
         const bytes = (await read(peer(), '.self-review-assets/a.png')) as ArrayBuffer;
         expect(Buffer.from(bytes).toString()).toBe('PNG-A');
-        expect(await read(peer(), '/etc/passwd')).toBeNull();
-        expect(await read(peer(), '../../etc/passwd')).toBeNull();
+        await expect(read(peer(), '/etc/passwd')).rejects.toThrow(/Attachments are read only/);
+        await expect(read(peer(), '../../etc/passwd')).rejects.toThrow(/Attachments are read only/);
       } finally {
         fsMod.rmSync(tmp, { recursive: true, force: true });
       }

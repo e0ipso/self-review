@@ -1,6 +1,6 @@
 import React, { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ElectronAPI, DiffLoadPayload, ResumeLoadPayload, AppConfig } from '../shared/types';
 import { DEFAULT_CONFIG } from '../../packages/react/src/config-defaults';
 vi.mock('../../packages/react/src/components/Toolbar', () => ({
@@ -18,7 +18,7 @@ vi.mock('./components/CloseConfirmDialog', () => ({ default: () => null }));
 import App from './App';
 afterEach(() => vi.unstubAllGlobals());
 
-it('recreates effect-owned adapters under StrictMode and submits current state before saving', async () => {
+beforeEach(() => {
   vi.stubGlobal(
     'IntersectionObserver',
     class {
@@ -32,6 +32,9 @@ it('recreates effect-owned adapters under StrictMode and submits current state b
     addEventListener() {},
     removeEventListener() {},
   }));
+});
+
+it('recreates effect-owned adapters under StrictMode and submits current state before saving', async () => {
   const diffs = new Set<(value: DiffLoadPayload) => void>();
   const resumes = new Set<(value: ResumeLoadPayload) => void>();
   const configs = new Set<(value: AppConfig) => void>();
@@ -103,4 +106,50 @@ it('recreates effect-owned adapters under StrictMode and submits current state b
   );
   view.unmount();
   expect(diffs.size + resumes.size + configs.size).toBe(0);
+});
+
+it('shows a config refusal immediately, releases listeners and recovers after Retry', async () => {
+  const configs = new Set<(value: AppConfig) => void>();
+  const refusals = new Set<(value: import('../shared/types').ContentLoadRefusal) => void>();
+  const subscribe =
+    <T,>(listeners: Set<(value: T) => void>) =>
+    (callback: (value: T) => void) => {
+      listeners.add(callback);
+      return () => {
+        listeners.delete(callback);
+      };
+    };
+  const requestConfig = vi.fn(() => {
+    for (const callback of refusals)
+      callback({ kind: 'config', message: 'Configuration exceeds desktop delivery limits.' });
+  });
+  window.electronAPI = {
+    onConfigLoad: subscribe(configs),
+    onContentRefused: subscribe(refusals),
+    requestConfig,
+    onResumeLoad: () => () => {},
+  } as unknown as ElectronAPI;
+  const view = render(<App />);
+  expect((await screen.findByRole('alert')).textContent).toContain(
+    'Configuration exceeds desktop delivery limits.'
+  );
+  expect(refusals.size).toBe(0);
+  expect(configs.size).toBe(1);
+  requestConfig.mockImplementation(() => {
+    for (const callback of configs) callback(DEFAULT_CONFIG);
+  });
+  // Keep this recovered review at its loading boundary; no diff has arrived yet.
+  Object.assign(window.electronAPI, {
+    onDiffLoad: () => () => {},
+    requestDiffData: () => {},
+    requestResumeData: () => {},
+    onGuideLoad: () => () => {},
+    onOutputPathChanged: () => () => {},
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await screen.findByRole('status', { name: 'Loading review' });
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(requestConfig).toHaveBeenCalledTimes(2);
+  view.unmount();
+  expect(configs.size + refusals.size).toBe(0);
 });

@@ -32,6 +32,7 @@ export function useImageAttachments({ process = processImageFile, ...options }: 
       running: false,
       nextId: 0,
       delivered: [] as Attachment[],
+      activeJob: null as { id: number; controller: AbortController } | null,
     }),
     [snapshot, options.owner, process]
   );
@@ -78,8 +79,13 @@ export function useImageAttachments({ process = processImageFile, ...options }: 
           item.id === id ? { ...item, status: 'processing' } : item
         );
         publish();
+        const jobController = new AbortController();
+        owner.activeJob = { id, controller: jobController };
         try {
-          const attachment = await process(job.file, controller.signal);
+          const attachment = await process(
+            job.file,
+            AbortSignal.any([controller.signal, jobController.signal])
+          );
           if (!active()) return;
           if (!owner.jobs.some(item => item.id === id)) continue;
           owner.jobs = owner.jobs.filter(item => item.id !== id);
@@ -96,6 +102,8 @@ export function useImageAttachments({ process = processImageFile, ...options }: 
                 }
               : item
           );
+        } finally {
+          if (owner.activeJob?.id === id) owner.activeJob = null;
         }
         publish();
       }
@@ -138,6 +146,7 @@ export function useImageAttachments({ process = processImageFile, ...options }: 
   };
   const dismiss = (id: number) => {
     owner.jobs = owner.jobs.filter(job => job.id !== id);
+    if (owner.activeJob?.id === id) owner.activeJob.controller.abort();
     publish();
   };
   return {

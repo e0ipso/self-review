@@ -47,6 +47,32 @@ function fixture() {
 }
 afterEach(() => vi.useRealTimers());
 
+it('keeps old ElectronAPI reads usable and makes pre-aborted optional reads transport-free', async () => {
+  const f = fixture();
+  const abort = new AbortController();
+  abort.abort();
+  await expect(f.bridge.adapter.reads!.loadFileContent!('old.ts', abort.signal)).rejects.toThrow(
+    /cancelled/
+  );
+  expect(f.api.loadFileContent).not.toHaveBeenCalled();
+  f.api.loadFileContent.mockResolvedValue([]);
+  await expect(
+    f.bridge.adapter.reads!.loadFileContent!('old.ts', new AbortController().signal)
+  ).resolves.toEqual([]);
+  f.api.expandContext.mockResolvedValue({ hunks: [], totalLines: 1 });
+  await expect(
+    f.bridge.adapter.reads!.expandContext!(
+      { filePath: 'old.ts', contextLines: 1 },
+      new AbortController().signal
+    )
+  ).resolves.toEqual({ hunks: [], totalLines: 1 });
+  f.api.readAttachment.mockResolvedValue(new ArrayBuffer(1));
+  await expect(
+    f.bridge.adapter.reads!.readAttachment!('old.png', new AbortController().signal)
+  ).resolves.toHaveProperty('byteLength', 1);
+  f.bridge.dispose();
+});
+
 it('settles initial requests and distinguishes resume acknowledgements from later pushes', async () => {
   const f = fixture();
   const push = vi.fn();
@@ -200,3 +226,114 @@ it('offers state handoff and publication only when their acknowledgements exist'
   expect(api.acknowledgeReviewSave).toHaveBeenCalledExactlyOnceWith('written');
   current.dispose();
 });
+
+const state = { timestamp: 'now', source: { type: 'welcome' as const }, files: [] };
+const flush = async () => {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+};
+
+function publicationFixture(requests = new ElectronRequests()) {
+  const legacy = fixture();
+  legacy.bridge.dispose();
+  const api = {
+    ...legacy.api,
+    saveReview: vi.fn(
+      async (): Promise<import('../shared/types').ReviewSaveResult> => ({
+        status: 'saved',
+        receipt: 'written',
+      })
+    ),
+    acknowledgeReviewSave: vi.fn(),
+  };
+  return { api, bridge: createElectronAdapter(api, requests) };
+}
+
+it.each([
+  null,
+  [],
+  {},
+  { status: 'unknown' },
+  { status: 'saved' },
+  { status: 'saved', receipt: '' },
+  { status: 'saved', receipt: 42 },
+  { status: 'failed', message: 'refused' },
+  { status: 'failed', detail: 'disk full' },
+])('keeps malformed publication results uncertain and never acknowledges %j', async value => {
+  const f = publicationFixture();
+  f.api.saveReview.mockResolvedValue(value as import('../shared/types').ReviewSaveResult);
+  await expect(f.bridge.adapter.publishReview!(state)).rejects.toMatchObject({ uncertain: true });
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  f.bridge.dispose();
+});
+
+it('distinguishes explicit refusal, busy, transport failure and failed acknowledgement', async () => {
+  const f = publicationFixture();
+  f.api.saveReview.mockResolvedValueOnce({ status: 'failed', message: 'No write', detail: 'Full' });
+  await expect(f.bridge.adapter.publishReview!(state)).rejects.toMatchObject({
+    uncertain: false,
+    message: 'No write',
+    details: ['Full'],
+  });
+  f.api.saveReview.mockResolvedValueOnce({ status: 'busy' });
+  await expect(f.bridge.adapter.publishReview!(state)).rejects.toMatchObject({ uncertain: true });
+  for (const uncertain of [undefined, false]) {
+    f.api.saveReview.mockRejectedValueOnce(Object.assign(new Error('transport'), { uncertain }));
+    await expect(f.bridge.adapter.publishReview!(state)).rejects.toMatchObject({
+      uncertain: uncertain !== false,
+    });
+  }
+  f.api.saveReview.mockImplementationOnce(() => {
+    throw new Error('sync transport');
+  });
+  await expect(f.bridge.adapter.publishReview!(state)).rejects.toMatchObject({ uncertain: true });
+  f.api.acknowledgeReviewSave.mockImplementationOnce(() => {
+    throw Object.assign(new Error('ack failed'), { uncertain: false });
+  });
+  await expect(f.bridge.adapter.publishReview!(state)).rejects.toMatchObject({ uncertain: true });
+  expect(f.api.acknowledgeReviewSave).toHaveBeenCalledExactlyOnceWith('written');
+  f.bridge.dispose();
+});
+
+it('preserves request admission and prevents acknowledgements after direct request disposal', async () => {
+  const requests = new ElectronRequests(100, 1);
+  const f = publicationFixture(requests);
+  let release!: (value: void) => void;
+  const occupying = requests.run<void>(resolve => {
+    release = resolve;
+  }, true);
+  await expect(f.bridge.adapter.publishReview!(state)).rejects.toThrow(/Too many/);
+  expect(f.api.saveReview).not.toHaveBeenCalled();
+  release();
+  await occupying;
+  let finish!: (value: import('../shared/types').ReviewSaveResult) => void;
+  f.api.saveReview.mockReturnValueOnce(new Promise(resolve => (finish = resolve)));
+  const pending = f.bridge.adapter.publishReview!(state);
+  const stopped = expect(pending).rejects.toThrow(/outcome is unknown/);
+  requests.dispose();
+  await stopped;
+  finish({ status: 'saved', receipt: 'late' });
+  await flush();
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+  f.bridge.dispose();
+});
+
+it.each(['deadline', 'dispose'] as const)(
+  'stops publication waiting on %s without replaying or acknowledging a late receipt',
+  async stop => {
+    vi.useFakeTimers();
+    const f = publicationFixture();
+    let finish!: (value: import('../shared/types').ReviewSaveResult) => void;
+    f.api.saveReview.mockReturnValueOnce(new Promise(resolve => (finish = resolve)));
+    const pending = f.bridge.adapter.publishReview!(state);
+    const result = Promise.allSettled([pending]);
+    if (stop === 'deadline') await vi.advanceTimersByTimeAsync(60_001);
+    else f.bridge.dispose();
+    finish({ status: 'saved', receipt: 'late' });
+    expect((await result)[0].status).toBe('rejected');
+    await flush();
+    expect(f.api.saveReview).toHaveBeenCalledOnce();
+    expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+    f.bridge.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  }
+);

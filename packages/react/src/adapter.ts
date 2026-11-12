@@ -20,6 +20,8 @@ import type {
  * are optional; the library degrades gracefully when absent.
  */
 export interface ReviewAdapter {
+  /** Optional cancellable reads. Omitted members fall back to their legacy counterparts. */
+  reads?: import('@self-review/types').ReviewReads;
   /** Load diff data. Called once on mount. */
   loadDiff: () => Promise<DiffLoadPayload>;
 

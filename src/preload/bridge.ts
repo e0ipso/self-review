@@ -18,6 +18,9 @@ export function createElectronAPI(
     };
   }
   const api = {
+    readContent: request => ipcRenderer.invoke(IPC.CONTENT_READ, request),
+    cancelContentRead: id => ipcRenderer.send(IPC.CONTENT_CANCEL, id),
+    onContentRefused: callback => subscribe(IPC.CONTENT_REFUSED, callback),
     requestDiffData: () => {
       ipcRenderer.send(IPC.DIFF_REQUEST);
     },

@@ -8,6 +8,25 @@ hooks. The provider adds no layout or keyboard manager. Keep adapter identity st
 suppress diff loading and diff subscriptions; initial comments hydrate once. `ReviewPanel` retains
 its children and imperative handle contracts.
 
+## Read ownership
+
+`ReviewAdapter.reads` optionally supplies `loadFileContent`, `expandContext`, `loadImage` and
+`readAttachment` with an `AbortSignal` as their last argument. Each member is optional. The UI falls
+back to the corresponding original adapter method when a member is absent, including manual retry.
+The original members and their signatures remain supported.
+
+Lazy hunks belong to the file, session and adapter that requested them. Collapse, replacement and
+disposal abort pending work; reopening starts a new read. Ordinary loading rerenders keep the
+request alive. Context expansion and image previews have the same ownership, and attachment reads
+also release their blob URLs. A dismissed image-ingestion job cancels its decoder without cancelling
+the next queued image. SVG previews read already-loaded hunks and make no host read.
+
+Stale-result checks remain necessary. Legacy hosts can continue working after cancellation, and an
+abort cannot preempt synchronous layout, structured cloning or a native decoder already running.
+Obsolete success and failure results never replace current content. Genuine read failures retain
+explicit retry; they do not trigger an automatic request loop. Attachment `null` means missing
+content. Access, unsafe-path, size and I/O failures reject with a useful message.
+
 ## Review metadata services
 
 `ReviewPanel` and `ReviewProviders` accept optional `services: Partial<ReviewServices>`. The

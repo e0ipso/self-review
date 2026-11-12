@@ -83,6 +83,93 @@ function openFile(filePath: string) {
   fireEvent.click(screen.getByTestId(`file-header-${filePath}`));
 }
 
+it('keeps a cancellable read through loading rerenders, cancels collapse, and reopens with a fresh owner', async () => {
+  const pending = [deferred<DiffHunk[] | null>(), deferred<DiffHunk[] | null>()];
+  const signals: AbortSignal[] = [];
+  const legacy = vi.fn();
+  const adapter: ReviewAdapter = {
+    loadDiff: async () => largePayload(['cancel.txt']),
+    loadFileContent: legacy,
+    reads: {
+      loadFileContent: vi.fn((_path, signal) => {
+        signals.push(signal);
+        return pending[signals.length - 1].promise;
+      }),
+    },
+  };
+  const view = await renderReview(adapter, 'cancel.txt');
+  openFile('cancel.txt');
+  await waitFor(() => expect(signals).toHaveLength(1));
+  await settle();
+  expect(signals[0].aborted).toBe(false);
+  expect(within(section('cancel.txt')).getByText('Loading file content...')).toBeTruthy();
+  openFile('cancel.txt');
+  expect(signals[0].aborted).toBe(true);
+  openFile('cancel.txt');
+  await waitFor(() => expect(signals).toHaveLength(2));
+  await act(async () => pending[0].reject(new Error('obsolete failure')));
+  expect(screen.queryByText('obsolete failure')).toBeNull();
+  await act(async () => pending[1].resolve(hunksWith('wanted line')));
+  expect((await screen.findAllByText('wanted line')).length).toBeGreaterThan(0);
+  expect(legacy).not.toHaveBeenCalled();
+  view.unmount();
+});
+
+it('aborts cancellable lazy work on a pushed replacement and on disposal', async () => {
+  const signals: AbortSignal[] = [];
+  let push!: (payload: DiffLoadPayload) => void;
+  const adapter: ReviewAdapter = {
+    loadDiff: async () => largePayload(['replace.txt']),
+    onDiffLoad: callback => {
+      push = callback;
+      return () => {};
+    },
+    reads: {
+      loadFileContent: (_path, signal) => {
+        signals.push(signal);
+        return new Promise(() => {});
+      },
+    },
+  };
+  const view = await renderReview(adapter, 'replace.txt');
+  openFile('replace.txt');
+  await waitFor(() => expect(signals).toHaveLength(1));
+  act(() => push(largePayload(['replace.txt'], { type: 'directory', sourcePath: '/new' })));
+  await settle();
+  expect(signals[0].aborted).toBe(true);
+  openFile('replace.txt');
+  await waitFor(() => expect(signals).toHaveLength(2));
+  view.unmount();
+  expect(signals[1].aborted).toBe(true);
+});
+
+it('replaces read ownership when a same-source push reuses the file object', async () => {
+  const payload = largePayload(['same.txt']);
+  const signals: AbortSignal[] = [];
+  let push!: (payload: DiffLoadPayload) => void;
+  const adapter: ReviewAdapter = {
+    loadDiff: async () => payload,
+    onDiffLoad: callback => {
+      push = callback;
+      return () => {};
+    },
+    reads: {
+      loadFileContent: (_path, signal) => {
+        signals.push(signal);
+        return new Promise(() => {});
+      },
+    },
+  };
+  const view = await renderReview(adapter, 'same.txt');
+  openFile('same.txt');
+  await waitFor(() => expect(signals).toHaveLength(1));
+  act(() => push({ ...payload }));
+  await waitFor(() => expect(signals).toHaveLength(2));
+  expect(signals[0].aborted).toBe(true);
+  expect(signals[1].aborted).toBe(false);
+  view.unmount();
+});
+
 function section(filePath: string) {
   return screen.getByTestId(`file-section-${filePath}`);
 }
