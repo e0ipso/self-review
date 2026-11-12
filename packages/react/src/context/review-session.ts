@@ -313,6 +313,9 @@ export interface FileReviewSummary {
   readonly viewed: boolean;
   readonly commentCount: number;
 }
+export interface FileProgressSummary extends FileReviewSummary {
+  readonly path: string;
+}
 
 /** One synchronous owner also lets async callbacks check ownership before React commits. */
 export function createReviewSessionStore(initial: ReviewSessionState) {
@@ -321,15 +324,29 @@ export function createReviewSessionStore(initial: ReviewSessionState) {
   let indexedFiles: FileReviewState[] | undefined;
   let filesByPath = new Map<string, FileReviewState>();
   let summaries: ReadonlyMap<string, FileReviewSummary> = new Map();
+  let progress: readonly FileProgressSummary[] = [];
   let indexedDiff: DiffFile[] | undefined;
   let diffByPath = new Map<string, DiffFile>();
   const indexFiles = () => {
     if (indexedFiles === state.files) return;
     indexedFiles = state.files;
     filesByPath = new Map();
+    const nextProgress: FileProgressSummary[] = [];
+    let progressChanged = progress.length !== state.files.length;
     // A rename and deletion can display the same path; ordered lookups select the first.
-    for (const file of state.files)
+    for (const [index, file] of state.files.entries()) {
       if (!filesByPath.has(file.path)) filesByPath.set(file.path, file);
+      const before = progress[index];
+      const summary =
+        before?.path === file.path &&
+        before.viewed === file.viewed &&
+        before.commentCount === file.comments.length
+          ? before
+          : { path: file.path, viewed: file.viewed, commentCount: file.comments.length };
+      nextProgress.push(summary);
+      if (before !== summary) progressChanged = true;
+    }
+    if (progressChanged) progress = nextProgress;
     const next = new Map<string, FileReviewSummary>();
     let changed = summaries.size !== filesByPath.size;
     const previousPaths = summaries.keys();
@@ -354,6 +371,10 @@ export function createReviewSessionStore(initial: ReviewSessionState) {
     getNavigation: () => {
       indexFiles();
       return summaries;
+    },
+    getProgress: () => {
+      indexFiles();
+      return progress;
     },
     getDiffFile: (path: string) => {
       if (indexedDiff !== state.allDiffFiles) {

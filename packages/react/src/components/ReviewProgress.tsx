@@ -1,19 +1,17 @@
 import { useLocalization } from '../localization/LocalizationContext';
 import React, { useMemo } from 'react';
-import { useDiffReview, useNavigationReview } from '../context/ReviewContext';
+import { useDiffReview, useProgressReview } from '../context/ReviewContext';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { Eye, MessageSquare } from 'lucide-react';
 
 export default function ReviewProgress() {
   const { t, number } = useLocalization();
   const { diffFiles } = useDiffReview();
-  const summaries = useNavigationReview();
+  const summaries = useProgressReview();
 
   const { viewedCount, totalFiles, commentCount, filesWithComments } = useMemo(() => {
     const paths = new Set(diffFiles.map(file => file.newPath || file.oldPath));
-    const visible = [...summaries]
-      .filter(([path]) => paths.has(path))
-      .map(([, summary]) => summary);
+    const visible = summaries.filter(summary => paths.has(summary.path));
     const viewed = visible.filter(f => f.viewed).length;
     const total = diffFiles.length;
     const comments = visible.reduce((sum, f) => sum + f.commentCount, 0);

@@ -167,6 +167,10 @@ export function useReviewedFile(filePath: string) {
 export function useNavigationReview() {
   return useStoreSelection(store => store.getNavigation());
 }
+/** Progress counts each canonical entry, including entries with a repeated display path. */
+export function useProgressReview() {
+  return useStoreSelection(store => store.getProgress());
+}
 export function useReviewSource() {
   return useSessionSelection(state => state.diffSource);
 }

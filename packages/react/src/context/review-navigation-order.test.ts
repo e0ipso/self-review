@@ -54,3 +54,15 @@ it('keeps the first-path navigation projection stable when later duplicates chan
   expect(store.getFile('shared')).toBe(store.getSnapshot().files[0]);
   expect(store.getSnapshot().files).toHaveLength(2);
 });
+
+it('retains every progress entry and reuses its snapshot when only canonical references change', () => {
+  const { store } = fixture();
+  const progress = store.getProgress();
+  expect(progress.map(file => file.viewed)).toEqual([false, true]);
+  expect(store.getProgress()).toBe(progress);
+  store.dispatch({ type: 'files', update: files => files.map(file => ({ ...file })) });
+  expect(store.getProgress()).toBe(progress);
+  store.dispatch({ type: 'files', update: files => [...files].reverse() });
+  expect(store.getProgress().map(file => file.viewed)).toEqual([true, false]);
+  expect(store.getProgress()).not.toBe(progress);
+});
