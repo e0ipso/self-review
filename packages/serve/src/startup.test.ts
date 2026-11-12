@@ -14,6 +14,19 @@ import type { ReviewState } from '@self-review/core';
 import { parseServeArgs } from './args';
 import { resolveSession } from './startup';
 import { createStartupHost } from './startup-composition';
+import { Worker } from 'node:worker_threads';
+import { buildResumeTestWorker } from './test-support/resume-worker';
+
+vi.mock('./resume-document-loader', async importOriginal => {
+  const original = await importOriginal<typeof import('./resume-document-loader')>();
+  return {
+    ...original,
+    loadResumeDocumentAsync: original.createResumeLoader(
+      undefined,
+      () => new Worker(path.join(tmp, 'resume-parser-worker.mjs'))
+    ),
+  };
+});
 
 // A real repository on disk, because every meaningful thing this module does
 // — mode detection, the diff, the repository root the server contains paths
@@ -40,7 +53,7 @@ function git(...args: string[]): void {
   execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'serve-startup-')));
 
   repo = path.join(tmp, 'repo');
@@ -65,6 +78,7 @@ beforeAll(() => {
   home = path.join(tmp, 'home');
   fs.mkdirSync(home);
   process.env.HOME = home;
+  await buildResumeTestWorker(path.join(tmp, 'resume-parser-worker.mjs'));
 });
 
 afterEach(() => {
@@ -141,6 +155,7 @@ describe('resolveSession', () => {
       ...host.operations,
       loadLocalReview: load,
       loadResumeDocument: resume,
+      loadResumeDocumentAsync: undefined,
       loadGuide: guide,
     };
     let settled = false;
@@ -378,4 +393,39 @@ describe('resolveSession', () => {
 
     await expect(resolveSession(parseServeArgs([]))).rejects.toThrow(/git repository/);
   });
+});
+
+it('awaits the optional async resume capability with the startup signal before guide loading', async () => {
+  const host = createStartupHost(repo, vi.fn());
+  const controller = new AbortController();
+  const options = { signal: controller.signal, timeoutMs: 1234 };
+  const synchronous = vi.fn<typeof host.operations.loadResumeDocument>(() => {
+    throw new Error('synchronous parsing must not run');
+  });
+  const guide = vi.fn(host.operations.loadGuide);
+  host.operations.loadResumeDocument = synchronous;
+  host.operations.loadGuide = guide;
+  host.operations.loadResumeDocumentAsync = vi.fn<
+    NonNullable<typeof host.operations.loadResumeDocumentAsync>
+  >((_session, _path, passed) => {
+    expect(passed).toBe(options);
+    return new Promise((_resolve, reject) =>
+      passed!.signal!.addEventListener('abort', () => reject(passed!.signal!.reason), {
+        once: true,
+      })
+    );
+  });
+  const pending = resolveSession(parseServeArgs(['--resume-from', 'prior.xml']), options, host);
+  const failure = pending.catch((error: unknown) => error);
+  try {
+    await vi.waitFor(() => expect(host.operations.loadResumeDocumentAsync).toHaveBeenCalledOnce());
+    expect(guide).not.toHaveBeenCalled();
+    controller.abort(new Error('startup cancelled'));
+    expect(await failure).toHaveProperty('message', expect.stringContaining('startup cancelled'));
+    expect(synchronous).not.toHaveBeenCalled();
+    expect(guide).not.toHaveBeenCalled();
+  } finally {
+    controller.abort();
+    await failure;
+  }
 });

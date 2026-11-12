@@ -22,6 +22,7 @@ import type * as core from '@self-review/core';
 import type { resolveCompatibleStartupSource } from './startup-compatibility';
 import type { GitExecutionOptions, ReviewOutputTarget, ReviewSession } from '@self-review/core';
 import type { ServeArgs } from './args';
+import type { loadResumeDocumentAsync } from './resume-document-loader';
 
 export interface ServeStartup {
   /** Carries the source identity every path-taking route authorizes against (audit A6). */
@@ -37,6 +38,8 @@ export interface StartupOperations {
   resolveSource: typeof resolveCompatibleStartupSource;
   loadLocalReview: typeof core.loadLocalReview;
   loadResumeDocument: typeof core.loadResumeDocument;
+  /** First-party cancellable parsing. Omitted by original injected operation sets. */
+  loadResumeDocumentAsync?: typeof loadResumeDocumentAsync;
   loadGuide: typeof core.loadGuide;
 }
 
@@ -52,6 +55,7 @@ export async function resolveSessionWithHost(
   options: GitExecutionOptions,
   host: StartupHost
 ): Promise<ServeStartup> {
+  options.signal?.throwIfAborted();
   // Phase 2 (main.ts): configuration and the output path.
   const { cwd, operations, reportDiagnostic } = host;
   const log = (message: string) => reportDiagnostic(`[serve] ${message}`);
@@ -105,7 +109,9 @@ export async function resolveSessionWithHost(
   if (args.resumeFrom) {
     const resumePath = resolve(cwd, args.resumeFrom);
     try {
-      operations.loadResumeDocument(session, resumePath);
+      if (operations.loadResumeDocumentAsync)
+        await operations.loadResumeDocumentAsync(session, resumePath, options);
+      else operations.loadResumeDocument(session, resumePath);
     } catch (error) {
       throw new Error(
         `Could not read the resume file ${resumePath}: ` +

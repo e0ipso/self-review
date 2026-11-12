@@ -1,5 +1,6 @@
 // Browser response policy and JSON requests; no endpoint or session state.
-import { SERVER_BUSY_ERROR } from '../protocol';
+import { SERVER_BUSY_CODE } from '../protocol';
+import { isLegacyBusyResponse } from './legacy-response-policy';
 import { ServeRequestError } from './request-error';
 import type { ServeRequester } from './requester';
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -19,7 +20,13 @@ export async function requestError(
     // A non-JSON error body is no more informative than the status.
   }
   const unknownOutcome =
-    mutation && response.status >= 500 && !(isRecord(body) && body.error === SERVER_BUSY_ERROR);
+    mutation &&
+    response.status >= 500 &&
+    !(
+      isRecord(body) &&
+      response.status === 503 &&
+      (body.code === SERVER_BUSY_CODE || isLegacyBusyResponse(response.status, body))
+    );
   const uncertainty = unknownOutcome ? { uncertain: true, code: 'outcome-unknown' } : {};
   if (isRecord(body)) {
     if (body.ok === false && typeof body.message === 'string') {
@@ -47,13 +54,14 @@ export async function requestError(
 // Response consumption stays inside the request deadline, including error bodies.
 export function createClient(requester: ServeRequester) {
   return {
-    getJson: <T>(path: string, signal?: AbortSignal): Promise<T> =>
+    getJson: <T>(path: string, signal?: AbortSignal, decode?: (value: unknown) => T): Promise<T> =>
       requester.request(
         path,
         { signal },
         async response => {
           if (!response.ok) throw await requestError(response, `GET ${path}`);
-          return response.json() as Promise<T>;
+          const value: unknown = await response.json();
+          return decode ? decode(value) : (value as T);
         },
         'read'
       ),
@@ -68,7 +76,12 @@ export function createClient(requester: ServeRequester) {
         read,
         'mutation'
       ),
-    postJson: <T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> =>
+    postJson: <T>(
+      path: string,
+      body: unknown,
+      signal?: AbortSignal,
+      decode?: (value: unknown) => T
+    ): Promise<T> =>
       requester.request(
         path,
         {
@@ -79,7 +92,8 @@ export function createClient(requester: ServeRequester) {
         },
         async response => {
           if (!response.ok) throw await requestError(response, `POST ${path}`);
-          return response.json() as Promise<T>;
+          const value: unknown = await response.json();
+          return decode ? decode(value) : (value as T);
         },
         'read'
       ),

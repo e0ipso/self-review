@@ -349,3 +349,40 @@ forward into the namespace, not a published port.
 Anyone who can reach the forwarded port _and has the URL_ has the same access you do. The key is a
 session secret, not a login: treat the printed URL like a password, and securing the tunnel is still
 yours to do.
+
+## Engine and transport contracts
+
+The CLI resolves installed Core capabilities once into a normalized engine contract. Core 2.0.4
+remains supported without disabling Apply, resume or publication. Its synchronous source probe,
+local loading and Apply can delay cancellation; its publication lacks the newer aggregate asset
+budget and cooperative staging cancellation. The CLI reports those limitations at startup. Pure
+request validation stays bundled, and fallback errors retain the installed Core error class.
+
+First-party transport construction uses `createBoundReviewServer` with bound read operations and an
+explicit publication role from `createPublicationOperations`. Publication owns its supplied state
+and does not first mutate the session's handoff cache. The existing `createReviewServer` overloads,
+`createReviewOperations`, `SubmissionOperations` and `ReviewSubmission` constructor retain the
+original submit-then-publish sequence, including custom handoff side effects. The transport and
+publication reporter contains both synchronous throws and asynchronous rejections; default route
+failure details still go to stderr.
+
+Startup's original required synchronous `loadResumeDocument` operation keeps its type and behavior
+for injected operation sets. The optional `loadResumeDocumentAsync` takes the startup signal and
+deadline. When replacing operations from a first-party host, clear that optional member to select
+the original synchronous path. `createStartupHost` selects it for the CLI. It reads and parses XML
+in a worker emitted as `dist/resume-parser-worker.js` beside `cli.js`, resolved relative to that
+module, before loading the guide or opening the listener. Every success, error, deadline and
+cancellation reaps that worker before adopting a result. Replacing an owner must abort its signal;
+an optional `isCurrent` guard also refuses stale replies. Termination may wait for a native syscall.
+Attachment-origin adoption still performs bounded synchronous metadata inspection on the host
+thread. For Core 2.0.4, a small compatibility projection uses its public `recordResumedAttachments`;
+no path or authorization policy is copied into serve.
+
+Browser reads validate diff, guide, config, resume, lazy hunks, context and image DTOs before
+delivery. A malformed read rejects with `malformed-read-response`, preserving existing data and
+subscriptions for explicit repair. Valid null responses, optional fields, extension metadata,
+duplicate paths and the full Core line budgets remain supported. Generic JSON helper call forms
+remain available. Admission busy responses preserve their original error text and add
+`code: "server-busy"`. Modern clients classify that code only on HTTP 503. The exact old uncoded
+busy response remains supported by an isolated legacy policy; other failures keep mutation outcomes
+uncertain and are never replayed.

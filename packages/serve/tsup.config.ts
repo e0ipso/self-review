@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/cli.ts'],
+  entry: ['src/cli.ts', 'src/resume-parser-worker.ts'],
   format: ['esm'],
   clean: true,
   sourcemap: true,

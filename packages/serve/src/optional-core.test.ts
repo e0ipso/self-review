@@ -147,3 +147,18 @@ it('does not invoke legacy Apply after cancellation was already observed', async
   ).rejects.toBe(reason);
   expect(write).not.toHaveBeenCalled();
 });
+
+it('retains custom selector method receivers when resolving capabilities once', async () => {
+  const engine = {
+    source: { mode: 'welcome' as const },
+    outcome: refusal,
+    resolveStartupSource() {
+      return this.source;
+    },
+    applySuggestionForSession() {
+      return this.outcome;
+    },
+  };
+  await expect(startupSourceFor(engine)([], '/launch', {})).resolves.toBe(engine.source);
+  await expect(applyFor(engine)(core.createReviewSession(), request)).resolves.toBe(engine.outcome);
+});

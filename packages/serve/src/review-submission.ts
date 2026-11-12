@@ -3,30 +3,39 @@
 import { ReviewPublishError } from '@self-review/core';
 import type { ReviewState, ReviewPublishErrorCode } from '@self-review/core';
 import type { ReviewSubmitAck, ReviewSubmitFailure } from './protocol';
+import { legacyPublication } from './legacy-submission';
+import { nonThrowingReporter } from './diagnostic-reporter';
 
 /** A publisher resolves only after commit; a refusal throws without replacing the previous file. */
-export interface SubmissionOperations {
-  submitReviewState: (state: ReviewState) => void;
+export interface PublicationOperations {
   publishReview: (
     state: ReviewState,
     options?: { signal?: AbortSignal }
   ) => Promise<{ outputPath: string }>;
 }
 
+/** Original handoff/publication contract, including handoff side effects and ordering. */
+export interface SubmissionOperations extends PublicationOperations {
+  submitReviewState: (state: ReviewState) => void;
+}
+export interface PublicationRole {
+  publication: PublicationOperations;
+}
+
 export class ReviewSubmission {
   private state: 'open' | 'publishing' | 'published' = 'open';
 
-  constructor(
-    private readonly operations: SubmissionOperations,
-    private readonly reportDiagnostic: (message: string) => void = message => console.error(message)
-  ) {}
+  private readonly operations: PublicationOperations;
+  private readonly report: ReturnType<typeof nonThrowingReporter>;
 
-  private report(message: string): void {
-    try {
-      void Promise.resolve(this.reportDiagnostic(message)).catch(() => {});
-    } catch {
-      // Diagnostics cannot change a committed result or hide a publication refusal.
-    }
+  constructor(operations: SubmissionOperations, reportDiagnostic?: (message: string) => void);
+  constructor(role: PublicationRole, reportDiagnostic?: (message: string) => void);
+  constructor(
+    input: SubmissionOperations | PublicationRole,
+    reportDiagnostic?: (message: string) => void
+  ) {
+    this.operations = 'submitReviewState' in input ? legacyPublication(input) : input.publication;
+    this.report = nonThrowingReporter(reportDiagnostic);
   }
 
   get completed(): boolean {
@@ -50,7 +59,6 @@ export class ReviewSubmission {
     options?: { signal?: AbortSignal }
   ): Promise<ReviewSubmitAck | ReviewSubmitFailure> {
     try {
-      this.operations.submitReviewState(state);
       const { outputPath } = await this.operations.publishReview(state, options);
       this.state = 'published';
       this.report(`[serve] Review written to ${outputPath}`);

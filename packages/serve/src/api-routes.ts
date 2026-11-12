@@ -4,7 +4,7 @@ import { parseAttachmentReference } from '@self-review/core';
 import { parseExpandContextBody, parseReviewStateBody, parseSuggestionApplyBody } from './validate';
 import { MAX_REVIEW_BODY_BYTES, MAX_APPLY_BODY_BYTES } from './protocol';
 import { readJsonBody, sendJson, sendError, SECURITY_HEADERS } from './http-transport';
-import type { ReviewOperations } from './review-operations';
+import type { ReviewTransportOperations as ReviewOperations } from './review-operations';
 import { ReviewSubmission, publishFailureStatus } from './review-submission';
 import { sendLargeJson } from './json-response';
 import type { RequestKind } from './request-admission';

@@ -58,3 +58,6 @@ export function formatMegabytes(bytes: number): string {
 
 /** Admission refuses before starting any engine operation, so retry is safe. */
 export const SERVER_BUSY_ERROR = 'review server busy; retry after pending requests finish';
+
+/** Stable pre-admission refusal; diagnostic wording is not the modern classifier. */
+export const SERVER_BUSY_CODE = 'server-busy';
