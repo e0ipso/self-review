@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   updateReply: vi.fn(),
 }));
 
-vi.mock('../../context/ReviewContext', () => ({
+vi.mock('../../context/review-session-hooks', () => ({
   useOptionalApplySession: () => null,
   useOptionalSnapshotKey: () => '',
   useReviewCommands: () => ({

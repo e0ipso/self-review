@@ -461,3 +461,51 @@ it('keeps resume failure and its pending retry unsaveable, then publishes all re
   expect(fs.readFileSync(outputPath, 'utf8')).toContain('Needs a test.');
   expect(submissions).toBe(1);
 });
+
+it(
+  'protects draft-only tab close and refuses Finish before publication until the draft is cancelled',
+  async () => {
+    session.resumeComments = [];
+    let submissions = 0;
+    let resumeDone!: () => void;
+    const resumed = new Promise<void>(resolve => {
+      resumeDone = resolve;
+    });
+    route = (url, init) => {
+      if (url.pathname === '/api/review') submissions++;
+      return realFetch(url, init).then(async response => {
+        if (url.pathname === '/api/resume') {
+          await response.clone().arrayBuffer();
+          resumeDone();
+        }
+        return response;
+      });
+    };
+    const view = render(<App capability={CAPABILITY} />);
+    await view.findByTestId('add-file-comment-src/index.ts', {}, { timeout: 10_000 });
+    await act(async () => {
+      await resumed;
+    });
+    expect(closeIsGuarded()).toBe(false);
+    fireEvent.click(view.getByTestId('add-file-comment-src/index.ts'));
+    fireEvent.change(view.getByTestId('comment-input').querySelector('textarea')!, {
+      target: { value: 'Unsubmitted text' },
+    });
+    await waitFor(() => expect(closeIsGuarded()).toBe(true));
+    fireEvent.click(view.getByTestId('finish-review-btn'));
+    await waitFor(() =>
+      expect(view.getByTestId('submit-error').textContent).toContain(
+        'Finish or cancel unfinished drafts'
+      )
+    );
+    expect(submissions).toBe(0);
+    expect(fs.existsSync(outputPath)).toBe(false);
+    expect(exit).not.toHaveBeenCalled();
+    expect(view.getByDisplayValue('Unsubmitted text')).toBeTruthy();
+    fireEvent.click(view.getByTestId('cancel-comment-btn'));
+    fireEvent.click(view.getByTestId('finish-review-btn'));
+    await view.findByText('Review saved');
+    expect(fs.existsSync(outputPath)).toBe(true);
+  },
+  CASE_TIMEOUT_MS
+);

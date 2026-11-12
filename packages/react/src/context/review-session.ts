@@ -9,6 +9,7 @@ import type {
   ReviewComment,
 } from '@self-review/types';
 import type { SetStateAction } from 'react';
+import { createReviewDraftStore } from './review-drafts';
 import { reconcileRemoteFeedback } from './reconcile-remote-feedback';
 
 function groupCommentsByFile(comments: ReviewComment[]): Map<string, ReviewComment[]> {
@@ -393,7 +394,12 @@ export function createReviewSessionStore(initial: ReviewSessionState) {
     if (changed) summaries = next;
   };
   let mutationLock: symbol | null = null;
+  const drafts = createReviewDraftStore(() => ({
+    snapshotId: state.snapshotId,
+    locked: mutationLock !== null,
+  }));
   return {
+    drafts,
     getSnapshot: () => state,
     getFile: (path: string) => {
       indexFiles();
@@ -445,7 +451,10 @@ export function createReviewSessionStore(initial: ReviewSessionState) {
       if (next.sessionId !== state.sessionId || next.snapshotId !== state.snapshotId)
         mutationLock = null;
       if (next === state) return;
+      const replacement = next.sessionId !== state.sessionId;
+      const refreshed = next.snapshotId !== state.snapshotId;
       state = next;
+      if (replacement || refreshed) drafts.transition(replacement);
       listeners.forEach(listener => listener());
     },
   };

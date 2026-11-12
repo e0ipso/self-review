@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { useReviewDraftWork } from '../../packages/react/src/hooks/useReviewDraft';
 import { useReview } from '../../packages/react/src/context/ReviewContext';
 
 /** Sticky for this mounted review, including removal of its final resumed comment or viewed flag. */
 export function useUnsavedReviewWork(): boolean {
+  const drafts = useReviewDraftWork();
   const { files } = useReview();
   const previous = useRef(files);
   const [changed, setChanged] = useState(false);
@@ -21,5 +23,5 @@ export function useUnsavedReviewWork(): boolean {
     )
       setChanged(true);
   }, [files, hasWork, changed]);
-  return changed || hasWork;
+  return drafts || changed || hasWork;
 }

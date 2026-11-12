@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Attachment } from '@self-review/types';
-import { useOptionalSnapshotKey, useOptionalApplySession } from '../context/ReviewContext';
+import { useOptionalSnapshotKey, useOptionalApplySession } from '../context/review-session-hooks';
 import { ImageAttachmentError, processImageFile } from '../utils/image-utils';
 
 export const ATTACHMENT_MAX_COUNT = 8;
@@ -15,6 +15,9 @@ interface Options {
   onAttach: (attachments: Attachment[]) => void;
   attachments?: Attachment[];
   owner?: string;
+  signal?: AbortSignal;
+  onAbort?: () => void;
+  onWorkChange?: (unfinished: boolean) => void;
   onProcessingChange?: (pending: boolean) => void;
   process?: typeof processImageFile;
 }
@@ -34,7 +37,7 @@ export function useImageAttachments({ process = processImageFile, ...options }: 
       delivered: [] as Attachment[],
       activeJob: null as { id: number; controller: AbortController } | null,
     }),
-    [snapshot, options.owner, process]
+    [snapshot, options.owner, options.signal, process]
   );
   const currentOwner = useRef<typeof owner | null>(owner);
   currentOwner.current = owner;
@@ -46,10 +49,12 @@ export function useImageAttachments({ process = processImageFile, ...options }: 
   const current = () =>
     currentOwner.current === owner &&
     !owner.controller.signal.aborted &&
+    !options.signal?.aborted &&
     (callbacks.current.isCurrent?.() ?? true);
   const publish = () => {
     if (!current()) return;
     setJobs([...owner.jobs]);
+    callbacks.current.onWorkChange?.(owner.jobs.length > 0);
     callbacks.current.onProcessingChange?.(owner.jobs.some(job => job.status !== 'error'));
   };
   useLayoutEffect(() => {
@@ -57,12 +62,15 @@ export function useImageAttachments({ process = processImageFile, ...options }: 
     currentOwner.current = owner;
     setJobs([]);
     setSelectionError(false);
+    const callbacksAtStart = callbacks.current;
     return () => {
+      if (owner.jobs.length > 0) callbacksAtStart.onAbort?.();
       owner.controller.abort();
       owner.jobs = [];
       owner.running = false;
       if (currentOwner.current === owner) currentOwner.current = null;
-      callbacks.current.onProcessingChange?.(false);
+      callbacksAtStart.onProcessingChange?.(false);
+      callbacksAtStart.onWorkChange?.(false);
     };
   }, [owner]);
 
@@ -84,7 +92,11 @@ export function useImageAttachments({ process = processImageFile, ...options }: 
         try {
           const attachment = await process(
             job.file,
-            AbortSignal.any([controller.signal, jobController.signal])
+            AbortSignal.any([
+              controller.signal,
+              jobController.signal,
+              ...(options.signal ? [options.signal] : []),
+            ])
           );
           if (!active()) return;
           if (!owner.jobs.some(item => item.id === id)) continue;

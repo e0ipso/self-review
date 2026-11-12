@@ -10,6 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../../packages/react/src/components/ui/alert-dialog';
+import { useReviewDraftGuard } from '../../../packages/react/src/hooks/useReviewDraft';
 import { useUnsavedReviewWork } from '../useUnsavedReviewWork';
 import { useDesktopLocalization } from '../useDesktopLocalization';
 import { useSaveReview } from '../useSaveReview';
@@ -34,17 +35,18 @@ export default function CloseConfirmDialog({
   const [open, setOpen] = useState(false);
   const handleSaveAndQuit = useSaveReview(api);
 
+  const hasDraftWork = useReviewDraftGuard();
   const hasUnsavedWork = useUnsavedReviewWork();
 
   useEffect(() => {
     return api.onCloseRequested(() => {
-      if (!hasUnsavedWork) {
+      if (!hasUnsavedWork && !hasDraftWork()) {
         api.discardAndQuit();
         return;
       }
       setOpen(true);
     });
-  }, [hasUnsavedWork, api]);
+  }, [hasUnsavedWork, hasDraftWork, api]);
 
   const handleDiscard = () => {
     api.discardAndQuit();

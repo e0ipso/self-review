@@ -31,14 +31,35 @@ export function FileSectionBody(props: PreviewFileSectionBodyProps): React.JSX.E
 // Keep the legacy signature last so ComponentProps retains the original public property types.
 export function FileSectionBody(props: FileSectionBodyProps): React.JSX.Element;
 export function FileSectionBody({
+  contentAreaProps,
+  ...props
+}: FileSectionBodyProps | PreviewFileSectionBodyProps) {
+  return (
+    <FileSectionBodyLayout {...props}>
+      <PreviewErrorBoundary
+        filePath={props.filePath}
+        resetKeys={[
+          contentAreaProps.file,
+          contentAreaProps.renderViewMode,
+          contentAreaProps.viewMode,
+        ]}
+      >
+        <PreviewContentArea {...normalizePreviewProps(contentAreaProps)} />
+      </PreviewErrorBoundary>
+    </FileSectionBodyLayout>
+  );
+}
+
+/** Internal arrangement depends only on its comments and a content slot. */
+export function FileSectionBodyLayout({
   filePath,
   fileComments,
   orphanedComments = [],
   showingFileComment,
   onCancelFileComment,
   onFileCommentSubmit,
-  contentAreaProps,
-}: FileSectionBodyProps | PreviewFileSectionBodyProps) {
+  children,
+}: Omit<FileSectionBodyProps, 'contentAreaProps'> & { children: React.ReactNode }) {
   const { t } = useLocalization();
   return (
     <div className='bg-background file-diff-content rounded-b-lg overflow-hidden'>
@@ -80,17 +101,7 @@ export function FileSectionBody({
         </div>
       )}
 
-      {/* A preview that throws is contained to this file; a view or content change retries it. */}
-      <PreviewErrorBoundary
-        filePath={filePath}
-        resetKeys={[
-          contentAreaProps.file,
-          contentAreaProps.renderViewMode,
-          contentAreaProps.viewMode,
-        ]}
-      >
-        <PreviewContentArea {...normalizePreviewProps(contentAreaProps)} />
-      </PreviewErrorBoundary>
+      {children}
     </div>
   );
 }
