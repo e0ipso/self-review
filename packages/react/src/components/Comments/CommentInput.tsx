@@ -180,6 +180,7 @@ export default function CommentInput({
           <span className='text-[10px] text-muted-foreground/50 me-0.5'>{t('Esc to unfocus')}</span>
           <Button
             data-testid='cancel-comment-btn'
+            data-hint-action='cancel-comment'
             variant='ghost'
             size='sm'
             onClick={handleCancel}
@@ -189,6 +190,7 @@ export default function CommentInput({
           </Button>
           <Button
             data-testid='add-comment-btn'
+            data-hint-action='submit-comment'
             size='sm'
             onClick={handleSubmit}
             disabled={!isValid || attachmentsPending}

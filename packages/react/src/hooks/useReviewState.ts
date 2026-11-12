@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { createReviewStateQueries } from '../context/review-state-queries';
+import { createReviewStateCommands } from '../context/review-state-commands';
 import { useReviewServices } from '../context/ReviewServicesContext';
 import type {
   Attachment,
@@ -46,135 +48,17 @@ export function useReviewStateOperations(
   setFiles: UseReviewStateReturn['setFiles']
 ): UseReviewStateReturn {
   const { createId } = useReviewServices();
-  const commands = useMemo(() => {
-    const changeThread = (
-      commentId: string,
-      change: (comment: ReviewComment) => ReviewComment | null
-    ) => {
-      setFiles(previous =>
-        previous.map(file => {
-          if (!file.comments.some(comment => comment.id === commentId)) return file;
-          return {
-            ...file,
-            comments: file.comments.flatMap(comment => {
-              if (comment.id !== commentId) return [comment];
-              const next = change(comment);
-              return next ? [next] : [];
-            }),
-          };
-        })
-      );
-    };
-    const addComment = (
-      filePath: string,
-      lineRange: LineRange | null,
-      body: string,
-      category: string,
-      suggestion: Suggestion | null,
-      attachments?: Attachment[]
-    ) => {
-      const newComment: ReviewComment = {
-        id: createId(),
-        filePath,
-        lineRange,
-        body,
-        category,
-        suggestion,
-        ...(attachments?.length ? { attachments } : {}),
-      };
+  const commands = useMemo(
+    () => createReviewStateCommands(setFiles, createId),
+    [setFiles, createId]
+  );
 
-      setFiles(prevFiles =>
-        prevFiles.map(file =>
-          file.path === filePath ? { ...file, comments: [...file.comments, newComment] } : file
-        )
-      );
-    };
-
-    const updateComment = (id: string, updates: Partial<ReviewComment>) =>
-      changeThread(id, comment => ({ ...comment, ...updates }));
-    const deleteComment = (id: string) => changeThread(id, () => null);
-
-    /**
-     * Appends a reply to a comment's thread, creating the array when absent.
-     * Order is conversation order: replies are always appended, never prepended.
-     */
-    const addReply = (
-      commentId: string,
-      body: string,
-      author?: string,
-      attachments?: Attachment[]
-    ) => {
-      const newReply: Reply = {
-        id: createId(),
-        body,
-        ...(author ? { author } : {}),
-        ...(attachments?.length ? { attachments } : {}),
-      };
-
-      changeThread(commentId, comment => ({
-        ...comment,
-        replies: [...(comment.replies ?? []), newReply],
-      }));
-    };
-    const updateReply = (commentId: string, replyId: string, updates: Partial<Reply>) => {
-      changeThread(commentId, comment => ({
-        ...comment,
-        replies: comment.replies?.map(reply =>
-          reply.id === replyId ? { ...reply, ...updates } : reply
-        ),
-      }));
-    };
-    const deleteReply = (commentId: string, replyId: string) => {
-      changeThread(commentId, comment => ({
-        ...comment,
-        replies: comment.replies?.filter(reply => reply.id !== replyId),
-      }));
-    };
-
-    const toggleViewed = (filePath: string) => {
-      setFiles(prevFiles =>
-        prevFiles.map(file => (file.path === filePath ? { ...file, viewed: !file.viewed } : file))
-      );
-    };
-
-    return {
-      addComment,
-      updateComment,
-      deleteComment,
-      addReply,
-      updateReply,
-      deleteReply,
-      toggleViewed,
-    };
-  }, [setFiles, createId]);
-
-  const byPath = useMemo(() => new Map(files.map(file => [file.path, file])), [files]);
-
-  const getCommentsForFile = (filePath: string): ReviewComment[] => {
-    const file = byPath.get(filePath);
-    return file ? file.comments : [];
-  };
-
-  const getCommentsForLine = (
-    filePath: string,
-    lineNumber: number,
-    side: 'old' | 'new'
-  ): ReviewComment[] => {
-    const file = byPath.get(filePath);
-    if (!file) return [];
-
-    return file.comments.filter(comment => {
-      if (!comment.lineRange) return false;
-      if (comment.lineRange.side !== side) return false;
-      return lineNumber >= comment.lineRange.start && lineNumber <= comment.lineRange.end;
-    });
-  };
+  const queries = useMemo(() => createReviewStateQueries(files), [files]);
 
   return {
     files,
     setFiles,
     ...commands,
-    getCommentsForFile,
-    getCommentsForLine,
+    ...queries,
   };
 }

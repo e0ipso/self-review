@@ -14,6 +14,12 @@ export interface HintItem {
 const HINT_CHARS = 'asdfjklhgqwertuiop'.split('');
 const SCROLL_AMOUNT = 80;
 
+// Semantic actions click their own controls. Keep the old composer IDs discoverable for hosts
+// whose existing custom controls predate the marker; use the same selector for activation.
+const CLICK_HINT_SELECTOR =
+  '[data-comment-gutter], [data-hint-action], [data-testid="cancel-comment-btn"], [data-testid="add-comment-btn"], [data-testid^="category-option-"]';
+const LINE_HINT_SELECTOR = '[data-line-type][data-line-number][data-line-side]';
+
 export function generateLabels(count: number): string[] {
   if (count <= HINT_CHARS.length) return HINT_CHARS.slice(0, count);
   const labels: string[] = [];
@@ -72,20 +78,7 @@ export function useKeyboardNavigation() {
   const activateHint = useCallback(
     (hint: HintItem) => {
       if (modeRef.current === 'hint-diff') {
-        const testId = hint.element.getAttribute('data-testid');
-
-        // Comment form buttons and file-level actions: just click them
-        const hintAction = hint.element.getAttribute('data-hint-action');
-        if (
-          hint.element.hasAttribute('data-comment-gutter') ||
-          testId === 'cancel-comment-btn' ||
-          testId === 'add-comment-btn' ||
-          testId?.startsWith('category-option-') ||
-          hintAction === 'toggle-viewed' ||
-          hintAction === 'add-file-comment' ||
-          hintAction === 'delete-comment' ||
-          hintAction === 'finish-review'
-        ) {
+        if (hint.element.matches(CLICK_HINT_SELECTOR)) {
           hint.element.click();
           clearHintsRef.current();
           return;
@@ -135,8 +128,7 @@ export function useKeyboardNavigation() {
     (newMode: 'hint-diff' | 'hint-file') => {
       let selector: string;
       if (newMode === 'hint-diff') {
-        selector =
-          '[data-comment-gutter], [data-line-type][data-line-number][data-line-side], [data-testid="cancel-comment-btn"], [data-testid="add-comment-btn"], [data-testid^="category-option-"], [data-hint-action="toggle-viewed"], [data-hint-action="add-file-comment"], [data-hint-action="delete-comment"], [data-hint-action="finish-review"]';
+        selector = `${CLICK_HINT_SELECTOR}, ${LINE_HINT_SELECTOR}`;
       } else {
         // A collapsed file tree panel renders every entry at zero width, which
         // the visibility filter below then discards, so hint-file mode would

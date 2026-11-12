@@ -1,9 +1,13 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo } from 'react';
 import type { ReviewAdapter } from '../adapter';
 import type { UseReviewStateReturn } from '../hooks/useReviewState';
-import { expandContext } from '../read-service';
-import type { ReviewContextValue } from './ReviewContext';
+import type { ReviewContextValue } from './review-context';
 import type { ReviewSessionStore } from './review-session';
+import {
+  createReviewSessionController,
+  type ReviewSessionController,
+} from './review-session-controller';
+import type { createReviewStateCommands } from './review-state-commands';
 
 export type ReviewCommands = Pick<
   ReviewContextValue,
@@ -20,7 +24,33 @@ export type ReviewCommands = Pick<
   | 'isCurrentSession'
 >;
 
-/** Commands capture one snapshot; read ownership follows the synchronous session owner. */
+/** Mutations keep their stable identities. Snapshot commands use the same request owner as loading. */
+export function createSessionCommands(
+  store: ReviewSessionStore,
+  controller: ReviewSessionController,
+  review: ReturnType<typeof createReviewStateCommands>
+): ReviewCommands {
+  const owner = controller.capture();
+  return {
+    addComment: review.addComment,
+    editComment: review.updateComment,
+    deleteComment: review.deleteComment,
+    addReply: review.addReply,
+    updateReply: review.updateReply,
+    deleteReply: review.deleteReply,
+    toggleViewed: review.toggleViewed,
+    isCurrentSession: owner.current,
+    expandFileContext: owner.expandFileContext,
+    updateFileHunks: (filePath, hunks) => {
+      if (owner.current()) store.dispatch({ type: 'hunks', filePath, hunks });
+    },
+    setApplyDestination: destination => {
+      if (owner.current()) store.dispatch({ type: 'destination', destination });
+    },
+  };
+}
+
+/** Retained for custom hook compositions. The provider binds its existing controller directly. */
 export function useSessionCommands(
   store: ReviewSessionStore,
   adapter: ReviewAdapter | null,
@@ -28,79 +58,22 @@ export function useSessionCommands(
   sessionId: number,
   snapshotId: number
 ): ReviewCommands {
-  const live = useRef(true);
-  const requests = useRef(new Set<AbortController>());
-  useLayoutEffect(() => {
-    live.current = true;
-    const abort = () => {
-      requests.current.forEach(controller => controller.abort());
-      requests.current.clear();
-    };
-    const unsubscribe = store.subscribe(() => {
-      const state = store.getSnapshot();
-      if (state.sessionId !== sessionId || state.snapshotId !== snapshotId) abort();
-    });
-    return () => {
-      live.current = false;
-      unsubscribe();
-      abort();
-    };
-  }, [store, adapter, sessionId, snapshotId]);
-  return useMemo<ReviewCommands>(() => {
-    const owner = sessionId;
-    const snapshot = snapshotId;
-    const current = () =>
-      live.current &&
-      store.getSnapshot().sessionId === owner &&
-      store.getSnapshot().snapshotId === snapshot;
-    return {
-      addComment: review.addComment,
-      editComment: review.updateComment,
-      deleteComment: review.deleteComment,
-      addReply: review.addReply,
-      updateReply: review.updateReply,
-      deleteReply: review.deleteReply,
-      toggleViewed: review.toggleViewed,
-      isCurrentSession: current,
-      updateFileHunks: (filePath, hunks) => {
-        if (current()) store.dispatch({ type: 'hunks', filePath, hunks });
-      },
-      setApplyDestination: destination => {
-        if (current()) store.dispatch({ type: 'destination', destination });
-      },
-      expandFileContext: async (filePath, contextLines) => {
-        if (!(adapter?.reads?.expandContext || adapter?.expandContext) || !current()) return null;
-        const controller = new AbortController();
-        requests.current.add(controller);
-        try {
-          const result = await expandContext(
-            adapter,
-            { filePath, contextLines },
-            controller.signal
-          );
-          return current() && result
-            ? { hunks: result.hunks, totalLines: result.totalLines }
-            : null;
-        } catch (error) {
-          if (!controller.signal.aborted && current())
-            console.error('[ReviewContext] Failed to expand context:', error);
-          return null;
-        } finally {
-          requests.current.delete(controller);
-        }
-      },
-    };
-  }, [
-    store,
-    adapter,
-    sessionId,
-    snapshotId,
-    review.addComment,
-    review.updateComment,
-    review.deleteComment,
-    review.addReply,
-    review.updateReply,
-    review.deleteReply,
-    review.toggleViewed,
-  ]);
+  const controller = useMemo(() => createReviewSessionController(store, adapter), [store, adapter]);
+  useLayoutEffect(() => controller.activate(), [controller]);
+  return useMemo(
+    () => createSessionCommands(store, controller, review),
+    [
+      store,
+      controller,
+      sessionId,
+      snapshotId,
+      review.addComment,
+      review.updateComment,
+      review.deleteComment,
+      review.addReply,
+      review.updateReply,
+      review.deleteReply,
+      review.toggleViewed,
+    ]
+  );
 }

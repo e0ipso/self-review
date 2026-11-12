@@ -1472,3 +1472,24 @@ describe('useReviewState', () => {
     });
   });
 });
+
+it('keeps ordered first-match reads for duplicate display paths', () => {
+  const { result } = renderHook(() => useReviewState());
+  const first = {
+    id: 'first',
+    filePath: 'a',
+    body: 'first',
+    category: 'note',
+    suggestion: null,
+    lineRange: { side: 'new' as const, start: 1, end: 1 },
+  };
+  const last = { ...first, id: 'last', body: 'last' };
+  act(() =>
+    result.current.setFiles([
+      { path: 'a', changeType: 'renamed', viewed: false, comments: [first] },
+      { path: 'a', changeType: 'deleted', viewed: false, comments: [last] },
+    ])
+  );
+  expect(result.current.getCommentsForFile('a')).toEqual([first]);
+  expect(result.current.getCommentsForLine('a', 1, 'new')).toEqual([first]);
+});

@@ -23,7 +23,10 @@ export function projectReviewContext(
     getCommentsForFile: review.getCommentsForFile,
     getCommentsForLine: review.getCommentsForLine,
     remoteDrift: state.resumedReview?.remoteDrift ?? null,
-    importDiagnostics: state.resumedReview?.importDiagnostics ?? [],
+    importDiagnostics: [
+      ...(state.resumedReview?.importDiagnostics ?? []),
+      ...state.anchorDiagnostics,
+    ],
     remote: state.remote,
     diagnostics: state.diagnostics,
     isLargePayload: state.isLargePayload,
