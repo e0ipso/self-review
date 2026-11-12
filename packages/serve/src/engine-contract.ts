@@ -104,6 +104,8 @@ export function requestContractFor(engine: RequestContract) {
 export function resolveServeEngine(engine: typeof core) {
   return {
     core: engine,
+    commitLoadedReview:
+      typeof engine.commitLoadedReview === 'function' ? engine.commitLoadedReview : undefined,
     compatibilityDiagnostics: coreCompatibilityDiagnostics(engine),
     resolveSource: startupSourceFor(engine),
     applySuggestion: applyFor(engine),

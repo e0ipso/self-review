@@ -29,6 +29,7 @@ export function createStartupHost(
       inspectOutput: output => core.inspectOutputPath(output.path, core.publishOptionsFor(output)),
       resolveSource,
       loadLocalReview: core.loadLocalReview,
+      commitLoadedReview: installedServeEngine.commitLoadedReview,
       loadResumeDocument: core.loadResumeDocument,
       loadResumeDocumentAsync,
       loadGuide: (output, config, files, options) =>

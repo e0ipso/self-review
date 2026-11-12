@@ -50,3 +50,5 @@ export type { ApplyDestinationInspection } from './review-suggestions';
 
 export { readSuggestionBoundedSync } from './suggestion-read';
 export type { BoundedSuggestionReader } from './suggestion-read';
+
+export type { LocalSourcePaths } from './source-identity';

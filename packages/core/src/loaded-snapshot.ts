@@ -7,8 +7,9 @@ import { nodeReadFsLayer } from './safe-fs-read';
 import { SafeFsError } from './safe-fs-policy';
 import { checkLoadingCancelled } from './local-loading-lifetime';
 
-// Stable across the separately bundled root and operations entry points. Non-enumerable evidence
-// never travels in IPC/XML or changes the old payload/identity reference contracts.
+// Legacy bridge for old loader + three-argument commit/read callers. This evidence belongs only
+// to this exact identity object: spreading or serializing logical identity loses it. New hosts
+// carry LoadedReview separately. Both symbols work across bundled root/operations entry points.
 const SNAPSHOT = Symbol.for('@self-review/core/loaded-snapshot');
 const CAPTURE = Symbol.for('@self-review/core/source-capture');
 export const RELOAD_REVIEW =
@@ -58,18 +59,79 @@ export function recordLoadedSnapshot(
   gitOptions?: import('./git').GitExecutionOptions,
   blobRunner?: import('./command-runner').BufferedCommandRunner,
   indexCapture?: IndexCapture
-): void {
-  Object.defineProperty(identity, SNAPSHOT, {
-    value: {
-      identityStamp: identityStamp(identity),
-      physical,
-      index,
-      gitOptions,
-      blobRunner,
-      indexCapture,
-    },
-    configurable: true,
-  });
+): LoadedReviewSnapshot {
+  const snapshot = {
+    identityStamp: identityStamp(identity),
+    physical,
+    index,
+    gitOptions,
+    blobRunner,
+    indexCapture,
+  };
+  Object.defineProperty(identity, SNAPSHOT, { value: snapshot, configurable: true });
+  return snapshot;
+}
+
+// The handle owns no descriptors or source copies. Only this module retains its private evidence.
+// Bundled root/operations aliases share this module; logical and handle copies carry no evidence.
+declare const loadedReviewBrand: unique symbol;
+
+/** Opaque host-local load capability. Never include it in XML, IPC or other wire data. */
+export interface LoadedReview {
+  readonly [loadedReviewBrand]: true;
+}
+
+interface LoadedReviewState {
+  readonly identity: ReviewSourceIdentity;
+  readonly reviewedPaths: ReadonlySet<string>;
+  readonly snapshot: LoadedReviewSnapshot;
+}
+
+const loadedReviews = new WeakMap<LoadedReview, LoadedReviewState>();
+
+/** Internal constructor: only loaders that observed the source can issue a captured capability. */
+export function createLoadedReview(
+  identity: ReviewSourceIdentity,
+  files: readonly DiffFile[],
+  snapshot: LoadedReviewSnapshot
+): LoadedReview {
+  const paths = new Set(files.flatMap(file => [file.oldPath, file.newPath].filter(Boolean)));
+  const state: LoadedReviewState = { identity, reviewedPaths: paths, snapshot };
+  const review = Object.freeze({}) as LoadedReview;
+  loadedReviews.set(review, state);
+  return review;
+}
+
+/** Internal projection: filtering a payload can narrow, but never widen, its captured membership. */
+export function restrictLoadedReview(
+  review: LoadedReview,
+  files: readonly DiffFile[]
+): LoadedReview {
+  const state = loadedReviewState(review);
+  for (const file of files) {
+    for (const filePath of [file.oldPath, file.newPath]) {
+      if (filePath && !state.reviewedPaths.has(filePath))
+        throw new TypeError('A filtered loaded review cannot add a source path');
+    }
+  }
+  return createLoadedReview(state.identity, files, state.snapshot);
+}
+
+/** Internal evidence access; entry aliases share the private registry through their bundled chunk. */
+export function loadedReviewState(review: LoadedReview): LoadedReviewState {
+  const state = loadedReviews.get(review);
+  if (!state) throw new TypeError('Expected an original LoadedReview capability');
+  return state;
+}
+
+/** Returns the original mutable logical identity alias, not a copy or captured handle. */
+export function loadedReviewIdentity(review: LoadedReview): ReviewSourceIdentity {
+  return loadedReviewState(review).identity;
+}
+
+/** A defensive membership copy; changing it cannot authorize another captured read. */
+export function loadedReviewPaths(review: LoadedReview): ReadonlySet<string> {
+  return new Set(loadedReviewState(review).reviewedPaths);
 }
 
 export function recordSourceCapture(file: DiffFile, capture: PhysicalCapture | undefined): void {
@@ -83,13 +145,13 @@ export function sourceCapture(file: DiffFile): PhysicalCapture | undefined {
 export function admitSyntheticSnapshot(
   identity: ReviewSourceIdentity,
   files: readonly DiffFile[]
-): void {
+): LoadedReview {
   const physical = new Map<string, PhysicalCapture>();
   for (const file of files) {
     const capture = sourceCapture(file);
     if (capture) physical.set(file.newPath || file.oldPath, capture);
   }
-  recordLoadedSnapshot(identity, physical);
+  return createLoadedReview(identity, files, recordLoadedSnapshot(identity, physical));
 }
 
 /**

@@ -1,3 +1,5 @@
+import type { SourceReadFsLayer } from './scan-fs';
+import type { LocalSourcePaths } from './source-identity';
 import type { DiffFile, ReviewSourceIdentity } from './types';
 import {
   runGitDiffAsync,
@@ -16,6 +18,9 @@ import { pinnedGitDiffArgs } from './pinned-comparison';
 import { resolveGitSourceIdentity } from './source-identity';
 
 export interface LoadGitDiffOptions extends GitExecutionOptions {
+  /** Supplied bounded source reads, including untracked additions. */
+  readFs?: SourceReadFsLayer;
+  sourcePaths?: LocalSourcePaths;
   /**
    * Include untracked working-tree files as synthetic additions. Defaults
    * to true (local git mode). Remote mode passes false: a base...head diff
@@ -67,6 +72,7 @@ export async function loadGitDiffWithUntracked(
     signal: options.signal,
     runner: options.runner,
     timeoutMs: options.timeoutMs,
+    sourcePaths: options.sourcePaths ?? options.readFs,
   });
 
   // Such output would parse as an empty review; name the flag and skip git.
@@ -152,8 +158,11 @@ export async function loadGitDiffWithUntracked(
 
   let allFiles = files;
   if (untrackedPaths.length > 0) {
+    if (options.sourcePaths && !options.readFs)
+      throw new TypeError('The supplied git source needs a SourceReadFsLayer for untracked reads');
     const untracked = await loadSyntheticFilesAsync(untrackedPaths, repository, {
       followSymlinks: false,
+      readFs: options.readFs,
       budgets: {
         ...budgets,
         maxDiffFiles: Math.max(0, budgets.maxDiffFiles - files.length),

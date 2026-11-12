@@ -8,6 +8,7 @@ import type { ReviewSourceIdentity, ReviewSourceSide } from './types';
 import { parseGitDiffArgs, describeDiffPathRelativity } from './git-diff-args';
 
 import { executeGit, type GitExecutionOptions } from './git';
+import { checkLoadingCancelled } from './local-loading-lifetime';
 import { isCommandCancelled } from './forge-provider';
 
 /** One side as the arguments describe it, before resolution; `implicit` is the HEAD git assumes. */
@@ -173,7 +174,8 @@ export function canonicalSourcePath(target: string): string {
 export function resolveReviewedPathPrefix(
   gitDiffArgv: readonly string[],
   sourceRoot: string,
-  invocationCwd: string
+  invocationCwd: string,
+  canonical: (target: string) => string = canonicalSourcePath
 ): string {
   const relative = describeDiffPathRelativity(gitDiffArgv);
   switch (relative.kind) {
@@ -182,10 +184,7 @@ export function resolveReviewedPathPrefix(
     case 'directory':
       return relative.directory.replace(/\/+$/, '');
     case 'cwd': {
-      const fromRoot = path.relative(
-        canonicalSourcePath(sourceRoot),
-        canonicalSourcePath(invocationCwd)
-      );
+      const fromRoot = path.relative(canonical(sourceRoot), canonical(invocationCwd));
       if (fromRoot === '' || fromRoot.startsWith('..') || path.isAbsolute(fromRoot)) return '';
       return fromRoot.split(path.sep).join('/');
     }
@@ -201,6 +200,8 @@ export function rootRelativeReviewedPath(
 }
 
 export interface GitSourceIdentityOptions extends GitExecutionOptions {
+  /** Supplied source path resolution; never falls back to native realpath. */
+  sourcePaths?: LocalSourcePaths;
   repository: string;
   gitDiffArgv: readonly string[];
   /** Defaults to the process's working directory. */
@@ -223,15 +224,26 @@ export async function resolveGitSourceIdentity(
     oldSide.kind === 'none' || newSide.kind === 'none'
       ? await gitOutput(repository, ['hash-object', '-t', 'tree', '--stdin'], options)
       : null;
-  const sourceRoot = canonicalSourcePath(repository);
   const invocationCwd = options.invocationCwd ?? process.cwd();
+  const sourceRoot = options.sourcePaths
+    ? await canonicalLocalPath(repository, options.sourcePaths, options.signal)
+    : canonicalSourcePath(repository);
+  const physicalCwd =
+    options.sourcePaths && describeDiffPathRelativity(options.gitDiffArgv).kind === 'cwd'
+      ? await canonicalLocalPath(invocationCwd, options.sourcePaths, options.signal)
+      : invocationCwd;
   return {
     mode: options.mode ?? 'git',
     ...(emptyTreeSha !== null && SHA_PATTERN.test(emptyTreeSha) ? { emptyTreeSha } : {}),
     sourceRoot,
     invocationCwd,
     gitDiffArgv: [...options.gitDiffArgv],
-    pathPrefix: resolveReviewedPathPrefix(options.gitDiffArgv, sourceRoot, invocationCwd),
+    pathPrefix: resolveReviewedPathPrefix(
+      options.gitDiffArgv,
+      sourceRoot,
+      physicalCwd,
+      options.sourcePaths ? target => target : canonicalSourcePath
+    ),
     oldSide,
     newSide,
   };
@@ -251,11 +263,39 @@ export interface LocalSourceIdentityOptions {
 export function resolveLocalSourceIdentity(
   options: LocalSourceIdentityOptions
 ): ReviewSourceIdentity {
+  return localIdentity(options, canonicalSourcePath);
+}
+
+/** The path role a local load needs; a supplied provider owns every canonicalization. */
+export interface LocalSourcePaths {
+  realpath(target: string): Promise<string>;
+}
+
+/** Async identity resolution for supplied sources; the synchronous public form stays native. */
+export async function resolveLocalSourceIdentityAsync(
+  options: LocalSourceIdentityOptions,
+  paths: LocalSourcePaths,
+  signal?: AbortSignal
+): Promise<ReviewSourceIdentity> {
+  const canonical = (target: string) => canonicalLocalPath(target, paths, signal);
+  const root = await canonical(
+    options.type === 'file' ? path.dirname(options.sourcePath) : options.sourcePath
+  );
+  const file = options.type === 'file' ? await canonical(options.sourcePath) : undefined;
+  return localIdentity(options, target =>
+    target === options.sourcePath && file !== undefined ? file : root
+  );
+}
+
+function localIdentity(
+  options: LocalSourceIdentityOptions,
+  canonical: (target: string) => string
+): ReviewSourceIdentity {
   const invocationCwd = options.invocationCwd ?? process.cwd();
   if (options.type === 'directory') {
     return {
       mode: 'directory',
-      sourceRoot: canonicalSourcePath(options.sourcePath),
+      sourceRoot: canonical(options.sourcePath),
       invocationCwd,
       gitDiffArgv: [],
       pathPrefix: '',
@@ -265,11 +305,28 @@ export function resolveLocalSourceIdentity(
   }
   return {
     mode: 'file',
-    sourceRoot: canonicalSourcePath(path.dirname(options.sourcePath)),
+    sourceRoot: canonical(path.dirname(options.sourcePath)),
     invocationCwd,
     gitDiffArgv: [],
     pathPrefix: '',
     oldSide: { kind: 'none' },
-    newSide: { kind: 'file', path: canonicalSourcePath(options.sourcePath) },
+    newSide: { kind: 'file', path: canonical(options.sourcePath) },
   };
+}
+
+async function canonicalLocalPath(
+  target: string,
+  paths: LocalSourcePaths,
+  signal?: AbortSignal
+): Promise<string> {
+  checkLoadingCancelled(signal);
+  try {
+    const result = await paths.realpath(target);
+    checkLoadingCancelled(signal);
+    return result;
+  } catch {
+    checkLoadingCancelled(signal);
+    // Keep per-path diagnostics without consulting a different filesystem.
+    return path.resolve(target);
+  }
 }

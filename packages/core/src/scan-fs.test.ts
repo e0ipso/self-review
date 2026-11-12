@@ -3,8 +3,13 @@ import { constants, Stats } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { scanDirectory, scanFile } from './directory-scanner';
 import { prepareDirectoryReview } from './review-start';
-import { createReviewSession, commitDiffData } from './review-session';
+import { createReviewSession, commitDiffData, commitLoadedReview } from './review-session';
+import { loadLocalReview } from './startup';
+import { readLoadedReviewContent } from './snapshot-reader';
+import { loadedReviewIdentity } from './loaded-snapshot';
 import { readReviewedContent } from './snapshot-reader';
+import { expandContext } from './review-context';
+import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { loadGitReviewSnapshot } from './loaded-git-review';
 import type { SourceScanOptions, SourceScanResult } from './directory-scanner';
 import type { ScanEntry, ScanFsLayer } from './scan-fs';
@@ -56,7 +61,7 @@ function virtualFs(content: Record<string, Buffer | string>) {
   const files = new Map(
     Object.entries(content).map(([name, bytes]) => [join(root, name), Buffer.from(bytes)])
   );
-  const directories = new Set([root, join(root, 'output')]);
+  const directories = new Set(['/', root, join(root, 'output')]);
   for (const target of files.keys()) {
     for (let parent = dirname(target); parent.startsWith(root); parent = dirname(parent)) {
       directories.add(parent);
@@ -516,4 +521,152 @@ it('captures git reads with supplied text, binary and filesystem dependencies on
     ok: false,
     reason: 'read-failed',
   });
+});
+
+it.each(['directory', 'file'] as const)(
+  'loads a supplied %s source with its own paths, bytes and receiver',
+  async mode => {
+    const bytes = Buffer.from([0, 0xff, 0x80]);
+    const virtual = virtualFs({ 'image.png': bytes, 'ignored/secret': 'hidden' });
+    virtual.links.set('/virtual-alias', root);
+    const receiver: ScanFsLayer = {
+      readAllocation: 'bounded',
+      async stat(target) {
+        expect(this).toBe(receiver);
+        return virtual.layer.stat(target);
+      },
+      async realpath(target) {
+        expect(this).toBe(receiver);
+        return virtual.layer.realpath(target);
+      },
+      async lstat(target) {
+        expect(this).toBe(receiver);
+        return virtual.layer.lstat(target);
+      },
+      async open(...args) {
+        expect(this).toBe(receiver);
+        return virtual.layer.open(...args);
+      },
+      async opendir(target) {
+        expect(this).toBe(receiver);
+        return virtual.layer.opendir(target);
+      },
+      async readlink(target) {
+        expect(this).toBe(receiver);
+        return virtual.layer.readlink(target);
+      },
+    };
+    const loaded = await loadLocalReview(
+      { mode, sourcePath: mode === 'file' ? '/virtual-alias/image.png' : '/virtual-alias' },
+      [],
+      { ignore: ['ignored/'] },
+      '/virtual-launch',
+      () => {},
+      {},
+      { scanFs: receiver }
+    );
+    expect(loaded.identity).toMatchObject({ sourceRoot: root, invocationCwd: '/virtual-launch' });
+    expect(loaded.payload.files.map(file => file.newPath)).toEqual(['image.png']);
+    expect(loaded.loadedReview).toBeDefined();
+    expect(loadedReviewIdentity(loaded.loadedReview!)).toBe(loaded.identity);
+    const session = createReviewSession();
+    commitLoadedReview(session, loaded.payload, loaded.loadedReview!);
+    expect(session.diffData).toBe(loaded.payload);
+    expect(session.sourceIdentity).toBe(loaded.identity);
+    expect(await readLoadedReviewContent(loaded.loadedReview!, 'image.png', 'new')).toEqual({
+      ok: true,
+      content: bytes,
+    });
+    virtual.files.set(join(root, 'image.png'), Buffer.from([0, 1, 2, 3]));
+    expect(await readReviewedContent(session, 'image.png', 'new')).toMatchObject({
+      ok: false,
+      reason: 'read-failed',
+    });
+    expect(virtual.closes.every(close => close.mock.calls.length === 1)).toBe(true);
+  }
+);
+
+it('retains supplied local source budgets and closes on cancellation before capture admission', async () => {
+  const virtual = virtualFs({ 'image.png': Buffer.alloc(500_000, 1), 'later.txt': 'later' });
+  const limited = await loadLocalReview(
+    { mode: 'directory', sourcePath: root },
+    [],
+    { ignore: [] },
+    root,
+    () => {},
+    { budgets: { maxFileBytes: 10 } },
+    { scanFs: virtual.layer }
+  );
+  expect(limited.payload.files[0].omittedReason).toContain('per-file read budget');
+  expect(virtual.reads).toHaveBeenCalledWith(join(root, 'image.png'), expect.any(Number));
+  const controller = new AbortController();
+  virtual.reads.mockImplementation(() => controller.abort(new Error('stop')));
+  await expect(
+    loadLocalReview(
+      { mode: 'directory', sourcePath: root },
+      [],
+      { ignore: [] },
+      root,
+      () => {},
+      { signal: controller.signal },
+      { scanFs: virtual.layer }
+    )
+  ).rejects.toMatchObject({ name: 'CommandCancelledError' });
+  expect(virtual.closes.every(close => close.mock.calls.length === 1)).toBe(true);
+});
+
+it('runs the standard git loader, untracked projection and captured expansion with supplied effects only', async () => {
+  const bytes = Buffer.from('top\nnew\nbottom\n');
+  const virtual = virtualFs({
+    'source.txt': bytes,
+    'untracked.txt': 'untracked\n',
+    '.git/index': 'index',
+  });
+  const oid = 'a'.repeat(40);
+  const patch =
+    'diff --git a/source.txt b/source.txt\n--- a/source.txt\n+++ b/source.txt\n@@ -1,3 +1,3 @@\n top\n-old\n+new\n bottom\n';
+  const runner = vi.fn(async (_command: string, args: readonly string[]) => {
+    let stdout: string;
+    if (args[0] === 'rev-parse')
+      stdout = args.includes('--git-path') ? join(root, '.git/index') + '\n' : root + '\n';
+    else if (args[0] === 'ls-files')
+      stdout = args.includes('--stage') ? `100644 ${oid} 0\tsource.txt\0` : 'untracked.txt\0';
+    else if (args.includes('--name-status')) stdout = 'M\0source.txt\0';
+    else if (args.includes('diff')) stdout = patch;
+    else throw new Error(`Unexpected supplied git command ${args.join(' ')}`);
+    return { stdout, stderr: '', exitCode: 0 };
+  });
+  const blobRunner = vi.fn(async () => ({ stdout: bytes, stderr: Buffer.alloc(0), exitCode: 0 }));
+  const loaded = await loadLocalReview(
+    { mode: 'git' },
+    [],
+    { ignore: [] },
+    root,
+    () => {},
+    { runner, snapshotRunner: blobRunner },
+    {
+      gitSnapshot: {
+        readFs: virtual.readFs,
+        sourceFs: virtual.layer,
+        loadDiff: loadGitDiffWithUntracked,
+      },
+    }
+  );
+  expect(loaded.payload.files.map(file => file.newPath)).toEqual(['source.txt', 'untracked.txt']);
+  const session = createReviewSession();
+  commitLoadedReview(session, loaded.payload, loaded.loadedReview!);
+  expect(await readReviewedContent(session, 'untracked.txt', 'new')).toEqual({
+    ok: true,
+    content: Buffer.from('untracked\n'),
+  });
+  expect(await readReviewedContent(session, 'source.txt', 'old')).toEqual({
+    ok: true,
+    content: bytes,
+  });
+  expect(await expandContext(session, { filePath: 'source.txt', contextLines: 20 })).toMatchObject({
+    totalLines: 3,
+  });
+  expect(runner).toHaveBeenCalledWith('git', expect.arrayContaining(['-U20']), expect.any(Object));
+  expect(blobRunner).toHaveBeenCalledWith('git', ['cat-file', 'blob', oid], expect.any(Object));
+  expect(virtual.closes.every(close => close.mock.calls.length === 1)).toBe(true);
 });

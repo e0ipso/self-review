@@ -12,6 +12,7 @@ import type {
   ReviewSourceIdentity,
   RemoteDriftInfo,
 } from './types';
+import { loadedReviewIdentity, type LoadedReview } from './loaded-snapshot';
 import type { AttachmentOrigins } from './attachment-origins';
 import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { validateReviewState } from './review-state-validation';
@@ -47,6 +48,8 @@ export interface ReviewSession {
    * reviewed content refuses.
    */
   sourceIdentity: ReviewSourceIdentity | null;
+  /** Host-local captured load, optional for legacy session objects. Never transport this value. */
+  loadedReview?: LoadedReview | null;
   /**
    * Resumed reference to absolute path beside *the resumed document*; authorizes reads and tells
    * the publisher which bytes to carry. Never sent to the front end.
@@ -109,9 +112,22 @@ export function commitDiffData(
   payload: DiffLoadPayload,
   identity: ReviewSourceIdentity | null
 ): void {
+  if ('loadedReview' in session)
+    (session as { loadedReview?: LoadedReview | null }).loadedReview = null;
   session.diffData = payload;
   session.reviewedPaths = reviewedPathsOf(payload.files);
   session.sourceIdentity = identity;
+}
+
+/** Commit explicit load evidence while preserving the original payload and identity aliases. */
+export function commitLoadedReview(
+  session: Pick<ReviewSession, 'diffData' | 'reviewedPaths' | 'sourceIdentity' | 'loadedReview'>,
+  payload: DiffLoadPayload,
+  loadedReview: LoadedReview
+): void {
+  const identity = loadedReviewIdentity(loadedReview);
+  commitDiffData(session, payload, identity);
+  session.loadedReview = loadedReview;
 }
 
 /**

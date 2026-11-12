@@ -219,3 +219,58 @@ delay termination.
 Hosts supporting older installed Core versions must bundle this subpath from their build input,
 while retaining the runtime Core root as external. Serve does this with its `noExternal` binding, so
 Core 2.0.4 needs no new export and its error classes keep their identity.
+
+## Explicit loaded review capabilities
+
+New local hosts carry `LoadedLocalReview.loadedReview` separately from the logical
+`ReviewSourceIdentity`. `loadLocalReview`, `loadGitReviewSnapshot` and `prepareDirectoryReview`
+issue this opaque `LoadedReview` capability after observing the source. Use
+`commitLoadedReview(session, payload, loadedReview)` to retain it in a session, or
+`readLoadedReviewContent(loadedReview, path, side, options)` for a direct captured read.
+`loadedReviewIdentity` returns the original mutable identity alias; `loadedReviewPaths` returns a
+membership copy. Copying that set cannot authorize additional reads. The original payload, identity,
+fields and nested maps remain mutable. Changing identity after load makes captured reads refuse
+until reload. Physical source drift also refuses; index reads use the captured blob OID even after
+restaging. Expansion verifies both compared sides and index replacement before and after re-diff. No
+source bytes, temporary source snapshots, Git objects, index entries or refs are written to capture
+a local review. The handle owns no open descriptors and requires no disposal.
+
+This capability is host-local. Do not put it in XML, IPC, HTTP, saved state or other transport data.
+Spreading or serializing a handle does not create another usable capability. Keep the original
+handle when copying logical metadata. Session previews and expansion consume it explicitly, and a
+copied logical identity cannot replace the identity associated with a retained handle.
+
+The original three-argument `commitDiffData`, synchronous identity functions, six-argument
+`loadLocalReview` and live structural `readReviewedContent` calls remain supported. For
+compatibility with captured callers predating this API, first-party loaders also attach
+non-enumerable evidence to the exact original identity object. The old commit/read route retains its
+captured guarantee only while that original object survives. A spread, clone or serialized logical
+identity has no capture guarantee and retains legacy live descriptor reads. Supplying such an
+identity to the old API does not assert capture. Use the explicit capability route whenever capture
+is required. Hosts running actual published Core 2.0.4 must feature-detect `commitLoadedReview` and
+retain their original commit/read, Apply, publication and resume paths. That peer has no explicit
+capture capability and provides only its original live descriptor semantics. No new peer subpath is
+needed.
+
+`loadLocalReview` accepts an optional seventh `LocalReviewDependencies` argument. Its `scanFs` role
+owns path canonicalization, enumeration, metadata and bounded bytes for directory/file loads.
+`resolveLocalSourceIdentityAsync(options, paths, signal)` uses the supplied path role; the original
+synchronous resolver keeps native behavior. Every provider method retains its receiver. Failed
+canonicalization keeps lexical paths for the scanner's diagnostics and never calls native realpath
+as a fallback. Source budgets and cancellation stay in the sixth options argument. Native defaults
+use the existing scanners and filesystem roles.
+
+Git hosts can supply `gitSnapshot` dependencies. Its bounded `readFs` supplies capture inspection;
+`sourceFs`, or the loader's `readFs` option, supplies untracked content and link reads. The standard
+loader refuses an untracked read if only a path role was supplied, rather than reading the host
+filesystem. Injected loaders retain their own source effects. Captured context expansion also uses
+the load's Git runner with the current operation's signal. A supplied text Git runner also needs
+`snapshotRunner` for binary-safe blob reads; otherwise a captured blob read refuses. Selected
+comparison paths bound index evidence; unrelated tracked entries never consume untracked entry
+budgets.
+
+Synthetic projection shares source accounting and text budgets, selects a patch or structured
+emitter once, then formats diagnostics separately. Both public synchronous and asynchronous forms
+retain their patch bytes, structured data, omission wording and ordering, and cancellation
+checkpoints. `scripts/test/core-loaded-review.test.mjs` checks the additive capture API and the
+legacy bridge through both built ESM and CommonJS root/operations aliases.

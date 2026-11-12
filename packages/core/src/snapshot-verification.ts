@@ -2,7 +2,12 @@
 import type { DiffFile, ReviewSourceIdentity } from './types';
 import { rootRelativeReviewedPath } from './source-identity';
 import { inspectPhysicalSource, readIndexManifest } from './loaded-git-review';
-import { identityStamp, loadedSnapshot } from './loaded-snapshot';
+import {
+  identityStamp,
+  loadedSnapshot,
+  loadedReviewState,
+  type LoadedReview,
+} from './loaded-snapshot';
 import { checkLoadingCancelled } from './local-loading-lifetime';
 import { verifyIndexCapture } from './index-capture';
 
@@ -10,9 +15,12 @@ import { verifyIndexCapture } from './index-capture';
 export async function verifyLoadedComparison(
   identity: ReviewSourceIdentity,
   file: DiffFile,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  loadedReview?: LoadedReview | null
 ): Promise<boolean> {
-  const snapshot = loadedSnapshot(identity);
+  const explicit = loadedReview ? loadedReviewState(loadedReview) : undefined;
+  if (explicit && explicit.identity !== identity) return false;
+  const snapshot = explicit?.snapshot ?? loadedSnapshot(identity);
   if (!snapshot) return true;
   if (snapshot.identityStamp !== identityStamp(identity)) return false;
   const sides = identity.fileSources?.get(file.newPath || file.oldPath) ?? identity;
