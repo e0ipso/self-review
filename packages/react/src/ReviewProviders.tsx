@@ -6,9 +6,16 @@ import { ConfigProvider } from './context/ConfigContext';
 import { GuideProvider } from './context/GuideContext';
 import { ReviewProvider, type ReviewProviderProps } from './context/ReviewContext';
 import { DiffNavigationProvider } from './context/DiffNavigationContext';
+import {
+  PreviewRenderingProvider,
+  type PreviewRenderingProviderProps,
+} from './context/PreviewRenderingContext';
 import { TooltipProvider } from './components/ui/tooltip';
 
-export interface ReviewProvidersProps extends ReviewProviderProps {
+export interface ReviewProvidersProps
+  extends
+    ReviewProviderProps,
+    Pick<PreviewRenderingProviderProps, 'previewRenderer' | 'diagramRenderer'> {
   adapter: ReviewAdapter;
   /** Initial configuration, merged once per mount. Later prop changes are ignored. */
   initialConfig?: Partial<AppConfig>;
@@ -25,6 +32,8 @@ export function ReviewProviders({
   initialConfig,
   initialOutputPath,
   children,
+  previewRenderer,
+  diagramRenderer,
   ...session
 }: ReviewProvidersProps) {
   return (
@@ -33,7 +42,12 @@ export function ReviewProviders({
         <GuideProvider>
           <ReviewProvider {...session}>
             <DiffNavigationProvider>
-              <TooltipProvider>{children}</TooltipProvider>
+              <PreviewRenderingProvider
+                previewRenderer={previewRenderer}
+                diagramRenderer={diagramRenderer}
+              >
+                <TooltipProvider>{children}</TooltipProvider>
+              </PreviewRenderingProvider>
             </DiffNavigationProvider>
           </ReviewProvider>
         </GuideProvider>

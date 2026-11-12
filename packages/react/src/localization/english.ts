@@ -1,6 +1,11 @@
 import type { LocalizedMessage } from './LocalizationContext';
 
 export const ENGLISH = {
+  'Emoji suggestions': 'Emoji suggestions',
+  'Emoji {name}': 'Emoji {name}',
+  'Emoji suggestion {index} of {count}: {name}. Use Up and Down to choose, Enter or Tab to insert, Escape to close.':
+    'Emoji suggestion {index} of {count}: {name}. Use Up and Down to choose, Enter or Tab to insert, Escape to close.',
+
   'The host rejected the request before applying the proposal.':
     'The host rejected the request before applying the proposal.',
   'The apply outcome is unknown. Inspect the destination file before allowing another attempt. Nothing is retried automatically.':

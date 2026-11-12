@@ -1,38 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useLocalization } from '../../localization/LocalizationContext';
 import { Button } from '../ui/button';
-import { exceedsMermaidComplexity, MERMAID_MAX_EDGES } from './mermaid-budget';
+import { exceedsMermaidComplexity } from './mermaid-budget';
 import { useAppearance } from '../../context/ConfigContext';
 import { svgToDataUri } from '../../utils/svg-data-uri';
 
-/** Longer diagram source is never handed to Mermaid; also pinned as its `maxTextSize`. */
-export const MERMAID_MAX_SOURCE_CHARS = 50_000;
-
-/** Layout is synchronous and cannot be interrupted; this only bounds the wait on a stall. */
-export const MERMAID_RENDER_TIMEOUT_MS = 10_000;
-
-/**
- * Keys reviewed content cannot change via `%%{init}%%` or front matter: Mermaid drops every
- * `secure` key from directives. The first six restate its defaults; the rest could inject
- * CSS or HTML, change text measurement, or weaken label sanitization.
- */
-export const MERMAID_SECURE_KEYS: readonly string[] = [
-  'secure',
-  'securityLevel',
-  'startOnLoad',
-  'maxTextSize',
-  'maxEdges',
-  'suppressErrorRendering',
-  'themeCSS',
-  'fontFamily',
-  'altFontFamily',
-  'htmlLabels',
-  'dompurifyConfig',
-];
-
+import { useDiagramRenderer } from '../../context/PreviewRenderingContext';
+import {
+  DiagramImageError,
+  MERMAID_MAX_SOURCE_CHARS,
+  MERMAID_RENDER_TIMEOUT_MS,
+} from './diagram-service';
+// Preserve existing imports from this component.
+export {
+  MERMAID_MAX_SOURCE_CHARS,
+  MERMAID_RENDER_TIMEOUT_MS,
+  MERMAID_SECURE_KEYS,
+  MERMAID_MAX_ADMITTED_RENDERS,
+} from './diagram-service';
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
-
-let mermaidIdCounter = 0;
 
 function resolveIsDark(theme: 'light' | 'dark' | 'system'): boolean {
   if (theme === 'system') {
@@ -41,73 +27,6 @@ function resolveIsDark(theme: 'light' | 'dark' | 'system'): boolean {
   return theme === 'dark';
 }
 
-/** Renders in a hidden off-screen container (outside `.self-review`) removed on success or failure. */
-let renderQueue: Promise<unknown> = Promise.resolve();
-let admittedRenders = 0;
-export const MERMAID_MAX_ADMITTED_RENDERS = 8;
-
-/** Serial admission prevents overlapping global Mermaid configuration and layout jobs. */
-function renderMermaidSvg(code: string, isDark: boolean, signal: AbortSignal): Promise<string> {
-  if (admittedRenders >= MERMAID_MAX_ADMITTED_RENDERS)
-    return Promise.reject(new DiagramImageError('busy'));
-  admittedRenders++;
-  const result = renderQueue
-    .then(() => renderQueuedSvg(code, isDark, signal))
-    .finally(() => {
-      admittedRenders--;
-    });
-  // A stalled library job retains the slot. A wait timeout cannot safely release active layout.
-  renderQueue = result.catch(() => {});
-  return result;
-}
-async function renderQueuedSvg(
-  code: string,
-  isDark: boolean,
-  signal: AbortSignal
-): Promise<string> {
-  signal.throwIfAborted();
-  const mermaid = (await import('mermaid')).default;
-  signal.throwIfAborted();
-
-  // Re-initialize per render: current palette, and no directives carried over.
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    secure: [...MERMAID_SECURE_KEYS],
-    theme: isDark ? 'dark' : 'default',
-    // SVG text instead of <foreignObject>, so the output renders identically through <img>.
-    htmlLabels: false,
-    maxTextSize: MERMAID_MAX_SOURCE_CHARS,
-    maxEdges: MERMAID_MAX_EDGES,
-    // Throw on a parse failure instead of drawing Mermaid's error diagram.
-    suppressErrorRendering: true,
-  });
-
-  const sandbox = document.createElement('div');
-  sandbox.setAttribute('data-mermaid-sandbox', '');
-  sandbox.setAttribute('aria-hidden', 'true');
-  sandbox.style.cssText =
-    'position:fixed;top:0;left:-100000px;width:1024px;height:1px;overflow:hidden;' +
-    'visibility:hidden;pointer-events:none;';
-  document.body.appendChild(sandbox);
-  const remove = () => sandbox.remove();
-  signal.addEventListener('abort', remove, { once: true });
-  try {
-    // mermaid.render needs a unique ID per call.
-    const { svg } = await mermaid.render(`mermaid-${mermaidIdCounter++}`, code, sandbox);
-    signal.throwIfAborted();
-    return svg;
-  } finally {
-    signal.removeEventListener('abort', remove);
-    sandbox.remove();
-  }
-}
-
-class DiagramImageError extends Error {
-  constructor(readonly kind: 'svg' | 'size' | 'busy') {
-    super(kind);
-  }
-}
 interface DiagramImage {
   src: string;
   width: number | undefined;
@@ -167,6 +86,7 @@ export default function MermaidBlock({ code }: { code: string }) {
   const [state, setState] = useState<BlockState>({ status: 'pending' });
   const [attempt, setAttempt] = useState(0);
   const config = useAppearance();
+  const diagramRenderer = useDiagramRenderer();
   const { t } = useLocalization();
   const isDark = resolveIsDark(config.theme);
 
@@ -207,8 +127,15 @@ export default function MermaidBlock({ code }: { code: string }) {
       });
       abort.abort();
     }, MERMAID_RENDER_TIMEOUT_MS);
-    renderMermaidSvg(code, isDark, abort.signal)
-      .then(svg => settle({ status: 'rendered', image: toDiagramImage(svg) }))
+    Promise.resolve()
+      .then(() =>
+        diagramRenderer.render({
+          source: code,
+          theme: isDark ? 'dark' : 'light',
+          signal: abort.signal,
+        })
+      )
+      .then(({ svg }) => settle({ status: 'rendered', image: toDiagramImage(svg) }))
       .catch((err: unknown) =>
         settle({
           status: 'error',
@@ -232,7 +159,7 @@ export default function MermaidBlock({ code }: { code: string }) {
       abort.abort();
       window.clearTimeout(timer);
     };
-  }, [code, isDark, attempt, t]);
+  }, [code, isDark, attempt, t, diagramRenderer]);
 
   if (state.status === 'error')
     return (

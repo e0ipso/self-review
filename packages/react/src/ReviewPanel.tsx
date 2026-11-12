@@ -1,6 +1,7 @@
 import React, { forwardRef, type ReactNode } from 'react';
 import type { AppConfig, ReviewComment } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
+import type { PreviewRenderingProviderProps } from './context/PreviewRenderingContext';
 import { ReviewProviders } from './ReviewProviders';
 import Layout from './components/Layout';
 import { KeyboardNavigationManager } from './components/KeyboardNavigationManager';
@@ -24,7 +25,10 @@ import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
  */
 export type ReviewPanelHandle = ReviewHandle;
 
-export interface ReviewPanelProps {
+export interface ReviewPanelProps extends Pick<
+  PreviewRenderingProviderProps,
+  'previewRenderer' | 'diagramRenderer'
+> {
   /** A different adapter object starts a new session: define it at module scope or memoize it. */
   adapter: ReviewAdapter;
   /** Initial configuration, merged once per mount. Later prop changes are ignored. */
@@ -73,11 +77,26 @@ export interface ReviewPanelProps {
  * ```
  */
 export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(function ReviewPanel(
-  { adapter, config, initialConfig, className, children, onReviewChange },
+  {
+    adapter,
+    config,
+    initialConfig,
+    className,
+    children,
+    onReviewChange,
+    previewRenderer,
+    diagramRenderer,
+  },
   ref
 ) {
   return (
-    <ReviewProviders adapter={adapter} config={config} initialConfig={initialConfig}>
+    <ReviewProviders
+      adapter={adapter}
+      config={config}
+      initialConfig={initialConfig}
+      previewRenderer={previewRenderer}
+      diagramRenderer={diagramRenderer}
+    >
       <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
         {children}
       </ReviewPanelInner>

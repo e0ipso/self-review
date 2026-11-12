@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { DiffFile } from '@self-review/types';
 import FileSection from './FileSection';
+import { PreviewRenderingProvider } from '../../context/PreviewRenderingContext';
 import type { FileSectionHeaderProps } from './FileSectionHeader';
 import type { DiffContentAreaProps } from './DiffContentArea';
 
@@ -137,4 +138,68 @@ describe('FileSection preview eligibility', () => {
     expect(svg.body.getAttribute('data-show-svg-preview')).toBe('true');
     expect(svg.body.getAttribute('data-rendered-text-mode')).toBe('null');
   });
+});
+
+it('offers a rendered toggle for an added host format with an explicit default', () => {
+  render(
+    <PreviewRenderingProvider
+      previewRenderer={{
+        supports: file => file.newPath.endsWith('.custom'),
+        defaultMode: 'rendered',
+        component: () => null,
+      }}
+    >
+      <FileSection file={makeDiffFile('schema.custom')} viewMode='unified' expanded />
+    </PreviewRenderingProvider>
+  );
+  expect(screen.getByTestId('mock-file-section-header').getAttribute('data-previewable')).toBe(
+    'true'
+  );
+  expect(screen.getByTestId('mock-file-section-body').getAttribute('data-render-view-mode')).toBe(
+    'rendered'
+  );
+});
+it('keeps a host-only format raw by default', () => {
+  render(
+    <PreviewRenderingProvider previewRenderer={{ supports: () => true, component: () => null }}>
+      <FileSection file={makeDiffFile('schema.custom')} viewMode='unified' expanded />
+    </PreviewRenderingProvider>
+  );
+  expect(screen.getByTestId('mock-file-section-header').getAttribute('data-previewable')).toBe(
+    'true'
+  );
+  expect(screen.getByTestId('mock-file-section-body').getAttribute('data-render-view-mode')).toBe(
+    'raw'
+  );
+});
+it('keeps existing built-in defaults and modified-file eligibility with a supplied renderer', () => {
+  const previewRenderer = {
+    supports: () => true,
+    defaultMode: 'raw' as const,
+    component: () => null,
+  };
+  const { rerender } = render(
+    <PreviewRenderingProvider previewRenderer={previewRenderer}>
+      <FileSection file={makeDiffFile('a.html')} viewMode='unified' expanded />
+    </PreviewRenderingProvider>
+  );
+  expect(screen.getByTestId('mock-file-section-body').getAttribute('data-render-view-mode')).toBe(
+    'rendered'
+  );
+  rerender(
+    <PreviewRenderingProvider previewRenderer={previewRenderer}>
+      <FileSection
+        key='modified'
+        file={makeDiffFile('a.html', { changeType: 'modified' })}
+        viewMode='unified'
+        expanded
+      />
+    </PreviewRenderingProvider>
+  );
+  expect(screen.getByTestId('mock-file-section-header').getAttribute('data-previewable')).toBe(
+    'false'
+  );
+  expect(screen.getByTestId('mock-file-section-body').getAttribute('data-render-view-mode')).toBe(
+    'raw'
+  );
 });

@@ -11,6 +11,7 @@ import {
 import { normalizePreviewProps } from './preview-compat';
 import PreviewErrorBoundary from './PreviewErrorBoundary';
 
+/** Legacy contentAreaProps remain supported; prefer the preview discriminator overload. */
 export interface FileSectionBodyProps {
   filePath: string;
   fileComments: ReviewComment[];
@@ -26,6 +27,7 @@ type PreviewFileSectionBodyProps = Omit<FileSectionBodyProps, 'contentAreaProps'
 };
 
 export function FileSectionBody(props: PreviewFileSectionBodyProps): React.JSX.Element;
+/** @deprecated Pass preview-based contentAreaProps for new compositions. */
 // Keep the legacy signature last so ComponentProps retains the original public property types.
 export function FileSectionBody(props: FileSectionBodyProps): React.JSX.Element;
 export function FileSectionBody({

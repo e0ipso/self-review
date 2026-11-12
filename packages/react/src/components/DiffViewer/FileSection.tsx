@@ -7,6 +7,7 @@ import type { DiffFile } from '@self-review/types';
 import { useReviewCommands, useFileReview, useReviewSource } from '../../context/ReviewContext';
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
+import { usePreviewRenderer } from '../../context/PreviewRenderingContext';
 import { getContentPreview, initialPreviewMode } from './content-preview';
 import { getGuideAccent } from '../../utils/guide-accents';
 import { FileSectionHeader } from './FileSectionHeader';
@@ -46,8 +47,13 @@ export default function FileSection({
   const unregisterFileElement = navigation?.unregisterFileElement;
 
   const preview = getContentPreview(file);
-  const isPreviewable = preview.kind !== 'none';
-  const initialViewMode = initialPreviewMode(preview);
+  const renderer = usePreviewRenderer();
+  const hostPreview = file.changeType === 'added' && !!renderer?.supports(file, preview);
+  const isPreviewable = preview.kind !== 'none' || hostPreview;
+  const initialViewMode =
+    preview.kind === 'none' && hostPreview
+      ? (renderer?.defaultMode ?? 'raw')
+      : initialPreviewMode(preview);
   const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
 
   const filePath = file.newPath || file.oldPath;

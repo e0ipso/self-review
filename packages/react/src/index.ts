@@ -108,3 +108,20 @@ export { useReviewCommands, useFileReview } from './context/ReviewContext';
 export { ReviewProviders } from './ReviewProviders';
 export type { ReviewProvidersProps } from './ReviewProviders';
 export { useOptionalApplySession } from './context/ReviewContext';
+
+export {
+  PreviewRenderingProvider,
+  usePreviewRenderer,
+  useDiagramRenderer,
+} from './context/PreviewRenderingContext';
+export type {
+  PreviewRenderer,
+  PreviewRenderProps,
+  PreviewRenderingProviderProps,
+} from './context/PreviewRenderingContext';
+export { createDiagramRenderService } from './components/DiffViewer/diagram-service';
+export type {
+  DiagramRenderRequest,
+  DiagramRenderService,
+} from './components/DiffViewer/diagram-service';
+export type { ContentPreview } from './components/DiffViewer/content-preview';

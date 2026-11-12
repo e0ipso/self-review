@@ -16,6 +16,28 @@ import {
 } from './AttachmentProcessing';
 import { AttachmentDropZone } from './AttachmentDropZone';
 
+// Toolbar buttons already carry names; their decorative SVGs must not announce as images.
+const EDITOR_COMMANDS = [
+  commands.bold,
+  commands.italic,
+  commands.divider,
+  commands.quote,
+  commands.code,
+  commands.link,
+  commands.divider,
+  commands.unorderedListCommand,
+  commands.orderedListCommand,
+  commands.checkedListCommand,
+].map(command => ({
+  ...command,
+  icon: command.icon
+    ? React.cloneElement(command.icon as React.ReactElement<React.SVGProps<SVGSVGElement>>, {
+        'aria-hidden': true,
+        focusable: false,
+      })
+    : undefined,
+}));
+
 /**
  * Shared composer body used by every markdown editor in the review UI.
  *
@@ -126,18 +148,7 @@ export function ComposerCore({
               onChange={val => onBodyChange(val || '')}
               preview='edit'
               highlightEnable={false}
-              commands={[
-                commands.bold,
-                commands.italic,
-                commands.divider,
-                commands.quote,
-                commands.code,
-                commands.link,
-                commands.divider,
-                commands.unorderedListCommand,
-                commands.orderedListCommand,
-                commands.checkedListCommand,
-              ]}
+              commands={EDITOR_COMMANDS}
               extraCommands={
                 headerLabel
                   ? [
@@ -150,9 +161,11 @@ export function ComposerCore({
                   : []
               }
               textareaProps={{
+                ...emoji.textareaProps,
                 placeholder,
                 'aria-label': placeholder,
                 onKeyDown: e => {
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return;
                   // Let emoji autocomplete handle keys first when dropdown is open
                   if (emoji.onKeyDown(e)) return;
 
@@ -176,6 +189,7 @@ export function ComposerCore({
               className='md-editor-comment'
             />
             <EmojiAutocomplete
+              popupId={emoji.popupId}
               isOpen={emoji.isOpen}
               results={emoji.results}
               selectedIndex={emoji.selectedIndex}
@@ -242,6 +256,8 @@ export function AttachButton({ setAttachments }: AttachButtonProps) {
       <input
         ref={fileInputRef}
         type='file'
+        aria-label={t('Attach')}
+        hidden
         accept='image/*'
         multiple
         className='hidden'

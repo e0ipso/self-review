@@ -1,8 +1,8 @@
 # React host integration
 
 `ReviewProviders` exports the provider order used by `ReviewPanel`. Pass `adapter`, optional
-`config`, `initialOutputPath` for the host output target, and the existing `ReviewProvider` options
-`initialFiles`, `initialSource`, and `initialComments`. Children can render host chrome, a
+`initialConfig`, `initialOutputPath` for the host output target, and the existing `ReviewProvider`
+options `initialFiles`, `initialSource`, and `initialComments`. Children can render host chrome, a
 welcome/loading view, or `Layout`, and can call all review, guide, configuration and navigation
 hooks. The provider adds no layout or keyboard manager. Keep adapter identity stable. Static files
 suppress diff loading and diff subscriptions; initial comments hydrate once. `ReviewPanel` retains
@@ -16,6 +16,92 @@ session's diff, because the existing resume payload contains no session identifi
 
 `ConfigAdapter` remains exported for source compatibility but is deprecated. Components never
 consumed it. Load configuration in the host and pass the result through a config prop or provider.
+
+Prefer focused customization hooks: `useAppearance`, `useCategories`, `useOutputPath`,
+`usePortalContainer`, `useConfiguration`, `useFileReview` and `useReviewCommands`. Broad `useReview`
+and `useConfig` remain compatibility APIs. `initialConfig` is merged once per provider mount;
+`config` remains its deprecated initial-only alias. Existing required and optional adapter members,
+legacy context exports and initial state semantics are preserved.
+
+## Preview composition
+
+`ReviewPanel` and `ReviewProviders` accept optional `previewRenderer` and `diagramRenderer` props.
+`PreviewRenderingProvider` supplies the same capabilities around lower-level compositions, including
+`SingleFileReview`, without changing `ReviewAdapter`. Nested providers inherit omitted capabilities.
+The focused `usePreviewRenderer` and `useDiagramRenderer` hooks read the current services. Keep
+renderer objects and component identities stable to preserve local UI state.
+
+A `PreviewRenderer` contains a pure `supports(file, builtIn)` predicate and a React `component`.
+Matching runs only for added files. Existing format eligibility and initial modes remain the
+default. A host-only format starts in raw mode unless the renderer sets `defaultMode: 'rendered'`.
+Loading, omission and load-failure states precede preview dispatch, and Raw remains available.
+
+```tsx
+const previewRenderer: PreviewRenderer = {
+  supports: (file, builtIn) => builtIn.kind === 'text',
+  component: ({ filePath, children }) => (
+    <section aria-label={`Preview of ${filePath}`}>{children}</section>
+  ),
+};
+
+<ReviewPanel adapter={adapter} previewRenderer={previewRenderer} />;
+```
+
+The component receives the file, path, built-in preview discriminator, current comment range and
+comment callbacks. `children` is the existing built-in preview, or null for a host-only format.
+Render it to retain built-in source gutters and feedback. A replacement owns its source mapping,
+keyboard operation and accessible names. Custom renderers are trusted host code; reviewed text,
+HTML, CSS and SVG must remain passive. Do not inject reviewed HTML into the host DOM or introduce
+network, storage or writes through a renderer. The built-ins retain passive-content filtering and
+SVG image isolation.
+
+Legacy deep-import users of `DiffContentArea` can still pass all four required eligibility fields,
+with optional `preview` taking precedence. New compositions can use `PreviewContentArea` with one
+`preview` discriminator. Both `FileSectionBody` overloads and their normalization remain supported;
+removing the old fields requires a breaking release.
+
+### Diagram services
+
+`DiagramRenderService.render({ source, theme, signal })` returns a promise of `{ svg: string }`.
+`source` is untrusted, `theme` is `light` or `dark`, and output is SVG text only. The view checks
+source length and layout complexity before invoking any service, then checks output size, XML/SVG
+shape and intrinsic dimensions before displaying a local data URI in an inert `<img>`. No service
+may return live DOM, URLs or executable callbacks. Strict security and passive output remain the
+service implementation's responsibility; the view's image boundary also contains supplied output.
+
+Use `createDiagramRenderService(layout)` to give a supplied implementation serial, bounded
+admission. It validates source before layout, admits eight active/queued requests, checks abort
+before starting a queued request, and retains each slot until the layout promise actually settles.
+The implementation must observe the signal, clean up its resources and resolve or reject only when
+its actual work ends. An abort rejection must not conceal still-running layout. The view aborts on
+source, theme or service replacement, unmount and wait timeout, drops stale results and retries only
+after an explicit action. Services may be shared; the host owns their creation, configuration and
+final disposal. Views never dispose a shared service. Configure an implementation outside React,
+keeping security settings fixed and using the request theme for palette variation.
+
+Omitting the service retains the lazily imported Mermaid implementation, one queue across reviews,
+strict configuration and protected directive keys. Its DOM measurement container is removed on abort
+and after actual completion. Neither an AbortSignal nor the view's timer can preempt its synchronous
+layout. The factory provides bounded admission and cooperative cancellation, not a hard CPU
+deadline. A terminable service needs a real host-owned execution context supporting DOM measurement;
+this package adds no worker assets, network loading or CSP exceptions.
+
+## Emoji input
+
+Every comment/reply composer, including edits, uses the same autocomplete. The actual MDEditor
+textarea keeps its native multiline textbox semantics and receives `aria-autocomplete`,
+`aria-haspopup`, `aria-controls` and `aria-activedescendant` while its named listbox is open. A
+linked live status announces result position, name and keyboard instructions through
+`LocalizationProvider` with English fallback. `aria-expanded` and the single-line combobox role are
+deliberately omitted because they are not valid for the native multiline textbox pattern. Closed
+popups remove their control/active-option relationships. IDs are scoped per composer.
+
+Up/Down selects, Enter/Tab inserts and Escape dismisses without leaving the editor. Pointer
+selection preserves textarea focus; insertion replaces only the live shortcode and restores the
+caret. Caret movement, text selection, scrolling, blur and IME composition update or dismiss the
+popup. Composition keys do not insert a suggestion or submit the composer. Legacy hook return
+members and popup props remain valid; custom hook consumers can pass the additive `popupId` to the
+popup and spread `textareaProps` onto the focused textarea.
 
 ## Attachments and browser capabilities
 
@@ -58,6 +144,11 @@ to total source size and can still pause on extremely large expanded files. Ordi
 would remove searchable source. Incremental DOM insertion would also make Find/navigation depend on
 preparation progress; neither change is introduced here. Browser measurements and native Find,
 wrapped-line scrolling and drag checks remain host integration work.
+
+Split alignment is memoized by the loaded hunk collection. Empty raw rows reuse stable comment
+arrays and skip mounting a feedback component; a draft or existing thread still mounts at its
+original anchor. This reduces repeated React work without withholding searchable source or changing
+readiness. It does not bound source-row DOM allocation or promise an elapsed-time improvement.
 
 Mermaid admission checks run before library import, parsing or layout. In addition to the existing
 50,000-character source limit, layout accepts at most 8000 characters, 120 non-empty statements, 800
