@@ -41,7 +41,8 @@ export interface ReviewAdapter {
   onResumeLoad?: (callback: (payload: ResumeLoadPayload) => void) => () => void;
 
   /** Legacy host-specific completion: desktop hands off state; HTTP publishes it.
-   * Prefer handoffReview/publishReview when completion matters. Kept for old hosts.
+   * Its void/promise return keeps the host's original meaning and supplies no additional receipt.
+   * Prefer handoffReview/publishReview when completion matters; pair publication with beginSave.
    */
   submitReview?: (state: ReviewState) => Promise<void> | void;
 

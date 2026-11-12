@@ -12,7 +12,7 @@ interface RenderedImageViewProps {
 }
 
 export default function RenderedImageView({ filePath, onLoadImage }: RenderedImageViewProps) {
-  const { t } = useLocalization();
+  const { t, number } = useLocalization();
   const adapter = useAdapter();
   const snapshot = useOptionalSnapshotKey();
   const [dataUri, setDataUri] = useState<string | null>(null);
@@ -111,7 +111,7 @@ export default function RenderedImageView({ filePath, onLoadImage }: RenderedIma
       />
       {dimensions && (
         <span className='text-xs text-muted-foreground'>
-          {dimensions.w} × {dimensions.h}
+          {number(dimensions.w)} × {number(dimensions.h)}
         </span>
       )}
     </div>

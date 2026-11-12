@@ -1,12 +1,30 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import RenderedImageView from './RenderedImageView';
 import { ReviewAdapterProvider } from '../../context/ReviewAdapterContext';
 import type { ReviewAdapter } from '../../adapter';
+import { LocalizationProvider } from '../../localization/LocalizationContext';
 
 describe('RenderedImageView', () => {
   afterEach(() => cleanup());
+
+  it('formats both decoded image dimensions in the selected locale', async () => {
+    const onLoadImage = vi.fn(async () => ({ dataUri: 'data:image/png;base64,aW1hZ2U=' }));
+    render(
+      <LocalizationProvider locale='de-DE'>
+        <RenderedImageView filePath='large.png' onLoadImage={onLoadImage} />
+      </LocalizationProvider>
+    );
+    const image = await screen.findByRole('img');
+    Object.defineProperties(image, {
+      naturalWidth: { value: 12345 },
+      naturalHeight: { value: 67890 },
+    });
+    fireEvent.load(image);
+    expect(screen.getByText('12.345 × 67.890')).toBeTruthy();
+    expect(onLoadImage).toHaveBeenCalledOnce();
+  });
 
   it('uses the optional read path and aborts it on replacement and unmount', async () => {
     const signals: AbortSignal[] = [];
