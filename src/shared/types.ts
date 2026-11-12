@@ -140,6 +140,20 @@ export interface ElectronAPI {
   chooseApplyDestination: () => Promise<ApplyDestinationOutcome>;
 }
 
+// Consumer roles retain the flat public bridge and its original optional methods.
+export type DesktopContentAPI = Pick<
+  ElectronAPI,
+  | 'readContent'
+  | 'cancelContentRead'
+  | 'loadFileContent'
+  | 'loadImage'
+  | 'readAttachment'
+  | 'expandContext'
+>;
+export type DesktopFindAPI = Pick<ElectronAPI, 'findInPage' | 'onFindResult'> & {
+  stopFindInPage: (action: import('../../packages/types/src/index').FindInPageAction) => void;
+};
+
 declare global {
   interface Window {
     electronAPI: ElectronAPI;

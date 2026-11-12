@@ -1,11 +1,12 @@
+import { sameDiffSource } from '../../packages/core/src/same-diff-source';
+import { PublicationReceipts } from './publication-receipts';
+import { registerOutputSelection } from './output-selection';
 import { createDesktopLocalization, type DesktopLocalization } from '../shared/localization';
-import { randomUUID } from 'crypto';
-import { resolve } from 'path';
 import { IPC } from '../shared/ipc-channels';
-import type { OutputPathInfo, ReviewState, ReviewSaveResult } from '../shared/types';
+import type { ReviewState, ReviewSaveResult } from '../shared/types';
 import { takeReviewState, submitReviewState } from '../../packages/core/src/review-handlers';
 import { saveAndQuit, describeSaveFailure, type QuitController } from './quit-controller';
-import { updateOutputInfo, type DesktopSession } from './desktop-session';
+import { type DesktopSession } from './desktop-session';
 import { createIpcBoundary, noArgument, reviewState, stringArgument } from './ipc-boundary';
 import type { BrowserWindow } from 'electron';
 import type { SaveFailure } from './quit-controller';
@@ -36,8 +37,7 @@ export function registerLifecycleHandlers(
   presentation: LifecyclePresentation,
   messages: DesktopLocalization = createDesktopLocalization()
 ): void {
-  let receipt: { token: string; current: () => void } | null = null;
-  let failed: { result: ReviewSaveResult; current: () => void } | null = null;
+  const receipts = new PublicationReceipts();
   const recordFailure = (error: unknown, current: () => void): ReviewSaveResult => {
     const failure = describeSaveFailure(error, desktop.output.path, messages);
     const result: ReviewSaveResult = {
@@ -45,34 +45,25 @@ export function registerLifecycleHandlers(
       message: failure.message,
       detail: failure.detail,
     };
-    failed = { result, current };
-    return result;
+    return receipts.recordFailure(result, current);
   };
-  boundary.handle(IPC.REVIEW_SAVE_STATUS, noArgument, () => {
-    if (!receipt) {
-      if (!failed) return null;
-      failed.current();
-      return failed.result;
-    }
-    receipt.current();
-    return { status: 'saved', receipt: receipt.token } satisfies ReviewSaveResult;
-  });
-  boundary.handle(
+  boundary.handleCommand(IPC.REVIEW_SAVE_STATUS, noArgument, () => receipts.inspect());
+  boundary.handleDeferredCommand(
     IPC.REVIEW_SAVE,
-    value => value,
-    (event, value): Promise<ReviewSaveResult> => {
+    reviewState,
+    (event, decode): Promise<ReviewSaveResult> => {
       if (controller.phase !== 'reviewing' || desktop.operations.finishing)
         return Promise.resolve({ status: 'busy' });
       const current = boundary.capture(event);
       let state: ReviewState;
       try {
-        state = reviewState(value);
+        state = decode();
       } catch (error) {
         // This refusal precedes publication, so it has a known failed outcome.
         return Promise.resolve(recordFailure(error, current));
       }
       const source = desktop.review.diffData;
-      failed = null;
+      receipts.clearFailure();
       return desktop.operations.complete(
         async signal => {
           current();
@@ -84,7 +75,7 @@ export function registerLifecycleHandlers(
               source.source.type === 'welcome' ||
               source.source.type === 'loading' ||
               desktop.review.diffData !== source ||
-              JSON.stringify(state.source) !== JSON.stringify(source.source)
+              !sameDiffSource(source.source, state.source)
             )
               throw new Error('The review state does not belong to the current review.');
             signal.throwIfAborted();
@@ -98,25 +89,22 @@ export function registerLifecycleHandlers(
           }
           // Publication has committed. A stale peer cannot turn success into a retryable failure.
           current();
-          receipt = { token: randomUUID(), current };
-          return { status: 'saved', receipt: receipt.token };
+          return receipts.saved(current);
         },
         false,
         () => controller.phase === 'saving'
       );
     }
   );
-  boundary.on(IPC.REVIEW_SAVE_RECEIVED, stringArgument, (_event, token) => {
-    if (!receipt || token !== receipt.token) throw new Error('Unknown publication receipt.');
-    receipt.current();
-    receipt = null;
+  boundary.onCommand(IPC.REVIEW_SAVE_RECEIVED, stringArgument, (_event, token) => {
+    receipts.acknowledge(token);
     controller.saveSucceeded();
     desktop.operations.releaseCompletion();
     // Do not await shutdown from an operation that shutdown itself drains.
     void shutdown(0, 'saved');
   });
 
-  boundary.on(IPC.APP_SAVE_AND_QUIT, noArgument, event => {
+  boundary.onCommand(IPC.APP_SAVE_AND_QUIT, noArgument, event => {
     const window = boundary.assertPeer(event);
     const current = boundary.capture(event);
     if (controller.phase !== 'reviewing') return;
@@ -138,7 +126,7 @@ export function registerLifecycleHandlers(
       }
     });
   });
-  boundary.on(IPC.APP_DISCARD_AND_QUIT, noArgument, event => {
+  boundary.onCommand(IPC.APP_DISCARD_AND_QUIT, noArgument, event => {
     if (controller.phase !== 'reviewing') return;
     const current = boundary.capture(event);
     return desktop.operations.complete(async () => {
@@ -148,21 +136,5 @@ export function registerLifecycleHandlers(
     }, true);
   });
 
-  boundary.handle(IPC.OUTPUT_PATH_CHANGE, noArgument, event =>
-    desktop.operations.read(async signal => {
-      const current = boundary.capture(event);
-      const filePath = await presentation.pickOutputPath(
-        boundary.assertPeer(event),
-        desktop.output.path
-      );
-      if (!filePath) return null;
-      current();
-      signal.throwIfAborted();
-      if (controller.phase !== 'reviewing') return null;
-      desktop.output = { path: resolve(filePath), origin: 'explicit' };
-      const info: OutputPathInfo = updateOutputInfo(desktop);
-      boundary.assertPeer(event).webContents.send(IPC.OUTPUT_PATH_CHANGED, info);
-      return info;
-    }, 10 * 60_000)
-  );
+  registerOutputSelection(desktop, boundary, controller, presentation);
 }

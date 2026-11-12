@@ -1,7 +1,7 @@
 import type { ReviewAdapter } from '../../packages/react/src/adapter';
-import type { DesktopReadRequest, ElectronAPI, ResumeLoadPayload } from '../shared/types';
+import type { ElectronAPI, ResumeLoadPayload } from '../shared/types';
 import { ElectronRequests } from './electron-requests';
-import { decodeReadResult } from './read-result';
+import { createDesktopReads } from './desktop-reads';
 import { createDesktopPublicationClient } from './desktop-publication-client';
 import { receiveDesktopContent } from './desktop-content';
 
@@ -66,52 +66,7 @@ export function createElectronAdapter(api: ReviewAPI, requests = new ElectronReq
     on: (callback: (value: T) => void) => () => void,
     request: () => void
   ) => receiveDesktopContent(requests, api, kind, on, request);
-  type ReadInput<T> = T extends unknown ? Omit<T, 'id'> : never;
-  const read = (request: ReadInput<DesktopReadRequest>, signal?: AbortSignal) =>
-    requests.read(
-      async id => {
-        const result = decodeReadResult(
-          await api.readContent!({ ...request, id } as DesktopReadRequest)
-        );
-        if (result.kind !== request.kind) throw new Error('Unexpected desktop read response.');
-        return result;
-      },
-      api.cancelContentRead,
-      signal
-    );
-  const reads = {
-    loadFileContent: async (filePath: string, signal: AbortSignal) => {
-      if (!api.readContent || !api.cancelContentRead)
-        return requests.read(() => api.loadFileContent(filePath), undefined, signal);
-      const result = await read({ kind: 'file', filePath }, signal);
-      if (result.kind !== 'file') throw new Error('Unexpected desktop read response.');
-      return result.hunks;
-    },
-    loadImage: async (filePath: string, signal: AbortSignal) => {
-      if (!api.readContent || !api.cancelContentRead)
-        return requests.read(() => api.loadImage(filePath), undefined, signal);
-      const result = await read({ kind: 'image', filePath }, signal);
-      if (result.kind !== 'image') throw new Error('Unexpected desktop read response.');
-      return result.image;
-    },
-    readAttachment: async (reference: string, signal: AbortSignal) => {
-      if (!api.readContent || !api.cancelContentRead)
-        return requests.read(() => api.readAttachment(reference), undefined, signal);
-      const result = await read({ kind: 'attachment', reference }, signal);
-      if (result.kind !== 'attachment') throw new Error('Unexpected desktop read response.');
-      return result.data;
-    },
-    expandContext: async (
-      request: import('../shared/types').ExpandContextRequest,
-      signal: AbortSignal
-    ) => {
-      if (!api.readContent || !api.cancelContentRead)
-        return requests.read(() => api.expandContext(request), undefined, signal);
-      const result = await read({ kind: 'context', request }, signal);
-      if (result.kind !== 'context') throw new Error('Unexpected desktop read response.');
-      return result.context;
-    },
-  };
+  const reads = createDesktopReads(api, requests);
   const adapter: ReviewAdapter = {
     reads,
     loadDiff: () => receiveContent('diff', api.onDiffLoad, api.requestDiffData),

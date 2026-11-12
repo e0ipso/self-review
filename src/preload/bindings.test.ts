@@ -122,6 +122,13 @@ function checkBindingConstraints(api: ElectronAPI, original: OriginalElectronAPI
   };
   // @ts-expect-error Non-wire synchronous return types have no transport mode.
   const invalidResult: PreloadBindings<{ bad: () => number }> = { bad: ['send', IPC.DIFF_REQUEST] };
+  // @ts-expect-error Same-mode channels with incompatible payloads cannot be swapped.
+  const wrongPayload: PreloadBindings<ElectronAPI>['readContent'] = ['invoke', IPC.REVIEW_SAVE];
+  // @ts-expect-error Same-mode channels with incompatible results cannot be swapped.
+  const wrongResult: PreloadBindings<ElectronAPI>['loadImage'] = ['invoke', IPC.DIFF_LOAD_FILE];
+  // @ts-expect-error Even identical void signatures retain their exact wire mapping.
+  const wrongEmpty: PreloadBindings<ElectronAPI>['requestConfig'] = ['send', IPC.DIFF_REQUEST];
+  void [wrongPayload, wrongResult, wrongEmpty];
   void [
     originalConsumer,
     currentConsumer,

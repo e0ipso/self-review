@@ -1,6 +1,6 @@
 import type { IpcRenderer } from 'electron';
 import type { ElectronAPI } from '../shared/types';
-import { PRELOAD_BINDINGS } from './bindings';
+import { IPC_BINDINGS as PRELOAD_BINDINGS } from '../shared/ipc-contract';
 
 export function createElectronAPI(
   ipcRenderer: Pick<IpcRenderer, 'on' | 'removeListener' | 'send' | 'invoke'>

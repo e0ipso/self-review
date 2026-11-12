@@ -337,3 +337,24 @@ it.each(['deadline', 'dispose'] as const)(
     expect(vi.getTimerCount()).toBe(0);
   }
 );
+
+it('keeps the read protocol selected at composition across all adapter entry points', async () => {
+  const f = fixture();
+  f.api.loadFileContent.mockResolvedValue([]);
+  const readContent = vi.fn(async () => ({ kind: 'file' as const, hunks: [] }));
+  const api: Parameters<typeof createElectronAdapter>[0] = {
+    ...f.api,
+    readContent,
+    cancelContentRead: vi.fn(),
+  };
+  const bridge = createElectronAdapter(api);
+  api.readContent = undefined;
+  await expect(bridge.adapter.loadFileContent!('modern.ts')).resolves.toEqual([]);
+  await expect(
+    bridge.adapter.reads!.loadFileContent!('modern.ts', new AbortController().signal)
+  ).resolves.toEqual([]);
+  expect(readContent).toHaveBeenCalledTimes(2);
+  expect(api.loadFileContent).not.toHaveBeenCalled();
+  bridge.dispose();
+  f.bridge.dispose();
+});

@@ -205,3 +205,38 @@ it.each(['v3', 'v3.0', 'v3.0.0', 'v3.0.0-beta', 'v3.0.0+build'])(
     expect(service.getVersionUpdate()?.latestVersion).toBe(tag_name.slice(1));
   }
 );
+
+it.each([
+  ['2.0.4', 'v2.0.5+build', true],
+  ['2.0.5+old', 'v2.0.5+new', false],
+  ['2.0.5', 'v2.0.5-beta', false],
+  ['2.0.5-beta', 'v2.0.5', true],
+  ['2.0.5-beta.2', 'v2.0.5-beta.10+build', true],
+  ['2.0.5-beta.10', 'v2.0.5-beta.2', false],
+  ['2.0.5-alpha', 'v2.0.5-beta', true],
+  ['2.0.5-alpha.1', 'v2.0.5-alpha', false],
+  ['2.0.5-alpha', 'v2.0.5-alpha.1', true],
+  ['2.0.5-1', 'v2.0.5-alpha', true],
+  ['2.0.5-alpha', 'v2.0.5-1', false],
+  ['2.0.4', 'v2.0.6-beta+build', true],
+  ['2.0.5', 'v2.0', false],
+  ['2.0.5', 'v3', true],
+  ['2.0.5', 'v2.1+build', true],
+  ['2.0.5', 'v2.0.5+', false],
+  ['2.0.5', 'v2.0.6-beta..2', false],
+  ['2.0.5', 'v2.0.6+build..2', false],
+  ['2.0.5', 'v2.0.6.0', false],
+])(
+  'interprets accepted release precedence %s -> %s as newer=%s',
+  async (current, tag_name, newer) => {
+    const { request, send } = edge();
+    const service = new UpdateService(current, () => request);
+    const check = service.checkForUpdate();
+    send(JSON.stringify({ tag_name }));
+    await check;
+    expect(service.getVersionUpdate()?.latestVersion ?? null).toBe(
+      newer ? tag_name.slice(1) : null
+    );
+    expect(request.eventNames()).toEqual([]);
+  }
+);

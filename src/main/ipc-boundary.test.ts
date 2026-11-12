@@ -128,3 +128,52 @@ it('uses the shared maximum context bound and retains numeric anchor refusals an
     })
   ).toThrow();
 });
+
+import { IPC } from '../shared/ipc-channels';
+import { stringArgument } from './ipc-boundary';
+
+// Source-only assertions compile with the unit program, independently of runtime decoders.
+function typedRegistrations(boundary: ReturnType<typeof createIpcBoundary>) {
+  boundary.handleCommand(IPC.DIFF_LOAD_FILE, stringArgument, () => null);
+  boundary.onCommand(IPC.FIND_IN_PAGE, findRequest, (_event, value) => {
+    void value.text;
+  });
+  // @ts-expect-error Invoke channel cannot be registered as a send.
+  boundary.onCommand(IPC.DIFF_LOAD_FILE, stringArgument, () => {});
+  // @ts-expect-error Send channel cannot be registered as an invoke.
+  boundary.handleCommand(IPC.FIND_IN_PAGE, findRequest, () => {});
+  // @ts-expect-error A context decoder cannot serve a string file request.
+  boundary.handleCommand(IPC.DIFF_LOAD_FILE, expansionRequest, () => null);
+  // @ts-expect-error Image result cannot answer a file request.
+  boundary.handleCommand(IPC.DIFF_LOAD_FILE, stringArgument, () => ({ dataUri: 'wrong' }));
+  // @ts-expect-error A required image result cannot be omitted.
+  boundary.handleCommand(IPC.DIFF_LOAD_IMAGE, stringArgument, () => {});
+  // @ts-expect-error Arbitrary channels cannot enter typed registration.
+  boundary.handleCommand('arbitrary:channel', noArgument, () => null);
+}
+void typedRegistrations;
+
+it('typed registrations retain runtime decoding, argument count and current-frame checks', async () => {
+  const { boundary, handlers, peer, replace } = fixture();
+  const run = vi.fn(() => null);
+  boundary.handleCommand(IPC.DIFF_LOAD_FILE, stringArgument, run);
+  expect(handlers[IPC.DIFF_LOAD_FILE](peer, 'a.ts')).toBeNull();
+  for (const args of [[null], ['a.ts', 'extra']])
+    expect(() => handlers[IPC.DIFF_LOAD_FILE](peer, ...args)).toThrow();
+  expect(() => handlers[IPC.DIFF_LOAD_FILE]({ ...peer, senderFrame: {} }, 'a.ts')).toThrow();
+  replace();
+  expect(() => handlers[IPC.DIFF_LOAD_FILE](peer, 'a.ts')).toThrow();
+  expect(run).toHaveBeenCalledOnce();
+});
+
+it('defers typed save decoding until after admission while authenticating and checking argv first', () => {
+  const { boundary, handlers, peer } = fixture();
+  const decode = vi.fn(reviewState);
+  const run = vi.fn(() => ({ status: 'busy' as const }));
+  boundary.handleDeferredCommand(IPC.REVIEW_SAVE, decode, run);
+  expect(handlers[IPC.REVIEW_SAVE](peer, null)).toEqual({ status: 'busy' });
+  expect(decode).not.toHaveBeenCalled();
+  expect(() => handlers[IPC.REVIEW_SAVE](peer, null, 'extra')).toThrow();
+  expect(() => handlers[IPC.REVIEW_SAVE]({ ...peer, senderFrame: {} }, null)).toThrow();
+  expect(run).toHaveBeenCalledOnce();
+});

@@ -122,3 +122,75 @@ it('admits explicit discard when reads are full, cancels Apply, and observes its
   await expect(owner.read(async () => 'another')).resolves.toBe('another');
   await owner.dispose('done', 1);
 });
+
+function scheduler() {
+  const tasks = new Set<{ run: () => void; ms: number }>();
+  return {
+    tasks,
+    schedule: (run: () => void, ms: number) => {
+      const task = { run, ms };
+      tasks.add(task);
+      return () => {
+        tasks.delete(task);
+      };
+    },
+    fire: (ms: number) => {
+      for (const task of [...tasks])
+        if (task.ms === ms) {
+          tasks.delete(task);
+          task.run();
+        }
+    },
+  };
+}
+it('uses injected read deadlines, keeps uncooperative admission, and cancels on every read exit', async () => {
+  const timing = scheduler();
+  const owner = new DesktopOperations(1, timing);
+  const late = deferred<string>();
+  let signal!: AbortSignal;
+  const reading = owner.read(async current => {
+    signal = current;
+    return late.promise;
+  }, 17);
+  await Promise.resolve();
+  expect([...timing.tasks].map(task => task.ms)).toEqual([17]);
+  timing.fire(17);
+  expect(signal.aborted).toBe(true);
+  await expect(owner.read(async () => 'excess')).rejects.toThrow(/Too many/);
+  late.resolve('late');
+  await expect(reading).rejects.toThrow(/timed out/);
+  expect(timing.tasks.size).toBe(0);
+  await expect(owner.read(async () => 'ok')).resolves.toBe('ok');
+  await expect(
+    owner.read(async () => {
+      throw new Error('failed');
+    })
+  ).rejects.toThrow('failed');
+  const cancel = new AbortController();
+  const uncooperative = deferred<string>();
+  const cancelled = owner.readOwned(() => uncooperative.promise, cancel.signal);
+  await Promise.resolve();
+  cancel.abort();
+  expect(timing.tasks.size).toBe(0);
+  uncooperative.resolve('stale');
+  await expect(cancelled).rejects.toThrow();
+  expect(timing.tasks.size).toBe(0);
+});
+it('uses injected drain deadlines once and clears timers on disposal or normal drain', async () => {
+  const timing = scheduler();
+  const owner = new DesktopOperations(32, timing);
+  const late = deferred<void>();
+  const reading = owner.read(() => late.promise);
+  await Promise.resolve();
+  const disposal = owner.dispose('closed', 23);
+  expect(owner.dispose('again')).toBe(disposal);
+  expect([...timing.tasks].map(task => task.ms)).toEqual([23]);
+  timing.fire(23);
+  await disposal;
+  expect(timing.tasks.size).toBe(0);
+  late.resolve();
+  await expect(reading).rejects.toThrow('closed');
+  const normal = new DesktopOperations(32, timing);
+  await normal.dispose('normal', 19);
+  expect(timing.tasks.size).toBe(0);
+});
