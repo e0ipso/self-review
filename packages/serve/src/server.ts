@@ -41,6 +41,10 @@ interface ReviewTransportOptions extends AdmissionOptions {
   /** Bearer token required on every API request; never returned by the server. */
   capability: string;
   clientDir?: string;
+  /** Accepted sockets, including idle peers and incomplete HTTP headers. */
+  maxConnections?: number;
+  /** Submission messages; defaults to stderr. Reporter failures do not change outcomes. */
+  reportDiagnostic?: (message: string) => void;
 }
 /** Primary construction consumes bound operations; composition belongs to the CLI. */
 export interface BoundReviewServerOptions extends ReviewTransportOptions {
@@ -70,7 +74,11 @@ export function createReviewServer(
       (options as ReviewServerOptions).session,
       (options as ReviewServerOptions).output
     );
-  const submission = new ReviewSubmission(operations);
+  const maxConnections = options.maxConnections ?? 64;
+  if (!Number.isSafeInteger(maxConnections) || maxConnections < 1) {
+    throw new Error('Connection limit must be a positive safe integer.');
+  }
+  const submission = new ReviewSubmission(operations, options.reportDiagnostic);
   const admission = new RequestAdmission({
     maxRequests: options.maxRequests,
     maxExpensiveReads: options.maxExpensiveReads,
@@ -146,9 +154,9 @@ export function createReviewServer(
           req,
           res,
           'read',
-          async () => {
+          async signal => {
             try {
-              await serveStatic(res, clientDir, url.pathname);
+              await serveStatic(res, clientDir, url.pathname, { signal });
             } catch {
               if (!res.headersSent && !res.destroyed) sendError(res, 500, 'internal error');
               else res.destroy();
@@ -173,6 +181,8 @@ export function createReviewServer(
     void dispatch(req, res);
   }) as ManagedReviewServer;
   server[REQUEST_SHUTDOWN] = () => admission.shutdown();
+  // node:net closes excess sockets before HTTP parses any request bytes.
+  server.maxConnections = maxConnections;
   server.headersTimeout = 15_000;
   server.requestTimeout = 60_000;
   return server;
