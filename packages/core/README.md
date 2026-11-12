@@ -375,3 +375,18 @@ and its error classes external. No minimum-version change is required for existi
 cleanup ownership intact on success, failure and cancellation. `remote-mode` retains direct aliases
 for `mergeRemoteThreads`, `applyRemoteProvenance` and `computeRemoteDrift`; their implementation is
 pure policy in `remote-feedback`, independent of clone acquisition and disposal.
+
+## Review schema validation effects
+
+`serializeReview` and `publishReview` accept an optional `validateSchema(xml, schema)` effect in
+their existing options. `ReviewSchemaValidator` is available from `@self-review/core/operations`.
+The effect returns `{ valid, errors? }`, synchronously or asynchronously. It receives the emitted
+review document and the unchanged v3 schema. A supplied effect owns validation; Core never retries
+it through xmllint. Omitting it retains xmllint validation.
+
+A returned `valid: false` throws the original `ReviewXmlError` with `schema-invalid` and rendered
+errors. Publication maps that to `validation-failed` before staging assets or replacing XML. A
+thrown or rejected effect means validation infrastructure is unavailable. The historical warning and
+unvalidated document fallback remain. Diagnostic throws and rejected promises cannot replace either
+outcome. The guide parser keeps its separate fail-closed policy. Serialization performs no file I/O;
+the validator is its only supplied or default external effect.

@@ -181,5 +181,7 @@ it('rejects a directory replaced while its confirmation was pending', async () =
 it('acknowledges an absent initial resume using the existing empty payload', async () => {
   const { invoke, sender } = fixture();
   await invoke(IPC.RESUME_REQUEST);
-  expect(sender.send).toHaveBeenCalledWith(IPC.RESUME_LOAD, { comments: [], viewedFiles: [] });
+  await vi.waitFor(() =>
+    expect(sender.send).toHaveBeenCalledWith(IPC.RESUME_LOAD, { comments: [], viewedFiles: [] })
+  );
 });

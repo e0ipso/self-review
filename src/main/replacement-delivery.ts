@@ -1,6 +1,11 @@
 import type { DiffLoadPayload, GuideLoadPayload, ResumeLoadPayload } from '../shared/types';
 import { IPC } from '../shared/ipc-channels';
-import { prepareDiffDelivery, prepareResumeLoad } from './ipc-delivery';
+import {
+  prepareDiffDelivery,
+  prepareResumeLoad,
+  prepareDiffDeliveryAsync,
+  prepareResumeLoadAsync,
+} from './ipc-delivery';
 
 /** A replacement is admitted only after every wire piece is ready. Adoption keeps the host's
  * original payload, identity and capture. A lost peer after adoption cannot undo that commit;
@@ -20,6 +25,18 @@ export function replaceReview(
 ): void {
   const { diff, guide } = prepareDiffDelivery(content.payload, content.guide);
   const resume = prepareResumeLoad(content.resume);
+  deliverReplacement({ diff, guide, resume }, owner, adopt);
+}
+
+function deliverReplacement(
+  {
+    diff,
+    guide,
+    resume,
+  }: { diff: DiffLoadPayload; guide: GuideLoadPayload | null; resume: ResumeLoadPayload },
+  owner: Parameters<typeof replaceReview>[1],
+  adopt: () => void
+): void {
   const current = () => {
     owner.signal.throwIfAborted();
     owner.assertCurrent();
@@ -37,4 +54,22 @@ export function replaceReview(
   current();
   owner.send(IPC.RESUME_LOAD, resume);
   current();
+}
+
+/** Prepare every piece under the old owner, then adopt and send without yielding. */
+export async function replaceReviewAsync(
+  content: Parameters<typeof replaceReview>[0],
+  owner: Parameters<typeof replaceReview>[1],
+  adopt: () => void,
+  assertPreparing: () => void = owner.assertCurrent
+): Promise<void> {
+  const current = () => {
+    owner.signal.throwIfAborted();
+    owner.assertCurrent();
+    assertPreparing();
+  };
+  const { diff, guide } = await prepareDiffDeliveryAsync(content.payload, content.guide, current);
+  const resume = await prepareResumeLoadAsync(content.resume, current);
+  current();
+  deliverReplacement({ diff, guide, resume }, owner, adopt);
 }

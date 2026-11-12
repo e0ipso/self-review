@@ -38,8 +38,8 @@ vi.mock('./desktop-session', async original => {
     }),
   };
 });
-vi.mock('./startup', () => ({
-  initializeSession: async (desktop: import('./desktop-session').DesktopSession) => {
+vi.mock('./startup-policy', () => ({
+  initializeSuppliedSession: async (desktop: import('./desktop-session').DesktopSession) => {
     desktop.review.diffData = { files: [], source: { type: 'directory', sourcePath: '/review' } };
     return true;
   },

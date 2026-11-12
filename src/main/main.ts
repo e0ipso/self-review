@@ -7,7 +7,7 @@ import { PublishedReviewRecovery } from './published-review-recovery';
 import { RendererRecovery } from './renderer-recovery';
 import { createDesktopLocalization, resolveApplicationLocale } from '../shared/localization';
 import { createReviewWindow, observeRendererHealth } from './desktop-window';
-import { initializeSession } from './startup';
+import { initializeSuppliedSession } from './startup-policy';
 import { createDesktopStartupOperations } from './startup-operations';
 import { QuitController } from './quit-controller';
 import { bindDesktopReviewOperations } from './review-operations';
@@ -170,7 +170,12 @@ void app
       if (
         !(await desktop.operations.read(
           signal =>
-            initializeSession(desktop, signal, presentation.confirmPayload, startupOperations),
+            initializeSuppliedSession(
+              desktop,
+              signal,
+              presentation.confirmPayload,
+              startupOperations
+            ),
           45_000
         ))
       ) {

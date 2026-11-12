@@ -1,7 +1,8 @@
 import type { BrowserWindow } from 'electron';
 import { IPC } from '../shared/ipc-channels';
 import { preparePayload } from '../../packages/core/src/review-handlers';
-import { checkContentBudget } from './content-budget';
+import { checkContentBudget, checkContentBudgetAsync } from './content-budget';
+import { setImmediate } from 'node:timers/promises';
 import type {
   DiffLoadPayload,
   AppConfig,
@@ -54,4 +55,48 @@ export function sendResumeLoad(window: BrowserWindow, payload: ResumeLoadPayload
 
 export function sendGuideLoad(window: BrowserWindow, payload: GuideLoadPayload): void {
   window.webContents.send(IPC.GUIDE_LOAD, prepareContent(payload));
+}
+
+/** Cooperative preparation retains all host references; only the wire projection is copied. */
+export async function prepareDiffLoadAsync(
+  payload: DiffLoadPayload,
+  assertCurrent: () => void
+): Promise<DiffLoadPayload> {
+  await checkContentBudgetAsync(payload, payload.isLargePayload, assertCurrent);
+  const files: DiffLoadPayload['files'] = [];
+  for (let offset = 0; offset < payload.files.length; offset += 256) {
+    assertCurrent();
+    const part = preparePayload({ ...payload, files: payload.files.slice(offset, offset + 256) });
+    files.push(...part.files);
+    if (offset + 256 < payload.files.length) {
+      await setImmediate();
+      assertCurrent();
+    }
+  }
+  const wire = { ...payload, files };
+  await checkContentBudgetAsync(wire, false, assertCurrent);
+  return wire;
+}
+
+export async function prepareContentAsync<T>(value: T, assertCurrent: () => void): Promise<T> {
+  await checkContentBudgetAsync(value, false, assertCurrent);
+  return value;
+}
+
+export async function prepareResumeLoadAsync(
+  payload: ResumeLoadPayload | null,
+  assertCurrent: () => void
+): Promise<ResumeLoadPayload> {
+  if (payload === undefined) throw new Error('The host did not acknowledge saved feedback.');
+  return prepareContentAsync(payload ?? { comments: [], viewedFiles: [] }, assertCurrent);
+}
+
+export async function prepareDiffDeliveryAsync(
+  payload: DiffLoadPayload,
+  guide: GuideLoadPayload | null,
+  assertCurrent: () => void
+) {
+  const diff = await prepareDiffLoadAsync(payload, assertCurrent);
+  await prepareContentAsync(guide, assertCurrent);
+  return { diff, guide };
 }

@@ -54,7 +54,7 @@ vi.mock('./desktop-window', () => ({
     harness.health = health;
   },
 }));
-vi.mock('./startup', () => ({ initializeSession: harness.initialize }));
+vi.mock('./startup-policy', () => ({ initializeSuppliedSession: harness.initialize }));
 vi.mock('./ipc-handlers', () => ({
   registerIpcHandlers: (
     _review: unknown,

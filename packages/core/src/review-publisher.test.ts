@@ -698,3 +698,49 @@ it.each(['native', 'legacy'] as const)(
     );
   }
 );
+
+it('uses injected schema refusal before touching the last publication or its assets', async () => {
+  await publishReview(withAttachment(), outputPath, explicit);
+  const beforeXml = fs.readFileSync(outputPath);
+  const beforeAssets = listDir(path.join(tmp, ASSETS));
+  const bytes = beforeAssets.map(name => fs.readFileSync(path.join(tmp, ASSETS, name)));
+  const validateSchema = vi.fn(async () => ({ valid: false, errors: ['supplied refusal'] }));
+  await expect(
+    publishReview(withAttachment(), outputPath, { ...explicit, validateSchema })
+  ).rejects.toMatchObject({ code: 'validation-failed', details: ['supplied refusal'] });
+  expect(validateSchema).toHaveBeenCalledOnce();
+  expect(fs.readFileSync(outputPath)).toEqual(beforeXml);
+  expect(listDir(path.join(tmp, ASSETS))).toEqual(beforeAssets);
+  expect(beforeAssets.map(name => fs.readFileSync(path.join(tmp, ASSETS, name)))).toEqual(bytes);
+  expect(listDir(tmp)).toEqual([ASSETS, 'review.xml']);
+});
+
+it.each(['valid', 'infrastructure'] as const)(
+  'uses the supplied %s validator through publication without a default validator retry',
+  async mode => {
+    const { validateXML } = await import('xmllint-wasm');
+    const before = vi.mocked(validateXML).mock.calls.length;
+    const reportDiagnostic = vi.fn();
+    const validateSchema = vi.fn(() => {
+      if (mode === 'infrastructure') throw new Error('supplied infrastructure unavailable');
+      return { valid: true };
+    });
+    const result = await publishReview(withAttachment(), outputPath, {
+      ...explicit,
+      validateSchema,
+      reportDiagnostic,
+    });
+    expect(result.assetPaths).toHaveLength(1);
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain('<attachment path=');
+    expect(validateSchema).toHaveBeenCalledOnce();
+    expect(vi.mocked(validateXML).mock.calls).toHaveLength(before);
+    if (mode === 'infrastructure')
+      expect(reportDiagnostic).toHaveBeenCalledWith(
+        '[main] XML validation infrastructure failed: supplied infrastructure unavailable - emitting XML without validation'
+      );
+    else
+      expect(reportDiagnostic.mock.calls.some(([message]) => message.includes('validation'))).toBe(
+        false
+      );
+  }
+);

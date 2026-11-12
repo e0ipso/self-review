@@ -257,3 +257,50 @@ it('uses the supplied publication error constructor and keeps unknown failures u
   expect(await unknown.json()).toEqual({ error: 'internal error' });
   expect(publishReview).toHaveBeenCalledTimes(2);
 });
+
+it('uses selected legacy validation and peer error classes when optional validators are omitted', async () => {
+  const { resolveServeEngine } = await import('./engine-contract');
+  const { session, output, state } = setup();
+  const constructed = vi.fn();
+  class PeerXmlError extends core.ReviewXmlError {
+    constructor(...args: ConstructorParameters<typeof core.ReviewXmlError>) {
+      super(...args);
+      constructed(...args);
+    }
+  }
+  const engine = resolveServeEngine({
+    ...core,
+    ReviewXmlError: PeerXmlError,
+    validateReviewState: undefined,
+    decodeSuggestionApplyRequest: undefined,
+    MAX_CONTEXT_LINES: undefined,
+  });
+  const operations = createPublicationOperations(session, output, engine);
+  const publish = vi.spyOn(operations, 'publishReview');
+  const url = await listen(
+    createBoundReviewServer({ operations, publication: operations, capability: 'key' })
+  );
+  const response = await fetch(url + 'api/review', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ...state, source: { type: 'invalid' } }),
+  });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: expect.stringContaining('source') });
+  expect(constructed).toHaveBeenCalledOnce();
+  expect(publish).not.toHaveBeenCalled();
+});
+
+it('observes operation replacements after route construction with bound validation', async () => {
+  const { session, output } = setup();
+  const operations = createPublicationOperations(session, output);
+  const url = await listen(
+    createBoundReviewServer({ operations, publication: operations, capability: 'key' })
+  );
+  const getConfigLoad = vi.fn(() => null);
+  operations.getConfigLoad = getConfigLoad;
+  const response = await fetch(url + 'api/config', { headers });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toBeNull();
+  expect(getConfigLoad).toHaveBeenCalledOnce();
+});

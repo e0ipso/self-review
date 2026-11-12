@@ -15,7 +15,8 @@ import { serveStatic } from './static-assets';
 import type { ReviewTransportOperations } from './review-operations';
 import { nonThrowingReporter } from './diagnostic-reporter';
 import { ReviewSubmission } from './review-submission';
-import { createApiRoutes } from './api-routes';
+import { createBoundApiRoutes } from './bound-api-routes';
+import { bindRouteValidation } from './route-composition';
 export { MAX_EXPAND_CONTEXT_BODY_BYTES } from './api-routes';
 import {
   RequestAdmission,
@@ -71,7 +72,12 @@ export function createBoundReviewServer(
   const published = (response: http.ServerResponse) =>
     server.emit(REVIEW_PUBLISHED, response, () => admission.drain());
 
-  const routes = createApiRoutes(operations, submission, published);
+  const routes = createBoundApiRoutes(
+    operations,
+    submission,
+    published,
+    bindRouteValidation(operations)
+  );
   const routeMethods = new Map<string, string[]>();
   for (const key of Object.keys(routes)) {
     const [method, path] = key.split(' ');

@@ -1,5 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import { replaceReview } from './replacement-delivery';
+import { replaceReviewAsync } from './replacement-delivery';
 import type { createIpcBoundary } from './ipc-boundary';
 import type { DesktopReviewOperations } from './review-operations';
 import type { ReviewPresentation } from './presentation';
@@ -40,7 +40,7 @@ export async function startDirectoryReview(
     current();
     opening.assertCurrent();
     signal.throwIfAborted();
-    replaceReview(
+    await replaceReviewAsync(
       { payload, guide: null, resume: { comments: [], viewedFiles: [] } },
       {
         signal,
@@ -50,7 +50,8 @@ export async function startDirectoryReview(
       () => {
         opening.assertCurrent();
         review.commitReviewStart(payload, identity, loadedReview);
-      }
+      },
+      opening.assertCurrent
     );
 
     if (payload.source.type === 'file') {
