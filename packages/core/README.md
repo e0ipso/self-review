@@ -45,6 +45,29 @@ diagnostics. `loadLocalReview` routes scanner messages through its existing `log
 as reporting payload diagnostics. Hosts calling scanners directly can pass their own reporter. Each
 operation owns its reporter; there is no mutable global reporting setting.
 
+`loadGuide(outputPath, config, diffPaths, options)` accepts `reader?: BoundedGuideReader` and
+`reportDiagnostic`. The reader's `read(path, maxBytes, options?)` uses the existing
+`BoundedReadResult` and bounded-read options. It receives `MAX_GUIDE_BYTES` and the operation's
+signal, retains its receiver, and owns its opened handles through success, failure and cancellation.
+A supplied reader owns every guide read. Missing or refused virtual input never triggers a native
+retry. It must check regular-file metadata before reading, avoid blocking on FIFOs, bound allocation
+and detect growth while reading. Core independently refuses an oversized returned buffer before
+decoding or validation; it cannot undo allocation inside an adapter that violates the contract. The
+default remains the native descriptor reader with regular-file checks, bounded growth detection and
+cleanup. Missing guides stay silent, other read or validation failures return null with one warning,
+and an aborted supplied signal propagates after the reader settles. XML/schema validation and
+reconciliation apply equally to native and supplied bytes. Validation and individual adapter calls
+in flight cannot be preempted.
+
+`loadImage(session, path, options)` accepts a per-operation `reportDiagnostic`. Snapshot refusals
+retain their existing error results and diagnostic text. Reporter throws and rejected promises are
+ignored without replacing the read result. Membership, image-size and replaced-session refusals
+retain their existing silent behavior; cancellation rejects without a diagnostic. The option does
+not change captured versus legacy live read semantics. Neither option installs a global reporter.
+Both operations and their option types are available from `@self-review/core/operations`, and the
+original root functions remain supported. Hosts must pass their own reporter into each operation to
+route these messages; callers that omit it retain stderr output.
+
 ## Payload threshold validation
 
 `max-files` and `max-total-lines` accept finite numeric values from zero through

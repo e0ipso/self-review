@@ -14,6 +14,8 @@ import {
 } from './attachment-origins';
 import type { AttachmentReadResult } from './attachment-origins';
 import { ASSET_DIR_NAME } from './xml-serializer';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 
 const IMAGE_MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -25,6 +27,13 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
 };
 
+export interface LoadImageOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  /** Defaults to stderr. Reporter failures never change the read outcome. */
+  reportDiagnostic?: DiagnosticReporter;
+}
+
 /**
  * Reads a reviewed, previewable path. First-party loads pin index blobs and verify physical
  * source evidence; legacy injected identities retain live descriptor reads.
@@ -32,7 +41,7 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
 export async function loadImage(
   session: Pick<ReviewSession, 'reviewedPaths' | 'diffData' | 'sourceIdentity' | 'loadedReview'>,
   filePath: string,
-  options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  options: LoadImageOptions = {}
 ): Promise<ImageLoadResult> {
   if (!session.reviewedPaths.has(filePath)) {
     return { error: 'Image preview unavailable — this file is not part of the reviewed diff.' };
@@ -63,7 +72,9 @@ export async function loadImage(
     if (result.reason === 'too-large') {
       return { error: 'File too large to preview (>10 MB)' };
     }
-    console.error(`[review] Image preview unavailable for ${filePath}: ${result.message}`);
+    isolatedReporter(options.reportDiagnostic)(
+      `[review] Image preview unavailable for ${filePath}: ${result.message}`
+    );
     return { error: `Image preview unavailable — ${result.message}` };
   }
   const mimeType = IMAGE_MIME_TYPES[path.posix.extname(filePath).toLowerCase()];

@@ -19,6 +19,7 @@
 
 import { extname, resolve } from 'path';
 import { readFileWithinBudget } from './bounded-read';
+import type { AsyncBoundedReadOptions, BoundedReadResult } from './bounded-read';
 import { parseGuideXml, reconcileGuide } from './guide-parser';
 import { formatBytes, MAX_GUIDE_BYTES } from './input-budgets';
 import { AppConfig, GuideLoadPayload } from './types';
@@ -53,7 +54,24 @@ export function resolveGuidePath(
   return deriveGuidePath(outputPath);
 }
 
+/**
+ * Owns bounded guide reads, including regular-file checks, growth detection and handle cleanup.
+ * Must reject filesystem errors with Node-style errno codes and settle after cleanup on abort.
+ * Methods retain their receiver. A supplied reader is authoritative; native I/O is never retried.
+ */
+export interface BoundedGuideReader {
+  read(
+    path: string,
+    maxBytes: number,
+    options?: AsyncBoundedReadOptions
+  ): Promise<BoundedReadResult>;
+}
+
+const nativeGuideReader: BoundedGuideReader = { read: readFileWithinBudget };
+
 export interface LoadGuideOptions {
+  /** Defaults to the native bounded reader. The caller owns the reader; it owns opened handles. */
+  reader?: BoundedGuideReader;
   /** Resolution directory for a relative guide-file. Defaults to process.cwd(). */
   cwd?: string;
   /** Defaults to stderr; missing guides are always silent. */
@@ -90,10 +108,15 @@ export async function loadGuide(
     // Refused on fstat size / non-regular file before any read, so a FIFO cannot block.
     let content: string;
     try {
-      const read = await (options.signal
-        ? readFileWithinBudget(guidePath, MAX_GUIDE_BYTES, { signal: options.signal })
-        : readFileWithinBudget(guidePath, MAX_GUIDE_BYTES));
+      const reader = options.reader ?? nativeGuideReader;
+      let read = await (options.signal
+        ? reader.read(guidePath, MAX_GUIDE_BYTES, { signal: options.signal })
+        : reader.read(guidePath, MAX_GUIDE_BYTES));
       options.signal?.throwIfAborted();
+      // Enforce the parse budget even if a supplied reader under-enforces its allocation contract.
+      if (read.kind === 'ok' && read.content.length > MAX_GUIDE_BYTES) {
+        read = { kind: 'too-large', size: read.content.length };
+      }
       if (read.kind === 'too-large') {
         reportDiagnostic(
           `[guide] Ignoring guide at ${guidePath}: too large (${formatBytes(read.size)}, ` +
