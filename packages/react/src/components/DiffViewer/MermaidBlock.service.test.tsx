@@ -5,7 +5,7 @@ import { PreviewRenderingProvider } from '../../context/PreviewRenderingContext'
 import MermaidBlock from './MermaidBlock';
 import type { DiagramRenderRequest } from './diagram-service';
 
-vi.mock('../../context/ConfigContext', () => ({ useAppearance: () => ({ theme: 'light' }) }));
+vi.mock('../../context/ConfigContext', () => ({ useResolvedTheme: () => 'light' }));
 const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"><text>safe</text></svg>';
 
 it('uses the supplied service, aborts replaced work and ignores its late result', async () => {
@@ -62,4 +62,17 @@ it('never sends excessive source to a supplied service', async () => {
   );
   await screen.findByRole('alert');
   expect(service.render).not.toHaveBeenCalled();
+});
+
+it('preserves service, error and budget identities through the old feature imports', async () => {
+  const old = await import('./diagram-service');
+  const shared = await import('../../services/diagram-service');
+  expect(old.DiagramImageError).toBe(shared.DiagramImageError);
+  expect(old.defaultDiagramRenderService).toBe(shared.defaultDiagramRenderService);
+  expect(old.createDiagramRenderService).toBe(shared.createDiagramRenderService);
+  expect(old.MERMAID_SECURE_KEYS).toBe(shared.MERMAID_SECURE_KEYS);
+  const preview = await import('./content-preview');
+  const policy = await import('../../services/content-preview');
+  expect(preview.getContentPreview).toBe(policy.getContentPreview);
+  expect(preview.initialPreviewMode).toBe(policy.initialPreviewMode);
 });

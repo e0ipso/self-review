@@ -2,7 +2,7 @@ import React, {
   createContext,
   useContext,
   useState,
-  useEffect,
+  useSyncExternalStore,
   useCallback,
   useMemo,
   ReactNode,
@@ -48,7 +48,10 @@ export function useConfig() {
 export type ConfigurationValue = Pick<ConfigContextValue, 'config' | 'setConfig' | 'updateConfig'>;
 export type OutputPathValue = Pick<ConfigContextValue, 'outputPathInfo' | 'setOutputPathInfo'>;
 export type AppearanceValue = Pick<AppConfig, 'theme' | 'diffView' | 'fontSize' | 'wordWrap'> &
-  Pick<ConfigContextValue, 'updateConfig'>;
+  Pick<ConfigContextValue, 'updateConfig'> & {
+    /** Resolved palette, separate from the configured light/dark/system intent. */
+    resolvedTheme?: 'light' | 'dark';
+  };
 
 const ConfigurationContext = createContext<ConfigurationValue>({
   config: defaultConfig,
@@ -77,6 +80,32 @@ export function useConfiguration() {
 export function useAppearance() {
   return useContext(AppearanceContext);
 }
+/** One reactive palette for CSS, diagrams and editors. Legacy appearance values may omit it. */
+export function useResolvedTheme(): 'light' | 'dark' {
+  const appearance = useAppearance();
+  return useThemeResolution(appearance.theme, appearance.resolvedTheme);
+}
+
+function useThemeResolution(theme: AppConfig['theme'], resolved?: 'light' | 'dark') {
+  const media = useMemo(
+    () =>
+      resolved === undefined && theme === 'system' && typeof window !== 'undefined'
+        ? window.matchMedia('(prefers-color-scheme: dark)')
+        : null,
+    [theme, resolved]
+  );
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      media?.addEventListener('change', notify);
+      return () => media?.removeEventListener('change', notify);
+    },
+    [media]
+  );
+  const read = useCallback(() => media?.matches ?? false, [media]);
+  const isDark = useSyncExternalStore(subscribe, read, () => false);
+  return resolved ?? (theme === 'dark' || (theme === 'system' && isDark) ? 'dark' : 'light');
+}
+
 /** The configured categories, including the initial fallback when no category is usable. */
 export function useCategories() {
   return useContext(CategoriesContext);
@@ -163,15 +192,17 @@ export function ConfigProvider({
     () => ({ config, setConfig, updateConfig }),
     [config, setConfig, updateConfig]
   );
+  const resolvedTheme = useThemeResolution(config.theme);
   const appearance = useMemo(
     () => ({
       theme: config.theme,
+      resolvedTheme,
       diffView: config.diffView,
       fontSize: config.fontSize,
       wordWrap: config.wordWrap,
       updateConfig,
     }),
-    [config.theme, config.diffView, config.fontSize, config.wordWrap, updateConfig]
+    [config.theme, resolvedTheme, config.diffView, config.fontSize, config.wordWrap, updateConfig]
   );
   const output = useMemo(() => ({ outputPathInfo, setOutputPathInfo }), [outputPathInfo]);
   const compatibility = useMemo(
@@ -183,33 +214,6 @@ export function ConfigProvider({
     [configuration, output, portalContainer]
   );
 
-  // Toggling `dark` is the whole theme switch: both Prism themes are pre-scoped in the stylesheet.
-  useEffect(() => {
-    const applyTheme = (isDark: boolean) => {
-      if (portalContainer) {
-        portalContainer.classList.toggle('dark', isDark);
-      }
-    };
-
-    const resolveIsDark = (theme: 'light' | 'dark' | 'system') => {
-      if (theme === 'system') {
-        return window.matchMedia('(prefers-color-scheme: dark)').matches;
-      }
-      return theme === 'dark';
-    };
-
-    applyTheme(resolveIsDark(config.theme));
-
-    // Listen for system theme changes when in system mode
-    if (config.theme !== 'system') return;
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const listener = (e: MediaQueryListEvent) => {
-      applyTheme(e.matches);
-    };
-    mediaQuery.addEventListener('change', listener);
-    return () => mediaQuery.removeEventListener('change', listener);
-  }, [config.theme, portalContainer]);
-
   return (
     <ConfigContext.Provider value={compatibility}>
       <ConfigurationContext.Provider value={configuration}>
@@ -219,7 +223,7 @@ export function ConfigProvider({
               <PortalContext.Provider value={portalContainer}>
                 <div
                   ref={wrapperCallbackRef}
-                  className='self-review'
+                  className={`self-review${resolvedTheme === 'dark' ? ' dark' : ''}`}
                   style={
                     {
                       display: 'contents',

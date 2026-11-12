@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { DiffFile, GuideLoadPayload } from '@self-review/types';
 import GuideChapterDivider from './DiffViewer/GuideChapterDivider';
 import GuideRouteHud from './GuideRouteHud';
+import GuideOverviewContent from './DiffViewer/GuideOverviewContent';
 import { ReviewProvider, useReview, type ReviewContextValue } from '../context/ReviewContext';
 import { ReviewContext, SessionStoreContext } from '../context/review-context';
 import type { ReviewSessionStore } from '../context/review-session';
@@ -21,6 +22,7 @@ const diff: DiffFile[] = [
   { oldPath: 'shared', newPath: '', changeType: 'deleted', hunks: [], isBinary: false },
 ];
 const guide: GuideLoadPayload = {
+  overview: 'Review orientation',
   groups: [
     { name: 'Chapter', implicit: false, files: [{ path: 'shared' }] },
     { name: 'Empty', implicit: false, files: [] },
@@ -48,6 +50,7 @@ function fixture() {
   }
   const chapterRenders = vi.fn();
   const hudRenders = vi.fn();
+  const overviewRenders = vi.fn();
   const view = render(
     <ConfigProvider>
       <GuideProvider initialGuide={guide}>
@@ -59,6 +62,9 @@ function fixture() {
             <Capture />
             <Profiler id='chapter' onRender={chapterRenders}>
               <GuideChapterDivider {...chapterProps} />
+            </Profiler>
+            <Profiler id='overview' onRender={overviewRenders}>
+              <GuideOverviewContent />
             </Profiler>
             <Profiler id='hud' onRender={hudRenders}>
               <GuideRouteHud />
@@ -76,18 +82,27 @@ function fixture() {
     guide: () => guideState,
     chapterRenders,
     hudRenders,
+    overviewRenders,
   };
 }
 
 it('does not render guide progress on comment or reply changes and updates on viewed changes', () => {
   const f = fixture();
-  const before = [f.chapterRenders.mock.calls.length, f.hudRenders.mock.calls.length];
+  const before = [
+    f.chapterRenders.mock.calls.length,
+    f.hudRenders.mock.calls.length,
+    f.overviewRenders.mock.calls.length,
+  ];
   act(() => f.review().addComment('shared', null, 'original', 'note', null));
   const id = f.review().files[0].comments[0].id;
   act(() => f.review().editComment(id, { body: 'edited' }));
   act(() => f.review().addReply(id, 'reply'));
   act(() => f.review().deleteComment(id));
-  expect([f.chapterRenders.mock.calls.length, f.hudRenders.mock.calls.length]).toEqual(before);
+  expect([
+    f.chapterRenders.mock.calls.length,
+    f.hudRenders.mock.calls.length,
+    f.overviewRenders.mock.calls.length,
+  ]).toEqual(before);
   act(() => f.review().toggleViewed('shared'));
   expect(screen.getByText('2/2 reviewed', { exact: false })).toBeTruthy();
   expect(f.chapterRenders.mock.calls.length).toBeGreaterThan(before[0]);
@@ -103,9 +118,14 @@ it('uses the first duplicate for chapter counts and any viewed duplicate for HUD
     })
   );
   expect(screen.getByText('0/2 reviewed', { exact: false })).toBeTruthy();
-  const stop = screen.getByRole('button', { name: 'Go to stop 1: Chapter' });
+  expect(screen.getByRole('group', { name: 'Walkthrough route map' }).textContent).toContain('✓');
+  const stop = screen
+    .getByTestId('guide-route-hud')
+    .querySelector('[aria-label="Go to stop 1: Chapter"]')!;
   expect(stop.firstElementChild?.className).toContain(getGuideAccent(0).dotSoft);
-  const empty = screen.getByRole('button', { name: 'Go to stop 2: Empty' });
+  const empty = screen
+    .getByTestId('guide-route-hud')
+    .querySelector('[aria-label="Go to stop 2: Empty"]')!;
   expect(empty.firstElementChild?.className).toContain(getGuideAccent(1).dotFaint);
   const hudCount = f.hudRenders.mock.calls.length;
   act(() => f.store().dispatch({ type: 'files', update: files => [...files].reverse() }));
@@ -127,7 +147,9 @@ it('keeps ordered stops, empty-stop controls, routing and the flat toggle', () =
   const target = document.createElement('section');
   target.scrollIntoView = vi.fn();
   act(() => f.navigation().registerFileElement('shared', target));
-  const stops = screen.getAllByRole('button', { name: /Go to stop/ });
+  const stops = Array.from(
+    screen.getByTestId('guide-route-hud').querySelectorAll('button[aria-label]')
+  );
   expect(stops.map(stop => stop.getAttribute('aria-label'))).toEqual([
     'Go to stop 1: Chapter',
     'Go to stop 2: Empty',
@@ -154,6 +176,7 @@ it('supports context-only legacy guide compositions with the same duplicate rule
           <ReviewContext.Provider value={value}>
             <GuideChapterDivider {...chapterProps} />
             <GuideRouteHud />
+            <GuideOverviewContent />
           </ReviewContext.Provider>
         </DiffNavigationProvider>
       </GuideProvider>
@@ -162,8 +185,45 @@ it('supports context-only legacy guide compositions with the same duplicate rule
   const view = render(tree({ ...review, files }));
   expect(screen.getByText('0/2 reviewed', { exact: false })).toBeTruthy();
   expect(
-    screen.getByRole('button', { name: 'Go to stop 1: Chapter' }).firstElementChild?.className
+    screen.getByTestId('guide-route-hud').querySelector('[aria-label="Go to stop 1: Chapter"]')!
+      .firstElementChild?.className
   ).toContain(getGuideAccent(0).dotSoft);
   view.rerender(tree({ ...review, files: [...files].reverse() }));
   expect(screen.getByText('2/2 reviewed', { exact: false })).toBeTruthy();
+});
+
+it('recomputes overview totals for a new diff but keeps them on comment and viewed changes', () => {
+  const f = fixture();
+  const lines = vi.fn(() => [
+    { type: 'addition' as const, content: 'one', oldLineNumber: null, newLineNumber: 1 },
+    { type: 'addition' as const, content: 'two', oldLineNumber: null, newLineNumber: 2 },
+    { type: 'deletion' as const, content: 'old', oldLineNumber: 1, newLineNumber: null },
+  ]);
+  act(() =>
+    f.review().setDiffFiles([
+      {
+        ...diff[0],
+        hunks: [
+          {
+            oldStart: 1,
+            oldLines: 1,
+            newStart: 1,
+            newLines: 2,
+            header: '@@ -1 +1,2 @@',
+            get lines() {
+              return lines();
+            },
+          },
+        ],
+      },
+    ])
+  );
+  expect(screen.getByText('+2', { exact: false })).toBeTruthy();
+  expect(screen.getByText('−1', { exact: false })).toBeTruthy();
+  const before = lines.mock.calls.length;
+  act(() => f.review().addComment('shared', null, 'another comment', 'note', null));
+  act(() => f.review().toggleViewed('shared'));
+  expect(lines).toHaveBeenCalledTimes(before);
+  act(() => f.review().setDiffFiles(diff));
+  expect(screen.queryByText('+2', { exact: false })).toBeNull();
 });

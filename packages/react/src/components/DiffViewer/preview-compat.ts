@@ -4,7 +4,7 @@
  */
 import type { RenderedTextMode } from '../../utils/file-type-utils';
 import type { DiffContentAreaProps, PreviewContentAreaProps } from './DiffContentArea';
-import type { ContentPreview } from './content-preview';
+import type { ContentPreview } from '../../services/content-preview';
 
 export function previewFromFlags({
   showImagePreview,

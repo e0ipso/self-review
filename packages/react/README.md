@@ -315,3 +315,28 @@ Built-in image and SVG preview failures use the localization catalog and named a
 has a named status. Host diagnostics remain visible below the localized failure message. Native
 image decode failures now show an alert, and null image results remain failures. Previews retain
 passive image data URIs and the original file path as their accessible identity.
+
+## Resolved appearance and diagram access
+
+`config.theme` retains the requested `light`, `dark` or `system` setting. `ConfigProvider` resolves
+that intent once for its subtree. `useResolvedTheme()` publishes the reactive `light`/`dark` palette
+used by scoped CSS, mounted diagrams and comment editors. OS preference changes in system mode
+update those consumers without changing configuration or writing browser storage. The optional
+`AppearanceValue.resolvedTheme` keeps older appearance object literals compatible. Media listeners
+belong to the mounted owner and are removed when its theme changes or it unmounts.
+
+Shared preview contracts, eligibility policy, Mermaid admission limits and the default rendering
+service live in `src/services`. Providers and feature components consume that layer. Previous
+DiffViewer service imports and the PreviewRenderingContext type exports remain direct facades.
+
+Successful Mermaid images use bounded plain text from the inert SVG document's direct `title` and
+`desc` elements as their accessible name and description. The diagram source remains mounted in a
+localized disclosure on success, as it does on failure. SVG markup continues to render only through
+an image data URI. This does not change Mermaid's cooperative cancellation or its synchronous layout
+limit described above.
+
+The walkthrough overview subscribes to diff and viewed-path projections; the import banner
+subscribes to import/anchor diagnostics and session identity. Comment changes leave those surfaces
+quiet in store-backed reviews. Legacy context-only compositions still update through their complete
+context. A replacement session resets the banner's dismissal. Overview route completion uses any
+viewed duplicate path, while chapter counts retain first-entry semantics.

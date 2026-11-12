@@ -1,7 +1,7 @@
 import React from 'react';
 import type { DiffFile } from '@self-review/types';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
-import type { ContentPreview } from './content-preview';
+import type { ContentPreview } from '../../services/content-preview';
 import type { LazyLoadState } from './useLazyFileContent';
 import { normalizePreviewProps } from './preview-compat';
 import { ContentStatusBoundary } from './ContentStatusBoundary';

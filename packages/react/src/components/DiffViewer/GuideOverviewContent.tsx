@@ -1,11 +1,14 @@
 import { useLocalization } from '../../localization/LocalizationContext';
-import React, { useMemo } from 'react';
+import React, { useMemo, useContext } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
 import { Map as MapIcon } from 'lucide-react';
+import type { DiffFile } from '@self-review/types';
+import { SessionStoreContext } from '../../context/review-context';
+import { ViewedReview } from '../../context/ViewedReview';
 import { useGuide } from '../../context/GuideContext';
-import { useReview } from '../../context/ReviewContext';
+import { useReview, useDiffReview } from '../../context/ReviewContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import { GuideRouteMap } from '../GuideRouteMap';
 import { remarkEmoji } from '../../utils/remark-emoji';
@@ -26,10 +29,43 @@ export interface GuideOverviewContentProps {
  * places — the trailhead at the top of the review and the recall dialog
  * opened from the wayfinding HUD — so both always show the same thing.
  */
-export default function GuideOverviewContent({ onNavigate }: GuideOverviewContentProps) {
+export default function GuideOverviewContent(props: GuideOverviewContentProps) {
+  const store = useContext(SessionStoreContext);
+  return store ? <StoredOverview {...props} /> : <LegacyOverview {...props} />;
+}
+
+function StoredOverview(props: GuideOverviewContentProps) {
+  const { diffFiles } = useDiffReview();
+  return (
+    <ViewedReview match='any'>
+      {viewedPaths => (
+        <OverviewContent {...props} diffFiles={diffFiles} viewedPaths={viewedPaths} />
+      )}
+    </ViewedReview>
+  );
+}
+
+function LegacyOverview(props: GuideOverviewContentProps) {
+  const { diffFiles } = useReview();
+  return (
+    <ViewedReview match='any'>
+      {viewedPaths => (
+        <OverviewContent {...props} diffFiles={diffFiles} viewedPaths={viewedPaths} />
+      )}
+    </ViewedReview>
+  );
+}
+
+function OverviewContent({
+  onNavigate,
+  diffFiles,
+  viewedPaths,
+}: GuideOverviewContentProps & {
+  diffFiles: DiffFile[];
+  viewedPaths: ReadonlySet<string>;
+}) {
   const { t, number } = useLocalization();
   const { guide } = useGuide();
-  const { diffFiles, files } = useReview();
   const navigation = useOptionalDiffNavigation();
 
   // In large-payload mode files arrive with empty hunks until they are
@@ -55,7 +91,6 @@ export default function GuideOverviewContent({ onNavigate }: GuideOverviewConten
   const groups = guide.groups;
   const totalFiles = groups.reduce((sum, group) => sum + group.files.length, 0);
 
-  const viewedPaths = new Set((files ?? []).filter(f => f.viewed).map(f => f.path));
   const isGroupComplete = (group: (typeof groups)[number]) =>
     group.files.length > 0 && group.files.every(file => viewedPaths.has(file.path));
 
