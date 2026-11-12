@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import React from 'react';
+import { ReviewDisplayProvider } from '../../context/ReviewDisplayContext';
+import { render as testingRender } from '@testing-library/react';
 import DiffViewer, { COLLAPSE_THRESHOLD } from './DiffViewer';
 import type { DiffFile } from '@self-review/types';
 
@@ -40,6 +42,18 @@ vi.mock('./FileSection', () => ({
     </div>
   ),
 }));
+
+function render(ui: React.ReactElement) {
+  return testingRender(
+    <ReviewDisplayProvider
+      files={[...mockDiffFiles]}
+      reviewFiles={[]}
+      isLargePayload={mockReview.isLargePayload}
+    >
+      {ui}
+    </ReviewDisplayProvider>
+  );
+}
 
 function makeDiffFile(path: string): DiffFile {
   return {

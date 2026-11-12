@@ -333,4 +333,12 @@ export const ENGLISH = {
   'Mermaid diagram': 'Mermaid diagram',
   'Highlighting is limited for this suggestion. All code remains available.':
     'Highlighting is limited for this suggestion. All code remains available.',
+  'Loading image...': 'Loading image...',
+  'Image preview unavailable': 'Image preview unavailable',
+  'Failed to load image.': 'Failed to load image.',
+  'Image loading not supported in this context.': 'Image loading not supported in this context.',
+  'SVG preview unavailable': 'SVG preview unavailable',
+  'SVG content could not be extracted.': 'SVG content could not be extracted.',
+  'Failed to load SVG preview.': 'Failed to load SVG preview.',
+  'SVG preview': 'SVG preview',
 } satisfies Record<string, LocalizedMessage>;

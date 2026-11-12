@@ -139,3 +139,7 @@ export type { ContentPreview } from './components/DiffViewer/content-preview';
 
 export { ReviewServicesProvider, useReviewServices } from './context/ReviewServicesContext';
 export type { ReviewServices } from './context/ReviewServicesContext';
+
+// Scoped display commands, supplied automatically by ReviewProvider.
+export { useReviewExpansion, useCommentDisclosure } from './context/ReviewDisplayContext';
+export { useNavigationReview } from './context/ReviewContext';

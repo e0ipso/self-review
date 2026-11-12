@@ -200,3 +200,38 @@ Raw unified and split layouts share hunk gap controls and source-derived comment
 row markup, side ordering and selection geometry remain separate. The content dispatcher keeps
 loading, omission and manual retry outside preview/raw composition; neither branch mounts until
 content is available. Legacy public eligibility flags and preview services retain their contracts.
+
+## Scoped display commands and navigation
+
+Every `ReviewProvider` owns transient file expansion and comment disclosure, including bare custom
+compositions and `SingleFileReview`. No extra provider argument is needed. `useReviewExpansion()`
+exposes `expanded`, `setExpanded(path, value)` and `setAllExpanded(value, paths?)`.
+`useCommentDisclosure()` exposes `isCollapsed(id)`, `allCollapsed`, `setCollapsed(id, value)` and
+`setAllCollapsed(value)`. The toolbar and file tree use these typed commands. Mixed file expansion
+offers Expand all; mixed comment disclosure offers Collapse all.
+
+Large payloads and reviews above 50 files start collapsed. Each path keeps the default it first saw
+through same-identity updates, including when the payload size changes. A replacement resets display
+state before any new file can load. Bulk comment disclosure also supplies the default for newly
+arriving comments. Individual comment disclosure updates the toolbar action, and hidden reply drafts
+and Apply state stay mounted. `SingleFileReview` now honors its file's disclosure button.
+
+`useNavigationReview()` returns a read-only path index containing only `viewed` and `commentCount`.
+Repeated reads retain the same map until those values or membership change. Unaffected entries keep
+their references. Canonical file/review selectors use store-local indexes; body and reply edits do
+not render the file tree or progress controls. The exported `FileSectionHeaderProps.comments`
+remains required for existing deep-import callers; the internal presentation receives only its
+count.
+
+One compatibility bridge accepts `toggle-all-sections` with `{ expanded: boolean }` and
+`toggle-all-comments` with `{ collapsed: boolean }`. Dispatch at the owning
+`[data-review-display-root]`. Existing direct dispatch at a `ConfigProvider`'s `.self-review`
+container remains supported when it contains exactly one review root. A container shared by several
+reviews cannot identify the intended review, so its bulk events are ignored. Window/document events
+are not review commands. Nested and sibling review roots remain isolated; first-party controls do
+not emit DOM bulk events.
+
+Built-in image and SVG preview failures use the localization catalog and named alerts. Image loading
+has a named status. Host diagnostics remain visible below the localized failure message. Native
+image decode failures now show an alert, and null image results remain failures. Previews retain
+passive image data URIs and the original file path as their accessible identity.

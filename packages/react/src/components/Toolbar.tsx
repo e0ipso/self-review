@@ -1,6 +1,6 @@
 import { useLocalization } from '../localization/LocalizationContext';
-import React, { useState, useMemo } from 'react';
-import { useConfiguration, useOutputPath, usePortalContainer } from '../context/ConfigContext';
+import React, { useMemo } from 'react';
+import { useConfiguration, useOutputPath } from '../context/ConfigContext';
 import { useDiffReview } from '../context/ReviewContext';
 import { useGuide } from '../context/GuideContext';
 import { useAdapter } from '../context/ReviewAdapterContext';
@@ -25,6 +25,7 @@ import {
   Route,
   List,
 } from 'lucide-react';
+import { useCommentDisclosure } from '../context/ReviewDisplayContext';
 import ReviewProgress from './ReviewProgress';
 
 export interface ToolbarProps {
@@ -36,11 +37,10 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
   const { t, number } = useLocalization();
   const { config, updateConfig } = useConfiguration();
   const { outputPathInfo } = useOutputPath();
-  const portalContainer = usePortalContainer();
   const { diffFiles, diffSource } = useDiffReview();
   const { guide, mode: guideMode, setMode: setGuideMode } = useGuide();
   const adapter = useAdapter();
-  const [allCommentsCollapsed, setAllCommentsCollapsed] = useState(false);
+  const { allCollapsed: allCommentsCollapsed, setAllCollapsed } = useCommentDisclosure();
 
   const stats = useMemo(() => {
     let additions = 0;
@@ -57,12 +57,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
   }, [diffFiles]);
 
   const handleToggleAllComments = () => {
-    const newCollapsed = !allCommentsCollapsed;
-    setAllCommentsCollapsed(newCollapsed);
-    const event = new CustomEvent('toggle-all-comments', {
-      detail: { collapsed: newCollapsed },
-    });
-    portalContainer?.dispatchEvent(event);
+    setAllCollapsed(!allCommentsCollapsed);
   };
 
   const handleThemeChange = (theme: 'light' | 'dark' | 'system') => {

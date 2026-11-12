@@ -35,7 +35,13 @@ export interface FileSectionHeaderProps {
   onRenderViewModeChange: (mode: 'raw' | 'rendered') => void;
 }
 
-export function FileSectionHeader({
+/** Compatibility facade: comments remains a required exported property. */
+export function FileSectionHeader({ comments, ...props }: FileSectionHeaderProps) {
+  return <FileSectionHeaderPresentation {...props} commentCount={comments.length} />;
+}
+
+/** Internal first-party presentation only needs the count, never comment entities. */
+export function FileSectionHeaderPresentation({
   bodyId,
   file,
   filePath,
@@ -43,12 +49,12 @@ export function FileSectionHeader({
   isViewed,
   isPreviewable,
   renderViewMode,
-  comments,
+  commentCount,
   onToggle,
   onViewedToggle,
   onAddFileComment,
   onRenderViewModeChange,
-}: FileSectionHeaderProps) {
+}: Omit<FileSectionHeaderProps, 'comments'> & { commentCount: number }) {
   const { t, number } = useLocalization();
   const { additions, deletions } = getFileStats(file);
   const hasSourcePath = file.changeType === 'renamed' || file.changeType === 'copied';
@@ -205,10 +211,10 @@ export function FileSectionHeader({
         )}
 
         {/* Comment count */}
-        {comments.length > 0 && (
+        {commentCount > 0 && (
           <span className='inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums'>
             <MessageSquare className='h-3.5 w-3.5' />
-            {number(comments.length)}
+            {number(commentCount)}
           </span>
         )}
 

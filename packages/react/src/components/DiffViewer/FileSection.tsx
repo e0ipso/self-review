@@ -10,7 +10,8 @@ import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
 import { usePreviewRenderer } from '../../context/PreviewRenderingContext';
 import { getContentPreview, initialPreviewMode } from './content-preview';
 import { getGuideAccent } from '../../utils/guide-accents';
-import { FileSectionHeader } from './FileSectionHeader';
+import { useReviewExpansion } from '../../context/ReviewDisplayContext';
+import { FileSectionHeaderPresentation } from './FileSectionHeader';
 import { FileSectionBody } from './FileSectionBody';
 import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 
@@ -32,8 +33,8 @@ export default function FileSection({
   const diffSource = useReviewSource();
   const fileState = useFileReview(file.newPath || file.oldPath);
   const { mode: guideMode, getFileDescription, getFileGroupIndex } = useGuide();
-  const [internalExpanded, setInternalExpanded] = useState(true);
-  const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
+  const { expanded: expansion, setExpanded } = useReviewExpansion();
+  const expanded = controlledExpanded ?? expansion.get(file.newPath || file.oldPath) ?? false;
   const [commentRange, setCommentRange] = useState<{
     start: number;
     end: number;
@@ -139,7 +140,7 @@ export default function FileSection({
       data-file-path={filePath}
       data-testid={`file-section-${filePath}`}
     >
-      <FileSectionHeader
+      <FileSectionHeaderPresentation
         bodyId={bodyId}
         file={file}
         filePath={filePath}
@@ -147,19 +148,19 @@ export default function FileSection({
         isViewed={isViewed}
         isPreviewable={isPreviewable}
         renderViewMode={renderViewMode}
-        comments={comments}
+        commentCount={comments.length}
         onToggle={() => {
           if (onToggleExpanded) {
             onToggleExpanded(filePath);
           } else {
-            setInternalExpanded(!expanded);
+            setExpanded(filePath, !expanded);
           }
         }}
         onViewedToggle={handleViewedToggle}
         onAddFileComment={() => {
           if (!expanded) {
             if (onToggleExpanded) onToggleExpanded(filePath);
-            else setInternalExpanded(true);
+            else setExpanded(filePath, true);
           }
           setShowingFileComment(true);
         }}
