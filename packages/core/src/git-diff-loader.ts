@@ -6,7 +6,7 @@ import {
   type GitExecutionOptions,
   isOutputLimitError,
 } from './git';
-import { parseDiffWithDiagnostics } from './diff-parser';
+import { parseDiffWithDiagnosticsAsync } from './diff-parser-async';
 import { findUnsupportedGitDiffOptions } from './git-diff-args';
 import { loadSyntheticFilesAsync } from './synthetic-diff';
 import { formatBytes, resolveSourceBudgets, type SourceBudgets } from './input-budgets';
@@ -107,7 +107,9 @@ export async function loadGitDiffWithUntracked(
     };
   }
   checkLoadingCancelled(options.signal);
-  const { files, diagnostics } = parseDiffWithDiagnostics(rawDiff);
+  const { files, diagnostics } = await parseDiffWithDiagnosticsAsync(rawDiff, {
+    signal: options.signal,
+  });
   checkLoadingCancelled(options.signal);
 
   if (!includeUntracked) {

@@ -43,6 +43,7 @@ export type {
 
 // Diff parsing
 export { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
+export { parseDiffWithDiagnosticsAsync } from './diff-parser-async';
 export type { DiffParseResult } from './diff-parser';
 
 // Transport-neutral runtime review DTO validation

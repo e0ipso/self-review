@@ -1,4 +1,4 @@
-// Cooperative loading checkpoints. Native calls and one file's parser remain non-preemptible.
+// Cooperative loading checkpoints. Native calls and individual string operations cannot be preempted.
 import { setImmediate } from 'node:timers/promises';
 import { CommandCancelledError } from './forge-provider';
 
