@@ -12,6 +12,8 @@
 import { createRequire } from 'node:module';
 import { parseServeArgs } from './args';
 import { resolveSession } from './startup';
+import { createStartupHost } from './startup-composition';
+import { reportCoreCompatibility } from './core-capabilities';
 import { createServeLifecycle } from './lifecycle';
 import { createReviewServer, listenLoopback } from './server';
 import { createReviewOperations } from './review-operations';
@@ -81,6 +83,8 @@ async function main(): Promise<void> {
     return;
   }
 
+  const host = createStartupHost(process.cwd(), message => console.error(message));
+  reportCoreCompatibility(host.reportDiagnostic);
   const lifetime = createServeLifecycle({ signals: process });
   const startupTimer = setTimeout(() => {
     console.error('[serve] Startup deadline reached; stopping.');
@@ -89,10 +93,14 @@ async function main(): Promise<void> {
   try {
     await lifetime.track(
       (async () => {
-        const { session, output } = await resolveSession(args, {
-          signal: lifetime.signal,
-          timeoutMs: 30_000,
-        });
+        const { session, output } = await resolveSession(
+          args,
+          {
+            signal: lifetime.signal,
+            timeoutMs: 30_000,
+          },
+          host
+        );
         if (lifetime.signal.aborted) throw lifetime.signal.reason;
         const capability = generateCapability();
         const server = createReviewServer({

@@ -15,16 +15,12 @@ import {
   computePayloadStats,
   countTotalLines,
   createReviewSession,
-  inspectOutputPath,
-  loadConfigWithProvenance,
-  loadGuide,
-  loadLocalReview,
-  loadResumeDocument,
-  publishOptionsFor,
   resolveOutputTarget,
   resolveStartupDiffArgs,
 } from '@self-review/core';
-import { resolveCompatibleStartupSource } from './startup-compatibility';
+import { createStartupHost } from './startup-composition';
+import type * as core from '@self-review/core';
+import type { resolveCompatibleStartupSource } from './startup-compatibility';
 import type { GitExecutionOptions, ReviewOutputTarget, ReviewSession } from '@self-review/core';
 import type { ServeArgs } from './args';
 
@@ -35,19 +31,35 @@ export interface ServeStartup {
   output: ReviewOutputTarget;
 }
 
-const log = (message: string) => console.error(`[serve] ${message}`);
+/** The effects startup uses, independent of the process environment and transport. */
+export interface StartupOperations {
+  loadConfigWithProvenance: typeof core.loadConfigWithProvenance;
+  inspectOutput: (output: ReviewOutputTarget) => ReturnType<typeof core.inspectOutputPath>;
+  resolveSource: typeof resolveCompatibleStartupSource;
+  loadLocalReview: typeof core.loadLocalReview;
+  loadResumeDocument: typeof core.loadResumeDocument;
+  loadGuide: typeof core.loadGuide;
+}
+
+export interface StartupHost {
+  cwd: string;
+  reportDiagnostic: (message: string) => void;
+  operations: StartupOperations;
+}
 
 /** Throws when startup cannot produce a servable session; the caller reports and exits. */
 export async function resolveSession(
   args: ServeArgs,
-  options: GitExecutionOptions = {}
+  options: GitExecutionOptions = {},
+  host: StartupHost = createStartupHost()
 ): Promise<ServeStartup> {
   // Phase 2 (main.ts): configuration and the output path.
-  const cwd = process.cwd();
-  const loadedConfig = loadConfigWithProvenance({ cwd });
+  const { cwd, operations, reportDiagnostic } = host;
+  const log = (message: string) => reportDiagnostic(`[serve] ${message}`);
+  const loadedConfig = operations.loadConfigWithProvenance({ cwd });
   const output = resolveOutputTarget(args.outputPath, loadedConfig, cwd);
   // Advisory (the publisher re-checks at submit), but refusing an output that can never be written beats serving a review with no way out.
-  const problem = inspectOutputPath(output.path, publishOptionsFor(output));
+  const problem = operations.inspectOutput(output);
   if (problem) {
     throw new Error(
       `Output path is not writable (${problem.code}): ${problem.message} ` +
@@ -60,7 +72,7 @@ export async function resolveSession(
   const { gitDiffArgs, config } = resolveStartupDiffArgs(args.gitDiffArgs, loadedConfig, cwd);
 
   // Phase 4 (main.ts): what to review. Welcome mode is refused: a browser has no directory picker.
-  const source = await resolveCompatibleStartupSource(gitDiffArgs, cwd, options);
+  const source = await operations.resolveSource(gitDiffArgs, cwd, options);
   log(`Startup mode: ${source.mode}`);
   if (source.mode === 'welcome') {
     throw new Error(
@@ -68,7 +80,7 @@ export async function resolveSession(
         'Run self-review-serve inside a git repository, or pass a directory or file to review.'
     );
   }
-  const { payload: diffData, identity } = await loadLocalReview(
+  const { payload: diffData, identity } = await operations.loadLocalReview(
     source,
     gitDiffArgs,
     config,
@@ -94,7 +106,7 @@ export async function resolveSession(
   if (args.resumeFrom) {
     const resumePath = resolve(cwd, args.resumeFrom);
     try {
-      loadResumeDocument(session, resumePath);
+      operations.loadResumeDocument(session, resumePath);
     } catch (error) {
       throw new Error(
         `Could not read the resume file ${resumePath}: ` +
@@ -111,10 +123,11 @@ export async function resolveSession(
   }
 
   // Phase 5b (main.ts): guide sidecar. It must be on the session before listening; GET /api/diff answers from there.
-  const guideData = await loadGuide(
+  const guideData = await operations.loadGuide(
     output.path,
     config,
-    diffData.files.map(f => f.newPath || f.oldPath)
+    diffData.files.map(f => f.newPath || f.oldPath),
+    { cwd, reportDiagnostic }
   );
   if (guideData) {
     log(`Walkthrough guide loaded: ${guideData.groups.length} groups`);

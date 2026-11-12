@@ -67,3 +67,54 @@ it('forwards publication cancellation and preserves the previous review document
   expect(fs.readFileSync(output, 'utf8')).toBe('previous review');
   expect(fs.readdirSync(root)).toEqual(['review.xml']);
 });
+
+it('binds the real publisher budget for disk-derived resumed assets and cleans partial staging', async () => {
+  const prior = join(root, 'prior', '.self-review-assets');
+  const outputDir = join(root, 'output');
+  fs.mkdirSync(prior, { recursive: true });
+  fs.mkdirSync(outputDir);
+  const output = join(outputDir, 'review.xml');
+  fs.writeFileSync(output, 'previous review');
+  const session = createReviewSession();
+  const origins = new Map<string, string>();
+  session.attachmentOrigins = origins;
+  const attachments = Array.from({ length: 7 }, (_, index) => {
+    const fileName = `.self-review-assets/${index}.png`;
+    const origin = join(prior, `${index}.png`);
+    fs.closeSync(fs.openSync(origin, 'w'));
+    fs.truncateSync(origin, 10 * 1024 * 1024);
+    origins.set(fileName, origin);
+    return { id: `a${index}`, fileName, mediaType: 'image/png' };
+  });
+  const operations = createReviewOperations(session, { path: output, origin: 'explicit' });
+  await expect(
+    operations.publishReview({
+      timestamp: '2026-01-01T00:00:00Z',
+      source: { type: 'directory', sourcePath: root },
+      files: [
+        {
+          path: 'file',
+          changeType: 'added',
+          viewed: false,
+          comments: [
+            {
+              id: 'c',
+              filePath: 'file',
+              lineRange: null,
+              suggestion: null,
+              body: '',
+              category: 'note',
+              attachments,
+            },
+          ],
+        },
+      ],
+    })
+  ).rejects.toMatchObject({
+    code: 'attachment-unavailable',
+    message: expect.stringContaining('publication asset budget'),
+  });
+  expect(fs.readFileSync(output, 'utf8')).toBe('previous review');
+  expect(fs.readdirSync(join(outputDir, '.self-review-assets'))).toEqual([]);
+  expect(fs.readdirSync(prior)).toHaveLength(7);
+});

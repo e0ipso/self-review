@@ -3,8 +3,17 @@
 // The fallback follows core's runtime DTO rules; both run the same contract tests.
 
 import * as core from '@self-review/core';
-import { validateLineRange, ReviewXmlError } from '@self-review/core';
+import { validateLineRange, ReviewXmlError, MAX_IMAGE_BYTES, formatBytes } from '@self-review/core';
 import type { ReviewState } from '@self-review/core';
+
+// These two limits are not exported by 2.0.4. Keep them aligned with the
+// canonical validator until its released minimum permits removing this module.
+const MAX_REVIEW_ATTACHMENTS = 1_000;
+const MAX_PUBLICATION_ASSET_BYTES = 64 * 1024 * 1024;
+interface AttachmentBudget {
+  attachments: number;
+  bytes: number;
+}
 
 type ReviewStateValidator = (value: unknown) => ReviewState;
 
@@ -24,6 +33,7 @@ function validateLegacyReviewState(value: unknown): ReviewState {
 
 function validateState(value: unknown): void {
   const state = record(value, 'review');
+  const budget = { attachments: 0, bytes: 0 };
   string(state.timestamp, 'review.timestamp');
   const source = record(state.source, 'review.source');
   switch (source.type) {
@@ -55,12 +65,12 @@ function validateState(value: unknown): void {
     );
     boolean(file.viewed, `${at}.viewed`);
     array(file.comments, `${at}.comments`).forEach((comment, index) =>
-      validateComment(comment, `${at}.comments[${index}]`)
+      validateComment(comment, `${at}.comments[${index}]`, budget)
     );
   });
 }
 
-function validateComment(value: unknown, at: string): void {
+function validateComment(value: unknown, at: string, budget: AttachmentBudget): void {
   const comment = record(value, at);
   string(comment.id, `${at}.id`);
   for (const key of ['filePath', 'body', 'category']) string(comment[key], `${at}.${key}`);
@@ -87,7 +97,7 @@ function validateComment(value: unknown, at: string): void {
     if (comment.lineRange === null || comment.lineRange === undefined)
       invalid(`${at}.suggestion`, 'requires a line anchor');
   }
-  validateAttachments(comment.attachments, `${at}.attachments`);
+  validateAttachments(comment.attachments, `${at}.attachments`, budget);
   if (comment.replies !== undefined) {
     array(comment.replies, `${at}.replies`).forEach((value, index) => {
       const replyAt = `${at}.replies[${index}]`;
@@ -95,20 +105,38 @@ function validateComment(value: unknown, at: string): void {
       string(reply.id, `${replyAt}.id`);
       string(reply.body, `${replyAt}.body`);
       for (const key of ['author', 'remoteId']) optionalString(reply, key, replyAt);
-      validateAttachments(reply.attachments, `${replyAt}.attachments`);
+      validateAttachments(reply.attachments, `${replyAt}.attachments`, budget);
     });
   }
 }
 
-function validateAttachments(value: unknown, at: string): void {
+function validateAttachments(value: unknown, at: string, budget: AttachmentBudget): void {
   if (value === undefined) return;
-  array(value, at).forEach((value, index) => {
+  const attachments = array(value, at);
+  budget.attachments += attachments.length;
+  if (budget.attachments > MAX_REVIEW_ATTACHMENTS)
+    invalid(at, `exceeds the ${MAX_REVIEW_ATTACHMENTS} attachment limit for a review document`);
+  attachments.forEach((value, index) => {
     const attachmentAt = `${at}[${index}]`;
     const attachment = record(value, attachmentAt);
     for (const key of ['id', 'fileName', 'mediaType'])
       string(attachment[key], `${attachmentAt}.${key}`);
     if (attachment.data !== undefined && !isReadableArrayBuffer(attachment.data))
       invalid(`${attachmentAt}.data`, 'must be a readable ArrayBuffer');
+    if (attachment.data !== undefined) {
+      const bytes = new Uint8Array(attachment.data as ArrayBuffer).byteLength;
+      if (bytes > MAX_IMAGE_BYTES)
+        invalid(
+          `${attachmentAt}.data`,
+          `exceeds the ${formatBytes(MAX_IMAGE_BYTES)} attachment limit`
+        );
+      budget.bytes += bytes;
+      if (budget.bytes > MAX_PUBLICATION_ASSET_BYTES)
+        invalid(
+          at,
+          `exceeds the ${formatBytes(MAX_PUBLICATION_ASSET_BYTES)} publication asset limit`
+        );
+    }
   });
 }
 
