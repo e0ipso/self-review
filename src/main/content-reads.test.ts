@@ -375,7 +375,7 @@ it('coalesces pushed-event storms before preparation and delivers diff, guide an
   await flush();
   expect(diff).toHaveBeenCalledOnce();
   expect(config).toHaveBeenCalledOnce();
-  expect(resume).toHaveBeenCalledOnce();
+  await vi.waitFor(() => expect(resume).toHaveBeenCalledOnce());
   const order = f.sender.send.mock.calls.map(([channel]) => channel);
   expect(order.indexOf(IPC.DIFF_LOAD)).toBeLessThan(order.indexOf(IPC.GUIDE_LOAD));
   expect(order.indexOf(IPC.GUIDE_LOAD)).toBeLessThan(order.indexOf(IPC.RESUME_LOAD));

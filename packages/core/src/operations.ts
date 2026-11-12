@@ -66,3 +66,5 @@ export { loadGuide } from './guide-loader';
 export type { LoadGuideOptions, BoundedGuideReader } from './guide-loader';
 export { loadImage, readAttachment } from './review-content';
 export type { LoadImageOptions, ReadAttachmentOptions, AttachmentReader } from './review-content';
+
+export type { ReviewSchemaValidator } from './review-xml-validator';

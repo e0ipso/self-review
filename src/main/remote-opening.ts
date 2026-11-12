@@ -2,7 +2,7 @@ import type { RemoteBootstrapResult } from '../../packages/core/src/remote-mode'
 import type { DiffLoadPayload, GuideLoadPayload, ResumeLoadPayload } from '../shared/types';
 import type { RemoteLifetime } from './remote-lifetime';
 import type { ReviewTransition } from './review-transition';
-import { replaceReview } from './replacement-delivery';
+import { replaceReviewAsync } from './replacement-delivery';
 
 export const REMOTE_OPEN_TIMEOUT_MS = 10 * 60_000;
 
@@ -62,11 +62,16 @@ export function createRemoteOpeningOperation(deps: RemoteOpeningDependencies) {
         comments: acquired.session.fetchedComments,
         viewedFiles: [],
       };
-      replaceReview({ payload: acquired.payload, guide, resume }, { ...owner, signal }, () => {
-        current();
-        deps.adopt(acquired!, guide, resume);
-        adopted = true;
-      });
+      await replaceReviewAsync(
+        { payload: acquired.payload, guide, resume },
+        { ...owner, signal },
+        () => {
+          current();
+          deps.adopt(acquired!, guide, resume);
+          adopted = true;
+        },
+        current
+      );
       return true;
     } finally {
       clearTimeout(deadline);

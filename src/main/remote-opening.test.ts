@@ -275,3 +275,42 @@ it('the registrar authenticates and maps results from a supplied application ope
   });
   expect(supplied).toHaveBeenCalledOnce();
 });
+
+it('owns cooperative preparation cancellation through release of only the newly acquired remote', async () => {
+  const { setImmediate } = await import('node:timers/promises');
+  const f = fixture();
+  f.acquired.payload.files = [
+    {
+      oldPath: '',
+      newPath: 'a.ts',
+      changeType: 'added',
+      isBinary: false,
+      hunks: [
+        {
+          header: '@@ -0,0 +1,100000 @@',
+          oldStart: 0,
+          oldLines: 0,
+          newStart: 1,
+          newLines: 100000,
+          lines: Array.from({ length: 100000 }, (_, i) => ({
+            type: 'addition',
+            content: '',
+            newLineNumber: i + 1,
+            oldLineNumber: null,
+          })),
+        },
+      ],
+    },
+  ];
+  const work = f.open(url, f.owner);
+  const rejected = expect(work).rejects.toThrow('cancelled during preparation');
+  await setImmediate();
+  expect(f.adopt).not.toHaveBeenCalled();
+  expect(f.acquired.session.cleanup).not.toHaveBeenCalled();
+  f.abort.abort(new Error('cancelled during preparation'));
+  await rejected;
+  expect(f.desktop.review.diffData).toBe(f.welcome);
+  expect(f.adopt).not.toHaveBeenCalled();
+  expect(f.owner.send).not.toHaveBeenCalled();
+  expect(f.acquired.session.cleanup).toHaveBeenCalledOnce();
+});

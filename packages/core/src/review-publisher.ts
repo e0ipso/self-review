@@ -11,6 +11,7 @@ import { validateReviewForSerialization } from './review-state-validation';
 import { ReviewXmlError, XmlIllegalCharacterError } from './xml-errors';
 import { checkWritability } from './fs-utils';
 import { serializePlannedReview } from './xml-serializer';
+import type { ReviewSchemaValidator } from './review-xml-validator';
 import { ASSET_DIR_NAME, planPublicationAttachments } from './attachment-planner';
 import type { PublicationAsset } from './attachment-planner';
 import { MAX_IMAGE_BYTES, MAX_PUBLICATION_ASSET_BYTES, formatBytes } from './input-budgets';
@@ -80,6 +81,8 @@ export type ReviewOutputTarget =
 interface PublishReviewCommonOptions {
   /** Per-call diagnostics, including XML validation. Defaults to stderr. Must not throw. */
   reportDiagnostic?: DiagnosticReporter;
+  /** Optional authoritative schema effect, before staging any asset or XML. */
+  validateSchema?: ReviewSchemaValidator;
   fs?: FsLayer;
   /** Explicit asynchronous effects, authoritative over fs when both are supplied. */
   publicationFs?: PublicationFileSystem;
@@ -152,7 +155,7 @@ export async function publishReview(
       targetAssetDir
     );
     assets = plan.assets;
-    xml = await serializePlannedReview(plan.state, reportDiagnostic);
+    xml = await serializePlannedReview(plan.state, reportDiagnostic, options.validateSchema);
     assertActive();
     checkOutputPolicy(target, options, fs);
   } catch (error) {

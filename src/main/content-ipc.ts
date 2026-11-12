@@ -6,7 +6,11 @@ import type { DesktopOperations } from './desktop-operations';
 import type { ReviewState } from '../shared/types';
 import { registerReadHandlers } from './content-reads';
 import { registerLegacyContentHandlers } from './legacy-content-ipc';
-import { prepareContent, prepareDiffDelivery, prepareResumeLoad } from './ipc-delivery';
+import {
+  prepareContentAsync,
+  prepareDiffDeliveryAsync,
+  prepareResumeLoadAsync,
+} from './ipc-delivery';
 import { contentDelivery } from './content-delivery';
 export function registerContentHandlers(
   review: Pick<
@@ -30,13 +34,15 @@ export function registerContentHandlers(
   const deliver = contentDelivery(boundary, operations, review.captureReadSnapshot);
   // Handle diff data request from renderer
   boundary.onCommand(IPC.DIFF_REQUEST, noArgument, event => {
-    deliver('diff', event, () => {
+    deliver('diff', event, async current => {
       const load = review.getDiffLoad();
       if (load) {
-        const wire = prepareDiffDelivery(load.diff, load.guide);
+        const wire = await prepareDiffDeliveryAsync(load.diff, load.guide, current);
+        current();
         event.sender.send(IPC.DIFF_LOAD, wire.diff);
         // The guide rides after the diff payload, and only when there is one.
         if (wire.guide) {
+          current();
           event.sender.send(IPC.GUIDE_LOAD, wire.guide);
         }
       }
@@ -45,10 +51,11 @@ export function registerContentHandlers(
 
   // Handle config request from renderer
   boundary.onCommand(IPC.CONFIG_REQUEST, noArgument, event => {
-    deliver('config', event, () => {
+    deliver('config', event, async current => {
       const load = review.getConfigLoad();
       if (load) {
-        prepareContent(load);
+        await prepareContentAsync(load, current);
+        current();
         event.sender.send(IPC.CONFIG_LOAD, load.config, load.outputPathInfo);
       }
     });
@@ -74,8 +81,9 @@ export function registerContentHandlers(
   // Send resumed comments and viewed files when the renderer is ready
   // (after diff data is loaded)
   boundary.onCommand(IPC.RESUME_REQUEST, noArgument, event => {
-    deliver('resume', event, () => {
-      const payload = prepareResumeLoad(review.getResumeLoad());
+    deliver('resume', event, async current => {
+      const payload = await prepareResumeLoadAsync(review.getResumeLoad(), current);
+      current();
       event.sender.send(IPC.RESUME_LOAD, payload);
     });
   });

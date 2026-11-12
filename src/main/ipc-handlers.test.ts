@@ -238,7 +238,9 @@ describe('ipc-handlers', () => {
       const mockSend = sender.send;
       const handler = onHandlers[IPC.DIFF_REQUEST];
       handler(peer());
-      await Promise.resolve();
+      await vi.waitFor(() =>
+        expect(mockSend).toHaveBeenCalledWith(IPC.DIFF_LOAD, expect.anything())
+      );
 
       expect(mockSend).toHaveBeenCalledWith(
         IPC.DIFF_LOAD,
@@ -266,7 +268,9 @@ describe('ipc-handlers', () => {
       const mockSend = sender.send;
       const handler = onHandlers[IPC.DIFF_REQUEST];
       handler(peer());
-      await Promise.resolve();
+      await vi.waitFor(() =>
+        expect(mockSend).toHaveBeenCalledWith(IPC.DIFF_LOAD, expect.anything())
+      );
 
       expect(mockSend).toHaveBeenCalledWith(
         IPC.DIFF_LOAD,

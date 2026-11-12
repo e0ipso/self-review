@@ -1,3 +1,4 @@
+import { setImmediate } from 'node:timers/promises';
 import { MAX_IPC_COLLECTION_ITEMS, MAX_IPC_DEPTH, MAX_IPC_VALUES } from './ipc-review-budget';
 import {
   MAX_IMAGE_BYTES,
@@ -10,7 +11,8 @@ export const MAX_CONTENT_TEXT_BYTES = 32 * 1024 * 1024;
 
 /** Bound traversal and structured clone before delivery. Large diffs inspect the metadata
  * projection before preparePayload allocates its file copies; skipped hunks stay in the host. */
-export function checkContentBudget(value: unknown, metadataOnly = false): void {
+function* contentBudgetTraversal(value: unknown, metadataOnly: boolean): Generator<void> {
+  let steps = 0;
   let values = 0;
   let textBytes = 0;
   let binaryBytes = 0;
@@ -23,7 +25,8 @@ export function checkContentBudget(value: unknown, metadataOnly = false): void {
     if (textBytes > MAX_CONTENT_TEXT_BYTES) refuse();
   };
   type Role = 'payload' | 'files' | 'file' | 'hunks' | 'hunk' | 'lines' | 'other';
-  function visit(node: unknown, depth: number, role: Role): void {
+  function* visit(node: unknown, depth: number, role: Role): Generator<void> {
+    if (++steps % 2048 === 0) yield;
     if (++values > MAX_IPC_VALUES || depth > MAX_IPC_DEPTH) refuse();
     if (typeof node === 'string') {
       text(node);
@@ -51,6 +54,7 @@ export function checkContentBudget(value: unknown, metadataOnly = false): void {
       refuse();
     for (const key in node) {
       if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
+      if (++steps % 2048 === 0) yield;
       text(key);
       if (metadataOnly && role === 'file' && key === 'hunks') {
         ++values;
@@ -64,9 +68,31 @@ export function checkContentBudget(value: unknown, metadataOnly = false): void {
       else if (role === 'hunk' && key === 'lines') childRole = 'lines';
       else if (role === 'payload' && key === 'files') childRole = 'files';
       else if (role === 'files') childRole = 'file';
-      visit((node as Record<string, unknown>)[key], depth + 1, childRole);
+      yield* visit((node as Record<string, unknown>)[key], depth + 1, childRole);
     }
     active.delete(node);
   }
-  visit(value, 0, 'payload');
+  yield* visit(value, 0, 'payload');
+}
+
+/** Original synchronous boundary, also used by legacy push helpers. */
+export function checkContentBudget(value: unknown, metadataOnly = false): void {
+  for (const _span of contentBudgetTraversal(value, metadataOnly)) {
+    // Drain the same traversal without scheduling another event-loop turn.
+  }
+}
+
+/** Trusted outgoing data only. Untrusted IPC DTO admission remains synchronous. */
+export async function checkContentBudgetAsync(
+  value: unknown,
+  metadataOnly = false,
+  assertCurrent: () => void = () => {}
+): Promise<void> {
+  assertCurrent();
+  for (const _span of contentBudgetTraversal(value, metadataOnly)) {
+    assertCurrent();
+    await setImmediate();
+    assertCurrent();
+  }
+  assertCurrent();
 }

@@ -5,16 +5,30 @@ import type { createIpcBoundary } from './ipc-boundary';
 import type { DesktopOperations } from './desktop-operations';
 import { ownContent } from './content-lifetime';
 
+type Kind = ContentLoadRefusal['kind'];
+interface ContentDelivery {
+  (
+    kind: Kind,
+    event: IpcMainEvent,
+    deliver: (assertCurrent: () => void) => void | Promise<void>
+  ): void;
+  /** Keep the original reflected callback contract for existing callers. */
+  (kind: Kind, event: IpcMainEvent, deliver: () => void): void;
+}
+
 /** At most one outstanding preparation/delivery per kind. Coalesced callers attach no
  * callbacks to the retained work. Admission includes preparation, ordering and delivery. */
 export function contentDelivery(
   boundary: ReturnType<typeof createIpcBoundary>,
   operations: DesktopOperations,
   captureSnapshot?: () => () => void
-) {
-  type Kind = ContentLoadRefusal['kind'];
+): ContentDelivery {
   const pending = new Map<Kind, { owner: ReturnType<typeof ownContent>; done: Promise<boolean> }>();
-  return (kind: Kind, event: IpcMainEvent, deliver: () => void): void => {
+  return (
+    kind: Kind,
+    event: IpcMainEvent,
+    deliver: (assertCurrent: () => void) => void | Promise<void>
+  ): void => {
     const earlier = pending.get(kind);
     if (earlier) {
       try {
@@ -32,7 +46,10 @@ export function contentDelivery(
           throw new Error('The diff could not be delivered. Retry loading the review.');
         signal.throwIfAborted();
         owner.assertCurrent();
-        deliver();
+        await deliver(() => {
+          signal.throwIfAborted();
+          owner.assertCurrent();
+        });
         owner.assertCurrent();
         return true;
       }, owner.signal)

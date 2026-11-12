@@ -5,7 +5,7 @@ import type { createIpcBoundary } from './ipc-boundary';
 import type { DesktopOperations } from './desktop-operations';
 import type { DesktopReviewOperations } from './review-operations';
 import { ownContent } from './content-lifetime';
-import { checkContentBudget } from './content-budget';
+import { checkContentBudgetAsync } from './content-budget';
 
 export type ContentReview = Pick<
   DesktopReviewOperations,
@@ -126,7 +126,7 @@ export function registerReadHandlers(
       };
       pending.set(request.id, entry);
       owner.signal.addEventListener('abort', remove, { once: true });
-      const run = async (signal: AbortSignal): Promise<DesktopReadResult> => {
+      const read = async (signal: AbortSignal): Promise<DesktopReadResult> => {
         owner.assertCurrent();
         switch (request.kind) {
           case 'file':
@@ -145,13 +145,20 @@ export function registerReadHandlers(
             };
         }
       };
+      const run = async (signal: AbortSignal) => {
+        const result = await read(signal);
+        await checkContentBudgetAsync(result, false, () => {
+          signal.throwIfAborted();
+          owner.assertCurrent();
+        });
+        return result;
+      };
       try {
         const result =
           request.kind === 'context'
             ? await operations.apply(signal => run(AbortSignal.any([signal, owner.signal])))
             : await operations.readOwned(run, owner.signal);
         owner.assertCurrent();
-        checkContentBudget(result);
         return result;
       } catch (error) {
         return {

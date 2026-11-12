@@ -438,3 +438,17 @@ large values clamp at 2,147,483,647 ms; negative and nonfinite values reject. Th
 accepts these same forms. Cancellation never settles before termination. If termination itself
 rejects, release is unconfirmed and the owner reports a termination failure retaining the original
 failure/cancellation as its cause. Native syscalls can delay worker termination.
+
+`createBoundApiRoutes` requires bound operations and complete request validation. It does not select
+an engine or construct validators. Server composition supplies the operations' selected validation;
+the original `createApiRoutes` facade and operation sets without `requestValidation` use the
+compatibility composition factory. An explicit fourth validator still takes precedence. All original
+server overloads remain available. Operations replaced after route construction remain observable.
+
+The HTTP body cap applies to bytes received from the client. A resumed attachment reference can name
+up to 10 MiB of disk content without sending those bytes in the request. Published Core 2.0.4 owns
+those reads internally and has no aggregate publication budget or cooperative staging cancellation.
+Pure request validation cannot derive authoritative disk sizes from references, and an extra host
+filesystem probe would neither cover virtual effects nor prevent a later file change. Serve keeps
+that peer's publication support and startup warning. Current Core enforces its aggregate budget
+inside the authoritative reader and writer, preserving the prior document on refusal.

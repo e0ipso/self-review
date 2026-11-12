@@ -5,7 +5,7 @@ import { validateReviewForSerialization } from './review-state-validation';
 import { ReviewState, FileReviewState, ReviewComment, Reply, Attachment } from './types';
 import { planAttachments, defaultAssetName } from './attachment-planner';
 import type { AssetNamer, SerializedReview } from './attachment-planner';
-import { validateAgainstSchema } from './review-xml-validator';
+import { validateAgainstSchema, type ReviewSchemaValidator } from './review-xml-validator';
 import type { XmlIllegalCharacterLocation } from './xml-errors';
 import { ReviewXmlWriter } from './xml-writer';
 
@@ -17,6 +17,8 @@ export interface SerializeOptions {
   /** Defaults to stderr for validation diagnostics. */
   reportDiagnostic?: DiagnosticReporter;
   assetName?: AssetNamer;
+  /** Optional authoritative schema effect; omitted calls use xmllint. */
+  validateSchema?: ReviewSchemaValidator;
 }
 
 /**
@@ -36,17 +38,31 @@ export async function serializeReview(
 ): Promise<SerializedReview> {
   state = validateReviewForSerialization(state);
   const staged = planAttachments(state, outputFilePath, options.assetName ?? defaultAssetName);
-  const xml = await serializePlannedReview(staged.state, options.reportDiagnostic);
+  const xml = await serializePlannedReview(
+    staged.state,
+    options.reportDiagnostic,
+    options.validateSchema
+  );
   return { xml, assets: staged.assets };
 }
 
 /** Internal publication path: references are already planned, so disk bytes never enter this module. */
-export async function serializePlannedReview(
+export function serializePlannedReview(
+  state: ReviewState,
+  reportDiagnostic: DiagnosticReporter | undefined,
+  validateSchema: ReviewSchemaValidator | undefined
+): Promise<string>;
+export function serializePlannedReview(
   state: ReviewState,
   reportDiagnostic?: DiagnosticReporter
+): Promise<string>;
+export async function serializePlannedReview(
+  state: ReviewState,
+  reportDiagnostic?: DiagnosticReporter,
+  validateSchema: ReviewSchemaValidator | undefined = undefined
 ): Promise<string> {
   const xml = buildXml(state);
-  await validateAgainstSchema(xml, reportDiagnostic);
+  await validateAgainstSchema(xml, reportDiagnostic, validateSchema);
   return xml;
 }
 
