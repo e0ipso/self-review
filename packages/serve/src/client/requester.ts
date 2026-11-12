@@ -3,8 +3,21 @@
 import { ServeRequestError } from './request-error';
 import { capabilityAuthorization } from '../protocol';
 
+export type ServeOperation = 'read' | 'mutation';
+
+// Compatibility for external three-argument callers. First-party calls always pass semantics.
+// Keep until that legacy call form can be retired in a breaking release.
+function legacyOperation(path: string): ServeOperation {
+  return path === '/api/review' || path === '/api/apply-suggestion' ? 'mutation' : 'read';
+}
+
 export interface ServeRequester {
-  request<T>(path: string, init: RequestInit, read: (response: Response) => Promise<T>): Promise<T>;
+  request<T>(
+    path: string,
+    init: RequestInit,
+    read: (response: Response) => Promise<T>,
+    operation?: ServeOperation
+  ): Promise<T>;
   dispose(): void;
 }
 
@@ -23,8 +36,13 @@ export function createServeRequester(
   const active = new Set<AbortController>();
   let disposed = false;
   return {
-    async request<T>(path: string, init: RequestInit, read: (response: Response) => Promise<T>) {
-      const mutation = path === '/api/review' || path === '/api/apply-suggestion';
+    async request<T>(
+      path: string,
+      init: RequestInit,
+      read: (response: Response) => Promise<T>,
+      operation: ServeOperation = legacyOperation(path)
+    ) {
+      const mutation = operation === 'mutation';
       const controller = new AbortController();
       const failure = (reason: string) =>
         new ServeRequestError(

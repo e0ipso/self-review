@@ -271,3 +271,151 @@ it('refuses publication while the current diff is still a loading placeholder', 
   expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(false);
   await act(async () => resume.resolve({ comments: [], viewedFiles: [] }));
 });
+
+it('refuses desktop save after diff arrival until pending resumed feedback is hydrated', async () => {
+  const resumed = deferred<import('../shared/types').ResumeLoadPayload>();
+  const api = {
+    submitReview: vi.fn(),
+    saveAndQuit: vi.fn(),
+    saveReview: vi.fn(async () => ({ status: 'saved', receipt: 'complete' }) as const),
+    acknowledgeReviewSave: vi.fn(),
+  };
+  const adapter = { loadDiff: async () => payload, loadResumedReview: () => resumed.promise };
+  function Controls() {
+    const review = useReview();
+    const save = useSaveReview(api);
+    return (
+      <>
+        <button onClick={save}>Finish hydrated</button>
+        <output>{review.diffSource.type}</output>
+        <button onClick={() => review.toggleViewed('a.ts')}>Viewed while loading</button>
+      </>
+    );
+  }
+  render(
+    <ReviewAdapterProvider adapter={adapter}>
+      <ConfigProvider initialConfig={{}}>
+        <ReviewProvider>
+          <SaveReviewBoundary api={api}>
+            <Controls />
+          </SaveReviewBoundary>
+        </ReviewProvider>
+      </ConfigProvider>
+    </ReviewAdapterProvider>
+  );
+  await screen.findByText('directory');
+  fireEvent.click(screen.getByText('Finish hydrated'));
+  expect(api.saveReview).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert').textContent).toContain('still loading');
+  fireEvent.click(screen.getByText('Viewed while loading'));
+  await act(async () =>
+    resumed.resolve({
+      comments: [
+        {
+          id: 'saved',
+          filePath: 'a.ts',
+          lineRange: null,
+          body: 'Preserve feedback',
+          category: 'note',
+          suggestion: null,
+        },
+      ],
+    })
+  );
+  fireEvent.click(screen.getByText('Finish hydrated'));
+  await waitFor(() => expect(api.acknowledgeReviewSave).toHaveBeenCalledWith('complete'));
+  expect(api.saveReview).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      files: [
+        expect.objectContaining({
+          viewed: true,
+          comments: [expect.objectContaining({ body: 'Preserve feedback' })],
+        }),
+      ],
+    })
+  );
+});
+
+it('prefers acknowledged handoff to legacy submission without claiming disk publication', async () => {
+  const handoff = deferred<void>();
+  const api = {
+    submitReview: vi.fn(),
+    handoffReview: vi.fn(() => handoff.promise),
+    saveAndQuit: vi.fn(),
+  };
+  function Finish() {
+    const save = useSaveReview(api);
+    return <button onClick={save}>Handoff finish</button>;
+  }
+  render(
+    <ConfigProvider initialConfig={{}}>
+      <ReviewProvider initialFiles={payload.files} initialSource={payload.source}>
+        <SaveReviewBoundary api={api}>
+          <Finish />
+        </SaveReviewBoundary>
+      </ReviewProvider>
+    </ConfigProvider>
+  );
+  fireEvent.click(screen.getByText('Handoff finish'));
+  await waitFor(() => expect(api.handoffReview).toHaveBeenCalledTimes(1));
+  expect(api.submitReview).not.toHaveBeenCalled();
+  expect(api.saveAndQuit).not.toHaveBeenCalled();
+  await act(async () => handoff.resolve());
+  expect(api.saveAndQuit).toHaveBeenCalledOnce();
+  expect(screen.getByText(/The save outcome is unknown/)).toBeTruthy();
+});
+
+it.each([false, true])(
+  'keeps handoff failures distinguishable from publication, uncertain=%s',
+  async uncertain => {
+    const api = {
+      submitReview: vi.fn(),
+      saveAndQuit: vi.fn(),
+      handoffReview: vi.fn(async () => {
+        throw Object.assign(new Error('handoff failed'), { uncertain });
+      }),
+    };
+    function Controls() {
+      const review = useReview();
+      const save = useSaveReview(api);
+      return (
+        <>
+          <button onClick={save}>Handoff failure</button>
+          <button onClick={() => review.toggleViewed('a.ts')}>Edit after handoff</button>
+          <output>{review.files[0].viewed ? 'Viewed' : 'Unviewed'}</output>
+        </>
+      );
+    }
+    render(
+      <ConfigProvider initialConfig={{}}>
+        <ReviewProvider initialFiles={payload.files} initialSource={payload.source}>
+          <SaveReviewBoundary api={api}>
+            <Controls />
+          </SaveReviewBoundary>
+        </ReviewProvider>
+      </ConfigProvider>
+    );
+    fireEvent.click(screen.getByText('Handoff failure'));
+    await screen.findByText(/The host could not accept the review state/);
+    expect(api.submitReview).not.toHaveBeenCalled();
+    expect(api.saveAndQuit).not.toHaveBeenCalled();
+    expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(uncertain);
+    fireEvent.click(screen.getByText('Edit after handoff'));
+    expect(screen.getByText(uncertain ? 'Unviewed' : 'Viewed')).toBeTruthy();
+  }
+);
+
+it('keeps a synchronously thrown save failure in the unknown-outcome flow', async () => {
+  const f = fixture();
+  f.api.saveReview.mockImplementationOnce(() => {
+    throw new Error('bridge disconnected');
+  });
+  fireEvent.click(screen.getByText('Finish'));
+  await screen.findByText(/The save outcome is unknown/);
+  act(() => {
+    f.edit();
+    f.save();
+  });
+  expect(screen.getByText('Unviewed')).toBeTruthy();
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+});

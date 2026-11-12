@@ -91,6 +91,13 @@ it('recreates effect-owned adapters under StrictMode and submits current state b
   });
   await waitFor(() => expect(screen.getByText('Finish')).toBeTruthy());
   fireEvent.click(screen.getByText('Finish'));
+  expect(api.submitReview).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('alert').textContent).toContain('still loading');
+  await act(async () => {
+    for (const callback of resumes) callback({ comments: [], viewedFiles: [] });
+  });
+  fireEvent.click(screen.getByText('Finish'));
+  expect(api.submitReview).toHaveBeenCalledTimes(2);
   expect(api.submitReview).toHaveBeenLastCalledWith(
     expect.objectContaining({ source: { type: 'directory', sourcePath: '/replacement' } })
   );

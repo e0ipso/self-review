@@ -23,12 +23,18 @@ export interface ReviewAdapter {
   /** Load diff data. Called once on mount. */
   loadDiff: () => Promise<DiffLoadPayload>;
 
-  /** Load a previously saved review — comments and viewed files (resume flow). */
+  /** Load the initial session's saved comments and viewed files. Capture waits for this
+   * acknowledgement, including an empty result. Rejections stay visible until manual retry.
+   * Later sessions pushed through onDiffLoad use onResumeLoad, so an old cached initial
+   * response is never treated as their feedback. Hosts must bound this read's lifetime.
+   */
   loadResumedReview?: () => Promise<ResumeLoadPayload>;
 
   /**
    * Later resume pushes, delivered after their owning diff push. A new push supersedes any
-   * pending loadResumedReview response. Old adapters can omit this subscription.
+   * pending loadResumedReview response. A replacement diff push reserves resume readiness
+   * until its acknowledgement arrives, even when there are no comments. Old adapters can
+   * omit this subscription; their later diff pushes have no associated resume hydration.
    */
   onResumeLoad?: (callback: (payload: ResumeLoadPayload) => void) => () => void;
 
@@ -54,7 +60,7 @@ export interface ReviewAdapter {
   /** Optional native clipboard capability. Reject on failure so the UI can report it. */
   writeClipboard?: (text: string) => Promise<void>;
 
-  /** Read an attachment file for display. */
+  /** Read attachment bytes. Null means missing content; transport/access failures reject. */
   readAttachment?: (filePath: string) => Promise<ArrayBuffer | null>;
 
   /** Change the output file path (e.g., open save dialog). */

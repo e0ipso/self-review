@@ -96,14 +96,17 @@ function withSyntheticEntries(diffFiles: DiffFile[], paths: Iterable<string>): D
 function mergeIntoFileStates(
   prev: FileReviewState[],
   commentsByFile: Map<string, ReviewComment[]>,
-  viewedPaths: ReadonlySet<string>
+  viewedPaths: ReadonlySet<string>,
+  viewedEdits: ReadonlySet<string>
 ): FileReviewState[] {
   const known = new Set(prev.map(f => f.path));
   const merged = prev.map(file => {
     const incoming = commentsByFile.get(file.path) ?? [];
     const ids = new Set(file.comments.map(c => c.id));
     const added = incoming.filter(c => !ids.has(c.id));
-    const viewed = file.viewed || viewedPaths.has(file.path);
+    const viewed = viewedEdits.has(file.path)
+      ? file.viewed
+      : file.viewed || viewedPaths.has(file.path);
     if (added.length === 0 && viewed === file.viewed) return file;
     return { ...file, viewed, comments: [...file.comments, ...added] };
   });
@@ -133,9 +136,16 @@ export interface ReviewSessionState {
   acceptsInitialComments: boolean;
   loadError: string | null;
   resumeError: string | null;
+  resumePending: boolean;
+  deletedCommentIds: ReadonlySet<string>;
+  viewedEdits: ReadonlySet<string>;
 }
 let nextSessionId = 1;
-export function createReviewSession(files?: DiffFile[], source?: DiffSource): ReviewSessionState {
+export function createReviewSession(
+  files?: DiffFile[],
+  source?: DiffSource,
+  resumePending = false
+): ReviewSessionState {
   const diffSource = source ?? (files ? DEFAULT_STATIC_SOURCE : LOADING_SOURCE);
   return {
     sessionId: nextSessionId++,
@@ -154,12 +164,21 @@ export function createReviewSession(files?: DiffFile[], source?: DiffSource): Re
     acceptsInitialComments: true,
     loadError: null,
     resumeError: null,
+    resumePending,
+    deletedCommentIds: new Set(),
+    viewedEdits: new Set(),
   };
 }
 export type SessionAction =
-  | { type: 'payload'; payload: DiffLoadPayload; initialComments?: ReviewComment[] }
+  | {
+      type: 'payload';
+      payload: DiffLoadPayload;
+      initialComments?: ReviewComment[];
+      resumePending?: boolean;
+    }
   | { type: 'hydrate'; comments?: ReviewComment[] }
   | { type: 'resume'; resumed: ResumeLoadPayload | null }
+  | { type: 'resume-start' }
   | { type: 'files'; update: SetStateAction<FileReviewState[]> }
   | { type: 'diff-files'; files: DiffFile[] }
   | { type: 'hunks'; filePath: string; hunks: DiffHunk[] }
@@ -171,10 +190,12 @@ function mergeComments(
   comments: ReviewComment[],
   viewed: ReadonlySet<string>
 ): ReviewSessionState {
-  const byFile = groupCommentsByFile(comments);
+  const byFile = groupCommentsByFile(
+    comments.filter(comment => !state.deletedCommentIds.has(comment.id))
+  );
   return {
     ...state,
-    files: mergeIntoFileStates(state.files, byFile, viewed),
+    files: mergeIntoFileStates(state.files, byFile, viewed, state.viewedEdits),
     allDiffFiles: withSyntheticEntries(state.allDiffFiles, byFile.keys()),
   };
 }
@@ -225,25 +246,46 @@ export function reviewSessionReducer(
           diagnostics: payload.diagnostics ?? [],
           isLargePayload: payload.isLargePayload === true,
           loadError: null,
+          resumePending: same ? state.resumePending : (action.resumePending ?? false),
         },
         action.initialComments
       );
     }
     case 'hydrate':
       return hydrate(state, action.comments);
+    case 'resume-start':
+      return { ...state, resumePending: true, resumeError: null };
     case 'resume':
       return {
         ...(action.resumed
           ? mergeComments(state, action.resumed.comments, new Set(action.resumed.viewedFiles ?? []))
           : state),
         resumedReview: action.resumed,
+        resumePending: false,
         resumeError: null,
       };
-    case 'files':
-      return {
-        ...state,
-        files: typeof action.update === 'function' ? action.update(state.files) : action.update,
-      };
+    case 'files': {
+      const files =
+        typeof action.update === 'function' ? action.update(state.files) : action.update;
+      const previous = new Map(state.files.map(file => [file.path, file]));
+      let deletedCommentIds = state.deletedCommentIds;
+      let viewedEdits = state.viewedEdits;
+      for (const file of files) {
+        const before = previous.get(file.path);
+        if (!before || before === file) continue;
+        if (before.viewed !== file.viewed) viewedEdits = new Set([...viewedEdits, file.path]);
+        if (before.comments === file.comments) continue;
+        const ids = new Set(file.comments.map(comment => comment.id));
+        const deleted = before.comments.filter(comment => !ids.has(comment.id));
+        if (deleted.length)
+          deletedCommentIds = new Set([
+            ...deletedCommentIds,
+            ...deleted.map(comment => comment.id),
+          ]);
+      }
+      // Resume may arrive after local edits. Deletions and explicit unviewing must win too.
+      return { ...state, files, deletedCommentIds, viewedEdits };
+    }
     case 'diff-files':
       return {
         ...state,
@@ -263,7 +305,7 @@ export function reviewSessionReducer(
     case 'load-error':
       return { ...state, loadError: action.message };
     case 'resume-error':
-      return { ...state, resumeError: action.message };
+      return { ...state, resumeError: action.message, resumePending: false };
   }
 }
 
@@ -271,14 +313,17 @@ export function reviewSessionReducer(
 export function createReviewSessionStore(initial: ReviewSessionState) {
   let state = initial;
   const listeners = new Set<() => void>();
-  let mutationLock = false;
+  let mutationLock: symbol | null = null;
   return {
     getSnapshot: () => state,
     lockMutations: () => {
-      mutationLock = true;
+      if (mutationLock) throw new Error('A save already owns this review.');
+      mutationLock = Symbol('review-save');
+      return mutationLock;
     },
-    unlockMutations: () => {
-      mutationLock = false;
+    ownsMutations: (owner: symbol) => mutationLock === owner,
+    unlockMutations: (owner: symbol) => {
+      if (mutationLock === owner) mutationLock = null;
     },
     subscribe: (listener: () => void) => {
       listeners.add(listener);
@@ -289,12 +334,14 @@ export function createReviewSessionStore(initial: ReviewSessionState) {
     dispatch: (action: SessionAction) => {
       if (
         mutationLock &&
-        ['files', 'resume', 'hydrate', 'diff-files', 'destination'].includes(action.type)
+        ['files', 'resume', 'resume-start', 'hydrate', 'diff-files', 'destination'].includes(
+          action.type
+        )
       )
         return;
       const next = reviewSessionReducer(state, action);
       if (next.sessionId !== state.sessionId || next.snapshotId !== state.snapshotId)
-        mutationLock = false;
+        mutationLock = null;
       if (next === state) return;
       state = next;
       listeners.forEach(listener => listener());

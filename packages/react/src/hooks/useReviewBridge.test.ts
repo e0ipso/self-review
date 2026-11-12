@@ -6,6 +6,7 @@ import { useReviewBridge, type ReviewHandle } from './useReviewBridge';
 // Mock useReview
 vi.mock('../context/ReviewContext', () => ({
   useReview: vi.fn(),
+  useReviewSaveTransaction: () => ({ begin: vi.fn() }),
 }));
 
 import { useReview } from '../context/ReviewContext';

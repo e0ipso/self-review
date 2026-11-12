@@ -62,3 +62,35 @@ describe('page request ownership', () => {
     ).rejects.toMatchObject({ uncertain: true });
   });
 });
+
+it.each(['read', 'mutation'] as const)(
+  'uses explicit operation semantics for an arbitrary endpoint: %s',
+  async operation => {
+    vi.useFakeTimers();
+    const transport = vi.fn<typeof fetch>(() => new Promise(() => {}));
+    const client = createServeRequester('secret', {
+      fetch: transport,
+      readTimeoutMs: 10,
+      mutationTimeoutMs: 20,
+    });
+    const result = client.request(
+      '/future-operation',
+      { method: 'POST' },
+      response => response.json(),
+      operation
+    );
+    const rejected = expect(result).rejects.toMatchObject({ uncertain: operation === 'mutation' });
+    await vi.advanceTimersByTimeAsync(operation === 'mutation' ? 20 : 10);
+    await rejected;
+    expect(transport).toHaveBeenCalledTimes(1);
+  }
+);
+
+it('lets explicit read semantics override legacy URL inference', async () => {
+  const client = createServeRequester('secret', {
+    fetch: vi.fn<typeof fetch>().mockRejectedValue(new Error('offline')),
+  });
+  await expect(
+    client.request('/api/review', {}, response => response.json(), 'read')
+  ).rejects.toMatchObject({ uncertain: false });
+});

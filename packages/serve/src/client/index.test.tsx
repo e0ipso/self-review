@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -246,7 +246,12 @@ describe('serve client', () => {
     expect(shortcut).not.toHaveBeenCalled();
     expect(closeIsGuarded()).toBe(true);
 
-    refuse(new Response(JSON.stringify({ error: 'try again' }), { status: 500 }));
+    refuse(
+      new Response(
+        JSON.stringify({ ok: false, code: 'refused', message: 'try again', details: [] }),
+        { status: 422 }
+      )
+    );
     await view.findByTestId('submit-error');
     expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(false);
     fireEvent.click(remove);
@@ -338,7 +343,7 @@ it('keeps an unknown save guarded until the reviewer explicitly confirms a retry
   expect(notice.textContent).toContain('Check the terminal and the output file');
   expect(view.queryByTestId('finish-review-btn')).toBeNull();
   expect(view.getByText('Needs a test.')).toBeTruthy();
-  expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(false);
+  expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(true);
   expect(closeIsGuarded()).toBe(true);
   expect(submissions).toBe(1);
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -363,4 +368,96 @@ it('keeps an unknown save guarded until the reviewer explicitly confirms a retry
   } finally {
     confirm.mockRestore();
   }
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(yes => {
+    resolve = yes;
+  });
+  return { promise, resolve };
+}
+
+it.each(['populated', 'empty', 'null'] as const)(
+  'refuses early publication until a slow %s resume is acknowledged',
+  async kind => {
+    const resume = deferred<Response>();
+    let resumeRequested = false;
+    let submissions = 0;
+    let submitted: unknown;
+    route = (url, init) => {
+      if (url.pathname === '/api/resume') {
+        resumeRequested = true;
+        return resume.promise;
+      }
+      if (url.pathname === '/api/review') {
+        submissions++;
+        submitted = JSON.parse(String(init?.body));
+      }
+      return realFetch(url, init);
+    };
+    const view = render(<App capability={CAPABILITY} />);
+    const finish = await view.findByTestId('finish-review-btn');
+    await waitFor(() => expect(resumeRequested).toBe(true));
+    fireEvent.click(finish);
+    expect(submissions).toBe(0);
+    expect(view.getByTestId('submit-error').textContent).toContain('loading');
+    expect(fs.existsSync(outputPath)).toBe(false);
+    fireEvent.click(view.getByTestId('viewed-toggle-src/index.ts'));
+    const response =
+      kind === 'null'
+        ? null
+        : { comments: kind === 'populated' ? session.resumeComments : [], viewedFiles: [] };
+    await act(async () =>
+      resume.resolve(
+        new Response(JSON.stringify(response), { headers: { 'content-type': 'application/json' } })
+      )
+    );
+    fireEvent.click(finish);
+    expect(await view.findByText('Review saved', {}, { timeout: 10_000 })).toBeTruthy();
+    expect(submissions).toBe(1);
+    expect(submitted).toMatchObject({
+      files: [{ viewed: true, comments: kind === 'populated' ? [{ body: 'Needs a test.' }] : [] }],
+    });
+    expect(fs.readFileSync(outputPath, 'utf8').includes('Needs a test.')).toBe(
+      kind === 'populated'
+    );
+  }
+);
+
+it('keeps resume failure and its pending retry unsaveable, then publishes all recovered feedback', async () => {
+  const retry = deferred<Response>();
+  let attempts = 0;
+  let submissions = 0;
+  route = (url, init) => {
+    if (url.pathname === '/api/resume') {
+      attempts++;
+      return attempts === 1
+        ? Promise.resolve(
+            new Response(JSON.stringify({ error: 'feedback offline' }), { status: 503 })
+          )
+        : retry.promise;
+    }
+    if (url.pathname === '/api/review') submissions++;
+    return realFetch(url, init);
+  };
+  const view = render(<App capability={CAPABILITY} />);
+  const finish = await view.findByTestId('finish-review-btn');
+  await view.findByText(/Saved feedback could not be loaded/);
+  fireEvent.click(finish);
+  expect(submissions).toBe(0);
+  fireEvent.click(view.getByRole('button', { name: 'Retry loading saved feedback' }));
+  fireEvent.click(finish);
+  expect(submissions).toBe(0);
+  expect(attempts).toBe(2);
+  await act(async () =>
+    retry.resolve(
+      new Response(JSON.stringify({ comments: session.resumeComments, viewedFiles: [] }))
+    )
+  );
+  expect(await view.findByText('Needs a test.')).toBeTruthy();
+  fireEvent.click(finish);
+  expect(await view.findByText('Review saved', {}, { timeout: 10_000 })).toBeTruthy();
+  expect(fs.readFileSync(outputPath, 'utf8')).toContain('Needs a test.');
+  expect(submissions).toBe(1);
 });

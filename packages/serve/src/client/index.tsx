@@ -4,7 +4,7 @@
 // under `sideEffects`; without this import the UI renders unstyled.
 // The capability is taken from the launch URL once, before React mounts, then erased from the address bar.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Button,
@@ -15,12 +15,10 @@ import {
   useReview,
 } from '@self-review/react';
 import type { ReviewPanelHandle } from '@self-review/react';
-import type { AppConfig, OutputPathInfo } from '@self-review/core';
+import type { OutputPathInfo } from '@self-review/core';
 import '@self-review/react/styles.css';
-import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
-import type { FetchReviewAdapter } from './adapter';
-import { createServeRequester } from './requester';
-import type { ServeRequester } from './requester';
+import { useServeConnection } from './useServeConnection';
+import { SubmissionSession, useReviewSubmission, type SubmitFailure } from './useReviewSubmission';
 import { REVIEW_TOO_LARGE_CODE, parseCapabilityFragment } from '../protocol';
 
 // Removed with `history.replaceState`, so it leaves the history entry too. Null after a reload or a retyped address.
@@ -34,32 +32,6 @@ export function takeCapabilityFromLocation(): string | null {
     );
   }
   return capability;
-}
-
-// `failed` is `reviewing` with a notice: the close guard stays up and Finish Review resends.
-type Status = 'reviewing' | 'submitting' | 'submitted' | 'failed' | 'uncertain';
-
-interface SubmitFailure {
-  code: string | null;
-  uncertain?: boolean;
-  message: string;
-  details: readonly string[];
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-interface ConfigFailure {
-  message: string;
-  unauthorized: boolean;
-}
-
-function configFailureOf(error: unknown): ConfigFailure {
-  return {
-    message: messageOf(error),
-    unauthorized: error instanceof ServeRequestError && error.status === 401,
-  };
 }
 
 // Unrecoverable from the page: the only copy of the key was in the URL the server printed.
@@ -78,18 +50,6 @@ function CapabilityNotice() {
       </p>
     </Notice>
   );
-}
-
-function failureOf(error: unknown): SubmitFailure {
-  if (error instanceof ServeRequestError) {
-    return {
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      uncertain: error.uncertain,
-    };
-  }
-  return { code: null, message: messageOf(error), details: [] };
 }
 
 /**
@@ -218,111 +178,15 @@ export function App(props: AppProps) {
 }
 
 function ReviewApp({ capability }: AppProps) {
-  const [connection, setConnection] = useState<{
-    requester: ServeRequester;
-    adapter: FetchReviewAdapter;
-  } | null>(null);
-  // Each effect setup owns fresh resources, including React's setup/cleanup replay.
-  useEffect(() => {
-    if (capability === null) return;
-    const requester = createServeRequester(capability);
-    const adapter = createFetchAdapter(capability, requester);
-    setConnection({ requester, adapter });
-    return () => adapter.dispose();
-  }, [capability]);
-  const requester = connection?.requester ?? null;
+  const { connection, error: configError } = useServeConnection(capability);
   const adapter = connection?.adapter ?? null;
+  const config = connection?.config ?? null;
+  const outputPathInfo = connection?.outputPathInfo ?? null;
   const reviewRef = useRef<ReviewPanelHandle>(null);
-  const submissionPending = useRef(false);
-
-  // Native inert blocks the panel. Capture at window too, since library shortcuts
-  // listen on document and can activate controls outside the focused subtree.
-  useEffect(() => {
-    const block = (event: Event) => {
-      if (!submissionPending.current) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    };
-    const events = [
-      'keydown',
-      'click',
-      'beforeinput',
-      'input',
-      'change',
-      'submit',
-      'trigger-line-comment',
-    ];
-    events.forEach(name => window.addEventListener(name, block, true));
-    return () => events.forEach(name => window.removeEventListener(name, block, true));
-  }, []);
-
-  const [config, setConfig] = useState<Partial<AppConfig> | null>(null);
-  const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo | null>(null);
-  const [configError, setConfigError] = useState<ConfigFailure | null>(null);
-  const [status, setStatus] = useState<Status>('reviewing');
-  const [hasUnsavedWork, setHasUnsavedWork] = useState(false);
-  const markUnsaved = useCallback(() => setHasUnsavedWork(true), []);
-  const [failure, setFailure] = useState<SubmitFailure | null>(null);
-
-  // Config first: the providers below are seeded with it, so mounting before
-  // it lands would render the wrong theme and categories.
-  useEffect(() => {
-    if (capability === null || requester === null) return;
-    let cancelled = false;
-    loadServeConfig(capability, requester)
-      .then(loaded => {
-        if (cancelled) return;
-        setConfig(loaded?.config ?? {});
-        setOutputPathInfo(loaded?.outputPathInfo ?? null);
-      })
-      .catch(error => {
-        if (!cancelled) setConfigError(configFailureOf(error));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [capability, requester]);
-
-  // Warn before the tab closes with work that only exists in this page.
-  //
-  // The desktop application intercepts its window close and offers Save & Quit,
-  // Discard or Cancel. A browser gives us less: `beforeunload` is a yes/no
-  // prompt whose wording belongs to the browser, so this warns without being
-  // able to offer the save. It is closer to the desktop than closing silently,
-  // which is what happened before.
-  //
-  // Active until the review is on disk, including after a refused submission.
-  useEffect(() => {
-    if (!hasUnsavedWork || status === 'submitted') return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [hasUnsavedWork, status]);
-
-  const handleFinishReview = useCallback(async () => {
-    // One in flight at a time; none after an acknowledged one (the server stops). A refused one may be resent.
-    if (
-      submissionPending.current ||
-      status === 'submitted' ||
-      status === 'uncertain' ||
-      adapter === null
-    )
-      return;
-    const state = reviewRef.current?.getReviewState();
-    if (!state) return;
-    submissionPending.current = true;
-    setStatus('submitting');
-    setFailure(null);
-    try {
-      await (adapter.publishReview ?? adapter.submitReview)?.(state);
-      submissionPending.current = false;
-      setStatus('submitted');
-    } catch (error) {
-      setFailure(failureOf(error));
-      submissionPending.current = false;
-      setStatus(error instanceof ServeRequestError && error.uncertain ? 'uncertain' : 'failed');
-    }
-  }, [adapter, status]);
+  const { status, failure, finish, allowRetry, markUnsaved, sessionChanged } = useReviewSubmission(
+    reviewRef,
+    adapter
+  );
 
   // All hooks stay above this line: an early return ahead of an effect made React throw on the shorter hook list.
 
@@ -351,8 +215,15 @@ function ReviewApp({ capability }: AppProps) {
       {(status === 'failed' || status === 'uncertain') && failure && (
         <SubmitFailureNotice failure={failure} />
       )}
+      {status === 'uncertain' && (
+        <div className='p-2' data-save-recovery>
+          <Button variant='outline' onClick={allowRetry}>
+            Allow retry after checking output
+          </Button>
+        </div>
+      )}
       <div
-        inert={status === 'submitting'}
+        inert={status === 'submitting' || status === 'uncertain'}
         aria-busy={status === 'submitting'}
         data-testid='review-interaction'
         style={{ flex: 1, display: 'flex', minHeight: 0 }}
@@ -363,31 +234,11 @@ function ReviewApp({ capability }: AppProps) {
           config={config}
           className='flex-1 flex flex-col overflow-hidden bg-background text-foreground'
         >
+          <SubmissionSession onChange={sessionChanged} />
           <UnsavedWork onChange={markUnsaved} />
           <OutputPath info={outputPathInfo} />
           <ImportDiagnosticsBanner />
-          {status === 'uncertain' && (
-            <div className='p-2'>
-              <Button
-                variant='outline'
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Have you checked the terminal and output file and confirmed that this review was not saved? Only allow a retry if the original server is still running.'
-                    )
-                  ) {
-                    setStatus('reviewing');
-                    setFailure(null);
-                  }
-                }}
-              >
-                Allow retry after checking output
-              </Button>
-            </div>
-          )}
-          <Toolbar
-            onFinishReview={status === 'uncertain' ? undefined : () => void handleFinishReview()}
-          />
+          <Toolbar onFinishReview={status === 'uncertain' ? undefined : () => void finish()} />
         </ReviewPanel>
       </div>
     </div>
