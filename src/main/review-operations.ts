@@ -14,7 +14,7 @@ import {
   submitReviewState,
 } from '../../packages/core/src/review-handlers';
 import type { ReviewSession } from '../../packages/core/src/review-handlers';
-import type { LoadedReview } from '../../packages/core/src/operations';
+import type { LoadedReview, ReadAttachmentOptions } from '../../packages/core/src/operations';
 import { checkContentBudget } from './content-budget';
 import type {
   ReviewState,
@@ -24,7 +24,11 @@ import type {
   ReviewSourceIdentity,
 } from '../shared/types';
 
-export function bindDesktopReviewOperations(session: ReviewSession, canMutate = () => true) {
+export function bindDesktopReviewOperations(
+  session: ReviewSession,
+  canMutate = () => true,
+  attachmentOptions: Omit<ReadAttachmentOptions, 'signal'> = {}
+) {
   const writable = () => {
     if (!canMutate()) throw new Error('The review is finishing.');
   };
@@ -69,7 +73,7 @@ export function bindDesktopReviewOperations(session: ReviewSession, canMutate = 
     getFileHunks: (path: string) => getFileHunks(session, path),
     loadImage: (path: string, signal: AbortSignal) => loadImage(session, path, { signal }),
     readAttachment: (reference: unknown, signal: AbortSignal) =>
-      readAttachment(session, reference, { signal }),
+      readAttachment(session, reference, { ...attachmentOptions, signal }),
     applySuggestion: (request: SuggestionApplyRequest, signal: AbortSignal) => {
       writable();
       return applySuggestionForSessionAsync(session, request, { signal });

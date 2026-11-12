@@ -322,3 +322,37 @@ it.each(['capture', 'throw', 'reject', 'default'] as const)(
     }
   }
 );
+
+it.each(['capture', 'throw', 'reject', 'default'] as const)(
+  'routes current Core attachment diagnostics through the bound %s reporter',
+  async mode => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const reportDiagnostic = vi.fn((_message: string) => {
+      if (mode === 'throw') throw new Error('diagnostic sink failed');
+      if (mode === 'reject') return Promise.reject(new Error('diagnostic sink rejected'));
+    });
+    try {
+      const operations = createPublicationOperations(
+        createReviewSession(),
+        { path: join(root, 'review.xml'), origin: 'explicit' },
+        undefined,
+        mode === 'default' ? undefined : reportDiagnostic
+      );
+      const signal = new AbortController().signal;
+      expect(await operations.readAttachment('../secret', { signal })).toMatchObject({
+        ok: false,
+        reason: 'not-authorized',
+      });
+      const message = '[attachment:read] Refused: "../secret"';
+      if (mode === 'default') {
+        expect(stderr).toHaveBeenCalledExactlyOnceWith(message);
+        expect(reportDiagnostic).not.toHaveBeenCalled();
+      } else {
+        expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(message);
+        expect(stderr).not.toHaveBeenCalled();
+      }
+    } finally {
+      stderr.mockRestore();
+    }
+  }
+);

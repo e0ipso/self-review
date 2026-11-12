@@ -41,6 +41,7 @@ export {
 } from './review-suggestions';
 export type {
   ApplySuggestionForSessionAsyncOptions,
+  ApplySuggestionForSessionOptions,
   SuggestionOperationOptions,
 } from './review-suggestions';
 export type { PublicationFileSystem } from './publication-fs';
@@ -58,5 +59,5 @@ export { resolveLocalSourceIdentityAsync } from './source-identity';
 export type { LocalSourcePaths } from './source-identity';
 export { loadGuide } from './guide-loader';
 export type { LoadGuideOptions, BoundedGuideReader } from './guide-loader';
-export { loadImage } from './review-content';
-export type { LoadImageOptions } from './review-content';
+export { loadImage, readAttachment } from './review-content';
+export type { LoadImageOptions, ReadAttachmentOptions, AttachmentReader } from './review-content';

@@ -140,3 +140,85 @@ it('keeps the directory capture in the host while sending only the prepared payl
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('binds authoritative attachment storage after authorization with the request signal', async () => {
+  const session = createReviewSession();
+  const reference = '.self-review-assets/photo.png';
+  const target = '/virtual/original/.self-review-assets/photo.png';
+  session.attachmentOrigins = new Map([[reference, target]]);
+  const signal = new AbortController().signal;
+  const result = { ok: true as const, data: new Uint8Array([0, 255, 128]).buffer };
+  const reader = {
+    calls: [] as string[],
+    async readAssetFile(path: string, options: { signal?: AbortSignal }) {
+      this.calls.push(path);
+      expect(options.signal).toBe(signal);
+      return result;
+    },
+  };
+  const reportDiagnostic = vi.fn();
+  const operations = bindDesktopReviewOperations(session, undefined, {
+    attachmentReader: reader,
+    reportDiagnostic,
+  });
+  expect(await operations.readAttachment('../secret', signal)).toMatchObject({
+    ok: false,
+    reason: 'not-authorized',
+  });
+  expect(reader.calls).toEqual([]);
+  expect(await operations.readAttachment(reference, signal)).toBe(result);
+  expect(reader.calls).toEqual([target]);
+  expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(
+    '[attachment:read] Refused: "../secret"'
+  );
+});
+
+it('preserves supplied attachment failure without native fallback', async () => {
+  const session = createReviewSession();
+  const reference = '.self-review-assets/photo.png';
+  session.attachmentOrigins = new Map([
+    [reference, '/virtual/original/.self-review-assets/photo.png'],
+  ]);
+  const error = new Error('supplied attachment store failed');
+  const readAssetFile = vi.fn(async () => {
+    throw error;
+  });
+  const operations = bindDesktopReviewOperations(session, undefined, {
+    attachmentReader: { readAssetFile },
+  });
+  await expect(operations.readAttachment(reference, new AbortController().signal)).rejects.toBe(
+    error
+  );
+  expect(readAssetFile).toHaveBeenCalledOnce();
+});
+
+it.each(['capture', 'throw', 'reject', 'default'] as const)(
+  'routes desktop attachment diagnostics through the %s reporter without changing refusal',
+  async mode => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const reportDiagnostic = vi.fn((_message: string) => {
+      if (mode === 'throw') throw new Error('diagnostic sink failed');
+      if (mode === 'reject') return Promise.reject(new Error('diagnostic sink rejected'));
+    });
+    try {
+      const operations = bindDesktopReviewOperations(
+        createReviewSession(),
+        undefined,
+        mode === 'default' ? {} : { reportDiagnostic }
+      );
+      expect(
+        await operations.readAttachment('../secret', new AbortController().signal)
+      ).toMatchObject({ ok: false, reason: 'not-authorized' });
+      const message = '[attachment:read] Refused: "../secret"';
+      if (mode === 'default') {
+        expect(stderr).toHaveBeenCalledExactlyOnceWith(message);
+        expect(reportDiagnostic).not.toHaveBeenCalled();
+      } else {
+        expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(message);
+        expect(stderr).not.toHaveBeenCalled();
+      }
+    } finally {
+      stderr.mockRestore();
+    }
+  }
+);

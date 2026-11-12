@@ -63,7 +63,12 @@ export function createPublicationOperations(
     getFileHunks: path => core.getFileHunks(session, path),
     loadImage: (path, options) =>
       core.loadImage(session, path, report ? { ...options, reportDiagnostic: report } : options),
-    readAttachment: (path, options) => core.readAttachment(session, path, options),
+    readAttachment: (path, options) =>
+      core.readAttachment(
+        session,
+        path,
+        report ? { ...options, reportDiagnostic: report } : options
+      ),
     expandContext: (request, options) => core.expandContext(session, request, undefined, options),
     applySuggestionForSession: (request, options) => applySuggestion(session, request, options),
     publishReview: (state: ReviewState, options) => {

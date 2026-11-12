@@ -536,3 +536,83 @@ describe('runFetchComments', () => {
     expect(parsed.viewedFiles).toEqual([]);
   });
 });
+
+describe('fetch-comments owns supplied temporary clone storage', () => {
+  it.each([
+    'success',
+    'clone-failure',
+    'thread-cancel',
+    'load-failure',
+    'publish-failure',
+  ] as const)('runs real materialization and disposes supplied ownership after %s', async stage => {
+    const controller = new AbortController();
+    const released: string[] = [];
+    const owned = '/__virtual_fetch_clone__';
+    const storage = {
+      root: owned,
+      async create() {
+        return this.root;
+      },
+      async remove(target: string) {
+        expect(target).toBe(this.root);
+        released.push(target);
+      },
+      removeSync() {
+        throw new Error('unexpected synchronous cleanup');
+      },
+    };
+    let cloneTarget: string | undefined;
+    let published = false;
+    const execute = runFetchComments(PR_URL, {
+      cwd: '/__virtual_launch__',
+      temporaryClones: storage,
+      signal: controller.signal,
+      reportDiagnostic: () => {},
+      deps: {
+        detectExistingClone: async () => null,
+        runner: async (_command, args) => {
+          if (args[0] === 'clone') {
+            cloneTarget = args.at(-1);
+            if (stage === 'clone-failure') throw new Error('clone failed');
+          }
+          return {
+            stdout: args.includes('rev-parse') ? 'a'.repeat(40) : '',
+            stderr: '',
+            exitCode: 0,
+          };
+        },
+        createProvider: () => ({
+          forge: 'github',
+          fetchBaseBranch: async () => 'main',
+          fetchThreads: async () => {
+            if (stage === 'thread-cancel') {
+              controller.abort();
+              throw new CommandCancelledError('aborted', 'gh', []);
+            }
+            return [];
+          },
+        }),
+        loadDiff: async (_args, cwd) => {
+          expect(cwd).toBe(owned);
+          if (stage === 'load-failure') throw new Error('load failed');
+          return { files: [], repository: cwd };
+        },
+        loadConfig: () =>
+          loadConfigWithProvenance({
+            cwd: '/__virtual_launch__',
+            homeDir: '/__missing_config__',
+          }),
+        publish: async (_state, outputPath) => {
+          if (stage === 'publish-failure') throw new Error('publish failed');
+          published = true;
+          return { outputPath, assetPaths: [] };
+        },
+      },
+    });
+    if (stage === 'success') await expect(execute).resolves.toBeUndefined();
+    else await expect(execute).rejects.toThrow();
+    expect(cloneTarget).toBe(owned);
+    expect(released).toEqual([owned]);
+    expect(published).toBe(stage === 'success');
+  });
+});

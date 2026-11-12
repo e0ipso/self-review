@@ -15,7 +15,8 @@ import type {
   ApplySuggestionAsyncOptions,
   ApplySuggestionRequest,
 } from './apply-suggestion';
-import { SafeFsError } from './safe-fs';
+import { SafeFsError, nodeFsLayer } from './safe-fs';
+import type { FsLayer } from './safe-fs';
 import type { DiagnosticReporter } from './diagnostics';
 import { isolatedReporter } from './effect-diagnostics';
 
@@ -38,6 +39,11 @@ export interface ApplyDestinationInspection {
 export interface SuggestionOperationOptions {
   destinationInspection?: ApplyDestinationInspection;
   reportDiagnostic?: DiagnosticReporter;
+}
+
+export interface ApplySuggestionForSessionOptions extends SuggestionOperationOptions {
+  /** Authoritative filesystem for synchronous Apply; never supplemented with native I/O. */
+  fs?: FsLayer;
 }
 
 export const nodeApplyDestinationInspection: ApplyDestinationInspection = {
@@ -205,20 +211,114 @@ function prepareSessionApply(
   };
 }
 
+/** Capture the mutable public authorization and recheck it at the writer's commit hook. */
+function sessionApplyChecks(
+  session: ApplySession,
+  request: SuggestionApplyRequest,
+  engineRequest: ApplySuggestionRequest,
+  inspection: ApplyDestinationInspection
+) {
+  const identity = session.sourceIdentity;
+  const paths = session.reviewedPaths;
+  const identityStamp = JSON.stringify(identity);
+  const fileSource = JSON.stringify(identity?.fileSources?.get(request.filePath));
+  const chosen = session.applyDestinationRoot;
+  const temporary = isTemporaryCloneSession(session);
+  const validateDestination = (physicalRoot: string) => {
+    const destinationRoot = engineRequest.destinationRoot;
+    if (
+      physicalRoot !== path.resolve(destinationRoot) ||
+      canonicalize(destinationRoot, inspection) !== physicalRoot ||
+      (temporary && identity && isWithin(identity.sourceRoot, physicalRoot, inspection))
+    ) {
+      throw new SafeFsError(
+        'identity-changed',
+        request.filePath,
+        'The Apply destination no longer belongs to this review.'
+      );
+    }
+  };
+  return {
+    validateDestination,
+    beforeCommit() {
+      validateDestination(engineRequest.destinationRoot);
+      if (
+        session.sourceIdentity !== identity ||
+        session.reviewedPaths !== paths ||
+        !session.reviewedPaths.has(request.filePath) ||
+        JSON.stringify(session.sourceIdentity) !== identityStamp ||
+        JSON.stringify(session.sourceIdentity?.fileSources?.get(request.filePath)) !== fileSource ||
+        session.applyDestinationRoot !== chosen ||
+        isTemporaryCloneSession(session) !== temporary ||
+        resolveApplyDestination(session) !== engineRequest.destinationRoot
+      ) {
+        throw new SafeFsError(
+          'identity-changed',
+          request.filePath,
+          'The review or its Apply destination changed before the write could commit.'
+        );
+      }
+    },
+  };
+}
+
 /** Apply synchronously using the session's destination and reviewed-path authorization. */
 export function applySuggestionForSession(
   session: ApplySession,
   request: SuggestionApplyRequest,
-  effects: SuggestionOperationOptions = {}
+  effects: ApplySuggestionForSessionOptions = {}
 ): SuggestionApplyOutcome {
+  request = {
+    ...request,
+    lineRange: request.lineRange && { ...request.lineRange },
+    suggestion: { ...request.suggestion },
+  };
   const reportDiagnostic = isolatedReporter(effects.reportDiagnostic);
   const prepared = prepareSessionApply(session, request, reportDiagnostic);
   if ('status' in prepared) return prepared;
-  return projectApplyResult(
-    request.filePath,
-    applySuggestion(prepared.engineRequest),
-    reportDiagnostic
-  );
+  const layer = effects.fs ?? nodeFsLayer;
+  const inspection = effects.destinationInspection ?? {
+    realpath: (target: string) => layer.realpathSync(target),
+    isDirectory: (target: string) => layer.lstatSync(target).isDirectory(),
+  };
+  const checks = sessionApplyChecks(session, request, prepared.engineRequest, inspection);
+  let destinationChanged = false;
+  // The old engine accepts FsLayer and a final hook. Validate its physical root through that
+  // same layer, preserving receiver binding for every legacy method and avoiding native fallback.
+  // A separate proxy target accepts frozen providers without changing their method descriptors.
+  const guardedFs = new Proxy({} as FsLayer, {
+    get(_target, member) {
+      const target = layer;
+      if (member === 'realpathSync')
+        return (value: string) => {
+          const physical = target.realpathSync(value);
+          if (value === path.resolve(prepared.engineRequest.destinationRoot)) {
+            try {
+              checks.validateDestination(physical);
+            } catch (error) {
+              destinationChanged = true;
+              throw error;
+            }
+          }
+          return physical;
+        };
+      const value = Reflect.get(target, member, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  let result = applySuggestion(prepared.engineRequest, {
+    fs: guardedFs,
+    beforeCommit: checks.beforeCommit,
+  });
+  if (destinationChanged && result.status === 'refused') {
+    result = {
+      status: 'refused',
+      filePath: request.filePath,
+      reason: 'file-changed',
+      detail: 'The Apply destination no longer belongs to this review.',
+    };
+  }
+  return projectApplyResult(request.filePath, result, reportDiagnostic);
 }
 
 /**
@@ -244,49 +344,8 @@ export async function applySuggestionForSessionAsync(
   const prepared = prepareSessionApply(session, request, reportDiagnostic);
   options.signal?.throwIfAborted();
   if ('status' in prepared) return prepared;
-  const identity = session.sourceIdentity;
-  const paths = session.reviewedPaths;
-  const identityStamp = JSON.stringify(identity);
-  const fileSource = JSON.stringify(identity?.fileSources?.get(request.filePath));
-  const chosen = session.applyDestinationRoot;
-  const temporary = isTemporaryCloneSession(session);
-  const assertDestination = (physicalRoot: string) => {
-    const destinationRoot = prepared.engineRequest.destinationRoot;
-    if (
-      physicalRoot !== path.resolve(destinationRoot) ||
-      canonicalize(destinationRoot, inspection) !== physicalRoot ||
-      (temporary && identity && isWithin(identity.sourceRoot, physicalRoot, inspection))
-    ) {
-      throw new SafeFsError(
-        'identity-changed',
-        request.filePath,
-        'The Apply destination no longer belongs to this review.'
-      );
-    }
-  };
-  const result = await applySuggestionAsync(prepared.engineRequest, {
-    ...options,
-    validateDestination: assertDestination,
-    beforeCommit() {
-      assertDestination(prepared.engineRequest.destinationRoot);
-      if (
-        session.sourceIdentity !== identity ||
-        session.reviewedPaths !== paths ||
-        !session.reviewedPaths.has(request.filePath) ||
-        JSON.stringify(session.sourceIdentity) !== identityStamp ||
-        JSON.stringify(session.sourceIdentity?.fileSources?.get(request.filePath)) !== fileSource ||
-        session.applyDestinationRoot !== chosen ||
-        isTemporaryCloneSession(session) !== temporary ||
-        resolveApplyDestination(session) !== prepared.engineRequest.destinationRoot
-      ) {
-        throw new SafeFsError(
-          'identity-changed',
-          request.filePath,
-          'The review or its Apply destination changed before the write could commit.'
-        );
-      }
-    },
-  });
+  const checks = sessionApplyChecks(session, request, prepared.engineRequest, inspection);
+  const result = await applySuggestionAsync(prepared.engineRequest, { ...options, ...checks });
   const outcome = projectApplyResult(request.filePath, result, reportDiagnostic);
   // Reporting can trigger host cancellation. A refusal has not committed anything; an applied
   // result must remain successful even when cancellation arrives during its diagnostic.

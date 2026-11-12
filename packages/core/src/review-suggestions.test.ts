@@ -11,6 +11,7 @@ import { commitDiffData, createReviewSession } from './review-session';
 import type { ReviewSession } from './review-session';
 import type { SuggestionApplyRequest } from './types';
 import { nodeAsyncFsLayer } from './safe-fs-async';
+import { nodeFsLayer, type FsLayer } from './safe-fs';
 import type { AsyncFsLayer } from './safe-fs-async';
 
 let root: string;
@@ -425,4 +426,189 @@ it('propagates cancellation from refused-result diagnostics and retains a commit
       applied ? 'new\n' : 'different\n'
     );
   }
+});
+
+describe('synchronous session destination revalidation', () => {
+  it('refuses a selected external directory redirected into the disposable clone before Apply', () => {
+    const clone = path.join(root, 'clone');
+    const destination = path.join(root, 'destination');
+    const moved = path.join(root, 'moved');
+    fs.mkdirSync(clone);
+    fs.mkdirSync(destination);
+    fs.writeFileSync(path.join(clone, 'file'), 'old\n');
+    fs.writeFileSync(path.join(destination, 'file'), 'old\n');
+    const session = makeSession(clone, true);
+    expect(setApplyDestination(session, destination)).toMatchObject({ status: 'chosen' });
+    fs.renameSync(destination, moved);
+    fs.symlinkSync(clone, destination);
+    expect(applySuggestionForSession(session, request())).toMatchObject({
+      status: 'refused',
+      reason: 'file-changed',
+    });
+    expect(fs.readFileSync(path.join(clone, 'file'), 'utf8')).toBe('old\n');
+    expect(fs.readFileSync(path.join(moved, 'file'), 'utf8')).toBe('old\n');
+    expect(fs.readdirSync(clone)).toEqual(['file']);
+  });
+
+  for (const stage of ['read', 'precommit'] as const) {
+    for (const change of ['redirect', 'membership', 'identity', 'destination', 'review'] as const) {
+      it(`refuses ${change} during ${stage} without replacing either source`, () => {
+        const clone = path.join(root, 'clone');
+        const destination = path.join(root, 'destination');
+        const moved = path.join(root, 'moved');
+        fs.mkdirSync(clone);
+        fs.mkdirSync(destination);
+        fs.writeFileSync(path.join(clone, 'file'), 'old\n');
+        fs.writeFileSync(path.join(destination, 'file'), 'old\n');
+        const session = makeSession(clone, true);
+        setApplyDestination(session, destination);
+        let changed = false;
+        const mutate = () => {
+          if (changed) return;
+          changed = true;
+          if (change === 'redirect') {
+            fs.renameSync(destination, moved);
+            fs.symlinkSync(clone, destination);
+          }
+          if (change === 'membership') session.reviewedPaths = new Set();
+          if (change === 'identity') session.sourceIdentity!.pathPrefix = 'other';
+          if (change === 'destination') session.applyDestinationRoot = clone;
+          if (change === 'review')
+            commitDiffData(session, session.diffData!, session.sourceIdentity);
+        };
+        vi.spyOn(nodeFsLayer, 'readSync').mockImplementation((...args) => {
+          const bytes = fs.readSync(...args);
+          if (stage === 'read') mutate();
+          return bytes;
+        });
+        vi.spyOn(nodeFsLayer, 'fsyncSync').mockImplementation(fd => {
+          fs.fsyncSync(fd);
+          if (stage === 'precommit') mutate();
+        });
+        expect(applySuggestionForSession(session, request())).toMatchObject({
+          status: 'refused',
+        });
+        expect(changed).toBe(true);
+        expect(fs.readFileSync(path.join(clone, 'file'), 'utf8')).toBe('old\n');
+        const external = change === 'redirect' ? moved : destination;
+        expect(fs.readFileSync(path.join(external, 'file'), 'utf8')).toBe('old\n');
+        if (change === 'redirect' && stage === 'precommit') {
+          // Portable path-based cleanup cannot rediscover a parent moved by another actor.
+          // The existing writer refuses replacement; its staged file moved with that parent.
+          expect(fs.readdirSync(external)).toEqual([
+            expect.stringMatching(/^\.file\.[a-f0-9]+\.tmp$/),
+            'file',
+          ]);
+        } else expect(fs.readdirSync(external)).toEqual(['file']);
+        expect(fs.readdirSync(clone)).toEqual(['file']);
+      });
+    }
+  }
+
+  it('applies into a safe dot-prefixed sibling through an authoritative legacy filesystem', () => {
+    const clone = '/__virtual_clone__';
+    const virtual = '/__virtual_..cache__';
+    fs.writeFileSync(path.join(root, 'file'), 'old\n');
+    const mapPath = (target: string) =>
+      target === virtual
+        ? root
+        : target.startsWith(virtual + '/')
+          ? root + target.slice(virtual.length)
+          : target;
+    const descriptors = new Map<number, number>();
+    let next = 1000000;
+    const layer: FsLayer & { calls: number } = {
+      calls: 0,
+      realpathSync(target) {
+        this.calls++;
+        return target;
+      },
+      lstatSync(target) {
+        this.calls++;
+        return nodeFsLayer.lstatSync(mapPath(target));
+      },
+      openSync(target, flags, mode) {
+        this.calls++;
+        const fd = next++;
+        descriptors.set(fd, nodeFsLayer.openSync(mapPath(target), flags, mode));
+        return fd;
+      },
+      closeSync(fd) {
+        this.calls++;
+        nodeFsLayer.closeSync(descriptors.get(fd)!);
+        descriptors.delete(fd);
+      },
+      fstatSync(fd) {
+        this.calls++;
+        return nodeFsLayer.fstatSync(descriptors.get(fd)!);
+      },
+      readFileSync(fd) {
+        this.calls++;
+        return nodeFsLayer.readFileSync(descriptors.get(fd)!);
+      },
+      writeSync(fd, bytes) {
+        this.calls++;
+        return nodeFsLayer.writeSync(descriptors.get(fd)!, bytes);
+      },
+      fsyncSync(fd) {
+        this.calls++;
+        nodeFsLayer.fsyncSync(descriptors.get(fd)!);
+      },
+      fchmodSync(fd, mode) {
+        this.calls++;
+        nodeFsLayer.fchmodSync(descriptors.get(fd)!, mode);
+      },
+      fchownSync(fd, uid, gid) {
+        this.calls++;
+        nodeFsLayer.fchownSync(descriptors.get(fd)!, uid, gid);
+      },
+      renameSync(from, to) {
+        this.calls++;
+        nodeFsLayer.renameSync(mapPath(from), mapPath(to));
+      },
+      unlinkSync(target) {
+        this.calls++;
+        nodeFsLayer.unlinkSync(mapPath(target));
+      },
+      mkdirSync(target, mode) {
+        this.calls++;
+        nodeFsLayer.mkdirSync(mapPath(target), mode);
+      },
+    };
+    const session = makeSession(clone, true);
+    expect(
+      setApplyDestination(session, virtual, {
+        destinationInspection: {
+          realpath: value => layer.realpathSync(value),
+          isDirectory: value => layer.lstatSync(value).isDirectory(),
+        },
+      })
+    ).toMatchObject({ status: 'chosen' });
+    expect(applySuggestionForSession(session, request(), { fs: layer })).toEqual({
+      status: 'applied',
+      filePath: 'file',
+      replacedLines: 1,
+    });
+    expect(layer.calls).toBeGreaterThan(0);
+    expect(descriptors.size).toBe(0);
+    expect(fs.readFileSync(path.join(root, 'file'), 'utf8')).toBe('new\n');
+  });
+});
+
+it('applies through a frozen receiver-bound filesystem provider', () => {
+  fs.writeFileSync(path.join(root, 'file'), 'old\n');
+  const realpathSync = vi.fn(function (this: FsLayer, target: string) {
+    expect(this).toBe(layer);
+    return nodeFsLayer.realpathSync(target);
+  });
+  const layer: FsLayer = Object.freeze({ ...nodeFsLayer, realpathSync });
+  expect(applySuggestionForSession(makeSession(), request(), { fs: layer })).toEqual({
+    status: 'applied',
+    filePath: 'file',
+    replacedLines: 1,
+  });
+  expect(fs.readFileSync(path.join(root, 'file'), 'utf8')).toBe('new\n');
+  expect(realpathSync).toHaveBeenCalled();
+  expect(layer.realpathSync).toBe(realpathSync);
+  expect(Object.isFrozen(layer)).toBe(true);
 });

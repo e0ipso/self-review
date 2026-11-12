@@ -157,6 +157,7 @@ export async function runFetchComments(
   const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
   const lifetime: RemoteLifetimeOptions = {
     signal: options.signal,
+    temporaryClones: options.temporaryClones,
     ...(options.reportDiagnostic ? { reportDiagnostic } : {}),
   };
 
