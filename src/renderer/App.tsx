@@ -15,6 +15,7 @@ import RemoteDriftBanner from '../../packages/react/src/components/RemoteDriftBa
 import ImportDiagnosticsBanner from '../../packages/react/src/components/ImportDiagnosticsBanner';
 import type { AppConfig, OutputPathInfo, ApplicationLocale } from '../shared/types';
 
+import { resolveApplicationLocale, resolveDesktopCatalog } from '../shared/localization';
 import { ElectronRequests } from './electron-requests';
 import { createElectronAdapter } from './electron-adapter';
 import { useDesktopLocalization } from './useDesktopLocalization';
@@ -194,7 +195,8 @@ export default function App() {
         : undefined) ?? Promise.resolve({ locale: 'en', direction: 'ltr' as const });
     void request.then(
       value => {
-        if (active) setLocale(value);
+        if (active)
+          setLocale({ ...resolveApplicationLocale(value.locale), direction: value.direction });
       },
       () => {
         if (active) setLocale({ locale: 'en', direction: 'ltr' });
@@ -207,7 +209,11 @@ export default function App() {
   }, []);
   if (!locale) return null;
   return (
-    <LocalizationProvider locale={locale.locale} direction={locale.direction}>
+    <LocalizationProvider
+      locale={locale.locale}
+      direction={locale.direction}
+      messages={resolveDesktopCatalog(locale.locale)}
+    >
       <DesktopApp />
     </LocalizationProvider>
   );

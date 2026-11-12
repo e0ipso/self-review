@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DesktopOperations } from './desktop-operations';
 import { IPC } from '../shared/ipc-channels';
@@ -13,8 +14,9 @@ const harness = vi.hoisted(() => ({
   health: null as import('./renderer-recovery').RendererRecovery | null,
   operations: null as DesktopOperations | null,
   boundary: null as ReturnType<typeof import('./ipc-boundary').createIpcBoundary> | null,
-  checkUpdate: vi.fn(),
-  getUpdate: vi.fn(),
+  requestUpdate: vi.fn(),
+  presentation: vi.fn(),
+  locale: 'ar-EG',
   remote: { closed: false, dispose: vi.fn(async () => {}) },
   session: { diffData: null as import('../shared/types').DiffLoadPayload | null },
 }));
@@ -24,7 +26,8 @@ vi.mock('electron', () => ({
       harness.appHandlers[name] = callback;
     }),
     whenReady: () => Promise.resolve(),
-    getLocale: () => 'ar-EG',
+    getLocale: () => harness.locale,
+    getVersion: () => '2.0.4',
     quit: vi.fn(),
     commandLine: { appendSwitch: vi.fn() },
     disableHardwareAcceleration: vi.fn(),
@@ -58,7 +61,7 @@ vi.mock('./ipc-handlers', () => ({
 }));
 vi.mock('./lifecycle-handlers', () => ({ registerLifecycleHandlers: vi.fn() }));
 vi.mock('./presentation', () => ({
-  createReviewPresentation: () => ({ confirmPayload: vi.fn() }),
+  createReviewPresentation: harness.presentation,
   createLifecyclePresentation: vi.fn(),
   confirmRendererDiscard: harness.confirmDiscard,
   confirmPublishedClose: harness.confirmPublished,
@@ -69,10 +72,7 @@ vi.mock('./publication', () => ({
 vi.mock('./remote-open-handler', () => ({ registerRemoteOpenHandler: vi.fn() }));
 vi.mock('./app-assets', () => ({ getAppIconDataUri: vi.fn() }));
 vi.mock('./menu', () => ({ setupMenu: vi.fn() }));
-vi.mock('./version-checker', () => ({
-  checkForUpdate: harness.checkUpdate,
-  getVersionUpdate: harness.getUpdate,
-}));
+vi.mock('./electron-update-request', () => ({ requestUpdate: harness.requestUpdate }));
 import { app } from 'electron';
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -111,8 +111,22 @@ beforeEach(() => {
   harness.remote.dispose.mockResolvedValue(undefined);
   harness.initialize.mockResolvedValue(true);
   harness.createWindow.mockImplementation(window);
-  harness.checkUpdate.mockResolvedValue(undefined);
-  harness.getUpdate.mockReturnValue(null);
+  harness.locale = 'ar-EG';
+  harness.presentation.mockImplementation((_icon, versionUpdate) => ({
+    confirmPayload: vi.fn(),
+    versionUpdate,
+  }));
+  harness.requestUpdate.mockImplementation(() => {
+    const request = Object.assign(new EventEmitter(), {
+      setHeader: vi.fn(),
+      abort: vi.fn(() => {
+        request.emit('abort');
+        request.emit('close');
+      }),
+      end: vi.fn(),
+    });
+    return request;
+  });
   vi.spyOn(process, 'on').mockImplementation(((
     name: string,
     callback: (...args: unknown[]) => unknown
@@ -122,7 +136,26 @@ beforeEach(() => {
   }) as typeof process.on);
   vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  harness.signals.SIGTERM?.();
+  vi.unstubAllEnvs();
+});
+function completeUpdate() {
+  const response = Object.assign(new EventEmitter(), { statusCode: 200 });
+  const request = harness.requestUpdate.mock.results[0].value;
+  request.emit('response', response);
+  response.emit(
+    'data',
+    Buffer.from(
+      JSON.stringify({
+        tag_name: 'v99.0.0',
+        html_url: 'https://github.com/e0ipso/self-review/releases',
+      })
+    )
+  );
+  response.emit('end');
+  request.emit('close');
+}
 
 describe('desktop composition', () => {
   it('ignores activation until deferred initialization completes and creates one window', async () => {
@@ -150,8 +183,6 @@ describe('desktop composition', () => {
   );
 
   it('pushes a late update to a replacement live window and leaves cached request support intact', async () => {
-    const network = deferred<void>();
-    harness.checkUpdate.mockReturnValue(network.promise);
     await import('./main');
     await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
     const first = harness.createWindow.mock.results[0].value;
@@ -162,8 +193,10 @@ describe('desktop composition', () => {
       latestVersion: '99.0.0',
       releaseUrl: 'https://github.com/e0ipso/self-review/releases',
     };
-    harness.getUpdate.mockReturnValue(update);
-    network.resolve();
+    expect(harness.presentation.mock.results[0].value.versionUpdate()).toBeNull();
+    completeUpdate();
+    expect(harness.presentation.mock.results[0].value.versionUpdate()).toEqual(update);
+    expect(harness.requestUpdate).toHaveBeenCalledOnce();
     await vi.waitFor(() =>
       expect(second.webContents.send).toHaveBeenCalledWith(IPC.VERSION_UPDATE_AVAILABLE, update)
     );
@@ -171,17 +204,11 @@ describe('desktop composition', () => {
   });
 
   it('drops update delivery to a closed window', async () => {
-    const network = deferred<void>();
-    harness.checkUpdate.mockReturnValue(network.promise);
     await import('./main');
     await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
     const first = harness.createWindow.mock.results[0].value;
     first.destroy();
-    harness.getUpdate.mockReturnValue({
-      latestVersion: '99.0.0',
-      releaseUrl: 'https://github.com/',
-    });
-    network.resolve();
+    completeUpdate();
     await Promise.resolve();
     await Promise.resolve();
     expect(first.webContents.send).not.toHaveBeenCalled();
@@ -303,4 +330,30 @@ it('confirms a committed publication natively when its renderer cannot receive t
   await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0));
   expect(harness.confirmDiscard).not.toHaveBeenCalled();
   expect(harness.publish).toHaveBeenCalledOnce();
+});
+
+it.each(['es-MX', 'en-GB', 'fr-FR', 'bad_locale'])(
+  'binds native presentation and menu to the resolved application locale %s',
+  async locale => {
+    harness.locale = locale;
+    await import('./main');
+    await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
+    const { setupMenu } = await import('./menu');
+    const native = harness.presentation.mock.calls[0][2];
+    expect(vi.mocked(setupMenu)).toHaveBeenCalledWith(native);
+    expect(native.t('Cancel')).toBe(locale === 'es-MX' ? 'Cancelar' : 'Cancel');
+    expect(native.locale).toBe(locale === 'bad_locale' ? 'en' : locale);
+  }
+);
+
+it('disposes its owned update service before shutdown and prevents late cache delivery', async () => {
+  await import('./main');
+  await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
+  const request = harness.requestUpdate.mock.results[0].value;
+  const readUpdate = harness.presentation.mock.results[0].value.versionUpdate;
+  harness.signals.SIGTERM();
+  await vi.waitFor(() => expect(request.abort).toHaveBeenCalledOnce());
+  completeUpdate();
+  expect(readUpdate()).toBeNull();
+  expect(request.eventNames()).toEqual([]);
 });

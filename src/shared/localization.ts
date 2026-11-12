@@ -5,70 +5,44 @@ import {
   createMessageFormatter,
   type LocalizedMessage,
 } from '../../packages/react/src/localization/formatter';
+import { ENGLISH as REVIEW_ENGLISH } from '../../packages/react/src/localization/english';
+import { DESKTOP_ENGLISH } from './desktop-english';
+import { SPANISH_SHELL } from './spanish-shell';
+import { SPANISH_REVIEW } from './spanish-review';
 export type DesktopMessage = LocalizedMessage;
 export interface DesktopLocaleOptions {
   locale?: string;
   direction?: 'ltr' | 'rtl';
   messages?: Readonly<Record<string, DesktopMessage | undefined>>;
 }
-const ENGLISH: Record<string, DesktopMessage> = {
-  'Review size': {
-    plural: 'files',
-    forms: {
-      one: {
-        plural: 'lines',
-        forms: {
-          one: 'This review contains {files} file and approximately {lines} line.',
-          other: 'This review contains {files} file and approximately {lines} lines.',
-        },
-      },
-      other: {
-        plural: 'lines',
-        forms: {
-          one: 'This review contains {files} files and approximately {lines} line.',
-          other: 'This review contains {files} files and approximately {lines} lines.',
-        },
-      },
-    },
-  },
-  'Review thresholds': {
-    plural: 'files',
-    forms: {
-      one: {
-        plural: 'lines',
-        forms: {
-          one: 'Thresholds: {files} file, {lines} line.\n\nLarge reviews may be slow. Continue in large-payload mode?',
-          other:
-            'Thresholds: {files} file, {lines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?',
-        },
-      },
-      other: {
-        plural: 'lines',
-        forms: {
-          one: 'Thresholds: {files} files, {lines} line.\n\nLarge reviews may be slow. Continue in large-payload mode?',
-          other:
-            'Thresholds: {files} files, {lines} lines.\n\nLarge reviews may be slow. Continue in large-payload mode?',
-        },
-      },
-    },
-  },
-};
 export function createDesktopLocalization({
   locale = 'en',
   direction = 'ltr',
   messages = {},
 }: DesktopLocaleOptions = {}) {
-  const formatter = createMessageFormatter(locale);
+  const resolved = resolveApplicationLocale(locale);
+  const catalog = resolveDesktopCatalog(resolved.locale);
+  const formatter = createMessageFormatter(resolved.locale);
   return {
-    locale,
+    locale: resolved.locale,
     direction,
     t: (source: string, values: Readonly<Record<string, string | number>> = {}) =>
-      formatter.render(messages[source] ?? ENGLISH[source] ?? source, values),
+      formatter.render(messages[source] ?? catalog[source] ?? source, values),
     number: formatter.number,
     date: formatter.date,
   };
 }
 export type DesktopLocalization = ReturnType<typeof createDesktopLocalization>;
+
+/** The same pure catalog is used by native messages and the renderer provider. */
+export function resolveDesktopCatalog(
+  locale = 'en'
+): Readonly<Record<string, DesktopMessage | undefined>> {
+  const language = resolveApplicationLocale(locale).locale.split('-')[0];
+  return language === 'es' ? SPANISH : ENGLISH;
+}
+const ENGLISH = { ...REVIEW_ENGLISH, ...DESKTOP_ENGLISH };
+const SPANISH = { ...ENGLISH, ...SPANISH_REVIEW, ...SPANISH_SHELL };
 
 /** Host locale affects formatters and direction; missing catalogs use the English source. */
 export function resolveApplicationLocale(candidate?: string): import('./types').ApplicationLocale {

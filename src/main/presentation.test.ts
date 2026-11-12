@@ -90,3 +90,41 @@ it('injects native output and save-error messages without loading a React runtim
     expect.objectContaining({ title: 'Still open', message: 'disk full' })
   );
 });
+
+it('delivers Spanish regional catalog messages to native dialogs while preserving engine diagnostics', async () => {
+  const messages = createDesktopLocalization({ locale: 'es-MX' });
+  const lifecycle = createLifecyclePresentation(messages);
+  vi.mocked(dialog.showSaveDialog).mockResolvedValue({ canceled: true, filePath: '' });
+  await lifecycle.pickOutputPath(window, '/review.xml');
+  expect(dialog.showSaveDialog).toHaveBeenCalledWith(
+    window,
+    expect.objectContaining({
+      title: 'Guardar revisión como',
+      filters: [{ name: 'Archivos XML', extensions: ['xml'] }],
+    })
+  );
+  await lifecycle.reportSaveFailure(window, {
+    code: 'io-error',
+    message: 'EIO: fsync',
+    detail: 'Path: /review.xml',
+  });
+  expect(dialog.showMessageBox).toHaveBeenCalledWith(
+    window,
+    expect.objectContaining({
+      title: 'Revisión sin guardar',
+      message: 'EIO: fsync',
+      detail: 'Path: /review.xml',
+      buttons: ['Aceptar'],
+    })
+  );
+  vi.mocked(dialog.showMessageBox).mockResolvedValue({ response: 0, checkboxChecked: false });
+  await confirmRendererDiscard(window, 'unresponsive', messages);
+  expect(dialog.showMessageBox).toHaveBeenCalledWith(
+    window,
+    expect.objectContaining({
+      title: 'Ventana de revisión no disponible',
+      message: 'La ventana de revisión no responde.',
+      buttons: ['Cancelar', 'Descartar y salir'],
+    })
+  );
+});
