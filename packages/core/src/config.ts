@@ -1,14 +1,14 @@
 // YAML configuration loading and merging
 
-import { existsSync } from 'fs';
-import { readFileWithinBudgetSync } from './bounded-read';
 import { join } from 'path';
-import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import { AppConfig } from './types';
 import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { createDefaultConfig } from '../../config/src/index';
 import { gitDiffArgsSyntaxError } from './git-argument-text';
+import { nativeConfigEffects } from './config-reader';
+import type { BoundedReadOptions, BoundedReadResult } from './bounded-read';
+import { normalizeConfigFontSize } from './config-font-size';
 
 // Privately owned reference values, independent of the public compatibility snapshots.
 const defaults = createDefaultConfig();
@@ -31,7 +31,16 @@ export interface LoadedConfig {
   sources: ConfigSource[];
 }
 
+/** Synchronous startup effects. A supplied implementation owns every read and location lookup. */
+export interface ConfigEffects {
+  exists(path: string): boolean;
+  read(path: string, maxBytes: number, options: BoundedReadOptions): BoundedReadResult;
+  homeDir(): string;
+  cwd(): string;
+}
+
 export interface LoadConfigOptions {
+  effects?: ConfigEffects;
   cwd?: string;
   homeDir?: string;
   /** Defaults to stderr; supply a callback to collect diagnostics without printing. */
@@ -50,6 +59,7 @@ const CONFIG_KEYS = Object.keys(defaults) as (keyof AppConfig)[];
  */
 export function loadConfigWithProvenance(options: LoadConfigOptions = {}): LoadedConfig {
   const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  const effects = options.effects ?? nativeConfigEffects;
   let config = createDefaultConfig();
   const provenance = Object.fromEntries(CONFIG_KEYS.map(key => [key, 'default'])) as Record<
     keyof AppConfig,
@@ -62,14 +72,19 @@ export function loadConfigWithProvenance(options: LoadConfigOptions = {}): Loade
   const files: ConfigSource[] = [
     {
       origin: 'user',
-      path: join(options.homeDir ?? homedir(), '.config', 'self-review', 'config.yaml'),
+      path: join(options.homeDir ?? effects.homeDir(), '.config', 'self-review', 'config.yaml'),
     },
-    { origin: 'project', path: join(options.cwd ?? process.cwd(), '.self-review.yaml') },
+    { origin: 'project', path: join(options.cwd ?? effects.cwd(), '.self-review.yaml') },
   ];
   for (const source of files) {
-    if (!existsSync(source.path)) continue;
+    if (!effects.exists(source.path)) continue;
     try {
-      const override = loadYamlConfig(source.path, source.origin === 'project', reportDiagnostic);
+      const override = loadYamlConfig(
+        source.path,
+        source.origin === 'project',
+        reportDiagnostic,
+        effects
+      );
       config = mergeConfig(config, override);
       for (const key of Object.keys(override) as (keyof AppConfig)[]) {
         provenance[key] = source.origin;
@@ -100,11 +115,12 @@ function describeConfigValue(value: unknown): string {
 function loadYamlConfig(
   path: string,
   noFollow: boolean,
-  reportDiagnostic: DiagnosticReporter
+  reportDiagnostic: DiagnosticReporter,
+  reader: Pick<ConfigEffects, 'read'>
 ): Partial<AppConfig> {
   // Project data cannot redirect startup reads through a link. User config may link
   // to another regular file, but the same byte and nonblocking limits apply.
-  const read = readFileWithinBudgetSync(path, MAX_CONFIG_BYTES, { noFollow });
+  const read = reader.read(path, MAX_CONFIG_BYTES, { noFollow });
   if (read.kind === 'not-regular') throw new Error('Config is not a regular file');
   if (read.kind === 'too-large') {
     throw new Error(`Config exceeds the ${MAX_CONFIG_BYTES}-byte limit`);
@@ -145,7 +161,9 @@ function loadYamlConfig(
   }
 
   if ('font-size' in raw && typeof raw['font-size'] === 'number') {
-    config.fontSize = raw['font-size'];
+    const normalized = normalizeConfigFontSize({ fontSize: raw['font-size'] }, defaults.fontSize);
+    if (normalized.diagnostic) reportDiagnostic(normalized.diagnostic);
+    else config.fontSize = normalized.config.fontSize;
   }
 
   if ('output-format' in raw && typeof raw['output-format'] === 'string') {
