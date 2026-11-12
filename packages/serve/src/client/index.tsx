@@ -190,7 +190,7 @@ export function App(props: AppProps) {
 }
 
 function ReviewApp({ capability }: AppProps) {
-  const { connection, error: configError } = useServeConnection(capability);
+  const { connection, error: configError, retry } = useServeConnection(capability);
   const adapter = connection?.adapter ?? null;
   const config = connection?.config ?? null;
   const outputPathInfo = connection?.outputPathInfo ?? null;
@@ -210,8 +210,11 @@ function ReviewApp({ capability }: AppProps) {
   if (configError) {
     return (
       <Notice title='Could not reach the review server'>
-        <p>{configError.message}</p>
-        <p>The process that served this page may have exited.</p>
+        <div role='alert'>
+          <p>{configError.message}</p>
+          <p>The process that served this page may have exited.</p>
+        </div>
+        <Button onClick={retry}>Retry connection</Button>
       </Notice>
     );
   }
@@ -220,7 +223,12 @@ function ReviewApp({ capability }: AppProps) {
     return <Saved outputPath={outputPathInfo?.resolvedOutputPath ?? null} />;
   }
 
-  if (!config || !adapter) return null;
+  if (!config || !adapter)
+    return (
+      <Notice title='Connecting to the review server'>
+        <p role='status'>Waiting for the review server.</p>
+      </Notice>
+    );
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

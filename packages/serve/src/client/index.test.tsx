@@ -206,6 +206,30 @@ describe('serve client', () => {
     expect(view.getByText('Failed to fetch')).toBeTruthy();
   });
 
+  it('retries the initial connection in place after the URL capability was erased', async () => {
+    let configs = 0;
+    const requests: string[] = [];
+    route = (url, init) => {
+      requests.push(url.pathname);
+      if (url.pathname === '/api/config' && ++configs === 1)
+        return Promise.resolve(new Response(JSON.stringify({ error: 'busy' }), { status: 503 }));
+      return realFetch(url, init);
+    };
+    window.history.replaceState(null, '', `/#cap=${CAPABILITY}`);
+    const capability = takeCapabilityFromLocation();
+    const view = render(<App capability={capability} />);
+    expect(await view.findByText('Could not reach the review server')).toBeTruthy();
+    expect(requests).toEqual(['/api/config']);
+    expect(window.location.hash).toBe('');
+    fireEvent.click(view.getByRole('button', { name: 'Retry connection' }));
+    expect(await view.findByText('Needs a test.')).toBeTruthy();
+    expect(configs).toBe(2);
+    expect(requests).not.toContain('/api/review');
+    expect(requests).not.toContain('/api/apply-suggestion');
+    expect(view.container.textContent).not.toContain(CAPABILITY);
+    expect(window.location.href).not.toContain(CAPABILITY);
+  });
+
   it('keeps the close warning after deleting the final resumed comment', async () => {
     const view = await mountWithUnsavedWork();
     fireEvent.click(view.container.querySelector('[data-hint-action="delete-comment"]')!);

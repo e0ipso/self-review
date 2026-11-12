@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useCommentDisclosure } from '../context/ReviewDisplayContext';
 import ReviewProgress from './ReviewProgress';
+import { diffTotals } from '../utils/diff-totals';
 
 export interface ToolbarProps {
   /** Callback when "Finish Review" is clicked. If not provided, the button is hidden. */
@@ -42,19 +43,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
   const adapter = useAdapter();
   const { allCollapsed: allCommentsCollapsed, setAllCollapsed } = useCommentDisclosure();
 
-  const stats = useMemo(() => {
-    let additions = 0;
-    let deletions = 0;
-    for (const file of diffFiles) {
-      for (const hunk of file.hunks) {
-        for (const line of hunk.lines) {
-          if (line.type === 'addition') additions++;
-          else if (line.type === 'deletion') deletions++;
-        }
-      }
-    }
-    return { files: diffFiles.length, additions, deletions };
-  }, [diffFiles]);
+  const stats = useMemo(() => diffTotals(diffFiles), [diffFiles]);
 
   const handleToggleAllComments = () => {
     setAllCollapsed(!allCommentsCollapsed);
@@ -196,6 +185,7 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
         </span>
         <Separator orientation='vertical' className='h-3.5' />
         <span>{t('files changed', { count: stats.files })}</span>
+        {!stats.complete && <span>{t('Line totals unavailable')}</span>}
         {stats.additions > 0 && (
           <span className='text-green-600 dark:text-green-400'>+{number(stats.additions)}</span>
         )}

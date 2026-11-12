@@ -49,8 +49,15 @@ export function createReviewStateCommands(
     );
   };
 
+  // Edits cannot rename a thread or move it out of its owning file. Wholesale setters
+  // remain available to hosts replacing state; other fields and extensions still merge.
   const updateComment = (id: string, updates: Partial<ReviewComment>) =>
-    changeThread(id, comment => ({ ...comment, ...updates }));
+    changeThread(id, comment => ({
+      ...comment,
+      ...updates,
+      id: comment.id,
+      filePath: comment.filePath,
+    }));
   const deleteComment = (id: string) => changeThread(id, () => null);
 
   /**
@@ -79,7 +86,7 @@ export function createReviewStateCommands(
     changeThread(commentId, comment => ({
       ...comment,
       replies: comment.replies?.map(reply =>
-        reply.id === replyId ? { ...reply, ...updates } : reply
+        reply.id === replyId ? { ...reply, ...updates, id: reply.id } : reply
       ),
     }));
   };

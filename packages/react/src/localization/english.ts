@@ -265,6 +265,11 @@ export const ENGLISH = {
       other: 'Applied to {path}. Replaced {count} lines.',
     },
   },
+  'Line totals unavailable': 'Line totals unavailable',
+  'The host request failed.': 'The host request failed.',
+  'The host did not acknowledge saved feedback.': 'The host did not acknowledge saved feedback.',
+  'Saved feedback belongs to an earlier remote snapshot. The host must supply feedback for the current snapshot.':
+    'Saved feedback belongs to an earlier remote snapshot. The host must supply feedback for the current snapshot.',
   'Retry loading review': 'Retry loading review',
   'Retry loading saved feedback': 'Retry loading saved feedback',
   'The review could not be loaded. {detail}': 'The review could not be loaded. {detail}',
