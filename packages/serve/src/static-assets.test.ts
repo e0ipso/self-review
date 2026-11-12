@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createReviewSession } from '@self-review/core';
 import { createReviewServer, listenLoopback } from './server';
+import { createServeLifecycle } from './lifecycle';
 import { REQUEST_SHUTDOWN } from './request-admission';
 import { MAX_STATIC_ASSET_BYTES, STATIC_READ_CHUNK_BYTES, serveStatic } from './static-assets';
 
@@ -271,8 +272,8 @@ describe('bounded static file delivery', () => {
     async operation => {
       const failure = Object.assign(new Error('private filesystem detail'), { code: 'EIO' });
       if (operation === 'containment' || operation === 'root containment') {
-        const original = fs.realpathSync;
-        vi.spyOn(fs, 'realpathSync').mockImplementation((...args) => {
+        const original = fs.promises.realpath.bind(fs.promises);
+        vi.spyOn(fs.promises, 'realpath').mockImplementation(async (...args) => {
           if (args[0] === (operation === 'containment' ? path.join(root, 'index.html') : root))
             throw failure;
           return original(...args);
@@ -340,4 +341,101 @@ describe('bounded static file delivery', () => {
     expect(observed.readBytes).toBe(MAX_STATIC_ASSET_BYTES);
     expect(observed.largestRead).toBeLessThanOrEqual(STATIC_READ_CHUNK_BYTES);
   });
+});
+
+it('runs the deadline during pending containment I/O and retains admission until it settles', async () => {
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  server = makeServer(50);
+  ({ url } = await listenLoopback(server));
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  releaseCleanup.push(release);
+  const realpath = fs.promises.realpath.bind(fs.promises);
+  let entered = false;
+  vi.spyOn(fs.promises, 'realpath').mockImplementation(async (...args) => {
+    if (args[0] === root) {
+      entered = true;
+      await pending;
+    }
+    return realpath(...args);
+  });
+  const opened = vi.spyOn(fs.promises, 'open');
+  const reading = fetch(url).catch(error => error);
+  await vi.waitFor(() => expect(entered).toBe(true));
+  await vi.waitFor(() => expect(reportDiagnostic).toHaveBeenCalledOnce());
+  await reading;
+  expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(
+    expect.stringMatching(/^\[serve\] Request deadline exceeded: kind=read elapsedMs=\d+$/)
+  );
+  expect((await config()).status).toBe(503);
+  const exit = vi.fn();
+  let expire!: () => void;
+  const lifetime = createServeLifecycle({
+    exit,
+    scheduleDeadline: run => {
+      expire = run;
+      return () => {};
+    },
+  });
+  lifetime.attach(server);
+  lifetime.stop(143);
+  expire();
+  expect(exit).not.toHaveBeenCalled();
+  let drained = false;
+  const shutdown = server[REQUEST_SHUTDOWN]().then(() => {
+    drained = true;
+  });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  expect(drained).toBe(false);
+  release();
+  await shutdown;
+  await vi.waitFor(() => expect(exit).toHaveBeenCalledExactlyOnceWith(143));
+  expect(opened).not.toHaveBeenCalled();
+  expect(reportDiagnostic).toHaveBeenCalledOnce();
+});
+
+it('retains an opened descriptor through cancelled containment recheck and deferred close', async () => {
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  server = makeServer(50);
+  ({ url } = await listenLoopback(server));
+  let releaseMetadata!: () => void;
+  const metadata = new Promise<void>(resolve => {
+    releaseMetadata = resolve;
+  });
+  releaseCleanup.push(releaseMetadata);
+  let releaseClose!: () => void;
+  const closing = new Promise<void>(resolve => {
+    releaseClose = resolve;
+  });
+  releaseCleanup.push(releaseClose);
+  let closeStarted = false;
+  const observed = observeFile(path.join(root, 'index.html'), undefined, async () => {
+    closeStarted = true;
+    await closing;
+  });
+  const realpath = fs.promises.realpath.bind(fs.promises);
+  let calls = 0;
+  vi.spyOn(fs.promises, 'realpath').mockImplementation(async (...args) => {
+    if (args[0] === root && ++calls === 2) await metadata;
+    return realpath(...args);
+  });
+  const reading = fetch(url).catch(error => error);
+  await vi.waitFor(() => expect(reportDiagnostic).toHaveBeenCalledOnce());
+  await reading;
+  expect(observed.handle).toBeDefined();
+  expect(closeStarted).toBe(false);
+  expect((await config()).status).toBe(503);
+  releaseMetadata();
+  await vi.waitFor(() => expect(closeStarted).toBe(true));
+  expect((await config()).status).toBe(503);
+  expect(observed.closed).toBe(false);
+  releaseClose();
+  await vi.waitFor(async () => expect((await config()).status).toBe(200));
+  expect(observed.closed).toBe(true);
+  expect(observed.readBytes).toBe(0);
+  expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(
+    expect.stringMatching(/^\[serve\] Request deadline exceeded: kind=read elapsedMs=\d+$/)
+  );
 });

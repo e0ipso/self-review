@@ -39,6 +39,59 @@ export function registerLifecycleHandlers(
   messages: DesktopLocalization = createDesktopLocalization()
 ): void {
   const receipts = new PublicationReceipts();
+  // A discard event expresses intent, never acknowledgement. Retain it only for
+  // this publication's peer and load, and join admitted work before closing.
+  let activeSave: {
+    current: () => void;
+    pending: boolean;
+    committed: boolean;
+    close: boolean;
+    receiptProtocol: boolean;
+  } | null = null;
+  const closeRecovered = (owner: NonNullable<typeof activeSave>) => {
+    if (activeSave !== owner || owner.pending || !owner.close || controller.mayQuit) return;
+    try {
+      owner.current();
+    } catch {
+      return;
+    }
+    if (owner.committed) controller.saveSucceeded();
+    else controller.discard();
+    desktop.operations.releaseCompletion();
+    void shutdown(0, owner.committed ? 'saved' : 'discard');
+  };
+  const ownSave = (current: () => void, receiptProtocol = false) => {
+    const review = desktop.review;
+    const payload = review.diffData;
+    const output = desktop.output;
+    const outputPath = output.path;
+    const owner = {
+      pending: true,
+      receiptProtocol,
+      committed: false,
+      close: false,
+      current: () => {
+        current();
+        if (
+          desktop.review !== review ||
+          review.diffData !== payload ||
+          desktop.output !== output ||
+          output.path !== outputPath
+        )
+          throw new Error('The publication owner has changed.');
+      },
+    };
+    activeSave = owner;
+    return owner;
+  };
+  const trackSave = <T>(owner: NonNullable<typeof activeSave>, work: Promise<T>): Promise<T> => {
+    const settled = () => {
+      owner.pending = false;
+      closeRecovered(owner);
+    };
+    void work.then(settled, settled);
+    return work;
+  };
   const recordFailure = (error: unknown, current: () => void): ReviewSaveResult => {
     const failure = describeSaveFailure(error, desktop.output.path, messages);
     const result: ReviewSaveResult = {
@@ -65,7 +118,8 @@ export function registerLifecycleHandlers(
       }
       const prepare = captureDesktopPublication(desktop.review, desktop.output.path);
       receipts.clearFailure();
-      return desktop.operations.complete(
+      const owner = ownSave(current, true);
+      const work = desktop.operations.complete(
         async signal => {
           current();
           const result = await saveReview({
@@ -87,13 +141,16 @@ export function registerLifecycleHandlers(
               current
             );
           }
-          // Publication has committed. A stale peer cannot turn success into a retryable failure.
+          // Record commit before delivery. Stale peers still cannot receive or consume it.
+          owner.committed = true;
+          const receipt = receipts.saved(owner.current);
           current();
-          return receipts.saved(current);
+          return receipt;
         },
         false,
         () => controller.phase === 'saving'
       );
+      return trackSave(owner, work);
     }
   );
   boundary.onCommand(IPC.REVIEW_SAVE_RECEIVED, stringArgument, (_event, token) => {
@@ -110,25 +167,42 @@ export function registerLifecycleHandlers(
     if (controller.phase !== 'reviewing' || desktop.operations.finishing) return;
     const prepare = captureDesktopPublication(desktop.review, desktop.output.path);
     const state = desktop.review.reviewState;
-    return desktop.operations.complete(async signal => {
-      current();
-      const result = await saveAndQuit({
-        controller,
-        messages,
-        takeState: () => (state ? prepare(state) : null),
-        publish: state => publication.publish(state, signal),
-        reportFailure: failure => presentation.reportSaveFailure(window, failure),
-        quit: () => {
-          void shutdown(0, 'saved');
-        },
-      });
-      if (result === 'failed') {
+    const owner = ownSave(current);
+    return trackSave(
+      owner,
+      desktop.operations.complete(async signal => {
         current();
-        window.webContents.send(IPC.REVIEW_SAVE_FAILED);
-      }
-    });
+        const result = await saveAndQuit({
+          controller,
+          messages,
+          takeState: () => (state ? prepare(state) : null),
+          publish: async state => {
+            await publication.publish(state, signal);
+            owner.committed = true;
+          },
+          reportFailure: failure => presentation.reportSaveFailure(window, failure),
+          quit: () => {
+            void shutdown(0, 'saved');
+          },
+        });
+        if (result === 'failed') {
+          current();
+          window.webContents.send(IPC.REVIEW_SAVE_FAILED);
+        }
+      })
+    );
   });
   boundary.onCommand(IPC.APP_DISCARD_AND_QUIT, noArgument, event => {
+    if (
+      activeSave &&
+      (controller.phase === 'saving' || activeSave.receiptProtocol) &&
+      (activeSave.pending || activeSave.committed)
+    ) {
+      activeSave.current();
+      activeSave.close = true;
+      closeRecovered(activeSave);
+      return;
+    }
     if (controller.phase !== 'reviewing') return;
     const current = boundary.capture(event);
     return desktop.operations.complete(async () => {

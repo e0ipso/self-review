@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as http from 'node:http';
 import { once } from 'node:events';
-import { containPath, isUnavailablePathError } from './contained-path';
+import { containPathAsync, isUnavailablePathError } from './contained-path';
 import { SECURITY_HEADERS, sendError } from './http-transport';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -48,12 +48,6 @@ export async function serveStatic(
     return;
   }
   const relative = decoded === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
-  const resolved = containPath(clientDir, relative);
-  if (resolved === null) {
-    sendError(res, 404, 'not found');
-    return;
-  }
-
   const controller = new AbortController();
   const abort = () => controller.abort(new Error('Static delivery cancelled.'));
   options.signal?.addEventListener('abort', abort, { once: true });
@@ -63,20 +57,28 @@ export async function serveStatic(
   let file: fs.promises.FileHandle | undefined;
   try {
     signal.throwIfAborted();
+    const resolved = await containPathAsync(clientDir, relative, { signal });
+    signal.throwIfAborted();
+    if (resolved === null) {
+      sendError(res, 404, 'not found');
+      return;
+    }
     file = await fs.promises.open(
       resolved,
       fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
     );
     signal.throwIfAborted();
     const stat = await file.stat();
+    signal.throwIfAborted();
     const named = await fs.promises.lstat(resolved);
+    signal.throwIfAborted();
     // Recheck containment and inode after opening. Never reopen the file for reading.
     if (
       !stat.isFile() ||
       stat.dev !== named.dev ||
       stat.ino !== named.ino ||
       named.isSymbolicLink() ||
-      containPath(clientDir, relative) !== resolved ||
+      (await containPathAsync(clientDir, relative, { signal })) !== resolved ||
       (await fs.promises.realpath(resolved)) !== resolved
     ) {
       sendError(res, 404, 'not found');

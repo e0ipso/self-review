@@ -78,3 +78,48 @@ it('accepts canonically valid reviews at the collection and text boundaries', ()
     /limits/
   );
 });
+
+it.each(['cycle', 'depth', 'width', 'text', 'sparse'])(
+  'preflights Apply %s extensions before invoking its decoder',
+  async kind => {
+    const { suggestionRequest } = await import('./ipc-boundary');
+    const extension: Record<string, unknown> = {};
+    if (kind === 'cycle') extension.self = extension;
+    if (kind === 'depth') {
+      let nested: unknown = null;
+      for (let i = 0; i < 66; i++) nested = { nested };
+      extension.value = nested;
+    }
+    if (kind === 'width') for (let i = 0; i < MAX_IPC_VALUES; i++) extension[i] = null;
+    if (kind === 'text') extension.value = 'x'.repeat(11 * 1024 * 1024);
+    if (kind === 'sparse') extension.value = new Array(MAX_IPC_COLLECTION_ITEMS + 1);
+    // Malformed known fields would normally fail in the canonical decoder first.
+    expect(() => suggestionRequest({ extension })).toThrow(/limits|Cyclic/);
+  }
+);
+
+it('admits both maximum supported Apply snippets, extensions and their original aliases', async () => {
+  const { suggestionRequest } = await import('./ipc-boundary');
+  const { MAX_SOURCE_FILE_BYTES } = await import('../../packages/core/src/input-budgets');
+  const request = {
+    filePath: 'a.txt',
+    lineRange: { side: 'new', start: 1, end: 1, extension: 'kept' },
+    suggestion: {
+      originalCode: 'a'.repeat(MAX_SOURCE_FILE_BYTES),
+      proposedCode: 'b'.repeat(MAX_SOURCE_FILE_BYTES),
+      extension: { accepted: true },
+    },
+    extension: { alsoKept: [1, 2, 3] },
+  };
+  expect(suggestionRequest(request)).toBe(request);
+  expect(suggestionRequest(request).suggestion).toBe(request.suggestion);
+  expect(suggestionRequest(request).lineRange).toBe(request.lineRange);
+});
+
+it('checks the Apply text boundary without the smaller review-state cap', async () => {
+  const { preflightApplyMessage, MAX_IPC_APPLY_TEXT_BYTES } = await import('./ipc-review-budget');
+  preflightApplyMessage('a'.repeat(MAX_IPC_APPLY_TEXT_BYTES / 2));
+  expect(() => preflightApplyMessage('a'.repeat(MAX_IPC_APPLY_TEXT_BYTES / 2 + 1))).toThrow(
+    /limits/
+  );
+});

@@ -638,3 +638,41 @@ it('bounds status inspection and ignores its late saved receipt without resendin
   f.unmount();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('keeps a void recovery-close request visibly waiting without claiming host acknowledgement', async () => {
+  const f = fixture();
+  const discardAndQuit = vi.fn();
+  f.replaceAPI({ ...f.api, discardAndQuit });
+  fireEvent.click(screen.getByText('Finish'));
+  await act(async () => f.publication.reject(new Error('reply lost')));
+  fireEvent.click(screen.getByText('Discard & Quit'));
+  expect(discardAndQuit).toHaveBeenCalledOnce();
+  expect(screen.getByText(/Close requested. Waiting for the host/)).toBeTruthy();
+  expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(true);
+  act(() => {
+    f.save();
+    f.edit();
+  });
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+  expect(screen.getByText('Unviewed')).toBeTruthy();
+  fireEvent.click(screen.getByText('Request close again'));
+  expect(discardAndQuit).toHaveBeenCalledTimes(2);
+  expect(f.api.acknowledgeReviewSave).not.toHaveBeenCalled();
+});
+
+it('offers close recovery after receiving a saved receipt when its void acknowledgement is lost', async () => {
+  const f = fixture();
+  const discardAndQuit = vi.fn();
+  f.replaceAPI({ ...f.api, discardAndQuit });
+  fireEvent.click(screen.getByText('Finish'));
+  await act(async () => f.publication.resolve({ status: 'saved', receipt: 'published' }));
+  expect(f.api.acknowledgeReviewSave).toHaveBeenCalledExactlyOnceWith('published');
+  expect(screen.getByText(/The review was saved. Waiting for the window to close/)).toBeTruthy();
+  expect(screen.getByText('Check publication status')).toBeTruthy();
+  fireEvent.click(screen.getByText('Discard & Quit'));
+  expect(discardAndQuit).toHaveBeenCalledOnce();
+  expect(screen.getByText(/Close requested. Waiting for the host/)).toBeTruthy();
+  expect(screen.getByTestId('desktop-review-interaction').hasAttribute('inert')).toBe(true);
+  act(() => f.save());
+  expect(f.api.saveReview).toHaveBeenCalledOnce();
+});

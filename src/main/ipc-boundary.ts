@@ -6,7 +6,7 @@ import {
   decodeSuggestionApplyRequest,
   MAX_CONTEXT_LINES,
 } from '../../packages/core/src/review-request-validation';
-import { preflightReviewMessage } from './ipc-review-budget';
+import { preflightReviewMessage, preflightApplyMessage } from './ipc-review-budget';
 import { validateReviewState } from '../../packages/core/src/review-state-validation';
 import type {
   ExpandContextRequest,
@@ -156,6 +156,7 @@ export function expansionRequest(value: unknown): ExpandContextRequest {
   return value as ExpandContextRequest;
 }
 export function suggestionRequest(value: unknown): SuggestionApplyRequest {
+  preflightApplyMessage(value);
   const decoded = decodeSuggestionApplyRequest(value);
   if (!decoded.ok) throw new Error(decoded.error);
   return decoded.value;

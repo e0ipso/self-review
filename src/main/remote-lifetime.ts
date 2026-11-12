@@ -104,7 +104,9 @@ async function bounded(run: () => Promise<void>, timeoutMs: number): Promise<voi
       run().catch(() => console.error('[main] Remote cleanup failed')),
       new Promise<void>(resolve => {
         timer = setTimeout(() => {
-          console.error('[main] Remote cleanup deadline reached; exiting');
+          console.error(
+            '[main] Remote cleanup deadline reached; closing the window and waiting for owned cleanup'
+          );
           resolve();
         }, timeoutMs);
       }),

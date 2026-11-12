@@ -215,3 +215,54 @@ it('keeps remote cleanup owned through confirmation, resume drift, and guide loa
   await desktop.remote.dispose('done');
   expect(cleanup).toHaveBeenCalledOnce();
 });
+
+it('uses a supplied output inspector without probing a physical output path', async () => {
+  const { desktop, operations, plan } = fixture();
+  plan.output = { path: '/virtual/review.xml', origin: 'explicit' };
+  const inspectOutput = vi.fn(() => null);
+  Object.assign(operations, { inspectOutput });
+  await expect(initializeSession(desktop, undefined, async () => true, operations)).resolves.toBe(
+    true
+  );
+  expect(inspectOutput).toHaveBeenCalledWith(plan.output, desktop.review.attachmentOrigins);
+  expect(desktop.review.outputPathInfo).toEqual({
+    resolvedOutputPath: plan.output.path,
+    outputPathWritable: true,
+  });
+});
+
+it.each(['throw', 'reject'] as const)(
+  'keeps supplied output inspection committed with a %s reporter',
+  async mode => {
+    const { desktop, operations, plan } = fixture();
+    plan.output = { path: '/virtual/review.xml', origin: 'inherited', baseDir: '/virtual' };
+    operations.inspectOutput = vi.fn(async () => ({
+      code: 'permission-denied' as const,
+      message: 'read only',
+    }));
+    operations.reportDiagnostic = vi.fn(() => {
+      if (mode === 'throw') throw new Error('report failed');
+      return Promise.reject(new Error('report failed'));
+    });
+    await expect(initializeSession(desktop, undefined, async () => true, operations)).resolves.toBe(
+      true
+    );
+    expect(desktop.output).toBe(plan.output);
+    expect(desktop.review.outputPathInfo).toEqual({
+      resolvedOutputPath: plan.output.path,
+      outputPathWritable: false,
+    });
+    expect(operations.reportDiagnostic).toHaveBeenCalledExactlyOnceWith(
+      '[main] Output path check (permission-denied): read only'
+    );
+  }
+);
+
+it('does not consult the physical filesystem for old providers omitting output inspection', async () => {
+  const { desktop, operations, plan } = fixture();
+  plan.output = { path: '/virtual/review.xml', origin: 'explicit' };
+  await expect(initializeSession(desktop, undefined, async () => true, operations)).resolves.toBe(
+    true
+  );
+  expect(desktop.review.outputPathInfo?.outputPathWritable).toBe(true);
+});

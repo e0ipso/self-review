@@ -68,18 +68,21 @@ type ReviewStateValidator = (value: unknown) => ReviewState;
 
 export function reviewStateValidatorFor(engine: {
   validateReviewState?: ReviewStateValidator;
+  ReviewXmlError?: typeof ReviewXmlError;
 }): ReviewStateValidator {
-  return engine.validateReviewState ?? validateBundledReviewState;
+  if (engine.validateReviewState) return engine.validateReviewState;
+  const ErrorType = engine.ReviewXmlError ?? ReviewXmlError;
+  return value => validateBundledReviewState(value, ErrorType);
 }
 
-function validateBundledReviewState(value: unknown): ReviewState {
+function validateBundledReviewState(value: unknown, ErrorType: typeof ReviewXmlError): ReviewState {
   try {
     return validateReviewState(value);
   } catch (error) {
     // The bundled subpath has its own class in published serve. Keep callers'
     // instanceof checks tied to the installed root, in both ESM and CommonJS.
     if (error instanceof BundledXmlError) {
-      throw new ReviewXmlError(error.code, error.message, {
+      throw new ErrorType(error.code, error.message, {
         details: error.details,
         cause: error.cause,
       });
@@ -100,8 +103,19 @@ export function requestContractFor(engine: RequestContract) {
   };
 }
 
-/** One explicit service contract for startup, request validation and execution. */
-export function resolveServeEngine(engine: typeof core) {
+/** Only capabilities selected here are required. Extra root members retain their
+ * inferred types and identity, including the original complete Core namespace. */
+export type ServeEngineCapabilities = ApplyEngine &
+  StartupEngine &
+  RequestContract & {
+    ReviewXmlError: typeof core.ReviewXmlError;
+    recordResumedAttachments: typeof core.recordResumedAttachments;
+    validateReviewState?: ReviewStateValidator;
+    adoptResumeDocument?: typeof core.adoptResumeDocument;
+    commitLoadedReview?: typeof core.commitLoadedReview;
+  } & CoreCapabilityShape;
+
+function selectServeEngine<T extends ServeEngineCapabilities>(engine: T) {
   return {
     core: engine,
     commitLoadedReview:
@@ -114,7 +128,15 @@ export function resolveServeEngine(engine: typeof core) {
     adoptResume: resumeAdopterFor(engine),
   };
 }
-export type ServeEngine = ReturnType<typeof resolveServeEngine>;
+// The final overload preserves the original ReturnType as well as call-site
+// inference. The alias adds no forwarding call or runtime ownership.
+export const resolveServeEngine: {
+  <T extends ServeEngineCapabilities>(engine: T): ReturnType<typeof selectServeEngine<T>>;
+  (engine: typeof core): ReturnType<typeof selectServeEngine<typeof core>>;
+} = selectServeEngine;
+
+/** Original complete-root type remains available for existing consumers. */
+export type ServeEngine = ReturnType<typeof resolveServeEngine<typeof core>>;
 export const installedServeEngine = resolveServeEngine(core);
 
 export interface CoreCapabilityShape {

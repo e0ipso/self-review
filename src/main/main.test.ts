@@ -380,3 +380,27 @@ it('disposes its owned update service before shutdown and prevents late cache de
   expect(readUpdate()).toBeNull();
   expect(request.eventNames()).toEqual([]);
 });
+
+it('closes the window at the drain deadline but retains admitted desktop cleanup before exit', async () => {
+  await import('./main');
+  await vi.waitFor(() => expect(harness.createWindow).toHaveBeenCalledOnce());
+  const win = harness.createWindow.mock.results[0].value;
+  const completion = deferred<void>();
+  const reading = harness.operations!.read(() => completion.promise).catch(error => error);
+  await Promise.resolve();
+  vi.useFakeTimers();
+  try {
+    harness.signals.SIGTERM();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(win.isDestroyed()).toBe(true);
+    expect(process.exit).not.toHaveBeenCalled();
+    completion.resolve();
+    await reading;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(process.exit).toHaveBeenCalledExactlyOnceWith(0);
+  } finally {
+    completion.resolve();
+    await reading;
+    vi.useRealTimers();
+  }
+});

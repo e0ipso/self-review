@@ -162,6 +162,12 @@ export class DesktopOperations {
     this.completing = false;
   }
 
+  /** After the window-close deadline, hard exit must still join every admitted
+   * operation, including native I/O and descriptor cleanup that ignored abort. */
+  settleForExit(): Promise<void> {
+    return Promise.allSettled([...this.pending]).then(() => {});
+  }
+
   dispose(reason: string, timeoutMs = 10_000): Promise<void> {
     if (this.disposal) return this.disposal;
     this.lifetime.abort(new Error(reason));
@@ -173,7 +179,9 @@ export class DesktopOperations {
           Promise.allSettled(pending),
           new Promise<void>(resolve => {
             cancelTimer = this.scheduler.schedule(() => {
-              console.error('[main] Operation drain deadline reached; exiting');
+              console.error(
+                '[main] Operation drain deadline reached; closing the window and waiting for owned work'
+              );
               resolve();
             }, timeoutMs);
           }),

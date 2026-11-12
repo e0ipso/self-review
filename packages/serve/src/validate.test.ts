@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { containPathAsync } from './contained-path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -106,6 +107,30 @@ describe('containPath', () => {
   it('returns null when the root does not exist', () => {
     expect(containPath(path.join(tmp, 'no-such-root'), 'x')).toBeNull();
   });
+});
+
+it('keeps async physical containment aligned with the original sync API', async () => {
+  for (const [base, candidate] of [
+    [root, '.'],
+    [root, root],
+    [root, 'src/index.ts'],
+    [root, '../outside/secret.txt'],
+    [root, 'src/../../outside/secret.txt'],
+    [root, '%2E%2E%2F'],
+    [root, '%252E%252E%252F'],
+    [root, 'link-out'],
+    [root, 'link-out/secret.txt'],
+    [root, 'link-in/index.ts'],
+    [root, 'src/gone.ts'],
+    [root, 'link-in/gone.ts'],
+    [root, 'link-out/missing.txt'],
+    [root, '../repo-evil'],
+    [root, path.join(tmp, 'repo-evil', 'x.txt')],
+    [path.join(tmp, 'repo-alias'), 'src/index.ts'],
+    [path.join(tmp, 'no-such-root'), 'x'],
+  ]) {
+    expect(await containPathAsync(base, candidate)).toBe(containPath(base, candidate));
+  }
 });
 
 describe('parseExpandContextBody', () => {

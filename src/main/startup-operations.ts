@@ -10,6 +10,9 @@ import {
 } from '../../packages/core/src/startup';
 import { bootstrapRemoteDiff } from '../../packages/core/src/remote-mode';
 import { loadGuide } from '../../packages/core/src/guide-loader';
+import { inspectOutputPath } from '../../packages/core/src/review-publisher';
+import { publishOptionsFor } from '../../packages/core/src/startup';
+import type { ReviewOutputTarget } from '../../packages/core/src/review-publisher';
 import type { ReviewSession } from '../../packages/core/src/review-session';
 import { loadResumeDocumentAsync } from './resume-document-loader';
 
@@ -33,6 +36,14 @@ async function prepare(cwd: string, signal: AbortSignal) {
 export type StartupPlan = Awaited<ReturnType<typeof prepare>>;
 export interface StartupOperations {
   prepare: typeof prepare;
+  /** Advisory only. Old providers may omit inspection; supplied effects never fall back to disk. */
+  inspectOutput?: (
+    output: ReviewOutputTarget,
+    attachmentOrigins: ReviewSession['attachmentOrigins']
+  ) =>
+    | Pick<NonNullable<ReturnType<typeof inspectOutputPath>>, 'code' | 'message'>
+    | null
+    | Promise<Pick<NonNullable<ReturnType<typeof inspectOutputPath>>, 'code' | 'message'> | null>;
   loadLocal: (
     plan: StartupPlan,
     cwd: string,
@@ -55,6 +66,8 @@ export interface StartupOperations {
 }
 export const defaultStartupOperations: StartupOperations = {
   prepare,
+  inspectOutput: (output, origins) =>
+    inspectOutputPath(output.path, publishOptionsFor(output, origins)),
   loadLocal: (plan, cwd, signal) => {
     if (plan.source.mode === 'remote')
       throw new Error('Remote startup requires its lifetime owner.');
