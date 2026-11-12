@@ -33,40 +33,47 @@ export function useOptionalDiffNavigation() {
 export function DiffNavigationProvider({ children }: { children: ReactNode }) {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const portalContainer = usePortalContainer();
-  const files = useRef(new Map<string, HTMLElement>());
+  const files = useRef(new Map<string, Set<HTMLElement>>());
   const intersections = useRef(new Map<Element, number>());
   const observer = useRef<IntersectionObserver | null>(null);
   const chooseActive = useCallback(() => {
     let path: string | null = null;
     let largest = 0;
-    files.current.forEach((element, candidate) => {
-      const ratio = intersections.current.get(element) ?? 0;
-      if (ratio > largest) {
-        largest = ratio;
-        path = candidate;
-      }
+    files.current.forEach((elements, candidate) => {
+      elements.forEach(element => {
+        const ratio = intersections.current.get(element) ?? 0;
+        if (ratio > largest) {
+          largest = ratio;
+          path = candidate;
+        }
+      });
     });
     setActiveFilePath(path);
   }, []);
   const registerFileElement = useCallback((path: string, element: HTMLElement) => {
-    const previous = files.current.get(path);
-    if (previous && previous !== element) {
-      observer.current?.unobserve(previous);
-      intersections.current.delete(previous);
+    let elements = files.current.get(path);
+    if (!elements) {
+      elements = new Set();
+      files.current.set(path, elements);
     }
-    files.current.set(path, element);
+    elements.add(element);
     observer.current?.observe(element);
   }, []);
   const unregisterFileElement = useCallback(
     (path: string, element: HTMLElement) => {
       observer.current?.unobserve(element);
       intersections.current.delete(element);
-      if (files.current.get(path) === element) files.current.delete(path);
+      const elements = files.current.get(path);
+      elements?.delete(element);
+      if (elements?.size === 0) files.current.delete(path);
       chooseActive();
     },
     [chooseActive]
   );
-  const getFileElement = useCallback((path: string) => files.current.get(path) ?? null, []);
+  const getFileElement = useCallback(
+    (path: string) => files.current.get(path)?.values().next().value ?? null,
+    []
+  );
   const scrollToFile = useCallback(
     (path: string) => {
       const reduced =
@@ -83,7 +90,9 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
     const tracked = new IntersectionObserver(
       entries => {
         if (observer.current !== tracked) return;
-        const registered = new Set(files.current.values());
+        const registered = new Set(
+          Array.from(files.current.values()).flatMap(elements => Array.from(elements))
+        );
         entries.forEach(entry => {
           if (registered.has(entry.target as HTMLElement))
             intersections.current.set(
@@ -101,7 +110,7 @@ export function DiffNavigationProvider({ children }: { children: ReactNode }) {
     );
     observer.current = tracked;
     intersections.current.clear();
-    files.current.forEach(element => tracked.observe(element));
+    files.current.forEach(elements => elements.forEach(element => tracked.observe(element)));
     return () => {
       tracked.disconnect();
       if (observer.current === tracked) observer.current = null;

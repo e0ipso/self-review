@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import { useReviewSessionId, useReviewSnapshotId } from '@self-review/react';
+import { useReviewSessionId, useReviewSnapshotId, useInteractionLock } from '@self-review/react';
 import type { ReviewPanelHandle, ReviewSaveSnapshot, ReviewAdapter } from '@self-review/react';
 import { ServeRequestError } from './request-error';
 
@@ -52,30 +52,11 @@ export function useReviewSubmission(
     setStatus('reviewing');
     setFailure(null);
   }, []);
+  useInteractionLock(pending);
   useEffect(() => {
     live.current = true;
-    const block = (event: Event) => {
-      if (
-        !pending.current ||
-        (event.target instanceof Element && event.target.closest('[data-save-recovery]'))
-      )
-        return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    };
-    const events = [
-      'keydown',
-      'click',
-      'beforeinput',
-      'input',
-      'change',
-      'submit',
-      'trigger-line-comment',
-    ];
-    events.forEach(name => window.addEventListener(name, block, true));
     return () => {
       live.current = false;
-      events.forEach(name => window.removeEventListener(name, block, true));
     };
   }, []);
   useEffect(() => {

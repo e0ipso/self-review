@@ -1,3 +1,4 @@
+import { applyRefusalSummary } from '../../localization/apply-refusal';
 import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useState, useLayoutEffect, useRef } from 'react';
 import type { LineRange, Suggestion, SuggestionApplyOutcome } from '@self-review/types';
@@ -91,6 +92,9 @@ function OwnedSuggestionApplyControl({
   }
 
   const applied = outcome?.status === 'applied';
+  const refusalKey =
+    outcome?.status === 'refused' ? applyRefusalSummary(outcome.reason) : undefined;
+  const refusalSummary = refusalKey ? t(refusalKey) : undefined;
 
   // The clone is deleted when the review ends, so the reviewed files are not
   // a destination. Either the session says so up front, or the host said so
@@ -217,7 +221,12 @@ function OwnedSuggestionApplyControl({
               {t('Applied suggestion', { path: outcome.filePath, count: outcome.replacedLines })}
             </span>
           ) : (
-            <span>{t('Not applied. {detail}', { detail: outcome.detail })}</span>
+            <span>
+              {t('Not applied. {detail}', { detail: outcome.detail })}
+              {refusalSummary && refusalSummary !== outcome.detail && (
+                <span className='block'>{refusalSummary}</span>
+              )}
+            </span>
           )}
         </span>
       ) : (

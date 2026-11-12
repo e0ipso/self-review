@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocalization } from '../../localization/LocalizationContext';
 import UnifiedView, { type UnifiedViewProps } from './UnifiedView';
 import SplitView from './SplitView';
+import { effectiveDiffLayout } from './effective-layout';
 
 interface RawDiffContentProps extends UnifiedViewProps {
   viewMode: 'split' | 'unified';
@@ -23,9 +24,6 @@ export function RawDiffContent({ viewMode, ...props }: RawDiffContentProps) {
         {t('No changes to display')}
       </div>
     );
-  const View =
-    viewMode === 'split' && file.changeType !== 'added' && file.changeType !== 'deleted'
-      ? SplitView
-      : UnifiedView;
+  const View = effectiveDiffLayout(viewMode, file.changeType) === 'split' ? SplitView : UnifiedView;
   return <View {...props} />;
 }

@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { localContentUrlTransform } from '../../utils/passive-content';
 import remarkGfm from 'remark-gfm';
 import type { Reply } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { useReviewCommands } from '../../context/ReviewContext';
 import { Button } from '../ui/button';
 import { Pencil, Trash2, Bot, User } from 'lucide-react';
 import ReplyInput from './ReplyInput';
@@ -35,7 +35,7 @@ export interface ReplyDisplayProps {
  */
 export default function ReplyDisplay({ commentId, reply }: ReplyDisplayProps) {
   const { t } = useLocalization();
-  const { deleteReply } = useReview();
+  const { deleteReply } = useReviewCommands();
   const [isEditing, setIsEditing] = useState(false);
 
   if (isEditing) {

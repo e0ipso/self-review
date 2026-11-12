@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../context/ReviewContext', () => ({
   useOptionalApplySession: () => null,
   useOptionalSnapshotKey: () => '',
-  useReview: () => ({
+  useReviewCommands: () => ({
     addReply: mocks.addReply,
     updateReply: mocks.updateReply,
   }),

@@ -1,7 +1,6 @@
 import React, {
   createContext,
   useContext,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -25,6 +24,8 @@ import type {
 } from '@self-review/types';
 import { useReviewStateOperations } from '../hooks/useReviewState';
 import { useReviewHost } from '../hooks/useReviewHost';
+import { useSessionCommands, type ReviewCommands } from './review-commands';
+import { projectReviewContext } from './review-compatibility';
 import { useConfiguration } from './ConfigContext';
 import { useAdapter } from './ReviewAdapterContext';
 import type { ReviewAdapter } from '../adapter';
@@ -107,20 +108,6 @@ export interface ReviewContextValue {
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
 const SessionStoreContext = createContext<ReviewSessionStore | null>(null);
-type ReviewCommands = Pick<
-  ReviewContextValue,
-  | 'addComment'
-  | 'editComment'
-  | 'deleteComment'
-  | 'addReply'
-  | 'updateReply'
-  | 'deleteReply'
-  | 'toggleViewed'
-  | 'expandFileContext'
-  | 'updateFileHunks'
-  | 'setApplyDestination'
-  | 'isCurrentSession'
->;
 const CommandsContext = createContext<ReviewCommands | null>(null);
 
 export function useReview() {
@@ -257,7 +244,8 @@ function ReviewSessionProvider({
     store,
     adapter,
     initialFiles !== undefined,
-    initialComments
+    initialComments,
+    { files: initialFiles, source: initialSource }
   );
   const loadingState = useMemo(
     () => ({
@@ -268,20 +256,6 @@ function ReviewSessionProvider({
     }),
     [state.loadError, state.resumeError, retryLoad, retryResume]
   );
-  const staticFiles = useRef(initialFiles);
-  useLayoutEffect(() => {
-    if (!initialFiles || initialFiles === staticFiles.current) return;
-    staticFiles.current = initialFiles;
-    store.dispatch({
-      type: 'payload',
-      payload: { files: initialFiles, source: initialSource ?? state.diffSource },
-      initialComments,
-      resumePending: !!adapter?.loadResumedReview,
-    });
-  }, [initialFiles, initialSource, initialComments, store, state.diffSource, adapter]);
-  useEffect(() => {
-    store.dispatch({ type: 'hydrate', comments: initialComments });
-  }, [initialComments, store]);
 
   const diffFiles = useMemo(
     () =>
@@ -290,75 +264,17 @@ function ReviewSessionProvider({
         : state.allDiffFiles.filter(file => !file.isUntracked),
     [state.allDiffFiles, config.showUntracked]
   );
-  const commands = useMemo<ReviewCommands>(() => {
-    const owner = state.sessionId;
-    const snapshot = state.snapshotId;
-    const current = () =>
-      store.getSnapshot().sessionId === owner && store.getSnapshot().snapshotId === snapshot;
-    return {
-      addComment: review.addComment,
-      editComment: review.updateComment,
-      deleteComment: review.deleteComment,
-      addReply: review.addReply,
-      updateReply: review.updateReply,
-      deleteReply: review.deleteReply,
-      toggleViewed: review.toggleViewed,
-      isCurrentSession: current,
-      updateFileHunks: (filePath, hunks) => {
-        if (current()) store.dispatch({ type: 'hunks', filePath, hunks });
-      },
-      setApplyDestination: destination => {
-        if (current()) store.dispatch({ type: 'destination', destination });
-      },
-      expandFileContext: async (filePath, contextLines) => {
-        if (!adapter?.expandContext || !current()) return null;
-        try {
-          const result = await adapter.expandContext({ filePath, contextLines });
-          return current() && result
-            ? { hunks: result.hunks, totalLines: result.totalLines }
-            : null;
-        } catch (error) {
-          console.error('[ReviewContext] Failed to expand context:', error);
-          return null;
-        }
-      },
-    };
-  }, [
-    store,
-    adapter,
-    state.sessionId,
-    state.snapshotId,
-    review.addComment,
-    review.updateComment,
-    review.deleteComment,
-    review.addReply,
-    review.updateReply,
-    review.deleteReply,
-    review.toggleViewed,
-  ]);
+  const commands = useSessionCommands(store, adapter, review, state.sessionId, state.snapshotId);
   const applyOperations = useMemo(createApplyOperations, [state.sessionId, state.snapshotId]);
-  const value: ReviewContextValue = {
-    ...commands,
-    files: state.files,
+  const value = projectReviewContext(
+    store,
+    state,
     diffFiles,
-    diffSource: state.diffSource,
-    setDiffFiles: files => store.dispatch({ type: 'diff-files', files }),
-    getCommentsForFile: review.getCommentsForFile,
-    getCommentsForLine: review.getCommentsForLine,
-    remoteDrift: state.resumedReview?.remoteDrift ?? null,
-    importDiagnostics: state.resumedReview?.importDiagnostics ?? [],
-    remote: state.remote,
-    diagnostics: state.diagnostics,
-    isLargePayload: state.isLargePayload,
-    applyDestination: state.applyDestination,
-    reviewedPaths: state.reviewedPaths,
-    sessionId: state.sessionId,
-    snapshotId: state.snapshotId,
-    loadError: state.loadError,
-    resumeError: state.resumeError,
+    commands,
+    review,
     retryLoad,
-    retryResume,
-  };
+    retryResume
+  );
   return (
     <SessionStoreContext.Provider value={store}>
       <ApplyOperationsContext.Provider value={applyOperations}>

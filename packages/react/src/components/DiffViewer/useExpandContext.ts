@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { DiffFile, DiffHunk } from '@self-review/types';
 import {
   useReviewCommands,
@@ -15,6 +15,8 @@ import {
 } from './diff-utils';
 import { useAdapter } from '../../context/ReviewAdapterContext';
 import { expandContext } from '../../read-service';
+import { planExpansion } from './expansion-plan';
+import { useExpansionScrollAnchor } from './useExpansionScrollAnchor';
 
 interface UseExpandContextParams {
   file: DiffFile;
@@ -103,44 +105,7 @@ export function useExpandContext({
     );
   }
 
-  // Scroll compensation: keep the user looking at the same code after expansion.
-  // We anchor on a specific diff line that existed before expansion:
-  //   - Expand up: the first line of the hunk (it will shift down as new lines appear above)
-  //   - Expand down/all: the last line of the hunk (stays in place, new lines appear below)
-  // We record that line's position relative to the scroll container before expansion,
-  // then after React commits the new DOM, find the same line and adjust scrollTop.
-  const scrollCompensationRef = useRef<{
-    anchorLineNumber: number;
-    anchorSide: 'old' | 'new';
-    anchorOffsetFromContainerTop: number;
-    scrollTop: number;
-  } | null>(null);
-
-  if (ownerChanged) scrollCompensationRef.current = null;
-
-  useLayoutEffect(() => {
-    const compensation = scrollCompensationRef.current;
-    if (!compensation) return;
-    scrollCompensationRef.current = null;
-
-    const scrollContainer = sectionRef.current?.closest<HTMLElement>(
-      '[data-scroll-container="diff"]'
-    );
-    if (!scrollContainer || !sectionRef.current) return;
-
-    // Find the anchor line element in the updated DOM
-    const selector = `[data-line-number="${compensation.anchorLineNumber}"][data-line-side="${compensation.anchorSide}"]`;
-    const anchorEl = sectionRef.current.querySelector<HTMLElement>(selector);
-    if (!anchorEl) return;
-
-    const containerRect = scrollContainer.getBoundingClientRect();
-    const anchorRect = anchorEl.getBoundingClientRect();
-    const currentOffset = anchorRect.top - containerRect.top;
-    const drift = currentOffset - compensation.anchorOffsetFromContainerTop;
-    if (Math.abs(drift) > 1) {
-      scrollContainer.scrollTop = compensation.scrollTop + drift;
-    }
-  }, [file.hunks]);
+  const scrollAnchor = useExpansionScrollAnchor(sectionRef, file.hunks, owner);
 
   // Stable refs for callback dependencies
   const expandLoadingRef = useRef(expandLoading);
@@ -164,124 +129,17 @@ export function useExpandContext({
 
       const currentHunks = fileHunksRef.current;
 
-      // --- Update per-hunk budgets for the clicked direction ---
-      // Map current hunkIndex back to original hunk indices via change ranges.
-      const currentHunk = currentHunks[hunkIndex];
-      const findOriginalIndices = (h: DiffHunk): number[] => {
-        const indices: number[] = [];
-        for (let i = 0; i < originalRanges.length; i++) {
-          const range = originalRanges[i];
-          for (const line of h.lines) {
-            if (line.type === 'context') continue;
-            if (
-              range.oldRange &&
-              line.oldLineNumber !== null &&
-              line.oldLineNumber >= range.oldRange[0] &&
-              line.oldLineNumber <= range.oldRange[1]
-            ) {
-              indices.push(i);
-              break;
-            }
-            if (
-              range.newRange &&
-              line.newLineNumber !== null &&
-              line.newLineNumber >= range.newRange[0] &&
-              line.newLineNumber <= range.newRange[1]
-            ) {
-              indices.push(i);
-              break;
-            }
-          }
-        }
-        return indices;
-      };
-
-      const STEP = 5;
-      const MAX_CONTEXT = 99999;
-
-      if (direction === 'up') {
-        // Increase `above` for the first original hunk in currentHunk
-        const indices = findOriginalIndices(currentHunk);
-        if (indices.length > 0) {
-          budgets[indices[0]].above += STEP;
-        }
-      } else if (direction === 'down') {
-        // The hunk ABOVE the bar:
-        //   bottom bar: hunkIndex IS the hunk above
-        //   between bar: hunkIndex is the hunk below, so above = hunkIndex - 1
-        const aboveIdx = position === 'bottom' ? hunkIndex : hunkIndex - 1;
-        const aboveHunk = currentHunks[Math.max(0, aboveIdx)];
-        const indices = findOriginalIndices(aboveHunk);
-        if (indices.length > 0) {
-          budgets[indices[indices.length - 1]].below += STEP;
-        }
-      } else {
-        // 'all' — expand both sides fully
-        if (position === 'top') {
-          const indices = findOriginalIndices(currentHunk);
-          if (indices.length > 0) budgets[indices[0]].above = MAX_CONTEXT;
-        } else if (position === 'bottom') {
-          const indices = findOriginalIndices(currentHunk);
-          if (indices.length > 0) budgets[indices[indices.length - 1]].below = MAX_CONTEXT;
-        } else {
-          // between: expand below of hunk above AND above of hunk below
-          const aboveHunk = currentHunks[hunkIndex - 1];
-          const aboveIndices = findOriginalIndices(aboveHunk);
-          if (aboveIndices.length > 0)
-            budgets[aboveIndices[aboveIndices.length - 1]].below = MAX_CONTEXT;
-          const belowIndices = findOriginalIndices(currentHunk);
-          if (belowIndices.length > 0) budgets[belowIndices[0]].above = MAX_CONTEXT;
-        }
-      }
-
-      // --- Pick scroll anchor ---
-      const scrollContainer = sectionRef.current?.closest<HTMLElement>(
-        '[data-scroll-container="diff"]'
+      const plan = planExpansion(
+        currentHunks,
+        originalRanges,
+        budgets,
+        direction,
+        hunkIndex,
+        position
       );
-      if (scrollContainer && sectionRef.current && currentHunks.length > 0) {
-        let anchorLine: { lineNumber: number; side: 'old' | 'new' } | null = null;
-
-        const getFirstLine = (hi: number) => {
-          const line = currentHunks[hi].lines[0];
-          return line.type === 'deletion'
-            ? { lineNumber: line.oldLineNumber!, side: 'old' as const }
-            : { lineNumber: line.newLineNumber!, side: 'new' as const };
-        };
-        const getLastLine = (hi: number) => {
-          const lines = currentHunks[hi].lines;
-          const line = lines[lines.length - 1];
-          return line.type === 'deletion'
-            ? { lineNumber: line.oldLineNumber!, side: 'old' as const }
-            : { lineNumber: line.newLineNumber!, side: 'new' as const };
-        };
-
-        if (direction === 'up') {
-          anchorLine = getFirstLine(hunkIndex);
-        } else if (direction === 'down') {
-          const aboveIdx = position === 'bottom' ? hunkIndex : hunkIndex - 1;
-          anchorLine = getLastLine(Math.max(0, aboveIdx));
-        } else {
-          anchorLine = getFirstLine(hunkIndex);
-        }
-
-        if (anchorLine) {
-          const selector = `[data-line-number="${anchorLine.lineNumber}"][data-line-side="${anchorLine.side}"]`;
-          const anchorEl = sectionRef.current.querySelector<HTMLElement>(selector);
-          if (anchorEl) {
-            const containerRect = scrollContainer.getBoundingClientRect();
-            const anchorRect = anchorEl.getBoundingClientRect();
-            scrollCompensationRef.current = {
-              anchorLineNumber: anchorLine.lineNumber,
-              anchorSide: anchorLine.side,
-              anchorOffsetFromContainerTop: anchorRect.top - containerRect.top,
-              scrollTop: scrollContainer.scrollTop,
-            };
-          }
-        }
-      }
-
-      // --- Fetch (if needed) and trim ---
-      const maxBudget = Math.max(...budgets.flatMap(b => [b.above, b.below]), 0);
+      hunkBudgetsRef.current = plan.budgets;
+      scrollAnchor.capture(currentHunks, direction, hunkIndex, position);
+      const { maxBudget } = plan;
 
       const requestOwner = ownerRef.current;
       const controller = new AbortController();
@@ -315,7 +173,7 @@ export function useExpandContext({
           setExpandError(true);
           setExpandLoading(false);
           expandLoadingRef.current = false;
-          scrollCompensationRef.current = null;
+          scrollAnchor.clear();
           return;
         }
         rawHunks = result.hunks;
@@ -328,13 +186,13 @@ export function useExpandContext({
       }
 
       if (!current()) return;
-      const trimmed = trimHunkContext(rawHunks, originalRanges, budgets);
+      const trimmed = trimHunkContext(rawHunks, originalRanges, plan.budgets);
       updateFileHunks(filePath, trimmed);
       setTotalLines(newTotalLines);
       setExpandLoading(false);
       expandLoadingRef.current = false;
     },
-    [isExpandable, filePath, adapter, isCurrentSession, updateFileHunks]
+    [isExpandable, filePath, adapter, isCurrentSession, updateFileHunks, scrollAnchor]
   );
 
   return { expandLoading, expandError, totalLines, handleExpandContext };

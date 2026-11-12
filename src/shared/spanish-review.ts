@@ -3,6 +3,42 @@ import type { LocalizedMessage } from '../../packages/react/src/localization/for
 
 /** Built-in translations for the shared review UI used by desktop. */
 export const SPANISH_REVIEW = {
+  'Front matter too complex to display: it refers to itself. The document body is shown below.':
+    'Los metadatos se refieren a sí mismos. El cuerpo del documento se muestra debajo.',
+  'Front matter too complex to display: it is nested too deeply. The document body is shown below.':
+    'Los metadatos están demasiado anidados para mostrarlos. El cuerpo del documento se muestra debajo.',
+  'Front matter too complex to display: it has too many values. The document body is shown below.':
+    'Los metadatos tienen demasiados valores para mostrarlos. El cuerpo del documento se muestra debajo.',
+  null: 'nulo',
+  'A line range is required to apply this suggestion.':
+    'Se necesita un intervalo de líneas para aplicar esta sugerencia.',
+  'Deleted lines cannot be applied to the working file.':
+    'Las líneas eliminadas no se pueden aplicar al archivo de trabajo.',
+  'The suggestion has an invalid line range.':
+    'La sugerencia tiene un intervalo de líneas no válido.',
+  'The destination must be an absolute path.': 'El destino debe ser una ruta absoluta.',
+  'The destination does not exist.': 'El destino no existe.',
+  'The file path is outside the destination.': 'La ruta del archivo está fuera del destino.',
+  'Git control files cannot be changed.': 'Los archivos de control de Git no se pueden cambiar.',
+  'The destination file cannot be replaced safely.':
+    'El archivo de destino no se puede reemplazar de forma segura.',
+  'Replacing the file would change its owner.': 'Reemplazar el archivo cambiaría su propietario.',
+  'The file is missing from the destination.': 'El archivo no está en el destino.',
+  'The destination file could not be read.': 'No se pudo leer el archivo de destino.',
+  'The destination file is not valid UTF-8.': 'El archivo de destino no es UTF-8 válido.',
+  'The line range is outside the destination file.':
+    'El intervalo de líneas está fuera del archivo de destino.',
+  'The original code no longer matches the destination.':
+    'El código original ya no coincide con el destino.',
+  'The file changed while the suggestion was being applied.':
+    'El archivo cambió mientras se aplicaba la sugerencia.',
+  'The suggestion could not be written.': 'No se pudo escribir la sugerencia.',
+  'Choose a destination before applying this suggestion.':
+    'Elige un destino antes de aplicar esta sugerencia.',
+  'This review has no writable destination.': 'Esta revisión no tiene un destino de escritura.',
+  'This file is not in the reviewed diff.': 'Este archivo no está en el diff revisado.',
+  'The destination must be a directory.': 'El destino debe ser un directorio.',
+  'Choose a destination outside the temporary clone.': 'Elige un destino fuera del clon temporal.',
   'Add bold text (ctrl + b)': 'Añadir negrita (ctrl + b)',
   'Add italic text (ctrl + i)': 'Añadir cursiva (ctrl + i)',
   'Insert a quote (ctrl + q)': 'Insertar cita (ctrl + q)',

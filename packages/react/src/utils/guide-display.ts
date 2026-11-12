@@ -63,10 +63,12 @@ export function buildGuideDisplaySections(
     return [{ entries: files.map(file => ({ file })) }];
   }
 
-  const byPath = new Map<string, DiffFile>();
+  const byPath = new Map<string, DiffFile[]>();
   files.forEach(file => {
     const path = displayPath(file);
-    if (!byPath.has(path)) byPath.set(path, file);
+    const entries = byPath.get(path) ?? [];
+    entries.push(file);
+    byPath.set(path, entries);
   });
 
   const consumed = new Set<string>();
@@ -75,10 +77,10 @@ export function buildGuideDisplaySections(
   groups.forEach((group, groupIndex) => {
     const entries: GuideDisplayEntry[] = [];
     for (const guideFile of group.files) {
-      const file = byPath.get(guideFile.path);
-      if (!file || consumed.has(guideFile.path)) continue;
+      const matchingFiles = byPath.get(guideFile.path);
+      if (!matchingFiles || consumed.has(guideFile.path)) continue;
       consumed.add(guideFile.path);
-      entries.push({ file, description: guideFile.description });
+      matchingFiles.forEach(file => entries.push({ file, description: guideFile.description }));
     }
     if (entries.length === 0) return;
     sections.push({

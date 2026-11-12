@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useDiffReview, useNavigationReview, useReviewCommands } from '../context/ReviewContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 import { useGuide } from '../context/GuideContext';
+import { keyDiffEntries } from '../utils/diff-entry-keys';
 import { buildGuideDisplaySections } from '../utils/guide-display';
 import { Input } from './ui/input';
 import { Separator } from './ui/separator';
@@ -32,8 +33,12 @@ export default function FileTree() {
   // Ordering/annotation layer: flat mode (or no guide) yields a single
   // headerless section with the files untouched — today's tree by construction.
   const displaySections = useMemo(
-    () => buildGuideDisplaySections(filteredFiles, guide?.groups ?? null, mode),
-    [filteredFiles, guide, mode]
+    () =>
+      keyDiffEntries(
+        diffFiles,
+        buildGuideDisplaySections(filteredFiles, guide?.groups ?? null, mode)
+      ),
+    [diffFiles, filteredFiles, guide, mode]
   );
 
   return (
@@ -80,11 +85,11 @@ export default function FileTree() {
           const viewedCount = section.header
             ? progressPaths.filter(path => summaries.get(path)?.viewed).length
             : 0;
-          const entryNodes = section.entries.map(({ file, description }) => {
+          const entryNodes = section.entries.map(({ file, description, key }) => {
             const filePath = file.newPath || file.oldPath;
             return (
               <FileTreeEntry
-                key={filePath}
+                key={key}
                 file={file}
                 isActive={activeFilePath === filePath}
                 commentCount={summaries.get(filePath)?.commentCount ?? 0}

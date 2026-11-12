@@ -154,3 +154,24 @@ describe('buildGuideDisplaySections', () => {
     expect(sections).toEqual([]);
   });
 });
+
+it('retains every duplicate display path in a guided group', () => {
+  const first = makeFile('shared', 'original');
+  const second = makeFile('shared');
+  const duplicateFiles = [first, second];
+  const result = buildGuideDisplaySections(
+    duplicateFiles,
+    [
+      {
+        name: 'Read both',
+        implicit: false,
+        files: [{ path: 'shared', description: 'Shared path' }],
+      },
+    ],
+    'guided'
+  );
+  expect(result.flatMap(section => section.entries.map(entry => entry.file))).toEqual(
+    duplicateFiles
+  );
+  expect(result[0].entries.map(entry => entry.description)).toEqual(['Shared path', 'Shared path']);
+});

@@ -6,7 +6,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from 'react';
-import type { DiffLoadPayload, ReviewComment } from '@self-review/types';
+import type { DiffFile, DiffSource, DiffLoadPayload, ReviewComment } from '@self-review/types';
 import { ReviewLifecycleContext } from '../context/ReviewLifecycleContext';
 import type { ReviewAdapter } from '../adapter';
 import {
@@ -24,8 +24,26 @@ export function useReviewHost(
   store: ReviewSessionStore,
   adapter: ReviewAdapter | null,
   staticDiff: boolean,
-  initialComments?: ReviewComment[]
+  initialComments?: ReviewComment[],
+  staticInput?: { files?: DiffFile[]; source?: DiffSource }
 ) {
+  const inputFiles = staticInput?.files;
+  const inputSource = staticInput?.source;
+  const staticFiles = useRef(inputFiles);
+  useLayoutEffect(() => {
+    if (!inputFiles || inputFiles === staticFiles.current) return;
+    staticFiles.current = inputFiles;
+    store.dispatch({
+      type: 'payload',
+      payload: { files: inputFiles, source: inputSource ?? store.getSnapshot().diffSource },
+      initialComments,
+      resumePending: !!adapter?.loadResumedReview,
+    });
+  }, [inputFiles, inputSource, initialComments, store, adapter]);
+  useEffect(() => {
+    store.dispatch({ type: 'hydrate', comments: initialComments });
+  }, [initialComments, store]);
+
   const notifyIdentity = useContext(ReviewLifecycleContext);
   const mounted = useRef(false);
   const pushVersion = useRef(0);
