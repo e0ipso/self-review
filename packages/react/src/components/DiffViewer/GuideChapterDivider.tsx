@@ -1,6 +1,6 @@
 import { useLocalization } from '../../localization/LocalizationContext';
 import React from 'react';
-import { useReview } from '../../context/ReviewContext';
+import { ViewedReview } from '../../context/ViewedReview';
 import { getGuideAccent } from '../../utils/guide-accents';
 import type { GuideDisplayEntry, GuideDisplayHeader } from '../../utils/guide-display';
 
@@ -22,19 +22,27 @@ export interface GuideChapterDividerProps {
  * with a large outlined stop numeral, the group's rationale, and a dot
  * strip locating this stop on the route.
  */
-export default function GuideChapterDivider({
+export default function GuideChapterDivider(props: GuideChapterDividerProps) {
+  return (
+    <ViewedReview match='first'>
+      {viewedPaths => <ChapterDivider {...props} viewedPaths={viewedPaths} />}
+    </ViewedReview>
+  );
+}
+
+function ChapterDivider({
   header,
   index,
   totalStops,
   implicitLast,
   entries,
-}: GuideChapterDividerProps) {
+  viewedPaths,
+}: GuideChapterDividerProps & { viewedPaths: ReadonlySet<string> }) {
   const { t, locale } = useLocalization();
-  const { files } = useReview();
 
   const viewedCount = entries.filter(({ file }) => {
     const path = file.newPath || file.oldPath;
-    return files.find(f => f.path === path)?.viewed;
+    return viewedPaths.has(path);
   }).length;
 
   return (

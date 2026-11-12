@@ -9,10 +9,13 @@ import {
 
 export interface ReviewHandle {
   /** Return the current rendered review, including while it is loading. This read neither
-   * checks readiness nor reserves mutations. Use beginSave for publication.
+   * checks readiness nor reserves mutations, and preserves the current source/files references.
+   * Use beginSave for publication; a custom handle without it leaves coordination to its host.
    */
   getReviewState: () => ReviewState;
-  /** Atomically capture a ready review and reserve mutations. Throws until resume succeeds. */
+  /** Atomically capture a ready review and reserve mutations. Refuses unfinished drafts and
+   * pending/failed diff or resume. First-party handles supply it; older custom handles may omit it.
+   */
   beginSave?: () => ReviewSaveSnapshot;
 }
 

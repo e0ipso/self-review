@@ -81,9 +81,11 @@ subscriptions and late responses cannot mutate a replacement session. Existing a
 session's diff, because the existing resume payload contains no session identifier.
 
 `submitReview` retains its host-specific legacy meaning: desktop state handoff and HTTP disk
-publication. Prefer `handoffReview` or `publishReview` when the completion guarantee matters.
-Neither mutation nor publication uses cancellable read handling, and an unknown write outcome is
-never turned into an automatically retryable read error.
+publication. Prefer `handoffReview` or `publishReview` when the completion guarantee matters. A
+legacy completion resolving does not give the library a stronger guarantee than the host's own
+contract. `handoffReview` acknowledges receipt in host memory; `publishReview` acknowledges durable
+publication. Neither mutation nor publication uses cancellable read handling, and an unknown write
+outcome is never turned into an automatically retryable read error.
 
 `ConfigAdapter` remains exported for source compatibility but is deprecated. Components never
 consumed it. Load configuration in the host and pass the result through a config prop or provider.
@@ -93,6 +95,27 @@ Prefer focused customization hooks: `useAppearance`, `useCategories`, `useOutput
 and `useConfig` remain compatibility APIs. `initialConfig` is merged once per provider mount;
 `config` remains its deprecated initial-only alias. Existing required and optional adapter members,
 legacy context exports and initial state semantics are preserved.
+
+## Capturing a review
+
+`ReviewHandle.getReviewState()` is a diagnostic read of the current rendered state. It returns while
+diff loading or resume is pending or has failed, and while a save owns mutations. It neither checks
+readiness nor reserves mutations, and retains the current source and file references. This supports
+existing embedding code and read-only inspection. Reading it does not finish drafts or prove that
+saved feedback has arrived.
+
+For publication, use `ReviewHandle.beginSave?.()` or `useReviewSaveTransaction().begin()`. The
+first-party desktop and HTTP flows use this transaction. It refuses unfinished drafts, pending or
+failed loading/resume and competing saves, then captures from the synchronous owner and reserves
+mutations. Check `capture.current()` before accepting a late host reply. A known refusal can release
+`capture.unlock()` for a manual retry. Success and unknown outcomes retain ownership; inspect an
+unknown outcome before explicitly unlocking or repeating a write.
+
+`beginSave` remains optional on the public handle. A custom handle that only implements
+`getReviewState` still works for inspection; its host owns readiness, draft handling and capture
+coordination if it publishes through that older contract. `submitReview` also remains optional and
+keeps its existing host-specific return behavior. These legacy calls alone cannot promise an atomic
+capture or a durable publication acknowledgement.
 
 ## Preview composition
 
@@ -274,6 +297,11 @@ their references. Canonical file/review selectors use store-local indexes; body 
 not render the file tree or progress controls. The exported `FileSectionHeaderProps.comments`
 remains required for existing deep-import callers; the internal presentation receives only its
 count.
+
+Guide chapter counts and route completion use separate cached viewed-path sets. Chapter counts use
+the first canonical entry for a path; route completion accepts any viewed duplicate. Comment edits,
+replies and comment counts do not change these snapshots. Context-only legacy guide compositions
+retain the same duplicate rules through the complete review context.
 
 One compatibility bridge accepts `toggle-all-sections` with `{ expanded: boolean }` and
 `toggle-all-comments` with `{ collapsed: boolean }`. Dispatch at the owning

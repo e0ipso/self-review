@@ -106,6 +106,32 @@ const bodies = (owner: ReturnType<ReviewSaveTransaction['begin']>) =>
   owner.state.files.flatMap(f => f.comments.map(c => c.body));
 
 describe('atomic save readiness', () => {
+  it('keeps the legacy snapshot readable while loading, pending resume and locked publication', async () => {
+    const loaded = deferred<DiffLoadPayload>();
+    const resumed = deferred<ResumeLoadPayload>();
+    const f = mount({
+      adapter: { loadDiff: () => loaded.promise, loadResumedReview: () => resumed.promise },
+    });
+    const legacy: ReviewHandle = { getReviewState: () => f.handle.current!.getReviewState() };
+    expect(legacy.beginSave).toBeUndefined();
+    expect(legacy.getReviewState().source.type).toBe('loading');
+    expect(legacy.getReviewState().files).toEqual([]);
+    await act(async () => loaded.resolve(payload));
+    const pending = legacy.getReviewState();
+    expect(pending.source).toBe(payload.source);
+    expect(pending.files).toBe(f.review().files);
+    expect(() => f.begin()).toThrow(/loading/);
+    // Reading never reserves mutations, even before saved feedback is acknowledged.
+    act(() => f.review().addComment('a', null, 'edited while pending', 'note', null));
+    await act(async () => resumed.resolve({ comments: [] }));
+    const ready = legacy.getReviewState();
+    const capture = f.begin();
+    expect(capture.state.files).toBe(ready.files);
+    expect(legacy.getReviewState().files).toBe(ready.files);
+    expect(pending.files[0].comments).toEqual([]);
+    capture.unlock();
+  });
+
   it('refuses capture after the diff arrives but before resumed feedback, without dropping either feedback or edits', async () => {
     const resumed = deferred<ResumeLoadPayload>();
     const f = mount({

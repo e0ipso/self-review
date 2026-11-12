@@ -2,7 +2,7 @@ import { useLocalization } from '../localization/LocalizationContext';
 import React, { useState } from 'react';
 import { Map as MapIcon } from 'lucide-react';
 import { useGuide } from '../context/GuideContext';
-import { useReview } from '../context/ReviewContext';
+import { ViewedReview } from '../context/ViewedReview';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 import { getGuideAccent } from '../utils/guide-accents';
 import GuideOverviewDialog from './DiffViewer/GuideOverviewDialog';
@@ -16,16 +16,20 @@ import GuideOverviewDialog from './DiffViewer/GuideOverviewDialog';
  * scroll position live via the diff navigation context's active file.
  */
 export default function GuideRouteHud() {
+  return (
+    <ViewedReview match='any'>{viewedPaths => <RouteHud viewedPaths={viewedPaths} />}</ViewedReview>
+  );
+}
+
+function RouteHud({ viewedPaths }: { viewedPaths: ReadonlySet<string> }) {
   const { t } = useLocalization();
   const { guide, mode } = useGuide();
-  const { files } = useReview();
   const { activeFilePath, scrollToFile } = useDiffNavigationContext();
   const [overviewOpen, setOverviewOpen] = useState(false);
 
   if (mode !== 'guided' || !guide || guide.groups.length === 0) return null;
 
   const groups = guide.groups;
-  const viewedPaths = new Set(files.filter(f => f.viewed).map(f => f.path));
   const currentIndex = groups.findIndex(group =>
     group.files.some(file => file.path === activeFilePath)
   );
