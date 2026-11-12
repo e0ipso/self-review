@@ -63,7 +63,11 @@ export function registerRemoteOpenHandler(
                 desktop.output.path,
                 config,
                 payload.files.map(file => file.newPath || file.oldPath),
-                { cwd: desktop.cwd, reportDiagnostic: message => console.error(message) }
+                {
+                  cwd: desktop.cwd,
+                  reportDiagnostic: message => console.error(message),
+                  signal: AbortSignal.any([signal, abort.signal]),
+                }
               )
             : null;
           current();

@@ -56,3 +56,7 @@ export { commitLoadedReview } from './review-session';
 export type { LocalReviewDependencies, LocalReviewLoadOptions } from './startup';
 export { resolveLocalSourceIdentityAsync } from './source-identity';
 export type { LocalSourcePaths } from './source-identity';
+export { loadGuide } from './guide-loader';
+export type { LoadGuideOptions, BoundedGuideReader } from './guide-loader';
+export { loadImage } from './review-content';
+export type { LoadImageOptions } from './review-content';
