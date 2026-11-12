@@ -297,3 +297,46 @@ emitter once, then formats diagnostics separately. Both public synchronous and a
 retain their patch bytes, structured data, omission wording and ordering, and cancellation
 checkpoints. `scripts/test/core-loaded-review.test.mjs` checks the additive capture API and the
 legacy bridge through both built ESM and CommonJS root/operations aliases.
+
+## Session Apply and attachment effects
+
+Synchronous `applySuggestionForSession(session, request, options?)` and asynchronous
+`applySuggestionForSessionAsync` share destination and final authorization checks. A selected
+destination redirected into a disposable clone is refused. Replacing the review, changing its
+identity or destination, or removing membership before the commit also refuses. The synchronous
+operation additionally accepts `fs?: FsLayer` through its optional effects argument. That layer owns
+all inspection, reads, staging and replacement, including legacy virtual descriptors without
+`readSync`; native methods never supplement it. A supplied `destinationInspection` retains its
+receiver. The async operation keeps its existing filesystem and inspection arguments and
+cancellation behavior. Neither operation changes the original session identity or payload aliases.
+
+These checks do not make portable rename a filesystem transaction. Another actor can still change
+names after the final check. If a parent directory moves after staging, path-based cleanup cannot
+rediscover the staged file in the moved directory. Ordinary failures remove staging, and a refusal
+never claims a committed replacement. Legacy synchronous reads can allocate a whole file and block
+until their adapter returns. Timers and promise races cannot interrupt that work.
+
+`readAttachment(session, reference, options?)` accepts an optional `attachmentReader` with one
+`readAssetFile(authorizedPath, { signal })` method, plus `reportDiagnostic`. The method retains its
+receiver and returns the existing `AttachmentReadResult`. Authorization against recorded origins or
+the current output asset directory always precedes provider access. Rejected references touch no
+provider. A supplied reader is authoritative; errors and refusals never cause a native retry. It
+must enforce no-follow ancestry and leaf opens, regular files and `MAX_IMAGE_BYTES` before
+allocation, preserve passive bytes, close acquired resources and honor cancellation. Core checks
+cancellation before invocation and after settlement. Calls already in progress cannot be preempted.
+Reporter throws and rejected promises cannot replace results. Omitted options retain native reads,
+stderr messages and typed results. Refusal diagnostics describe non-string inputs without traversing
+objects or calling `toJSON`; string labels are limited to 512 input characters before escaping.
+
+The attachment operation and its types are available from the focused operations entry point. Hosts
+must pass effects explicitly. Actual published Core 2.0.4 predates these options and ignores them;
+its native attachment, synchronous Apply, startup, resume and publication routes remain supported.
+Passing options alone cannot supply a virtual reader to that historical peer. Hosts must select a
+supported operation explicitly when requiring injected I/O; bundling effectful Core internals as a
+supposed pure helper would duplicate acquisition and error ownership. Keep the installed Core root
+and its error classes external. No minimum-version change is required for existing native hosts.
+
+`runFetchComments` forwards `temporaryClones` to real materialization, with receiver binding and
+cleanup ownership intact on success, failure and cancellation. `remote-mode` retains direct aliases
+for `mergeRemoteThreads`, `applyRemoteProvenance` and `computeRemoteDrift`; their implementation is
+pure policy in `remote-feedback`, independent of clone acquisition and disposal.

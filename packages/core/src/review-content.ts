@@ -96,6 +96,29 @@ export function recordResumedAttachments(
   return diagnostics;
 }
 
+/** Authorized asset reads only. Implementations enforce no-follow, regular-file and byte limits. */
+export interface AttachmentReader {
+  readAssetFile(
+    assetPath: string,
+    options: { signal?: AbortSignal }
+  ): Promise<AttachmentReadResult>;
+}
+
+export interface ReadAttachmentOptions {
+  signal?: AbortSignal;
+  /** Authoritative when supplied. Failures never retry through the native reader. */
+  attachmentReader?: AttachmentReader;
+  /** Defaults to stderr. Throwing or rejecting reporters cannot change the read outcome. */
+  reportDiagnostic?: DiagnosticReporter;
+}
+
+// Refusals accept unknown input. Do not invoke toJSON/getters or serialize an unbounded object.
+function refusedReferenceLabel(reference: unknown): string {
+  if (typeof reference === 'string') return JSON.stringify(reference.slice(0, 512));
+  if (reference === null) return 'null';
+  return `[${typeof reference}]`;
+}
+
 /**
  * Read one attachment by its `.self-review-assets/<name>` reference, never a path:
  * an imported one from its recorded origin, any other from the current output's asset
@@ -104,13 +127,14 @@ export function recordResumedAttachments(
 export async function readAttachment(
   session: Pick<ReviewSession, 'outputPathInfo' | 'attachmentOrigins'>,
   reference: unknown,
-  options: { signal?: AbortSignal } = {}
+  options: ReadAttachmentOptions = {}
 ): Promise<AttachmentReadResult> {
   const checkCancelled = () => {
     if (options.signal?.aborted)
       throw new CommandCancelledError('aborted', 'self-review', ['read-attachment']);
   };
   checkCancelled();
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
   const outputPath = session.outputPathInfo?.resolvedOutputPath;
   const currentAssetDir = outputPath ? path.join(path.dirname(outputPath), ASSET_DIR_NAME) : null;
   const assetPath = authorizeAttachmentReference(
@@ -119,7 +143,8 @@ export async function readAttachment(
     currentAssetDir
   );
   if (assetPath === null) {
-    console.error(`[attachment:read] Refused: ${JSON.stringify(reference)}`);
+    reportDiagnostic(`[attachment:read] Refused: ${refusedReferenceLabel(reference)}`);
+    checkCancelled();
     return {
       ok: false,
       reason: 'not-authorized',
@@ -128,14 +153,17 @@ export async function readAttachment(
   }
   let result: AttachmentReadResult;
   try {
-    result = await readAssetFile(assetPath, { signal: options.signal });
+    result = options.attachmentReader
+      ? await options.attachmentReader.readAssetFile(assetPath, { signal: options.signal })
+      : await readAssetFile(assetPath, { signal: options.signal });
   } catch (error) {
     checkCancelled();
     throw error;
   }
   checkCancelled();
   if (!result.ok) {
-    console.error(`[attachment:read] ${result.reason}: ${result.message}`);
+    reportDiagnostic(`[attachment:read] ${result.reason}: ${result.message}`);
+    checkCancelled();
   }
   return result;
 }
