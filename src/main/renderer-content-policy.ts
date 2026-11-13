@@ -2,10 +2,11 @@ import { shell, type WebContents } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Forge emits the entry under renderer/main_window and shared chunks/assets under renderer. */
+/** Forge emits renderer assets under .webpack, optionally inside an architecture directory. */
 function isBundledResource(resource: URL, entry: URL, rawUrl: string): boolean {
   if (entry.protocol !== 'file:' || entry.host || resource.host) return false;
-  if (!entry.pathname.endsWith('/.webpack/renderer/main_window/index.html')) return false;
+  if (!/\/\.webpack\/(?:[^/]+\/)?renderer\/main_window\/index\.html$/.test(entry.pathname))
+    return false;
   // Reject platform-dependent separators before decoding. URL parsing itself normalizes dot
   // segments; the decoded path comparison below still bounds the normalized result.
   if (rawUrl.split(/[?#]/, 1)[0].includes('\\') || /%2f|%5c|%00/i.test(rawUrl.split(/[?#]/, 1)[0]))

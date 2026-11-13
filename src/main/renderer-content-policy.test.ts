@@ -9,6 +9,32 @@ const entry =
 const bundle = 'file:///opt/Self%20Review/resources/app.asar/.webpack/renderer/';
 
 describe('automatic renderer resources', () => {
+  it.each(['x64', 'arm64'])('retains Forge resources in the %s output directory', arch => {
+    const renderer = `file:///opt/Self%20Review/resources/app.asar/.webpack/${arch}/renderer/`;
+    const packagedEntry = `${renderer}main_window/index.html`;
+    for (const url of [
+      packagedEntry,
+      `${renderer}main_window/index.js`,
+      `${renderer}main_window/index.css?v=1#style`,
+      `${renderer}assets/字%20体.woff2`,
+      `${renderer}42.chunk.js`,
+    ]) {
+      expect(isAllowedRendererRequest(url, packagedEntry), url).toBe(true);
+    }
+    for (const url of [
+      'file:///outside-private/not-reviewed.png',
+      `${renderer}../main/index.js`,
+      `${renderer.slice(0, -1)}-other/private.png`,
+      `${renderer}main_window/%2foutside.png`,
+      `${renderer}main_window/%5coutside.png`,
+      `${renderer}main_window/%00.png`,
+      `${bundle}main_window/index.js`,
+      'https://outside.test/private.png',
+    ]) {
+      expect(isAllowedRendererRequest(url, packagedEntry), url).toBe(false);
+    }
+  });
+
   it.each([
     'file:///outside-private/not-reviewed.png',
     `${bundle}../main/index.js`,
