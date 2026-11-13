@@ -53,48 +53,57 @@ const block: Prism.TokenObject = {
   },
 };
 
-Prism.languages.svelte = Prism.languages.extend('markup', {
-  tag: {
-    pattern: new RegExp(`<\\/?(?!\\d)[^\\s>/=$<%{}]+(?:\\s(?:\\s*${ATTRIBUTE})+)?\\s*\\/?>`),
-    greedy: true,
-    inside: {
-      tag: {
-        pattern: /^<\/?[^\s>/]+/,
-        inside: {
-          punctuation: /^<\/?/,
-          namespace: /^[^\s>/:]+:/,
+/**
+ * Registers `Prism.languages.svelte` once. A called function rather than an import-time
+ * side effect: the package declares no side-effect modules, so a bare `import './svelte-grammar'`
+ * is dropped from the built bundle.
+ */
+export function registerSvelteGrammar(): void {
+  if (Prism.languages.svelte) return;
+
+  Prism.languages.svelte = Prism.languages.extend('markup', {
+    tag: {
+      pattern: new RegExp(`<\\/?(?!\\d)[^\\s>/=$<%{}]+(?:\\s(?:\\s*${ATTRIBUTE})+)?\\s*\\/?>`),
+      greedy: true,
+      inside: {
+        tag: {
+          pattern: /^<\/?[^\s>/]+/,
+          inside: {
+            punctuation: /^<\/?/,
+            namespace: /^[^\s>/:]+:/,
+          },
         },
-      },
-      'svelte-block': block,
-      'language-javascript': expression,
-      'attr-value': {
-        pattern: new RegExp(`=\\s*(?:${QUOTED}|${UNQUOTED})`),
-        // Greedy so a quoted value reclaims any `{…}` the rule above already took out of it;
-        // a quote inside a brace value starts inside a token and is left alone.
-        greedy: true,
-        inside: {
-          punctuation: [
-            { pattern: /^=/, alias: 'attr-equals' },
-            { pattern: /^(\s*)["']|["']$/, lookbehind: true },
-          ],
-          'language-javascript': expression,
-          entity: markupEntity,
+        'svelte-block': block,
+        'language-javascript': expression,
+        'attr-value': {
+          pattern: new RegExp(`=\\s*(?:${QUOTED}|${UNQUOTED})`),
+          // Greedy so a quoted value reclaims any `{…}` the rule above already took out of it;
+          // a quote inside a brace value starts inside a token and is left alone.
+          greedy: true,
+          inside: {
+            punctuation: [
+              { pattern: /^=/, alias: 'attr-equals' },
+              { pattern: /^(\s*)["']|["']$/, lookbehind: true },
+            ],
+            'language-javascript': expression,
+            entity: markupEntity,
+          },
         },
-      },
-      punctuation: [/\/?>/, { pattern: /=/, alias: 'attr-equals' }],
-      'attr-name': {
-        pattern: /[^\s>/={}]+/,
-        inside: {
-          namespace: /^[^\s>/:]+:/,
+        punctuation: [/\/?>/, { pattern: /=/, alias: 'attr-equals' }],
+        'attr-name': {
+          pattern: /[^\s>/={}]+/,
+          inside: {
+            namespace: /^[^\s>/:]+:/,
+          },
         },
       },
     },
-  },
-});
+  });
 
-// Blocks and interpolations run before `tag`: a `<` inside an expression never starts a tag,
-// and the greedy tag rule still reclaims an attribute's `{…}` that was taken out first.
-Prism.languages.insertBefore('svelte', 'tag', {
-  'svelte-block': block,
-  'language-javascript': expression,
-});
+  // Blocks and interpolations run before `tag`: a `<` inside an expression never starts a tag,
+  // and the greedy tag rule still reclaims an attribute's `{…}` that was taken out first.
+  Prism.languages.insertBefore('svelte', 'tag', {
+    'svelte-block': block,
+    'language-javascript': expression,
+  });
+}

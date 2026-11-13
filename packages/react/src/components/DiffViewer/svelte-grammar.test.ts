@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import Prism from 'prismjs';
-import './svelte-grammar';
+import { registerSvelteGrammar } from './svelte-grammar';
+
+registerSvelteGrammar();
 
 interface FlatToken {
   type: string;
