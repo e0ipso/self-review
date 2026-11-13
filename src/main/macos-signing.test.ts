@@ -59,60 +59,79 @@ const workflow = parse(readFileSync(resolve('.github/workflows/release-darwin.ym
 };
 const steps = workflow.jobs.build.steps;
 const verification =
-  steps.find(step => step.name === 'Verify the signed and stapled archive contents')?.run ??
-  'exit 99';
-it('requires release mode and successful verification before making archives available to upload', () => {
-  expect(
-    steps.find(step => step.name === 'Sign and notarize macOS package')?.env
-      ?.SELF_REVIEW_MAC_RELEASE
-  ).toBe('1');
+  steps.find(step => step.name === 'Verify the archive contents')?.run ?? 'exit 99';
+it('builds without Apple credentials and verifies archives before making them available to upload', () => {
+  expect(steps.find(step => step.name === 'Build unsigned macOS package')?.run).toBe(
+    'npm run make'
+  );
+  expect(steps.some(step => step.env?.SELF_REVIEW_MAC_RELEASE === '1')).toBe(false);
+  expect(JSON.stringify(steps)).not.toContain('secrets.APPLE_');
   const verifyAt = steps.findIndex(step => step.run === verification);
   const uploadAt = steps.findIndex(step => step.uses?.startsWith('actions/upload-artifact@'));
   expect(verifyAt).toBeGreaterThan(0);
   expect(uploadAt).toBeGreaterThan(verifyAt);
   expect(steps[uploadAt].if).toBeUndefined();
   expect(workflow.jobs.upload.needs).toBe('build');
-  expect(steps.find(step => step.name === 'Remove signing material')?.if).toBe('always()');
   for (const step of steps.filter(step => step.run)) {
     expect(spawnSync('bash', ['-n'], { input: step.run, encoding: 'utf8' }).status).toBe(0);
   }
 });
 
-it.each(['', 'codesign', 'xcrun', 'spctl'])(
-  'gates archive verification on each macOS tool: %s',
-  failure => {
-    const root = mkdtempSync(join(tmpdir(), 'signing-command-'));
-    try {
-      mkdirSync(join(root, 'bin'));
-      mkdirSync(join(root, 'out/make/zip/darwin/arm64'), { recursive: true });
+it.each([
+  'valid',
+  'missing-archive',
+  'missing-application',
+  'multiple-applications',
+  'missing-executable',
+  'non-executable',
+  'ditto',
+  'plutil',
+])('validates unsigned archive contents: %s', fixture => {
+  const root = mkdtempSync(join(tmpdir(), 'macos-archive-'));
+  try {
+    mkdirSync(join(root, 'bin'));
+    mkdirSync(join(root, 'out/make/zip/darwin/arm64'), { recursive: true });
+    if (fixture !== 'missing-archive') {
       writeFileSync(join(root, 'out/make/zip/darwin/arm64/app.zip'), 'controlled archive');
-      for (const tool of ['ditto', 'codesign', 'xcrun', 'spctl']) {
-        writeFileSync(
-          join(root, 'bin', tool),
-          `#!/bin/bash
-if [ "$FAIL_TOOL" = "${tool}" ]; then exit 1; fi
-printf '%s\\n' '${tool}' >> "$TOOL_LOG"
-${tool === 'ditto' ? 'mkdir -p "$4/Self Review.app"' : tool === 'codesign' ? 'if [ "$1" = "--display" ]; then echo "flags=0x10000(runtime)"; fi' : 'exit 0'}
-`,
-          { mode: 0o700 }
-        );
-      }
-      const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', verification], {
-        cwd: root,
-        env: {
-          ...process.env,
-          PATH: `${root}/bin:${process.env.PATH}`,
-          RUNNER_TEMP: root,
-          APPLE_TEAM_ID: 'TEAM',
-          FAIL_TOOL: failure,
-          TOOL_LOG: join(root, 'tools.log'),
-        },
-        encoding: 'utf8',
-      });
-      expect(result.status, result.stderr).toBe(failure ? 1 : 0);
-      if (!failure) expect(readFileSync(join(root, 'tools.log'), 'utf8')).toContain('spctl');
-    } finally {
-      rmSync(root, { recursive: true, force: true });
     }
+    const app = join(root, 'fixture/Self Review.app/Contents');
+    mkdirSync(join(app, 'MacOS'), { recursive: true });
+    writeFileSync(join(app, 'Info.plist'), 'controlled plist');
+    if (fixture !== 'missing-executable') {
+      writeFileSync(join(app, 'MacOS/Self Review'), '#!/bin/sh\nexit 0\n', {
+        mode: fixture === 'non-executable' ? 0o600 : 0o700,
+      });
+    }
+    for (const tool of ['ditto', 'plutil']) {
+      writeFileSync(
+        join(root, 'bin', tool),
+        `#!/bin/bash
+set -e
+if [ "$FIXTURE" = "${tool}" ]; then exit 1; fi
+${
+  tool === 'ditto'
+    ? `mkdir -p "$4"
+if [ "$FIXTURE" != 'missing-application' ]; then cp -R "$FIXTURE_APPS/Self Review.app" "$4/"; fi
+if [ "$FIXTURE" = 'multiple-applications' ]; then mkdir -p "$4/Other.app"; fi`
+    : 'test -f "$6"\nprintf "Self Review\\n"'
+}
+`,
+        { mode: 0o700 }
+      );
+    }
+    const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', verification], {
+      cwd: root,
+      env: {
+        ...process.env,
+        PATH: `${root}/bin:${process.env.PATH}`,
+        RUNNER_TEMP: root,
+        FIXTURE: fixture,
+        FIXTURE_APPS: join(root, 'fixture'),
+      },
+      encoding: 'utf8',
+    });
+    expect(result.status, result.stderr).toBe(fixture === 'valid' ? 0 : 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
-);
+});

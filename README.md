@@ -536,34 +536,19 @@ See [docs/PRD.md](docs/PRD.md#7-configuration) for complete documentation.
 - **AI-native output.** The XML format is designed to be parsed by LLMs, with an XSD schema they can
   reference for structure.
 
-### macOS release signing
+### macOS packages and optional signing
 
-The macOS release workflow requires a Developer ID Application certificate and Apple notarization
-credentials. Configure these repository Actions secrets before dispatching a release:
+The macOS release workflow builds unsigned ZIP archives and requires no Apple credentials. Before
+uploading an archive, it checks that the ZIP contains exactly one application and the executable
+declared by its `Info.plist`.
 
-| Secret                         | Value                                                                                           |
-| ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `APPLE_CERTIFICATE_P12_BASE64` | Base64 of an exported Developer ID Application certificate and its private key in a `.p12` file |
-| `APPLE_CERTIFICATE_PASSWORD`   | Password protecting that `.p12`                                                                 |
-| `APPLE_SIGNING_IDENTITY`       | Full `Developer ID Application: ... (TEAMID)` identity from the certificate                     |
-| `APPLE_ID`                     | Apple Developer account email                                                                   |
-| `APPLE_APP_SPECIFIC_PASSWORD`  | App-specific password for notarization, not the account password                                |
-| `APPLE_TEAM_ID`                | Apple Developer team identifier                                                                 |
+For an optional local signed build, set `SELF_REVIEW_MAC_RELEASE=1`, `APPLE_SIGNING_KEYCHAIN`,
+`APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. Use an
+existing unlocked keychain with a Developer ID Application certificate. Xcode with `notarytool` and
+an enrolled Apple Developer account are required.
 
-The build imports the certificate into a temporary keychain and removes it on success or failure.
-`SELF_REVIEW_MAC_RELEASE=1` makes Forge require signing and notarization. The workflow supplies
-`APPLE_SIGNING_KEYCHAIN` as the temporary keychain path. Ordinary local development and Linux
-packaging remain unsigned and require no Apple credentials. To sign locally, explicitly set release
-mode and the five `APPLE_*` values consumed by `macos-signing.ts`, using an existing unlocked
-keychain. Xcode with `notarytool` and an enrolled Apple Developer account are required.
-
-Release signing enables hardened runtime and only the JIT entitlement needed by Electron's V8
-runtime. It adds no camera, microphone, USB, unsigned-memory, or library-validation exemptions.
-Forge notarizes and staples the app during packaging. Before any archive is uploaded, the workflow
-extracts each ZIP and verifies its complete code signature, expected team, hardened runtime flag,
-stapled ticket, and Gatekeeper acceptance. Missing credentials or failed verification stops the
-release. A Linux configuration or unit check does not establish macOS signature or notarization
-validity. See
+Signed builds enable hardened runtime and the JIT entitlement needed by Electron's V8 runtime. Forge
+notarizes and staples the app during packaging. See
 [Forge's macOS signing guide](https://www.electronforge.io/guides/code-signing/code-signing-macos)
 for certificate and notarization setup.
 
