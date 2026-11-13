@@ -46,6 +46,10 @@ import 'prismjs/components/prism-makefile';
 import 'prismjs/components/prism-git';
 import 'prismjs/components/prism-vim';
 import 'prismjs/components/prism-xml-doc';
+// Svelte (in-repo grammar; Prism 1.x ships none). Extends markup, embeds javascript.
+import { registerSvelteGrammar } from './svelte-grammar';
+
+registerSvelteGrammar();
 
 export interface SyntaxLineProps {
   content: string;

@@ -17,6 +17,7 @@ import {
   createMarkdownPayload,
   createRenderedHtmlPayload,
   createHostileContentPayload,
+  createSveltePayload,
   createGuideFixturePayload,
   createRemoteSession,
   defaultCategories,
@@ -32,7 +33,7 @@ import './styles.css';
  * read the review state when ready.
  *
  * URL parameters control behavior:
- * - ?fixture=empty|markdown|rendered-html|hostile-content
+ * - ?fixture=empty|markdown|rendered-html|hostile-content|svelte
  *                             — Select fixture dataset (default: full fixture)
  * - ?gitDiffArgs=...          — Pass gitDiffArgs to empty fixture
  * - ?categories=commenting    — Use commenting test categories (bug, nit, question)
@@ -88,6 +89,7 @@ function getFixturePayload(): DiffLoadPayload {
   if (fixture === 'markdown') return createMarkdownPayload();
   if (fixture === 'rendered-html') return createRenderedHtmlPayload();
   if (fixture === 'hostile-content') return createHostileContentPayload();
+  if (fixture === 'svelte') return createSveltePayload();
   const remote = getUrlParam('remote');
   if (remote === 'temporary' || remote === 'reused') {
     return { ...createFixturePayload(), remote: createRemoteSession(remote === 'temporary') };
