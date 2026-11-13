@@ -2,7 +2,7 @@
 id: 3
 group: "e2e"
 dependencies: [1, 2]
-status: "pending"
+status: "completed"
 created: 2026-11-13
 skills:
   - playwright-bdd

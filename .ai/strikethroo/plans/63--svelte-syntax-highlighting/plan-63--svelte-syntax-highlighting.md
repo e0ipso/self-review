@@ -207,9 +207,9 @@ No circular dependencies.
 - ✔️ Task 001: Svelte Prism grammar module, registration in SyntaxLine and grammar unit tests
 - ✔️ Task 002: Map the .svelte extension in both getLanguageFromPath copies, with tests
 
-### Phase 2: End-to-End Verification
+### ✅ Phase 2: End-to-End Verification
 **Parallel Tasks:**
-- Task 003: Webapp e2e scenario for Svelte highlighting on a dedicated fixture (depends on: 001, 002)
+- ✔️ Task 003: Webapp e2e scenario for Svelte highlighting on a dedicated fixture (depends on: 001, 002)
 
 ### Post-phase Actions
 
