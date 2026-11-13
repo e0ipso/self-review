@@ -112,6 +112,19 @@ Then(
   }
 );
 
+Then(
+  'no token in the file section for {string} should break its line',
+  async ({}, filePath: string) => {
+    const page = getPage();
+    const tokens = page.locator(`[data-testid="file-section-${filePath}"] .token`);
+    await expect(tokens.first()).toBeAttached({ timeout: 10000 });
+    // A token type that shares a name with a Tailwind display utility (`block`, `table`)
+    // would otherwise render as its own line.
+    const displays = await tokens.evaluateAll(els => els.map(el => getComputedStyle(el).display));
+    expect(displays.filter(display => display !== 'inline')).toEqual([]);
+  }
+);
+
 Then('addition lines should have a green background', async () => {
   const page = getPage();
   const additionLines = page.locator('[class*="bg-emerald"]');

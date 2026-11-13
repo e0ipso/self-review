@@ -37,7 +37,8 @@ const expression: Prism.TokenObject = {
  * Every block tag, current and future: `{` + sigil (`#`, `:`, `/`, `@`) + first word is the
  * keyword and the rest is JavaScript, so `{:else if x}` keeps `if x` as the expression. The
  * closing brace is optional so a block whose expression continues on the next line still
- * shows its keyword.
+ * shows its keyword. Registered as `svelte-block`, not `block`: Prism renders the token type
+ * as a class, and Tailwind's `.block` utility would make every block tag `display: block`.
  */
 const block: Prism.TokenObject = {
   pattern: new RegExp(`\\{[#:/@][a-z]+\\b(?:[^{}]|\\{[^{}]*\\})*(?:\\}|$)`),
@@ -64,7 +65,7 @@ Prism.languages.svelte = Prism.languages.extend('markup', {
           namespace: /^[^\s>/:]+:/,
         },
       },
-      block,
+      'svelte-block': block,
       'language-javascript': expression,
       'attr-value': {
         pattern: new RegExp(`=\\s*(?:${QUOTED}|${UNQUOTED})`),
@@ -94,6 +95,6 @@ Prism.languages.svelte = Prism.languages.extend('markup', {
 // Blocks and interpolations run before `tag`: a `<` inside an expression never starts a tag,
 // and the greedy tag rule still reclaims an attribute's `{…}` that was taken out first.
 Prism.languages.insertBefore('svelte', 'tag', {
-  block,
+  'svelte-block': block,
   'language-javascript': expression,
 });

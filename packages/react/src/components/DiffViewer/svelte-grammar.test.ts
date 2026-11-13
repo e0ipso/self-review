@@ -38,7 +38,7 @@ function pairs(line: string): [string, string][] {
 /** The keyword tokens that are direct children of a Svelte block tag. */
 function blockKeywords(line: string): string[] {
   return tokens(line)
-    .filter(t => t.type === 'keyword' && t.parents[t.parents.length - 1] === 'block')
+    .filter(t => t.type === 'keyword' && t.parents[t.parents.length - 1] === 'svelte-block')
     .map(t => t.text);
 }
 
@@ -136,7 +136,7 @@ describe('svelte grammar', () => {
       ['{@debug user}', ['@debug']],
     ];
     for (const [line, keywords] of cases) {
-      expect(pairs(line)[0], line).toEqual(['block', line]);
+      expect(pairs(line)[0], line).toEqual(['svelte-block', line]);
       expect(blockKeywords(line), line).toEqual(keywords);
     }
 
@@ -146,12 +146,12 @@ describe('svelte grammar', () => {
     expect(elseIf).toContainEqual({
       type: 'language-javascript',
       text: ' if x > 0',
-      parents: ['block'],
+      parents: ['svelte-block'],
     });
     expect(elseIf).toContainEqual({
       type: 'keyword',
       text: 'if',
-      parents: ['block', 'language-javascript'],
+      parents: ['svelte-block', 'language-javascript'],
     });
 
     // A `<` in a block expression does not start a tag.
@@ -168,12 +168,12 @@ describe('svelte grammar', () => {
       ['{@const total = a + b}', ['@const']],
     ];
     for (const [line, keywords] of cases) {
-      expect(pairs(line)[0], line).toEqual(['block', line]);
+      expect(pairs(line)[0], line).toEqual(['svelte-block', line]);
       expect(blockKeywords(line), line).toEqual(keywords);
     }
 
     const attach = pairs('<div {@attach tooltip(text)}>');
-    expect(attach).toContainEqual(['block', '{@attach tooltip(text)}']);
+    expect(attach).toContainEqual(['svelte-block', '{@attach tooltip(text)}']);
     expect(attach).toContainEqual(['keyword', '@attach']);
   });
 

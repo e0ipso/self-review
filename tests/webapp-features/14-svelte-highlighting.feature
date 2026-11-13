@@ -10,3 +10,4 @@ Feature: Svelte syntax highlighting
     Then the file section for "src/lib/Counter.svelte" should contain highlighted code lines
     And the file section for "src/lib/Counter.svelte" should contain a "keyword" token with text "#if"
     And the file section for "src/lib/Counter.svelte" should contain a "namespace" token with text "on:"
+    And no token in the file section for "src/lib/Counter.svelte" should break its line
