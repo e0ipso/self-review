@@ -22,6 +22,7 @@ import { KeyboardNavigationManager } from './KeyboardNavigationManager';
 import { ConfigProvider } from '../context/ConfigContext';
 import { ReviewProvider } from '../context/ReviewContext';
 import { DiffNavigationProvider } from '../context/DiffNavigationContext';
+import { ReviewShortcutToggle } from './ReviewShortcutToggle';
 
 const file: DiffFile = {
   oldPath: 'src/foo.ts',
@@ -55,6 +56,61 @@ function sidebar(): HTMLElement {
   if (!el) throw new Error('sidebar wrapper not rendered');
   return el;
 }
+
+it('opens file hints while the file tree navigation toggle retains keyboard focus', () => {
+  renderLayout(<KeyboardNavigationManager />);
+  const toggle = screen.getByTestId('file-tree-toggle');
+  fireEvent.click(toggle);
+  act(() => toggle.focus());
+  const entry = screen.getByTestId('file-tree').querySelector<HTMLElement>('[data-file-path]')!;
+  vi.spyOn(entry, 'getBoundingClientRect').mockReturnValue({
+    top: 10,
+    left: 10,
+    bottom: 30,
+    right: 210,
+    width: 200,
+    height: 20,
+  } as DOMRect);
+  const section = screen.getByTestId('file-section-src/foo.ts');
+  section.scrollIntoView = vi.fn();
+
+  fireEvent.keyDown(toggle, { key: 'g' });
+  expect(toggle.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByTestId('hint-overlay')).toBeTruthy();
+  fireEvent.keyDown(toggle, { key: 'a' });
+  expect(section.scrollIntoView).toHaveBeenCalledOnce();
+  expect(screen.queryByTestId('hint-overlay')).toBeNull();
+});
+
+it('keeps already handled navigation keys with their control', () => {
+  renderLayout(<KeyboardNavigationManager />);
+  const toggle = screen.getByTestId('file-tree-toggle');
+  fireEvent.click(toggle);
+  act(() => toggle.focus());
+  const event = new KeyboardEvent('keydown', { key: 'g', bubbles: true, cancelable: true });
+  event.preventDefault();
+  fireEvent(toggle, event);
+  expect(toggle.getAttribute('aria-expanded')).toBe('false');
+});
+
+it('honors shortcut opt-out while navigation retains focus and resumes on opt-in', () => {
+  renderLayout(
+    <>
+      <KeyboardNavigationManager />
+      <ReviewShortcutToggle />
+    </>
+  );
+  const navigation = screen.getByTestId('file-tree-toggle');
+  const policy = screen.getByRole('button', { name: 'Keyboard shortcuts (f, g, j, k)' });
+  fireEvent.click(navigation);
+  fireEvent.click(policy);
+  act(() => navigation.focus());
+  fireEvent.keyDown(navigation, { key: 'g' });
+  expect(navigation.getAttribute('aria-expanded')).toBe('false');
+  fireEvent.click(policy);
+  fireEvent.keyDown(navigation, { key: 'g' });
+  expect(navigation.getAttribute('aria-expanded')).toBe('true');
+});
 
 describe('Layout file tree collapse', () => {
   it('starts expanded and offers a collapse control', () => {

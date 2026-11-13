@@ -44,14 +44,15 @@ export function isTextInputFocused(): boolean {
   return false;
 }
 
-// Native and ARIA controls keep their own character navigation and activation keys.
-function isInteractiveControl(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element &&
-    !!target.closest(
-      'input, textarea, select, button, a[href], [role="button"], [role="combobox"], [role="listbox"], [role="slider"], [role="spinbutton"], [role="menu"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="switch"], [role="tab"], [role="textbox"], [contenteditable]:not([contenteditable="false"])'
-    )
-  );
+// Controls own their keys; app-owned review navigation may keep shared shortcuts while focused.
+function controlBlocksShortcuts(target: EventTarget | null): boolean {
+  const control =
+    target instanceof Element
+      ? target.closest(
+          'input, textarea, select, button, a[href], [role="button"], [role="combobox"], [role="listbox"], [role="slider"], [role="spinbutton"], [role="menu"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="switch"], [role="tab"], [role="textbox"], [contenteditable]:not([contenteditable="false"])'
+        )
+      : null;
+  return !!control && !control.hasAttribute('data-review-navigation');
 }
 
 function scrollDiff(root: HTMLElement | null, direction: 1 | -1): void {
@@ -227,7 +228,7 @@ export function useKeyboardNavigation() {
       const currentHints = hintsRef.current;
       const currentBuffer = inputBufferRef.current;
 
-      if (isInteractiveControl(target) || isInteractiveControl(focused)) return;
+      if (controlBlocksShortcuts(target) || controlBlocksShortcuts(focused)) return;
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       if (e.key === 'Escape' && currentMode !== 'normal') {
         e.preventDefault();
