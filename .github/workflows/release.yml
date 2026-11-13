@@ -167,7 +167,7 @@ jobs:
 
   build:
     name: Build packages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [provenance, release]
     if: needs.release.outputs.tag != ''
     permissions:
@@ -209,6 +209,9 @@ jobs:
 
       - name: Install Linux maker dependencies
         run: sudo apt-get install -y dpkg-dev fakeroot rpm
+
+      - name: Check RPM packaging
+        run: node --test scripts/test/rpm-packaging.test.mjs
 
       # Both architectures come out of one `make` run because the npm script
       # cleans `out/` first, so a second invocation would delete the first

@@ -68,6 +68,16 @@ of linking it; 2.0.0 failed that way. The `build` job refuses a lockfile that in
 from the registry.
 The npm OIDC permission exists only in `publish`, which never checks out the repository.
 
+The Linux build uses Ubuntu 26.04. Its RPM version changes into a per-package build directory,
+while `electron-installer-redhat` 3.4.0 stages the application in `BUILD/usr`. The dependency patch
+in `patches/` uses `%{_topdir}/BUILD/usr` as the copy source instead of a relative `usr` path.
+RPM 6 also changes `%{_builddir}`, so the source must use the installer's explicit staging root.
+The patch keeps the v4 package format so older RPM installations can read the release assets.
+See [the upstream issue](https://github.com/electron-userland/electron-installer-redhat/issues/343).
+The root `postinstall` applies the patch with `patch-package --error-on-fail`; a dependency update
+that makes it incompatible fails installation. The `release` job still disables lifecycle scripts
+and does not build packages. The read-only `build` job applies the patch through its full `npm ci`.
+
 Other properties of the files:
 
 - every `actions/checkout` sets `persist-credentials: false`; the only step that needs the token
