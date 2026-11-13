@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import type { Attachment, Reply } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { useLocalization } from '../../localization/LocalizationContext';
+import React, { useRef } from 'react';
+import type { Reply } from '@self-review/types';
+import { useReviewCommands } from '../../context/review-session-hooks';
+import { useReviewDraft } from '../../hooks/useReviewDraft';
+import { DraftStatus } from './DraftStatus';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { ComposerCore, AttachButton } from './ComposerCore';
@@ -21,24 +24,30 @@ export default function ReplyInput({
   onCancel,
   onSubmit,
 }: ReplyInputProps) {
-  const { addReply, updateReply } = useReview();
-  const [body, setBody] = useState('');
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const actionsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (existingReply) {
-      setBody(existingReply.body);
-      if (existingReply.attachments) {
-        setAttachments(existingReply.attachments);
-      }
+  const { t } = useLocalization();
+  const { addReply, updateReply } = useReviewCommands();
+  const editor = useReviewDraft(
+    { filePath: '', lineRange: null, commentId, existingReply },
+    {
+      body: existingReply?.body ?? '',
+      category: '',
+      showSuggestion: false,
+      proposedCode: '',
+      attachments: existingReply?.attachments ?? [],
     }
-  }, [existingReply]);
+  );
+  const {
+    content: { body, attachments },
+    setBody,
+    setAttachments,
+  } = editor;
+  const actionsRef = useRef<HTMLDivElement>(null);
 
   const hasContent = body.trim().length > 0 || attachments.length > 0;
 
   const handleSubmit = () => {
-    if (!hasContent) return;
+    if (!hasContent || !editor.current() || editor.draft.pending || editor.draft.interrupted)
+      return;
 
     if (existingReply) {
       updateReply(commentId, existingReply.id, {
@@ -50,29 +59,33 @@ export default function ReplyInput({
       addReply(commentId, body, undefined, attachments.length ? attachments : undefined);
     }
 
-    setBody('');
-    setAttachments([]);
+    editor.clear();
     onSubmit?.();
   };
 
   const handleCancel = () => {
-    setBody('');
-    setAttachments([]);
+    editor.clear();
     onCancel();
   };
 
   return (
     <ComposerCore
+      key={editor.draft.key}
+      attachmentOwner={editor.draft.key}
+      attachmentSignal={editor.draft.controller.signal}
+      onAttachmentsAborted={editor.onAttachmentsAborted}
+      onAttachmentWorkChange={editor.onProcessingChange}
       body={body}
       onBodyChange={setBody}
       attachments={attachments}
       setAttachments={setAttachments}
-      placeholder='Reply to this comment... (paste or drop images here)'
+      placeholder={t('Reply to this comment... (paste or drop images here)')}
       onSubmit={handleSubmit}
       testId='reply-input'
       actionsRef={actionsRef}
       height={REPLY_EDITOR_HEIGHT}
     >
+      <DraftStatus editor={editor} />
       <Separator />
 
       {/* Actions bar */}
@@ -87,9 +100,7 @@ export default function ReplyInput({
         </div>
 
         <div className='flex items-center gap-1.5'>
-          <span className='text-[10px] text-muted-foreground/50 mr-0.5'>
-            <kbd className='font-mono'>Esc</kbd> to unfocus
-          </span>
+          <span className='text-[10px] text-muted-foreground/50 me-0.5'>{t('Esc to unfocus')}</span>
           <Button
             data-testid='cancel-reply-btn'
             variant='ghost'
@@ -97,16 +108,18 @@ export default function ReplyInput({
             onClick={handleCancel}
             className='h-7 text-xs'
           >
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             data-testid='add-reply-btn'
             size='sm'
             onClick={handleSubmit}
-            disabled={!hasContent}
+            disabled={
+              !hasContent || editor.draft.pending || editor.draft.stale || editor.draft.interrupted
+            }
             className='h-7 text-xs gap-1.5'
           >
-            {existingReply ? 'Update' : 'Reply'}
+            {t(existingReply ? 'Update' : 'Reply')}
             <kbd className='pointer-events-none inline-flex items-center rounded border border-current/20 px-1 font-mono text-[10px] font-medium opacity-60'>
               {navigator.platform?.includes('Mac') ? '\u2318' : 'Ctrl'}
               {'\u21B5'}

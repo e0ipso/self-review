@@ -18,6 +18,11 @@ export default defineConfig({
         replacement: sibling('../react/src/build-styles.css'),
       },
       { find: '@self-review/react', replacement: sibling('../react/src/index.ts') },
+      { find: '@self-review/core/validation', replacement: sibling('../core/src/validation.ts') },
+      {
+        find: '@self-review/core/resume-worker',
+        replacement: sibling('../core/src/resume-worker.ts'),
+      },
       { find: '@self-review/core', replacement: sibling('../core/src/index.ts') },
     ],
   },

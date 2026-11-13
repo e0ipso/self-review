@@ -1,5 +1,7 @@
 import React from 'react';
+import { useLocalization } from '../../localization/LocalizationContext';
 import Prism from 'prismjs';
+import { createHighlightBudget } from '../DiffViewer/highlight-budget';
 import type { LineRange, Suggestion } from '@self-review/types';
 import SuggestionApplyControl from './SuggestionApplyControl';
 import 'prismjs/components/prism-typescript';
@@ -33,17 +35,24 @@ export default function SuggestionBlock({
   filePath,
   lineRange = null,
 }: SuggestionBlockProps) {
-  const highlightCode = (code: string, lang: string): string => {
+  const { t } = useLocalization();
+  const budget = createHighlightBudget();
+  const highlightCode = (code: string, lang: string): string | null => {
+    if (!budget.admit(code)) return null;
     try {
       const grammar = Prism.languages[lang] || Prism.languages.plaintext;
       return Prism.highlight(code, grammar, lang);
     } catch {
-      return code;
+      return null;
     }
   };
 
-  const originalLines = suggestion.originalCode.split('\n');
-  const proposedLines = suggestion.proposedCode.split('\n');
+  const originalLines = suggestion.originalCode
+    .split('\n')
+    .map(line => ({ line, html: highlightCode(line, language) }));
+  const proposedLines = suggestion.proposedCode
+    .split('\n')
+    .map(line => ({ line, html: highlightCode(line, language) }));
 
   return (
     <div
@@ -51,10 +60,15 @@ export default function SuggestionBlock({
       data-testid='suggestion-block'
     >
       <div className='flex items-center h-7 px-3 bg-muted text-[11px] font-semibold text-muted-foreground uppercase tracking-wider'>
-        Suggested change
+        {t('Suggested change')}
       </div>
+      {budget.limited && (
+        <p role='status' className='px-3 py-1 font-sans text-muted-foreground'>
+          {t('Highlighting is limited for this suggestion. All code remains available.')}
+        </p>
+      )}
       <div>
-        {originalLines.map((line, idx) => (
+        {originalLines.map(({ line, html }, idx) => (
           <div
             key={`old-${idx}`}
             className='suggestion-deletion flex bg-red-50/70 dark:bg-red-900/35 leading-[20px]'
@@ -64,13 +78,13 @@ export default function SuggestionBlock({
             </span>
             <span
               className='flex-1 text-foreground/80 whitespace-pre'
-              dangerouslySetInnerHTML={{
-                __html: highlightCode(line, language),
-              }}
-            />
+              dangerouslySetInnerHTML={html === null ? undefined : { __html: html }}
+            >
+              {html === null ? line : undefined}
+            </span>
           </div>
         ))}
-        {proposedLines.map((line, idx) => (
+        {proposedLines.map(({ line, html }, idx) => (
           <div
             key={`new-${idx}`}
             className='suggestion-addition flex bg-emerald-50/70 dark:bg-emerald-900/35 leading-[20px]'
@@ -80,10 +94,10 @@ export default function SuggestionBlock({
             </span>
             <span
               className='flex-1 text-foreground/80 whitespace-pre'
-              dangerouslySetInnerHTML={{
-                __html: highlightCode(line, language),
-              }}
-            />
+              dangerouslySetInnerHTML={html === null ? undefined : { __html: html }}
+            >
+              {html === null ? line : undefined}
+            </span>
           </div>
         ))}
       </div>

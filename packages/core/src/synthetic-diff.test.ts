@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   openSync,
   rmSync,
+  renameSync,
   symlinkSync,
   writeFileSync,
   writeSync,
@@ -16,12 +17,14 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   generateSyntheticDiffs,
+  generateSyntheticDiffsAsync,
+  loadSyntheticFilesAsync,
   loadSyntheticFiles,
   quoteGitPath,
   readSyntheticSource,
 } from './synthetic-diff';
 import { BINARY_SNIFF_BYTES, MAX_SOURCE_FILE_BYTES } from './input-budgets';
-import { parseDiff } from './diff-parser';
+import { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
 import { gitSync } from './test-support/git-env';
 
 // Names git writes verbatim, names git quotes, and names that would run past
@@ -70,6 +73,73 @@ describe('generateSyntheticDiffs', () => {
     mkdirSync(join(full, '..'), { recursive: true });
     writeFileSync(full, content);
   }
+
+  it.each([{}, { maxFileBytes: 4 }, { maxTotalBytes: 12 }])(
+    'keeps direct and textual projections equivalent for real source bytes, budgets %o',
+    async budgets => {
+      const contents = [
+        Buffer.alloc(0),
+        Buffer.from('one\r\ntwo\r\n'),
+        Buffer.from('\ufeffBOM\nlast'),
+        Buffer.from([0x61, 0xff, 0xc3, 0x28, 0x0a]),
+        Buffer.from('\n\n'),
+        Buffer.from('no newline'),
+        Buffer.from([0, 0xff]),
+        Buffer.from('--- fake header\n+++ another\n@@ -0,0 +1 @@\n'),
+      ];
+      for (let i = 0; i < LITERAL_NAMES.length; i++) {
+        write(LITERAL_NAMES[i], contents[i % contents.length]);
+      }
+      symlinkSync('missing-target', join(root, 'link'));
+      const paths = [...LITERAL_NAMES, 'link', 'disappeared'];
+      const patch = generateSyntheticDiffs(paths, root, { budgets });
+      expect(await generateSyntheticDiffsAsync(paths, root, { budgets })).toEqual(patch);
+      const parsed = parseDiffWithDiagnostics(patch.diff);
+      for (const file of parsed.files) {
+        const reason = patch.omitted.get(file.newPath);
+        if (reason !== undefined) file.omittedReason = reason;
+      }
+      const expected = {
+        files: parsed.files,
+        diagnostics: [...patch.diagnostics, ...parsed.diagnostics],
+      };
+      expect(loadSyntheticFiles(paths, root, { budgets })).toEqual(expected);
+      expect(await loadSyntheticFilesAsync(paths, root, { budgets })).toEqual(expected);
+    }
+  );
+
+  it('refuses an enumerated ancestor replaced with an outside symlink before reading', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'self-review-test-outside-'));
+    try {
+      write('sub/note.txt', 'inside\n');
+      writeFileSync(join(outside, 'note.txt'), 'SECRET\n');
+      const enumerated = ['sub/note.txt'];
+      renameSync(join(root, 'sub'), join(root, 'saved'));
+      symlinkSync(outside, join(root, 'sub'));
+      const result = loadSyntheticFiles(enumerated, root);
+      expect(result.files).toEqual([]);
+      expect(result.diagnostics.join(' ')).toContain('unsafe-link');
+      expect(JSON.stringify(result)).not.toContain('SECRET');
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('counts symlink text against file and total read budgets', () => {
+    symlinkSync('1234567890', join(root, 'first'));
+    symlinkSync('1234567890', join(root, 'second'));
+    const perFile = loadSyntheticFiles(['first'], root, { budgets: { maxFileBytes: 5 } });
+    expect(perFile.files[0].omittedReason).toContain('per-file read budget');
+    expect(perFile.files[0].hunks).toEqual([]);
+    const total = loadSyntheticFiles(['first', 'second'], root, { budgets: { maxTotalBytes: 12 } });
+    expect(total.files[0].hunks[0].lines[0].content).toBe('1234567890');
+    expect(total.files[1].omittedReason).toContain('total read budget');
+    expect(total.files[1].hunks).toEqual([]);
+  });
+
+  it('keeps disappeared roots empty instead of throwing', () => {
+    expect(loadSyntheticFiles(['missing.txt'], join(root, 'missing')).files).toEqual([]);
+  });
 
   it('round-trips literal names through the diff parser with their own bytes', () => {
     for (const name of LITERAL_NAMES) {

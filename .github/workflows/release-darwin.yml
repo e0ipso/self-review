@@ -33,6 +33,9 @@ jobs:
   build:
     name: macOS build
     runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
     steps:
@@ -75,16 +78,90 @@ jobs:
           node-version: 24
           cache: 'npm'
 
+      - name: Require Apple release credentials
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required release credential: $name" >&2
+              exit 1
+            fi
+          done
+
       - run: npm ci
 
       - name: Build workspace packages
         run: |
-          for pkg in packages/types packages/core packages/react; do
+          for pkg in packages/types packages/config packages/core packages/react; do
             (cd "$pkg" && npm run build)
           done
 
-      - name: Build macOS package
+      - name: Import signing certificate into a temporary keychain
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          umask 077
+          certificate="$RUNNER_TEMP/self-review-signing.p12"
+          keychain="$RUNNER_TEMP/self-review-signing.keychain-db"
+          password="$(openssl rand -hex 32)"
+          printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          rm -f "$certificate"
+
+      - name: Sign and notarize macOS package
+        env:
+          SELF_REVIEW_MAC_RELEASE: '1'
+          APPLE_SIGNING_KEYCHAIN: ${{ runner.temp }}/self-review-signing.keychain-db
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run make
+
+      - name: Verify the signed and stapled archive contents
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          shopt -s nullglob
+          archives=(out/make/zip/darwin/*/*.zip)
+          if [ "${#archives[@]}" -eq 0 ]; then
+            echo "No macOS archive to verify" >&2
+            exit 1
+          fi
+          for archive in "${archives[@]}"; do
+            extracted="$(mktemp -d "$RUNNER_TEMP/self-review-verify.XXXXXX")"
+            ditto -x -k "$archive" "$extracted"
+            apps=("$extracted"/*.app)
+            if [ "${#apps[@]}" -ne 1 ]; then
+              echo "Expected exactly one application in the archive" >&2
+              exit 1
+            fi
+            codesign --verify --deep --strict --verbose=2 "${apps[0]}"
+            codesign --verify -R="anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\"" "${apps[0]}"
+            codesign --display --verbose=4 "${apps[0]}" 2>&1 | grep -q 'flags=.*runtime'
+            xcrun stapler validate "${apps[0]}"
+            spctl --assess --type execute --verbose=2 "${apps[0]}"
+            rm -rf "$extracted"
+          done
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/self-review-signing.p12"
+          if [ -f "$RUNNER_TEMP/self-review-signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/self-review-signing.keychain-db"
+          fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

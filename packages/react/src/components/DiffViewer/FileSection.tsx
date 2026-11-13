@@ -1,19 +1,24 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useDragSelection } from './useDragSelection';
+import { useLocalization } from '../../localization/LocalizationContext';
+import React, { useRef, useMemo, useCallback, useId } from 'react';
+import { effectiveDiffLayout } from './effective-layout';
+import { useFileCommentSelection } from './useFileCommentSelection';
+import { useFilePreviewMode } from './useFilePreviewMode';
 import { useExpandContext } from './useExpandContext';
 import { useLazyFileContent } from './useLazyFileContent';
 import type { DiffFile } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
+import { useReviewCommands, useFileReview, useReviewSource } from '../../context/ReviewContext';
 import { useGuide } from '../../context/GuideContext';
 import { useOptionalDiffNavigation } from '../../context/DiffNavigationContext';
-import {
-  getRenderedTextMode,
-  isPreviewableImage,
-  isPreviewableSvg,
-} from '../../utils/file-type-utils';
+import { usePreviewRenderer } from '../../context/PreviewRenderingContext';
+import { resolveFilePreview } from '../../services/content-preview';
 import { getGuideAccent } from '../../utils/guide-accents';
-import { FileSectionHeader } from './FileSectionHeader';
-import { FileSectionBody } from './FileSectionBody';
+import { useFileSectionExpansion } from './useFileSectionExpansion';
+import { FileSectionHeaderPresentation } from './FileSectionHeader';
+import { FileSectionBodyLayout } from './FileSectionBody';
+import { ContentStatusBoundary } from './ContentStatusBoundary';
+import { FilePreview } from './FilePreview';
+import { RawDiffContent } from './RawDiffContent';
+import PreviewErrorBoundary from './PreviewErrorBoundary';
 import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 
 export interface FileSectionProps {
@@ -29,40 +34,34 @@ export default function FileSection({
   expanded: controlledExpanded,
   onToggleExpanded,
 }: FileSectionProps) {
-  const { toggleViewed, getCommentsForFile, files, diffSource } = useReview();
+  const { t } = useLocalization();
+  const { toggleViewed } = useReviewCommands();
+  const diffSource = useReviewSource();
+  const fileState = useFileReview(file.newPath || file.oldPath);
   const { mode: guideMode, getFileDescription, getFileGroupIndex } = useGuide();
-  const [internalExpanded, setInternalExpanded] = useState(true);
-  const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
-  const [commentRange, setCommentRange] = useState<{
-    start: number;
-    end: number;
-    side: 'old' | 'new';
-  } | null>(null);
-  const [showingFileComment, setShowingFileComment] = useState(false);
+  const bodyId = useId();
   const sectionRef = useRef<HTMLDivElement | null>(null);
   const navigation = useOptionalDiffNavigation();
   const registerFileElement = navigation?.registerFileElement;
   const unregisterFileElement = navigation?.unregisterFileElement;
 
-  const isAddedFile = file.changeType === 'added';
-  const filePath_ = file.newPath || file.oldPath || '';
-  const showImagePreview = isAddedFile && file.isBinary === true && isPreviewableImage(filePath_);
-  const showSvgPreview = isAddedFile && isPreviewableSvg(filePath_);
-  const renderedTextMode = isAddedFile ? getRenderedTextMode(filePath_) : null;
-  const isEligibleForRenderedView = renderedTextMode !== null;
-  const isPreviewable = showImagePreview || showSvgPreview || isEligibleForRenderedView;
-
-  const initialViewMode = showSvgPreview ? 'raw' : isPreviewable ? 'rendered' : 'raw';
-  const [renderViewMode, setRenderViewMode] = useState<'raw' | 'rendered'>(initialViewMode);
+  const renderer = usePreviewRenderer();
+  const preview = resolveFilePreview(file, renderer);
+  const { renderViewMode, setRenderViewMode } = useFilePreviewMode(file, preview);
 
   const filePath = file.newPath || file.oldPath;
   const guideDescription = guideMode === 'guided' ? getFileDescription(filePath) : undefined;
-  const comments = getCommentsForFile(filePath);
+  const comments = fileState?.comments ?? [];
   const fileComments = comments.filter(c => c.lineRange === null);
   const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
   const orphanedComments = comments.filter(c => !hasAnchor(c));
-  const fileState = files.find(f => f.path === filePath);
   const isViewed = fileState?.viewed || false;
+  const { expanded, changeExpanded } = useFileSectionExpansion(
+    filePath,
+    isViewed,
+    controlledExpanded,
+    onToggleExpanded
+  );
 
   // Registered by path so navigation never builds a CSS selector from the filename.
   const setSectionElement = useCallback(
@@ -84,78 +83,46 @@ export default function FileSection({
   // Expand context state
   const isExpandable = diffSource.type === 'git' && !file.isUntracked && !file.isBinary;
 
-  const { expandLoading, totalLines, handleExpandContext } = useExpandContext({
+  const { expandLoading, expandError, totalLines, handleExpandContext } = useExpandContext({
     file,
     filePath,
     isExpandable,
     sectionRef,
+    expanded,
   });
 
-  // Effective view mode: added/deleted files are forced to unified view
-  const effectiveViewMode =
-    viewMode === 'split' && (file.changeType === 'added' || file.changeType === 'deleted')
-      ? 'unified'
-      : viewMode;
+  const effectiveViewMode = effectiveDiffLayout(viewMode, file.changeType);
 
-  // Stable identities: the rendered view hands these to every block through context.
-  const handleCommentRange = useCallback((start: number, end: number, side: 'old' | 'new') => {
-    setCommentRange({
-      start: Math.min(start, end),
-      end: Math.max(start, end),
-      side,
-    });
-  }, []);
-  const clearCommentRange = useCallback(() => setCommentRange(null), []);
-
-  const { dragState, handleDragStart } = useDragSelection({
-    sectionRef,
-    effectiveViewMode,
+  const { lineComments, rawSelection, onCommentRange, fileComment } = useFileCommentSelection(
     file,
-    filePath,
-    onCommentRange: handleCommentRange,
-  });
+    sectionRef,
+    effectiveViewMode
+  );
 
-  // Sync viewed state with expansion: when viewed is checked, collapse the file
-  useEffect(() => {
-    if (isViewed && expanded && onToggleExpanded) {
-      onToggleExpanded(filePath);
-    }
-  }, [isViewed]);
-
-  const handleViewedToggle = () => {
-    toggleViewed(filePath);
-    if (!isViewed && expanded && onToggleExpanded) {
-      onToggleExpanded(filePath);
-    }
-    if (isViewed && !expanded && onToggleExpanded) {
-      onToggleExpanded(filePath);
-    }
-  };
+  const handleViewedToggle = () => toggleViewed(filePath);
 
   return (
     <div
       ref={setSectionElement}
-      className={`mx-2 mt-2 border border-border rounded-lg shadow-sm${dragState ? ' select-none' : ''}`}
+      className={`mx-2 mt-2 border border-border rounded-lg shadow-sm${rawSelection.dragState ? ' select-none' : ''}`}
       data-file-path={filePath}
       data-testid={`file-section-${filePath}`}
     >
-      <FileSectionHeader
+      <FileSectionHeaderPresentation
+        bodyId={bodyId}
         file={file}
         filePath={filePath}
         expanded={expanded}
         isViewed={isViewed}
-        isPreviewable={isPreviewable}
+        isPreviewable={preview.available}
         renderViewMode={renderViewMode}
-        comments={comments}
-        onToggle={() => {
-          if (onToggleExpanded) {
-            onToggleExpanded(filePath);
-          } else {
-            setInternalExpanded(!expanded);
-          }
-        }}
+        commentCount={comments.length}
+        onToggle={() => changeExpanded(!expanded)}
         onViewedToggle={handleViewedToggle}
-        onAddFileComment={() => setShowingFileComment(true)}
+        onAddFileComment={() => {
+          changeExpanded(true);
+          fileComment.openFileComment();
+        }}
         onRenderViewModeChange={setRenderViewMode}
       />
 
@@ -176,38 +143,56 @@ export default function FileSection({
         </div>
       )}
 
-      {expanded && (
-        <FileSectionBody
-          filePath={filePath}
-          fileComments={fileComments}
-          orphanedComments={orphanedComments}
-          showingFileComment={showingFileComment}
-          onCancelFileComment={() => setShowingFileComment(false)}
-          onFileCommentSubmit={() => setShowingFileComment(false)}
-          contentAreaProps={{
-            file,
-            filePath,
-            viewMode: effectiveViewMode,
-            renderViewMode,
-            isEligibleForRenderedView,
-            renderedTextMode,
-            showImagePreview,
-            showSvgPreview,
-            contentLoad,
-            onRetry: retryContentLoad,
-            commentRange,
-            dragState,
-            onDragStart: handleDragStart,
-            onCancelComment: clearCommentRange,
-            onCommentSaved: clearCommentRange,
-            onCommentRange: handleCommentRange,
-            isExpandable,
-            expandLoading,
-            totalLines,
-            handleExpandContext,
-          }}
-        />
-      )}
+      <div id={bodyId} hidden={!expanded}>
+        {expanded && expandError && (
+          <p role='alert' className='m-3 text-sm text-destructive'>
+            {t('Context could not be loaded. Use an expand button to try again.')}
+          </p>
+        )}
+        {expanded && (
+          <FileSectionBodyLayout
+            filePath={filePath}
+            fileComments={fileComments}
+            orphanedComments={orphanedComments}
+            showingFileComment={fileComment.showingFileComment}
+            onCancelFileComment={fileComment.closeFileComment}
+            onFileCommentSubmit={fileComment.closeFileComment}
+          >
+            <PreviewErrorBoundary
+              filePath={filePath}
+              resetKeys={[file, renderViewMode, effectiveViewMode]}
+            >
+              <ContentStatusBoundary
+                omittedReason={file.omittedReason}
+                contentLoaded={file.contentLoaded}
+                contentLoad={contentLoad}
+                onRetry={retryContentLoad}
+              >
+                <FilePreview
+                  file={file}
+                  preview={preview.builtIn}
+                  descriptor={preview}
+                  filePath={filePath}
+                  mode={renderViewMode}
+                  {...lineComments}
+                  onCommentRange={onCommentRange}
+                >
+                  <RawDiffContent
+                    file={file}
+                    viewMode={effectiveViewMode}
+                    {...lineComments}
+                    {...rawSelection}
+                    isExpandable={isExpandable}
+                    expandLoading={expandLoading}
+                    totalLines={totalLines}
+                    onExpandContext={isExpandable ? handleExpandContext : undefined}
+                  />
+                </FilePreview>
+              </ContentStatusBoundary>
+            </PreviewErrorBoundary>
+          </FileSectionBodyLayout>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,16 +1,14 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useMemo } from 'react';
-import { MessageSquarePlus } from 'lucide-react';
 import type { DiffFile, DiffLine } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
-import { useConfig } from '../../context/ConfigContext';
-import HunkHeader from './HunkHeader';
-import SyntaxLine from './SyntaxLine';
+import { RawDiffRow, useRawDragStart } from './RawDiffRow';
+import { useRawDiffAnnotations } from './useRawDiffAnnotations';
+import { HunkSeparator } from './HunkSeparator';
+import { useAppearance } from '../../context/ConfigContext';
+import { planHighlighting } from './highlight-budget';
 import { getLanguageFromPath } from '../../utils/file-type-utils';
-import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
-import ExpandContextBar from './ExpandContextBar';
-import { getLineBg, getGutterBg } from '../../utils/diff-styles';
-import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
+import { buildSplitRows } from './split-rows';
 import EmptyLinePane from './EmptyLinePane';
 
 export interface SplitViewProps {
@@ -21,7 +19,7 @@ export interface SplitViewProps {
     currentLine: number;
     side: 'old' | 'new';
   } | null;
-  onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
+  onDragStart: (lineNumber: number, side: 'old' | 'new', keyboard?: boolean) => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
   onExpandContext?: (
@@ -32,11 +30,6 @@ export interface SplitViewProps {
   isExpandable?: boolean;
   expandLoading?: boolean;
   totalLines?: number | null;
-}
-
-interface SplitLineRow {
-  oldLine: DiffLine | null;
-  newLine: DiffLine | null;
 }
 
 export default function SplitView({
@@ -51,9 +44,12 @@ export default function SplitView({
   expandLoading,
   totalLines,
 }: SplitViewProps) {
-  const { getCommentsForLine } = useReview();
-  const { config } = useConfig();
-  const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
+  const { t } = useLocalization();
+  const startDrag = useRawDragStart(onDragStart);
+  const { commentIndex, originalCode, feedbackAt, getOriginalCodeForComment } =
+    useRawDiffAnnotations(file, commentRange);
+  const highlighting = useMemo(() => planHighlighting(file), [file]);
+  const config = useAppearance();
   const filePath = file.newPath || file.oldPath;
   const language = getLanguageFromPath(filePath);
 
@@ -69,53 +65,10 @@ export default function SplitView({
     return false;
   };
 
-  const buildSplitRows = (lines: DiffLine[]): SplitLineRow[] => {
-    const rows: SplitLineRow[] = [];
-    let i = 0;
-
-    while (i < lines.length) {
-      const line = lines[i];
-
-      if (line.type === 'context') {
-        rows.push({ oldLine: line, newLine: line });
-        i++;
-      } else if (line.type === 'deletion') {
-        // Collect consecutive deletions
-        const deletions: DiffLine[] = [];
-        while (i < lines.length && lines[i].type === 'deletion') {
-          deletions.push(lines[i]);
-          i++;
-        }
-        // Collect consecutive additions that follow
-        const additions: DiffLine[] = [];
-        while (i < lines.length && lines[i].type === 'addition') {
-          additions.push(lines[i]);
-          i++;
-        }
-        // Zip deletions and additions into paired rows
-        const maxLen = Math.max(deletions.length, additions.length);
-        for (let j = 0; j < maxLen; j++) {
-          rows.push({
-            oldLine: j < deletions.length ? deletions[j] : null,
-            newLine: j < additions.length ? additions[j] : null,
-          });
-        }
-      } else if (line.type === 'addition') {
-        rows.push({ oldLine: null, newLine: line });
-        i++;
-      } else {
-        i++;
-      }
-    }
-
-    return rows;
-  };
-
-  // Extract original code for the selected line range (for suggestions)
-  const getOriginalCode = (): string | undefined => {
-    if (!commentRange) return undefined;
-    return extractOriginalCode(file, commentRange);
-  };
+  const splitHunks = useMemo(
+    () => file.hunks.map(hunk => buildSplitRows(hunk.lines)),
+    [file.hunks]
+  );
 
   const renderLineCell = (line: DiffLine | null, side: 'old' | 'new', hasComment = false) => {
     if (!line) {
@@ -125,161 +78,94 @@ export default function SplitView({
     const lineNumber = side === 'old' ? line.oldLineNumber : line.newLineNumber;
     const isSelected = lineNumber ? isLineSelected(lineNumber, side) : false;
 
-    const lineTestId = lineNumber
-      ? `${side === 'old' ? 'old' : 'new'}-line-${filePath}-${lineNumber}`
-      : undefined;
-
     return (
-      <div
-        className={`split-half w-1/2 flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${hasComment ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}
-        data-line-number={lineNumber || undefined}
-        data-line-side={side}
-        data-line-type={line.type}
-      >
-        {/* Line number gutter */}
-        <div
-          className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter relative`}
-          data-testid={lineTestId}
-        >
-          {lineNumber && (
-            <button
-              className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
-              onMouseDown={e => {
-                e.preventDefault();
-                e.stopPropagation();
-                onDragStart(lineNumber, side);
-              }}
-              data-testid={`comment-icon-${side}-${lineNumber}`}
-            >
-              <MessageSquarePlus className='h-4 w-4' />
-            </button>
-          )}
-          <span className='pointer-events-none'>{lineNumber || ''}</span>
-        </div>
-        {/* Code content */}
-        <div
-          className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}
-        >
-          <SyntaxLine
-            content={line.content}
-            language={language}
-            lineType={line.type}
-            wordWrap={config.wordWrap}
-          />
-        </div>
-      </div>
+      <RawDiffRow
+        layout={side}
+        filePath={filePath}
+        oldLineNumber={line.oldLineNumber}
+        newLineNumber={line.newLineNumber}
+        lineType={line.type}
+        content={line.content}
+        language={highlighting.lines.has(line) ? language : 'plaintext'}
+        wordWrap={config.wordWrap}
+        isSelected={isSelected}
+        hasComment={hasComment}
+        onDragStart={startDrag}
+      />
     );
-  };
-
-  const computeGapBefore = (hunkIndex: number): number | undefined => {
-    if (!isExpandable) return undefined;
-    if (hunkIndex === 0) {
-      const start = Math.max(file.hunks[0].oldStart, file.hunks[0].newStart);
-      return start > 1 ? start - 1 : 0;
-    }
-    const prev = file.hunks[hunkIndex - 1];
-    const curr = file.hunks[hunkIndex];
-    return curr.newStart - (prev.newStart + prev.newLines);
   };
 
   return (
     <div className='font-mono text-[13px] leading-[22px] split-view'>
-      {file.hunks.map((hunk, hunkIndex) => (
+      {highlighting.limited && (
+        <p role='status' className='px-3 py-1 text-xs font-sans text-muted-foreground'>
+          {t('Highlighting is limited for this file. All source lines remain available.')}
+        </p>
+      )}
+      {file.hunks.map((_, hunkIndex) => (
         <div key={hunkIndex}>
-          {isExpandable &&
-            onExpandContext &&
-            hunkIndex === 0 &&
-            (file.hunks[0].oldStart > 1 || file.hunks[0].newStart > 1) && (
-              <ExpandContextBar
-                position='top'
-                hunkIndex={0}
-                gapSize={computeGapBefore(0)}
-                onExpand={onExpandContext}
-                loading={expandLoading}
-              />
-            )}
-          {isExpandable && onExpandContext && hunkIndex > 0 && (
-            <ExpandContextBar
-              position='between'
-              hunkIndex={hunkIndex}
-              gapSize={computeGapBefore(hunkIndex)}
-              onExpand={onExpandContext}
-              loading={expandLoading}
-            />
-          )}
-          <HunkHeader header={hunk.header} />
-          {buildSplitRows(hunk.lines).map((row, rowIndex) => {
+          <HunkSeparator
+            hunks={file.hunks}
+            hunkIndex={hunkIndex}
+            isExpandable={isExpandable}
+            onExpandContext={onExpandContext}
+            expandLoading={expandLoading}
+            totalLines={totalLines}
+          />
+          {splitHunks[hunkIndex].map((row, rowIndex) => {
             const oldLineNumber = row.oldLine?.oldLineNumber;
             const newLineNumber = row.newLine?.newLineNumber;
-            const oldComments = oldLineNumber
-              ? getCommentsForLine(file.newPath || file.oldPath, oldLineNumber, 'old')
-              : [];
-            const newComments = newLineNumber
-              ? getCommentsForLine(file.newPath || file.oldPath, newLineNumber, 'new')
-              : [];
-            const oldCommentsToRender = oldComments.filter(
-              c => c.lineRange!.end === oldLineNumber && hasAnchor(c)
+            const { comments: commentsToRender, showInput: showCommentInputHere } = feedbackAt(
+              oldLineNumber,
+              newLineNumber,
+              'old'
             );
-            const newCommentsToRender = newComments.filter(
-              c => c.lineRange!.end === newLineNumber && hasAnchor(c)
-            );
-            const showCommentInputHere =
-              commentRange &&
-              ((commentRange.side === 'old' && oldLineNumber === commentRange.end) ||
-                (commentRange.side === 'new' && newLineNumber === commentRange.end));
 
             return (
               <React.Fragment key={`${hunkIndex}-${rowIndex}`}>
-                <div className='flex'>
+                <div
+                  className='flex'
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 26px' }}
+                >
                   {/* Old side (left) */}
                   {row.oldLine ? (
-                    renderLineCell(row.oldLine, 'old', oldComments.length > 0)
+                    renderLineCell(row.oldLine, 'old', commentIndex.covers(oldLineNumber, 'old'))
                   ) : (
                     <EmptyLinePane />
                   )}
                   {/* New side (right) */}
                   {row.newLine ? (
-                    renderLineCell(row.newLine, 'new', newComments.length > 0)
+                    renderLineCell(row.newLine, 'new', commentIndex.covers(newLineNumber, 'new'))
                   ) : (
                     <EmptyLinePane />
                   )}
                 </div>
 
-                <InlineCommentSlot
-                  commentsToRender={[...oldCommentsToRender, ...newCommentsToRender]}
-                  showCommentInput={!!showCommentInputHere}
-                  commentRange={commentRange}
-                  filePath={file.newPath || file.oldPath}
-                  originalCode={getOriginalCode()}
-                  onCancel={onCancelComment}
-                  onSaved={onCommentSaved}
-                  getOriginalCodeForComment={comment =>
-                    comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
-                  }
-                />
+                {(commentsToRender.length > 0 || showCommentInputHere) && (
+                  <InlineCommentSlot
+                    commentsToRender={commentsToRender}
+                    showCommentInput={!!showCommentInputHere}
+                    commentRange={commentRange}
+                    filePath={file.newPath || file.oldPath}
+                    originalCode={originalCode}
+                    onCancel={onCancelComment}
+                    onSaved={onCommentSaved}
+                    getOriginalCodeForComment={getOriginalCodeForComment}
+                  />
+                )}
               </React.Fragment>
             );
           })}
         </div>
       ))}
-      {isExpandable &&
-        onExpandContext &&
-        (() => {
-          const lastIdx = file.hunks.length - 1;
-          const lastHunk = file.hunks[lastIdx];
-          const lastNewLine = lastHunk.newStart + lastHunk.newLines - 1;
-          const bottomGap = totalLines != null ? totalLines - lastNewLine : undefined;
-          if (bottomGap !== undefined && bottomGap <= 0) return null;
-          return (
-            <ExpandContextBar
-              position='bottom'
-              hunkIndex={lastIdx}
-              gapSize={bottomGap}
-              onExpand={onExpandContext}
-              loading={expandLoading}
-            />
-          );
-        })()}
+      <HunkSeparator
+        hunks={file.hunks}
+        hunkIndex={file.hunks.length}
+        isExpandable={isExpandable}
+        onExpandContext={onExpandContext}
+        expandLoading={expandLoading}
+        totalLines={totalLines}
+      />
     </div>
   );
 }

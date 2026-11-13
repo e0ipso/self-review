@@ -69,3 +69,24 @@ describe('passive content layout attributes', () => {
     expect(elements(tree, 'code')[0].properties.className).toEqual(['language-mermaid']);
   });
 });
+
+describe('reviewed image resource attributes', () => {
+  it('keeps relative references inert and strips file/network/source-set/active properties', () => {
+    const tree = parsePassiveHtml(
+      '<img src="../pic.png?q#f" alt="caption" title="title" width="12" height="13" srcset="file:///secret.png 2x" onerror="run()" style="position:fixed" class="fixed">' +
+        '<img src="file:///secret.png"><img src="https://outside.test/pic.png">' +
+        '<img data-reviewed-image-source="private.png">'
+    );
+    const [relative, file, network, forged] = elements(tree, 'img');
+    expect(relative.properties).toEqual({
+      'data-reviewed-image-source': '../pic.png?q#f',
+      alt: 'caption',
+      title: 'title',
+      width: 12,
+      height: 13,
+    });
+    expect(file.properties.src).toBeUndefined();
+    expect(network.properties.src).toBeUndefined();
+    expect(forged.properties).toEqual({});
+  });
+});

@@ -254,3 +254,37 @@
   --tw-prose-pre-code: hsl(220, 14%, 71%);
   --tw-prose-code: hsl(var(--foreground));
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .self-review *,
+  .self-review *::before,
+  .self-review *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .self-review *,
+  .self-review *::before,
+  .self-review *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* A shared decorative mask avoids an SVG subtree for every line action. */
+.self-review [data-comment-gutter]::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  pointer-events: none;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M3 3h18v14H8l-5 4V3zM12 7v6m-3-3h6'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}

@@ -7,4 +7,8 @@ if [ ! -x node_modules/.bin/lint-staged ]; then
   exit 1
 fi
 
-node_modules/.bin/lint-staged && npm run lint && npm run test:unit
+node_modules/.bin/lint-staged && npm run lint && (
+  # Tests create their own repositories; git's hook environment overrides their cwd.
+  unset $(git rev-parse --local-env-vars)
+  npm run test:unit
+)

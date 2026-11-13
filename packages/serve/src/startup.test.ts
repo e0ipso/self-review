@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -13,6 +13,20 @@ import {
 import type { ReviewState } from '@self-review/core';
 import { parseServeArgs } from './args';
 import { resolveSession } from './startup';
+import { createStartupHost } from './startup-composition';
+import { Worker } from 'node:worker_threads';
+import { buildResumeTestWorker } from './test-support/resume-worker';
+
+vi.mock('./resume-document-loader', async importOriginal => {
+  const original = await importOriginal<typeof import('./resume-document-loader')>();
+  return {
+    ...original,
+    loadResumeDocumentAsync: original.createResumeLoader(
+      undefined,
+      () => new Worker(path.join(tmp, 'resume-parser-worker.mjs'))
+    ),
+  };
+});
 
 // A real repository on disk, because every meaningful thing this module does
 // — mode detection, the diff, the repository root the server contains paths
@@ -39,7 +53,7 @@ function git(...args: string[]): void {
   execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'serve-startup-')));
 
   repo = path.join(tmp, 'repo');
@@ -64,6 +78,7 @@ beforeAll(() => {
   home = path.join(tmp, 'home');
   fs.mkdirSync(home);
   process.env.HOME = home;
+  await buildResumeTestWorker(path.join(tmp, 'resume-parser-worker.mjs'));
 });
 
 afterEach(() => {
@@ -85,6 +100,92 @@ function writeUserConfig(yaml: string): void {
 }
 
 describe('resolveSession', () => {
+  it('uses the supplied launch directory for configuration, output, source and configured guide', async () => {
+    const cwd = process.cwd();
+    fs.writeFileSync(path.join(repo, '.self-review.yaml'), 'guide-file: review.guide.xml\n');
+    const report = vi.fn();
+    const { session, output } = await resolveSession(
+      parseServeArgs([]),
+      {},
+      createStartupHost(repo, report)
+    );
+    expect(process.cwd()).toBe(cwd);
+    expect(session.sourceIdentity?.invocationCwd).toBe(repo);
+    expect(session.loadedReview).toBeDefined();
+    expect(output).toEqual({
+      path: path.join(repo, 'review.xml'),
+      origin: 'inherited',
+      baseDir: repo,
+    });
+    expect(session.guideData?.groups[0].name).toBe('Core change');
+    expect(report).toHaveBeenCalledWith('[serve] Startup mode: git');
+  });
+
+  it('delivers invalid configured guide diagnostics to the host reporter', async () => {
+    fs.writeFileSync(path.join(repo, '.self-review.yaml'), 'guide-file: invalid.guide.xml\n');
+    const invalid = path.join(repo, 'invalid.guide.xml');
+    fs.writeFileSync(invalid, '<invalid>');
+    const report = vi.fn();
+    try {
+      const { session } = await resolveSession(
+        parseServeArgs([]),
+        {},
+        createStartupHost(repo, report)
+      );
+      expect(session.guideData).toBeNull();
+      expect(report.mock.calls.filter(([message]) => message.startsWith('[guide]'))).toEqual([
+        [expect.stringContaining(`[guide] Ignoring guide at ${invalid}: invalid`)],
+      ]);
+    } finally {
+      fs.rmSync(invalid);
+    }
+  });
+
+  it('awaits supplied effects and passes launch cwd, resume path and owned signal', async () => {
+    const host = createStartupHost(repo, vi.fn());
+    const controller = new AbortController();
+    const options = { signal: controller.signal, timeoutMs: 1234 };
+    let release!: () => void;
+    const pendingGuide = new Promise<null>(done => {
+      release = () => done(null);
+    });
+    const guide = vi.fn<typeof host.operations.loadGuide>(() => pendingGuide);
+    const load = vi.fn(host.operations.loadLocalReview);
+    const resume = vi.fn<typeof host.operations.loadResumeDocument>();
+    host.operations = {
+      ...host.operations,
+      loadLocalReview: load,
+      loadResumeDocument: resume,
+      loadResumeDocumentAsync: undefined,
+      loadGuide: guide,
+    };
+    let settled = false;
+    const pending = resolveSession(parseServeArgs(['--resume-from', 'prior.xml']), options, host);
+    void pending.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      }
+    );
+    try {
+      await vi.waitFor(() => expect(guide).toHaveBeenCalledOnce());
+      expect(settled).toBe(false);
+      expect(load.mock.calls[0][3]).toBe(repo);
+      expect(load.mock.calls[0][5]).toBe(options);
+      expect(resume.mock.calls[0][1]).toBe(path.join(repo, 'prior.xml'));
+      expect(guide.mock.calls[0][3]).toEqual({
+        cwd: repo,
+        reportDiagnostic: host.reportDiagnostic,
+        signal: controller.signal,
+      });
+    } finally {
+      release();
+      await pending;
+    }
+  });
+
   it('resolves a git session and records the identity the routes authorize against', async () => {
     process.chdir(repo);
 
@@ -295,3 +396,53 @@ describe('resolveSession', () => {
     await expect(resolveSession(parseServeArgs([]))).rejects.toThrow(/git repository/);
   });
 });
+
+it('awaits the optional async resume capability with the startup signal before guide loading', async () => {
+  const host = createStartupHost(repo, vi.fn());
+  const controller = new AbortController();
+  const options = { signal: controller.signal, timeoutMs: 1234 };
+  const synchronous = vi.fn<typeof host.operations.loadResumeDocument>(() => {
+    throw new Error('synchronous parsing must not run');
+  });
+  const guide = vi.fn(host.operations.loadGuide);
+  host.operations.loadResumeDocument = synchronous;
+  host.operations.loadGuide = guide;
+  host.operations.loadResumeDocumentAsync = vi.fn<
+    NonNullable<typeof host.operations.loadResumeDocumentAsync>
+  >((_session, _path, passed) => {
+    expect(passed).toBe(options);
+    return new Promise((_resolve, reject) =>
+      passed!.signal!.addEventListener('abort', () => reject(passed!.signal!.reason), {
+        once: true,
+      })
+    );
+  });
+  const pending = resolveSession(parseServeArgs(['--resume-from', 'prior.xml']), options, host);
+  const failure = pending.catch((error: unknown) => error);
+  try {
+    await vi.waitFor(() => expect(host.operations.loadResumeDocumentAsync).toHaveBeenCalledOnce());
+    expect(guide).not.toHaveBeenCalled();
+    controller.abort(new Error('startup cancelled'));
+    expect(await failure).toHaveProperty('message', expect.stringContaining('startup cancelled'));
+    expect(synchronous).not.toHaveBeenCalled();
+    expect(guide).not.toHaveBeenCalled();
+  } finally {
+    controller.abort();
+    await failure;
+  }
+});
+
+it.each(['capture', 'throw', 'reject'] as const)(
+  'forwards configuration diagnostics to the startup %s reporter',
+  async mode => {
+    fs.writeFileSync(path.join(repo, '.self-review.yaml'), 'font-size: .inf\n');
+    const report = vi.fn(() => {
+      if (mode === 'throw') throw new Error('report failed');
+      if (mode === 'reject') return Promise.reject(new Error('report failed'));
+    });
+    const host = createStartupHost(repo, report);
+    const result = await resolveSession(parseServeArgs([]), {}, host);
+    expect(Number.isFinite(result.session.config?.fontSize)).toBe(true);
+    expect(report).toHaveBeenCalledWith(expect.stringContaining('font-size'));
+  }
+);

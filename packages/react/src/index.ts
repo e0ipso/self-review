@@ -8,7 +8,7 @@ export type { SingleFileReviewProps, SingleFileReviewHandle } from './SingleFile
 export type { ReviewHandle } from './hooks/useReviewBridge';
 
 // Adapter interface
-export type { ReviewAdapter, ConfigAdapter } from './adapter';
+export type { ReviewAdapter, ConfigAdapter, ReviewOperationError } from './adapter';
 
 // Re-export types consumers commonly need
 export type {
@@ -43,11 +43,39 @@ export type {
   SuggestionApplyOutcome,
 } from '@self-review/types';
 
-// Context providers (for advanced/custom composition)
-export { ReviewProvider, useReview } from './context/ReviewContext';
-export type { ReviewContextValue, ReviewProviderProps } from './context/ReviewContext';
-export { ConfigProvider, useConfig, defaultConfig } from './context/ConfigContext';
-export type { ConfigContextValue, ConfigProviderProps } from './context/ConfigContext';
+// Compatibility contexts for existing custom compositions.
+// Prefer supported feature hooks when a consumer needs only part of the state.
+export {
+  ReviewProvider,
+  useReview,
+  useReviewSaveTransaction,
+  useReviewSessionId,
+  useReviewSnapshotId,
+} from './context/ReviewContext';
+export type {
+  ReviewContextValue,
+  ReviewProviderProps,
+  ReviewSaveSnapshot,
+  ReviewSaveTransaction,
+} from './context/ReviewContext';
+export {
+  ConfigProvider,
+  useConfig,
+  defaultConfig,
+  useConfiguration,
+  useAppearance,
+  useResolvedTheme,
+  useCategories,
+  useOutputPath,
+  usePortalContainer,
+} from './context/ConfigContext';
+export type {
+  ConfigContextValue,
+  ConfigProviderProps,
+  ConfigurationValue,
+  AppearanceValue,
+  OutputPathValue,
+} from './context/ConfigContext';
 export { DiffNavigationProvider, useDiffNavigationContext } from './context/DiffNavigationContext';
 export { ReviewAdapterProvider, useAdapter } from './context/ReviewAdapterContext';
 export { GuideProvider, useGuide } from './context/GuideContext';
@@ -68,9 +96,65 @@ export { default as FileSection } from './components/DiffViewer/FileSection';
 export { default as FileTree } from './components/FileTree';
 export { default as Layout } from './components/Layout';
 export { default as Toolbar } from './components/Toolbar';
+export { Button } from './components/ui/button';
 export { default as RemoteDriftBanner } from './components/RemoteDriftBanner';
 export { default as ImportDiagnosticsBanner } from './components/ImportDiagnosticsBanner';
 
 // Hooks
 export { useReviewState } from './hooks/useReviewState';
 export { useDiffNavigation } from './hooks/useDiffNavigation';
+
+export {
+  LocalizationProvider,
+  useLocalization,
+  createLocalization,
+} from './localization/LocalizationContext';
+export type {
+  LocalizationOptions,
+  LocalizedMessage,
+  MessageKey,
+  MessageValues,
+} from './localization/LocalizationContext';
+export { useReviewCommands, useFileReview } from './context/ReviewContext';
+
+export { ReviewProviders } from './ReviewProviders';
+export type { ReviewProvidersProps } from './ReviewProviders';
+export { useOptionalApplySession } from './context/ReviewContext';
+
+export {
+  PreviewRenderingProvider,
+  usePreviewRenderer,
+  useDiagramRenderer,
+} from './context/PreviewRenderingContext';
+export type {
+  PreviewRenderer,
+  PreviewRenderProps,
+  PreviewRenderingProviderProps,
+} from './context/PreviewRenderingContext';
+export { createDiagramRenderService } from './services/diagram-service';
+export type { DiagramRenderRequest, DiagramRenderService } from './services/diagram-service';
+export type { ContentPreview } from './services/content-preview';
+
+export { ReviewServicesProvider, useReviewServices } from './context/ReviewServicesContext';
+export type { ReviewServices } from './context/ReviewServicesContext';
+
+// Scoped display commands, supplied automatically by ReviewProvider.
+export { useReviewExpansion, useCommentDisclosure } from './context/ReviewDisplayContext';
+export { useNavigationReview } from './context/ReviewContext';
+
+export { useInteractionLock } from './hooks/useInteractionLock';
+
+export { useReviewDraftWork, useReviewDraftGuard } from './hooks/useReviewDraft';
+export { UnfinishedReviewDraftError } from './context/review-drafts';
+
+export type { ReviewCommands } from './context/review-commands';
+export { useReviewLoadState } from './context/ReviewLoadContext';
+export type { ReviewLoadState } from './context/ReviewLoadContext';
+export { ReviewRecovery } from './components/ReviewRecovery';
+export { ReviewLoadRecovery } from './components/ReviewLoadRecovery';
+export { ReviewDraftRecovery } from './components/Comments/ReviewDraftRecovery';
+
+export { ReviewShortcutProvider, useReviewShortcutPolicy } from './context/ReviewShortcutContext';
+export type { ReviewShortcutPolicy } from './context/ReviewShortcutContext';
+export { ReviewShortcutToggle } from './components/ReviewShortcutToggle';
+export { KeyboardNavigationManager } from './components/KeyboardNavigationManager';

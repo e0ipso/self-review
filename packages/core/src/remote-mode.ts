@@ -26,8 +26,7 @@ import type {
   ForgeThread,
   ForgeUrl,
 } from './forge-provider';
-import { createGitHubProvider } from './github-provider';
-import { createGitLabProvider } from './gitlab-provider';
+import { createForgeProvider } from './forge-catalog';
 import {
   DEFAULT_GIT_COMMAND_TIMEOUT_MS,
   defaultGitRunner,
@@ -46,15 +45,15 @@ import { createIgnoreFilter } from './ignore-filter';
 import type {
   DiffFile,
   DiffLoadPayload,
-  RemoteDriftInfo,
   RemoteSessionInfo,
   ReviewComment,
   ReviewSourceIdentity,
-  ReviewState,
 } from './types';
 import { loadGitDiffWithUntracked } from './git-diff-loader';
 import { formatGitDiffArgs } from './git-diff-args';
 import { canonicalSourcePath } from './source-identity';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 
 /**
  * The git-mode inputs plus the forge threads, before any diff is loaded (so nothing to anchor
@@ -69,6 +68,8 @@ export interface MaterializedRemoteSession {
   mode: MaterializeMode;
   /** Idempotent, never rejects; the receiver of the session must call it. */
   cleanup: () => Promise<void>;
+  /** Legacy synchronous-first removal, for an exit handler that cannot await normal disposal. */
+  cleanupForExit?: () => Promise<void>;
   /** Provenance + thread-sync status for payloads and the saved review. */
   remote: RemoteSessionInfo;
   /** Verbatim; empty when thread sync is unavailable. */
@@ -108,17 +109,14 @@ export interface RemoteSessionDeps {
   /** Untracked files are never included. A stand-in may omit `diagnostics` and `identity`. */
   loadDiff: (
     gitDiffArgs: string[],
-    cwd: string
+    cwd: string,
+    options?: RemoteLifetimeOptions
   ) => Promise<{
     files: DiffFile[];
     repository: string;
     diagnostics?: string[];
     identity?: ReviewSourceIdentity;
   }>;
-}
-
-function defaultCreateProvider(forge: ForgeName, runner: ForgeCommandRunner): ForgeProvider {
-  return forge === 'github' ? createGitHubProvider(runner) : createGitLabProvider(runner);
 }
 
 /** Puts `gh`/`glab` under the session's bounds too, so a startup deadline can reach them. */
@@ -142,18 +140,30 @@ function throwIfAborted(signal: AbortSignal | undefined, stage: string): void {
 }
 
 export const defaultRemoteSessionDeps: RemoteSessionDeps = {
-  createProvider: defaultCreateProvider,
+  createProvider: createForgeProvider,
   detectExistingClone,
   materialize,
   resolveRemoteDefaultBranch,
   runner: defaultGitRunner,
-  loadDiff: (gitDiffArgs, cwd) =>
+  loadDiff: (gitDiffArgs, cwd, options) =>
     // A base...head diff of a remote PR/MR must never pick up local
     // untracked files (an existing clone may have unrelated ones).
-    loadGitDiffWithUntracked(gitDiffArgs, cwd, { includeUntracked: false }),
+    loadGitDiffWithUntracked(gitDiffArgs, cwd, {
+      includeUntracked: false,
+      signal: options?.signal,
+      runner: (command, args, execution) =>
+        defaultGitRunner(command, args, {
+          ...execution,
+          gitEnvironment: 'isolated',
+        }),
+    }),
 };
 
 export interface RemoteLifetimeOptions {
+  /** Defaults to stderr, with the existing remote diagnostic text and call form. */
+  reportDiagnostic?: DiagnosticReporter;
+  /** Passed unchanged to materialization; no host storage is used when supplied. */
+  temporaryClones?: MaterializeOptions['temporaryClones'];
   /** Without one, the session is bounded only by the per-command timeout. */
   signal?: AbortSignal;
 }
@@ -184,9 +194,14 @@ export async function startRemoteSession(
   options: StartRemoteSessionOptions = {}
 ): Promise<MaterializedRemoteSession> {
   const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
   const threadsRequired = options.threads === 'required';
   const { signal } = options;
-  const lifetime: MaterializeOptions = { signal };
+  const lifetime: MaterializeOptions = {
+    signal,
+    ...(options.temporaryClones ? { temporaryClones: options.temporaryClones } : {}),
+    ...(options.reportDiagnostic ? { reportDiagnostic } : {}),
+  };
   throwIfAborted(signal, 'start');
 
   const forgeUrl = parseForgeUrl(url);
@@ -209,14 +224,14 @@ export async function startRemoteSession(
       throw error;
     }
     cliAvailable = false;
-    console.error(
+    reportDiagnostic(
       `[remote] Forge CLI unavailable (${error.cli}): ${error.message} — ` +
         'falling back to the remote default branch via git.'
     );
     existingClone = await d.detectExistingClone(forgeUrl, cwd, d.runner, lifetime);
     baseBranch = await d.resolveRemoteDefaultBranch(forgeUrl, d.runner, existingClone, lifetime);
   }
-  console.error(`[remote] Base branch: ${baseBranch}`);
+  reportDiagnostic(`[remote] Base branch: ${baseBranch}`);
 
   const materialized = await d.materialize(
     forgeUrl,
@@ -229,59 +244,62 @@ export async function startRemoteSession(
 
   // The caller gets the cleanup handle only with a session, so anything ending the call before that
   // releases here.
-  let fetchedThreads: ForgeThread[] = [];
-  let threadSyncAvailable = false;
-  if (cliAvailable || threadsRequired) {
-    try {
-      fetchedThreads = await provider.fetchThreads(forgeUrl, {
-        includeResolved: options.includeResolved ?? false,
-      });
-      threadSyncAvailable = true;
-    } catch (error) {
-      // A cancelled fetch ends the session under either policy.
-      if (threadsRequired || isCommandCancelled(error)) {
-        await materialized.cleanup();
-        if (error instanceof ForgeCliUnavailableError) {
-          throw new Error(
-            `Cannot fetch discussion threads: ${error.message}\n` +
-              `This requires the ${error.cli} CLI to be installed and authenticated.`
-          );
+  try {
+    let fetchedThreads: ForgeThread[] = [];
+    let threadSyncAvailable = false;
+    if (cliAvailable || threadsRequired) {
+      try {
+        fetchedThreads = await provider.fetchThreads(forgeUrl, {
+          includeResolved: options.includeResolved ?? false,
+          reviewedHeadSha: materialized.headSha,
+        });
+        threadSyncAvailable = true;
+      } catch (error) {
+        // A cancelled fetch ends the session under either policy.
+        if (threadsRequired || isCommandCancelled(error)) {
+          if (error instanceof ForgeCliUnavailableError) {
+            throw new Error(
+              `Cannot fetch discussion threads: ${error.message}\n` +
+                `This requires the ${error.cli} CLI to be installed and authenticated.`
+            );
+          }
+          throw error;
         }
-        throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        reportDiagnostic(
+          `[remote] thread sync unavailable — continuing without forge threads: ${message}`
+        );
       }
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(
-        `[remote] thread sync unavailable — continuing without forge threads: ${message}`
+    } else {
+      reportDiagnostic(
+        '[remote] thread sync unavailable — forge CLI missing, continuing without forge threads.'
       );
     }
-  } else {
-    console.error(
-      '[remote] thread sync unavailable — forge CLI missing, continuing without forge threads.'
-    );
-  }
-  if (signal?.aborted) {
-    await materialized.cleanup();
     throwIfAborted(signal, 'threads');
-  }
 
-  return {
-    forgeUrl,
-    repoPath: materialized.repoPath,
-    gitDiffArgs: [`${materialized.baseSha}...${materialized.headSha}`],
-    mode: materialized.mode,
-    cleanup: materialized.cleanup,
-    remote: {
-      remoteUrl: url,
-      remoteBaseSha: materialized.baseSha,
-      remoteHeadSha: materialized.headSha,
-      remoteForge: forgeUrl.forge,
-      threadSyncAvailable,
-      // A temporary clone is deleted on exit, so nothing may be written
-      // into it; the front end needs the fact, not the path.
-      temporaryClone: materialized.mode === 'temp-clone',
-    },
-    fetchedThreads,
-  };
+    return {
+      forgeUrl,
+      repoPath: materialized.repoPath,
+      gitDiffArgs: [`${materialized.baseSha}...${materialized.headSha}`],
+      mode: materialized.mode,
+      cleanup: materialized.cleanupAsync ?? materialized.cleanup,
+      cleanupForExit: materialized.cleanup,
+      remote: {
+        remoteUrl: url,
+        remoteBaseSha: materialized.baseSha,
+        remoteHeadSha: materialized.headSha,
+        remoteForge: forgeUrl.forge,
+        threadSyncAvailable,
+        // A temporary clone is deleted on exit, so nothing may be written
+        // into it; the front end needs the fact, not the path.
+        temporaryClone: materialized.mode === 'temp-clone',
+      },
+      fetchedThreads,
+    };
+  } catch (error) {
+    await (materialized.cleanupAsync ?? materialized.cleanup)();
+    throw error;
+  }
 }
 
 export interface RemoteReviewLoad {
@@ -310,7 +328,8 @@ export async function loadRemoteReview(
   throwIfAborted(options.signal, 'load');
   const { files, repository, diagnostics, identity } = await loadDiff(
     session.gitDiffArgs,
-    session.repoPath
+    session.repoPath,
+    options
   );
   throwIfAborted(options.signal, 'load');
   const shouldKeep = createIgnoreFilter(ignorePatterns);
@@ -366,14 +385,19 @@ export async function bootstrapRemoteDiff(
   options: RemoteLifetimeOptions = {}
 ): Promise<RemoteBootstrapResult> {
   const d: RemoteSessionDeps = { ...defaultRemoteSessionDeps, ...deps };
-  const started = await startRemoteSession(url, cwd, d, { signal: options.signal });
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
+  const started = await startRemoteSession(url, cwd, d, {
+    signal: options.signal,
+    temporaryClones: options.temporaryClones,
+    reportDiagnostic,
+  });
 
   // The caller gets the cleanup handle only with the result, so any failure before that releases
   // here.
   try {
     const loaded = await loadRemoteReview(started, ignorePatterns, d.loadDiff, options);
     for (const diagnostic of loaded.diagnostics) {
-      console.error(`[remote] Diff diagnostic: ${diagnostic}`);
+      reportDiagnostic(`[remote] Diff diagnostic: ${diagnostic}`);
     }
 
     const session: RemoteSession = { ...started, fetchedComments: loaded.comments };
@@ -400,62 +424,4 @@ export async function bootstrapRemoteDiff(
   }
 }
 
-/**
- * Merge fetched forge threads into a resumed document's comments. The
- * resumed document wins: a fetched thread whose root `remoteId` already
- * appears in the resumed comments is skipped (the resumed copy may carry
- * the user's added replies). Order: resumed comments first, then the
- * non-duplicate fetched threads in fetch order. Inputs are not mutated.
- */
-export function mergeRemoteThreads(
-  resumed: ReviewComment[],
-  fetched: ReviewComment[]
-): ReviewComment[] {
-  const resumedRemoteIds = new Set(
-    resumed.map(c => c.remoteId).filter((id): id is string => id !== undefined)
-  );
-  return [
-    ...resumed,
-    ...fetched.filter(c => c.remoteId === undefined || !resumedRemoteIds.has(c.remoteId)),
-  ];
-}
-
-/**
- * Return a copy of the state carrying this session's remote provenance, so
- * "Finish Review" writes the `remote-*` root attributes. Always records the
- * live session values: the saved document describes the diff that was
- * actually reviewed.
- */
-export function applyRemoteProvenance(state: ReviewState, remote: RemoteSessionInfo): ReviewState {
-  return {
-    ...state,
-    // The three source shapes are mutually exclusive in the document: the
-    // remote-* attributes ARE the source, so the in-session git source
-    // (the materialized clone) must not leak into the saved review. The
-    // welcome source emits no source attributes, mirroring fetch-comments.
-    source: { type: 'welcome' },
-    remoteUrl: remote.remoteUrl,
-    remoteBaseSha: remote.remoteBaseSha,
-    remoteHeadSha: remote.remoteHeadSha,
-    remoteForge: remote.remoteForge,
-  };
-}
-
-/**
- * Compare a resumed document's recorded `remote-head-sha` with the live
- * head from materialization. Returns `null` when the document recorded no
- * head SHA (nothing to compare).
- */
-export function computeRemoteDrift(
-  recordedHeadSha: string | undefined,
-  liveHeadSha: string
-): RemoteDriftInfo | null {
-  if (recordedHeadSha === undefined) {
-    return null;
-  }
-  return {
-    recordedHeadSha,
-    liveHeadSha,
-    drifted: recordedHeadSha !== liveHeadSha,
-  };
-}
+export { mergeRemoteThreads, applyRemoteProvenance, computeRemoteDrift } from './remote-feedback';

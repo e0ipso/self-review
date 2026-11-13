@@ -1,13 +1,29 @@
 import React from 'react';
+import { ReviewDisplayProvider } from '../../context/ReviewDisplayContext';
+function render(ui: React.ReactElement) {
+  return testingRender(ui, {
+    wrapper: ({ children }) => (
+      <ReviewDisplayProvider files={[]} reviewFiles={[]} isLargePayload={false}>
+        {children}
+      </ReviewDisplayProvider>
+    ),
+  });
+}
+
 import { describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render as testingRender, screen } from '@testing-library/react';
 import type { DiffFile } from '@self-review/types';
 import FileSection from './FileSection';
+import { PreviewRenderingProvider } from '../../context/PreviewRenderingContext';
 import type { FileSectionHeaderProps } from './FileSectionHeader';
-import type { DiffContentAreaProps } from './DiffContentArea';
+import type { PreviewRenderProps } from '../../services/preview-renderer';
 
 vi.mock('../../context/ReviewContext', () => ({
-  useReview: () => ({
+  useReviewSource: () => ({ type: 'git' }),
+  useFileReview: () => undefined,
+  useReviewSessionId: () => 1,
+  useReviewSnapshotId: () => 1,
+  useReviewCommands: () => ({
     toggleViewed: vi.fn(),
     getCommentsForFile: vi.fn(() => []),
     files: [],
@@ -36,7 +52,7 @@ vi.mock('./useExpandContext', () => ({
 }));
 
 vi.mock('./FileSectionHeader', () => ({
-  FileSectionHeader: ({ isPreviewable, renderViewMode }: FileSectionHeaderProps) => (
+  FileSectionHeaderPresentation: ({ isPreviewable, renderViewMode }: FileSectionHeaderProps) => (
     <div
       data-testid='mock-file-section-header'
       data-previewable={String(isPreviewable)}
@@ -45,15 +61,17 @@ vi.mock('./FileSectionHeader', () => ({
   ),
 }));
 
-vi.mock('./FileSectionBody', () => ({
-  FileSectionBody: ({ contentAreaProps }: { contentAreaProps: DiffContentAreaProps }) => (
+vi.mock('./FilePreview', () => ({
+  FilePreview: (contentAreaProps: PreviewRenderProps & { mode: 'raw' | 'rendered' }) => (
     <div
       data-testid='mock-file-section-body'
-      data-render-view-mode={contentAreaProps.renderViewMode}
-      data-rendered-text-mode={contentAreaProps.renderedTextMode ?? 'null'}
-      data-eligible-rendered-text={String(contentAreaProps.isEligibleForRenderedView)}
-      data-show-image-preview={String(contentAreaProps.showImagePreview)}
-      data-show-svg-preview={String(contentAreaProps.showSvgPreview)}
+      data-render-view-mode={contentAreaProps.mode}
+      data-rendered-text-mode={
+        contentAreaProps.preview?.kind === 'text' ? contentAreaProps.preview.mode : 'null'
+      }
+      data-eligible-rendered-text={String(contentAreaProps.preview?.kind === 'text')}
+      data-show-image-preview={String(contentAreaProps.preview?.kind === 'image')}
+      data-show-svg-preview={String(contentAreaProps.preview?.kind === 'svg')}
     />
   ),
 }));
@@ -132,4 +150,68 @@ describe('FileSection preview eligibility', () => {
     expect(svg.body.getAttribute('data-show-svg-preview')).toBe('true');
     expect(svg.body.getAttribute('data-rendered-text-mode')).toBe('null');
   });
+});
+
+it('offers a rendered toggle for an added host format with an explicit default', () => {
+  render(
+    <PreviewRenderingProvider
+      previewRenderer={{
+        supports: file => file.newPath.endsWith('.custom'),
+        defaultMode: 'rendered',
+        component: () => null,
+      }}
+    >
+      <FileSection file={makeDiffFile('schema.custom')} viewMode='unified' expanded />
+    </PreviewRenderingProvider>
+  );
+  expect(screen.getByTestId('mock-file-section-header').getAttribute('data-previewable')).toBe(
+    'true'
+  );
+  expect(screen.getByTestId('mock-file-section-body').getAttribute('data-render-view-mode')).toBe(
+    'rendered'
+  );
+});
+it('keeps a host-only format raw by default', () => {
+  render(
+    <PreviewRenderingProvider previewRenderer={{ supports: () => true, component: () => null }}>
+      <FileSection file={makeDiffFile('schema.custom')} viewMode='unified' expanded />
+    </PreviewRenderingProvider>
+  );
+  expect(screen.getByTestId('mock-file-section-header').getAttribute('data-previewable')).toBe(
+    'true'
+  );
+  expect(screen.getByTestId('mock-file-section-body').getAttribute('data-render-view-mode')).toBe(
+    'raw'
+  );
+});
+it('keeps existing built-in defaults and modified-file eligibility with a supplied renderer', () => {
+  const previewRenderer = {
+    supports: () => true,
+    defaultMode: 'raw' as const,
+    component: () => null,
+  };
+  const { rerender } = render(
+    <PreviewRenderingProvider previewRenderer={previewRenderer}>
+      <FileSection file={makeDiffFile('a.html')} viewMode='unified' expanded />
+    </PreviewRenderingProvider>
+  );
+  expect(screen.getByTestId('mock-file-section-body').getAttribute('data-render-view-mode')).toBe(
+    'rendered'
+  );
+  rerender(
+    <PreviewRenderingProvider previewRenderer={previewRenderer}>
+      <FileSection
+        key='modified'
+        file={makeDiffFile('a.html', { changeType: 'modified' })}
+        viewMode='unified'
+        expanded
+      />
+    </PreviewRenderingProvider>
+  );
+  expect(screen.getByTestId('mock-file-section-header').getAttribute('data-previewable')).toBe(
+    'false'
+  );
+  expect(screen.getByTestId('mock-file-section-body').getAttribute('data-render-view-mode')).toBe(
+    'raw'
+  );
 });

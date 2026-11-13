@@ -100,7 +100,11 @@ Then('hint labels should be shown over the file tree', async () => {
 
   // Labels sit at their target's rect, so one inside the panel's box means
   // the collector measured the restored tree rather than the collapsed one.
-  const panelBox = await page.locator('#fileTree').boundingBox();
+  const panelId = await page
+    .locator('[data-testid="file-tree-toggle"]')
+    .getAttribute('aria-controls');
+  expect(panelId).toBeTruthy();
+  const panelBox = await page.locator(`[id="${panelId}"]`).boundingBox();
   const labelBox = await labels.first().boundingBox();
   expect(panelBox).not.toBeNull();
   expect(labelBox).not.toBeNull();

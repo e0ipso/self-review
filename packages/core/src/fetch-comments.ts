@@ -6,13 +6,16 @@
 // thread-fetch policy differs (the app degrades, this fails).
 //
 // No overall deadline: bounded by the per-command timeout and the caller's `signal`.
-// Either way the in-flight command is killed, the clone removed and nothing written.
+// The in-flight command tree is killed and owned resources are released. Publication checks
+// cancellation before rename; interruption after rename keeps the saved document.
 
+import { stderrReporter } from './diagnostics';
+import { CommandCancelledError } from './forge-provider';
 import { REVIEW_LEVEL_FILE_PATH } from './thread-mapper';
 import { publishReview } from './review-publisher';
 import type { PublishReviewOptions, PublishReviewResult } from './review-publisher';
 import { loadConfigWithProvenance } from './config';
-import type { LoadedConfig } from './config';
+import type { LoadedConfig, LoadConfigOptions } from './config';
 import { publishOptionsFor, resolveOutputTarget } from './startup';
 import { defaultRemoteSessionDeps, loadRemoteReview, startRemoteSession } from './remote-mode';
 import type { RemoteLifetimeOptions, RemoteSessionDeps } from './remote-mode';
@@ -25,7 +28,7 @@ export interface FetchCommentsDeps extends RemoteSessionDeps {
     outputPath: string,
     options: PublishReviewOptions
   ) => Promise<PublishReviewResult>;
-  loadConfig: () => LoadedConfig;
+  loadConfig: (options?: LoadConfigOptions) => LoadedConfig;
   now: () => Date;
 }
 
@@ -139,6 +142,9 @@ export interface FetchCommentsOptions extends RemoteLifetimeOptions {
  * clone, when one was created, is removed on both success and failure, and
  * the removal has completed by the time the promise settles.
  *
+ * A supplied reportDiagnostic owns progress, configuration, loading and materialization diagnostics.
+ * Errors still reject for the host to present. Reporters must not throw.
+ *
  * Fetching comments is the whole point, so threads run under the `'required'`
  * policy: an unavailable forge CLI is an error, not a degraded review.
  */
@@ -148,7 +154,12 @@ export async function runFetchComments(
 ): Promise<void> {
   const deps: FetchCommentsDeps = { ...defaultDeps(), ...options.deps };
   const cwd = options.cwd ?? process.cwd();
-  const lifetime: RemoteLifetimeOptions = { signal: options.signal };
+  const reportDiagnostic = options.reportDiagnostic ?? stderrReporter;
+  const lifetime: RemoteLifetimeOptions = {
+    signal: options.signal,
+    temporaryClones: options.temporaryClones,
+    ...(options.reportDiagnostic ? { reportDiagnostic } : {}),
+  };
 
   // startRemoteSession cleans up after its own failure; once it returns, this try/finally owns the
   // session.
@@ -158,13 +169,16 @@ export async function runFetchComments(
     threads: 'required',
   });
   try {
-    console.error(`[fetch-comments] Fetched ${session.fetchedThreads.length} threads`);
+    reportDiagnostic(`[fetch-comments] Fetched ${session.fetchedThreads.length} threads`);
 
-    const loadedConfig = deps.loadConfig();
+    const loadedConfig = deps.loadConfig({
+      cwd,
+      ...(options.reportDiagnostic ? { reportDiagnostic } : {}),
+    });
     const config = loadedConfig.config;
     const loaded = await loadRemoteReview(session, config.ignore ?? [], deps.loadDiff, lifetime);
     for (const diagnostic of loaded.diagnostics) {
-      console.error(`[fetch-comments] Diff diagnostic: ${diagnostic}`);
+      reportDiagnostic(`[fetch-comments] Diff diagnostic: ${diagnostic}`);
     }
 
     const state = buildRemoteReviewState({
@@ -179,9 +193,25 @@ export async function runFetchComments(
 
     // No flag names the output, so config provenance decides its trust (as in the app and serve).
     const target = resolveOutputTarget(null, loadedConfig, cwd);
-    await deps.publish(state, target.path, publishOptionsFor(target));
-    console.error(`[fetch-comments] ${loaded.comments.length} threads written to ${target.path}`);
+    if (options.signal?.aborted) {
+      throw new CommandCancelledError('aborted', 'self-review', ['publish']);
+    }
+    await deps.publish(state, target.path, {
+      ...publishOptionsFor(target),
+      ...(options.reportDiagnostic ? { reportDiagnostic } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    try {
+      reportDiagnostic(
+        `[fetch-comments] ${loaded.comments.length} threads written to ${target.path}`
+      );
+    } catch {
+      /* Presentation cannot change an already committed publication's outcome. */
+    }
   } finally {
     await session.cleanup();
+  }
+  if (options.signal?.aborted) {
+    throw new CommandCancelledError('aborted', 'self-review', ['fetch-comments']);
   }
 }

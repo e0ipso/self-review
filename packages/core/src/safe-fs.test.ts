@@ -101,6 +101,26 @@ describe('atomicReplace', () => {
     expect(fs.readdirSync(tmp)).toEqual(['file.txt']);
   });
 
+  it('returns the written inode identity without inspecting after commit', () => {
+    const target = path.join(tmp, 'file.txt');
+    let committed = false;
+    const layer: FsLayer = {
+      ...nodeFsLayer,
+      renameSync(from, to) {
+        nodeFsLayer.renameSync(from, to);
+        committed = true;
+      },
+      lstatSync(filePath) {
+        if (committed) throw new Error('inspection unavailable after commit');
+        return nodeFsLayer.lstatSync(filePath);
+      },
+    };
+    const result = atomicReplace(target, Buffer.from('committed'), { fs: layer });
+    const actual = fs.statSync(target);
+    expect(result.identity).toMatchObject({ ino: actual.ino, dev: actual.dev, size: actual.size });
+    expect(fs.readFileSync(target, 'utf-8')).toBe('committed');
+  });
+
   it('refuses when the target is no longer the file that was inspected', () => {
     const target = path.join(tmp, 'file.txt');
     fs.writeFileSync(target, 'original');
@@ -233,4 +253,61 @@ describe('atomicReplace: owner and modification policy', () => {
     expect(fs.readFileSync(target, 'utf-8')).toBe('original and more');
     expect(fs.readdirSync(tmp)).toEqual(['file.txt']);
   });
+});
+
+describe('atomicReplace: changes while staging', () => {
+  for (const phase of ['write', 'sync'] as const) {
+    for (const mutation of ['rewrite', 'replace'] as const) {
+      it(`preserves an external ${mutation} during ${phase} and removes staging`, () => {
+        const target = path.join(tmp, 'file.txt');
+        fs.writeFileSync(target, 'original');
+        const expectedIdentity = inspectReplaceTarget(target)!;
+        let mutated = false;
+        const mutate = () => {
+          if (mutated) return;
+          mutated = true;
+          if (mutation === 'replace') fs.renameSync(target, path.join(outside, 'old'));
+          fs.writeFileSync(target, 'external edit, longer than original');
+        };
+        const layer: FsLayer = {
+          ...nodeFsLayer,
+          writeSync(fd, bytes) {
+            const written = nodeFsLayer.writeSync(fd, bytes);
+            if (phase === 'write') mutate();
+            return written;
+          },
+          fsyncSync(fd) {
+            nodeFsLayer.fsyncSync(fd);
+            if (phase === 'sync') mutate();
+          },
+        };
+        expect(
+          codeOf(() =>
+            atomicReplace(target, Buffer.from('proposal'), {
+              fs: layer,
+              expectedIdentity,
+              expectUnmodified: true,
+            })
+          )
+        ).toBe('identity-changed');
+        expect(fs.readFileSync(target, 'utf8')).toBe('external edit, longer than original');
+        expect(fs.readdirSync(tmp)).toEqual(['file.txt']);
+      });
+    }
+  }
+});
+
+it('applies the exact mode after ownership changes that clear set-ID bits', () => {
+  const target = path.join(tmp, 'file');
+  writeExclusiveNoFollow(target, Buffer.from('new'), {
+    exactMode: 0o2640,
+    exactOwner: { uid: 1234, gid: 1234 },
+    fs: {
+      ...nodeFsLayer,
+      fchownSync(fd) {
+        fs.fchmodSync(fd, fs.fstatSync(fd).mode & 0o777);
+      },
+    },
+  });
+  expect(fs.statSync(target).mode & 0o7777).toBe(0o2640);
 });

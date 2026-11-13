@@ -3,7 +3,7 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtemp, writeFile, mkdir, rm, symlink, opendir } from 'fs/promises';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, renameSync, symlinkSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join, sep } from 'path';
 import { tmpdir } from 'os';
@@ -29,6 +29,47 @@ describe('scanDirectory', () => {
       await rm(dir, { recursive: true, force: true });
     }
     tempDirs.length = 0;
+  });
+
+  it('keeps scan diagnostics with each caller without printing', async () => {
+    const dir = await createTempDir();
+    await writeFile(join(dir, 'one.txt'), 'one');
+    await writeFile(join(dir, 'two.txt'), 'two');
+    const reportLimit = vi.fn();
+    const reportMissing = vi.fn();
+    const terminal = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const [limited, missing] = await Promise.all([
+        scanDirectory(dir, [], { budgets: { maxEntries: 1 }, reportDiagnostic: reportLimit }),
+        scanFile(join(dir, 'missing.txt'), { reportDiagnostic: reportMissing }),
+      ]);
+      expect(limited.entryLimitExceeded).toBe(true);
+      expect(limited.diagnostics).toHaveLength(1);
+      expect(reportLimit).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining('Stopped scanning')
+      );
+      expect(reportMissing).toHaveBeenCalledExactlyOnceWith(`[scan] ${missing.diagnostics[0]}`);
+      expect(terminal).not.toHaveBeenCalled();
+    } finally {
+      terminal.mockRestore();
+    }
+  });
+
+  it('refuses a queued directory replaced by a symlink during opendir', async () => {
+    const root = await createTempDir();
+    const outside = await createTempDir();
+    await mkdir(join(root, 'sub'));
+    await writeFile(join(outside, 'secret.txt'), 'SECRET\n');
+    const actual = await vi.importActual<typeof import('fs/promises')>('fs/promises');
+    vi.mocked(opendir).mockImplementationOnce(async (...args) => actual.opendir(...args));
+    vi.mocked(opendir).mockImplementationOnce(async (...args) => {
+      renameSync(join(root, 'sub'), join(root, 'saved'));
+      symlinkSync(outside, join(root, 'sub'));
+      return actual.opendir(...args);
+    });
+    const result = await scanDirectory(root);
+    expect(result.files).toEqual([]);
+    expect(result.diagnostics.join(' ')).toContain('symbolic link');
   });
 
   it('scans a directory with text files', async () => {

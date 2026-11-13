@@ -39,21 +39,13 @@ export function searchEmojis(query: string): EmojiMatch[] {
 }
 
 export function resolveShortcode(shortcode: string): string | null {
-  const emoji = emojis[shortcode];
-  if (emoji) {
-    return emoji.skins[0].native;
-  }
+  if (Object.prototype.hasOwnProperty.call(emojis, shortcode))
+    return emojis[shortcode].skins[0].native;
 
-  // Check aliases (e.g., "satisfied" -> "laughing")
-  if (aliases) {
-    const canonicalId = aliases[shortcode];
-    if (canonicalId) {
-      const aliasedEmoji = emojis[canonicalId];
-      if (aliasedEmoji) {
-        return aliasedEmoji.skins[0].native;
-      }
-    }
-  }
-
-  return null;
+  const canonicalId = Object.prototype.hasOwnProperty.call(aliases, shortcode)
+    ? aliases[shortcode]
+    : null;
+  return canonicalId && Object.prototype.hasOwnProperty.call(emojis, canonicalId)
+    ? emojis[canonicalId].skins[0].native
+    : null;
 }

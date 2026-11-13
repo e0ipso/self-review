@@ -1,44 +1,30 @@
-// src/main/menu.ts
-// Builds the application menu. Standard menus (File/Edit/View/Window) use
-// Electron's built-in role submenus so they match the platform defaults
-// automatically; only the Help menu is customized.
-//
-// Quit stays the built-in role: main.ts intercepts its `app.quit()` in `before-quit`. A custom click that
-// exited directly would reopen the data-loss path.
-
-import { Menu, shell, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+// Native composition stays at the edge; template policy has no Electron globals.
+import { app, Menu, shell, BrowserWindow } from 'electron';
+import { createDesktopLocalization } from '../shared/localization';
 import { IPC } from '../shared/ipc-channels';
+import { createMenuTemplate } from './menu-template';
+import { runMenuAction } from './action-failure';
 
 const DOCUMENTATION_URL = 'https://github.com/e0ipso/self-review#self-review-';
 
-export function setupMenu(): void {
-  const isMac = process.platform === 'darwin';
-
-  const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [{ role: 'appMenu' as const }] : []),
-    { role: 'fileMenu' },
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
-    { role: 'windowMenu' },
+export function setupMenu(messages = createDesktopLocalization()): void {
+  const template = createMenuTemplate(
+    { isMac: process.platform === 'darwin', isPackaged: app.isPackaged },
     {
-      role: 'help',
-      submenu: [
-        {
-          label: 'Documentation',
-          click: () => {
-            shell.openExternal(DOCUMENTATION_URL);
-          },
-        },
-        { type: 'separator' },
-        {
-          label: 'About',
-          click: () => {
+      documentation: () =>
+        runMenuAction(
+          () => shell.openExternal(DOCUMENTATION_URL),
+          () => console.error('[main] Could not open Documentation.')
+        ),
+      about: () =>
+        runMenuAction(
+          () => {
             BrowserWindow.getFocusedWindow()?.webContents.send(IPC.APP_SHOW_ABOUT);
           },
-        },
-      ],
+          () => console.error('[main] Could not show About.')
+        ),
     },
-  ];
-
+    messages
+  );
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

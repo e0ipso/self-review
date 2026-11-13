@@ -43,7 +43,11 @@ export type {
 
 // Diff parsing
 export { parseDiff, parseDiffWithDiagnostics } from './diff-parser';
-export type { DiffParseResult } from './diff-parser';
+export { parseDiffWithDiagnosticsAsync } from './diff-parser-async';
+export type { DiffParseResult, DiffParseOptions } from './diff-parser';
+
+// Transport-neutral runtime review DTO validation
+export { validateReviewState } from './review-state-validation';
 
 // XML I/O
 export { serializeReview, ASSET_DIR_NAME } from './xml-serializer';
@@ -80,6 +84,7 @@ export {
 export type {
   AttachmentOrigins,
   AttachmentReadResult,
+  AttachmentReadOptions,
   AttachmentReadFailureReason,
 } from './attachment-origins';
 
@@ -103,6 +108,8 @@ export type {
   AtomicReplaceOptions,
   AtomicReplaceResult,
 } from './safe-fs';
+export { atomicReplaceAsync, nodeAsyncFsLayer } from './safe-fs-async';
+export type { AtomicReplaceAsyncOptions, AsyncFsLayer, AsyncFileHandle } from './safe-fs-async';
 
 // Line-anchor validation (shared by the resume importer and Apply)
 export { validateLineAnchor, validateLineRange } from './anchor-validation';
@@ -117,6 +124,7 @@ export type { GuideParseResult } from './guide-parser';
 
 // Git operations
 export {
+  GitCommandError,
   runGitDiffAsync,
   getRepoRootAsync,
   getUntrackedFilesAsync,
@@ -125,6 +133,7 @@ export {
   PARSER_COMPATIBLE_GIT_CONFIG,
   PARSER_COMPATIBLE_DIFF_FLAGS,
 } from './git';
+export type { GitExecutionOptions } from './git';
 
 // Forge providers (remote PR/MR conversation plane)
 export {
@@ -149,8 +158,17 @@ export type {
 } from './forge-provider';
 
 // Synthetic diffs (for non-git files/directories)
-export { generateSyntheticDiffs, loadSyntheticFiles } from './synthetic-diff';
-export type { SyntheticDiffOptions, SyntheticDiffResult } from './synthetic-diff';
+export {
+  generateSyntheticDiffs,
+  loadSyntheticFiles,
+  generateSyntheticDiffsAsync,
+  loadSyntheticFilesAsync,
+} from './synthetic-diff';
+export type {
+  SyntheticDiffOptions,
+  SyntheticDiffResult,
+  AsyncSyntheticDiffOptions,
+} from './synthetic-diff';
 
 // Directory/file scanning
 export { scanDirectory, scanFile } from './directory-scanner';
@@ -162,10 +180,18 @@ export {
   BINARY_SNIFF_BYTES,
   MAX_SOURCE_FILE_BYTES,
   MAX_SOURCE_TOTAL_BYTES,
+  MAX_SOURCE_FILE_LINES,
+  MAX_SOURCE_TOTAL_LINES,
+  MAX_DIFF_FILES,
+  MAX_DIFF_HUNKS,
+  MAX_DIFF_DIAGNOSTICS,
+  MAX_DIFF_DIAGNOSTIC_CHARS,
   MAX_GIT_DIFF_OUTPUT_BYTES,
   MAX_GUIDE_BYTES,
   MAX_RESUME_XML_BYTES,
   MAX_RESUME_ATTACHMENTS,
+  MAX_REVIEW_ATTACHMENTS,
+  MAX_PUBLICATION_ASSET_BYTES,
   MAX_IMAGE_BYTES,
   DEFAULT_SOURCE_BUDGETS,
   resolveSourceBudgets,
@@ -200,6 +226,9 @@ export type {
   SnapshotReadOptions,
 } from './snapshot-reader';
 
+// Per-call library diagnostics
+export type { DiagnosticReporter } from './diagnostics';
+
 // Configuration, with provenance
 export { loadConfig, loadConfigWithProvenance } from './config';
 export type {
@@ -211,7 +240,14 @@ export type {
 } from './config';
 
 // Payload sizing
-export { computePayloadStats, countTotalLines, getGitDiffStats } from './payload-sizing';
+export {
+  computePayloadStats,
+  countTotalLines,
+  getGitDiffStats,
+  getGitDiffStatsResult,
+} from './payload-sizing';
+
+export type { GitDiffStats, GitDiffStatsResult } from './payload-sizing';
 
 // Ignore filter
 export { createIgnoreFilter } from './ignore-filter';
@@ -220,10 +256,11 @@ export { createIgnoreFilter } from './ignore-filter';
 export { checkWritability } from './fs-utils';
 
 // Anchored suggestion application (writes a reviewed working file)
-export { applySuggestion, isRepositoryControlPath } from './apply-suggestion';
+export { applySuggestion, applySuggestionAsync, isRepositoryControlPath } from './apply-suggestion';
 export type {
   ApplyRefusalReason,
   ApplySuggestionOptions,
+  ApplySuggestionAsyncOptions,
   ApplySuggestionRequest,
   ApplySuggestionApplied,
   ApplySuggestionRefused,
@@ -288,11 +325,17 @@ export {
   resolveSourceBaseDir,
   resolveApplyDestination,
   applySuggestionForSession,
+  applySuggestionForSessionAsync,
 } from './review-handlers';
-export type { ReviewSession, ReviewStartResult } from './review-handlers';
+export type {
+  ReviewSession,
+  ReviewStartResult,
+  ContextExpansionDependencies,
+  ApplySuggestionForSessionAsyncOptions,
+} from './review-handlers';
 
 // Startup mode detection (git, directory, file, welcome)
-export { determineMode, resolveStartupSource } from './startup-mode';
+export { determineMode, resolveStartupSource, resolveStartupSourceAsync } from './startup-mode';
 export type { StartupSource } from './startup-mode';
 
 // Startup steps both front ends share
@@ -302,6 +345,7 @@ export {
   resolveStartupDiffArgs,
   loadLocalReview,
   loadResumeDocument,
+  adoptResumeDocument,
   ConfiguredDiffArgsError,
 } from './startup';
 export type { ResolvedDiffArgs, LoadedLocalReview } from './startup';
@@ -312,6 +356,7 @@ export type { ApplicationOptionsSpec, ExtractedApplicationOptions } from './cli-
 
 // Walkthrough guide sidecar discovery and tolerant loading
 export { deriveGuidePath, resolveGuidePath, loadGuide } from './guide-loader';
+export type { LoadGuideOptions } from './guide-loader';
 
 // Git diff loading, staged/untracked defaulting, and argument normalisation
 export { loadGitDiffWithUntracked, dedupeUntrackedByPath } from './git-diff-loader';
@@ -356,3 +401,37 @@ export type {
   BuildRemoteReviewStateArgs,
   FetchCommentsOptions,
 } from './fetch-comments';
+
+export { decodeSuggestionApplyRequest, MAX_CONTEXT_LINES } from './review-request-validation';
+export type { RequestDecodeResult } from './review-request-validation';
+
+// Focused read capabilities; all existing filesystem exports above remain available.
+export { readContainedFileBounded } from './safe-fs-async';
+export { nodeReadFsLayer, boundedReadFsFromSync } from './safe-fs-read';
+export type {
+  AsyncReadHandle,
+  AsyncReadFsLayer,
+  BoundedAsyncReadFsLayer,
+  SyncReadFsLayer,
+} from './safe-fs-read';
+
+export type { SourceReadFsLayer, ScanFsLayer, ScanEntry, ScanDirectoryHandle } from './scan-fs';
+export { nodeScanFsLayer } from './node-scan-fs';
+
+export { nodePublicationFileSystem } from './publication-fs';
+export type { PublicationFileSystem, PublicationInspection } from './publication-fs';
+export { nodeTemporaryCloneStorage } from './materializer';
+export type { TemporaryCloneStorage } from './materializer';
+export { nodeApplyDestinationInspection } from './review-suggestions';
+export type { ApplyDestinationInspection, SuggestionOperationOptions } from './review-suggestions';
+
+export { loadGitReviewSnapshot } from './loaded-git-review';
+export type { GitSnapshotDependencies } from './loaded-git-review';
+
+export type { LoadedReview } from './loaded-snapshot';
+export { loadedReviewIdentity, loadedReviewPaths } from './loaded-snapshot';
+export { readLoadedReviewContent } from './snapshot-reader';
+export { commitLoadedReview } from './review-session';
+export type { LocalReviewDependencies, LocalReviewLoadOptions } from './startup';
+export { resolveLocalSourceIdentityAsync } from './source-identity';
+export type { LocalSourcePaths } from './source-identity';

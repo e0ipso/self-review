@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -139,6 +139,19 @@ async function mountWithUnsavedWork() {
   return view;
 }
 
+it('keeps the adapter alive through StrictMode effect replay', async () => {
+  const view = render(
+    <React.StrictMode>
+      <App capability={CAPABILITY} />
+    </React.StrictMode>
+  );
+  await view.findByTestId('finish-review-btn', {}, { timeout: 2_000 });
+  await waitFor(() => expect(closeIsGuarded()).toBe(true));
+  expect(view.getByText('Needs a test.')).toBeTruthy();
+  fireEvent.click(view.getByTestId('finish-review-btn'));
+  expect(await view.findByText('Review saved', {}, { timeout: 2_000 })).toBeTruthy();
+});
+
 describe('session capability', () => {
   afterEach(() => {
     window.history.replaceState(null, '', '/');
@@ -193,6 +206,83 @@ describe('serve client', () => {
     expect(view.getByText('Failed to fetch')).toBeTruthy();
   });
 
+  it('retries the initial connection in place after the URL capability was erased', async () => {
+    let configs = 0;
+    const requests: string[] = [];
+    route = (url, init) => {
+      requests.push(url.pathname);
+      if (url.pathname === '/api/config' && ++configs === 1)
+        return Promise.resolve(new Response(JSON.stringify({ error: 'busy' }), { status: 503 }));
+      return realFetch(url, init);
+    };
+    window.history.replaceState(null, '', `/#cap=${CAPABILITY}`);
+    const capability = takeCapabilityFromLocation();
+    const view = render(<App capability={capability} />);
+    expect(await view.findByText('Could not reach the review server')).toBeTruthy();
+    expect(requests).toEqual(['/api/config']);
+    expect(window.location.hash).toBe('');
+    fireEvent.click(view.getByRole('button', { name: 'Retry connection' }));
+    expect(await view.findByText('Needs a test.')).toBeTruthy();
+    expect(configs).toBe(2);
+    expect(requests).not.toContain('/api/review');
+    expect(requests).not.toContain('/api/apply-suggestion');
+    expect(view.container.textContent).not.toContain(CAPABILITY);
+    expect(window.location.href).not.toContain(CAPABILITY);
+  });
+
+  it('keeps the close warning after deleting the final resumed comment', async () => {
+    const view = await mountWithUnsavedWork();
+    fireEvent.click(view.container.querySelector('[data-hint-action="delete-comment"]')!);
+    await waitFor(() => expect(view.queryByText('Needs a test.')).toBeNull());
+    expect(closeIsGuarded()).toBe(true);
+  });
+
+  it('protects viewed-only progress, including when the flag is cleared again', async () => {
+    session.resumeComments = [];
+    const view = render(<App capability={CAPABILITY} />);
+    const toggle = await view.findByTestId('viewed-toggle-src/index.ts');
+    expect(closeIsGuarded()).toBe(false);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(closeIsGuarded()).toBe(true));
+    fireEvent.click(toggle);
+    expect(closeIsGuarded()).toBe(true);
+  });
+
+  it('blocks mutations and document shortcuts while submitting, then restores editing on refusal', async () => {
+    let refuse!: (response: Response) => void;
+    route = (url, init) =>
+      url.pathname === '/api/review'
+        ? new Promise(resolve => {
+            refuse = resolve;
+          })
+        : realFetch(url, init);
+    const view = await mountWithUnsavedWork();
+    const remove = view.container.querySelector('[data-hint-action="delete-comment"]')!;
+    fireEvent.click(view.getByTestId('finish-review-btn'));
+    await waitFor(() => expect(refuse).toBeTypeOf('function'));
+    expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(true);
+    fireEvent.click(remove);
+    expect(view.getByText('Needs a test.')).toBeTruthy();
+    const shortcut = vi.fn();
+    document.addEventListener('keydown', shortcut);
+    fireEvent.keyDown(document, { key: 'f' });
+    document.removeEventListener('keydown', shortcut);
+    expect(shortcut).not.toHaveBeenCalled();
+    expect(closeIsGuarded()).toBe(true);
+
+    refuse(
+      new Response(
+        JSON.stringify({ ok: false, code: 'refused', message: 'try again', details: [] }),
+        { status: 422 }
+      )
+    );
+    await view.findByTestId('submit-error');
+    expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(false);
+    fireEvent.click(remove);
+    await waitFor(() => expect(view.queryByText('Needs a test.')).toBeNull());
+    expect(closeIsGuarded()).toBe(true);
+  });
+
   it(
     'keeps the review and its close guard after a failed publication, and retries to success',
     async () => {
@@ -217,6 +307,11 @@ describe('serve client', () => {
       expect(fs.readFileSync(outputPath, 'utf-8')).toContain('Needs a test.');
       await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
       expect(closeIsGuarded()).toBe(false);
+      const shortcut = vi.fn();
+      document.addEventListener('keydown', shortcut);
+      fireEvent.keyDown(document, { key: 'j' });
+      document.removeEventListener('keydown', shortcut);
+      expect(shortcut).toHaveBeenCalledTimes(1);
     },
     CASE_TIMEOUT_MS
   );
@@ -255,3 +350,186 @@ describe('serve client', () => {
     CASE_TIMEOUT_MS
   );
 });
+
+it('keeps an unknown save guarded until the reviewer explicitly confirms a retry is safe', async () => {
+  const view = await mountWithUnsavedWork();
+  let submissions = 0;
+  route = async (url, init) => {
+    if (url.pathname === '/api/review') {
+      submissions++;
+      throw new TypeError('connection closed after sending');
+    }
+    return realFetch(url, init);
+  };
+  fireEvent.click(view.getByTestId('finish-review-btn'));
+  const notice = await view.findByTestId('submit-error');
+  expect(notice.textContent).toContain('save outcome is unknown');
+  expect(notice.textContent).toContain('Check the terminal and the output file');
+  expect(view.queryByTestId('finish-review-btn')).toBeNull();
+  expect(view.getByText('Needs a test.')).toBeTruthy();
+  expect(view.getByTestId('review-interaction').hasAttribute('inert')).toBe(true);
+  expect(closeIsGuarded()).toBe(true);
+  expect(submissions).toBe(1);
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  try {
+    fireEvent.click(view.getByRole('button', { name: 'Allow retry after checking output' }));
+    expect(view.queryByTestId('finish-review-btn')).toBeNull();
+    expect(submissions).toBe(1);
+    confirm.mockReturnValue(true);
+    fireEvent.click(view.getByRole('button', { name: 'Allow retry after checking output' }));
+    expect(view.getByTestId('finish-review-btn')).toBeTruthy();
+    expect(view.getByText('Needs a test.')).toBeTruthy();
+    expect(closeIsGuarded()).toBe(true);
+    expect(submissions).toBe(1);
+    route = (url, init) => {
+      if (url.pathname === '/api/review') submissions++;
+      return realFetch(url, init);
+    };
+    fireEvent.click(view.getByTestId('finish-review-btn'));
+    expect(await view.findByText('Review saved', {}, { timeout: 10_000 })).toBeTruthy();
+    expect(submissions).toBe(2);
+    expect(fs.existsSync(outputPath)).toBe(true);
+  } finally {
+    confirm.mockRestore();
+  }
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(yes => {
+    resolve = yes;
+  });
+  return { promise, resolve };
+}
+
+it.each(['populated', 'empty', 'null'] as const)(
+  'refuses early publication until a slow %s resume is acknowledged',
+  async kind => {
+    const resume = deferred<Response>();
+    let resumeRequested = false;
+    let submissions = 0;
+    let submitted: unknown;
+    route = (url, init) => {
+      if (url.pathname === '/api/resume') {
+        resumeRequested = true;
+        return resume.promise;
+      }
+      if (url.pathname === '/api/review') {
+        submissions++;
+        submitted = JSON.parse(String(init?.body));
+      }
+      return realFetch(url, init);
+    };
+    const view = render(<App capability={CAPABILITY} />);
+    const finish = await view.findByTestId('finish-review-btn');
+    await waitFor(() => expect(resumeRequested).toBe(true));
+    fireEvent.click(finish);
+    expect(submissions).toBe(0);
+    expect(view.getByTestId('submit-error').textContent).toContain('loading');
+    expect(fs.existsSync(outputPath)).toBe(false);
+    fireEvent.click(view.getByTestId('viewed-toggle-src/index.ts'));
+    const response =
+      kind === 'null'
+        ? null
+        : { comments: kind === 'populated' ? session.resumeComments : [], viewedFiles: [] };
+    await act(async () =>
+      resume.resolve(
+        new Response(JSON.stringify(response), { headers: { 'content-type': 'application/json' } })
+      )
+    );
+    fireEvent.click(finish);
+    expect(await view.findByText('Review saved', {}, { timeout: 10_000 })).toBeTruthy();
+    expect(submissions).toBe(1);
+    expect(submitted).toMatchObject({
+      files: [{ viewed: true, comments: kind === 'populated' ? [{ body: 'Needs a test.' }] : [] }],
+    });
+    expect(fs.readFileSync(outputPath, 'utf8').includes('Needs a test.')).toBe(
+      kind === 'populated'
+    );
+  }
+);
+
+it('keeps resume failure and its pending retry unsaveable, then publishes all recovered feedback', async () => {
+  const retry = deferred<Response>();
+  let attempts = 0;
+  let submissions = 0;
+  route = (url, init) => {
+    if (url.pathname === '/api/resume') {
+      attempts++;
+      return attempts === 1
+        ? Promise.resolve(
+            new Response(JSON.stringify({ error: 'feedback offline' }), { status: 503 })
+          )
+        : retry.promise;
+    }
+    if (url.pathname === '/api/review') submissions++;
+    return realFetch(url, init);
+  };
+  const view = render(<App capability={CAPABILITY} />);
+  const finish = await view.findByTestId('finish-review-btn');
+  await view.findByText(/Saved feedback could not be loaded/);
+  fireEvent.click(finish);
+  expect(submissions).toBe(0);
+  fireEvent.click(view.getByRole('button', { name: 'Retry loading saved feedback' }));
+  fireEvent.click(finish);
+  expect(submissions).toBe(0);
+  expect(attempts).toBe(2);
+  await act(async () =>
+    retry.resolve(
+      new Response(JSON.stringify({ comments: session.resumeComments, viewedFiles: [] }))
+    )
+  );
+  expect(await view.findByText('Needs a test.')).toBeTruthy();
+  fireEvent.click(finish);
+  expect(await view.findByText('Review saved', {}, { timeout: 10_000 })).toBeTruthy();
+  expect(fs.readFileSync(outputPath, 'utf8')).toContain('Needs a test.');
+  expect(submissions).toBe(1);
+});
+
+it(
+  'protects draft-only tab close and refuses Finish before publication until the draft is cancelled',
+  async () => {
+    session.resumeComments = [];
+    let submissions = 0;
+    let resumeDone!: () => void;
+    const resumed = new Promise<void>(resolve => {
+      resumeDone = resolve;
+    });
+    route = (url, init) => {
+      if (url.pathname === '/api/review') submissions++;
+      return realFetch(url, init).then(async response => {
+        if (url.pathname === '/api/resume') {
+          await response.clone().arrayBuffer();
+          resumeDone();
+        }
+        return response;
+      });
+    };
+    const view = render(<App capability={CAPABILITY} />);
+    await view.findByTestId('add-file-comment-src/index.ts', {}, { timeout: 10_000 });
+    await act(async () => {
+      await resumed;
+    });
+    expect(closeIsGuarded()).toBe(false);
+    fireEvent.click(view.getByTestId('add-file-comment-src/index.ts'));
+    fireEvent.change(view.getByTestId('comment-input').querySelector('textarea')!, {
+      target: { value: 'Unsubmitted text' },
+    });
+    await waitFor(() => expect(closeIsGuarded()).toBe(true));
+    fireEvent.click(view.getByTestId('finish-review-btn'));
+    await waitFor(() =>
+      expect(view.getByTestId('submit-error').textContent).toContain(
+        'Finish or cancel unfinished drafts'
+      )
+    );
+    expect(submissions).toBe(0);
+    expect(fs.existsSync(outputPath)).toBe(false);
+    expect(exit).not.toHaveBeenCalled();
+    expect(view.getByDisplayValue('Unsubmitted text')).toBeTruthy();
+    fireEvent.click(view.getByTestId('cancel-comment-btn'));
+    fireEvent.click(view.getByTestId('finish-review-btn'));
+    await view.findByText('Review saved');
+    expect(fs.existsSync(outputPath)).toBe(true);
+  },
+  CASE_TIMEOUT_MS
+);

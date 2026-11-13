@@ -1,3 +1,4 @@
+import { useLocalization } from '../localization/LocalizationContext';
 import React, { useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { Button } from './ui/button';
@@ -15,6 +16,7 @@ function shortSha(sha: string): string {
  */
 export default function RemoteDriftBanner() {
   const { remoteDrift } = useReview();
+  const { t } = useLocalization();
   const [dismissed, setDismissed] = useState(false);
 
   if (!remoteDrift || !remoteDrift.drifted || dismissed) return null;
@@ -27,9 +29,10 @@ export default function RemoteDriftBanner() {
       <div className='flex items-center gap-2'>
         <AlertTriangle className='h-3.5 w-3.5 text-amber-600 dark:text-amber-400' />
         <span>
-          This PR/MR has changed since this review was recorded (
-          <code>{shortSha(remoteDrift.recordedHeadSha)}</code> →{' '}
-          <code>{shortSha(remoteDrift.liveHeadSha)}</code>) — line anchors may be stale.
+          {t('Remote review drift', {
+            recorded: shortSha(remoteDrift.recordedHeadSha),
+            live: shortSha(remoteDrift.liveHeadSha),
+          })}
         </span>
       </div>
       <Button
@@ -40,7 +43,7 @@ export default function RemoteDriftBanner() {
         data-testid='remote-drift-banner-dismiss'
       >
         <X className='h-3 w-3' />
-        <span className='sr-only'>Dismiss</span>
+        <span className='sr-only'>{t('Dismiss')}</span>
       </Button>
     </div>
   );

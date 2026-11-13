@@ -7,7 +7,10 @@ import { mapThreadsToReviewComments } from './thread-mapper';
 import { serializeReview } from './xml-serializer';
 import { parseReviewXmlString } from './xml-parser';
 import type { AppConfig, DiffFile } from './types';
-import type { LoadedConfig } from './config';
+import { loadConfigWithProvenance, type LoadedConfig } from './config';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { buildRemoteReviewState, runFetchComments, type FetchCommentsDeps } from './fetch-comments';
 import type { ReviewState } from './types';
 
@@ -185,6 +188,114 @@ describe('runFetchComments', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps concurrent operation diagnostics with their own reporter through cleanup', async () => {
+    const reporters = [vi.fn(), vi.fn()];
+    await Promise.all(
+      reporters.map((reportDiagnostic, index) => {
+        const marker = `operation-${index}`;
+        return runFetchComments(PR_URL, {
+          cwd: `/work/${marker}`,
+          reportDiagnostic,
+          deps: {
+            ...deps,
+            loadConfig(options) {
+              options?.reportDiagnostic?.(`config ${marker}`);
+              return deps.loadConfig(options);
+            },
+            async materialize(...args) {
+              const options = args[5];
+              options?.reportDiagnostic?.(`materialize ${marker}`);
+              return {
+                ...materializeResult(),
+                cleanup: async () => {
+                  options?.reportDiagnostic?.(`cleanup ${marker}`);
+                },
+              };
+            },
+            async loadDiff(_args, _cwd, options) {
+              options?.reportDiagnostic?.(`load ${marker}`);
+              return { files: [], repository: '/tmp/clone', diagnostics: [`diff ${marker}`] };
+            },
+          },
+        });
+      })
+    );
+    for (const [index, reportDiagnostic] of reporters.entries()) {
+      const messages = reportDiagnostic.mock.calls.map(([message]) => message).join('\n');
+      expect(messages).toContain('[remote] Base branch: main');
+      expect(messages).toContain('[fetch-comments] Fetched 2 threads');
+      for (const stage of ['config', 'materialize', 'cleanup', 'load', 'diff']) {
+        expect(messages).toContain(`${stage} operation-${index}`);
+      }
+      expect(messages).toContain('threads written to');
+      expect(messages).not.toContain(`operation-${1 - index}`);
+    }
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps validation infrastructure diagnostics with its reporter during real publication', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-fetch-report-'));
+    const { validateXML } = await import('xmllint-wasm');
+    const { publishReview } = await import('./review-publisher');
+    const reportDiagnostic = vi.fn();
+    vi.mocked(validateXML).mockRejectedValueOnce(new Error('validator unavailable'));
+    try {
+      await runFetchComments(PR_URL, {
+        cwd,
+        reportDiagnostic,
+        deps: { ...deps, publish: publishReview },
+      });
+      expect(reportDiagnostic).toHaveBeenCalledWith(
+        expect.stringContaining('validator unavailable')
+      );
+      expect(fs.existsSync(path.join(cwd, 'review.xml'))).toBe(true);
+      expect(console.error).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('retains validation failures and cleanup while routing schema diagnostics', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-fetch-invalid-'));
+    const { validateXML } = await import('xmllint-wasm');
+    const { publishReview } = await import('./review-publisher');
+    const reportDiagnostic = vi.fn();
+    vi.mocked(validateXML).mockResolvedValueOnce({
+      valid: false,
+      errors: [{ message: 'schema rejected', rawMessage: 'schema rejected', loc: null }],
+      rawOutput: 'schema rejected',
+      normalized: '',
+    });
+    try {
+      await expect(
+        runFetchComments(PR_URL, {
+          cwd,
+          reportDiagnostic,
+          deps: { ...deps, publish: publishReview },
+        })
+      ).rejects.toMatchObject({ code: 'validation-failed' });
+      expect(reportDiagnostic).toHaveBeenCalledWith('  schema rejected');
+      expect(fs.existsSync(path.join(cwd, 'review.xml'))).toBe(false);
+      expect(cleanup).toHaveBeenCalledOnce();
+      expect(console.error).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps publication successful when the completion reporter throws', async () => {
+    const reportDiagnostic = vi.fn((message: string) => {
+      if (message.includes('threads written to')) throw new Error('presentation failed');
+    });
+    await expect(
+      runFetchComments(PR_URL, { cwd: '/work', reportDiagnostic, deps })
+    ).resolves.toBeUndefined();
+    expect(written).toHaveLength(1);
+    expect(reportDiagnostic).toHaveBeenCalledWith(expect.stringContaining('threads written to'));
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
   it('publishes the review to the configured output path under the inherited policy', async () => {
     await runFetchComments(PR_URL, { cwd: '/work', deps });
 
@@ -283,6 +394,74 @@ describe('runFetchComments', () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it('loads config from the programmatic review cwd rather than the host process cwd', async () => {
+    await runFetchComments(PR_URL, { cwd: '/another/project', deps });
+    expect(deps.loadConfig).toHaveBeenCalledWith({ cwd: '/another/project' });
+    expect(written[0].path).toBe('/another/project/review.xml');
+  });
+
+  it('uses the selected project config with inherited output trust', async () => {
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-fetch-config-'));
+    fs.writeFileSync(path.join(project, '.self-review.yaml'), 'output-file: ./project.xml\n');
+    deps.loadConfig = options => loadConfigWithProvenance({ ...options, homeDir: project });
+    try {
+      await runFetchComments(PR_URL, { cwd: project, deps });
+      expect(written[0].path).toBe(path.join(project, 'project.xml'));
+      expect(deps.publish).toHaveBeenCalledWith(
+        expect.anything(),
+        path.join(project, 'project.xml'),
+        {
+          outputOrigin: 'inherited',
+          baseDir: project,
+        }
+      );
+    } finally {
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it('passes publication cancellation through and cleans up before rejecting', async () => {
+    const controller = new AbortController();
+    deps.publish = vi.fn(async (_state, _target, options) => {
+      await new Promise<void>(resolve =>
+        (options.signal ?? controller.signal).addEventListener('abort', () => resolve(), {
+          once: true,
+        })
+      );
+      expect(options.signal).toBe(controller.signal);
+      throw new Error('publication cancelled before rename');
+    });
+    const run = runFetchComments(PR_URL, { cwd: '/work', deps, signal: controller.signal });
+    const observed = run.catch(error => error);
+    await vi.waitFor(() => expect(deps.publish).toHaveBeenCalled());
+    controller.abort();
+    expect(await observed).toMatchObject({ message: 'publication cancelled before rename' });
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(written).toHaveLength(0);
+    expect(console.error).not.toHaveBeenCalledWith(expect.stringContaining('threads written'));
+  });
+
+  it('reports an already saved output but rejects interruption during cleanup', async () => {
+    const controller = new AbortController();
+    let finish!: () => void;
+    cleanup.mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        })
+    );
+    const run = runFetchComments(PR_URL, { cwd: '/work', deps, signal: controller.signal });
+    const observed = expect(run).rejects.toBeInstanceOf(CommandCancelledError);
+    await vi.waitFor(() => expect(cleanup).toHaveBeenCalled());
+    controller.abort();
+    expect(written).toHaveLength(1);
+    finish();
+    await observed;
+    expect(console.error).toHaveBeenCalledWith(
+      '[fetch-comments] 2 threads written to /work/review.xml'
+    );
+  });
+
   it('rejects URLs that are not PR/MR URLs', async () => {
     await expect(
       runFetchComments('https://example.com/not-a-pr', { cwd: '/work', deps })
@@ -295,6 +474,7 @@ describe('runFetchComments', () => {
 
     expect(provider.fetchThreads).toHaveBeenCalledWith(expect.objectContaining({ number: 42 }), {
       includeResolved: true,
+      reviewedHeadSha: 'bbb222',
     });
   });
 
@@ -303,6 +483,7 @@ describe('runFetchComments', () => {
 
     expect(provider.fetchThreads).toHaveBeenCalledWith(expect.objectContaining({ number: 42 }), {
       includeResolved: false,
+      reviewedHeadSha: 'bbb222',
     });
   });
 
@@ -353,5 +534,85 @@ describe('runFetchComments', () => {
 
     // No file marked viewed: nothing has been reviewed yet.
     expect(parsed.viewedFiles).toEqual([]);
+  });
+});
+
+describe('fetch-comments owns supplied temporary clone storage', () => {
+  it.each([
+    'success',
+    'clone-failure',
+    'thread-cancel',
+    'load-failure',
+    'publish-failure',
+  ] as const)('runs real materialization and disposes supplied ownership after %s', async stage => {
+    const controller = new AbortController();
+    const released: string[] = [];
+    const owned = '/__virtual_fetch_clone__';
+    const storage = {
+      root: owned,
+      async create() {
+        return this.root;
+      },
+      async remove(target: string) {
+        expect(target).toBe(this.root);
+        released.push(target);
+      },
+      removeSync() {
+        throw new Error('unexpected synchronous cleanup');
+      },
+    };
+    let cloneTarget: string | undefined;
+    let published = false;
+    const execute = runFetchComments(PR_URL, {
+      cwd: '/__virtual_launch__',
+      temporaryClones: storage,
+      signal: controller.signal,
+      reportDiagnostic: () => {},
+      deps: {
+        detectExistingClone: async () => null,
+        runner: async (_command, args) => {
+          if (args[0] === 'clone') {
+            cloneTarget = args.at(-1);
+            if (stage === 'clone-failure') throw new Error('clone failed');
+          }
+          return {
+            stdout: args.includes('rev-parse') ? 'a'.repeat(40) : '',
+            stderr: '',
+            exitCode: 0,
+          };
+        },
+        createProvider: () => ({
+          forge: 'github',
+          fetchBaseBranch: async () => 'main',
+          fetchThreads: async () => {
+            if (stage === 'thread-cancel') {
+              controller.abort();
+              throw new CommandCancelledError('aborted', 'gh', []);
+            }
+            return [];
+          },
+        }),
+        loadDiff: async (_args, cwd) => {
+          expect(cwd).toBe(owned);
+          if (stage === 'load-failure') throw new Error('load failed');
+          return { files: [], repository: cwd };
+        },
+        loadConfig: () =>
+          loadConfigWithProvenance({
+            cwd: '/__virtual_launch__',
+            homeDir: '/__missing_config__',
+          }),
+        publish: async (_state, outputPath) => {
+          if (stage === 'publish-failure') throw new Error('publish failed');
+          published = true;
+          return { outputPath, assetPaths: [] };
+        },
+      },
+    });
+    if (stage === 'success') await expect(execute).resolves.toBeUndefined();
+    else await expect(execute).rejects.toThrow();
+    expect(cloneTarget).toBe(owned);
+    expect(released).toEqual([owned]);
+    expect(published).toBe(stage === 'success');
   });
 });

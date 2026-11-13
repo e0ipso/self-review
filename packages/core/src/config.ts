@@ -1,14 +1,18 @@
 // YAML configuration loading and merging
 
-import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import { AppConfig } from './types';
-import { DEFAULT_CONFIG } from '../../react/src/config-defaults';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
+import { createDefaultConfig } from '../../config/src/index';
+import { gitDiffArgsSyntaxError } from './git-argument-text';
+import { nativeConfigEffects } from './config-reader';
+import type { BoundedReadOptions, BoundedReadResult } from './bounded-read';
+import { normalizeConfigFontSize } from './config-font-size';
 
-// Shared with the renderer's ConfigProvider; see packages/react/src/config-defaults.ts.
-const defaults: AppConfig = DEFAULT_CONFIG;
+// Privately owned reference values, independent of the public compatibility snapshots.
+const defaults = createDefaultConfig();
 
 /**
  * `project` config is repository data and is trusted less than the reviewer's own `user` config.
@@ -28,16 +32,36 @@ export interface LoadedConfig {
   sources: ConfigSource[];
 }
 
+/** Synchronous startup effects. A supplied implementation owns every read and location lookup. */
+export interface ConfigEffects {
+  exists(path: string): boolean;
+  read(path: string, maxBytes: number, options: BoundedReadOptions): BoundedReadResult;
+  homeDir(): string;
+  cwd(): string;
+}
+
 export interface LoadConfigOptions {
+  effects?: ConfigEffects;
   cwd?: string;
   homeDir?: string;
+  /** Defaults to stderr; supply a callback to collect diagnostics without printing. */
+  reportDiagnostic?: DiagnosticReporter;
 }
+
+/** Configuration is small startup input, bounded before YAML parsing. */
+export const MAX_CONFIG_BYTES = 1024 * 1024;
 
 const CONFIG_KEYS = Object.keys(defaults) as (keyof AppConfig)[];
 
-/** Project overrides user overrides defaults; an invalid value is not attributed to its file. */
+/**
+ * Project overrides user overrides defaults; an invalid value is not attributed to its file.
+ * The deprecated `output-format` key is retained verbatim for compatibility. Publication always
+ * produces XML. Unsupported values warn without rejecting the configuration or changing provenance.
+ */
 export function loadConfigWithProvenance(options: LoadConfigOptions = {}): LoadedConfig {
-  let config = { ...defaults };
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
+  const effects = options.effects ?? nativeConfigEffects;
+  let config = createDefaultConfig();
   const provenance = Object.fromEntries(CONFIG_KEYS.map(key => [key, 'default'])) as Record<
     keyof AppConfig,
     ConfigValueOrigin
@@ -49,21 +73,26 @@ export function loadConfigWithProvenance(options: LoadConfigOptions = {}): Loade
   const files: ConfigSource[] = [
     {
       origin: 'user',
-      path: join(options.homeDir ?? homedir(), '.config', 'self-review', 'config.yaml'),
+      path: join(options.homeDir ?? effects.homeDir(), '.config', 'self-review', 'config.yaml'),
     },
-    { origin: 'project', path: join(options.cwd ?? process.cwd(), '.self-review.yaml') },
+    { origin: 'project', path: join(options.cwd ?? effects.cwd(), '.self-review.yaml') },
   ];
   for (const source of files) {
-    if (!existsSync(source.path)) continue;
+    if (!effects.exists(source.path)) continue;
     try {
-      const override = loadYamlConfig(source.path);
+      const override = loadYamlConfig(
+        source.path,
+        source.origin === 'project',
+        reportDiagnostic,
+        effects
+      );
       config = mergeConfig(config, override);
       for (const key of Object.keys(override) as (keyof AppConfig)[]) {
         provenance[key] = source.origin;
       }
       sources.push(source);
     } catch (error) {
-      console.error(
+      reportDiagnostic(
         `Warning: Failed to load ${source.origin} config from ${source.path}: ${error}`
       );
     }
@@ -72,12 +101,32 @@ export function loadConfigWithProvenance(options: LoadConfigOptions = {}): Loade
   return { config, provenance, sources };
 }
 
+/** Load merged configuration; `output-format` is deprecated and publication always uses XML. */
 export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
   return loadConfigWithProvenance(options).config;
 }
 
-function loadYamlConfig(path: string): Partial<AppConfig> {
-  const content = readFileSync(path, 'utf-8');
+// Do not invoke YAML mappings' coercion properties or expand aliased collections for a warning.
+function describeConfigValue(value: unknown): string {
+  return value !== null && typeof value === 'object'
+    ? Object.prototype.toString.call(value)
+    : String(value);
+}
+
+function loadYamlConfig(
+  path: string,
+  noFollow: boolean,
+  reportDiagnostic: DiagnosticReporter,
+  reader: Pick<ConfigEffects, 'read'>
+): Partial<AppConfig> {
+  // Project data cannot redirect startup reads through a link. User config may link
+  // to another regular file, but the same byte and nonblocking limits apply.
+  const read = reader.read(path, MAX_CONFIG_BYTES, { noFollow });
+  if (read.kind === 'not-regular') throw new Error('Config is not a regular file');
+  if (read.kind === 'too-large') {
+    throw new Error(`Config exceeds the ${MAX_CONFIG_BYTES}-byte limit`);
+  }
+  const content = read.content.toString('utf-8');
   const raw = parseYaml(content);
 
   // An empty file (or one containing only `null`) is a valid "use defaults" state.
@@ -96,7 +145,9 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     if (['light', 'dark', 'system'].includes(raw.theme)) {
       config.theme = raw.theme;
     } else {
-      console.error(`Warning: Invalid theme value "${raw.theme}", using default`);
+      reportDiagnostic(
+        `Warning: Invalid theme value "${describeConfigValue(raw.theme)}", using default`
+      );
     }
   }
 
@@ -104,16 +155,25 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     if (['split', 'unified'].includes(raw['diff-view'])) {
       config.diffView = raw['diff-view'];
     } else {
-      console.error(`Warning: Invalid diff-view value "${raw['diff-view']}", using default`);
+      reportDiagnostic(
+        `Warning: Invalid diff-view value "${describeConfigValue(raw['diff-view'])}", using default`
+      );
     }
   }
 
   if ('font-size' in raw && typeof raw['font-size'] === 'number') {
-    config.fontSize = raw['font-size'];
+    const normalized = normalizeConfigFontSize({ fontSize: raw['font-size'] }, defaults.fontSize);
+    if (normalized.diagnostic) reportDiagnostic(normalized.diagnostic);
+    else config.fontSize = normalized.config.fontSize;
   }
 
   if ('output-format' in raw && typeof raw['output-format'] === 'string') {
     config.outputFormat = raw['output-format'];
+    if (config.outputFormat !== 'xml') {
+      reportDiagnostic(
+        'Warning: output-format is deprecated; only XML output is supported. The configured value is retained for compatibility.'
+      );
+    }
   }
 
   if ('ignore' in raw && Array.isArray(raw.ignore)) {
@@ -137,14 +197,21 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     if (usableCategories.length > 0) {
       config.categories = usableCategories;
     } else {
-      console.error(
+      reportDiagnostic(
         'Warning: Category configuration has no usable categories, using default categories'
       );
     }
   }
 
   if ('default-diff-args' in raw && typeof raw['default-diff-args'] === 'string') {
-    config.defaultDiffArgs = raw['default-diff-args'];
+    const syntaxError = gitDiffArgsSyntaxError(raw['default-diff-args']);
+    if (syntaxError === null) {
+      config.defaultDiffArgs = raw['default-diff-args'];
+    } else {
+      reportDiagnostic(
+        `Warning: Invalid default-diff-args: ${syntaxError}; keeping the inherited value`
+      );
+    }
   }
 
   if ('show-untracked' in raw && typeof raw['show-untracked'] === 'boolean') {
@@ -156,13 +223,25 @@ function loadYamlConfig(path: string): Partial<AppConfig> {
     config.wordWrap = raw['word-wrap'];
   }
 
-  if ('max-files' in raw && typeof raw['max-files'] === 'number') {
-    config.maxFiles = raw['max-files'] >= 0 ? raw['max-files'] : defaults.maxFiles;
-  }
-
-  if ('max-total-lines' in raw && typeof raw['max-total-lines'] === 'number') {
-    config.maxTotalLines =
-      raw['max-total-lines'] >= 0 ? raw['max-total-lines'] : defaults.maxTotalLines;
+  for (const [key, property] of [
+    ['max-files', 'maxFiles'],
+    ['max-total-lines', 'maxTotalLines'],
+  ] as const) {
+    if (!(key in raw)) continue;
+    const value = raw[key];
+    // Threshold comparisons support fractions; only zero explicitly disables a dimension.
+    if (
+      typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= 0 &&
+      value <= Number.MAX_SAFE_INTEGER
+    ) {
+      config[property] = value;
+    } else {
+      reportDiagnostic(
+        `Warning: Invalid ${key} value "${describeConfigValue(value)}", expected a finite number between 0 and ${Number.MAX_SAFE_INTEGER}; keeping the inherited value`
+      );
+    }
   }
 
   if (

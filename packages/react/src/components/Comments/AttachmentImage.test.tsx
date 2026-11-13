@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Attachment } from '@self-review/types';
 import type { ReviewAdapter } from '../../adapter';
 import { ReviewAdapterProvider } from '../../context/ReviewAdapterContext';
@@ -60,6 +60,30 @@ describe('AttachmentImage async reads', () => {
   });
 
   afterEach(() => cleanup());
+
+  it('aborts replaced attachment reads, retains useful failures, and retries explicitly', async () => {
+    const signals: AbortSignal[] = [];
+    const pending = deferred<ArrayBuffer | null>();
+    const read = vi.fn((_name: string, signal: AbortSignal) => {
+      signals.push(signal);
+      return signals.length === 1
+        ? pending.promise
+        : Promise.reject(new Error('Attachment access denied'));
+    });
+    const adapter: ReviewAdapter = { loadDiff: vi.fn(), reads: { readAttachment: read } };
+    const view = renderWithAdapter(adapter, attachment('first.png'));
+    view.rerenderAttachment(attachment('second.png'));
+    expect(signals[0].aborted).toBe(true);
+    expect(await screen.findByText('Attachment access denied')).toBeTruthy();
+    await act(async () => pending.resolve(new ArrayBuffer(4)));
+    expect(created).toHaveLength(0);
+    expect(read).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByText('Attachment access denied');
+    expect(read).toHaveBeenCalledTimes(3);
+    view.unmount();
+    expect(signals.every(signal => signal.aborted)).toBe(true);
+  });
 
   it('leaves no unreclaimed blob URL when unmounted while a read is pending', async () => {
     const read = deferred<ArrayBuffer | null>();

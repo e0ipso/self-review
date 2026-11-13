@@ -1,10 +1,22 @@
 import { useEffect, useImperativeHandle, useRef, type ForwardedRef } from 'react';
 import type { ReviewComment, ReviewState } from '@self-review/types';
-import { useReview } from '../context/ReviewContext';
+import { useReviewServices } from '../context/ReviewServicesContext';
+import {
+  useReview,
+  useReviewSaveTransaction,
+  type ReviewSaveSnapshot,
+} from '../context/ReviewContext';
 
 export interface ReviewHandle {
-  /** Return the current review state (comments, viewed flags, source metadata). */
+  /** Return the current rendered review, including while it is loading. This read neither
+   * checks readiness nor reserves mutations, and preserves the current source/files references.
+   * Use beginSave for publication; a custom handle without it leaves coordination to its host.
+   */
   getReviewState: () => ReviewState;
+  /** Atomically capture a ready review and reserve mutations. Refuses unfinished drafts and
+   * pending/failed diff or resume. First-party handles supply it; older custom handles may omit it.
+   */
+  beginSave?: () => ReviewSaveSnapshot;
 }
 
 /**
@@ -19,6 +31,10 @@ export function useReviewBridge(
   onReviewChange?: (comments: ReviewComment[]) => void
 ): void {
   const { files, diffSource } = useReview();
+  const transaction = useReviewSaveTransaction();
+  const { now } = useReviewServices();
+  const clock = useRef(now);
+  clock.current = now;
 
   // Stable refs so getReviewState() never closes over stale values
   const filesRef = useRef(files);
@@ -27,8 +43,9 @@ export function useReviewBridge(
   diffSourceRef.current = diffSource;
 
   useImperativeHandle(ref, () => ({
+    beginSave: transaction.begin,
     getReviewState: (): ReviewState => ({
-      timestamp: new Date().toISOString(),
+      timestamp: clock.current().toISOString(),
       source: diffSourceRef.current,
       files: filesRef.current,
     }),

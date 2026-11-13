@@ -100,6 +100,29 @@ describe('expandContext re-runs the reviewed comparison', () => {
     expect(contentOf(result!.hunks, 'context')).toHaveLength(29);
   });
 
+  it('keeps expanded context on the loaded branch snapshot after the ref moves', async () => {
+    const base = numbered('line', 30);
+    write('notes.txt', base);
+    git('add', 'notes.txt');
+    git('commit', '-qm', 'base');
+    git('checkout', '-qb', 'feature');
+    write('notes.txt', withLine(base, 15, 'reviewed-head-version'));
+    git('add', 'notes.txt');
+    git('commit', '-qm', 'reviewed head');
+
+    const session = await loadSession(['main..feature']);
+    write('notes.txt', withLine(numbered('line', 35), 15, 'new-head-version'));
+    git('add', 'notes.txt');
+    git('commit', '-qm', 'advance feature');
+
+    const result = await expandContext(session, { filePath: 'notes.txt', contextLines: 100 });
+
+    expect(result).not.toBeNull();
+    expect(contentOf(result!.hunks, 'addition')).toEqual(['reviewed-head-version']);
+    expect(contentOf(result!.hunks, 'deletion')).toEqual(['line15']);
+    expect(result!.totalLines).toBe(30);
+  });
+
   it('expands an edited staged rename into rename hunks, not a full addition', async () => {
     const base = numbered('row', 30);
     write('old-name.txt', base);

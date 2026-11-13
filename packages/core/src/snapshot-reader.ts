@@ -1,15 +1,30 @@
 // packages/core/src/snapshot-reader.ts
-// The one place a reviewed path turns into bytes, read from the side the review compared (audit R13, A6).
+// Authorized side reads. First-party loaded evidence pins index objects and detects source drift.
 
-import { execFile } from 'child_process';
+import { runBufferedCommand, type BufferedCommandRunner } from './command-runner';
+import { CommandCancelledError, isCommandCancelled } from './forge-provider';
 import * as path from 'path';
 import type { ReviewSourceIdentity, ReviewSourceSide } from './types';
 import { MAX_SOURCE_FILE_BYTES } from './input-budgets';
-import { errnoOf, readContainedFile, toSafeFsError } from './safe-fs';
+import { errnoOf, toSafeFsError } from './safe-fs';
 import type { SafeFsErrorCode } from './safe-fs';
 import { rootRelativeReviewedPath } from './source-identity';
+import { readContainedFileBounded } from './safe-fs-async';
+import { nodeReadFsLayer, type BoundedAsyncReadFsLayer } from './safe-fs-read';
+import {
+  identityStamp,
+  loadedSnapshot,
+  loadedReviewState,
+  type LoadedReview,
+  sourceStamp,
+  captureSourceReads,
+  RELOAD_REVIEW,
+} from './loaded-snapshot';
+import type { PhysicalCapture } from './loaded-snapshot';
 
 export interface ReviewedSnapshot {
+  /** Explicit load evidence. A logical identity copy alone has only legacy live semantics. */
+  loadedReview?: LoadedReview | null;
   sourceIdentity: ReviewSourceIdentity | null;
   reviewedPaths: ReadonlySet<string>;
 }
@@ -85,6 +100,12 @@ export type SnapshotReadResult =
 export interface SnapshotReadOptions {
   /** Defaults to `MAX_SOURCE_FILE_BYTES`. */
   maxBytes?: number;
+  /** Aborts git children; a physical read closes its bounded descriptor before rejecting. */
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  runner?: BufferedCommandRunner;
+  /** Bounded reader for legacy identities. Captured reads require the load's own reader. */
+  readFs?: BoundedAsyncReadFsLayer;
 }
 
 function failure(reason: SnapshotReadFailure, message: string): SnapshotReadResult {
@@ -100,32 +121,109 @@ export async function readReviewedContent(
 ): Promise<SnapshotReadResult> {
   const authorized = authorizeReviewedPath(source, filePath);
   if (!authorized.ok) return failure(authorized.reason, authorized.message);
+  const throwIfAborted = () => {
+    if (options.signal?.aborted)
+      throw new CommandCancelledError('aborted', 'self-review', [
+        'read-reviewed-content',
+        filePath,
+      ]);
+  };
+  throwIfAborted();
   const identity = source.sourceIdentity!;
-  const descriptor = side === 'old' ? identity.oldSide : identity.newSide;
+  const sides = identity.fileSources?.get(filePath) ?? identity;
+  const descriptor = side === 'old' ? sides.oldSide : sides.newSide;
   const maxBytes = options.maxBytes ?? MAX_SOURCE_FILE_BYTES;
-  return readSide(descriptor, authorized.sourceRoot, authorized.relativePath, maxBytes);
+  const explicit = source.loadedReview ? loadedReviewState(source.loadedReview) : undefined;
+  if (explicit && (explicit.identity !== identity || !explicit.reviewedPaths.has(filePath)))
+    return failure('read-failed', RELOAD_REVIEW);
+  const captured = explicit?.snapshot ?? loadedSnapshot(identity);
+  if (captured && captured.identityStamp !== identityStamp(identity)) {
+    return failure('read-failed', RELOAD_REVIEW);
+  }
+  if (captured && (descriptor.kind === 'index' || descriptor.kind === 'commit')) {
+    if (captured.gitOptions?.runner && !captured.blobRunner && !options.runner) {
+      return failure(
+        'read-failed',
+        'The supplied git source needs a binary snapshot runner for blob reads.'
+      );
+    }
+    const spec =
+      descriptor.kind === 'index'
+        ? captured.index.get(filePath)
+        : `${descriptor.sha}:${authorized.relativePath}`;
+    const result = spec
+      ? await readGitBlob(authorized.sourceRoot, spec, maxBytes, {
+          ...options,
+          runner: options.runner ?? captured.blobRunner,
+        })
+      : failure('side-unavailable', 'No stage-zero blob was captured for this side of the review.');
+    throwIfAborted();
+    return captured.identityStamp === identityStamp(identity)
+      ? result
+      : failure('read-failed', RELOAD_REVIEW);
+  }
+  const physical = ['working-tree', 'directory', 'file'].includes(descriptor.kind);
+  if (captured && physical && !captured.physical.has(filePath)) {
+    return failure('read-failed', RELOAD_REVIEW);
+  }
+  const result = await readSide(
+    descriptor,
+    authorized.sourceRoot,
+    authorized.relativePath,
+    maxBytes,
+    options,
+    captured?.physical.get(filePath)
+  );
+  throwIfAborted();
+  if (captured && captured.identityStamp !== identityStamp(identity))
+    return failure('read-failed', RELOAD_REVIEW);
+  return result;
+}
+
+/** Read through an original load capability; structural/serialized identities are not accepted. */
+export function readLoadedReviewContent(
+  loadedReview: LoadedReview,
+  filePath: string,
+  side: 'old' | 'new',
+  options: SnapshotReadOptions = {}
+): Promise<SnapshotReadResult> {
+  const state = loadedReviewState(loadedReview);
+  return readReviewedContent(
+    { sourceIdentity: state.identity, reviewedPaths: state.reviewedPaths, loadedReview },
+    filePath,
+    side,
+    options
+  );
 }
 
 async function readSide(
   descriptor: ReviewSourceSide,
   sourceRoot: string,
   relativePath: string,
-  maxBytes: number
+  maxBytes: number,
+  options: SnapshotReadOptions,
+  capture?: PhysicalCapture
 ): Promise<SnapshotReadResult> {
   switch (descriptor.kind) {
     case 'working-tree':
     case 'directory':
-      return readPhysicalFile(sourceRoot, relativePath, maxBytes);
+      return readPhysicalFile(sourceRoot, relativePath, maxBytes, options, capture);
     case 'file': {
       // Walked from the filesystem root: the path was physical at load, so any link now is new.
       const fsRoot = path.parse(descriptor.path).root;
-      return readPhysicalFile(fsRoot, path.relative(fsRoot, descriptor.path), maxBytes);
+      return readPhysicalFile(
+        fsRoot,
+        path.relative(fsRoot, descriptor.path),
+        maxBytes,
+        options,
+        capture
+      );
     }
     case 'index':
       // `:path` alone would read a leading `<n>:` in the path as a stage number.
-      return readGitBlob(sourceRoot, `:0:${relativePath}`, maxBytes);
+      return readGitBlob(sourceRoot, `:0:${relativePath}`, maxBytes, options);
     case 'commit':
-      return readGitBlob(sourceRoot, `${descriptor.sha}:${relativePath}`, maxBytes);
+      return readGitBlob(sourceRoot, `${descriptor.sha}:${relativePath}`, maxBytes, options);
     case 'none':
       return failure('side-unavailable', 'This side of the review has no content.');
     case 'unknown':
@@ -139,12 +237,41 @@ async function readSide(
 async function readPhysicalFile(
   root: string,
   relativePath: string,
-  maxBytes: number
+  maxBytes: number,
+  options: SnapshotReadOptions,
+  capture?: PhysicalCapture
 ): Promise<SnapshotReadResult> {
   try {
-    return { ok: true, content: await readContainedFile(root, relativePath, maxBytes) };
+    if (capture && options.readFs && options.readFs !== capture.readFs)
+      return failure('read-failed', RELOAD_REVIEW);
+    const layer = options.readFs ?? capture?.readFs ?? nodeReadFsLayer;
+    const target = path.join(root, relativePath);
+    const verify = async () => {
+      if (
+        capture &&
+        (capture.target !== target || sourceStamp(await layer.lstat(target)) !== capture.stamp)
+      ) {
+        throw new Error(RELOAD_REVIEW);
+      }
+    };
+    await verify();
+    const observation = captureSourceReads(layer, options.signal);
+    const content = await readContainedFileBounded(
+      root,
+      relativePath,
+      maxBytes,
+      observation.readFs,
+      options.signal
+    );
+    if (capture && observation.captures.get(target)?.stamp !== capture.stamp)
+      throw new Error(RELOAD_REVIEW);
+    await verify();
+    return { ok: true, content };
   } catch (error) {
+    if (options.signal?.aborted)
+      throw new CommandCancelledError('aborted', 'self-review', ['read-reviewed-content']);
     const fsError = toSafeFsError(error, relativePath, 'read');
+    if (capture && fsError.code !== 'too-large') return failure('read-failed', RELOAD_REVIEW);
     const [reason, message = fsError.message] = FS_FAILURES[fsError.code] ?? ['read-failed'];
     return failure(reason, message);
   }
@@ -160,34 +287,37 @@ const FS_FAILURES: Partial<Record<SafeFsErrorCode, [SnapshotReadFailure, string?
 };
 
 /** `cat-file blob`, not `show`: it refuses a tree and never smudges, so the bytes are the ones git compared. */
-function readGitBlob(root: string, spec: string, maxBytes: number): Promise<SnapshotReadResult> {
-  return new Promise(resolve => {
-    execFile(
-      'git',
-      ['cat-file', 'blob', spec],
-      { cwd: root, encoding: 'buffer', maxBuffer: maxBytes + 1, timeout: 30_000 },
-      (error, stdout, stderr) => {
-        if (error) {
-          if (errnoOf(error) === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-            resolve(failure('too-large', `The blob is over the ${maxBytes}-byte limit.`));
-            return;
-          }
-          const detail = stderr.toString('utf-8').trim();
-          if (
-            /does not exist|not a valid object name|invalid object name|not a blob/i.test(detail)
-          ) {
-            resolve(failure('not-found', 'The file does not exist on this side of the review.'));
-            return;
-          }
-          resolve(failure('read-failed', `git cat-file failed: ${detail || error.message}`));
-          return;
-        }
-        if (stdout.length > maxBytes) {
-          resolve(failure('too-large', `The blob is over the ${maxBytes}-byte limit.`));
-          return;
-        }
-        resolve({ ok: true, content: stdout });
+async function readGitBlob(
+  root: string,
+  spec: string,
+  maxBytes: number,
+  options: SnapshotReadOptions
+): Promise<SnapshotReadResult> {
+  try {
+    const result = await (options.runner ?? runBufferedCommand)('git', ['cat-file', 'blob', spec], {
+      cwd: root,
+      maxOutputBytes: maxBytes + 1,
+      timeoutMs: options.timeoutMs ?? 30_000,
+      signal: options.signal,
+    });
+    if (result.exitCode !== 0) {
+      const detail = result.stderr.toString('utf-8').trim();
+      if (/does not exist|not a valid object name|invalid object name|not a blob/i.test(detail)) {
+        return failure('not-found', 'The file does not exist on this side of the review.');
       }
+      return failure('read-failed', `git cat-file failed: ${detail || `exit ${result.exitCode}`}`);
+    }
+    if (result.stdout.length > maxBytes)
+      return failure('too-large', `The blob is over the ${maxBytes}-byte limit.`);
+    return { ok: true, content: result.stdout };
+  } catch (error) {
+    if (isCommandCancelled(error) && error.reason === 'aborted') throw error;
+    if (errnoOf(error) === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+      return failure('too-large', `The blob is over the ${maxBytes}-byte limit.`);
+    }
+    return failure(
+      'read-failed',
+      `git cat-file failed: ${error instanceof Error ? error.message : String(error)}`
     );
-  });
+  }
 }

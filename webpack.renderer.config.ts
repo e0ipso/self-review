@@ -32,8 +32,5 @@ export const rendererConfig: Configuration = {
   plugins,
   resolve: {
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.css'],
-    alias: {
-      '@self-review/core': path.resolve(__dirname, 'packages/core/src/browser.ts'),
-    },
   },
 };

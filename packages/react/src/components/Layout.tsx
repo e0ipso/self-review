@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, useId } from 'react';
 import { flushSync } from 'react-dom';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { GripVertical } from 'lucide-react';
@@ -7,9 +7,15 @@ import DiffViewer from './DiffViewer/DiffViewer';
 import GuideRouteHud from './GuideRouteHud';
 import FileTreeToggle from './FileTreeToggle';
 
-const FILE_TREE_PANEL_ID = 'fileTree';
+import { useFileTreeExpansion } from '../context/FileTreeExpansionContext';
+import { usePortalContainer } from '../context/ConfigContext';
 
-export default function Layout() {
+function Layout() {
+  const expansion = useFileTreeExpansion();
+  const portalContainer = usePortalContainer();
+  const panelId = useId();
+  const fileTreePanelId = `${panelId}-file-tree`;
+  const diffPanelId = `${panelId}-diff-viewer`;
   const fileTreePanel = useRef<PanelImperativeHandle | null>(null);
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false);
 
@@ -32,34 +38,33 @@ export default function Layout() {
     syncCollapsed();
   }, [syncCollapsed]);
 
-  // The jump-to-file hint key (`g`) needs the panel visible before it can
-  // collect hint targets against real rects. It can't reach into this
-  // component's panel ref directly, so it asks by dispatching this event;
-  // restoring is a no-op when the panel is already expanded, which keeps
-  // the shortcut's behavior unchanged in that case.
-  useEffect(() => {
-    function handleExpandRequest() {
-      const panel = fileTreePanel.current;
-      if (!panel || !panel.isCollapsed()) return;
-      // expand() only writes the new size into the panel library's store; the
-      // width reaches the DOM on the render that store update schedules, which
-      // React would otherwise run a microtask after dispatchEvent returns. The
-      // requester measures rects on the next statement, so flush that render
-      // here. Deferring the measurement a frame instead would work too, at the
-      // cost of one painted frame of expanded tree with no hints on it.
+  // The layout owns the panel library and commits its restore before acknowledging measurement.
+  const expandFileTree = useCallback(() => {
+    const panel = fileTreePanel.current;
+    if (!panel) return false;
+    if (panel.isCollapsed()) {
       flushSync(() => {
         panel.expand();
         syncCollapsed();
       });
     }
-    document.addEventListener('expand-file-tree', handleExpandRequest);
-    return () => document.removeEventListener('expand-file-tree', handleExpandRequest);
+    return !panel.isCollapsed();
   }, [syncCollapsed]);
+  useLayoutEffect(() => expansion?.register(expandFileTree), [expansion, expandFileTree]);
+
+  // Compatibility for embedded controls that still request expansion through the scoped root.
+  useEffect(() => {
+    const legacyExpand = () => {
+      expandFileTree();
+    };
+    portalContainer?.addEventListener('expand-file-tree', legacyExpand);
+    return () => portalContainer?.removeEventListener('expand-file-tree', legacyExpand);
+  }, [expandFileTree, portalContainer]);
 
   return (
     <Group orientation='horizontal' style={{ flex: 1 }}>
       <Panel
-        id={FILE_TREE_PANEL_ID}
+        id={fileTreePanelId}
         panelRef={fileTreePanel}
         collapsible
         collapsedSize='0%'
@@ -91,7 +96,7 @@ export default function Layout() {
         </div>
       </Separator>
 
-      <Panel id='diffViewer' defaultSize='75%'>
+      <Panel id={diffPanelId} defaultSize='75%'>
         <div className='relative h-full'>
           <div className='h-full overflow-y-auto bg-background' data-scroll-container='diff'>
             <DiffViewer />
@@ -99,7 +104,7 @@ export default function Layout() {
           <div className='absolute bottom-4 left-4 z-30'>
             <FileTreeToggle
               collapsed={fileTreeCollapsed}
-              controls={FILE_TREE_PANEL_ID}
+              controls={fileTreePanelId}
               onToggle={toggleFileTree}
             />
           </div>
@@ -109,3 +114,5 @@ export default function Layout() {
     </Group>
   );
 }
+
+export default React.memo(Layout);

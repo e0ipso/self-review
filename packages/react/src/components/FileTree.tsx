@@ -1,62 +1,27 @@
+import { useLocalization } from '../localization/LocalizationContext';
 import React, { useState, useMemo } from 'react';
-import { useReview } from '../context/ReviewContext';
-import { useConfig } from '../context/ConfigContext';
+import { useDiffReview, useNavigationReview, useReviewCommands } from '../context/ReviewContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
-import { useAdapter } from '../context/ReviewAdapterContext';
 import { useGuide } from '../context/GuideContext';
+import { keyDiffEntries } from '../utils/diff-entry-keys';
 import { buildGuideDisplaySections } from '../utils/guide-display';
-import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import {
-  Search,
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Keyboard,
-  CheckCircle2,
-  AlertCircle,
-  Columns2,
-  AlignJustify,
-} from 'lucide-react';
-import TruncatedPath from './TruncatedPath';
+import { Search } from 'lucide-react';
 import { FileTreeEntry } from './FileTreeEntry';
+import FileTreeControls from './FileTreeControls';
+import OutputPathControl from './OutputPathControl';
 import { GuideStation } from './GuideStation';
 import { getGuideAccent } from '../utils/guide-accents';
 
 export default function FileTree() {
-  const { diffFiles, files, toggleViewed } = useReview();
-  const { config, updateConfig, outputPathInfo, setOutputPathInfo } = useConfig();
+  const { t, number } = useLocalization();
+  const { diffFiles } = useDiffReview();
+  const summaries = useNavigationReview();
+  const { toggleViewed } = useReviewCommands();
   const { activeFilePath, scrollToFile } = useDiffNavigationContext();
-  const adapter = useAdapter();
   const { guide, mode } = useGuide();
   const [searchQuery, setSearchQuery] = useState('');
-  const [allExpanded, setAllExpanded] = useState(true);
-
-  const handleChangeOutputPath = async () => {
-    if (!adapter?.changeOutputPath) return;
-    const result = await adapter.changeOutputPath();
-    if (result) {
-      setOutputPathInfo(result);
-    }
-  };
-
-  const handleViewModeChange = (value: string) => {
-    if (value === 'split' || value === 'unified') {
-      updateConfig({ diffView: value });
-    }
-  };
-
-  const handleToggleAllSections = () => {
-    const newExpanded = !allExpanded;
-    setAllExpanded(newExpanded);
-    const event = new CustomEvent('toggle-all-sections', {
-      detail: { expanded: newExpanded },
-    });
-    document.dispatchEvent(event);
-  };
 
   const filteredFiles = useMemo(() => {
     if (!searchQuery.trim()) return diffFiles;
@@ -68,19 +33,13 @@ export default function FileTree() {
   // Ordering/annotation layer: flat mode (or no guide) yields a single
   // headerless section with the files untouched — today's tree by construction.
   const displaySections = useMemo(
-    () => buildGuideDisplaySections(filteredFiles, guide?.groups ?? null, mode),
-    [filteredFiles, guide, mode]
+    () =>
+      keyDiffEntries(
+        diffFiles,
+        buildGuideDisplaySections(filteredFiles, guide?.groups ?? null, mode)
+      ),
+    [diffFiles, filteredFiles, guide, mode]
   );
-
-  const getCommentCount = (filePath: string) => {
-    const fileState = files.find(f => f.path === filePath);
-    return fileState?.comments.length || 0;
-  };
-
-  const isViewed = (filePath: string) => {
-    const fileState = files.find(f => f.path === filePath);
-    return fileState?.viewed || false;
-  };
 
   return (
     <div className='flex flex-col h-full' data-testid='file-tree'>
@@ -88,115 +47,19 @@ export default function FileTree() {
       <div className='px-3 pt-3 pb-2'>
         <div className='flex items-center justify-between mb-2.5'>
           <span className='text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'>
-            Changed files
+            {t('Changed files')}
           </span>
-          <div className='flex items-center gap-1'>
-            <ToggleGroup
-              type='single'
-              variant='outline'
-              size='sm'
-              value={config.diffView}
-              onValueChange={handleViewModeChange}
-            >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <ToggleGroupItem
-                    value='split'
-                    data-testid='view-mode-split'
-                    className='h-5 w-5 p-0'
-                  >
-                    <Columns2 className='h-3.5 w-3.5' />
-                    <span className='sr-only'>Split view</span>
-                  </ToggleGroupItem>
-                </TooltipTrigger>
-                <TooltipContent>Side-by-side view</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <ToggleGroupItem
-                    value='unified'
-                    data-testid='view-mode-unified'
-                    className='h-5 w-5 p-0'
-                  >
-                    <AlignJustify className='h-3.5 w-3.5' />
-                    <span className='sr-only'>Unified view</span>
-                  </ToggleGroupItem>
-                </TooltipTrigger>
-                <TooltipContent>Unified view</TooltipContent>
-              </Tooltip>
-            </ToggleGroup>
-            <Separator orientation='vertical' className='h-4' />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant='ghost'
-                  size='icon'
-                  data-testid='keyboard-shortcuts-btn'
-                  className='h-5 w-5 text-muted-foreground hover:text-foreground'
-                >
-                  <Keyboard className='h-3.5 w-3.5' />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side='right' className='text-xs space-y-1 p-2'>
-                <div className='font-medium mb-1'>Keyboard Shortcuts</div>
-                <div className='flex justify-between gap-4'>
-                  <span>Find in page</span>
-                  <kbd className='font-mono'>Ctrl+F</kbd>
-                </div>
-                <div className='flex justify-between gap-4'>
-                  <span>Comment on line</span>
-                  <kbd className='font-mono'>f</kbd>
-                </div>
-                <div className='flex justify-between gap-4'>
-                  <span>Jump to file</span>
-                  <kbd className='font-mono'>g</kbd>
-                </div>
-                <div className='flex justify-between gap-4'>
-                  <span>Scroll diffs</span>
-                  <kbd className='font-mono'>j/k</kbd>
-                </div>
-                <div className='flex justify-between gap-4'>
-                  <span>Cancel</span>
-                  <kbd className='font-mono'>Esc</kbd>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant='ghost'
-                  size='icon'
-                  data-testid={allExpanded ? 'collapse-all-btn' : 'expand-all-btn'}
-                  onClick={handleToggleAllSections}
-                  className='h-5 w-5 text-muted-foreground hover:text-foreground'
-                >
-                  {allExpanded ? (
-                    <ChevronsDownUp className='h-3.5 w-3.5' />
-                  ) : (
-                    <ChevronsUpDown className='h-3.5 w-3.5' />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {allExpanded ? 'Collapse all files' : 'Expand all files'}
-              </TooltipContent>
-            </Tooltip>
-            <Badge
-              variant='secondary'
-              className='h-5 px-1.5 text-[11px] font-normal tabular-nums rounded'
-            >
-              {diffFiles.length}
-            </Badge>
-          </div>
+          <FileTreeControls />
         </div>
         <div className='relative'>
-          <Search className='absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none' />
+          <Search className='absolute start-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none' />
           <Input
             type='text'
-            placeholder='Filter files...'
+            placeholder={t('Filter files...')}
+            aria-label={t('Filter files...')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className='h-7 pl-7 text-xs bg-background'
+            className='h-7 ps-7 text-xs bg-background'
             data-testid='file-search'
           />
         </div>
@@ -220,17 +83,17 @@ export default function FileTree() {
           const progressPaths =
             fullGroupPaths ?? section.entries.map(({ file }) => file.newPath || file.oldPath);
           const viewedCount = section.header
-            ? progressPaths.filter(path => isViewed(path)).length
+            ? progressPaths.filter(path => summaries.get(path)?.viewed).length
             : 0;
-          const entryNodes = section.entries.map(({ file, description }) => {
+          const entryNodes = section.entries.map(({ file, description, key }) => {
             const filePath = file.newPath || file.oldPath;
             return (
               <FileTreeEntry
-                key={filePath}
+                key={key}
                 file={file}
                 isActive={activeFilePath === filePath}
-                commentCount={getCommentCount(filePath)}
-                viewed={isViewed(filePath)}
+                commentCount={summaries.get(filePath)?.commentCount ?? 0}
+                viewed={summaries.get(filePath)?.viewed ?? false}
                 guideDescription={description}
                 onScrollToFile={scrollToFile}
                 onToggleViewed={toggleViewed}
@@ -255,7 +118,7 @@ export default function FileTree() {
                   sections butt together so the line reads as a single
                   route. The implicit group joins by a dashed segment. */}
               <div
-                className={`pointer-events-none absolute left-[18px] w-[2px] ${
+                className={`pointer-events-none absolute start-[18px] w-[2px] ${
                   isFirst ? 'top-[27px]' : 'top-0'
                 } ${isLast ? 'bottom-2' : 'bottom-0'} ${
                   section.header.implicit
@@ -274,71 +137,31 @@ export default function FileTree() {
                     className='relative z-10'
                   />
                   <span className='min-w-0 flex-1 truncate text-xs font-semibold text-foreground'>
-                    {section.header.name}
+                    {section.header.implicit ? t('Everything else') : section.header.name}
                   </span>
                   <span className='shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground'>
-                    {viewedCount}/{progressPaths.length}
+                    {number(viewedCount)}/{number(progressPaths.length)}
                   </span>
                 </div>
                 {section.header.rationale && (
-                  <div className='mt-1 pl-[30px] text-[11px] leading-snug text-muted-foreground'>
+                  <div className='mt-1 ps-[30px] text-[11px] leading-snug text-muted-foreground'>
                     {section.header.rationale}
                   </div>
                 )}
               </div>
-              <div className='pl-6'>{entryNodes}</div>
+              <div className='ps-6'>{entryNodes}</div>
             </div>
           );
         })}
 
         {filteredFiles.length === 0 && (
           <div className='text-center text-muted-foreground text-xs py-8'>
-            {searchQuery ? 'No files match your search' : 'No files in diff'}
+            {t(searchQuery ? 'No files match your search' : 'No files in diff')}
           </div>
         )}
       </div>
 
-      {/* Output Path Footer */}
-      {outputPathInfo.resolvedOutputPath && (
-        <>
-          <Separator />
-          <div className='px-3 py-2 space-y-1'>
-            <div className='flex items-center gap-1.5 text-xs text-muted-foreground'>
-              <span className='font-medium'>Output:</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TruncatedPath
-                    path={outputPathInfo.resolvedOutputPath}
-                    className='cursor-default'
-                  />
-                </TooltipTrigger>
-                <TooltipContent side='right' className='max-w-sm'>
-                  <p className='font-mono text-xs break-all'>{outputPathInfo.resolvedOutputPath}</p>
-                </TooltipContent>
-              </Tooltip>
-              {outputPathInfo.outputPathWritable ? (
-                <CheckCircle2 className='h-3.5 w-3.5 text-green-500 shrink-0' />
-              ) : (
-                <AlertCircle className='h-3.5 w-3.5 text-red-500 shrink-0' />
-              )}
-              {/* Only offered when the host can actually change the path. */}
-              {adapter?.changeOutputPath && (
-                <Button
-                  variant='ghost'
-                  size='sm'
-                  className='h-6 px-2 text-xs ml-auto'
-                  onClick={handleChangeOutputPath}
-                >
-                  Change...
-                </Button>
-              )}
-            </div>
-            {!outputPathInfo.outputPathWritable && (
-              <p className='text-xs text-red-500'>Path not writable</p>
-            )}
-          </div>
-        </>
-      )}
+      <OutputPathControl />
     </div>
   );
 }

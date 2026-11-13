@@ -19,6 +19,13 @@ class MockIntersectionObserver implements IntersectionObserver {
 }
 
 export function installBrowserApiStubs(): void {
+  if (typeof ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = class implements ResizeObserver {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    };
+  }
   (globalThis as { IntersectionObserver: typeof IntersectionObserver }).IntersectionObserver =
     MockIntersectionObserver as unknown as typeof IntersectionObserver;
 

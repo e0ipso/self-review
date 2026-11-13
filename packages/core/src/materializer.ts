@@ -15,15 +15,19 @@
 // talks to a forge API: head refs come from the forges' well-known git refs
 // (`refs/pull/N/head`, `refs/merge-requests/N/head`) over plain git.
 
-import { spawn } from 'child_process';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
 import { randomUUID } from 'crypto';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { nodeTemporaryCloneStorage } from './remote-temp';
+import type { TemporaryCloneStorage } from './remote-temp';
+export { nodeTemporaryCloneStorage } from './remote-temp';
+export type { TemporaryCloneStorage } from './remote-temp';
 import { stripTrailingNewline } from './git';
+import { defaultGitRunner } from './command-runner';
+export { defaultGitRunner } from './command-runner';
 import { CommandCancelledError } from './forge-provider';
+import { FORGE_DEFINITIONS } from './forge-definitions';
 import type {
-  CommandCancelReason,
   ForgeCommandOptions,
   ForgeCommandResult,
   ForgeCommandRunner,
@@ -50,8 +54,12 @@ export interface MaterializeResult {
    * Removes the temp clone (synchronously, before the first await, so an `exit`
    * handler that cannot wait still gets that far) and deletes the session's refs
    * from a reused clone. Idempotent, never rejects; a failed deletion goes to stderr.
+   * A caller that opts into cleanupAsync must await that disposal: while it is in flight,
+   * cleanup joins the same deletion rather than starting a competing synchronous removal.
    */
   cleanup: () => Promise<void>;
+  /** Nonblocking normal disposal; concurrent calls share one attempt and failures can be retried. */
+  cleanupAsync?: () => Promise<void>;
 }
 
 /** A local clone whose fetch remote matches the requested forge repository. */
@@ -61,6 +69,10 @@ export interface ExistingClone {
 }
 
 export interface MaterializeOptions {
+  /** Authoritative owner of temporary clone creation and both removal modes. */
+  temporaryClones?: TemporaryCloneStorage;
+  /** Per-call progress and cleanup diagnostics. Defaults to stderr; must not throw. */
+  reportDiagnostic?: DiagnosticReporter;
   /**
    * Aborting kills the command in flight and rejects with {@link CommandCancelledError}; the temp
    * clone is removed first.
@@ -78,122 +90,14 @@ export const DEFAULT_GIT_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
 const CLEANUP_COMMAND_TIMEOUT_MS = 15_000;
 
-const KILL_GRACE_MS = 2_000;
-
-const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
-
 const AUTH_HINT =
   'Hint: if this repository is private or requires authentication, run ' +
   '`gh auth setup-git` (GitHub) or `glab auth git-credential` (GitLab) to ' +
   'wire your CLI credentials into git.';
 
-/**
- * Default runner: spawns the real binary. Rejects on spawn failure, on output over
- * the buffer cap, and with {@link CommandCancelledError} on abort or timeout (SIGTERM,
- * then SIGKILL after {@link KILL_GRACE_MS}; settles once the child exited).
- *
- * Deliberately not in its own process group: that would detach the controlling
- * terminal and silently disable git's and ssh's credential prompts.
- */
-export const defaultGitRunner: ForgeCommandRunner = (command, args, options = {}) =>
-  new Promise<ForgeCommandResult>((resolve, reject) => {
-    const { signal, timeoutMs } = options;
-    if (signal?.aborted) {
-      reject(new CommandCancelledError('aborted', command, args));
-      return;
-    }
-
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let outputBytes = 0;
-    let settled = false;
-    let cancelled: CommandCancelReason | null = null;
-    let overflowed = false;
-    let killTimer: NodeJS.Timeout | undefined;
-    let timeoutTimer: NodeJS.Timeout | undefined;
-
-    const killChild = () => {
-      child.kill('SIGTERM');
-      killTimer = setTimeout(() => {
-        if (!settled) child.kill('SIGKILL');
-      }, KILL_GRACE_MS);
-    };
-    const cancel = (reason: CommandCancelReason) => {
-      if (settled || cancelled !== null) return;
-      cancelled = reason;
-      killChild();
-    };
-    const onAbort = () => cancel('aborted');
-    signal?.addEventListener('abort', onAbort, { once: true });
-    if (timeoutMs !== undefined && timeoutMs > 0) {
-      timeoutTimer = setTimeout(() => cancel('timeout'), timeoutMs);
-    }
-
-    const settle = (outcome: () => void) => {
-      if (settled) return;
-      settled = true;
-      if (killTimer) clearTimeout(killTimer);
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-      signal?.removeEventListener('abort', onAbort);
-      outcome();
-    };
-
-    const collect = (sink: Buffer[]) => (chunk: Buffer) => {
-      outputBytes += chunk.length;
-      if (outputBytes > MAX_OUTPUT_BYTES) {
-        if (!overflowed) {
-          overflowed = true;
-          killChild();
-        }
-        return;
-      }
-      sink.push(chunk);
-    };
-    child.stdout?.on('data', collect(stdout));
-    child.stderr?.on('data', collect(stderr));
-
-    child.on('error', error => settle(() => reject(error)));
-
-    // A helper (ssh waiting on the terminal) may hold our pipes; closing them lets `close` follow
-    // `exit`.
-    child.on('exit', () => {
-      if (cancelled !== null || overflowed) {
-        child.stdout?.destroy();
-        child.stderr?.destroy();
-      }
-    });
-
-    child.on('close', (code, exitSignal) =>
-      settle(() => {
-        if (cancelled !== null) {
-          reject(new CommandCancelledError(cancelled, command, args));
-          return;
-        }
-        if (overflowed) {
-          reject(
-            new Error(`${command} ${args.join(' ')} produced more than ${MAX_OUTPUT_BYTES} bytes`)
-          );
-          return;
-        }
-        let stderrText = Buffer.concat(stderr).toString('utf-8');
-        if (code === null && exitSignal) {
-          stderrText += `${stderrText.endsWith('\n') || stderrText === '' ? '' : '\n'}(killed by ${exitSignal})\n`;
-        }
-        resolve({
-          stdout: Buffer.concat(stdout).toString('utf-8'),
-          stderr: stderrText,
-          exitCode: code ?? 1,
-        });
-      })
-    );
-  });
-
 /** Well-known git ref for the PR/MR head on each forge. */
 function headRefFor(url: ForgeUrl): string {
-  return url.forge === 'github'
-    ? `refs/pull/${url.number}/head`
-    : `refs/merge-requests/${url.number}/head`;
+  return FORGE_DEFINITIONS[url.forge].headRef(url.number);
 }
 
 /**
@@ -219,6 +123,7 @@ type SessionGit = (args: string[]) => Promise<ForgeCommandResult>;
 function bindGit(runner: ForgeCommandRunner, options: MaterializeOptions): SessionGit {
   const commandOptions: ForgeCommandOptions = {
     signal: options.signal,
+    gitEnvironment: 'isolated',
     timeoutMs: options.commandTimeoutMs ?? DEFAULT_GIT_COMMAND_TIMEOUT_MS,
   };
   return args => {
@@ -315,6 +220,10 @@ async function fetchSnapshot(
     '-C',
     repoPath,
     'fetch',
+    '--refmap=',
+    '--no-tags',
+    '--no-write-fetch-head',
+    '--recurse-submodules=no',
     remote,
     `+refs/heads/${baseBranch}:${refs.base}`,
     `+${headRefFor(url)}:${refs.head}`,
@@ -363,31 +272,45 @@ async function materializeIntoExistingClone(
   repoPath: string,
   remoteName: string
 ): Promise<MaterializeResult> {
-  console.error(`self-review: reusing existing clone at ${repoPath} (remote "${remoteName}")`);
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
+  reportDiagnostic(`self-review: reusing existing clone at ${repoPath} (remote "${remoteName}")`);
   const git = bindGit(runner, options);
   const refs = sessionRefs();
   const ownedRefs = [refs.base, refs.head];
 
   // Not under the session signal: an aborted session must still release its refs.
-  let released = false;
-  const cleanup = async (): Promise<void> => {
-    if (released) return;
-    released = true;
-    for (const ref of ownedRefs) {
+  const pendingRefs = new Set(ownedRefs);
+  let releasing: Promise<void> | undefined;
+  const releaseRefs = async (): Promise<void> => {
+    for (const ref of pendingRefs) {
       try {
         const result = await runner('git', ['-C', repoPath, 'update-ref', '-d', ref], {
           timeoutMs: CLEANUP_COMMAND_TIMEOUT_MS,
+          gitEnvironment: 'isolated',
         });
         if (result.exitCode !== 0) {
-          console.error(
+          reportCleanupDiagnostic(
+            reportDiagnostic,
             `self-review: could not delete ${ref} in ${repoPath}: ${result.stderr.trim()}`
           );
+        } else {
+          pendingRefs.delete(ref);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`self-review: could not delete ${ref} in ${repoPath}: ${message}`);
+        reportCleanupDiagnostic(
+          reportDiagnostic,
+          `self-review: could not delete ${ref} in ${repoPath}: ${message}`
+        );
       }
     }
+  };
+
+  const cleanup = (): Promise<void> => {
+    releasing ??= releaseRefs().finally(() => {
+      releasing = undefined;
+    });
+    return releasing;
   };
 
   // Namespaced refs only: no checkout, branch or working-tree change. A part-way
@@ -416,18 +339,46 @@ async function materializeIntoTempClone(
   baseBranch: string
 ): Promise<MaterializeResult> {
   const git = bindGit(runner, options);
+  const reportDiagnostic = isolatedReporter(options.reportDiagnostic);
   // This run creates the directory, so cleanup may only ever remove it; it is owned
   // from here on, before any git runs.
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'self-review-'));
+  const storage = options.temporaryClones ?? nodeTemporaryCloneStorage;
+  const tempDir = await storage.create();
   let removed = false;
-  const cleanup = async (): Promise<void> => {
-    if (removed) return;
-    removed = true;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+  let removing: Promise<void> | undefined;
+  const failed = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    reportDiagnostic(`self-review: could not remove ${tempDir}: ${message}`);
+  };
+  const cleanupAsync = (): Promise<void> => {
+    if (removed) return Promise.resolve();
+    removing ??= Promise.resolve().then(async () => {
+      try {
+        await storage.remove(tempDir);
+        removed = true;
+      } catch (error) {
+        failed(error);
+      } finally {
+        removing = undefined;
+      }
+    });
+    return removing;
+  };
+  const cleanup = (): Promise<void> => {
+    if (removed) return Promise.resolve();
+    // Do not start a competing recursive deletion when normal disposal is already running.
+    if (removing) return removing;
+    try {
+      storage.removeSync(tempDir);
+      removed = true;
+    } catch (error) {
+      failed(error);
+    }
+    return Promise.resolve();
   };
 
   try {
-    console.error(`self-review: created temporary blobless clone at ${tempDir}`);
+    reportDiagnostic(`self-review: created temporary blobless clone at ${tempDir}`);
     const cloneUrl = cloneUrlFor(url);
     // Blobless, never shallow: --depth would break merge-base computation.
     const clone = await git(['clone', '--filter=blob:none', cloneUrl, tempDir]);
@@ -443,9 +394,17 @@ async function materializeIntoTempClone(
       sessionRefs(),
       `fetch of ${headRefFor(url)}`
     );
-    return { repoPath: tempDir, baseSha, headSha, mode: 'temp-clone', ownedRefs: [], cleanup };
+    return {
+      repoPath: tempDir,
+      baseSha,
+      headSha,
+      mode: 'temp-clone',
+      ownedRefs: [],
+      cleanup,
+      cleanupAsync,
+    };
   } catch (error) {
-    await cleanup();
+    await cleanupAsync();
     throw error;
   }
 }
@@ -527,4 +486,13 @@ export async function resolveRemoteDefaultBranch(
     );
   }
   return match[1];
+}
+
+// A presentation failure must never interrupt resource release or replace its primary outcome.
+function reportCleanupDiagnostic(report: DiagnosticReporter, message: string): void {
+  try {
+    report(message);
+  } catch {
+    /* Cleanup is best effort and never rejects. */
+  }
 }

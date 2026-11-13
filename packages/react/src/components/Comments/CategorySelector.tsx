@@ -1,5 +1,5 @@
 import React from 'react';
-import { useConfig } from '../../context/ConfigContext';
+import { useCategories } from '../../context/ConfigContext';
 import { getUsableCategories } from '../../utils/category-utils';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -10,8 +10,8 @@ export interface CategorySelectorProps {
 }
 
 export default function CategorySelector({ value, onChange }: CategorySelectorProps) {
-  const { config } = useConfig();
-  const usableCategories = getUsableCategories(config.categories);
+  const categories = useCategories();
+  const usableCategories = getUsableCategories(categories);
 
   if (usableCategories.length === 0) {
     return null;
@@ -29,6 +29,7 @@ export default function CategorySelector({ value, onChange }: CategorySelectorPr
                 variant='ghost'
                 size='sm'
                 data-testid={`category-option-${cat.name}`}
+                data-hint-action='select-category'
                 onClick={() => {
                   if (!isActive) onChange(cat.name);
                 }}

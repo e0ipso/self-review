@@ -1,5 +1,6 @@
 import React from 'react';
 import Prism from 'prismjs';
+import { HIGHLIGHT_MAX_LINE_CHARS } from './highlight-budget';
 import type { ExtraProps } from 'react-markdown';
 import MermaidBlock from './MermaidBlock';
 
@@ -25,7 +26,7 @@ export function MarkdownCode({
     return <MermaidBlock code={code} />;
   }
 
-  if (lang && Prism.languages[lang]) {
+  if (code.length <= HIGHLIGHT_MAX_LINE_CHARS && lang && Prism.languages[lang]) {
     const html = Prism.highlight(code, Prism.languages[lang], lang);
     return <code className={className} dangerouslySetInnerHTML={{ __html: html }} {...props} />;
   }

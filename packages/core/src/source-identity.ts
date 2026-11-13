@@ -2,18 +2,14 @@
 // preview of a staged review) use those bytes and not the working tree. A shape this
 // module cannot vouch for is `unknown`, and a read from it fails visibly.
 
-import { execFile } from 'child_process';
 import { realpathSync } from 'fs';
 import * as path from 'path';
-import { promisify } from 'util';
 import type { ReviewSourceIdentity, ReviewSourceSide } from './types';
-import {
-  classifyGitDiffArgs,
-  consumesNextArgument,
-  describeDiffPathRelativity,
-} from './git-diff-args';
+import { parseGitDiffArgs, describeDiffPathRelativity } from './git-diff-args';
 
-const execFileAsync = promisify(execFile);
+import { executeGit, type GitExecutionOptions } from './git';
+import { checkLoadingCancelled } from './local-loading-lifetime';
+import { isCommandCancelled } from './forge-provider';
 
 /** One side as the arguments describe it, before resolution; `implicit` is the HEAD git assumes. */
 export type GitDiffSideSpec =
@@ -50,31 +46,15 @@ function unknownSides(reason: string): GitDiffSides {
  * or more revisions and `--cached` with a range are `unknown`.
  */
 export function describeGitDiffSides(argv: readonly string[]): GitDiffSides {
-  const separator = argv.indexOf('--');
-  const end = separator === -1 ? argv.length : separator;
-  const positional = new Set(
-    classifyGitDiffArgs([...argv]).positionalIndices.filter(index => index < end)
-  );
-
-  let cached = false;
-  let reverse = false;
-  let useMergeBase = false;
-  const revs: string[] = [];
-  for (let i = 0; i < end; i++) {
-    const arg = argv[i];
-    if (positional.has(i)) {
-      revs.push(arg);
-      continue;
-    }
-    if (consumesNextArgument(arg)) {
-      i++;
-      continue;
-    }
-    if (arg === '--cached' || arg === '--staged') cached = true;
-    else if (arg === '-R') reverse = true;
-    else if (arg === '--merge-base') useMergeBase = true;
-    else if (arg === '--no-index') return unknownSides('--no-index compares paths, not snapshots');
-  }
+  const parsed = parseGitDiffArgs(argv);
+  const names = new Set(parsed.options.map(option => option.name));
+  if (names.has('--no-index')) return unknownSides('--no-index compares paths, not snapshots');
+  const revs = parsed.positionalIndices
+    .filter(index => parsed.separatorIndex === null || index < parsed.separatorIndex)
+    .map(index => argv[index]);
+  const cached = names.has('--cached') || names.has('--staged');
+  const reverse = names.has('-R');
+  const useMergeBase = names.has('--merge-base');
 
   const sides = describeRevisionSides(revs, cached, useMergeBase);
   return reverse ? { oldSide: sides.newSide, newSide: sides.oldSide } : sides;
@@ -86,6 +66,7 @@ function describeRevisionSides(
   useMergeBase: boolean
 ): GitDiffSides {
   if (revs.length === 0) {
+    if (useMergeBase) return unknownSides('--merge-base requires a revision');
     return cached ? { oldSide: HEAD, newSide: INDEX } : { oldSide: INDEX, newSide: WORKING_TREE };
   }
 
@@ -119,49 +100,55 @@ function describeRevisionSides(
   return unknownSides(`a combined diff of ${revs.length} revisions has no single old side`);
 }
 
-async function gitOutput(repository: string, args: string[]): Promise<string | null> {
+async function gitOutput(
+  repository: string,
+  args: string[],
+  options: GitExecutionOptions
+): Promise<string | null> {
   try {
-    const { stdout } = await execFileAsync('git', args, {
-      cwd: repository,
-      timeout: 10_000,
-      maxBuffer: 1024 * 1024,
-    });
-    return stdout.replace(/\r?\n$/, '');
-  } catch {
+    return (await executeGit(args, repository, options)).replace(/\r?\n$/, '');
+  } catch (error) {
+    if (isCommandCancelled(error)) throw error;
     return null;
   }
 }
 
 const SHA_PATTERN = /^[0-9a-f]{40,64}$/;
 
-async function resolveCommit(repository: string, rev: string): Promise<string | null> {
+async function resolveCommit(
+  repository: string,
+  rev: string,
+  options: GitExecutionOptions
+): Promise<string | null> {
   // `--end-of-options` keeps a leading `-` from being an option; `^{commit}` refuses a blob or
   // tree.
-  const sha = await gitOutput(repository, [
-    'rev-parse',
-    '--verify',
-    '--quiet',
-    '--end-of-options',
-    `${rev}^{commit}`,
-  ]);
+  const sha = await gitOutput(
+    repository,
+    ['rev-parse', '--verify', '--quiet', '--end-of-options', `${rev}^{commit}`],
+    options
+  );
   return sha !== null && SHA_PATTERN.test(sha) ? sha : null;
 }
 
-async function resolveSide(repository: string, spec: GitDiffSideSpec): Promise<ReviewSourceSide> {
+async function resolveSide(
+  repository: string,
+  spec: GitDiffSideSpec,
+  options: GitExecutionOptions
+): Promise<ReviewSourceSide> {
   switch (spec.kind) {
     case 'working-tree':
     case 'index':
     case 'unknown':
       return spec;
     case 'revision': {
-      const sha = await resolveCommit(repository, spec.rev);
+      const sha = await resolveCommit(repository, spec.rev, options);
       if (sha !== null) return { kind: 'commit', sha };
       // An implicit HEAD resolving to nothing is an unborn branch: the empty tree.
       if (spec.implicit) return { kind: 'none' };
       return { kind: 'unknown', reason: `${spec.rev} does not name a commit` };
     }
     case 'merge-base': {
-      const sha = await gitOutput(repository, ['merge-base', spec.left, spec.right]);
+      const sha = await gitOutput(repository, ['merge-base', spec.left, spec.right], options);
       if (sha !== null && SHA_PATTERN.test(sha)) return { kind: 'commit', sha };
       return {
         kind: 'unknown',
@@ -187,7 +174,8 @@ export function canonicalSourcePath(target: string): string {
 export function resolveReviewedPathPrefix(
   gitDiffArgv: readonly string[],
   sourceRoot: string,
-  invocationCwd: string
+  invocationCwd: string,
+  canonical: (target: string) => string = canonicalSourcePath
 ): string {
   const relative = describeDiffPathRelativity(gitDiffArgv);
   switch (relative.kind) {
@@ -196,10 +184,7 @@ export function resolveReviewedPathPrefix(
     case 'directory':
       return relative.directory.replace(/\/+$/, '');
     case 'cwd': {
-      const fromRoot = path.relative(
-        canonicalSourcePath(sourceRoot),
-        canonicalSourcePath(invocationCwd)
-      );
+      const fromRoot = path.relative(canonical(sourceRoot), canonical(invocationCwd));
       if (fromRoot === '' || fromRoot.startsWith('..') || path.isAbsolute(fromRoot)) return '';
       return fromRoot.split(path.sep).join('/');
     }
@@ -214,7 +199,9 @@ export function rootRelativeReviewedPath(
   return identity.pathPrefix === '' ? filePath : `${identity.pathPrefix}/${filePath}`;
 }
 
-export interface GitSourceIdentityOptions {
+export interface GitSourceIdentityOptions extends GitExecutionOptions {
+  /** Supplied source path resolution; never falls back to native realpath. */
+  sourcePaths?: LocalSourcePaths;
   repository: string;
   gitDiffArgv: readonly string[];
   /** Defaults to the process's working directory. */
@@ -223,24 +210,40 @@ export interface GitSourceIdentityOptions {
   mode?: 'git' | 'remote';
 }
 
-/** Resolves the compared sides to commit SHAs. Never throws; an unresolvable side is `unknown`. */
+/** Resolves commits once. Unresolvable revisions become `unknown`; cancellation rejects. */
 export async function resolveGitSourceIdentity(
   options: GitSourceIdentityOptions
 ): Promise<ReviewSourceIdentity> {
   const sides = describeGitDiffSides(options.gitDiffArgv);
   const repository = options.repository;
   const [oldSide, newSide] = await Promise.all([
-    resolveSide(repository, sides.oldSide),
-    resolveSide(repository, sides.newSide),
+    resolveSide(repository, sides.oldSide, options),
+    resolveSide(repository, sides.newSide, options),
   ]);
-  const sourceRoot = canonicalSourcePath(repository);
+  const emptyTreeSha =
+    oldSide.kind === 'none' || newSide.kind === 'none'
+      ? await gitOutput(repository, ['hash-object', '-t', 'tree', '--stdin'], options)
+      : null;
   const invocationCwd = options.invocationCwd ?? process.cwd();
+  const sourceRoot = options.sourcePaths
+    ? await canonicalLocalPath(repository, options.sourcePaths, options.signal)
+    : canonicalSourcePath(repository);
+  const physicalCwd =
+    options.sourcePaths && describeDiffPathRelativity(options.gitDiffArgv).kind === 'cwd'
+      ? await canonicalLocalPath(invocationCwd, options.sourcePaths, options.signal)
+      : invocationCwd;
   return {
     mode: options.mode ?? 'git',
+    ...(emptyTreeSha !== null && SHA_PATTERN.test(emptyTreeSha) ? { emptyTreeSha } : {}),
     sourceRoot,
     invocationCwd,
     gitDiffArgv: [...options.gitDiffArgv],
-    pathPrefix: resolveReviewedPathPrefix(options.gitDiffArgv, sourceRoot, invocationCwd),
+    pathPrefix: resolveReviewedPathPrefix(
+      options.gitDiffArgv,
+      sourceRoot,
+      physicalCwd,
+      options.sourcePaths ? target => target : canonicalSourcePath
+    ),
     oldSide,
     newSide,
   };
@@ -260,11 +263,39 @@ export interface LocalSourceIdentityOptions {
 export function resolveLocalSourceIdentity(
   options: LocalSourceIdentityOptions
 ): ReviewSourceIdentity {
+  return localIdentity(options, canonicalSourcePath);
+}
+
+/** The path role a local load needs; a supplied provider owns every canonicalization. */
+export interface LocalSourcePaths {
+  realpath(target: string): Promise<string>;
+}
+
+/** Async identity resolution for supplied sources; the synchronous public form stays native. */
+export async function resolveLocalSourceIdentityAsync(
+  options: LocalSourceIdentityOptions,
+  paths: LocalSourcePaths,
+  signal?: AbortSignal
+): Promise<ReviewSourceIdentity> {
+  const canonical = (target: string) => canonicalLocalPath(target, paths, signal);
+  const root = await canonical(
+    options.type === 'file' ? path.dirname(options.sourcePath) : options.sourcePath
+  );
+  const file = options.type === 'file' ? await canonical(options.sourcePath) : undefined;
+  return localIdentity(options, target =>
+    target === options.sourcePath && file !== undefined ? file : root
+  );
+}
+
+function localIdentity(
+  options: LocalSourceIdentityOptions,
+  canonical: (target: string) => string
+): ReviewSourceIdentity {
   const invocationCwd = options.invocationCwd ?? process.cwd();
   if (options.type === 'directory') {
     return {
       mode: 'directory',
-      sourceRoot: canonicalSourcePath(options.sourcePath),
+      sourceRoot: canonical(options.sourcePath),
       invocationCwd,
       gitDiffArgv: [],
       pathPrefix: '',
@@ -274,11 +305,28 @@ export function resolveLocalSourceIdentity(
   }
   return {
     mode: 'file',
-    sourceRoot: canonicalSourcePath(path.dirname(options.sourcePath)),
+    sourceRoot: canonical(path.dirname(options.sourcePath)),
     invocationCwd,
     gitDiffArgv: [],
     pathPrefix: '',
     oldSide: { kind: 'none' },
-    newSide: { kind: 'file', path: canonicalSourcePath(options.sourcePath) },
+    newSide: { kind: 'file', path: canonical(options.sourcePath) },
   };
+}
+
+async function canonicalLocalPath(
+  target: string,
+  paths: LocalSourcePaths,
+  signal?: AbortSignal
+): Promise<string> {
+  checkLoadingCancelled(signal);
+  try {
+    const result = await paths.realpath(target);
+    checkLoadingCancelled(signal);
+    return result;
+  } catch {
+    checkLoadingCancelled(signal);
+    // Keep per-path diagnostics without consulting a different filesystem.
+    return path.resolve(target);
+  }
 }

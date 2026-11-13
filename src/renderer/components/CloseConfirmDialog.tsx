@@ -1,3 +1,4 @@
+import type { ElectronAPI } from '../../shared/types';
 import React, { useState, useEffect } from 'react';
 import {
   AlertDialog,
@@ -9,58 +10,68 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../../packages/react/src/components/ui/alert-dialog';
-import { useReview } from '../../../packages/react/src/context/ReviewContext';
+import { useReviewDraftGuard } from '../../../packages/react/src/hooks/useReviewDraft';
+import { useUnsavedReviewWork } from '../useUnsavedReviewWork';
+import { useDesktopLocalization } from '../useDesktopLocalization';
+import { useSaveReview } from '../useSaveReview';
 
-export default function CloseConfirmDialog() {
+type CloseConfirmDialogAPI = Pick<
+  ElectronAPI,
+  | 'onCloseRequested'
+  | 'discardAndQuit'
+  | 'submitReview'
+  | 'saveAndQuit'
+  | 'saveReview'
+  | 'acknowledgeReviewSave'
+  | 'onSaveFailed'
+>;
+
+export default function CloseConfirmDialog({
+  api = window.electronAPI,
+}: {
+  api?: CloseConfirmDialogAPI;
+}) {
+  const { t } = useDesktopLocalization();
   const [open, setOpen] = useState(false);
-  const { files, diffSource } = useReview();
+  const handleSaveAndQuit = useSaveReview(api);
 
-  const hasComments = files.some(f => f.comments.length > 0);
+  const hasDraftWork = useReviewDraftGuard();
+  const hasUnsavedWork = useUnsavedReviewWork();
 
   useEffect(() => {
-    return window.electronAPI.onCloseRequested(() => {
-      if (!hasComments) {
-        window.electronAPI.discardAndQuit();
+    return api.onCloseRequested(() => {
+      if (!hasUnsavedWork && !hasDraftWork()) {
+        api.discardAndQuit();
         return;
       }
       setOpen(true);
     });
-  }, [hasComments]);
-
-  const handleSaveAndQuit = () => {
-    // Push state before main saves; a failed save leaves the review as it is.
-    window.electronAPI.submitReview({
-      timestamp: new Date().toISOString(),
-      source: diffSource,
-      files,
-    });
-    window.electronAPI.saveAndQuit();
-  };
+  }, [hasUnsavedWork, hasDraftWork, api]);
 
   const handleDiscard = () => {
-    window.electronAPI.discardAndQuit();
+    api.discardAndQuit();
   };
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogContent data-testid='close-confirm-dialog'>
         <AlertDialogHeader>
-          <AlertDialogTitle>Save your review?</AlertDialogTitle>
+          <AlertDialogTitle>{t('Save your review?')}</AlertDialogTitle>
           <AlertDialogDescription>
-            You have unsaved review work. What would you like to do?
+            {t('You have unsaved review work. What would you like to do?')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel data-testid='close-confirm-cancel'>Cancel</AlertDialogCancel>
+          <AlertDialogCancel data-testid='close-confirm-cancel'>{t('Cancel')}</AlertDialogCancel>
           <AlertDialogAction
             className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
             data-testid='close-confirm-discard'
             onClick={handleDiscard}
           >
-            Discard
+            {t('Discard')}
           </AlertDialogAction>
           <AlertDialogAction data-testid='close-confirm-save' onClick={handleSaveAndQuit}>
-            Save & Quit
+            {t('Save & Quit')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

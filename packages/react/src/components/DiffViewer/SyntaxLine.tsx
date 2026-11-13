@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import Prism from 'prismjs';
 import type { DiffLineType } from '@self-review/types';
+import { HIGHLIGHT_MAX_LINE_CHARS } from './highlight-budget';
 import { getLanguageFromPath } from '../../utils/file-type-utils';
 
 // Base language components (order-sensitive)
@@ -61,7 +62,8 @@ function escapeHtml(text: string): string {
     .replace(/\t/g, '    ');
 }
 
-function highlight(prism: typeof Prism, content: string, language: string): string {
+function highlight(prism: typeof Prism, content: string, language: string): string | null {
+  if (content.length > HIGHLIGHT_MAX_LINE_CHARS || language === 'plaintext') return null;
   try {
     const prismLanguage = prism.languages[language];
     if (!prismLanguage || language === 'plaintext') {
@@ -85,8 +87,10 @@ const SyntaxLine = React.memo(function SyntaxLine({
   return (
     <code
       className={`font-mono sr-diff-code ${wordWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'} block`}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+      dangerouslySetInnerHTML={html === null ? undefined : { __html: html }}
+    >
+      {html === null ? content.replace(/\t/g, '    ') : undefined}
+    </code>
   );
 });
 

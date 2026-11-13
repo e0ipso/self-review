@@ -10,7 +10,7 @@
   "scripts": {
     "start": "npm run build:packages && electron-forge start",
     "clean": "rm -rf .webpack out",
-    "build:packages": "npm run build --workspace @self-review/types && npm run build --workspace @self-review/core && npm run build --workspace @self-review/react",
+    "build:packages": "npm run build --workspace @self-review/types && npm run build --workspace @self-review/config && npm run build --workspace @self-review/core && npm run build --workspace @self-review/react",
     "package": "npm run build:packages && npm run clean && electron-forge package",
     "make": "npm run build:packages && npm run clean && electron-forge make",
     "publish": "npm run build:packages && electron-forge publish",
@@ -20,7 +20,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:tests": "tsc -p tests/tsconfig.json",
     "typecheck:unit": "tsc -p tsconfig.unit-tests.json",
-    "typecheck:packages": "tsc -p packages/types/tsconfig.json --noEmit && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/react/tsconfig.json --noEmit && tsc -p packages/serve/tsconfig.json --noEmit",
+    "typecheck:packages": "tsc -p packages/types/tsconfig.json --noEmit && tsc -p packages/config/tsconfig.json --noEmit && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/react/tsconfig.json --noEmit && tsc -p packages/serve/tsconfig.json --noEmit",
     "typecheck:configs": "tsc -p tsconfig.build-configs.json",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "vitest run --config vitest.config.main.ts && vitest run --config vitest.config.renderer.ts && npm run test:unit --workspace @self-review/core && npm run test:unit --workspace @self-review/serve",

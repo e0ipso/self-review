@@ -16,9 +16,49 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts",
+        "default": "./dist/index.d.ts"
+      },
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./operations": {
+      "types": {
+        "import": "./dist/operations.d.ts",
+        "require": "./dist/operations.d.cts",
+        "default": "./dist/operations.d.ts"
+      },
+      "import": "./dist/operations.js",
+      "require": "./dist/operations.cjs"
+    },
+    "./filesystem": {
+      "types": {
+        "import": "./dist/filesystem.d.ts",
+        "require": "./dist/filesystem.d.cts",
+        "default": "./dist/filesystem.d.ts"
+      },
+      "import": "./dist/filesystem.js",
+      "require": "./dist/filesystem.cjs"
+    },
+    "./validation": {
+      "types": {
+        "import": "./dist/validation.d.ts",
+        "require": "./dist/validation.d.cts",
+        "default": "./dist/validation.d.ts"
+      },
+      "import": "./dist/validation.js",
+      "require": "./dist/validation.cjs"
+    },
+    "./resume-worker": {
+      "types": {
+        "import": "./dist/resume-worker.d.ts",
+        "require": "./dist/resume-worker.d.cts",
+        "default": "./dist/resume-worker.d.ts"
+      },
+      "import": "./dist/resume-worker.js",
+      "require": "./dist/resume-worker.cjs"
     }
   },
   "files": [
@@ -34,7 +74,8 @@
     "fast-xml-parser": "^5.11.2",
     "ignore": "^7.0.5",
     "xmllint-wasm": "^5.1.0",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "@self-review/config": "*"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

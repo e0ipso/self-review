@@ -3,15 +3,26 @@
 // hitting `maxEntries` yields no files rather than a shorter review that looks complete.
 // Only regular files are reviewed; links are never followed out of the tree.
 
-import { opendir, stat } from 'fs/promises';
+import { stderrReporter, type DiagnosticReporter } from './diagnostics';
 import { basename, dirname, join } from 'path';
+import { SafeFsError, sameFile } from './safe-fs';
+import { assertNoSymlinkAncestorsAsync } from './safe-fs-read';
+import type { ScanFsLayer } from './scan-fs';
+import { nodeScanFsLayer } from './node-scan-fs';
 import { DiffFile } from './types';
-import { loadSyntheticFiles } from './synthetic-diff';
+import { loadSyntheticFilesAsync } from './synthetic-diff';
+import { checkLoadingCancelled, loadingCheckpoint } from './local-loading-lifetime';
 import { createIgnoreFilter } from './ignore-filter';
 import { resolveSourceBudgets, type SourceBudgets } from './input-budgets';
 
 export interface SourceScanOptions {
+  /** Read-only scan and descriptor capability; never falls back to the host filesystem. */
+  scanFs?: ScanFsLayer;
+  /** Defaults to stderr. Payload diagnostics are retained independently of presentation. */
+  reportDiagnostic?: DiagnosticReporter;
   budgets?: Partial<SourceBudgets>;
+  /** Rejects with CommandCancelledError, including ordinary Error abort reasons. */
+  signal?: AbortSignal;
 }
 
 export interface SourceScanResult {
@@ -31,27 +42,47 @@ export async function scanDirectory(
   ignorePatterns: string[] = [],
   options: SourceScanOptions = {}
 ): Promise<SourceScanResult> {
+  checkLoadingCancelled(options.signal);
+  const layer = options.scanFs ?? nodeScanFsLayer;
   const budgets = resolveSourceBudgets(options.budgets);
 
+  let root: string;
   try {
-    const dirStat = await stat(directoryPath);
+    const dirStat = await layer.stat(directoryPath);
+    checkLoadingCancelled(options.signal);
     if (!dirStat.isDirectory()) {
-      return failed(`Cannot review "${directoryPath}": it is not a directory.`);
+      return failed(
+        options.reportDiagnostic,
+        `Cannot review "${directoryPath}": it is not a directory.`
+      );
     }
+    root = await layer.realpath(directoryPath);
+    checkLoadingCancelled(options.signal);
   } catch (error) {
-    return failed(`Cannot read directory "${directoryPath}": ${messageOf(error)}`);
+    checkLoadingCancelled(options.signal);
+    return failed(
+      options.reportDiagnostic,
+      `Cannot read directory "${directoryPath}": ${messageOf(error)}`
+    );
   }
 
   const shouldKeep = createIgnoreFilter(ignorePatterns);
   let walk: WalkResult;
   try {
-    walk = await walkDirectory(directoryPath, shouldKeep, budgets.maxEntries);
+    walk = await walkDirectory(root, shouldKeep, budgets.maxEntries, layer, options.signal);
   } catch (error) {
-    return failed(`Cannot read directory "${directoryPath}": ${messageOf(error)}`);
+    checkLoadingCancelled(options.signal);
+    return failed(
+      options.reportDiagnostic,
+      `Cannot read directory "${directoryPath}": ${messageOf(error)}`
+    );
   }
 
+  checkLoadingCancelled(options.signal);
   if (walk.limitExceeded) {
-    console.error(`[scan] Stopped scanning ${directoryPath} after ${budgets.maxEntries} entries`);
+    (options.reportDiagnostic ?? stderrReporter)(
+      `[scan] Stopped scanning ${directoryPath} after ${budgets.maxEntries} entries`
+    );
     return {
       files: [],
       diagnostics: [
@@ -70,8 +101,10 @@ export async function scanDirectory(
     return { files: [], diagnostics: [], entryLimitExceeded: false };
   }
 
-  const { files, diagnostics } = loadSyntheticFiles(walk.files, directoryPath, {
+  const { files, diagnostics } = await loadSyntheticFilesAsync(walk.files, root, {
+    readFs: layer,
     budgets: options.budgets,
+    signal: options.signal,
   });
   return { files, diagnostics, entryLimitExceeded: false };
 }
@@ -84,19 +117,32 @@ export async function scanFile(
   filePath: string,
   options: SourceScanOptions = {}
 ): Promise<SourceScanResult> {
+  checkLoadingCancelled(options.signal);
+  const layer = options.scanFs ?? nodeScanFsLayer;
   try {
-    const fileStat = await stat(filePath);
+    const fileStat = await layer.stat(filePath);
+    checkLoadingCancelled(options.signal);
     if (!fileStat.isFile()) {
-      return failed(`Cannot review "${filePath}": it is not a regular file.`);
+      return failed(
+        options.reportDiagnostic,
+        `Cannot review "${filePath}": it is not a regular file.`
+      );
     }
   } catch (error) {
-    return failed(`Cannot read file "${filePath}": ${messageOf(error)}`);
+    checkLoadingCancelled(options.signal);
+    return failed(options.reportDiagnostic, `Cannot read file "${filePath}": ${messageOf(error)}`);
   }
 
-  const { files, diagnostics } = loadSyntheticFiles([basename(filePath)], dirname(filePath), {
-    followSymlinks: true,
-    budgets: options.budgets,
-  });
+  const { files, diagnostics } = await loadSyntheticFilesAsync(
+    [basename(filePath)],
+    dirname(filePath),
+    {
+      followSymlinks: true,
+      readFs: layer,
+      budgets: options.budgets,
+      signal: options.signal,
+    }
+  );
   return { files, diagnostics, entryLimitExceeded: false };
 }
 
@@ -108,7 +154,9 @@ interface WalkResult {
 async function walkDirectory(
   root: string,
   shouldKeep: (path: string) => boolean,
-  maxEntries: number
+  maxEntries: number,
+  layer: ScanFsLayer,
+  signal?: AbortSignal
 ): Promise<WalkResult> {
   const files: string[] = [];
   // Relative directory paths still to open; '' is the root itself.
@@ -116,10 +164,21 @@ async function walkDirectory(
   let examined = 0;
 
   while (pending.length > 0) {
+    await loadingCheckpoint(signal);
     const relativeDir = pending.pop()!;
-    const dir = await opendir(relativeDir === '' ? root : join(root, relativeDir));
+    const target = join(root, relativeDir);
+    const before = await inspectDirectory(root, relativeDir, layer, signal);
+    checkLoadingCancelled(signal);
+    const dir = await layer.opendir(target);
     try {
+      checkLoadingCancelled(signal);
+      // opendir yields: a queued directory or one of its ancestors may have changed.
+      const after = await inspectDirectory(root, relativeDir, layer, signal);
+      if (!sameFile(before, after)) {
+        throw new SafeFsError('identity-changed', target, `${target} changed while opening`);
+      }
       for await (const entry of dir) {
+        await loadingCheckpoint(signal);
         examined++;
         if (examined > maxEntries) return { files, limitExceeded: true };
 
@@ -141,11 +200,33 @@ async function walkDirectory(
   return { files, limitExceeded: false };
 }
 
-function failed(message: string): SourceScanResult {
-  console.error(`[scan] ${message}`);
+function failed(
+  reportDiagnostic: DiagnosticReporter = stderrReporter,
+  message: string
+): SourceScanResult {
+  reportDiagnostic(`[scan] ${message}`);
   return { files: [], diagnostics: [message], entryLimitExceeded: false };
 }
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function inspectDirectory(
+  root: string,
+  rel: string,
+  layer: ScanFsLayer,
+  signal?: AbortSignal
+) {
+  const target = join(root, rel);
+  // Include the directory itself in the ancestor walk.
+  await assertNoSymlinkAncestorsAsync(root, join(rel, '.self-review-entry'), layer, signal);
+  checkLoadingCancelled(signal);
+  const stats = await layer.lstat(target);
+  checkLoadingCancelled(signal);
+  if (!stats.isDirectory() || (await layer.realpath(target)) !== target) {
+    throw new SafeFsError('unsafe-link', target, `${target} is no longer a contained directory`);
+  }
+  checkLoadingCancelled(signal);
+  return stats;
 }

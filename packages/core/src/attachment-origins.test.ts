@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -6,6 +6,9 @@ import * as path from 'path';
 import { parseReviewXml } from './xml-parser';
 import { publishReview, ReviewPublishError } from './review-publisher';
 import { createReviewSession, readAttachment, recordResumedAttachments } from './review-handlers';
+import { readAssetFile } from './attachment-origins';
+import { nodeFsLayer } from './safe-fs';
+import { nodeAsyncFsLayer } from './safe-fs-async';
 import type { ReviewSession } from './review-handlers';
 import { MAX_IMAGE_BYTES } from './input-budgets';
 import type { ReviewComment, ReviewState } from './types';
@@ -308,3 +311,31 @@ describe('publishing resumed attachments', () => {
     expect(fs.existsSync(path.join(outDir, '.self-review-assets'))).toBe(false);
   });
 });
+
+// The legacy option still accepts full synchronous adapters and their optional async counterpart.
+it.each(['descriptor', 'whole-file', 'async'] as const)(
+  'keeps the legacy attachment fs option working with %s reads',
+  async kind => {
+    const target = writeAsset(docDir, 'legacy.png', PNG_A);
+    const asyncOpen = vi.fn(nodeAsyncFsLayer.open);
+    const syncOpen = vi.fn(nodeFsLayer.openSync);
+    const wholeFileRead = vi.fn(nodeFsLayer.readFileSync);
+    const layer = {
+      ...nodeFsLayer,
+      openSync: syncOpen,
+      readFileSync: wholeFileRead,
+      readSync: kind === 'whole-file' ? undefined : nodeFsLayer.readSync,
+      asyncFs: kind === 'async' ? { ...nodeAsyncFsLayer, open: asyncOpen } : undefined,
+    };
+    const result = await readAssetFile(target, { fs: layer });
+    expect(result.ok && Buffer.from(result.data)).toEqual(PNG_A);
+    if (kind === 'async') {
+      expect(asyncOpen).toHaveBeenCalledOnce();
+      expect(syncOpen).not.toHaveBeenCalled();
+    } else {
+      expect(syncOpen).toHaveBeenCalledOnce();
+      expect(asyncOpen).not.toHaveBeenCalled();
+    }
+    expect(wholeFileRead).toHaveBeenCalledTimes(kind === 'whole-file' ? 1 : 0);
+  }
+);

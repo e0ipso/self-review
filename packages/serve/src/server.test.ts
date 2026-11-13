@@ -1,32 +1,19 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as http from 'http';
 import * as net from 'net';
+import { Worker } from 'node:worker_threads';
+import { JsonBodyProcessing } from './json-body-processing';
 import type { AddressInfo } from 'net';
 import * as core from '@self-review/core';
 import type { DiffFile, ReviewSession, ReviewState, AppConfig } from '@self-review/core';
 import { createReviewServer, listenLoopback } from './server';
 
-// Wrap every core function the routes call in a spy that passes through to
-// the real implementation. Success tests then exercise the real code; the
-// rejection tests assert the spy was never reached.
-vi.mock('@self-review/core', async importOriginal => {
-  const actual = await importOriginal<typeof import('@self-review/core')>();
-  return {
-    ...actual,
-    getDiffLoad: vi.fn(actual.getDiffLoad),
-    getConfigLoad: vi.fn(actual.getConfigLoad),
-    getResumeLoad: vi.fn(actual.getResumeLoad),
-    getFileHunks: vi.fn(actual.getFileHunks),
-    loadImage: vi.fn(actual.loadImage),
-    readAttachment: vi.fn(actual.readAttachment),
-    expandContext: vi.fn(actual.expandContext),
-    submitReviewState: vi.fn(actual.submitReviewState),
-    applySuggestionForSession: vi.fn(actual.applySuggestionForSession),
-  };
-});
+import { buildJsonBodyTestWorker } from './test-support/json-body-worker';
+
+import { createReviewOperations } from './review-operations';
 
 // Fixture layout — real paths, so containment is checked against a real tree:
 //
@@ -39,10 +26,19 @@ vi.mock('@self-review/core', async importOriginal => {
 //     client/
 //       index.html
 //       assets/app.js
+let jsonWorker: Awaited<ReturnType<typeof buildJsonBodyTestWorker>>;
+beforeAll(async () => {
+  jsonWorker = await buildJsonBodyTestWorker();
+});
+afterAll(async () => {
+  await jsonWorker.processing.shutdown();
+  await jsonWorker.cleanup();
+});
 let tmp: string;
 let root: string;
 let clientDir: string;
 let session: ReviewSession;
+let operations: ReturnType<typeof createReviewOperations>;
 let server: ReturnType<typeof createReviewServer>;
 let base: string;
 
@@ -54,7 +50,7 @@ function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
   return fetch(url, { ...init, headers: { ...AUTH, ...(init.headers as Record<string, string>) } });
 }
 
-const CORE_SPIES = [
+const OPERATION_SPIES = [
   'getDiffLoad',
   'getConfigLoad',
   'getResumeLoad',
@@ -128,8 +124,8 @@ function freshSession(): ReviewSession {
 }
 
 function expectNoCoreCall() {
-  for (const name of CORE_SPIES) {
-    expect(vi.mocked(core[name]), name).not.toHaveBeenCalled();
+  for (const name of OPERATION_SPIES) {
+    expect(vi.mocked(operations[name]), name).not.toHaveBeenCalled();
   }
 }
 
@@ -213,31 +209,32 @@ beforeAll(async () => {
   fs.mkdirSync(path.join(clientDir, 'assets'), { recursive: true });
   fs.writeFileSync(path.join(clientDir, 'index.html'), '<!doctype html><title>self-review</title>');
   fs.writeFileSync(path.join(clientDir, 'assets', 'app.js'), 'console.log("app");\n');
+});
 
+afterAll(() => {
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+beforeEach(async () => {
   session = freshSession();
+  const output = { path: path.join(root, 'review.xml'), origin: 'explicit' as const };
+  operations = createReviewOperations(session, output);
+  for (const name of OPERATION_SPIES) vi.spyOn(operations, name);
   server = createReviewServer({
     session,
     clientDir,
-    output: { path: path.join(root, 'review.xml'), origin: 'explicit' },
+    output,
     capability: CAPABILITY,
+    operations,
+    jsonBodyProcessing: new JsonBodyProcessing(() => new Worker(jsonWorker.path)),
   });
   const { port } = await listenLoopback(server, 0);
   base = `http://127.0.0.1:${port}`;
 });
 
-afterAll(async () => {
+afterEach(async () => {
+  server.closeAllConnections();
   await new Promise<void>(resolve => server.close(() => resolve()));
-  fs.rmSync(tmp, { recursive: true, force: true });
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  // Reset the mutable parts a previous test may have touched.
-  session.reviewState = null;
-  session.resumeComments = [];
-  session.resumeViewedFiles = [];
-  session.attachmentOrigins = new Map();
-  session.resumeRemoteDrift = null;
 });
 
 describe('listener', () => {
@@ -260,7 +257,7 @@ describe('GET /api/diff', () => {
     ]);
     expect(body.diff.source).toEqual(session.diffData!.source);
     expect(body.guide).toEqual({ overview: 'Start with the entry point.', groups: [] });
-    expect(vi.mocked(core.getDiffLoad)).toHaveBeenCalledWith(session);
+    expect(vi.mocked(operations.getDiffLoad)).toHaveBeenCalledWith();
   });
 });
 
@@ -271,7 +268,7 @@ describe('GET /api/config', () => {
     const body = await res.json();
     expect(body.config.theme).toBe('dark');
     expect(body.outputPathInfo).toEqual(session.outputPathInfo);
-    expect(vi.mocked(core.getConfigLoad)).toHaveBeenCalledWith(session);
+    expect(vi.mocked(operations.getConfigLoad)).toHaveBeenCalledWith();
   });
 });
 
@@ -287,7 +284,7 @@ describe('GET /api/resume', () => {
     const res = await apiFetch(`${base}/api/resume`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ comments: [], viewedFiles: ['src/index.ts'] });
-    expect(vi.mocked(core.getResumeLoad)).toHaveBeenCalledWith(session);
+    expect(vi.mocked(operations.getResumeLoad)).toHaveBeenCalledWith();
   });
 });
 
@@ -296,7 +293,7 @@ describe('GET /api/file', () => {
     const res = await apiFetch(`${base}/api/file?path=${encodeURIComponent('src/index.ts')}`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([INDEX_HUNK]);
-    expect(vi.mocked(core.getFileHunks)).toHaveBeenCalledWith(session, 'src/index.ts');
+    expect(vi.mocked(operations.getFileHunks)).toHaveBeenCalledWith('src/index.ts');
   });
 
   it('rejects a path the review does not contain with 400 before reaching core', async () => {
@@ -328,7 +325,9 @@ describe('GET /api/image', () => {
     expect(body.dataUri).toBe(
       `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64')}`
     );
-    expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(session, 'img.png');
+    expect(vi.mocked(operations.loadImage)).toHaveBeenCalledWith('img.png', {
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('rejects a traversal path with 400 before reaching core', async () => {
@@ -346,7 +345,9 @@ describe('GET /api/image', () => {
     expect((await res.json()).dataUri).toBe(
       `data:image/png;base64,${Buffer.from([0x4c, 0x49, 0x54]).toString('base64')}`
     );
-    expect(vi.mocked(core.loadImage)).toHaveBeenCalledWith(session, LITERAL_NAME);
+    expect(vi.mocked(operations.loadImage)).toHaveBeenCalledWith(LITERAL_NAME, {
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('rejects a path the review does not contain with 400 before reaching core', async () => {
@@ -362,9 +363,9 @@ describe('GET /api/attachment', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/octet-stream');
     expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('attachment-bytes');
-    expect(vi.mocked(core.readAttachment)).toHaveBeenCalledWith(
-      session,
-      '.self-review-assets/attach.bin'
+    expect(vi.mocked(operations.readAttachment)).toHaveBeenCalledWith(
+      '.self-review-assets/attach.bin',
+      { signal: expect.any(AbortSignal) }
     );
   });
 
@@ -424,7 +425,7 @@ describe('GET /api/attachment', () => {
     fs.symlinkSync(path.join(tmp, 'outside', 'secret.txt'), link);
     try {
       const res = await apiFetch(`${base}/api/attachment?path=.self-review-assets%2Flink.png`);
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(400);
       expect(await res.text()).not.toContain('secret');
     } finally {
       fs.unlinkSync(link);
@@ -453,17 +454,20 @@ describe('GET /api/attachment', () => {
 describe('POST /api/expand-context', () => {
   it('passes a valid body to core and returns its result', async () => {
     const expanded = { hunks: [INDEX_HUNK], totalLines: 1 };
-    vi.mocked(core.expandContext).mockResolvedValueOnce(expanded);
+    vi.mocked(operations.expandContext).mockResolvedValueOnce(expanded);
     const res = await postJson('/api/expand-context', {
       filePath: 'src/index.ts',
       contextLines: 10,
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(expanded);
-    expect(vi.mocked(core.expandContext)).toHaveBeenCalledWith(session, {
-      filePath: 'src/index.ts',
-      contextLines: 10,
-    });
+    expect(vi.mocked(operations.expandContext)).toHaveBeenCalledWith(
+      {
+        filePath: 'src/index.ts',
+        contextLines: 10,
+      },
+      { signal: expect.any(AbortSignal) }
+    );
   });
 
   it('rejects a non-integer contextLines with 400 before reaching core', async () => {
@@ -521,6 +525,35 @@ describe('POST /api/expand-context', () => {
     expectNoCoreCall();
   });
 
+  it.each([
+    'application/jsonp',
+    'application/json-seq',
+    'application/json+custom',
+    'application/json garbage',
+  ])('refuses the different media type %s before reaching core', async contentType => {
+    const res = await postJson(
+      '/api/expand-context',
+      { filePath: 'src/index.ts', contextLines: 3 },
+      { headers: { 'content-type': contentType } }
+    );
+    expect(res.status).toBe(415);
+    expectNoCoreCall();
+  });
+
+  it.each([
+    'application/json; charset=utf-8',
+    'Application/JSON; Charset=UTF-8',
+    'application/json ; charset=utf-8',
+  ])('accepts the JSON media type with supported parameters: %s', async contentType => {
+    const res = await postJson(
+      '/api/expand-context',
+      { filePath: 'src/index.ts', contextLines: 3 },
+      { headers: { 'content-type': contentType } }
+    );
+    expect(res.status).toBe(200);
+    expect(operations.expandContext).toHaveBeenCalledOnce();
+  });
+
   it('rejects a body over the size cap with 413 before reaching core', async () => {
     const res = await postJson('/api/expand-context', {
       filePath: 'x'.repeat(1024 * 1024),
@@ -538,6 +571,10 @@ describe('POST /api/review', () => {
     files: [{ path: 'src/index.ts', changeType: 'added', viewed: true, comments: [] }],
   };
 
+  beforeEach(() => {
+    state.source = session.diffData!.source;
+  });
+
   it('records a valid review state and acknowledges it only once it is published', async () => {
     const outputPath = path.join(root, 'review.xml');
     fs.rmSync(outputPath, { force: true });
@@ -545,7 +582,7 @@ describe('POST /api/review', () => {
     const res = await postJson('/api/review', state);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, outputPath });
-    expect(vi.mocked(core.submitReviewState)).toHaveBeenCalledWith(session, state);
+    expect(vi.mocked(operations.submitReviewState)).toHaveBeenCalledWith(state);
     expect(session.reviewState).toEqual(state);
     expect(fs.readFileSync(outputPath, 'utf-8')).toContain('urn:self-review:v3');
   });
@@ -648,14 +685,13 @@ describe('POST /api/review', () => {
     expectNoCoreCall();
   });
 
-  it('accepts the two id shapes this application produces', async () => {
-    // crypto.randomUUID() from the renderer, and generateId() from core's
-    // xml-parser for every comment read back out of a resumed document.
-    for (const id of ['3f1a7c2e-9b45-4d8a-8e21-5c6f0a9b7d33', '1757400000000-k3f9a2z']) {
+  it.each(['3f1a7c2e-9b45-4d8a-8e21-5c6f0a9b7d33', '1757400000000-abc123'])(
+    'accepts the application id %s',
+    async id => {
       const res = await postJson('/api/review', stateWithCommentId(id));
       expect(res.status).toBe(200);
     }
-  });
+  );
 
   // `Attachment.data` is an ArrayBuffer and `JSON.stringify` renders one as
   // `{}`, so an unencoded blob would reach the serializer empty and write a
@@ -699,7 +735,7 @@ describe('POST /api/review', () => {
     );
     expect(res.status).toBe(200);
 
-    const submitted = vi.mocked(core.submitReviewState).mock.calls[0][1];
+    const submitted = vi.mocked(operations.submitReviewState).mock.calls[0][0];
     const data = submitted.files[0].comments[0].attachments![0].data!;
     expect(new Uint8Array(data)).toEqual(BYTES);
     // And the session holds the same bytes, which is what lifecycle writes.
@@ -733,10 +769,20 @@ describe('POST /api/apply-suggestion', () => {
     suggestion: { originalCode: 'export {};', proposedCode: 'export const a = 1;' },
   };
 
+  it('accepts source text beyond 64 KiB and leaves refusal to the core Apply checks', async () => {
+    const res = await postJson('/api/apply-suggestion', {
+      filePath: 'src/index.ts',
+      lineRange: { side: 'new', start: 1, end: 1 },
+      suggestion: { originalCode: 'export {};', proposedCode: 'x'.repeat(70 * 1024) },
+    });
+    expect(res.status).toBe(200);
+    expect(vi.mocked(operations.applySuggestionForSession)).toHaveBeenCalledTimes(1);
+  });
+
   it('reaches core with a well-formed request', async () => {
     const res = await postJson('/api/apply-suggestion', request);
     expect(res.status).toBe(200);
-    expect(vi.mocked(core.applySuggestionForSession)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(operations.applySuggestionForSession)).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a path outside the repository before core runs', async () => {
@@ -752,8 +798,6 @@ describe('POST /api/apply-suggestion', () => {
     ['unknown field', { ...request, destination: '/tmp' }],
     ['missing filePath', { ...request, filePath: '' }],
     ['bad side', { ...request, lineRange: { side: 'sideways', start: 1, end: 1 } }],
-    ['zero line', { ...request, lineRange: { side: 'new', start: 0, end: 1 } }],
-    ['inverted range', { ...request, lineRange: { side: 'new', start: 4, end: 2 } }],
     ['unknown lineRange field', { ...request, lineRange: { side: 'new', start: 1, end: 1, x: 1 } }],
     ['non-string code', { ...request, suggestion: { originalCode: 1, proposedCode: 'x' } }],
     ['unknown suggestion field', { ...request, suggestion: { ...request.suggestion, z: 1 } }],
@@ -768,7 +812,7 @@ describe('POST /api/apply-suggestion', () => {
   it('passes a null lineRange through to core', async () => {
     const res = await postJson('/api/apply-suggestion', { ...request, lineRange: null });
     expect(res.status).toBe(200);
-    expect(vi.mocked(core.applySuggestionForSession)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(operations.applySuggestionForSession)).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1057,13 +1101,16 @@ describe('session capability', () => {
     }
     expect((await apiFetch(`${base}/api/image?path=img.png`)).status).toBe(200);
     expect((await apiFetch(`${base}/api/attachment?path=${ATTACH}`)).status).toBe(200);
-    vi.mocked(core.expandContext).mockResolvedValueOnce({ hunks: [INDEX_HUNK], totalLines: 1 });
+    vi.mocked(operations.expandContext).mockResolvedValueOnce({
+      hunks: [INDEX_HUNK],
+      totalLines: 1,
+    });
     const expanded = await postJson('/api/expand-context', {
       filePath: 'src/index.ts',
       contextLines: 3,
     });
     expect(expanded.status).toBe(200);
-    expect(vi.mocked(core.expandContext)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(operations.expandContext)).toHaveBeenCalledTimes(1);
   });
 
   // The audit's reproduction: `curl -H 'Host: 127.0.0.1:<port>' http://127.0.0.1:<port>/api/diff` from another account.
@@ -1132,4 +1179,127 @@ describe('session capability', () => {
       await new Promise<void>(resolve => proxy.close(() => resolve()));
     }
   });
+});
+
+it.each([
+  { side: 'new', start: 0, end: 1 },
+  { side: 'new', start: 4, end: 2 },
+  { side: 'new', start: 1.5, end: 2 },
+])('returns the engine refusal for an unusable numeric Apply range: %j', async lineRange => {
+  vi.mocked(operations.applySuggestionForSession).mockImplementation(request => ({
+    status: 'refused',
+    filePath: request.filePath,
+    reason: 'invalid-anchor',
+    detail: 'invalid range',
+  }));
+  const response = await postJson('/api/apply-suggestion', {
+    filePath: 'src/index.ts',
+    lineRange,
+    suggestion: { originalCode: 'a', proposedCode: 'b' },
+  });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ status: 'refused', reason: 'invalid-anchor' });
+  expect(operations.applySuggestionForSession).toHaveBeenCalledOnce();
+});
+
+it.each([
+  { type: 'git', gitDiffArgs: '--staged', repository: '/other' },
+  { type: 'git', gitDiffArgs: '--staged', repository: 'loaded' },
+  { type: 'directory', sourcePath: '/other' },
+  { type: 'file', sourcePath: '/other' },
+  { type: 'welcome' },
+  { type: 'loading' },
+])(
+  'refuses foreign publication source %j before caching or publishing and permits repair',
+  async source => {
+    const previous: ReviewState = {
+      timestamp: '2026-01-01T00:00:00Z',
+      source: session.diffData!.source,
+      files: [],
+    };
+    session.reviewState = previous;
+    const outputPath = path.join(root, 'review.xml');
+    fs.writeFileSync(outputPath, 'previous document');
+    const assets = fs.readdirSync(path.join(root, '.self-review-assets'));
+    const publisher = vi.spyOn(operations, 'publishReview');
+    const submittedSource =
+      source.type === 'git' && source.repository === 'loaded'
+        ? { ...source, repository: root }
+        : source;
+    const res = await postJson('/api/review', { ...previous, source: submittedSource });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ ok: false, code: 'validation-failed' });
+    expect(session.reviewState).toBe(previous);
+    expect(publisher).not.toHaveBeenCalled();
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe('previous document');
+    expect(fs.readdirSync(path.join(root, '.self-review-assets'))).toEqual(assets);
+    expect((await apiFetch(`${base}/api/diff`)).status).toBe(200);
+    const repair = await postJson('/api/review', {
+      ...previous,
+      source: { repository: root, extension: { preserved: true }, gitDiffArgs: '', type: 'git' },
+    });
+    expect(repair.status).toBe(200);
+    expect(session.reviewState!.source).toMatchObject({ extension: { preserved: true } });
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain(root);
+  }
+);
+
+it.each([
+  ['not-authorized', 400],
+  ['unsafe-link', 400],
+  ['not-regular', 400],
+  ['too-large', 413],
+  ['io-error', 500],
+  ['not-found', 404],
+] as const)('retains attachment failure %s as HTTP %s', async (reason, status) => {
+  vi.mocked(operations.readAttachment).mockResolvedValue({
+    ok: false,
+    reason,
+    message: `read failed: ${reason}`,
+  });
+  const res = await apiFetch(`${base}/api/attachment?path=${ATTACH}`);
+  expect(res.status).toBe(status);
+  expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+  expect(await res.json()).toEqual({
+    error: reason === 'not-found' ? 'attachment not found' : `read failed: ${reason}`,
+  });
+});
+
+it('publishes a multi-megabyte valid upload without changing attachment bytes or provenance', async () => {
+  const data = Buffer.alloc(2 * 1024 * 1024, 0x67);
+  const body = 'Feedback é '.repeat(48 * 1024);
+  const res = await postJson('/api/review', {
+    timestamp: '2026-01-01T00:00:00Z',
+    source: session.diffData!.source,
+    files: [
+      {
+        path: 'src/index.ts',
+        changeType: 'added',
+        viewed: true,
+        comments: [
+          {
+            id: 'large-upload',
+            filePath: 'src/index.ts',
+            lineRange: null,
+            suggestion: null,
+            body,
+            category: 'note',
+            attachments: [
+              {
+                id: 'large',
+                fileName: 'large.png',
+                mediaType: 'image/png',
+                dataBase64: data.toString('base64'),
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  expect(res.status).toBe(200);
+  const document = core.parseReviewXml(path.join(root, 'review.xml'));
+  expect(document.comments[0].body).toBe(body);
+  const reference = document.comments[0].attachments![0].fileName;
+  expect(fs.readFileSync(path.join(root, reference)).equals(data)).toBe(true);
 });

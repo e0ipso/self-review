@@ -1,8 +1,13 @@
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { DiffFile } from '@self-review/types';
+import {
+  PreviewRenderingProvider,
+  type PreviewRenderer,
+} from '../../context/PreviewRenderingContext';
 import { DiffContentArea, type DiffContentAreaProps } from './DiffContentArea';
+import type { FileSectionBodyProps, FileSectionBody } from './FileSectionBody';
 import type { RenderedTextMode } from '../../utils/file-type-utils';
 
 vi.mock('../../context/ReviewAdapterContext', () => ({
@@ -60,7 +65,10 @@ function makeFile(filePath: string, overrides: Partial<DiffFile> = {}): DiffFile
   };
 }
 
-function renderContentArea(overrides: Partial<DiffContentAreaProps> = {}) {
+function renderContentArea(
+  overrides: Partial<DiffContentAreaProps> = {},
+  previewRenderer?: PreviewRenderer
+) {
   const file = overrides.file ?? makeFile('index.html');
   const props: DiffContentAreaProps = {
     file,
@@ -86,7 +94,11 @@ function renderContentArea(overrides: Partial<DiffContentAreaProps> = {}) {
     ...overrides,
   };
 
-  render(<DiffContentArea {...props} />);
+  render(
+    <PreviewRenderingProvider previewRenderer={previewRenderer}>
+      <DiffContentArea {...props} />
+    </PreviewRenderingProvider>
+  );
 }
 
 describe('DiffContentArea rendered preview dispatch', () => {
@@ -180,4 +192,56 @@ describe('DiffContentArea omitted content', () => {
     expect(screen.getByTestId('content-omitted').textContent).toContain(reason);
     expect(screen.queryByText('No changes to display')).toBeNull();
   });
+});
+
+it('keeps the legacy preview flag property types required', () => {
+  expectTypeOf<
+    React.ComponentProps<typeof FileSectionBody>
+  >().toEqualTypeOf<FileSectionBodyProps>();
+  expectTypeOf<DiffContentAreaProps['showImagePreview']>().toEqualTypeOf<boolean>();
+  expectTypeOf<DiffContentAreaProps['showSvgPreview']>().toEqualTypeOf<boolean>();
+  expectTypeOf<DiffContentAreaProps['isEligibleForRenderedView']>().toEqualTypeOf<boolean>();
+  expectTypeOf<DiffContentAreaProps['renderedTextMode']>().toEqualTypeOf<RenderedTextMode | null>();
+});
+
+it('lets a host wrap the built-in preview without altering legacy dispatch', () => {
+  renderContentArea(
+    {},
+    {
+      supports: () => true,
+      component: ({ children, onCommentRange }) => (
+        <section aria-label='Host preview'>
+          <button onClick={() => onCommentRange(1, 1, 'new')}>Annotate</button>
+          {children}
+        </section>
+      ),
+    }
+  );
+  expect(
+    screen
+      .getByRole('region', { name: 'Host preview' })
+      .contains(screen.getByTestId('rendered-text-view'))
+  ).toBe(true);
+});
+it('lets a host render an added format while keeping raw mode available', () => {
+  renderContentArea(
+    { file: makeFile('schema.custom'), preview: { kind: 'none' } },
+    {
+      supports: file => file.newPath.endsWith('.custom'),
+      component: ({ filePath, children }) => (
+        <div>
+          {filePath}
+          {children}
+        </div>
+      ),
+    }
+  );
+  expect(screen.getByText('schema.custom')).toBeTruthy();
+  expect(screen.queryByTestId('rendered-text-view')).toBeNull();
+});
+it('does not invoke host preview composition for raw mode', () => {
+  const component = vi.fn(() => null);
+  renderContentArea({ renderViewMode: 'raw' }, { supports: () => true, component });
+  expect(component).not.toHaveBeenCalled();
+  expect(screen.getByTestId('unified-view')).toBeTruthy();
 });

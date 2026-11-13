@@ -20,19 +20,43 @@ import {
   type ForgeUrl,
 } from './forge-provider';
 
+import {
+  isRecord,
+  isOptionalString,
+  isOptionalNumber,
+  isNumericId,
+  hasUsableLines,
+} from './forge-payload';
+
 /** Relevant subset of a GitHub REST pull-request review comment. */
 interface GitHubReviewComment {
   id: number;
   in_reply_to_id?: number | null;
   /** `null` for deleted user accounts. */
-  user: { login: string } | null;
+  user?: { login: string } | null;
   body: string;
   path: string;
-  side?: 'LEFT' | 'RIGHT' | null;
-  line: number | null;
+  side?: string | null;
+  line?: number | null;
   start_line?: number | null;
   original_line?: number | null;
   original_start_line?: number | null;
+}
+
+/** Validate the consumed fields before normalizing any page. Extra API fields are allowed. */
+function isReviewComment(value: unknown): value is GitHubReviewComment {
+  if (!isRecord(value)) return false;
+  return (
+    isNumericId(value.id) &&
+    (value.in_reply_to_id == null || isNumericId(value.in_reply_to_id)) &&
+    (value.user == null || (isRecord(value.user) && typeof value.user.login === 'string')) &&
+    typeof value.body === 'string' &&
+    typeof value.path === 'string' &&
+    isOptionalString(value.side) &&
+    ['line', 'start_line', 'original_line', 'original_start_line'].every(key =>
+      isOptionalNumber(value[key])
+    )
+  );
 }
 
 const GH_CLI = 'gh';
@@ -86,16 +110,18 @@ function parseGhJson(stdout: string, context: string): unknown {
  * `original_*` fields then retain the historic anchor.
  *
  * GitHub re-anchors comments on each push, so `line: null` is the forge's own
- * outdated verdict. No `headSha` is carried: `commit_id` cannot be verified to
- * follow re-anchoring, and a lagging SHA would disable every suggestion.
+ * outdated verdict. `commit_id` can lag re-anchoring, so the provider verifies
+ * the PR head around retrieval instead of trusting each comment's recorded commit.
  */
 function toAnchor(comment: GitHubReviewComment): ForgeThreadAnchor {
   const outdated = comment.line === null || comment.line === undefined;
-  const endLine = outdated ? (comment.original_line ?? null) : comment.line;
+  const endLine = outdated ? (comment.original_line ?? null) : (comment.line ?? null);
   const startLine = outdated
     ? (comment.original_start_line ?? comment.original_line ?? null)
-    : (comment.start_line ?? comment.line);
-  const hasLines = startLine !== null && endLine !== null;
+    : (comment.start_line ?? comment.line ?? null);
+  const hasLines =
+    hasUsableLines(startLine, endLine) &&
+    (comment.side == null || comment.side === 'LEFT' || comment.side === 'RIGHT');
   return {
     filePath: comment.path,
     // Side is meaningless without usable lines; the contract says 'new'.
@@ -146,6 +172,33 @@ function groupIntoThreads(comments: GitHubReviewComment[]): ForgeThread[] {
   return threads;
 }
 
+/** An unavailable head read leaves discussion visible but cannot vouch for line numbers. */
+async function readHead(
+  runCommand: ForgeCommandRunner,
+  url: ForgeUrl
+): Promise<string | undefined> {
+  try {
+    const stdout = await runGh(runCommand, [
+      'pr',
+      'view',
+      String(url.number),
+      '--repo',
+      `${url.host}/${url.owner}/${url.repo}`,
+      '--json',
+      'headRefOid',
+    ]);
+    const parsed = parseGhJson(stdout, 'pull request head');
+    return isRecord(parsed) &&
+      typeof parsed.headRefOid === 'string' &&
+      /^[a-f0-9]{40}$/i.test(parsed.headRefOid)
+      ? parsed.headRefOid
+      : undefined;
+  } catch (error) {
+    if (isCommandCancelled(error)) throw error;
+    return undefined;
+  }
+}
+
 /**
  * Create the GitHub {@link ForgeProvider} backed by an injected command
  * runner, mirroring how `git.ts` keeps child-process execution testable.
@@ -164,10 +217,12 @@ export function createGitHubProvider(runCommand: ForgeCommandRunner): ForgeProvi
         '--json',
         'baseRefName',
       ]);
-      const parsed = parseGhJson(stdout, 'pr view') as {
-        baseRefName?: unknown;
-      };
-      if (typeof parsed?.baseRefName !== 'string' || parsed.baseRefName === '') {
+      const parsed = parseGhJson(stdout, 'pr view');
+      if (
+        !isRecord(parsed) ||
+        typeof parsed.baseRefName !== 'string' ||
+        parsed.baseRefName === ''
+      ) {
         throw new ForgeCliUnavailableError('github', GH_CLI, 'gh pr view returned no baseRefName');
       }
       return parsed.baseRefName;
@@ -177,7 +232,9 @@ export function createGitHubProvider(runCommand: ForgeCommandRunner): ForgeProvi
     // `options.includeResolved` is deliberately ignored: GitHub fetch
     // returns all review threads (resolved-state filtering is a GitLab
     // concern).
-    async fetchThreads(url: ForgeUrl, _options?: FetchThreadsOptions): Promise<ForgeThread[]> {
+    async fetchThreads(url: ForgeUrl, options?: FetchThreadsOptions): Promise<ForgeThread[]> {
+      const expectedHead = options?.reviewedHeadSha;
+      const before = expectedHead === undefined ? undefined : await readHead(runCommand, url);
       const stdout = await runGh(runCommand, [
         'api',
         `repos/${url.owner}/${url.repo}/pulls/${url.number}/comments`,
@@ -189,15 +246,30 @@ export function createGitHubProvider(runCommand: ForgeCommandRunner): ForgeProvi
       // `--paginate --slurp` wraps each response page in an outer array:
       // [[...page1], [...page2]]. Flatten one level to the comment list.
       const pages = parseGhJson(stdout, 'pull request comments');
-      if (!Array.isArray(pages)) {
+      if (
+        !Array.isArray(pages) ||
+        !pages.every(page => Array.isArray(page) && page.every(isReviewComment))
+      ) {
         throw new ForgeCliUnavailableError(
           'github',
           GH_CLI,
           'gh api returned an unexpected payload shape for pull request comments'
         );
       }
-      const comments = pages.flat(1) as GitHubReviewComment[];
-      return groupIntoThreads(comments);
+      const comments: GitHubReviewComment[] = pages.flat(1);
+      const threads = groupIntoThreads(comments);
+      if (expectedHead !== undefined) {
+        const after = await readHead(runCommand, url);
+        const verified = before === expectedHead && after === expectedHead;
+        for (const thread of threads) {
+          if (thread.anchor) {
+            thread.anchor = verified
+              ? { ...thread.anchor, headSha: expectedHead }
+              : { ...thread.anchor, outdated: true };
+          }
+        }
+      }
+      return threads;
     },
   };
 }

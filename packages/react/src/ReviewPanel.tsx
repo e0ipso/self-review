@@ -1,12 +1,10 @@
 import React, { forwardRef, type ReactNode } from 'react';
 import type { AppConfig, ReviewComment } from '@self-review/types';
 import type { ReviewAdapter } from './adapter';
-import { ReviewAdapterProvider } from './context/ReviewAdapterContext';
-import { ConfigProvider } from './context/ConfigContext';
-import { GuideProvider } from './context/GuideContext';
-import { ReviewProvider } from './context/ReviewContext';
-import { DiffNavigationProvider } from './context/DiffNavigationContext';
-import { TooltipProvider } from './components/ui/tooltip';
+import type { ReviewServices } from './context/ReviewServicesContext';
+import type { PreviewRenderingProviderProps } from './context/PreviewRenderingContext';
+import type { ReviewProviderProps } from './context/ReviewContext';
+import { ReviewProviders } from './ReviewProviders';
 import Layout from './components/Layout';
 import { KeyboardNavigationManager } from './components/KeyboardNavigationManager';
 import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
@@ -29,10 +27,17 @@ import { type ReviewHandle, useReviewBridge } from './hooks/useReviewBridge';
  */
 export type ReviewPanelHandle = ReviewHandle;
 
-export interface ReviewPanelProps {
+export interface ReviewPanelProps
+  extends
+    Pick<ReviewProviderProps, 'recovery' | 'initialCharacterShortcuts'>,
+    Pick<PreviewRenderingProviderProps, 'previewRenderer' | 'diagramRenderer'> {
   /** A different adapter object starts a new session: define it at module scope or memoize it. */
   adapter: ReviewAdapter;
-  /** Optional partial config to merge with defaults (theme, categories, etc.). */
+  /** Optional metadata dependencies scoped to this review. */
+  services?: Partial<ReviewServices>;
+  /** Initial configuration, merged once per mount. Later prop changes are ignored. */
+  initialConfig?: Partial<AppConfig>;
+  /** @deprecated Use initialConfig. Initial-only alias, ignored when initialConfig is supplied. */
   config?: Partial<AppConfig>;
   /** CSS class applied to the root container. */
   className?: string;
@@ -76,25 +81,36 @@ export interface ReviewPanelProps {
  * ```
  */
 export const ReviewPanel = forwardRef<ReviewPanelHandle, ReviewPanelProps>(function ReviewPanel(
-  { adapter, config, className, children, onReviewChange },
+  {
+    adapter,
+    config,
+    initialConfig,
+    className,
+    children,
+    onReviewChange,
+    previewRenderer,
+    diagramRenderer,
+    services,
+    recovery,
+    initialCharacterShortcuts,
+  },
   ref
 ) {
   return (
-    <ReviewAdapterProvider adapter={adapter}>
-      <ConfigProvider initialConfig={config}>
-        <GuideProvider>
-          <ReviewProvider>
-            <DiffNavigationProvider>
-              <TooltipProvider>
-                <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
-                  {children}
-                </ReviewPanelInner>
-              </TooltipProvider>
-            </DiffNavigationProvider>
-          </ReviewProvider>
-        </GuideProvider>
-      </ConfigProvider>
-    </ReviewAdapterProvider>
+    <ReviewProviders
+      adapter={adapter}
+      config={config}
+      initialConfig={initialConfig}
+      previewRenderer={previewRenderer}
+      diagramRenderer={diagramRenderer}
+      services={services}
+      recovery={recovery}
+      initialCharacterShortcuts={initialCharacterShortcuts}
+    >
+      <ReviewPanelInner ref={ref} className={className} onReviewChange={onReviewChange}>
+        {children}
+      </ReviewPanelInner>
+    </ReviewProviders>
   );
 });
 

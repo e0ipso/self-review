@@ -183,7 +183,7 @@ export function dispatchCli(deps: CliDispatchDeps = defaultCliDispatchDeps): boo
     })
     .then(() => {
       unsubscribe();
-      deps.exit(0);
+      deps.exit(interruptedBy ? 128 + osConstants.signals[interruptedBy] : 0);
     })
     .catch(error => {
       unsubscribe();

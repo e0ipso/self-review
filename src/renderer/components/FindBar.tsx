@@ -1,181 +1,71 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { MAX_FIND_QUERY_LENGTH } from '../../shared/find-limits';
+import type { DesktopFindAPI } from '../../shared/types';
+import React, { useId } from 'react';
 import { createPortal } from 'react-dom';
 import { Input } from '../../../packages/react/src/components/ui/input';
 import { Button } from '../../../packages/react/src/components/ui/button';
 import { ChevronUp, ChevronDown, X } from 'lucide-react';
-import { FindInPageResult } from '../../shared/types';
+import { useDesktopLocalization } from '../useDesktopLocalization';
+import { useNativeFindSession } from '../useNativeFindSession';
 
 interface FindBarProps {
   isOpen: boolean;
   onClose: () => void;
+  api?: DesktopFindAPI;
 }
 
-export function FindBar({ isOpen, onClose }: FindBarProps) {
-  const [query, setQuery] = useState('');
-  const [activeMatch, setActiveMatch] = useState(0);
-  const [totalMatches, setTotalMatches] = useState(0);
-  const lastSearchedQueryRef = useRef('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Declare all callbacks first
-  const findNext = useCallback(() => {
-    if (!query) return;
-
-    // Check if this is a new search or cycling through existing results
-    const isNewSearch = query !== lastSearchedQueryRef.current;
-
-    // Chromium starts at the focused element and matches the query text in this very input (ordinal 0,
-    // counter "0 of N" on Chromium 152). Blurring first starts the session in the document.
-    if (isNewSearch) inputRef.current?.blur();
-    window.electronAPI.findInPage({ text: query, forward: true, findNext: isNewSearch });
-
-    // Update the last searched query after initiating search
-    lastSearchedQueryRef.current = query;
-  }, [query]);
-
-  const findPrevious = useCallback(() => {
-    if (!query) return;
-
-    // Check if this is a new search or cycling through existing results
-    const isNewSearch = query !== lastSearchedQueryRef.current;
-
-    // Blur first, as above.
-    if (isNewSearch) inputRef.current?.blur();
-    window.electronAPI.findInPage({ text: query, forward: false, findNext: isNewSearch });
-
-    // Update the last searched query after initiating search
-    lastSearchedQueryRef.current = query;
-  }, [query]);
-
-  const handleClose = useCallback(() => {
-    window.electronAPI.stopFindInPage('clearSelection');
-    onClose();
-  }, [onClose]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        handleClose();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          findPrevious();
-        } else {
-          findNext();
-        }
-      }
-    },
-    [handleClose, findNext, findPrevious]
-  );
-
-  // Auto-focus input when opened
-  useEffect(() => {
-    if (isOpen) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [isOpen]);
-
-  // Subscribe to find results from main process
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const unsubscribe = window.electronAPI.onFindResult((result: FindInPageResult) => {
-      if (result.finalUpdate) {
-        setActiveMatch(result.activeMatchOrdinal);
-        setTotalMatches(result.matches);
-        // Don't refocus — Chromium's findInPage steals focus to highlight
-        // matches, and refocusing invalidates the find session, breaking
-        // Enter/button cycling. The global keydown handler catches Enter
-        // when input doesn't have focus.
-      }
-    });
-
-    return unsubscribe;
-  }, [isOpen]);
-
-  // Global keydown listener to handle Escape and Enter even when input loses focus
-  // (Chromium's findInPage can steal focus from the input)
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        handleClose();
-        return;
-      }
-
-      // Only handle Enter if target is not a text input/textarea
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      if (e.key === 'Enter' && query) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          findPrevious();
-        } else {
-          findNext();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleGlobalKeyDown);
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, query, findNext, findPrevious, handleClose]);
-
-  // Clear highlights when query is emptied
-  useEffect(() => {
-    if (!query && lastSearchedQueryRef.current) {
-      window.electronAPI.stopFindInPage('clearSelection');
-      setActiveMatch(0);
-      setTotalMatches(0);
-      lastSearchedQueryRef.current = '';
-    }
-  }, [query]);
-
-  // Clear highlights when closing
-  useEffect(() => {
-    if (!isOpen) {
-      window.electronAPI.stopFindInPage('clearSelection');
-      setActiveMatch(0);
-      setTotalMatches(0);
-      setQuery('');
-      lastSearchedQueryRef.current = '';
-    }
-  }, [isOpen]);
+export function FindBar({ isOpen, onClose, api = window.electronAPI }: FindBarProps) {
+  const { t } = useDesktopLocalization();
+  const {
+    query,
+    setQuery,
+    queryRefused,
+    searched,
+    adjustedTotal,
+    adjustedActive,
+    inputRef,
+    barRef,
+    handleKeyDown,
+    handleClose,
+    findNext,
+    findPrevious,
+  } = useNativeFindSession(isOpen, onClose, api);
+  const statusId = useId();
 
   if (!isOpen) return null;
 
-  // Chromium's findInPage searches the entire DOM including the find bar's
-  // own input, so the query text in the input always counts as one extra match.
-  // Subtract 1 from the total and cap the active ordinal accordingly.
-  const adjustedTotal = Math.max(0, totalMatches - 1);
-  const adjustedActive = Math.min(activeMatch, adjustedTotal);
-  const searched = query && lastSearchedQueryRef.current === query;
-  const matchDisplay = searched
-    ? adjustedTotal > 0
-      ? `${adjustedActive} of ${adjustedTotal}`
-      : 'No results'
-    : '';
+  const matchDisplay = queryRefused
+    ? t('Search is too long. Use at most {limit} characters.', { limit: MAX_FIND_QUERY_LENGTH })
+    : searched
+      ? adjustedTotal > 0
+        ? t('{active} of {total}', { active: adjustedActive, total: adjustedTotal })
+        : t('No results')
+      : '';
 
   return createPortal(
     <div
+      ref={barRef}
       className='fixed flex items-center gap-1 rounded-md border bg-background p-1.5 shadow-lg'
-      style={{ top: 44, right: 16, zIndex: 9998 }}
+      style={{ top: 44, insetInlineEnd: 16, zIndex: 9998 }}
     >
       <Input
         ref={inputRef}
         value={query}
         onChange={e => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder='Find...'
+        aria-label={t('Find in page')}
+        aria-invalid={queryRefused || undefined}
+        aria-describedby={statusId}
+        placeholder={t('Find...')}
         className='h-7 w-52 text-sm'
       />
-      <span className='min-w-[5rem] px-1.5 text-center text-xs text-muted-foreground'>
+      <span
+        id={statusId}
+        role='status'
+        aria-live='polite'
+        aria-atomic='true'
+        className='min-w-[5rem] px-1.5 text-center text-xs text-muted-foreground'
+      >
         {matchDisplay}
       </span>
       <Button
@@ -183,8 +73,9 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
         size='icon'
         className='h-7 w-7'
         onClick={findPrevious}
-        disabled={!query || adjustedTotal === 0}
-        title='Previous match (Shift+Enter)'
+        disabled={!query || queryRefused || adjustedTotal === 0}
+        aria-label={t('Previous match')}
+        title={t('Previous match (Shift+Enter)')}
       >
         <ChevronUp className='h-4 w-4' />
       </Button>
@@ -193,8 +84,9 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
         size='icon'
         className='h-7 w-7'
         onClick={findNext}
-        disabled={!query || adjustedTotal === 0}
-        title='Next match (Enter)'
+        disabled={!query || queryRefused || adjustedTotal === 0}
+        aria-label={t('Next match')}
+        title={t('Next match (Enter)')}
       >
         <ChevronDown className='h-4 w-4' />
       </Button>
@@ -203,7 +95,8 @@ export function FindBar({ isOpen, onClose }: FindBarProps) {
         size='icon'
         className='h-7 w-7'
         onClick={handleClose}
-        title='Close (Escape)'
+        aria-label={t('Close find bar')}
+        title={t('Close (Escape)')}
       >
         <X className='h-4 w-4' />
       </Button>

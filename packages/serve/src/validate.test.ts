@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { containPathAsync } from './contained-path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -106,6 +107,30 @@ describe('containPath', () => {
   it('returns null when the root does not exist', () => {
     expect(containPath(path.join(tmp, 'no-such-root'), 'x')).toBeNull();
   });
+});
+
+it('keeps async physical containment aligned with the original sync API', async () => {
+  for (const [base, candidate] of [
+    [root, '.'],
+    [root, root],
+    [root, 'src/index.ts'],
+    [root, '../outside/secret.txt'],
+    [root, 'src/../../outside/secret.txt'],
+    [root, '%2E%2E%2F'],
+    [root, '%252E%252E%252F'],
+    [root, 'link-out'],
+    [root, 'link-out/secret.txt'],
+    [root, 'link-in/index.ts'],
+    [root, 'src/gone.ts'],
+    [root, 'link-in/gone.ts'],
+    [root, 'link-out/missing.txt'],
+    [root, '../repo-evil'],
+    [root, path.join(tmp, 'repo-evil', 'x.txt')],
+    [path.join(tmp, 'repo-alias'), 'src/index.ts'],
+    [path.join(tmp, 'no-such-root'), 'x'],
+  ]) {
+    expect(await containPathAsync(base, candidate)).toBe(containPath(base, candidate));
+  }
 });
 
 describe('parseExpandContextBody', () => {
@@ -218,6 +243,71 @@ describe('parseReviewStateBody', () => {
     expect(parseReviewStateBody(null).ok).toBe(false);
     expect(parseReviewStateBody('{}').ok).toBe(false);
     expect(parseReviewStateBody([valid]).ok).toBe(false);
+  });
+});
+
+describe('nested review validation', () => {
+  const comment = {
+    id: 'c1',
+    filePath: 'a.ts',
+    body: 'body',
+    category: 'task',
+    lineRange: { side: 'new', start: 1, end: 2 },
+    suggestion: null,
+    author: 'reviewer',
+    severity: 'major',
+    confidence: 'high',
+    remoteId: 'thread',
+    replies: [{ id: 'r1', body: 'reply', author: 'author', remoteId: 'note' }],
+    extension: { retained: true },
+  };
+  function body(changes: Record<string, unknown> = {}) {
+    return {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      source: { type: 'git', gitDiffArgs: '', repository: '/repo' },
+      files: [
+        {
+          path: 'a.ts',
+          changeType: 'added',
+          viewed: false,
+          comments: [{ ...comment, ...changes }],
+        },
+      ],
+    };
+  }
+
+  it.each([
+    { lineRange: { side: 'sideways', start: 1, end: 2 } },
+    { lineRange: { side: 'new', start: 2, end: 1 } },
+    { lineRange: { side: 'new', start: 0, end: 1 } },
+    { lineRange: { side: 'new', start: 1.5, end: 2 } },
+    { body: null },
+    { author: 123 },
+    { severity: 'urgent' },
+    { confidence: false },
+    { replies: [null] },
+    { replies: [{ id: 'r1', body: 123 }] },
+    { attachments: [null] },
+    { suggestion: { originalCode: 'a', proposedCode: null } },
+  ])('rejects malformed comment data without throwing: %j', changes => {
+    expect(parseReviewStateBody(body(changes))).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('Invalid review state:'),
+    });
+  });
+
+  it('preserves optional metadata, replies, and nested extension fields', () => {
+    expect(parseReviewStateBody(body())).toEqual({ ok: true, value: body() });
+  });
+
+  it('accepts historical omitted nullable fields and normalizes them', () => {
+    const result = parseReviewStateBody(body({ lineRange: undefined, suggestion: undefined }));
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.value.files[0].comments[0]).toMatchObject({
+        lineRange: null,
+        suggestion: null,
+      });
   });
 });
 

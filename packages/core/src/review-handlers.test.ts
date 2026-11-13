@@ -206,6 +206,8 @@ describe('review-handlers', () => {
       commitDiffData(sessionA, makeModifiedGitPayload('src/app.ts'), {
         ...makeIdentity('git', '/repo'),
         gitDiffArgv: ['main..feature'],
+        oldSide: { kind: 'commit', sha: 'a'.repeat(40) },
+        newSide: { kind: 'commit', sha: 'b'.repeat(40) },
       });
       sessionB.diffData = makeGitPayload();
 
@@ -218,7 +220,7 @@ describe('review-handlers', () => {
       });
 
       expect(runGitDiffAsync).toHaveBeenCalledWith(
-        ['main..feature', '-U10', '--', ':(top,literal)src/app.ts'],
+        ['a'.repeat(40), 'b'.repeat(40), '-U10', '--', ':(top,literal)src/app.ts'],
         '/repo'
       );
       expect(result?.hunks[0].header).toBe('@@ -1,3 +1,3 @@');
@@ -230,13 +232,68 @@ describe('review-handlers', () => {
       expect(getFileHunks(sessionB, 'src/app.ts')).toEqual([makeHunk()]);
     });
 
-    it('re-runs the session argv with its argument boundaries intact', async () => {
+    it('drops an expansion when the review is replaced during git execution', async () => {
+      const session = createReviewSession();
+      commitDiffData(session, makeModifiedGitPayload('src/app.ts'), makeIdentity('git', '/repo'));
+      let finish!: (diff: string) => void;
+      vi.mocked(runGitDiffAsync).mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            finish = resolve;
+          })
+      );
+      const pending = expandContext(session, { filePath: 'src/app.ts', contextLines: 10 });
+      await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+      const replacement = makeGitPayload('different.ts');
+      const identity = makeIdentity('directory', '/different');
+      commitDiffData(session, replacement, identity);
+      finish(EXPANDED_DIFF);
+      expect(await pending).toBeNull();
+      expect(session.diffData).toBe(replacement);
+      expect(session.sourceIdentity).toBe(identity);
+      expect([...session.reviewedPaths]).toEqual(['different.ts']);
+    });
+
+    it('retains overlapping expansions of different files', async () => {
+      const session = createReviewSession();
+      const payload = makeModifiedGitPayload('src/app.ts');
+      payload.files.push(makeModifiedGitPayload('src/other.ts').files[0]);
+      commitDiffData(session, payload, makeIdentity('git', '/repo'));
+      let first!: (diff: string) => void;
+      let second!: (diff: string) => void;
+      vi.mocked(runGitDiffAsync)
+        .mockImplementationOnce(
+          () =>
+            new Promise(resolve => {
+              first = resolve;
+            })
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise(resolve => {
+              second = resolve;
+            })
+        );
+      const a = expandContext(session, { filePath: 'src/app.ts', contextLines: 10 });
+      const b = expandContext(session, { filePath: 'src/other.ts', contextLines: 10 });
+      await vi.waitFor(() => expect(second).toBeTypeOf('function'));
+      first(EXPANDED_DIFF);
+      const resultA = await a;
+      second(EXPANDED_DIFF.replaceAll('src/app.ts', 'src/other.ts'));
+      const resultB = await b;
+      expect(getFileHunks(session, 'src/app.ts')).toEqual(resultA?.hunks);
+      expect(getFileHunks(session, 'src/other.ts')).toEqual(resultB?.hunks);
+    });
+
+    it('keeps option and path boundaries while pinning revisions', async () => {
       vi.mocked(runGitDiffAsync).mockResolvedValue(EXPANDED_DIFF);
 
       const session = createReviewSession();
       commitDiffData(session, makeModifiedGitPayload('src/my dir/app.ts'), {
         ...makeIdentity('git', '/repo'),
         gitDiffArgv: ['-S', 'foo bar', 'main..feature', '--', 'src/my dir'],
+        oldSide: { kind: 'commit', sha: 'a'.repeat(40) },
+        newSide: { kind: 'commit', sha: 'b'.repeat(40) },
       });
 
       await expandContext(session, {
@@ -247,7 +304,15 @@ describe('review-handlers', () => {
       // The search string stays one argument and the original pathspec is
       // replaced by the file's own, as a literal pathspec from the root.
       expect(runGitDiffAsync).toHaveBeenCalledWith(
-        ['-S', 'foo bar', 'main..feature', '-U10', '--', ':(top,literal)src/my dir/app.ts'],
+        [
+          '-S',
+          'foo bar',
+          'a'.repeat(40),
+          'b'.repeat(40),
+          '-U10',
+          '--',
+          ':(top,literal)src/my dir/app.ts',
+        ],
         '/repo'
       );
     });

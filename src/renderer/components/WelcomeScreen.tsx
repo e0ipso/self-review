@@ -1,5 +1,8 @@
+import { useDesktopLocalization } from '../useDesktopLocalization';
+import { remoteOpenFailure } from './remote-open-failure';
+import type { ElectronAPI } from '../../shared/types';
 import React, { useEffect, useState } from 'react';
-import { parseForgeUrl } from '@self-review/core';
+import { parseForgeUrl } from '../../../packages/core/src/browser';
 import { Button } from '../../../packages/react/src/components/ui/button';
 import { Input } from '../../../packages/react/src/components/ui/input';
 import {
@@ -51,7 +54,13 @@ function Logo({ className }: { className?: string }) {
   );
 }
 
-export default function WelcomeScreen() {
+type WelcomeScreenAPI = Pick<
+  ElectronAPI,
+  'pickDirectory' | 'startDirectoryReview' | 'openRemoteUrl' | 'onCloseRequested' | 'discardAndQuit'
+>;
+
+export default function WelcomeScreen({ api = window.electronAPI }: { api?: WelcomeScreenAPI }) {
+  const { t } = useDesktopLocalization();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,15 +68,17 @@ export default function WelcomeScreen() {
   const [remoteError, setRemoteError] = useState<string | null>(null);
 
   useEffect(() => {
-    return window.electronAPI.onCloseRequested(() => {
-      window.electronAPI.discardAndQuit();
+    return api.onCloseRequested(() => {
+      api.discardAndQuit();
     });
-  }, []);
+  }, [api]);
 
   const handleBrowse = async () => {
-    const path = await window.electronAPI.pickDirectory();
-    if (path) {
-      setSelectedPath(path);
+    try {
+      const path = await api.pickDirectory();
+      if (path) setSelectedPath(path);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : t('Failed to choose directory'));
     }
   };
 
@@ -75,21 +86,19 @@ export default function WelcomeScreen() {
     const url = remoteUrl.trim();
     if (!parseForgeUrl(url)) {
       setRemoteError(
-        'Not a recognized PR/MR URL. Expected a GitHub pull request ' +
-          '(…/pull/N) or GitLab merge request (…/-/merge_requests/N) URL.'
+        'Not a recognized PR/MR URL. Expected a GitHub pull request (…/pull/N) or GitLab merge request (…/-/merge_requests/N) URL.'
       );
       return;
     }
     setRemoteError(null);
     setLoading(true);
     try {
-      const result = await window.electronAPI.openRemoteUrl(url);
+      const result = await api.openRemoteUrl(url);
       if (result.ok === false) {
         setRemoteError(result.error);
         setLoading(false);
       }
     } catch (err) {
-      console.error('[WelcomeScreen] Failed to open remote URL:', err);
       setRemoteError(err instanceof Error ? err.message : 'Failed to open remote PR/MR');
       setLoading(false);
     }
@@ -97,12 +106,14 @@ export default function WelcomeScreen() {
 
   const handleStartReview = async () => {
     if (!selectedPath) return;
+    setError(null);
     setLoading(true);
     try {
-      await window.electronAPI.startDirectoryReview(selectedPath);
+      await api.startDirectoryReview(selectedPath);
     } catch (err) {
       console.error('[WelcomeScreen] Failed to start directory review:', err);
-      setError(err instanceof Error ? err.message : 'Failed to start review');
+      setError(err instanceof Error ? err.message : t('Failed to start review'));
+    } finally {
       setLoading(false);
     }
   };
@@ -118,37 +129,41 @@ export default function WelcomeScreen() {
           <div className='space-y-2'>
             <h1 className='text-2xl font-bold tracking-tight'>self-review</h1>
             <p className='text-muted-foreground'>
-              GitHub-style PR review UI for local git diffs. Designed for solo developers reviewing
-              AI-generated code.
+              {t(
+                'GitHub-style PR review UI for local git diffs. Designed for solo developers reviewing AI-generated code.'
+              )}
             </p>
           </div>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Git Mode</CardTitle>
+            <CardTitle>{t('Git Mode')}</CardTitle>
             <CardDescription>
-              Runs git diff to show actual changes in your repository
+              {t('Runs git diff to show actual changes in your repository')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className='text-sm text-muted-foreground'>
-              Launch from the CLI with diff arguments to use this mode.
+              {t('Launch from the CLI with diff arguments to use this mode.')}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Remote Mode</CardTitle>
+            <CardTitle>{t('Remote Mode')}</CardTitle>
             <CardDescription>
-              Review a GitHub pull request or GitLab merge request by URL
+              {t('Review a GitHub pull request or GitLab merge request by URL')}
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4'>
             <div className='flex items-center gap-3'>
               <Input
                 data-testid='remote-url-input'
+                aria-label={t('GitHub PR or GitLab MR URL')}
+                aria-describedby={remoteError ? 'remote-url-error' : undefined}
+                aria-invalid={!!remoteError}
                 type='url'
                 placeholder='https://github.com/owner/repo/pull/42'
                 value={remoteUrl}
@@ -164,12 +179,17 @@ export default function WelcomeScreen() {
                 onClick={handleOpenRemoteUrl}
                 disabled={loading}
               >
-                {loading ? 'Loading...' : 'Open'}
+                {loading ? t('Loading...') : t('Open')}
               </Button>
             </div>
             {remoteError && (
-              <p data-testid='remote-url-error' className='text-sm text-destructive'>
-                {remoteError}
+              <p
+                id='remote-url-error'
+                role='alert'
+                data-testid='remote-url-error'
+                className='text-sm text-destructive'
+              >
+                {remoteOpenFailure(remoteError, t)}
               </p>
             )}
           </CardContent>
@@ -177,9 +197,9 @@ export default function WelcomeScreen() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Directory Mode</CardTitle>
+            <CardTitle>{t('Directory Mode')}</CardTitle>
             <CardDescription>
-              Shows all files as new additions — useful for reviewing generated code
+              {t('Shows all files as new additions — useful for reviewing generated code')}
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4'>
@@ -190,7 +210,7 @@ export default function WelcomeScreen() {
                 onClick={handleBrowse}
                 disabled={loading}
               >
-                Browse...
+                {t('Browse...')}
               </Button>
               {selectedPath && (
                 <span
@@ -204,11 +224,11 @@ export default function WelcomeScreen() {
             </div>
             {selectedPath && (
               <Button onClick={handleStartReview} disabled={loading} className='w-full'>
-                {loading ? 'Loading...' : 'Start Review'}
+                {loading ? t('Loading...') : t('Start Review')}
               </Button>
             )}
             {error && (
-              <p data-testid='welcome-error' className='text-sm text-destructive'>
+              <p role='alert' data-testid='welcome-error' className='text-sm text-destructive'>
                 {error}
               </p>
             )}

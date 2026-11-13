@@ -52,7 +52,8 @@
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "@self-review/config": "*"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -71,7 +72,8 @@
     "tailwindcss": "^4.0.0",
     "tsup": "^8.0.0",
     "typescript": "~5.9.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "axe-core": "4.10.3"
   },
   "license": "MIT"
 }

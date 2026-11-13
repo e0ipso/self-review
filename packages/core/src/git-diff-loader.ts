@@ -1,17 +1,26 @@
+import type { SourceReadFsLayer } from './scan-fs';
+import type { LocalSourcePaths } from './source-identity';
 import type { DiffFile, ReviewSourceIdentity } from './types';
 import {
   runGitDiffAsync,
   getRepoRootAsync,
-  getUntrackedFilesAsync,
+  listUntrackedFilesAsync,
+  type GitExecutionOptions,
   isOutputLimitError,
 } from './git';
-import { parseDiffWithDiagnostics } from './diff-parser';
+import { parseDiffWithDiagnosticsAsync } from './diff-parser-async';
 import { findUnsupportedGitDiffOptions } from './git-diff-args';
-import { loadSyntheticFiles } from './synthetic-diff';
+import { loadSyntheticFilesAsync } from './synthetic-diff';
 import { formatBytes, resolveSourceBudgets, type SourceBudgets } from './input-budgets';
+import { isCommandCancelled } from './forge-provider';
+import { checkLoadingCancelled } from './local-loading-lifetime';
+import { pinnedGitDiffArgs } from './pinned-comparison';
 import { resolveGitSourceIdentity } from './source-identity';
 
-export interface LoadGitDiffOptions {
+export interface LoadGitDiffOptions extends GitExecutionOptions {
+  /** Supplied bounded source reads, including untracked additions. */
+  readFs?: SourceReadFsLayer;
+  sourcePaths?: LocalSourcePaths;
   /**
    * Include untracked working-tree files as synthetic additions. Defaults
    * to true (local git mode). Remote mode passes false: a base...head diff
@@ -19,6 +28,8 @@ export interface LoadGitDiffOptions {
    */
   includeUntracked?: boolean;
   budgets?: Partial<SourceBudgets>;
+  /** Effective application ignore filter, in the same namespace as tracked diff paths. */
+  shouldKeep?: (path: string) => boolean;
 }
 
 export interface LoadGitDiffResult {
@@ -49,14 +60,19 @@ export async function loadGitDiffWithUntracked(
   cwd?: string,
   options: LoadGitDiffOptions = {}
 ): Promise<LoadGitDiffResult> {
+  checkLoadingCancelled(options.signal);
   const { includeUntracked = true } = options;
   const budgets = resolveSourceBudgets(options.budgets);
-  const repository = await getRepoRootAsync(cwd);
-  // Before the diff runs, so the SHAs hold even if a ref moves meanwhile.
+  const repository = await getRepoRootAsync(cwd, options);
+  // Resolve once, then execute against those same commits if a symbolic ref moves.
   const identity = await resolveGitSourceIdentity({
     repository,
     gitDiffArgv: gitDiffArgs,
     invocationCwd: cwd ?? process.cwd(),
+    signal: options.signal,
+    runner: options.runner,
+    timeoutMs: options.timeoutMs,
+    sourcePaths: options.sourcePaths ?? options.readFs,
   });
 
   // Such output would parse as an empty review; name the flag and skip git.
@@ -76,7 +92,12 @@ export async function loadGitDiffWithUntracked(
 
   let rawDiff: string;
   try {
-    rawDiff = await runGitDiffAsync(gitDiffArgs, cwd, budgets.maxGitDiffOutputBytes);
+    rawDiff = await runGitDiffAsync(
+      pinnedGitDiffArgs(identity),
+      cwd,
+      budgets.maxGitDiffOutputBytes,
+      options
+    );
   } catch (error) {
     if (!isOutputLimitError(error)) throw error;
     // A truncated diff must never be parsed as the review.
@@ -91,18 +112,40 @@ export async function loadGitDiffWithUntracked(
       ],
     };
   }
-  const { files, diagnostics } = parseDiffWithDiagnostics(rawDiff);
+  checkLoadingCancelled(options.signal);
+  const { files, diagnostics } = await parseDiffWithDiagnosticsAsync(rawDiff, {
+    signal: options.signal,
+    budgets,
+  });
+  checkLoadingCancelled(options.signal);
 
   if (!includeUntracked) {
     return { files, repository, identity, diagnostics };
   }
 
-  // Enumerate at the repository root. `git diff` reports root-relative paths
-  // for the whole repository, while `git ls-files` reports cwd-relative paths
-  // for the cwd subtree only. Read those cwd-relative names against the root
-  // and a nested file resolves to its same-named root neighbour, or to
-  // nothing at all.
-  const untrackedPaths = await getUntrackedFilesAsync(repository);
+  // Enumerate and read against the physical root, then name entries exactly like the
+  // tracked patch. Filter before counting entries or spending synthetic read budgets.
+  let listed: string[];
+  try {
+    listed = await listUntrackedFilesAsync(repository, options);
+  } catch (error) {
+    checkLoadingCancelled(options.signal);
+    if (isCommandCancelled(error) && error.reason === 'aborted') throw error;
+    diagnostics.push(
+      `Untracked files could not be listed; only tracked changes are shown: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return { files, repository, identity, diagnostics };
+  }
+  checkLoadingCancelled(options.signal);
+  const prefix = identity.pathPrefix === '' ? '' : `${identity.pathPrefix}/`;
+  const reviewPath = (rootPath: string) => rootPath.slice(prefix.length);
+  const trackedPaths = new Set(files.map(entryPath));
+  const untrackedPaths = listed.filter(
+    filePath =>
+      filePath.startsWith(prefix) &&
+      (options.shouldKeep?.(reviewPath(filePath)) ?? true) &&
+      !trackedPaths.has(reviewPath(filePath))
+  );
   if (untrackedPaths.length > budgets.maxEntries) {
     diagnostics.push(
       `${untrackedPaths.length.toLocaleString('en-US')} untracked files exceed the ` +
@@ -115,17 +158,51 @@ export async function loadGitDiffWithUntracked(
 
   let allFiles = files;
   if (untrackedPaths.length > 0) {
-    const untracked = loadSyntheticFiles(untrackedPaths, repository, {
+    if (options.sourcePaths && !options.readFs)
+      throw new TypeError('The supplied git source needs a SourceReadFsLayer for untracked reads');
+    const untracked = await loadSyntheticFilesAsync(untrackedPaths, repository, {
       followSymlinks: false,
-      budgets: options.budgets,
+      readFs: options.readFs,
+      budgets: {
+        ...budgets,
+        maxDiffFiles: Math.max(0, budgets.maxDiffFiles - files.length),
+        maxDiffHunks: Math.max(
+          0,
+          budgets.maxDiffHunks - files.reduce((n, f) => n + f.hunks.length, 0)
+        ),
+        maxTotalLines: Math.max(
+          0,
+          budgets.maxTotalLines -
+            files.reduce((n, f) => n + f.hunks.reduce((m, h) => m + h.lines.length, 0), 0)
+        ),
+      },
+      signal: options.signal,
     });
     diagnostics.push(...untracked.diagnostics);
+    for (const file of untracked.files) {
+      if (file.newPath) file.newPath = reviewPath(file.newPath);
+      if (file.oldPath) file.oldPath = reviewPath(file.oldPath);
+    }
     const untrackedFiles = dedupeUntrackedByPath(files, untracked.files);
     for (const file of untrackedFiles) {
       file.isUntracked = true;
     }
+    // A normal working-tree comparison already reads synthetic additions from the
+    // right place. Only store overrides when tracked files use another new side.
+    if (untrackedFiles.length > 0 && identity.newSide.kind !== 'working-tree') {
+      identity.fileSources = new Map(
+        untrackedFiles.map(file => [
+          entryPath(file),
+          {
+            oldSide: { kind: 'none' as const },
+            newSide: { kind: 'working-tree' as const },
+          },
+        ])
+      );
+    }
     allFiles = [...files, ...untrackedFiles];
   }
 
+  checkLoadingCancelled(options.signal);
   return { files: allFiles, repository, identity, diagnostics };
 }

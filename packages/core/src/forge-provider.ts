@@ -7,8 +7,11 @@
 // implementations (github-provider.ts, gitlab-provider.ts) do the CLI work
 // through an injectable command runner so they stay unit-testable.
 
+import type { RemoteForge } from './types';
+import { FORGE_DEFINITIONS } from './forge-definitions';
+
 /** Forges the app knows how to talk to. */
-export type ForgeName = 'github' | 'gitlab';
+export type ForgeName = RemoteForge;
 
 /**
  * A parsed pull-request / merge-request web URL.
@@ -48,7 +51,8 @@ export type ForgeAnchorSide = 'old' | 'new';
  * Revision provenance (the mapper compares it with the reviewed head; providers
  * report only what the forge told them):
  * - `headSha`: head commit the line numbers were computed against, when the
- *   forge reports one per note (GitLab). A suggestion activates only on a match.
+ *   forge reports one per note (GitLab), or a provider verifies the head around
+ *   thread retrieval (GitHub). A suggestion activates only on a match.
  * - `outdated`: the forge's own per-note verdict (GitHub `line: null`). `true`
  *   degrades to file-level; `false` vouches for the anchor when no `headSha` exists.
  *
@@ -95,6 +99,8 @@ export interface FetchThreadsOptions {
    * on the fetch path (GitHub REST review comments) may ignore it.
    */
   includeResolved?: boolean;
+  /** Pinned materialized head. Providers may verify current anchors against this snapshot. */
+  reviewedHeadSha?: string;
 }
 
 /**
@@ -113,6 +119,13 @@ export interface ForgeCommandResult {
 export interface ForgeCommandOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Working directory, without invoking a shell. */
+  cwd?: string;
+  /** Combined captured stdout/stderr byte limit, before decoding. */
+  maxOutputBytes?: number;
+  /** Remote-owned Git operations ignore ambient repository, index, object and namespace selection.
+   * Local explicit targets keep their intentionally selected alternate index by default. */
+  gitEnvironment?: 'isolated';
 }
 
 /**
@@ -166,7 +179,11 @@ export function isCommandCancelled(error: unknown): error is CommandCancelledErr
  * no posting — those concerns live elsewhere.
  *
  * Implementations throw {@link ForgeCliUnavailableError} when their CLI is
- * absent or unauthenticated so callers can degrade cleanly.
+ * absent, unauthenticated or returns malformed required response data so callers can degrade
+ * visibly. A successful fetch returns all validated pages, never a silently shortened list.
+ * Unknown extension fields are ignored. Null/deleted authors use each forge's fallback name.
+ * Runners must propagate CommandCancelledError on interruption, including across pagination.
+ * Each provider instance is safe for concurrent calls when its supplied runner is also safe.
  */
 export interface ForgeProvider {
   readonly forge: ForgeName;
@@ -193,14 +210,6 @@ export class ForgeCliUnavailableError extends Error {
   }
 }
 
-// Path-shape matchers. The number must terminate its path segment so
-// `/pull/12x` does not parse as PR 12; anything after the number segment
-// (trailing slash, sub-pages like /files) still identifies the same PR/MR.
-// Numbered groups (owner, repo, number in order): the app tsconfig targets
-// ES6, which predates named capture groups.
-const GITHUB_PR_PATH = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?=\/|$)/;
-const GITLAB_MR_PATH = /^\/(.+)\/([^/]+)\/-\/merge_requests\/(\d+)(?=\/|$)/;
-
 /**
  * Parse a forge web URL into a {@link ForgeUrl}, or return `null` for
  * anything that is not a PR/MR URL. Detection is by path shape only, on any
@@ -217,27 +226,19 @@ export function parseForgeUrl(url: string): ForgeUrl | null {
     return null;
   }
 
-  // GitLab first: `/-/merge_requests/` is the more specific marker.
-  const gitlab = GITLAB_MR_PATH.exec(parsed.pathname);
-  if (gitlab) {
-    return {
-      forge: 'gitlab',
-      host: parsed.host,
-      owner: gitlab[1],
-      repo: gitlab[2],
-      number: Number.parseInt(gitlab[3], 10),
-    };
-  }
-
-  const github = GITHUB_PR_PATH.exec(parsed.pathname);
-  if (github) {
-    return {
-      forge: 'github',
-      host: parsed.host,
-      owner: github[1],
-      repo: github[2],
-      number: Number.parseInt(github[3], 10),
-    };
+  for (const forge of Object.keys(FORGE_DEFINITIONS) as ForgeName[]) {
+    const match = FORGE_DEFINITIONS[forge].urlPath.exec(parsed.pathname);
+    if (match) {
+      const number = Number(match[3]);
+      if (!Number.isSafeInteger(number) || number <= 0) return null;
+      return {
+        forge,
+        host: parsed.host,
+        owner: match[1],
+        repo: match[2],
+        number,
+      };
+    }
   }
 
   return null;

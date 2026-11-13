@@ -6,11 +6,17 @@
 // stubbed; the round trip against a running server is covered by the
 // end-to-end project.
 
+import { DEFAULT_CONFIG } from '../../../react/src/config-defaults';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReviewState } from '@self-review/core';
 import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
+import { createServeRequester } from './requester';
 import { parseReviewStateBody } from '../validate';
-import { REVIEW_TOO_LARGE_CODE } from '../protocol';
+import {
+  MAX_APPLY_BODY_BYTES,
+  SUGGESTION_TOO_LARGE_CODE,
+  REVIEW_TOO_LARGE_CODE,
+} from '../protocol';
 
 const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
 
@@ -82,7 +88,24 @@ describe('createFetchAdapter', () => {
     const spy = stubFetch(url =>
       url.startsWith('/api/attachment')
         ? new Response(new Uint8Array([1]), { status: 200 })
-        : json({ diff: DIFF_PAYLOAD, guide: null, ok: true, outputPath: '/r/review.xml' })
+        : url === '/api/apply-suggestion'
+          ? json({ status: 'applied', filePath: 'src/a.ts', replacedLines: 1 })
+          : url === '/api/resume'
+            ? json(null)
+            : url.startsWith('/api/file?')
+              ? json([])
+              : url.startsWith('/api/image?')
+                ? json({ error: 'unavailable' })
+                : url === '/api/expand-context'
+                  ? json(null)
+                  : url === '/api/config'
+                    ? json(null)
+                    : json({
+                        diff: DIFF_PAYLOAD,
+                        guide: null,
+                        ok: true,
+                        outputPath: '/r/review.xml',
+                      })
     );
     const adapter = createFetchAdapter(CAPABILITY);
 
@@ -234,6 +257,45 @@ describe('createFetchAdapter', () => {
     await expect(createFetchAdapter(CAPABILITY).readAttachment!('missing.png')).resolves.toBeNull();
   });
 
+  it.each([401, 403, 429, 500, 503])(
+    'preserves attachment HTTP failures as typed errors: %s',
+    async status => {
+      stubFetch(() => json({ error: 'attachment access failed' }, status));
+      await expect(createFetchAdapter(CAPABILITY).readAttachment!('a.png')).rejects.toMatchObject({
+        name: 'ServeRequestError',
+        status,
+        uncertain: false,
+        message: expect.stringContaining('attachment access failed'),
+      });
+    }
+  );
+
+  it.each(['timeout', 'disconnect'] as const)(
+    'preserves attachment %s failures instead of reporting missing content',
+    async reason => {
+      vi.useFakeTimers();
+      const requester = createServeRequester(CAPABILITY, {
+        fetch: vi.fn<typeof fetch>(() => new Promise(() => {})),
+        readTimeoutMs: 20,
+      });
+      const adapter = createFetchAdapter(CAPABILITY, requester);
+      try {
+        const failed = expect(adapter.readAttachment!('a.png')).rejects.toMatchObject({
+          name: 'ServeRequestError',
+          status: null,
+          code: 'request-failed',
+          uncertain: false,
+        });
+        if (reason === 'timeout') await vi.advanceTimersByTimeAsync(20);
+        else adapter.dispose();
+        await failed;
+      } finally {
+        adapter.dispose();
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it('posts an expand-context request as JSON', async () => {
     const response = { hunks: [], totalLines: 12 };
     const spy = stubRoutes({ '/api/expand-context': response });
@@ -340,7 +402,7 @@ describe('createFetchAdapter', () => {
 
   it('reads the config and its output path from GET /api/config', async () => {
     const payload = {
-      config: { theme: 'dark' },
+      config: { ...DEFAULT_CONFIG, theme: 'dark' },
       outputPathInfo: { resolvedOutputPath: '/repo/review.xml', outputPathWritable: true },
     };
     const spy = stubRoutes({ '/api/config': payload });
@@ -440,5 +502,191 @@ describe('attachment blobs on the wire', () => {
     expect(new Uint8Array(comment.attachments![0].data!)).toEqual(BYTES);
     expect(new Uint8Array(comment.replies![0].attachments![0].data!)).toEqual(BYTES);
     expect(comment.attachments![1].data).toBeUndefined();
+  });
+});
+
+describe('suggestion transport budget', () => {
+  const request = {
+    filePath: 'src/a.ts',
+    lineRange: { side: 'new' as const, start: 1, end: 1 },
+    suggestion: { originalCode: 'a', proposedCode: 'b' },
+  };
+
+  it('sends suggestions larger than the context-request budget', async () => {
+    const outcome = { status: 'applied', filePath: request.filePath, replacedLines: 1 };
+    const spy = stubFetch(() => json(outcome));
+    const large = {
+      ...request,
+      suggestion: { ...request.suggestion, proposedCode: 'x'.repeat(70 * 1024) },
+    };
+    await expect(createFetchAdapter(CAPABILITY).applySuggestion!(large)).resolves.toEqual(outcome);
+    expect(JSON.parse(spy.mock.calls[0][1]!.body as string)).toEqual(large);
+  });
+
+  it('refuses an oversized suggestion before sending its JSON', async () => {
+    const spy = stubFetch(() => json({ ok: true }));
+    const large = {
+      ...request,
+      suggestion: { ...request.suggestion, proposedCode: 'é'.repeat(MAX_APPLY_BODY_BYTES / 2) },
+    };
+    await expect(createFetchAdapter(CAPABILITY).applySuggestion!(large)).rejects.toMatchObject({
+      status: null,
+      code: SUGGESTION_TOO_LARGE_CODE,
+      message: expect.stringContaining('Nothing was applied.'),
+    });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('maps a server refusal to the same size error', async () => {
+    stubFetch(() => json({ error: 'request body too large' }, 413));
+    await expect(createFetchAdapter(CAPABILITY).applySuggestion!(request)).rejects.toMatchObject({
+      status: 413,
+      code: SUGGESTION_TOO_LARGE_CODE,
+    });
+  });
+});
+
+it('retries a failed shared diff and delivers both halves to surviving and replacement subscriptions', async () => {
+  let reject!: (error: Error) => void;
+  let resolve!: (response: Response) => void;
+  const first = new Promise<Response>((_done, fail) => {
+    reject = fail;
+  });
+  const retry = new Promise<Response>(done => {
+    resolve = done;
+  });
+  const spy = stubFetch(() => (spy.mock.calls.length === 1 ? first : retry));
+  const adapter = createFetchAdapter(CAPABILITY);
+  const diff = vi.fn();
+  const obsoleteGuide = vi.fn();
+  const guide = vi.fn();
+  const unsubscribeDiff = adapter.onDiffLoad!(diff);
+  const unsubscribeGuide = adapter.onGuideLoad!(obsoleteGuide);
+  const failed = expect(adapter.loadDiff()).rejects.toThrow('unavailable');
+  reject(new Error('unavailable'));
+  await failed;
+  const next = adapter.loadDiff();
+  unsubscribeGuide();
+  adapter.onGuideLoad!(guide);
+  await Promise.resolve();
+  expect(spy).toHaveBeenCalledTimes(2);
+  resolve(json({ diff: DIFF_PAYLOAD, guide: GUIDE_PAYLOAD }));
+  await next;
+  expect(diff).toHaveBeenCalledExactlyOnceWith(DIFF_PAYLOAD);
+  expect(guide).toHaveBeenCalledExactlyOnceWith(GUIDE_PAYLOAD);
+  expect(obsoleteGuide).not.toHaveBeenCalled();
+  unsubscribeDiff();
+  adapter.dispose();
+});
+
+it('drops a late retry delivery when the page is replaced', async () => {
+  let resolve!: (response: Response) => void;
+  stubFetch(
+    () =>
+      new Promise<Response>(done => {
+        resolve = done;
+      })
+  );
+  const adapter = createFetchAdapter(CAPABILITY);
+  const diff = vi.fn();
+  adapter.onDiffLoad!(diff);
+  const pending = adapter.loadDiff();
+  adapter.dispose();
+  await expect(pending).rejects.toThrow(/cancelled/);
+  resolve(json({ diff: DIFF_PAYLOAD, guide: GUIDE_PAYLOAD }));
+  await Promise.resolve();
+  expect(diff).not.toHaveBeenCalled();
+});
+
+it('keeps a pre-admission busy refusal retryable and an unexpected mutation failure uncertain', async () => {
+  stubFetch(() => json({ error: 'review server busy; retry after pending requests finish' }, 503));
+  const adapter = createFetchAdapter(CAPABILITY);
+  const busy = await rejectionOf(adapter.submitReview!(REVIEW_STATE));
+  expect(busy.uncertain).toBe(false);
+  stubFetch(() => json({ error: 'internal error' }, 500));
+  // A new page captures the replacement requester; its previous page transport is stable.
+  const uncertain = await rejectionOf(createFetchAdapter(CAPABILITY).submitReview!(REVIEW_STATE));
+  expect(uncertain).toMatchObject({ uncertain: true, code: 'outcome-unknown' });
+});
+
+it('exposes acknowledged publication separately while preserving legacy submit completion', async () => {
+  let answer!: (response: Response) => void;
+  stubFetch(
+    () =>
+      new Promise<Response>(resolve => {
+        answer = resolve;
+      })
+  );
+  const adapter = createFetchAdapter(CAPABILITY);
+  expect(adapter.publishReview).toBe(adapter.submitReview);
+  const acknowledged = vi.fn();
+  const saving = adapter.publishReview!(REVIEW_STATE).then(acknowledged);
+  await Promise.resolve();
+  expect(acknowledged).not.toHaveBeenCalled();
+  answer(json({ ok: true, outputPath: '/review.xml' }));
+  await saving;
+  expect(acknowledged).toHaveBeenCalledOnce();
+  adapter.dispose();
+});
+
+it.each([
+  null,
+  {},
+  { status: 'applied', filePath: 'src/a.ts' },
+  { status: 'applied', filePath: 'other', replacedLines: 1 },
+  { status: 'applied', filePath: 'src/a.ts', replacedLines: -1 },
+  { status: 'applied', filePath: 'src/a.ts', replacedLines: 1.5 },
+  { status: 'applied', filePath: 'src/a.ts', replacedLines: '1' },
+  { status: 'refused', filePath: 'src/a.ts', reason: 'x' },
+  { status: 'refused', filePath: 'other', reason: 'x', detail: 'no' },
+  { status: 'unexpected', filePath: 'src/a.ts' },
+])('retains uncertainty for malformed Apply success %j without replay', async body => {
+  const fetch = stubFetch(() => json(body));
+  await expect(
+    createFetchAdapter(CAPABILITY).applySuggestion!({
+      filePath: 'src/a.ts',
+      lineRange: { side: 'new', start: 1, end: 1 },
+      suggestion: { originalCode: 'a', proposedCode: 'b' },
+    })
+  ).rejects.toMatchObject({ uncertain: true, code: 'outcome-unknown' });
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it('retains uncertainty for an empty Apply success', async () => {
+  stubFetch(() => new Response('', { status: 200 }));
+  await expect(
+    createFetchAdapter(CAPABILITY).applySuggestion!({
+      filePath: 'a',
+      lineRange: null,
+      suggestion: { originalCode: 'a', proposedCode: 'b' },
+    })
+  ).rejects.toMatchObject({ uncertain: true, code: 'outcome-unknown' });
+});
+
+it.each([400, 413, 500])('preserves attachment HTTP %i failures as errors', async status => {
+  stubFetch(() => json({ error: 'useful failure' }, status));
+  await expect(createFetchAdapter(CAPABILITY).readAttachment!('a')).rejects.toMatchObject({
+    status,
+    uncertain: false,
+  });
+});
+
+it('accepts the unchanged typed refusal shape and keeps precommit HTTP refusals retryable', async () => {
+  const request = {
+    filePath: 'a',
+    lineRange: null,
+    suggestion: { originalCode: 'a', proposedCode: 'b' },
+  };
+  const outcome = {
+    status: 'refused',
+    filePath: 'a',
+    reason: 'invalid-anchor',
+    detail: 'No line anchor.',
+  };
+  stubFetch(() => json(outcome));
+  await expect(createFetchAdapter(CAPABILITY).applySuggestion!(request)).resolves.toEqual(outcome);
+  stubFetch(() => json({ error: 'not reviewed' }, 400));
+  await expect(createFetchAdapter(CAPABILITY).applySuggestion!(request)).rejects.toMatchObject({
+    uncertain: false,
   });
 });

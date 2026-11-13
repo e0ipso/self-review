@@ -4,13 +4,23 @@
 // under `sideEffects`; without this import the UI renders unstyled.
 // The capability is taken from the launch URL once, before React mounts, then erased from the address bar.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ImportDiagnosticsBanner, ReviewPanel, Toolbar, useConfig } from '@self-review/react';
+import {
+  Button,
+  ImportDiagnosticsBanner,
+  ReviewPanel,
+  Toolbar,
+  useConfig,
+  useReview,
+  useReviewDraftWork,
+  useReviewDraftGuard,
+} from '@self-review/react';
 import type { ReviewPanelHandle } from '@self-review/react';
-import type { AppConfig, OutputPathInfo } from '@self-review/core';
+import type { OutputPathInfo } from '@self-review/core';
 import '@self-review/react/styles.css';
-import { createFetchAdapter, loadServeConfig, ServeRequestError } from './adapter';
+import { useServeConnection } from './useServeConnection';
+import { SubmissionSession, useReviewSubmission, type SubmitFailure } from './useReviewSubmission';
 import { REVIEW_TOO_LARGE_CODE, parseCapabilityFragment } from '../protocol';
 
 // Removed with `history.replaceState`, so it leaves the history entry too. Null after a reload or a retyped address.
@@ -24,31 +34,6 @@ export function takeCapabilityFromLocation(): string | null {
     );
   }
   return capability;
-}
-
-// `failed` is `reviewing` with a notice: the close guard stays up and Finish Review resends.
-type Status = 'reviewing' | 'submitting' | 'submitted' | 'failed';
-
-interface SubmitFailure {
-  code: string | null;
-  message: string;
-  details: readonly string[];
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-interface ConfigFailure {
-  message: string;
-  unauthorized: boolean;
-}
-
-function configFailureOf(error: unknown): ConfigFailure {
-  return {
-    message: messageOf(error),
-    unauthorized: error instanceof ServeRequestError && error.status === 401,
-  };
 }
 
 // Unrecoverable from the page: the only copy of the key was in the URL the server printed.
@@ -69,13 +54,6 @@ function CapabilityNotice() {
   );
 }
 
-function failureOf(error: unknown): SubmitFailure {
-  if (error instanceof ServeRequestError) {
-    return { code: error.code, message: error.message, details: error.details };
-  }
-  return { code: null, message: messageOf(error), details: [] };
-}
-
 /**
  * Push the server's output path into the config context.
  *
@@ -89,6 +67,35 @@ function OutputPath({ info }: { info: OutputPathInfo | null }) {
   useEffect(() => {
     if (info) setOutputPathInfo(info);
   }, [info, setOutputPathInfo]);
+  return null;
+}
+
+/** Observe persisted state without changing the library's comments-only callback. */
+function UnsavedWork({ onChange }: { onChange: () => void }) {
+  const { files } = useReview();
+  const drafts = useReviewDraftWork();
+  const hasDraftWork = useReviewDraftGuard();
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (hasDraftWork()) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasDraftWork]);
+  const previous = useRef(files);
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = files;
+    if (
+      drafts ||
+      files.some(file => file.viewed || file.comments.length > 0) ||
+      before.some(file => {
+        const next = files.find(candidate => candidate.path === file.path);
+        return next && (next.viewed !== file.viewed || next.comments !== file.comments);
+      })
+    )
+      onChange();
+  }, [files, drafts, onChange]);
   return null;
 }
 
@@ -110,7 +117,7 @@ function Saved({ outputPath }: { outputPath: string | null }) {
 
 // The size message already says what to do, so only filesystem refusals get the generic advice.
 function SubmitFailureNotice({ failure }: { failure: SubmitFailure }) {
-  const fixable = failure.code !== REVIEW_TOO_LARGE_CODE;
+  const fixable = !failure.uncertain && failure.code !== REVIEW_TOO_LARGE_CODE;
   return (
     <div
       role='alert'
@@ -124,7 +131,10 @@ function SubmitFailureNotice({ failure }: { failure: SubmitFailure }) {
       }}
     >
       <div>
-        <strong>The review was not saved{failure.code ? ` (${failure.code})` : ''}:</strong>{' '}
+        <strong>
+          {failure.uncertain ? 'The save outcome is unknown' : 'The review was not saved'}
+          {failure.code ? ` (${failure.code})` : ''}:
+        </strong>{' '}
         {failure.message}
       </div>
       {failure.details.length > 0 && (
@@ -133,6 +143,14 @@ function SubmitFailureNotice({ failure }: { failure: SubmitFailure }) {
             <li key={index}>{line}</li>
           ))}
         </ul>
+      )}
+      {failure.uncertain && (
+        <div>
+          Your comments are still here. Check the terminal and the output file on the server. Stop
+          the original process before restarting with --resume-from if the file was saved. If it was
+          not saved and the original server is still running, you can allow a retry below. Keep this
+          page open to preserve unsaved comments. No submission is retried automatically.
+        </div>
       )}
       {fixable && (
         <div style={{ marginTop: '0.25rem' }}>
@@ -167,84 +185,36 @@ export interface AppProps {
   capability: string | null;
 }
 
-export function App({ capability }: AppProps) {
-  // One adapter per page; none without a capability, since every request would be refused.
-  const adapter = useMemo(
-    () => (capability === null ? null : createFetchAdapter(capability)),
-    [capability]
-  );
+export function App(props: AppProps) {
+  return <ReviewApp key={props.capability} {...props} />;
+}
+
+function ReviewApp({ capability }: AppProps) {
+  const { connection, error: configError, retry } = useServeConnection(capability);
+  const adapter = connection?.adapter ?? null;
+  const config = connection?.config ?? null;
+  const outputPathInfo = connection?.outputPathInfo ?? null;
   const reviewRef = useRef<ReviewPanelHandle>(null);
-
-  const [config, setConfig] = useState<Partial<AppConfig> | null>(null);
-  const [outputPathInfo, setOutputPathInfo] = useState<OutputPathInfo | null>(null);
-  const [configError, setConfigError] = useState<ConfigFailure | null>(null);
-  const [status, setStatus] = useState<Status>('reviewing');
-  const [hasUnsavedWork, setHasUnsavedWork] = useState(false);
-  const [failure, setFailure] = useState<SubmitFailure | null>(null);
-
-  // Config first: the providers below are seeded with it, so mounting before
-  // it lands would render the wrong theme and categories.
-  useEffect(() => {
-    if (capability === null) return;
-    let cancelled = false;
-    loadServeConfig(capability)
-      .then(loaded => {
-        if (cancelled) return;
-        setConfig(loaded?.config ?? {});
-        setOutputPathInfo(loaded?.outputPathInfo ?? null);
-      })
-      .catch(error => {
-        if (!cancelled) setConfigError(configFailureOf(error));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [capability]);
-
-  // Warn before the tab closes with work that only exists in this page.
-  //
-  // The desktop application intercepts its window close and offers Save & Quit,
-  // Discard or Cancel. A browser gives us less: `beforeunload` is a yes/no
-  // prompt whose wording belongs to the browser, so this warns without being
-  // able to offer the save. It is closer to the desktop than closing silently,
-  // which is what happened before.
-  //
-  // Active until the review is on disk, including after a refused submission.
-  useEffect(() => {
-    if (!hasUnsavedWork || status === 'submitted') return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [hasUnsavedWork, status]);
-
-  const handleFinishReview = useCallback(async () => {
-    // One in flight at a time; none after an acknowledged one (the server stops). A refused one may be resent.
-    if (status === 'submitting' || status === 'submitted' || adapter === null) return;
-    const state = reviewRef.current?.getReviewState();
-    if (!state) return;
-    setStatus('submitting');
-    setFailure(null);
-    try {
-      await adapter.submitReview?.(state);
-      setStatus('submitted');
-    } catch (error) {
-      setFailure(failureOf(error));
-      setStatus('failed');
-    }
-  }, [adapter, status]);
+  const { status, failure, finish, allowRetry, markUnsaved, sessionChanged } = useReviewSubmission(
+    reviewRef,
+    adapter
+  );
 
   // All hooks stay above this line: an early return ahead of an effect made React throw on the shorter hook list.
 
   // No key and a refused key get the same page: the fix is the printed URL either way.
-  if (adapter === null || configError?.unauthorized) {
+  if (capability === null || configError?.unauthorized) {
     return <CapabilityNotice />;
   }
 
   if (configError) {
     return (
       <Notice title='Could not reach the review server'>
-        <p>{configError.message}</p>
-        <p>The process that served this page may have exited.</p>
+        <div role='alert'>
+          <p>{configError.message}</p>
+          <p>The process that served this page may have exited.</p>
+        </div>
+        <Button onClick={retry}>Retry connection</Button>
       </Notice>
     );
   }
@@ -253,22 +223,44 @@ export function App({ capability }: AppProps) {
     return <Saved outputPath={outputPathInfo?.resolvedOutputPath ?? null} />;
   }
 
-  if (!config) return null;
+  if (!config || !adapter)
+    return (
+      <Notice title='Connecting to the review server'>
+        <p role='status'>Waiting for the review server.</p>
+      </Notice>
+    );
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {status === 'failed' && failure && <SubmitFailureNotice failure={failure} />}
-      <ReviewPanel
-        ref={reviewRef}
-        adapter={adapter}
-        config={config}
-        onReviewChange={comments => setHasUnsavedWork(comments.length > 0)}
-        className='flex-1 flex flex-col overflow-hidden bg-background text-foreground'
+      {(status === 'failed' || status === 'uncertain') && failure && (
+        <SubmitFailureNotice failure={failure} />
+      )}
+      {status === 'uncertain' && (
+        <div className='p-2' data-save-recovery>
+          <Button variant='outline' onClick={allowRetry}>
+            Allow retry after checking output
+          </Button>
+        </div>
+      )}
+      <div
+        inert={status === 'submitting' || status === 'uncertain'}
+        aria-busy={status === 'submitting'}
+        data-testid='review-interaction'
+        style={{ flex: 1, display: 'flex', minHeight: 0 }}
       >
-        <OutputPath info={outputPathInfo} />
-        <ImportDiagnosticsBanner />
-        <Toolbar onFinishReview={() => void handleFinishReview()} />
-      </ReviewPanel>
+        <ReviewPanel
+          ref={reviewRef}
+          adapter={adapter}
+          config={config}
+          className='flex-1 flex flex-col overflow-hidden bg-background text-foreground'
+        >
+          <SubmissionSession onChange={sessionChanged} />
+          <UnsavedWork onChange={markUnsaved} />
+          <OutputPath info={outputPathInfo} />
+          <ImportDiagnosticsBanner />
+          <Toolbar onFinishReview={status === 'uncertain' ? undefined : () => void finish()} />
+        </ReviewPanel>
+      </div>
     </div>
   );
 }

@@ -8,6 +8,10 @@ import type { ReviewPublishErrorCode } from '@self-review/core';
  */
 export const MAX_REVIEW_BODY_BYTES = 32 * 1024 * 1024;
 
+/** Original plus proposed code, measured as JSON UTF-8 bytes by both ends. */
+export const MAX_APPLY_BODY_BYTES = MAX_REVIEW_BODY_BYTES;
+export const SUGGESTION_TOO_LARGE_CODE = 'suggestion-too-large';
+
 /** A 200 from `POST /api/review`, sent only after the document is published. */
 export interface ReviewSubmitAck {
   ok: true;
@@ -51,3 +55,9 @@ export function capabilityAuthorization(capability: string): string {
 export function formatMegabytes(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
 }
+
+/** Admission refuses before starting any engine operation, so retry is safe. */
+export const SERVER_BUSY_ERROR = 'review server busy; retry after pending requests finish';
+
+/** Stable pre-admission refusal; diagnostic wording is not the modern classifier. */
+export const SERVER_BUSY_CODE = 'server-busy';

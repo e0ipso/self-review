@@ -1,77 +1,108 @@
 import React, { useState, useEffect } from 'react';
 import type { Attachment } from '@self-review/types';
 import { useAdapter } from '../../context/ReviewAdapterContext';
+import { useLocalization } from '../../localization/LocalizationContext';
+import { useOptionalSnapshotKey } from '../../context/ReviewContext';
+import { Button } from '../ui/button';
+import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription } from '../ui/dialog';
 import { ImageOff } from 'lucide-react';
+import { readAttachment } from '../../read-service';
 
 export interface AttachmentImageProps {
   attachment: Attachment;
 }
 
 export function AttachmentImage({ attachment }: AttachmentImageProps) {
+  const { t } = useLocalization();
+  const snapshot = useOptionalSnapshotKey();
+  const [retry, setRetry] = useState(0);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const adapter = useAdapter();
 
   useEffect(() => {
     // `active` goes false in cleanup, so a late read creates no blob URL the cleanup would miss.
     let active = true;
+    const controller = new AbortController();
     let url: string | null = null;
     setImageUrl(null);
-    setError(false);
+    setError(null);
 
     const show = (bytes: BlobPart) => {
-      url = URL.createObjectURL(new Blob([bytes]));
+      url = URL.createObjectURL(new Blob([bytes], { type: attachment.mediaType }));
       setImageUrl(url);
     };
 
     if (attachment.data) {
       show(attachment.data);
-    } else if (attachment.fileName && adapter?.readAttachment) {
-      adapter.readAttachment(attachment.fileName).then(
+    } else if (attachment.fileName && (adapter?.reads?.readAttachment || adapter?.readAttachment)) {
+      readAttachment(adapter, attachment.fileName, controller.signal).then(
         buffer => {
           if (!active) return;
           if (buffer) show(buffer);
-          else setError(true);
+          else setError(t('Image not found'));
         },
-        () => {
-          if (active) setError(true);
+        reason => {
+          if (active) setError(reason instanceof Error ? reason.message : t('Image not found'));
         }
       );
+    } else {
+      setError(t('Image not found'));
     }
 
     return () => {
       active = false;
+      controller.abort();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [attachment.data, attachment.fileName, adapter]);
+  }, [attachment.data, attachment.fileName, attachment.mediaType, adapter, snapshot, retry, t]);
 
   if (error) {
     return (
-      <div className='flex items-center gap-1 text-muted-foreground text-sm p-2 border rounded bg-muted'>
+      <div
+        role='alert'
+        className='flex items-center gap-1 text-muted-foreground text-sm p-2 border rounded bg-muted'
+      >
         <ImageOff className='h-4 w-4' />
-        <span>Image not found</span>
+        <span>{error}</span>
+        <Button variant='outline' size='sm' onClick={() => setRetry(value => value + 1)}>
+          {t('Retry')}
+        </Button>
       </div>
     );
   }
 
-  if (!imageUrl) return null;
-
-  const openImageWindow = () => {
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(`<!DOCTYPE html>
-<html><head><title>Attachment</title>
-<style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1a1a1a;}</style>
-</head><body><img src="${imageUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;"/></body></html>`);
-    win.document.close();
-  };
+  if (!imageUrl) return <span role='status'>{t('Loading attachment...')}</span>;
 
   return (
-    <img
-      src={imageUrl}
-      alt='Attachment'
-      className='max-h-48 rounded border cursor-pointer hover:opacity-80'
-      onClick={openImageWindow}
-    />
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          type='button'
+          variant='ghost'
+          className='h-auto p-0'
+          aria-label={t('Enlarge attachment')}
+        >
+          <img
+            src={imageUrl}
+            alt={t('Attachment')}
+            className='max-h-48 rounded border hover:opacity-80'
+            onError={() => setError(t('Image not found'))}
+          />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className='max-w-[90vw] max-h-[90vh] overflow-auto'>
+        <DialogTitle>{t('Attachment')}</DialogTitle>
+        <DialogDescription className='sr-only'>
+          {t('Enlarged attachment preview')}
+        </DialogDescription>
+        <img
+          src={imageUrl}
+          alt={t('Attachment')}
+          className='max-w-full max-h-[75vh] object-contain'
+          onError={() => setError(t('Image not found'))}
+        />
+      </DialogContent>
+    </Dialog>
   );
 }

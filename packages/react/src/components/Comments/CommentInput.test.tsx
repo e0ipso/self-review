@@ -16,8 +16,10 @@ const mocks = vi.hoisted(() => ({
   editComment: vi.fn(),
 }));
 
-vi.mock('../../context/ReviewContext', () => ({
-  useReview: () => ({
+vi.mock('../../context/review-session-hooks', () => ({
+  useOptionalApplySession: () => null,
+  useOptionalSnapshotKey: () => '',
+  useReviewCommands: () => ({
     addComment: mocks.addComment,
     editComment: mocks.editComment,
   }),

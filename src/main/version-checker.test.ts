@@ -34,3 +34,11 @@ describe('compareVersions', () => {
     expect(compareVersions('1.17', '1.17')).toBe(false);
   });
 });
+
+it.each([
+  ['1.0.0', '2.0.0-beta', true],
+  ['1.0.0', '2.0.0+build', true],
+  ['1.0.0', '1.0.1-beta', false],
+])('keeps the legacy comparator result for %s and %s', (current, latest, expected) => {
+  expect(compareVersions(current, latest)).toBe(expected);
+});

@@ -128,9 +128,43 @@ describe('useDragSelection', () => {
     expect(onCommentRange).not.toHaveBeenCalled();
   });
 
+  it.each(['unified', 'split'] as const)('keeps a %s drag in the initiating section', mode => {
+    const section = document.createElement('div');
+    const other = document.createElement('div');
+    const row = document.createElement('div');
+    row.setAttribute('data-line-number', '1');
+    row.setAttribute('data-line-side', 'new');
+    row.setAttribute('data-row-index', '0');
+    other.appendChild(row);
+    const hitTest = vi.fn(() => row);
+    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: hitTest });
+    const { result } = renderHook(() => {
+      const ref = useRef<HTMLDivElement>(section);
+      return useDragSelection({
+        sectionRef: ref,
+        effectiveViewMode: mode,
+        file,
+        filePath: 'src/foo.ts',
+        onCommentRange,
+      });
+    });
+    act(() => {
+      result.current.handleDragStart(mode === 'unified' ? 2 : 3, 'new');
+    });
+    act(() => {
+      document.dispatchEvent(new MouseEvent('mousemove', { clientX: 30, clientY: 200 }));
+    });
+    act(() => {
+      document.dispatchEvent(new MouseEvent('mouseup'));
+    });
+    expect(onCommentRange).toHaveBeenCalledWith(3, 3, 'new');
+    delete (document as unknown as { elementFromPoint?: unknown }).elementFromPoint;
+  });
+
   it('trigger-line-comment event starts a range', () => {
+    const section = document.createElement('div');
     renderHook(() => {
-      const ref = useRef<HTMLDivElement>(null);
+      const ref = useRef<HTMLDivElement>(section);
       return useDragSelection({
         sectionRef: ref,
         effectiveViewMode: 'split',
@@ -141,7 +175,7 @@ describe('useDragSelection', () => {
     });
 
     act(() => {
-      document.dispatchEvent(
+      section.dispatchEvent(
         new CustomEvent('trigger-line-comment', {
           detail: { filePath: 'src/foo.ts', lineNumber: 3, side: 'new' },
         })
@@ -152,8 +186,9 @@ describe('useDragSelection', () => {
   });
 
   it('ignores trigger-line-comment for different file', () => {
+    const section = document.createElement('div');
     renderHook(() => {
-      const ref = useRef<HTMLDivElement>(null);
+      const ref = useRef<HTMLDivElement>(section);
       return useDragSelection({
         sectionRef: ref,
         effectiveViewMode: 'split',
@@ -164,7 +199,7 @@ describe('useDragSelection', () => {
     });
 
     act(() => {
-      document.dispatchEvent(
+      section.dispatchEvent(
         new CustomEvent('trigger-line-comment', {
           detail: { filePath: 'src/other.ts', lineNumber: 3, side: 'new' },
         })

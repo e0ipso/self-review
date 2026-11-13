@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@self-review/react": "^2.0.4",
+    "published-core-2-0-4": "npm:@self-review/core@2.0.4",
     "tsup": "^8.0.0",
     "typescript": "~5.9.0",
     "vite": "^7.3.1",

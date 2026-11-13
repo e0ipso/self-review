@@ -1,15 +1,56 @@
 // Git command execution. Helpers reject rather than exit; front ends report failures.
 
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import type { DiagnosticReporter } from './diagnostics';
+import { isolatedReporter } from './effect-diagnostics';
+import { defaultGitRunner } from './command-runner';
+import { CommandCancelledError, isCommandCancelled } from './forge-provider';
+import type { ForgeCommandRunner } from './forge-provider';
 import {
   generateSyntheticDiffs,
   type SyntheticDiffOptions,
   type SyntheticDiffResult,
 } from './synthetic-diff';
+import { parseGitDiffArgs } from './git-diff-args';
 import { MAX_GIT_DIFF_OUTPUT_BYTES } from './input-budgets';
 
-const execFileAsync = promisify(execFile);
+/** Optional execution effects; existing helper call forms keep their defaults. */
+export interface GitExecutionOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  runner?: ForgeCommandRunner;
+  /** Defaults to stderr for compatibility; strict executeGit itself reports by throwing. */
+  reportDiagnostic?: DiagnosticReporter;
+}
+
+export class GitCommandError extends Error {
+  constructor(
+    readonly args: readonly string[],
+    readonly exitCode: number,
+    readonly stderr: string
+  ) {
+    super(`git ${args.join(' ')} failed: ${stderr.trim() || `exit ${exitCode}`}`);
+    this.name = 'GitCommandError';
+  }
+}
+
+/** A bounded text git command. Nonzero results reject; cancellation stays typed. */
+export async function executeGit(
+  args: string[],
+  cwd?: string,
+  options: GitExecutionOptions = {},
+  maxOutputBytes = 1024 * 1024
+): Promise<string> {
+  if (options.signal?.aborted) throw new CommandCancelledError('aborted', 'git', args);
+  const result = await (options.runner ?? defaultGitRunner)('git', args, {
+    cwd,
+    signal: options.signal,
+    timeoutMs: options.timeoutMs ?? 10_000,
+    maxOutputBytes,
+  });
+  if (options.signal?.aborted) throw new CommandCancelledError('aborted', 'git', args);
+  if (result.exitCode !== 0) throw new GitCommandError(args, result.exitCode, result.stderr);
+  return result.stdout;
+}
 
 /**
  * Strip only the single trailing newline git appends to command output.
@@ -22,19 +63,18 @@ export function stripTrailingNewline(text: string): string {
 }
 
 /** Rejects when git is missing or `cwd` is not inside a repository. */
-export async function getRepoRootAsync(cwd?: string): Promise<string> {
+export async function getRepoRootAsync(
+  cwd?: string,
+  options: GitExecutionOptions = {}
+): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], {
-      timeout: 10000, // 10 second timeout
-      cwd,
-    });
+    const stdout = await executeGit(['rev-parse', '--show-toplevel'], cwd, options);
     return stripTrailingNewline(stdout);
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error getting repository root: ${error.message}`);
-    } else {
-      console.error('Error getting repository root: unknown error');
-    }
+    const knownError = error instanceof Error;
+    isolatedReporter(options.reportDiagnostic)(
+      `Error getting repository root: ${knownError ? error.message : 'unknown error'}`
+    );
     throw error;
   }
 }
@@ -66,8 +106,8 @@ export const PARSER_COMPATIBLE_DIFF_FLAGS: readonly string[] = [
 
 /** Inserts the flags after every user option and before `--`. */
 export function withParserCompatibleDiffArgs(args: readonly string[]): string[] {
-  const separator = args.indexOf('--');
-  if (separator === -1) {
+  const separator = parseGitDiffArgs(args).separatorIndex;
+  if (separator === null) {
     return [...args, ...PARSER_COMPATIBLE_DIFF_FLAGS];
   }
   return [...args.slice(0, separator), ...PARSER_COMPATIBLE_DIFF_FLAGS, ...args.slice(separator)];
@@ -81,31 +121,27 @@ export function withParserCompatibleDiffArgs(args: readonly string[]): string[] 
 export async function runGitDiffAsync(
   args: string[],
   cwd?: string,
-  maxOutputBytes: number = MAX_GIT_DIFF_OUTPUT_BYTES
+  maxOutputBytes: number = MAX_GIT_DIFF_OUTPUT_BYTES,
+  options: GitExecutionOptions = {}
 ): Promise<string> {
   try {
-    const { stdout } = await execFileAsync(
-      'git',
+    return await executeGit(
       [...PARSER_COMPATIBLE_GIT_CONFIG, 'diff', ...withParserCompatibleDiffArgs(args)],
-      {
-        maxBuffer: maxOutputBytes,
-        timeout: 30000, // 30 second timeout
-        cwd,
-      }
+      cwd,
+      { ...options, timeoutMs: options.timeoutMs ?? 30_000 },
+      maxOutputBytes
     );
-    return stdout;
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error running git diff: ${error.message}`);
-    } else {
-      console.error('Error running git diff: unknown error');
-    }
+    const knownError = error instanceof Error;
+    isolatedReporter(options.reportDiagnostic)(
+      `Error running git diff: ${knownError ? error.message : 'unknown error'}`
+    );
     throw error;
   }
 }
 
 /**
- * Get list of untracked files (respects .gitignore).
+ * Strict enumeration for loaders (respects .gitignore); failures must reach their diagnostics.
  *
  * Pass the repository root. `git ls-files` reports paths relative to the
  * directory it runs in and lists that subtree only, while `git diff` reports
@@ -117,24 +153,31 @@ export async function runGitDiffAsync(
  * filenames, and it turns off the C-style quoting git otherwise applies to
  * control characters and non-ASCII bytes.
  */
-export async function getUntrackedFilesAsync(repoRoot?: string): Promise<string[]> {
+export async function listUntrackedFilesAsync(
+  repoRoot?: string,
+  options: GitExecutionOptions = {}
+): Promise<string[]> {
+  const stdout = await executeGit(
+    ['ls-files', '--others', '--exclude-standard', '-z'],
+    repoRoot,
+    options,
+    10 * 1024 * 1024
+  );
+  return stdout.split('\0').filter(name => name.length > 0);
+}
+
+/** Compatibility helper: callers historically receive [] and a warning on listing failure. */
+export async function getUntrackedFilesAsync(
+  repoRoot?: string,
+  options: GitExecutionOptions = {}
+): Promise<string[]> {
   try {
-    const { stdout } = await execFileAsync(
-      'git',
-      ['ls-files', '--others', '--exclude-standard', '-z'],
-      {
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: 10000,
-        cwd: repoRoot,
-      }
-    );
-    return stdout.split('\0').filter(name => name.length > 0);
+    return await listUntrackedFilesAsync(repoRoot, options);
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Warning: Failed to list untracked files: ${error.message}`);
-    } else {
-      console.error('Warning: Failed to list untracked files: unknown error');
-    }
+    if (isCommandCancelled(error) && error.reason === 'aborted') throw error;
+    isolatedReporter(options.reportDiagnostic)(
+      `Warning: Failed to list untracked files: ${error instanceof Error ? error.message : 'unknown error'}`
+    );
     return [];
   }
 }

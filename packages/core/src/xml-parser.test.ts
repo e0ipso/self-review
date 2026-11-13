@@ -1554,6 +1554,27 @@ ${inner}
   </file>
 </review>`;
 
+    it.each([
+      ['CDATA', '<![CDATA[const label = "&lt;";]]>', 'const label = "&lt;";'],
+      ['mixed text', 'a&amp;<![CDATA[&lt;]]>b&#10;<![CDATA[&amp;]]>', 'a&&lt;b\n&amp;'],
+    ])(
+      'preserves %s in bodies, replies, categories and suggestion code',
+      (_name, encoded, expected) => {
+        const result = parseReviewXmlString(
+          wrap(`<comment new-line-start="1" new-line-end="1">
+        <body>${encoded}</body><category>${encoded}</category>
+        <suggestion><original-code>${encoded}</original-code><proposed-code>${encoded}</proposed-code></suggestion>
+        <reply><body>${encoded}</body></reply>
+      </comment>`)
+        );
+        const [comment] = result.comments;
+        expect(comment.body).toBe(expected);
+        expect(comment.category).toBe(expected);
+        expect(comment.replies?.[0].body).toBe(expected);
+        expect(comment.suggestion).toEqual({ originalCode: expected, proposedCode: expected });
+      }
+    );
+
     it('keeps numeric- and boolean-looking text verbatim (no value coercion, no falsy fallbacks)', () => {
       const result = parseReviewXmlString(
         wrap(`    <comment new-line-start="1" new-line-end="1" author="0" remote-id="007">
@@ -1761,6 +1782,7 @@ x
 
       const [comment] = result.comments;
       expect(comment.suggestion).toBeNull();
+      expect(comment.lineRange).toBeNull();
       expect(comment.body.startsWith('Hmm\n\n_Imported suggestion could not be anchored (')).toBe(
         true
       );
@@ -1838,5 +1860,69 @@ x
         expect(typeof id).toBe('string');
       });
     });
+  });
+});
+
+describe('namespace prefix spelling', () => {
+  it.each(['v1', 'v2', 'v3'])('reads fully prefixed %s documents', version => {
+    const xml = `<sr:review xmlns:sr="urn:self-review:${version}" git-diff-args="--staged" repository="/repo">
+       <sr:file path="x" viewed="true"><sr:comment new-line-start="1" new-line-end="1">
+         <sr:body>body</sr:body><sr:category>note</sr:category>
+         <sr:suggestion><sr:original-code>a</sr:original-code><sr:proposed-code>b</sr:proposed-code></sr:suggestion>
+         <sr:reply author="bot"><sr:body>reply</sr:body></sr:reply>
+       </sr:comment></sr:file></sr:review>`;
+    const parsed = parseReviewXmlString(xml);
+    expect(parsed.viewedFiles).toEqual(['x']);
+    expect(parsed.comments).toHaveLength(1);
+    expect(parsed.comments[0]).toMatchObject({
+      body: 'body',
+      category: 'note',
+      suggestion: { originalCode: 'a', proposedCode: 'b' },
+      replies: [{ body: 'reply', author: 'bot' }],
+    });
+  });
+  it('reads mixed default and prefixed children without dropping feedback', () => {
+    const parsed =
+      parseReviewXmlString(`<review xmlns="urn:self-review:v3" xmlns:sr="urn:self-review:v3">
+       <sr:file path="x"><comment new-line-start="1" new-line-end="1"><sr:body>body</sr:body><category>note</category>
+         <sr:suggestion><original-code>a</original-code><sr:proposed-code>b</sr:proposed-code></sr:suggestion>
+         <reply><sr:body>reply</sr:body></reply>
+       </comment></sr:file></review>`);
+    expect(parsed.comments).toHaveLength(1);
+    expect(parsed.comments[0]).toMatchObject({
+      body: 'body',
+      suggestion: { originalCode: 'a', proposedCode: 'b' },
+      replies: [{ body: 'reply' }],
+    });
+  });
+});
+
+describe('unanchored suggestion fences', () => {
+  it.each([1, 2, 3])('keeps many backtick runs and decodes code once in v%i', version => {
+    const original = '`x'.repeat(150_000) + '&amp;#13;';
+    const proposed = 'é🙂\n' + '`'.repeat(123) + ' end';
+    const xml = `<review xmlns="urn:self-review:v${version}"><file path="a.ts"><comment remote-id="thread"><body>keep body</body><category>task</category><suggestion><original-code>${original}</original-code><proposed-code>${proposed}</proposed-code></suggestion></comment></file></review>`;
+    const parsed = parseReviewXmlString(xml);
+    expect(parsed.comments[0]).toMatchObject({
+      body: [
+        'keep body',
+        '',
+        '_Imported suggestion could not be anchored (suggestion has no line anchor)._',
+        'Original:',
+        '```',
+        '`x'.repeat(150_000) + '&#13;',
+        '```',
+        'Proposed:',
+        '`'.repeat(124),
+        proposed,
+        '`'.repeat(124),
+      ].join('\n'),
+      lineRange: null,
+      suggestion: null,
+      remoteId: 'thread',
+    });
+    expect(parsed.importDiagnostics).toEqual([
+      'a.ts: comment 1 (remote-id thread) anchor suggestion has no line anchor; kept as file-level feedback',
+    ]);
   });
 });

@@ -22,10 +22,14 @@
 // |
 
 import { resolve } from 'path';
+import { isolatedReporter } from './effect-diagnostics';
+import type { LoadGitDiffOptions } from './git-diff-loader';
+import type { BufferedCommandRunner } from './command-runner';
+import { checkLoadingCancelled } from './local-loading-lifetime';
 import type { AppConfig, DiffLoadPayload, ReviewSourceIdentity } from './types';
 import type { ConfigValueOrigin, LoadedConfig } from './config';
 import type { PublishReviewOptions, ReviewOutputTarget } from './review-publisher';
-import type { AttachmentOrigins } from './attachment-origins';
+import type { ResolvedAttachmentLocation, AttachmentOrigins } from './attachment-origins';
 import {
   findWriteCapableGitDiffOptions,
   formatGitDiffArgs,
@@ -33,13 +37,16 @@ import {
   tokenizeGitDiffArgs,
 } from './git-diff-args';
 import { applyStagedUntrackedDefault } from './staged-untracked';
-import { loadGitDiffWithUntracked } from './git-diff-loader';
+import { loadGitReviewSnapshot, type GitSnapshotDependencies } from './loaded-git-review';
+import { admitSyntheticSnapshot, restrictLoadedReview, type LoadedReview } from './loaded-snapshot';
 import { createIgnoreFilter } from './ignore-filter';
 import { scanDirectory, scanFile } from './directory-scanner';
-import { resolveLocalSourceIdentity } from './source-identity';
+import { resolveLocalSourceIdentityAsync } from './source-identity';
+import { nodeScanFsLayer } from './node-scan-fs';
+import type { ScanFsLayer } from './scan-fs';
 import type { StartupSource } from './startup-mode';
 import { parseReviewXml } from './xml-parser';
-import type { ParsedReview } from './xml-parser';
+import type { ParsedReview, ReviewXmlReader } from './xml-parser';
 import { recordResumedAttachments } from './review-handlers';
 import type { ReviewSession } from './review-handlers';
 
@@ -132,6 +139,19 @@ export function resolveStartupDiffArgs(
 export interface LoadedLocalReview {
   payload: DiffLoadPayload;
   identity: ReviewSourceIdentity | null;
+  /** Host-local capture; optional so original injected loaders remain source compatible. */
+  loadedReview?: LoadedReview | null;
+}
+
+/** Local source effects. A supplied scan owns paths, enumeration and bounded reads together. */
+export interface LocalReviewDependencies {
+  scanFs?: ScanFsLayer;
+  gitSnapshot?: GitSnapshotDependencies;
+}
+
+export interface LocalReviewLoadOptions extends LoadGitDiffOptions {
+  /** Binary blob runner belonging to a supplied Git source. */
+  snapshotRunner?: BufferedCommandRunner;
 }
 
 /**
@@ -141,20 +161,30 @@ export interface LoadedLocalReview {
 export async function loadLocalReview(
   source: StartupSource,
   gitDiffArgs: readonly string[],
-  config: AppConfig,
+  config: Pick<AppConfig, 'ignore'>,
   cwd: string,
-  log: (message: string) => void
+  log: (message: string) => void,
+  options: LocalReviewLoadOptions = {},
+  dependencies: LocalReviewDependencies = {}
 ): Promise<LoadedLocalReview> {
+  log = isolatedReporter(log);
+  const checkCancelled = () => checkLoadingCancelled(options.signal);
+  checkCancelled();
   if (source.mode === 'git') {
-    const { files, repository, diagnostics, identity } = await loadGitDiffWithUntracked(
-      [...gitDiffArgs],
-      cwd
-    );
-    for (const diagnostic of diagnostics) log(`Diff diagnostic: ${diagnostic}`);
     const shouldKeep = createIgnoreFilter(config.ignore);
+    const { files, repository, diagnostics, identity, loadedReview } = await loadGitReviewSnapshot(
+      [...gitDiffArgs],
+      cwd,
+      { ...options, shouldKeep },
+      dependencies.gitSnapshot
+    );
+    checkCancelled();
+    for (const diagnostic of diagnostics) log(`Diff diagnostic: ${diagnostic}`);
+    checkCancelled();
+    const keptFiles = files.filter(f => shouldKeep(f.newPath || f.oldPath));
     return {
       payload: {
-        files: files.filter(f => shouldKeep(f.newPath || f.oldPath)),
+        files: keptFiles,
         source: {
           type: 'git',
           // Quoted so the argv is recoverable exactly from the document's git-diff-args.
@@ -164,22 +194,44 @@ export async function loadLocalReview(
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       },
       identity,
+      loadedReview: loadedReview ? restrictLoadedReview(loadedReview, keptFiles) : undefined,
     };
   }
 
   if (source.mode === 'file' || source.mode === 'directory') {
+    const scanFs = dependencies.scanFs ?? nodeScanFsLayer;
+    const scanOptions = {
+      scanFs,
+      budgets: options.budgets,
+      signal: options.signal,
+      reportDiagnostic: log,
+    };
     const scan =
       source.mode === 'file'
-        ? await scanFile(source.sourcePath)
-        : await scanDirectory(source.sourcePath, config.ignore);
+        ? await scanFile(source.sourcePath, scanOptions)
+        : await scanDirectory(source.sourcePath, config.ignore, scanOptions);
+    checkCancelled();
     for (const diagnostic of scan.diagnostics) log(`Diff diagnostic: ${diagnostic}`);
+    checkCancelled();
+    const identity = await resolveLocalSourceIdentityAsync(
+      {
+        type: source.mode,
+        sourcePath: source.sourcePath,
+        invocationCwd: dependencies.scanFs ? cwd : undefined,
+      },
+      scanFs,
+      options.signal
+    );
+    checkCancelled();
+    const loadedReview = admitSyntheticSnapshot(identity, scan.files);
     return {
       payload: {
         files: scan.files,
         source: { type: source.mode, sourcePath: source.sourcePath },
         ...(scan.diagnostics.length > 0 ? { diagnostics: scan.diagnostics } : {}),
       },
-      identity: resolveLocalSourceIdentity({ type: source.mode, sourcePath: source.sourcePath }),
+      identity,
+      loadedReview,
     };
   }
 
@@ -190,13 +242,63 @@ export async function loadLocalReview(
  * Throws `ReviewXmlError` for an unreadable document. Returns it for what the host still needs (the
  * remote head, for drift).
  */
-export function loadResumeDocument(session: ReviewSession, resumePath: string): ParsedReview {
-  const parsed = parseReviewXml(resumePath);
+export interface ResumeDocumentOptions extends ResolvedAttachmentLocation {
+  reader?: ReviewXmlReader;
+  signal?: AbortSignal;
+}
+
+export function loadResumeDocument(
+  session: ReviewSession,
+  resumePath: string,
+  options: ResumeDocumentOptions
+): ParsedReview;
+export function loadResumeDocument(session: ReviewSession, resumePath: string): ParsedReview;
+export function loadResumeDocument(
+  session: ReviewSession,
+  resumePath: string,
+  options: ResumeDocumentOptions | undefined = undefined
+): ParsedReview {
+  options?.signal?.throwIfAborted();
+  let parsed: ParsedReview;
+  try {
+    parsed = parseReviewXml(resumePath, options);
+  } catch (error) {
+    options?.signal?.throwIfAborted();
+    throw error;
+  }
+  return options === undefined
+    ? adoptResumeDocument(session, parsed, resumePath)
+    : adoptResumeDocument(session, parsed, resumePath, options);
+}
+
+/** Adopt an already parsed document, retaining the same attachment provenance as sync loading. */
+export function adoptResumeDocument(
+  session: ReviewSession,
+  parsed: ParsedReview,
+  resumePath: string,
+  options: ResolvedAttachmentLocation & { signal?: AbortSignal }
+): ParsedReview;
+export function adoptResumeDocument(
+  session: ReviewSession,
+  parsed: ParsedReview,
+  resumePath: string
+): ParsedReview;
+export function adoptResumeDocument(
+  session: ReviewSession,
+  parsed: ParsedReview,
+  resumePath: string,
+  options: (ResolvedAttachmentLocation & { signal?: AbortSignal }) | undefined = undefined
+): ParsedReview {
+  options?.signal?.throwIfAborted();
+  const attachments = { attachmentOrigins: session.attachmentOrigins };
+  const attachmentDiagnostics =
+    options === undefined
+      ? recordResumedAttachments(attachments, parsed.comments, resumePath)
+      : recordResumedAttachments(attachments, parsed.comments, resumePath, options);
+  options?.signal?.throwIfAborted();
+  session.attachmentOrigins = attachments.attachmentOrigins;
   session.resumeComments = parsed.comments;
   session.resumeViewedFiles = parsed.viewedFiles;
-  session.resumeImportDiagnostics = [
-    ...parsed.importDiagnostics,
-    ...recordResumedAttachments(session, parsed.comments, resumePath),
-  ];
+  session.resumeImportDiagnostics = [...parsed.importDiagnostics, ...attachmentDiagnostics];
   return parsed;
 }

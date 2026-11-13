@@ -32,7 +32,7 @@ const ToggleGroupContext = React.createContext<VariantProps<typeof toggleGroupIt
 });
 
 interface ToggleGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'defaultValue'> {
-  type?: 'single' | 'multiple';
+  type?: 'single';
   variant?: VariantProps<typeof toggleGroupItemVariants>['variant'];
   size?: VariantProps<typeof toggleGroupItemVariants>['size'];
   value?: string;
@@ -45,7 +45,7 @@ const ToggleGroup = React.forwardRef<HTMLDivElement, ToggleGroupProps>(
   (
     {
       className,
-      type = 'single',
+      type: _type,
       variant,
       size,
       value,
@@ -71,7 +71,7 @@ const ToggleGroup = React.forwardRef<HTMLDivElement, ToggleGroupProps>(
     return (
       <BaseToggleGroup
         ref={ref}
-        multiple={type === 'multiple'}
+        multiple={false}
         value={baseValue}
         defaultValue={baseDefaultValue}
         onValueChange={handleValueChange}

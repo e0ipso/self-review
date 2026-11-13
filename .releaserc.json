@@ -4,11 +4,47 @@
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     "./scripts/release/sync-workspace-versions.mjs",
-    ["@semantic-release/npm", { "npmPublish": false }],
-    ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "packages/types" }],
-    ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "packages/core" }],
-    ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "packages/react" }],
-    ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "packages/serve" }],
+    [
+      "@semantic-release/npm",
+      {
+        "npmPublish": false
+      }
+    ],
+    [
+      "@semantic-release/npm",
+      {
+        "npmPublish": false,
+        "pkgRoot": "packages/types"
+      }
+    ],
+    [
+      "@semantic-release/npm",
+      {
+        "npmPublish": false,
+        "pkgRoot": "packages/config"
+      }
+    ],
+    [
+      "@semantic-release/npm",
+      {
+        "npmPublish": false,
+        "pkgRoot": "packages/core"
+      }
+    ],
+    [
+      "@semantic-release/npm",
+      {
+        "npmPublish": false,
+        "pkgRoot": "packages/react"
+      }
+    ],
+    [
+      "@semantic-release/npm",
+      {
+        "npmPublish": false,
+        "pkgRoot": "packages/serve"
+      }
+    ],
     [
       "@semantic-release/git",
       {
@@ -16,6 +52,7 @@
           "package.json",
           "package-lock.json",
           "packages/types/package.json",
+          "packages/config/package.json",
           "packages/core/package.json",
           "packages/react/package.json",
           "packages/serve/package.json"

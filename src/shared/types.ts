@@ -1,6 +1,12 @@
 // Re-export all types from the canonical source in @self-review/types.
 // This file exists for backward compatibility — all src/ code imports from here.
 export type {
+  ReviewReads,
+  DesktopReadRequest,
+  DesktopReadResult,
+  ContentLoadRefusal,
+  ReviewSaveResult,
+  ApplicationLocale,
   ChangeType,
   DiffLineType,
   DiffLine,
@@ -31,6 +37,7 @@ export type {
   OutputPathInfo,
   ExpandContextRequest,
   ExpandContextResponse,
+  FindInPageAction,
   FindInPageRequest,
   FindInPageResult,
   VersionUpdateInfo,
@@ -58,6 +65,11 @@ export interface AppInfo {
 }
 
 import type {
+  DesktopReadRequest,
+  DesktopReadResult,
+  ContentLoadRefusal,
+  ReviewSaveResult,
+  ApplicationLocale,
   DiffLoadPayload,
   AppConfig,
   OutputPathInfo,
@@ -77,38 +89,70 @@ import type {
   ApplyDestinationOutcome,
 } from '../../packages/types/src/index';
 
+/** Subscriptions have independent, idempotent disposers. Invocations are never replayed.
+ * Writes keep their main-process owner until the final result, without a retryable timeout.
+ */
 export interface ElectronAPI {
+  /** Optional correlated reads. No AbortSignal crosses structured clone. */
+  readContent?: (request: DesktopReadRequest) => Promise<DesktopReadResult>;
+  cancelContentRead?: (requestId: string) => void;
+  onContentRefused?: (callback: (failure: ContentLoadRefusal) => void) => () => void;
   requestDiffData: () => void;
   onDiffLoad: (callback: (payload: DiffLoadPayload) => void) => () => void;
   requestConfig: () => void;
-  onConfigLoad: (callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void) => void;
+  onConfigLoad: (
+    callback: (payload: AppConfig, outputPathInfo?: OutputPathInfo) => void
+  ) => () => void;
   requestResumeData: () => void;
-  onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => void;
+  onResumeLoad: (callback: (payload: ResumeLoadPayload) => void) => () => void;
   onGuideLoad: (callback: (payload: GuideLoadPayload) => void) => () => void;
   submitReview: (state: ReviewState) => void;
   onCloseRequested: (callback: () => void) => () => void;
   saveAndQuit: () => void;
+  /** Optional acknowledged state handoff, never publication. */
+  handoffReview?: (state: ReviewState) => Promise<void>;
+  /** Publish one snapshot. No close until acknowledgeReviewSave receives its receipt. */
+  saveReview?: (state: ReviewState) => Promise<ReviewSaveResult>;
+  getSaveResult?: () => Promise<ReviewSaveResult | null>;
+  acknowledgeReviewSave?: (receipt: string) => void;
+  /** Legacy save failure notification; older peers may omit it. */
+  onSaveFailed?: (callback: () => void) => () => void;
+  getApplicationLocale?: () => Promise<ApplicationLocale>;
   readAttachment: (filePath: string) => Promise<ArrayBuffer | null>;
   discardAndQuit: () => void;
   pickDirectory: () => Promise<string | null>;
   startDirectoryReview: (path: string) => Promise<void>;
   expandContext: (request: ExpandContextRequest) => Promise<ExpandContextResponse | null>;
   changeOutputPath: () => Promise<OutputPathInfo | null>;
-  onOutputPathChanged: (callback: (info: OutputPathInfo) => void) => void;
+  onOutputPathChanged: (callback: (info: OutputPathInfo) => void) => () => void;
   findInPage: (request: FindInPageRequest) => void;
   stopFindInPage: (action: string) => void;
   onFindResult: (callback: (result: FindInPageResult) => void) => () => void;
   requestVersionUpdate: () => void;
-  onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => void;
+  onVersionUpdate: (callback: (info: VersionUpdateInfo) => void) => () => void;
   onShowAbout: (callback: () => void) => () => void;
   getAppInfo: () => Promise<AppInfo>;
   openExternal: (url: string) => Promise<void>;
-  loadFileContent: (filePath: string) => Promise<DiffHunk[]>;
+  loadFileContent: (filePath: string) => Promise<DiffHunk[] | null>;
   loadImage: (filePath: string) => Promise<ImageLoadResult>;
   openRemoteUrl: (url: string) => Promise<RemoteOpenUrlResult>;
   applySuggestion: (request: SuggestionApplyRequest) => Promise<SuggestionApplyOutcome>;
   chooseApplyDestination: () => Promise<ApplyDestinationOutcome>;
 }
+
+// Consumer roles retain the flat public bridge and its original optional methods.
+export type DesktopContentAPI = Pick<
+  ElectronAPI,
+  | 'readContent'
+  | 'cancelContentRead'
+  | 'loadFileContent'
+  | 'loadImage'
+  | 'readAttachment'
+  | 'expandContext'
+>;
+export type DesktopFindAPI = Pick<ElectronAPI, 'findInPage' | 'onFindResult'> & {
+  stopFindInPage: (action: import('../../packages/types/src/index').FindInPageAction) => void;
+};
 
 declare global {
   interface Window {

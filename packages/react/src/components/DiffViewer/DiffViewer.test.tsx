@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import React from 'react';
+import { ReviewDisplayProvider } from '../../context/ReviewDisplayContext';
+import { render as testingRender } from '@testing-library/react';
 import DiffViewer, { COLLAPSE_THRESHOLD } from './DiffViewer';
 import type { DiffFile } from '@self-review/types';
 
@@ -17,12 +19,17 @@ vi.mock('../../context/ReviewContext', () => ({
     diagnostics: mockDiagnostics,
     isLargePayload: mockReview.isLargePayload,
   }),
+  useDiffReview: () => ({
+    diffFiles: mockDiffFiles,
+    diffSource: mockDiffSource,
+    diagnostics: mockDiagnostics,
+    isLargePayload: mockReview.isLargePayload,
+  }),
 }));
 
 vi.mock('../../context/ConfigContext', () => ({
-  useConfig: () => ({
-    config: mockConfig,
-  }),
+  useAppearance: () => mockConfig,
+  usePortalContainer: () => null,
 }));
 
 vi.mock('./FileSection', () => ({
@@ -35,6 +42,18 @@ vi.mock('./FileSection', () => ({
     </div>
   ),
 }));
+
+function render(ui: React.ReactElement) {
+  return testingRender(
+    <ReviewDisplayProvider
+      files={[...mockDiffFiles]}
+      reviewFiles={[]}
+      isLargePayload={mockReview.isLargePayload}
+    >
+      {ui}
+    </ReviewDisplayProvider>
+  );
+}
 
 function makeDiffFile(path: string): DiffFile {
   return {
@@ -95,6 +114,17 @@ describe('DiffViewer', () => {
       sections.forEach(section => {
         expect(section.getAttribute('data-expanded')).toBe('false');
       });
+    });
+
+    it('treats inherited object names as ordinary paths in a large review', () => {
+      mockDiffFiles.length = 0;
+      mockDiffFiles.push(makeDiffFile('__proto__'), makeDiffFile('constructor'));
+      mockReview.isLargePayload = true;
+      const { getAllByTestId } = render(<DiffViewer />);
+      expect(
+        getAllByTestId(/^file-section-/).map(section => section.getAttribute('data-expanded'))
+      ).toEqual(['false', 'false']);
+      mockReview.isLargePayload = false;
     });
 
     it('initializes files as collapsed in large-payload mode whatever the file count', () => {

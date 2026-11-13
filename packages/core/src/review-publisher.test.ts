@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { inspectOutputPath, publishReview, ReviewPublishError } from './review-publisher';
 import type { PublishReviewOptions } from './review-publisher';
 import { nodeFsLayer } from './safe-fs';
+import { nodePublicationFileSystem } from './publication-fs';
 import type { FsLayer } from './safe-fs';
 import type { ReviewComment, ReviewState } from './types';
 
@@ -67,6 +68,32 @@ function withAttachment(bytes: Uint8Array = PNG): ReviewState {
 }
 
 const explicit: PublishReviewOptions = { outputOrigin: 'explicit' };
+
+it.each(['native', 'legacy'] as const)(
+  'allows an inherited dot-prefixed child directory with %s publication',
+  async mode => {
+    const directory = path.join(tmp, '..reviews');
+    fs.mkdirSync(directory);
+    const target = path.join(directory, 'review.xml');
+    const options: PublishReviewOptions = {
+      outputOrigin: 'inherited',
+      baseDir: tmp,
+      fs: mode === 'native' ? nodeFsLayer : { ...nodeFsLayer },
+    };
+    expect(inspectOutputPath(target, options)).toBeNull();
+    await publishReview(review(), target, options);
+    expect(fs.readFileSync(target, 'utf8')).toContain('Looks wrong');
+  }
+);
+
+it('preserves asynchronous publication for the explicitly supplied native filesystem', async () => {
+  const syncWrite = vi.spyOn(nodeFsLayer, 'writeSync');
+  const syncRename = vi.spyOn(nodeFsLayer, 'renameSync');
+  await publishReview(review(), outputPath, { ...explicit, fs: nodeFsLayer });
+  expect(fs.readFileSync(outputPath, 'utf8')).toContain('Looks wrong');
+  expect(syncWrite).not.toHaveBeenCalled();
+  expect(syncRename).not.toHaveBeenCalled();
+});
 
 async function publishError(
   state: ReviewState,
@@ -137,6 +164,53 @@ describe('publishReview', () => {
 
     expect(result).toEqual({ outputPath, assetPaths: [absolute] });
     expect(listDir(tmp)).toEqual([ASSETS, 'review.xml']);
+  });
+
+  it('keeps the committed XML and assets when inspection fails after rename', async () => {
+    let committed = false;
+    const layer: FsLayer = {
+      ...nodeFsLayer,
+      renameSync(from, to) {
+        nodeFsLayer.renameSync(from, to);
+        committed = true;
+      },
+      lstatSync(target) {
+        if (committed) throw errno('EIO');
+        return nodeFsLayer.lstatSync(target);
+      },
+    };
+    const result = await publishReview(withAttachment(), outputPath, { ...explicit, fs: layer });
+    expect(committed).toBe(true);
+    const xml = fs.readFileSync(outputPath, 'utf-8');
+    expect(result.assetPaths).toHaveLength(1);
+    for (const relative of assetPathsIn(xml)) {
+      expect(fs.readFileSync(path.join(tmp, relative))).toEqual(Buffer.from(PNG));
+    }
+  });
+
+  it.each([
+    ['reversed', { side: 'new', start: 9, end: 4 }],
+    ['unsafe', { side: 'new', start: 1, end: Number.MAX_SAFE_INTEGER + 1 }],
+    ['unanchored suggestion', null],
+  ] as const)('rejects %s anchors before staging assets', async (_name, lineRange) => {
+    const state = withAttachment();
+    state.files[0].comments[0].lineRange = lineRange;
+    state.files[0].comments[0].suggestion = { originalCode: 'a', proposedCode: 'b' };
+    const error = await publishError(state, outputPath, explicit);
+    expect(error.code).toBe('validation-failed');
+    expect(error.cause).toMatchObject({ name: 'ReviewXmlError', code: 'invalid-state' });
+    expect(listDir(tmp)).toEqual([]);
+  });
+
+  it('reports malformed nested state as validation failure before reading attachments', async () => {
+    const state = withAttachment();
+    const invalid: unknown = { ...state, files: [{ ...state.files[0], comments: null }] };
+    const error = await publishError(invalid as ReviewState, outputPath, {
+      ...explicit,
+      attachmentOrigins: new Map([['.self-review-assets/a.png', '/missing/a.png']]),
+    });
+    expect(error.code).toBe('validation-failed');
+    expect(listDir(tmp)).toEqual([]);
   });
 
   it('never overwrites an asset the previous document references', async () => {
@@ -452,3 +526,221 @@ describe('inspectOutputPath', () => {
     expect(inspectOutputPath(outputPath, explicit)?.code).toBe('permission-denied');
   });
 });
+
+describe('publication cancellation', () => {
+  it('supports filesystem adapters with inherited methods', async () => {
+    const layer: FsLayer = Object.create(nodeFsLayer);
+    await expect(
+      publishReview(review(), outputPath, {
+        ...explicit,
+        fs: layer,
+        signal: new AbortController().signal,
+      })
+    ).resolves.toMatchObject({ outputPath });
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain('<review');
+  });
+  it('preserves the previous XML and assets when aborted during serialization', async () => {
+    const previous = await publishReview(withAttachment(), outputPath, explicit);
+    const oldXml = fs.readFileSync(outputPath, 'utf8');
+    const oldAssets = previous.assetPaths.map(file => fs.readFileSync(file));
+    const controller = new AbortController();
+    const { validateXML } = await import('xmllint-wasm');
+    vi.mocked(validateXML).mockImplementationOnce(async () => {
+      controller.abort();
+      return { valid: true, errors: [], rawOutput: '', normalized: '' };
+    });
+    await expect(
+      publishReview(withAttachment(), outputPath, { ...explicit, signal: controller.signal })
+    ).rejects.toMatchObject({
+      name: 'ReviewPublishError',
+      code: 'io-error',
+      message: expect.stringContaining('was cancelled before saving'),
+    });
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe(oldXml);
+    expect(previous.assetPaths.map(file => fs.readFileSync(file))).toEqual(oldAssets);
+    expect(listDir(path.join(tmp, ASSETS))).toHaveLength(previous.assetPaths.length);
+  });
+
+  it('checks cancellation at rename and removes staged assets and temporary XML', async () => {
+    const previous = await publishReview(withAttachment(), outputPath, explicit);
+    const oldXml = fs.readFileSync(outputPath, 'utf8');
+    const controller = new AbortController();
+    let syncs = 0;
+    const fsLayer: FsLayer = {
+      ...nodeFsLayer,
+      fsyncSync(fd) {
+        nodeFsLayer.fsyncSync(fd);
+        // The attachment sync is first, the XML temp-file sync is second.
+        if (++syncs === 2) controller.abort();
+      },
+    };
+    await expect(
+      publishReview(withAttachment(), outputPath, {
+        ...explicit,
+        fs: fsLayer,
+        signal: controller.signal,
+      })
+    ).rejects.toMatchObject({
+      name: 'ReviewPublishError',
+      code: 'io-error',
+      message: expect.stringContaining('was cancelled before saving'),
+    });
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe(oldXml);
+    expect(listDir(path.join(tmp, ASSETS))).toEqual(
+      previous.assetPaths.map(file => path.basename(file)).sort()
+    );
+    expect(listDir(tmp)).toEqual([ASSETS, 'review.xml']);
+  });
+
+  it('keeps a committed publication if interruption arrives immediately after rename', async () => {
+    const controller = new AbortController();
+    const fsLayer: FsLayer = {
+      ...nodeFsLayer,
+      renameSync(from, to) {
+        nodeFsLayer.renameSync(from, to);
+        controller.abort();
+      },
+    };
+    const saved = await publishReview(withAttachment(), outputPath, {
+      ...explicit,
+      fs: fsLayer,
+      signal: controller.signal,
+    });
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain('<review');
+    expect(saved.assetPaths).toHaveLength(1);
+    expect(fs.existsSync(saved.assetPaths[0])).toBe(true);
+  });
+
+  it('refuses an already aborted publication before validation or writes', async () => {
+    fs.writeFileSync(outputPath, 'old document');
+    await expect(
+      publishReview(withAttachment(), outputPath, { ...explicit, signal: AbortSignal.abort() })
+    ).rejects.toMatchObject({
+      name: 'ReviewPublishError',
+      code: 'io-error',
+      message: expect.stringContaining('was cancelled before saving'),
+    });
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe('old document');
+    expect(listDir(tmp)).toEqual(['review.xml']);
+  });
+});
+
+it('uses asynchronous native handles through wrapped explicit publication roles', async () => {
+  const syncWrite = vi.spyOn(nodeFsLayer, 'writeSync').mockImplementation(() => {
+    throw new Error('blocking write');
+  });
+  const open = vi.fn(nodePublicationFileSystem.files.open);
+  await publishReview(withAttachment(new Uint8Array(200_000)), outputPath, {
+    outputOrigin: 'explicit',
+    publicationFs: {
+      ...nodePublicationFileSystem,
+      files: { ...nodePublicationFileSystem.files, open },
+    },
+    reportDiagnostic() {
+      throw new Error('presentation failed');
+    },
+  });
+  expect(syncWrite).not.toHaveBeenCalled();
+  expect(open).toHaveBeenCalled();
+  expect(fs.readFileSync(outputPath, 'utf8')).toContain('</review>');
+});
+
+it('isolates validation diagnostics without changing the default message or success', async () => {
+  const { validateXML } = await import('xmllint-wasm');
+  vi.mocked(validateXML).mockRejectedValueOnce(new Error('WASM load failed'));
+  const reportDiagnostic = vi.fn((_message: string) => {
+    throw new Error('reporter failed');
+  });
+  await publishReview(review(), outputPath, { ...explicit, reportDiagnostic });
+  expect(reportDiagnostic.mock.calls).toEqual([
+    [
+      '[main] XML validation infrastructure failed: WASM load failed - emitting XML without validation',
+    ],
+  ]);
+  expect(fs.readFileSync(outputPath, 'utf8')).toContain('</review>');
+});
+
+it.each(['native', 'legacy'] as const)(
+  'rejects inconsistent comment ownership before %s staging and preserves the prior document',
+  async mode => {
+    const previous = await publishPrevious();
+    const state = withAttachment();
+    state.files[0].comments[0].filePath = 'another.ts';
+    const write = vi.fn(nodeFsLayer.writeSync);
+    const open = vi.fn(nodeFsLayer.openSync);
+    const asyncOpen = vi.fn(nodePublicationFileSystem.files.open);
+    const mkdir = vi.fn(nodeFsLayer.mkdirSync);
+    const asyncMkdir = vi.fn(nodePublicationFileSystem.mkdir);
+    const error = await publishError(state, outputPath, {
+      ...explicit,
+      ...(mode === 'legacy'
+        ? { fs: { ...nodeFsLayer, writeSync: write, openSync: open, mkdirSync: mkdir } }
+        : {
+            publicationFs: {
+              ...nodePublicationFileSystem,
+              files: { ...nodePublicationFileSystem.files, open: asyncOpen },
+              mkdir: asyncMkdir,
+            },
+          }),
+    });
+    expect(error.code).toBe('validation-failed');
+    expect(error.cause).toMatchObject({ name: 'ReviewXmlError', code: 'invalid-state' });
+    expect(write).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    expect(asyncOpen).not.toHaveBeenCalled();
+    expect(mkdir).not.toHaveBeenCalled();
+    expect(asyncMkdir).not.toHaveBeenCalled();
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe(previous.xml);
+    expect(listDir(tmp)).toEqual([ASSETS, 'review.xml']);
+    expect(listDir(path.join(tmp, ASSETS))).toEqual([previous.assetName]);
+    expect(fs.readFileSync(path.join(tmp, ASSETS, previous.assetName))).toEqual(
+      previous.assetBytes
+    );
+  }
+);
+
+it('uses injected schema refusal before touching the last publication or its assets', async () => {
+  await publishReview(withAttachment(), outputPath, explicit);
+  const beforeXml = fs.readFileSync(outputPath);
+  const beforeAssets = listDir(path.join(tmp, ASSETS));
+  const bytes = beforeAssets.map(name => fs.readFileSync(path.join(tmp, ASSETS, name)));
+  const validateSchema = vi.fn(async () => ({ valid: false, errors: ['supplied refusal'] }));
+  await expect(
+    publishReview(withAttachment(), outputPath, { ...explicit, validateSchema })
+  ).rejects.toMatchObject({ code: 'validation-failed', details: ['supplied refusal'] });
+  expect(validateSchema).toHaveBeenCalledOnce();
+  expect(fs.readFileSync(outputPath)).toEqual(beforeXml);
+  expect(listDir(path.join(tmp, ASSETS))).toEqual(beforeAssets);
+  expect(beforeAssets.map(name => fs.readFileSync(path.join(tmp, ASSETS, name)))).toEqual(bytes);
+  expect(listDir(tmp)).toEqual([ASSETS, 'review.xml']);
+});
+
+it.each(['valid', 'infrastructure'] as const)(
+  'uses the supplied %s validator through publication without a default validator retry',
+  async mode => {
+    const { validateXML } = await import('xmllint-wasm');
+    const before = vi.mocked(validateXML).mock.calls.length;
+    const reportDiagnostic = vi.fn();
+    const validateSchema = vi.fn(() => {
+      if (mode === 'infrastructure') throw new Error('supplied infrastructure unavailable');
+      return { valid: true };
+    });
+    const result = await publishReview(withAttachment(), outputPath, {
+      ...explicit,
+      validateSchema,
+      reportDiagnostic,
+    });
+    expect(result.assetPaths).toHaveLength(1);
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain('<attachment path=');
+    expect(validateSchema).toHaveBeenCalledOnce();
+    expect(vi.mocked(validateXML).mock.calls).toHaveLength(before);
+    if (mode === 'infrastructure')
+      expect(reportDiagnostic).toHaveBeenCalledWith(
+        '[main] XML validation infrastructure failed: supplied infrastructure unavailable - emitting XML without validation'
+      );
+    else
+      expect(reportDiagnostic.mock.calls.some(([message]) => message.includes('validation'))).toBe(
+        false
+      );
+  }
+);

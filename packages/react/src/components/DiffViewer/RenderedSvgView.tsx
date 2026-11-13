@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import { useLocalization } from '../../localization/LocalizationContext';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { DiffFile } from '@self-review/types';
 import { svgToDataUri } from '../../utils/svg-data-uri';
 
@@ -15,12 +16,19 @@ function extractSvgContent(file: DiffFile): string {
 }
 
 export default function RenderedSvgView({ file }: RenderedSvgViewProps) {
+  const { t } = useLocalization();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [file]);
   const svgContent = useMemo(() => extractSvgContent(file), [file]);
 
-  if (!svgContent.trim()) {
+  if (!svgContent.trim() || failed) {
     return (
-      <div className='flex justify-center items-center p-8 text-sm text-muted-foreground'>
-        SVG content could not be extracted.
+      <div
+        role='alert'
+        aria-label={t('SVG preview unavailable')}
+        className='flex justify-center items-center p-8 text-sm text-muted-foreground'
+      >
+        {t(failed ? 'Failed to load SVG preview.' : 'SVG content could not be extracted.')}
       </div>
     );
   }
@@ -31,7 +39,8 @@ export default function RenderedSvgView({ file }: RenderedSvgViewProps) {
     <div className='flex justify-center p-4'>
       <img
         src={dataUri}
-        alt={file.newPath ?? file.oldPath ?? 'SVG preview'}
+        alt={file.newPath || file.oldPath || t('SVG preview')}
+        onError={() => setFailed(true)}
         style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
       />
     </div>

@@ -1,6 +1,6 @@
 import React from 'react';
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import type { DiffFile } from '@self-review/types';
 
 import { installBrowserApiStubs } from '../test-helpers';
@@ -22,6 +22,7 @@ import { KeyboardNavigationManager } from './KeyboardNavigationManager';
 import { ConfigProvider } from '../context/ConfigContext';
 import { ReviewProvider } from '../context/ReviewContext';
 import { DiffNavigationProvider } from '../context/DiffNavigationContext';
+import { ReviewShortcutToggle } from './ReviewShortcutToggle';
 
 const file: DiffFile = {
   oldPath: 'src/foo.ts',
@@ -45,7 +46,7 @@ function renderLayout(children: React.ReactNode = null) {
 }
 
 function fileTreePanel(): HTMLElement {
-  const panel = document.getElementById('fileTree');
+  const panel = document.querySelector<HTMLElement>('[id$="-file-tree"]');
   if (!panel) throw new Error('file tree panel not rendered');
   return panel;
 }
@@ -56,13 +57,68 @@ function sidebar(): HTMLElement {
   return el;
 }
 
+it('opens file hints while the file tree navigation toggle retains keyboard focus', () => {
+  renderLayout(<KeyboardNavigationManager />);
+  const toggle = screen.getByTestId('file-tree-toggle');
+  fireEvent.click(toggle);
+  act(() => toggle.focus());
+  const entry = screen.getByTestId('file-tree').querySelector<HTMLElement>('[data-file-path]')!;
+  vi.spyOn(entry, 'getBoundingClientRect').mockReturnValue({
+    top: 10,
+    left: 10,
+    bottom: 30,
+    right: 210,
+    width: 200,
+    height: 20,
+  } as DOMRect);
+  const section = screen.getByTestId('file-section-src/foo.ts');
+  section.scrollIntoView = vi.fn();
+
+  fireEvent.keyDown(toggle, { key: 'g' });
+  expect(toggle.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByTestId('hint-overlay')).toBeTruthy();
+  fireEvent.keyDown(toggle, { key: 'a' });
+  expect(section.scrollIntoView).toHaveBeenCalledOnce();
+  expect(screen.queryByTestId('hint-overlay')).toBeNull();
+});
+
+it('keeps already handled navigation keys with their control', () => {
+  renderLayout(<KeyboardNavigationManager />);
+  const toggle = screen.getByTestId('file-tree-toggle');
+  fireEvent.click(toggle);
+  act(() => toggle.focus());
+  const event = new KeyboardEvent('keydown', { key: 'g', bubbles: true, cancelable: true });
+  event.preventDefault();
+  fireEvent(toggle, event);
+  expect(toggle.getAttribute('aria-expanded')).toBe('false');
+});
+
+it('honors shortcut opt-out while navigation retains focus and resumes on opt-in', () => {
+  renderLayout(
+    <>
+      <KeyboardNavigationManager />
+      <ReviewShortcutToggle />
+    </>
+  );
+  const navigation = screen.getByTestId('file-tree-toggle');
+  const policy = screen.getByRole('button', { name: 'Keyboard shortcuts (f, g, j, k)' });
+  fireEvent.click(navigation);
+  fireEvent.click(policy);
+  act(() => navigation.focus());
+  fireEvent.keyDown(navigation, { key: 'g' });
+  expect(navigation.getAttribute('aria-expanded')).toBe('false');
+  fireEvent.click(policy);
+  fireEvent.keyDown(navigation, { key: 'g' });
+  expect(navigation.getAttribute('aria-expanded')).toBe('true');
+});
+
 describe('Layout file tree collapse', () => {
   it('starts expanded and offers a collapse control', () => {
     renderLayout();
     const toggle = screen.getByTestId('file-tree-toggle');
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(toggle.getAttribute('aria-label')).toBe('Hide file tree');
-    expect(toggle.getAttribute('aria-controls')).toBe('fileTree');
+    expect(toggle.getAttribute('aria-controls')).toBe(fileTreePanel().id);
     expect(fileTreePanel().style.flexGrow).not.toBe('0');
   });
 
@@ -140,7 +196,7 @@ describe('Layout file tree collapse', () => {
 // restored panel.
 describe('expand-file-tree request', () => {
   function requestExpand(): void {
-    document.dispatchEvent(new CustomEvent('expand-file-tree'));
+    document.querySelector('.self-review')!.dispatchEvent(new CustomEvent('expand-file-tree'));
   }
 
   // Runs fn with React's act environment off, so a render React schedules
@@ -197,10 +253,11 @@ describe('expand-file-tree request', () => {
   it('stops listening once Layout unmounts', () => {
     const { unmount } = renderLayout();
     fireEvent.click(screen.getByTestId('file-tree-toggle'));
+    const root = document.querySelector('.self-review')!;
     unmount();
 
     // A listener surviving unmount would reach into a detached panel handle.
-    expect(() => act(requestExpand)).not.toThrow();
+    expect(() => act(() => root.dispatchEvent(new CustomEvent('expand-file-tree')))).not.toThrow();
   });
 
   it('restores the panel when the g shortcut runs for real', () => {
@@ -239,3 +296,49 @@ describe('expand-file-tree request', () => {
     expect(fileTreePanel().style.flexGrow).toBe('0');
   });
 });
+
+// Keep the legacy event tests above for external compositions. First-party navigation uses
+// the scoped operation and must commit panel geometry before collecting any hint rectangle.
+it('acknowledges first-party expansion before measurements without a string event', () => {
+  const view = renderLayout(<KeyboardNavigationManager />);
+  const toggle = screen.getByTestId('file-tree-toggle');
+  fireEvent.click(toggle);
+  const root = view.container.querySelector<HTMLElement>('.self-review')!;
+  const dispatch = vi.spyOn(root, 'dispatchEvent');
+  const entry = screen.getByTestId('file-tree').querySelector<HTMLElement>('[data-file-path]')!;
+  let measured = false;
+  vi.spyOn(entry, 'getBoundingClientRect').mockImplementation(() => {
+    expect(fileTreePanel().style.flexGrow).not.toBe('0');
+    expect(sidebar().hasAttribute('inert')).toBe(false);
+    measured = true;
+    return { top: 10, left: 10, bottom: 30, right: 210, width: 200, height: 20 } as DOMRect;
+  });
+  fireEvent.keyDown(document, { key: 'g' });
+  expect(measured).toBe(true);
+  expect(dispatch.mock.calls.some(([event]) => event.type === 'expand-file-tree')).toBe(false);
+});
+
+it.each(['ltr', 'rtl'] as const)(
+  'keeps typed expansion scoped to the active %s panel',
+  direction => {
+    const a = renderLayout(<KeyboardNavigationManager />);
+    const b = renderLayout(<KeyboardNavigationManager />);
+    a.container.dir = direction;
+    b.container.dir = direction;
+    const first = within(a.container).getByTestId('file-tree-toggle');
+    const second = within(b.container).getByTestId('file-tree-toggle');
+    fireEvent.click(first);
+    fireEvent.click(second);
+    fireEvent.pointerDown(second);
+    fireEvent.keyDown(document, { key: 'g' });
+    expect(first.getAttribute('aria-expanded')).toBe('false');
+    expect(second.getAttribute('aria-expanded')).toBe('true');
+    expect(b.container.querySelector('[inert]')).toBeNull();
+    expect(a.container.querySelector('[inert]')).toBeTruthy();
+    fireEvent.click(second);
+    const input = within(b.container).getByPlaceholderText('Filter files...');
+    act(() => input.focus());
+    fireEvent.keyDown(input, { key: 'g' });
+    expect(second.getAttribute('aria-expanded')).toBe('false');
+  }
+);

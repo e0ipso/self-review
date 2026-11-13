@@ -1,14 +1,16 @@
 import React from 'react';
-import { describe, it, expect } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { DiffFile, DiffLoadPayload, ResumeLoadPayload } from '@self-review/types';
 
 import { installBrowserApiStubs } from '../test-helpers';
 import { ConfigProvider } from '../context/ConfigContext';
-import { ReviewProvider } from '../context/ReviewContext';
+import { ReviewProvider, useReview } from '../context/ReviewContext';
 import { ReviewAdapterProvider } from '../context/ReviewAdapterContext';
 import type { ReviewAdapter } from '../adapter';
 import ImportDiagnosticsBanner from './ImportDiagnosticsBanner';
+
+import { SessionStoreContext, ReviewContext } from '../context/review-context';
 
 installBrowserApiStubs();
 
@@ -76,4 +78,77 @@ describe('ImportDiagnosticsBanner', () => {
     renderBanner();
     await waitFor(() => expect(screen.queryByTestId('import-diagnostics-banner')).toBeNull());
   });
+});
+
+it('subscribes only to diagnostics and resets dismissal on session replacement', () => {
+  let review!: import('../context/ReviewContext').ReviewContextValue;
+  let store!: import('../context/review-session').ReviewSessionStore;
+  function Capture() {
+    review = useReview();
+    store = React.useContext(SessionStoreContext)!;
+    return null;
+  }
+  const commits = vi.fn();
+  render(
+    <ConfigProvider>
+      <ReviewProvider initialFiles={payload.files} initialSource={payload.source}>
+        <Capture />
+        <React.Profiler id='diagnostics' onRender={commits}>
+          <ImportDiagnosticsBanner />
+        </React.Profiler>
+      </ReviewProvider>
+    </ConfigProvider>
+  );
+  act(() =>
+    store.dispatch({
+      type: 'resume',
+      resumed: { comments: [], importDiagnostics: ['First diagnostic'] },
+    })
+  );
+  expect(screen.getByText('First diagnostic')).toBeTruthy();
+  const before = commits.mock.calls.length;
+  act(() => review.addComment('src/a.ts', null, 'body', 'note', null));
+  act(() => review.toggleViewed('src/a.ts'));
+  expect(commits).toHaveBeenCalledTimes(before);
+  fireEvent.click(screen.getByTestId('import-diagnostics-banner-dismiss'));
+  act(() =>
+    store.dispatch({
+      type: 'payload',
+      payload: { ...payload, source: { type: 'directory', sourcePath: '/other' } },
+    })
+  );
+  act(() =>
+    store.dispatch({
+      type: 'resume',
+      resumed: { comments: [], importDiagnostics: ['Replacement diagnostic'] },
+    })
+  );
+  expect(screen.getByText('Replacement diagnostic')).toBeTruthy();
+});
+
+it('keeps context-only legacy diagnostics and replacement behavior', () => {
+  let review!: import('../context/ReviewContext').ReviewContextValue;
+  function Capture() {
+    review = useReview();
+    return null;
+  }
+  const initial = render(
+    <ConfigProvider>
+      <ReviewProvider initialFiles={payload.files}>
+        <Capture />
+      </ReviewProvider>
+    </ConfigProvider>
+  );
+  const value = review;
+  initial.unmount();
+  const tree = (sessionId: number, diagnostic: string) => (
+    <ReviewContext.Provider value={{ ...value, sessionId, importDiagnostics: [diagnostic] }}>
+      <ImportDiagnosticsBanner />
+    </ReviewContext.Provider>
+  );
+  const view = render(tree(1, 'Legacy diagnostic'));
+  expect(screen.getByText('Legacy diagnostic')).toBeTruthy();
+  fireEvent.click(screen.getByTestId('import-diagnostics-banner-dismiss'));
+  view.rerender(tree(2, 'Next diagnostic'));
+  expect(screen.getByText('Next diagnostic')).toBeTruthy();
 });

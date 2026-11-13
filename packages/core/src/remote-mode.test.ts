@@ -21,11 +21,13 @@ import { mapThreadsToReviewComments } from './thread-mapper';
 import type { AppConfig, DiffFile, ReviewComment, ReviewState } from './types';
 import type { LoadedConfig } from './config';
 import { tokenizeGitDiffArgs } from './git-diff-args';
+import { createGitHubProvider } from './github-provider';
 import { createGitLabProvider } from './gitlab-provider';
 import { runFetchComments } from './fetch-comments';
 import { gitSync } from './test-support/git-env';
 import {
   startRemoteSession,
+  defaultRemoteSessionDeps,
   bootstrapRemoteDiff,
   mergeRemoteThreads,
   applyRemoteProvenance,
@@ -212,6 +214,7 @@ describe('startRemoteSession', () => {
     await startRemoteSession(PR_URL, '/cwd', deps, { includeResolved: true });
     expect(provider.fetchThreads).toHaveBeenCalledWith(expect.objectContaining({ number: 42 }), {
       includeResolved: true,
+      reviewedHeadSha: 'bbb222',
     });
   });
 
@@ -332,7 +335,7 @@ describe('bootstrapRemoteDiff', () => {
     const deps = makeDeps();
     const { payload, session } = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps);
 
-    expect(deps.loadDiff).toHaveBeenCalledWith(['aaa111...bbb222'], '/tmp/self-review-clone');
+    expect(deps.loadDiff).toHaveBeenCalledWith(['aaa111...bbb222'], '/tmp/self-review-clone', {});
     expect(payload.source).toEqual({
       type: 'git',
       gitDiffArgs: 'aaa111...bbb222',
@@ -750,6 +753,7 @@ describe('session lifetime', () => {
       expect(options).toEqual({
         signal: controller.signal,
         timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+        gitEnvironment: 'isolated',
       });
     }
   });
@@ -802,6 +806,37 @@ describe('session lifetime', () => {
       name: 'CommandCancelledError',
     });
 
+    expect(fs.existsSync(git.tempDirs[0])).toBe(false);
+  });
+
+  it('passes the session signal into a load that remains pending until cancellation', async () => {
+    const controller = new AbortController();
+    let received: AbortSignal | undefined;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => {
+      entered = resolve;
+    });
+    const git = scriptedGit();
+    const deps = lifetimeDeps(git.runner, {
+      loadDiff: async (_args, _cwd, options) => {
+        received = options?.signal;
+        entered();
+        return new Promise((_resolve, reject) => {
+          controller.signal.addEventListener(
+            'abort',
+            () => reject(new CommandCancelledError('aborted', 'git', ['diff'])),
+            { once: true }
+          );
+        });
+      },
+    });
+    const loading = bootstrapRemoteDiff(PR_URL, '/cwd', [], deps, {
+      signal: controller.signal,
+    }).catch(error => error);
+    await started;
+    controller.abort();
+    expect(await loading).toMatchObject({ name: 'CommandCancelledError', reason: 'aborted' });
+    expect(received).toBe(controller.signal);
     expect(fs.existsSync(git.tempDirs[0])).toBe(false);
   });
 
@@ -1011,5 +1046,179 @@ describe('remote state assembly serializes to valid XML', () => {
     } finally {
       fs.rmSync(outDir, { recursive: true, force: true });
     }
+  });
+});
+
+it('loads a remote diff in its clone despite inherited namespace and object redirection', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-remote-env-'));
+  const foreign = path.join(root, 'foreign');
+  const clone = path.join(root, 'clone');
+  gitSync(['init', '-q', foreign]);
+  gitSync(['init', '-q', clone]);
+  const git = (...args: string[]) => gitSync(['-C', clone, ...args]).trim();
+  git('config', 'user.name', 'Test');
+  git('config', 'user.email', 'test@example.com');
+  fs.writeFileSync(path.join(clone, 'a.txt'), 'before\n');
+  git('add', 'a.txt');
+  git('commit', '-qm', 'before');
+  const base = git('rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(clone, 'a.txt'), 'after\n');
+  git('commit', '-qam', 'after');
+  const head = git('rev-parse', 'HEAD');
+  vi.stubEnv('GIT_DIR', path.join(foreign, '.git'));
+  vi.stubEnv('GIT_NAMESPACE', 'foreign');
+  vi.stubEnv('GIT_OBJECT_DIRECTORY', path.join(foreign, '.git', 'objects'));
+  try {
+    const loaded = await defaultRemoteSessionDeps.loadDiff([`${base}...${head}`], clone);
+    expect(loaded.files.map(file => file.newPath)).toEqual(['a.txt']);
+    expect(loaded.repository).toBe(clone);
+    expect(loaded.identity?.newSide).toEqual({ kind: 'commit', sha: head });
+  } finally {
+    vi.unstubAllEnvs();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+describe('GitHub thread snapshot consistency', () => {
+  const ok = (stdout: string): ForgeCommandResult => ({ stdout, stderr: '', exitCode: 0 });
+  const pinned = 'a'.repeat(40);
+  const pushed = 'b'.repeat(40);
+  it.each([
+    {
+      name: 'stable head with a lagging per-comment commit',
+      before: pinned,
+      after: pinned,
+      active: true,
+    },
+    { name: 'push after materialization', before: pushed, after: pushed, active: false },
+    { name: 'push during comment retrieval', before: pinned, after: pushed, active: false },
+    { name: 'unverifiable head before retrieval', before: null, after: pinned, active: false },
+    { name: 'unverifiable head after retrieval', before: pinned, after: null, active: false },
+  ])('handles $name', async ({ before, after, active }) => {
+    const events: string[] = [];
+    let reads = 0;
+    const runner: ForgeCommandRunner = async (_command, args) => {
+      if (args.includes('baseRefName')) return ok(JSON.stringify({ baseRefName: 'main' }));
+      if (args.includes('headRefOid')) {
+        events.push('head');
+        const sha = reads++ === 0 ? before : after;
+        return sha
+          ? ok(JSON.stringify({ headRefOid: sha }))
+          : { stdout: '', stderr: 'head unavailable', exitCode: 1 };
+      }
+      events.push('comments');
+      return ok(
+        JSON.stringify([
+          [
+            {
+              id: 1,
+              user: { login: 'alice' },
+              body: '```suggestion\nreplacement\n```',
+              path: 'src/a.ts',
+              line: 3,
+              side: 'RIGHT',
+              commit_id: 'old-comment-commit',
+            },
+          ],
+        ])
+      );
+    };
+    const deps = makeDeps({
+      runner,
+      createProvider: (_forge, bound) => createGitHubProvider(bound),
+      materialize: async () => {
+        events.push('materialize');
+        return makeMaterializeResult({ headSha: pinned });
+      },
+      loadDiff: async () => ({
+        files: [makeDiffFile('src/a.ts', ['original'])],
+        repository: '/tmp/clone',
+      }),
+    });
+    const { session } = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps);
+    try {
+      const [comment] = session.fetchedComments;
+      expect(comment.body).toContain('replacement');
+      if (active)
+        expect(comment.suggestion).toMatchObject({
+          originalCode: 'original',
+          proposedCode: 'replacement',
+        });
+      else {
+        expect(comment.suggestion).toBeNull();
+        expect(comment.lineRange).toBeNull();
+      }
+      expect(events).toEqual(['materialize', 'head', 'comments', 'head']);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  it('treats cancellation of the closing head read as fatal under optional thread sync', async () => {
+    let reads = 0;
+    const cleanup = vi.fn(async () => {});
+    const deps = makeDeps({
+      createProvider: (_forge, runner) => createGitHubProvider(runner),
+      materialize: async () => makeMaterializeResult({ headSha: pinned, cleanup }),
+      runner: async (_command, args) => {
+        if (args.includes('baseRefName')) return ok(JSON.stringify({ baseRefName: 'main' }));
+        if (args.includes('headRefOid')) {
+          if (reads++ === 1) throw new CommandCancelledError('aborted', 'gh', args);
+          return ok(JSON.stringify({ headRefOid: pinned }));
+        }
+        return ok('[]');
+      },
+    });
+    await expect(startRemoteSession(PR_URL, '/cwd', deps)).rejects.toBeInstanceOf(
+      CommandCancelledError
+    );
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('remote diagnostic ownership', () => {
+  it('routes bootstrap and diff diagnostics to the supplied reporter', async () => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const reportDiagnostic = vi.fn();
+    const deps = makeDeps({
+      loadDiff: vi.fn(async () => ({
+        files: [],
+        repository: '/repo',
+        diagnostics: ['bounded input'],
+      })),
+    });
+    const started = await bootstrapRemoteDiff(PR_URL, '/cwd', [], deps, { reportDiagnostic });
+    expect(reportDiagnostic.mock.calls).toEqual([
+      ['[remote] Base branch: main'],
+      ['[remote] Diff diagnostic: bounded input'],
+    ]);
+    expect(stderr).not.toHaveBeenCalled();
+    await started.session.cleanup();
+    stderr.mockRestore();
+  });
+
+  it('routes optional thread failure without changing cleanup ownership', async () => {
+    const reportDiagnostic = vi.fn();
+    const provider: ForgeProvider = {
+      forge: 'github',
+      fetchBaseBranch: async () => 'main',
+      fetchThreads: async () => {
+        throw new Error('offline');
+      },
+    };
+    const session = await startRemoteSession(
+      PR_URL,
+      '/cwd',
+      makeDeps({ createProvider: () => provider }),
+      { reportDiagnostic }
+    );
+    expect(reportDiagnostic.mock.calls).toEqual([
+      ['[remote] Base branch: main'],
+      ['[remote] thread sync unavailable — continuing without forge threads: offline'],
+    ]);
+    expect(session.remote.threadSyncAvailable).toBe(false);
+    expect(session.cleanup).not.toHaveBeenCalled();
+    await session.cleanup();
+    expect(session.cleanup).toHaveBeenCalledTimes(1);
   });
 });

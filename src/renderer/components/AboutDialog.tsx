@@ -1,3 +1,4 @@
+import type { ElectronAPI } from '../../shared/types';
 import React, { useState, useEffect } from 'react';
 import {
   AlertDialog,
@@ -7,27 +8,37 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../../packages/react/src/components/ui/alert-dialog';
+import { useDesktopLocalization } from '../useDesktopLocalization';
 import type { AppInfo } from '../../shared/types';
 
 const REPOSITORY_URL = 'https://github.com/e0ipso/self-review';
 
-export default function AboutDialog() {
+type AboutDialogAPI = Pick<ElectronAPI, 'onShowAbout' | 'getAppInfo' | 'openExternal'>;
+
+export default function AboutDialog({ api = window.electronAPI }: { api?: AboutDialogAPI }) {
+  const { t } = useDesktopLocalization();
   const [isOpen, setIsOpen] = useState(false);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onShowAbout(() => setIsOpen(true));
+    const unsubscribe = api.onShowAbout(() => setIsOpen(true));
     return unsubscribe;
-  }, []);
+  }, [api]);
 
   useEffect(() => {
-    window.electronAPI
+    let live = true;
+    api
       .getAppInfo()
-      .then(setAppInfo)
+      .then(info => {
+        if (live) setAppInfo(info);
+      })
       .catch(() => {
         // App info unavailable — the dialog still renders without it.
       });
-  }, []);
+    return () => {
+      live = false;
+    };
+  }, [api]);
 
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
@@ -39,9 +50,13 @@ export default function AboutDialog() {
           <AlertDialogTitle className='text-center'>self-review</AlertDialogTitle>
           <AlertDialogDescription className='text-center pt-2'>
             <span className='block space-y-1 text-sm'>
-              {appInfo && <span className='block'>Version {appInfo.version}</span>}
+              {appInfo && (
+                <span className='block'>
+                  {t('Version {version}', { version: appInfo.version })}
+                </span>
+              )}
               <span className='block text-xs text-muted-foreground'>
-                GitHub-style PR review UI for local git diffs
+                {t('GitHub-style PR review UI for local git diffs')}
               </span>
               <span className='block text-xs text-muted-foreground pt-2'>
                 © 2026 Mateu Aguiló Bosch
@@ -51,7 +66,7 @@ export default function AboutDialog() {
                   href={REPOSITORY_URL}
                   onClick={e => {
                     e.preventDefault();
-                    window.electronAPI.openExternal(REPOSITORY_URL);
+                    api.openExternal(REPOSITORY_URL);
                   }}
                   className='text-blue-600 dark:text-blue-400 hover:underline'
                 >
@@ -61,7 +76,7 @@ export default function AboutDialog() {
             </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogAction onClick={() => setIsOpen(false)}>OK</AlertDialogAction>
+        <AlertDialogAction onClick={() => setIsOpen(false)}>{t('OK')}</AlertDialogAction>
       </AlertDialogContent>
     </AlertDialog>
   );

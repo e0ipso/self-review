@@ -4,9 +4,10 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createReviewSession } from '@self-review/core';
+import { createReviewSession, commitDiffData, ReviewPublishError } from '@self-review/core';
 import type { ReviewSession, ReviewState } from '@self-review/core';
 import { createReviewServer, listenLoopback } from './server';
+import { createReviewOperations } from './review-operations';
 import { completeReviewOnSubmit } from './lifecycle';
 import { encodeReviewStateForWire } from './client/adapter';
 
@@ -15,6 +16,9 @@ let session: ReviewSession;
 let server: ReturnType<typeof createReviewServer>;
 let base: string;
 let outputPath: string;
+let operations: ReturnType<typeof createReviewOperations>;
+let expireDeadline: () => void;
+let cancelDeadline: ReturnType<typeof vi.fn<() => void>>;
 let exit: ReturnType<typeof vi.fn<(code: number) => void>>;
 
 const CAPABILITY = 'test-capability-0123456789abcdefghijklmnopqrstuvwxyz';
@@ -75,26 +79,174 @@ beforeEach(async () => {
     source: { type: 'git', gitDiffArgs: '', repository: tmp },
     files: [],
   };
-  server = createReviewServer({
+  commitDiffData(
     session,
-    output: { path: outputPath, origin: 'explicit' },
-    capability: CAPABILITY,
-  });
+    {
+      source: { type: 'git', gitDiffArgs: '', repository: tmp },
+      files: [
+        {
+          oldPath: 'src/index.ts',
+          newPath: 'src/index.ts',
+          changeType: 'modified',
+          isBinary: false,
+          hunks: [],
+        },
+      ],
+    },
+    {
+      mode: 'git',
+      sourceRoot: tmp,
+      invocationCwd: tmp,
+      gitDiffArgv: [],
+      pathPrefix: '',
+      oldSide: { kind: 'index' },
+      newSide: { kind: 'working-tree' },
+    }
+  );
+  const output = { path: outputPath, origin: 'explicit' as const };
+  operations = createReviewOperations(session, output);
+  server = createReviewServer({ session, output, capability: CAPABILITY, operations });
   // The process exit is injected so the test can observe the code the real
   // program would exit with.
   exit = vi.fn<(code: number) => void>();
-  completeReviewOnSubmit({ server, exit });
+  cancelDeadline = vi.fn<() => void>();
+  completeReviewOnSubmit({
+    server,
+    exit,
+    scheduleDeadline: expire => {
+      expireDeadline = expire;
+      return cancelDeadline;
+    },
+  });
   base = (await listenLoopback(server)).url;
 });
 
 afterEach(() => {
-  if (server.listening) {
-    server.closeAllConnections();
-    server.close();
-  }
+  server.closeAllConnections();
+  server.close();
 });
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe('submission protocol', () => {
+  it('rejects overlapping submissions without starting a second publisher', async () => {
+    const gate = deferred();
+    const publish = operations.publishReview;
+    const publisher = vi.spyOn(operations, 'publishReview').mockImplementationOnce(async state => {
+      await gate.promise;
+      return publish(state);
+    });
+    const first = submit(reviewState());
+    await vi.waitFor(() => expect(publisher).toHaveBeenCalledTimes(1));
+    const secondState = reviewState();
+    secondState.files[0].comments[0].body = 'competing state';
+    const second = await submit(secondState);
+    gate.resolve();
+    const firstResponse = await first;
+    expect(second.status).toBe(409);
+    expect(await second.json()).toEqual({
+      error: 'review submission already in progress or complete',
+    });
+    expect(session.reviewState?.files[0].comments[0].body).toBe('Needs a test.');
+    expect(publisher).toHaveBeenCalledTimes(1);
+    expect(firstResponse.status).toBe(200);
+    expect(fs.readFileSync(outputPath, 'utf8')).not.toContain('competing state');
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledTimes(1));
+  });
+
+  it('reopens admission after an overlapping first publication fails', async () => {
+    fs.writeFileSync(outputPath, 'previous document');
+    const gate = deferred();
+    const publisher = vi.spyOn(operations, 'publishReview').mockImplementationOnce(async () => {
+      await gate.promise;
+      throw new ReviewPublishError('permission-denied', outputPath, 'denied');
+    });
+    const first = submit(reviewState());
+    await vi.waitFor(() => expect(publisher).toHaveBeenCalledTimes(1));
+    const overlap = await submit(reviewState());
+    gate.resolve();
+    const refused = await first;
+    expect(overlap.status).toBe(409);
+    expect(refused.status).toBe(500);
+    expect(fs.readFileSync(outputPath, 'utf8')).toBe('previous document');
+    expect(exit).not.toHaveBeenCalled();
+    expect((await submit(reviewState())).status).toBe(200);
+    expect(publisher).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+  });
+
+  it('refuses publication until the admitted expansion settles', async () => {
+    const gate = deferred();
+    const expansion = vi.spyOn(operations, 'expandContext').mockImplementationOnce(async () => {
+      await gate.promise;
+      return { hunks: [], totalLines: 42 };
+    });
+    const pending = fetch(base + 'api/expand-context', {
+      method: 'POST',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ filePath: 'src/index.ts', contextLines: 3 }),
+    });
+    await vi.waitFor(() => expect(expansion).toHaveBeenCalledTimes(1));
+    const blocked = await submit(reviewState());
+    expect(blocked.status).toBe(409);
+    expect(fs.existsSync(outputPath)).toBe(false);
+    expect(exit).not.toHaveBeenCalled();
+    gate.resolve();
+    const expanded = await pending;
+    expect(await expanded.json()).toEqual({ hunks: [], totalLines: 42 });
+    const saved = await submit(reviewState());
+    expect(await saved.json()).toEqual({ ok: true, outputPath });
+    expect(fs.readFileSync(outputPath, 'utf8')).toContain('Needs a test.');
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(cancelDeadline).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes connections at the shutdown deadline and retains admitted work until it settles', async () => {
+    const gate = deferred();
+    const expansion = vi.spyOn(operations, 'loadImage').mockImplementationOnce(async () => {
+      await gate.promise;
+      return { error: 'unavailable' };
+    });
+    const pending = fetch(base + 'api/image?path=src%2Findex.ts', { headers: AUTH }).catch(
+      error => error
+    );
+    await vi.waitFor(() => expect(expansion).toHaveBeenCalledTimes(1));
+    try {
+      expect((await submit(reviewState())).status).toBe(200);
+      expect(exit).not.toHaveBeenCalled();
+      expireDeadline();
+      expect(exit).not.toHaveBeenCalled();
+      expect(await pending).toBeInstanceOf(Error);
+      expect(server.listening).toBe(false);
+    } finally {
+      gate.resolve();
+    }
+    await vi.waitFor(() => expect(cancelDeadline).toHaveBeenCalledTimes(1));
+    expect(exit).toHaveBeenCalledExactlyOnceWith(0);
+  });
+
+  it.each([
+    { files: [null] },
+    { files: [{ path: 'a', changeType: 'added', viewed: false, comments: null }] },
+    { source: { type: 'invalid' } },
+  ])('rejects malformed nested JSON before storage and permits retry: %j', async changes => {
+    const invalid = await submit({ ...reviewState(), ...changes });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toMatchObject({
+      error: expect.stringContaining('Invalid review state:'),
+    });
+    expect(session.reviewState).toBeNull();
+    expect(fs.existsSync(outputPath)).toBe(false);
+    expect(exit).not.toHaveBeenCalled();
+    expect((await submit(reviewState())).status).toBe(200);
+  });
+
   it('publishes before answering: a 200 means the file is on disk', async () => {
     const res = await submit(reviewState());
 

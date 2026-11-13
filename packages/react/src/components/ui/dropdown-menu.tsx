@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useConfig } from '../../context/ConfigContext';
+import { usePortalContainer } from '../../context/ConfigContext';
 
 const DropdownMenu = MenuPrimitive.Root;
 const DropdownMenuTrigger = MenuPrimitive.Trigger;
@@ -36,7 +36,7 @@ const DropdownMenuSubContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => {
-  const { portalContainer } = useConfig();
+  const portalContainer = usePortalContainer();
   return (
     <MenuPrimitive.Portal container={portalContainer}>
       <MenuPrimitive.Positioner>
@@ -61,7 +61,7 @@ const DropdownMenuContent = React.forwardRef<
     side?: 'top' | 'right' | 'bottom' | 'left';
   }
 >(({ className, sideOffset = 4, side, ...props }, ref) => {
-  const { portalContainer } = useConfig();
+  const portalContainer = usePortalContainer();
   return (
     <MenuPrimitive.Portal container={portalContainer}>
       <MenuPrimitive.Positioner sideOffset={sideOffset} side={side}>

@@ -1,6 +1,17 @@
 import React from 'react';
+import { ReviewDisplayProvider } from '../../context/ReviewDisplayContext';
+function render(ui: React.ReactElement) {
+  return testingRender(ui, {
+    wrapper: ({ children }) => (
+      <ReviewDisplayProvider files={[]} reviewFiles={[]} isLargePayload={false}>
+        {children}
+      </ReviewDisplayProvider>
+    ),
+  });
+}
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, within } from '@testing-library/react';
+import { fireEvent, render as testingRender, within } from '@testing-library/react';
 import type { ReviewComment, Reply } from '@self-review/types';
 import CommentDisplay from './CommentDisplay';
 
@@ -10,7 +21,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../context/ReviewContext', () => ({
-  useReview: () => ({
+  useOptionalApplySession: () => null,
+  useOptionalSnapshotKey: () => '',
+  useReview: () => ({ deleteComment: mocks.deleteComment, deleteReply: mocks.deleteReply }),
+  useReviewCommands: () => ({
     deleteComment: mocks.deleteComment,
     deleteReply: mocks.deleteReply,
   }),
@@ -18,7 +32,8 @@ vi.mock('../../context/ReviewContext', () => ({
 }));
 
 vi.mock('../../context/ConfigContext', () => ({
-  useConfig: () => ({ config: { categories: [] } }),
+  useCategories: () => [],
+  usePortalContainer: () => document.body,
 }));
 
 vi.mock('./CommentInput', () => ({
@@ -73,6 +88,16 @@ describe('CommentDisplay threads', () => {
   beforeEach(() => {
     mocks.deleteComment.mockReset();
     mocks.deleteReply.mockReset();
+  });
+
+  it('keeps unknown signal values from a newer host visible without crashing', () => {
+    const comment = {
+      ...makeComment(),
+      severity: 'future',
+      confidence: 'future',
+    } as unknown as ReviewComment;
+    const { getAllByText } = render(<CommentDisplay comment={comment} />);
+    expect(getAllByText('future')).toHaveLength(2);
   });
 
   it('renders replies as direct children of the thread, in array order', () => {
@@ -160,18 +185,21 @@ describe('CommentDisplay threads', () => {
 
     fireEvent.click(getByTestId('comment-collapse-toggle-c1'));
 
-    expect(queryByTestId('thread-c1')).toBeNull();
-    expect(queryByTestId('reply-r1')).toBeNull();
-    expect(queryByTestId('reply-btn-c1')).toBeNull();
+    expect(queryByTestId('thread-c1')?.closest('[hidden]')).toBeTruthy();
+    expect(queryByTestId('reply-r1')?.closest('[hidden]')).toBeTruthy();
+    expect(queryByTestId('reply-btn-c1')?.closest('[hidden]')).toBeTruthy();
   });
 
-  it('hides the thread on the global toggle-all-comments event', () => {
+  it('hides the thread on the review toggle-all-comments event', () => {
     const { queryByTestId } = render(<CommentDisplay comment={makeComment({ replies })} />);
 
-    fireEvent(document, new CustomEvent('toggle-all-comments', { detail: { collapsed: true } }));
+    fireEvent(
+      document.querySelector('[data-review-display-root]')!,
+      new CustomEvent('toggle-all-comments', { detail: { collapsed: true } })
+    );
 
-    expect(queryByTestId('thread-c1')).toBeNull();
-    expect(queryByTestId('reply-btn-c1')).toBeNull();
+    expect(queryByTestId('thread-c1')?.closest('[hidden]')).toBeTruthy();
+    expect(queryByTestId('reply-btn-c1')?.closest('[hidden]')).toBeTruthy();
   });
 
   it('gives replies no category, severity or confidence badges', () => {

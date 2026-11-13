@@ -1,16 +1,13 @@
+import { useLocalization } from '../../localization/LocalizationContext';
 import React, { useMemo } from 'react';
-import { MessageSquarePlus } from 'lucide-react';
 import type { DiffFile } from '@self-review/types';
-import { useReview } from '../../context/ReviewContext';
-import { useConfig } from '../../context/ConfigContext';
-import HunkHeader from './HunkHeader';
-import SyntaxLine from './SyntaxLine';
+import { RawDiffRow, useRawDragStart } from './RawDiffRow';
+import { useRawDiffAnnotations } from './useRawDiffAnnotations';
+import { HunkSeparator } from './HunkSeparator';
+import { useAppearance } from '../../context/ConfigContext';
+import { planHighlighting } from './highlight-budget';
 import { getLanguageFromPath } from '../../utils/file-type-utils';
-import { extractOriginalCode } from './diff-utils';
 import { InlineCommentSlot } from './InlineCommentSlot';
-import ExpandContextBar from './ExpandContextBar';
-import { getLineBg, getGutterBg } from '../../utils/diff-styles';
-import { createCommentAnchorMatcher } from '../../utils/comment-anchors';
 
 export interface UnifiedViewProps {
   file: DiffFile;
@@ -20,7 +17,7 @@ export interface UnifiedViewProps {
     currentLine: number;
     side: 'old' | 'new';
   } | null;
-  onDragStart: (lineNumber: number, side: 'old' | 'new') => void;
+  onDragStart: (lineNumber: number, side: 'old' | 'new', keyboard?: boolean) => void;
   onCancelComment: () => void;
   onCommentSaved: () => void;
   onExpandContext?: (
@@ -45,94 +42,53 @@ export default function UnifiedView({
   expandLoading,
   totalLines,
 }: UnifiedViewProps) {
-  const { getCommentsForLine } = useReview();
-  const { config } = useConfig();
-  const hasAnchor = useMemo(() => createCommentAnchorMatcher(file), [file]);
+  const { t } = useLocalization();
+  const startDrag = useRawDragStart(onDragStart);
+  const { commentIndex, originalCode, rowOffsets, feedbackAt, getOriginalCodeForComment } =
+    useRawDiffAnnotations(file, commentRange);
+  const highlighting = useMemo(() => planHighlighting(file), [file]);
+  const config = useAppearance();
   const language = getLanguageFromPath(file.newPath || file.oldPath);
-
-  // Pre-compute row offsets per hunk for sequential row indexing
-  const hunkRowOffsets = useMemo(() => {
-    const offsets: number[] = [];
-    let offset = 0;
-    for (const hunk of file.hunks) {
-      offsets.push(offset);
-      offset += hunk.lines.length;
-    }
-    return offsets;
-  }, [file]);
 
   const filePath = file.newPath || file.oldPath;
 
-  const computeGapBefore = (hunkIndex: number): number | undefined => {
-    if (!isExpandable) return undefined;
-    if (hunkIndex === 0) {
-      const start = Math.max(file.hunks[0].oldStart, file.hunks[0].newStart);
-      return start > 1 ? start - 1 : 0;
-    }
-    const prev = file.hunks[hunkIndex - 1];
-    const curr = file.hunks[hunkIndex];
-    return curr.newStart - (prev.newStart + prev.newLines);
-  };
-
-  // Extract original code for the selected line range (for suggestions)
-  const getOriginalCode = (): string | undefined => {
-    if (!commentRange) return undefined;
-    return extractOriginalCode(file, commentRange);
-  };
-
   return (
     <div className='font-mono text-[13px] leading-[22px] unified-view'>
+      {highlighting.limited && (
+        <p role='status' className='px-3 py-1 text-xs font-sans text-muted-foreground'>
+          {t('Highlighting is limited for this file. All source lines remain available.')}
+        </p>
+      )}
       {file.hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex}>
-          {isExpandable &&
-            onExpandContext &&
-            hunkIndex === 0 &&
-            (file.hunks[0].oldStart > 1 || file.hunks[0].newStart > 1) && (
-              <ExpandContextBar
-                position='top'
-                hunkIndex={0}
-                gapSize={computeGapBefore(0)}
-                onExpand={onExpandContext}
-                loading={expandLoading}
-              />
-            )}
-          {isExpandable && onExpandContext && hunkIndex > 0 && (
-            <ExpandContextBar
-              position='between'
-              hunkIndex={hunkIndex}
-              gapSize={computeGapBefore(hunkIndex)}
-              onExpand={onExpandContext}
-              loading={expandLoading}
-            />
-          )}
-          <HunkHeader header={hunk.header} />
+          <HunkSeparator
+            hunks={file.hunks}
+            hunkIndex={hunkIndex}
+            isExpandable={isExpandable}
+            onExpandContext={onExpandContext}
+            expandLoading={expandLoading}
+            totalLines={totalLines}
+          />
           {hunk.lines.map((line, lineIndex) => {
-            const rowIndex = hunkRowOffsets[hunkIndex] + lineIndex;
+            const rowIndex = rowOffsets[hunkIndex] + lineIndex;
             const lineNumber = line.type === 'deletion' ? line.oldLineNumber : line.newLineNumber;
             const side: 'old' | 'new' = line.type === 'deletion' ? 'old' : 'new';
-            const comments = lineNumber ? getCommentsForLine(filePath, lineNumber, side) : [];
-            // Context rows carry both old and new coordinates. Saved old-side
-            // comments must remain visible when switching from split view.
-            const oldContextComments =
-              line.type === 'context' && line.oldLineNumber
-                ? getCommentsForLine(filePath, line.oldLineNumber, 'old')
-                : [];
-            const commentsToRender = [...comments, ...oldContextComments].filter(
-              c =>
-                c.lineRange!.end ===
-                  (c.lineRange!.side === 'old' ? line.oldLineNumber : line.newLineNumber) &&
-                hasAnchor(c)
+            const { comments: commentsToRender, showInput: showCommentInputHere } = feedbackAt(
+              line.oldLineNumber,
+              line.newLineNumber,
+              'new'
             );
-            const showCommentInputHere =
-              commentRange && lineNumber === commentRange.end && commentRange.side === side;
-
+            const hasComment =
+              commentIndex.covers(lineNumber, side) ||
+              (line.type === 'context' && commentIndex.covers(line.oldLineNumber, 'old'));
             // Comment range highlight: real line numbers + side
+            const selectedNumber =
+              commentRange?.side === 'old' ? line.oldLineNumber : line.newLineNumber;
             const isInCommentRange =
               commentRange &&
-              commentRange.side === side &&
-              lineNumber !== null &&
-              lineNumber >= commentRange.start &&
-              lineNumber <= commentRange.end;
+              selectedNumber !== null &&
+              selectedNumber >= commentRange.start &&
+              selectedNumber <= commentRange.end;
             // Drag highlight: row indices (side-agnostic for cross-type drag)
             const isInDragRange =
               dragState !== null &&
@@ -142,106 +98,47 @@ export default function UnifiedView({
 
             return (
               <React.Fragment key={`${hunkIndex}-${lineIndex}`}>
-                <div
-                  className={`flex ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : getLineBg(line)} ${comments.length > 0 ? 'shadow-[inset_4px_0_0_0_#d97706] dark:shadow-[inset_4px_0_0_0_#fcd34d]' : ''} ${line.type === 'addition' ? 'diff-line-addition' : ''} ${line.type === 'deletion' ? 'diff-line-deletion' : ''}`}
-                  data-line-number={lineNumber || undefined}
-                  data-line-side={side}
-                  data-line-type={line.type}
-                  data-row-index={rowIndex}
-                >
-                  {/* Old line number */}
-                  <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-old relative`}
-                    data-testid={
-                      line.oldLineNumber ? `old-line-${filePath}-${line.oldLineNumber}` : undefined
-                    }
-                  >
-                    {line.oldLineNumber && (
-                      <button
-                        className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter-old:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
-                        onMouseDown={e => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onDragStart(rowIndex, 'old');
-                        }}
-                        data-testid={`comment-icon-old-${line.oldLineNumber}`}
-                      >
-                        <MessageSquarePlus className='h-4 w-4' />
-                      </button>
-                    )}
-                    <span className='pointer-events-none'>{line.oldLineNumber || ''}</span>
-                  </div>
-                  {/* New line number */}
-                  <div
-                    className={`w-10 flex-shrink-0 text-right pr-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} group/gutter-new relative`}
-                    data-testid={
-                      line.newLineNumber ? `new-line-${filePath}-${line.newLineNumber}` : undefined
-                    }
-                  >
-                    {line.newLineNumber && (
-                      <button
-                        className='absolute left-0 top-1/2 -translate-y-1/2 h-[22px] flex items-center justify-center w-7 opacity-0 group-hover/gutter-new:opacity-100 transition-all cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white rounded-sm'
-                        onMouseDown={e => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onDragStart(rowIndex, 'new');
-                        }}
-                        data-testid={`comment-icon-new-${line.newLineNumber}`}
-                      >
-                        <MessageSquarePlus className='h-4 w-4' />
-                      </button>
-                    )}
-                    <span className='pointer-events-none'>{line.newLineNumber || ''}</span>
-                  </div>
-                  {/* Code content */}
-                  <div
-                    className={`flex-1 px-3 py-0.5 leading-[22px]${config.wordWrap ? '' : ' [overflow-x:overlay]'}`}
-                  >
-                    <SyntaxLine
-                      content={line.content}
-                      language={language}
-                      lineType={line.type}
-                      wordWrap={config.wordWrap}
-                    />
-                  </div>
-                </div>
-
-                <InlineCommentSlot
-                  commentsToRender={commentsToRender}
-                  showCommentInput={!!showCommentInputHere}
-                  commentRange={commentRange}
-                  filePath={file.newPath || file.oldPath}
-                  originalCode={getOriginalCode()}
-                  onCancel={onCancelComment}
-                  onSaved={onCommentSaved}
-                  indentClass='ml-[100px]'
-                  getOriginalCodeForComment={comment =>
-                    comment.lineRange ? extractOriginalCode(file, comment.lineRange) : undefined
-                  }
+                <RawDiffRow
+                  layout='unified'
+                  filePath={filePath}
+                  oldLineNumber={line.oldLineNumber}
+                  newLineNumber={line.newLineNumber}
+                  lineType={line.type}
+                  content={line.content}
+                  language={highlighting.lines.has(line) ? language : 'plaintext'}
+                  wordWrap={config.wordWrap}
+                  isSelected={isSelected}
+                  hasComment={hasComment}
+                  rowIndex={rowIndex}
+                  onDragStart={startDrag}
                 />
+
+                {(commentsToRender.length > 0 || showCommentInputHere) && (
+                  <InlineCommentSlot
+                    commentsToRender={commentsToRender}
+                    showCommentInput={!!showCommentInputHere}
+                    commentRange={commentRange}
+                    filePath={file.newPath || file.oldPath}
+                    originalCode={originalCode}
+                    onCancel={onCancelComment}
+                    onSaved={onCommentSaved}
+                    indentClass='ms-[100px]'
+                    getOriginalCodeForComment={getOriginalCodeForComment}
+                  />
+                )}
               </React.Fragment>
             );
           })}
         </div>
       ))}
-      {isExpandable &&
-        onExpandContext &&
-        (() => {
-          const lastIdx = file.hunks.length - 1;
-          const lastHunk = file.hunks[lastIdx];
-          const lastNewLine = lastHunk.newStart + lastHunk.newLines - 1;
-          const bottomGap = totalLines != null ? totalLines - lastNewLine : undefined;
-          if (bottomGap !== undefined && bottomGap <= 0) return null;
-          return (
-            <ExpandContextBar
-              position='bottom'
-              hunkIndex={lastIdx}
-              gapSize={bottomGap}
-              onExpand={onExpandContext}
-              loading={expandLoading}
-            />
-          );
-        })()}
+      <HunkSeparator
+        hunks={file.hunks}
+        hunkIndex={file.hunks.length}
+        isExpandable={isExpandable}
+        onExpandContext={onExpandContext}
+        expandLoading={expandLoading}
+        totalLines={totalLines}
+      />
     </div>
   );
 }

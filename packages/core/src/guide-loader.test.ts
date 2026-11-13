@@ -51,24 +51,14 @@ describe('deriveGuidePath', () => {
 });
 
 describe('resolveGuidePath', () => {
-  const originalCwd = process.cwd;
-
-  beforeEach(() => {
-    process.cwd = vi.fn().mockReturnValue('/workspace/project');
-  });
-
-  afterEach(() => {
-    process.cwd = originalCwd;
-  });
-
   it('derives from the output path when no guide-file override is set', () => {
     expect(resolveGuidePath('/work/review.xml', {})).toBe('/work/review.guide.xml');
   });
 
   it('uses the guide-file config override, resolved against cwd', () => {
-    expect(resolveGuidePath('/work/review.xml', { guideFile: 'walkthrough.xml' })).toBe(
-      '/workspace/project/walkthrough.xml'
-    );
+    expect(
+      resolveGuidePath('/work/review.xml', { guideFile: 'walkthrough.xml' }, '/workspace/project')
+    ).toBe('/workspace/project/walkthrough.xml');
   });
 
   it('uses an absolute guide-file override as-is', () => {
@@ -157,5 +147,34 @@ describe('loadGuide', () => {
       '/custom/guide.xml',
       MAX_GUIDE_BYTES
     );
+  });
+});
+
+describe('guide host dependencies', () => {
+  it('uses an explicit resolution directory and reports one warning to the caller', async () => {
+    const reportDiagnostic = vi.fn();
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(readFileWithinBudget).mockRejectedValue(fsError('EACCES', 'permission denied'));
+    expect(
+      await loadGuide('/output/review.xml', { guideFile: 'guide.xml' }, [], {
+        cwd: '/host/project',
+        reportDiagnostic,
+      })
+    ).toBeNull();
+    expect(readFileWithinBudget).toHaveBeenCalledWith('/host/project/guide.xml', MAX_GUIDE_BYTES);
+    expect(reportDiagnostic).toHaveBeenCalledExactlyOnceWith(
+      '[guide] Ignoring guide at /host/project/guide.xml: unreadable (EACCES)'
+    );
+    expect(stderr).not.toHaveBeenCalled();
+    stderr.mockRestore();
+  });
+
+  it('keeps a missing guide silent with an injected reporter', async () => {
+    const reportDiagnostic = vi.fn();
+    vi.mocked(readFileWithinBudget).mockRejectedValue(fsError('ENOENT', 'missing'));
+    expect(
+      await loadGuide('/output/review.xml', {}, [], { cwd: '/host', reportDiagnostic })
+    ).toBeNull();
+    expect(reportDiagnostic).not.toHaveBeenCalled();
   });
 });

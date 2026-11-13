@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { reviewElement, reviewElements } from '../utils/review-root';
+import { useReviewShortcutPolicy } from '../context/ReviewShortcutContext';
+import { usePortalContainer } from '../context/ConfigContext';
+import { useFileTreeExpansion } from '../context/FileTreeExpansionContext';
 import { useDiffNavigationContext } from '../context/DiffNavigationContext';
 
 export type HintMode = 'normal' | 'hint-diff' | 'hint-file';
@@ -11,6 +15,12 @@ export interface HintItem {
 
 const HINT_CHARS = 'asdfjklhgqwertuiop'.split('');
 const SCROLL_AMOUNT = 80;
+
+// Semantic actions click their own controls. Keep the old composer IDs discoverable for hosts
+// whose existing custom controls predate the marker; use the same selector for activation.
+const CLICK_HINT_SELECTOR =
+  '[data-comment-gutter], [data-hint-action], [data-testid="cancel-comment-btn"], [data-testid="add-comment-btn"], [data-testid^="category-option-"]';
+const LINE_HINT_SELECTOR = '[data-line-type][data-line-number][data-line-side]';
 
 export function generateLabels(count: number): string[] {
   if (count <= HINT_CHARS.length) return HINT_CHARS.slice(0, count);
@@ -29,19 +39,37 @@ export function isTextInputFocused(): boolean {
   if (!el) return false;
   const tag = el.tagName.toLowerCase();
   if (tag === 'input' || tag === 'textarea') return true;
-  if (el.getAttribute('contenteditable') === 'true') return true;
+  if (el.closest('[contenteditable]:not([contenteditable="false"])')) return true;
   if (el.closest('[class*="md-editor"]') || el.closest('[data-color-mode]')) return true;
   return false;
 }
 
-function scrollDiff(direction: 1 | -1): void {
-  const container = document.querySelector('[data-scroll-container="diff"]');
+// Controls own their keys; app-owned review navigation may keep shared shortcuts while focused.
+function controlBlocksShortcuts(target: EventTarget | null): boolean {
+  const control =
+    target instanceof Element
+      ? target.closest(
+          'input, textarea, select, button, a[href], [role="button"], [role="combobox"], [role="listbox"], [role="slider"], [role="spinbutton"], [role="menu"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="switch"], [role="tab"], [role="textbox"], [contenteditable]:not([contenteditable="false"])'
+        )
+      : null;
+  return !!control && !control.hasAttribute('data-review-navigation');
+}
+
+function scrollDiff(root: HTMLElement | null, direction: 1 | -1): void {
+  const container = reviewElement(root, '[data-scroll-container="diff"]');
   if (container) {
     container.scrollBy({ top: direction * SCROLL_AMOUNT, behavior: 'instant' });
   }
 }
 
 export function useKeyboardNavigation() {
+  const root = usePortalContainer();
+  const policy = useReviewShortcutPolicy();
+  const characterShortcuts = policy?.characterShortcuts ?? true;
+  const shortcutsEnabled = useRef(characterShortcuts);
+  shortcutsEnabled.current = characterShortcuts;
+  const expansion = useFileTreeExpansion();
+  const activeReview = useRef(false);
   const [mode, setMode] = useState<HintMode>('normal');
   const [hints, setHints] = useState<HintItem[]>([]);
   const [inputBuffer, setInputBuffer] = useState('');
@@ -68,19 +96,7 @@ export function useKeyboardNavigation() {
   const activateHint = useCallback(
     (hint: HintItem) => {
       if (modeRef.current === 'hint-diff') {
-        const testId = hint.element.getAttribute('data-testid');
-
-        // Comment form buttons and file-level actions: just click them
-        const hintAction = hint.element.getAttribute('data-hint-action');
-        if (
-          testId === 'cancel-comment-btn' ||
-          testId === 'add-comment-btn' ||
-          testId?.startsWith('category-option-') ||
-          hintAction === 'toggle-viewed' ||
-          hintAction === 'add-file-comment' ||
-          hintAction === 'delete-comment' ||
-          hintAction === 'finish-review'
-        ) {
+        if (hint.element.matches(CLICK_HINT_SELECTOR)) {
           hint.element.click();
           clearHintsRef.current();
           return;
@@ -103,7 +119,7 @@ export function useKeyboardNavigation() {
 
         if (filePath && lineNumber && side) {
           // ComposerCore focuses its own editor on mount; a document-wide focus here would steal it.
-          document.dispatchEvent(
+          hint.element.dispatchEvent(
             new CustomEvent('trigger-line-comment', {
               bubbles: true,
               detail: {
@@ -126,67 +142,101 @@ export function useKeyboardNavigation() {
     [scrollToFile]
   );
 
-  const enterHintMode = useCallback((newMode: 'hint-diff' | 'hint-file') => {
-    let selector: string;
-    if (newMode === 'hint-diff') {
-      selector =
-        '[data-line-type="addition"][data-line-number][data-line-side], [data-line-type="deletion"][data-line-number][data-line-side], [data-testid="cancel-comment-btn"], [data-testid="add-comment-btn"], [data-testid^="category-option-"], [data-hint-action="toggle-viewed"], [data-hint-action="add-file-comment"], [data-hint-action="delete-comment"], [data-hint-action="finish-review"]';
-    } else {
-      // A collapsed file tree panel renders every entry at zero width, which
-      // the visibility filter below then discards, so hint-file mode would
-      // silently find nothing. Layout owns the collapse state; ask it to
-      // restore the panel before collecting candidates rather than reaching
-      // into its panel handle from here. The panel's expand() only schedules a
-      // render, so Layout's handler flushes it before returning; that flush,
-      // not expand() itself, is what makes the rects below the restored ones.
-      document.dispatchEvent(new CustomEvent('expand-file-tree'));
-      selector =
-        '.file-tree [data-file-path], [data-testid="file-tree"] [data-file-path], button[data-file-path]';
-    }
-
-    const elements = document.querySelectorAll<HTMLElement>(selector);
-    const visible: { element: HTMLElement; rect: DOMRect }[] = [];
-
-    elements.forEach(el => {
-      const rect = el.getBoundingClientRect();
-      if (
-        rect.top >= 0 &&
-        rect.left >= 0 &&
-        rect.bottom <= window.innerHeight &&
-        rect.right <= window.innerWidth &&
-        rect.width > 0 &&
-        rect.height > 0
-      ) {
-        visible.push({ element: el, rect });
+  const enterHintMode = useCallback(
+    (newMode: 'hint-diff' | 'hint-file') => {
+      let selector: string;
+      if (newMode === 'hint-diff') {
+        selector = `${CLICK_HINT_SELECTOR}, ${LINE_HINT_SELECTOR}`;
+      } else {
+        const ready = expansion?.expand();
+        if (ready === false) return;
+        // Old custom layouts can still acknowledge synchronously through their root listener.
+        if (ready === undefined) root?.dispatchEvent(new CustomEvent('expand-file-tree'));
+        selector =
+          '.file-tree [data-file-path], [data-testid="file-tree"] [data-file-path], button[data-file-path]';
       }
-    });
 
-    if (visible.length === 0) return;
+      const elements = reviewElements<HTMLElement>(root, selector);
+      const visible: { element: HTMLElement; rect: DOMRect }[] = [];
 
-    const labels = generateLabels(visible.length);
-    const hintItems: HintItem[] = visible.map((v, i) => ({
-      label: labels[i],
-      element: v.element,
-      rect: v.rect,
-    }));
+      elements.forEach(el => {
+        if (el.hasAttribute('data-line-type') && el.querySelector('[data-comment-gutter]')) return;
+        const rect = el.getBoundingClientRect();
+        if (
+          rect.top >= 0 &&
+          rect.left >= 0 &&
+          rect.bottom <= window.innerHeight &&
+          rect.right <= window.innerWidth &&
+          rect.width > 0 &&
+          rect.height > 0
+        ) {
+          visible.push({ element: el, rect });
+        }
+      });
 
-    setMode(newMode);
-    setHints(hintItems);
-    setInputBuffer('');
-  }, []);
+      if (visible.length === 0) return;
+
+      const labels = generateLabels(visible.length);
+      const hintItems: HintItem[] = visible.map((v, i) => ({
+        label: labels[i],
+        element: v.element,
+        rect: v.rect,
+      }));
+
+      setMode(newMode);
+      setHints(hintItems);
+      setInputBuffer('');
+    },
+    [root, expansion]
+  );
 
   useEffect(() => {
+    if (!root) return;
+    root.setAttribute('data-review-shortcuts', '');
+    const setActive = (active: boolean) => {
+      if (!active && activeReview.current) clearHintsRef.current();
+      activeReview.current = active;
+      root.toggleAttribute('data-review-active', active);
+    };
+    setActive(document.querySelector('[data-review-shortcuts]') === root);
+    const activate = (event: Event) => {
+      setActive(
+        event.target instanceof Element && event.target.closest('[data-review-shortcuts]') === root
+      );
+    };
+    document.addEventListener('pointerdown', activate, true);
+    document.addEventListener('focusin', activate, true);
+    let composing = false;
+    const compositionStart = () => {
+      composing = true;
+      clearHintsRef.current();
+    };
+    const compositionEnd = () => {
+      composing = false;
+    };
     function handleKeyDown(e: KeyboardEvent) {
-      if (isTextInputFocused()) return;
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || composing) return;
+      const target = e.target;
+      if (!document.querySelector('[data-review-active]'))
+        setActive(document.querySelector('[data-review-shortcuts]') === root);
+      if (!activeReview.current || isTextInputFocused()) return;
+      if (target instanceof Element && target !== document.body && !root?.contains(target)) return;
+      const focused = document.activeElement;
+      if (focused && focused !== document.body && !root?.contains(focused)) return;
 
       const currentMode = modeRef.current;
       const currentHints = hintsRef.current;
       const currentBuffer = inputBufferRef.current;
 
+      if (controlBlocksShortcuts(target) || controlBlocksShortcuts(focused)) return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'Escape' && currentMode !== 'normal') {
+        e.preventDefault();
+        clearHintsRef.current();
+        return;
+      }
+      if (!shortcutsEnabled.current) return;
       if (currentMode === 'normal') {
-        // Don't handle single-key shortcuts when Ctrl/Cmd is held
-        if (e.ctrlKey || e.metaKey) return;
-
         switch (e.key) {
           case 'f':
             e.preventDefault();
@@ -198,22 +248,15 @@ export function useKeyboardNavigation() {
             return;
           case 'j':
             e.preventDefault();
-            scrollDiff(1);
+            scrollDiff(root, 1);
             return;
           case 'k':
             e.preventDefault();
-            scrollDiff(-1);
+            scrollDiff(root, -1);
             return;
           default:
             return;
         }
-      }
-
-      // In hint mode
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        clearHintsRef.current();
-        return;
       }
 
       if (/^[a-z0-9]$/i.test(e.key)) {
@@ -239,14 +282,28 @@ export function useKeyboardNavigation() {
     }
 
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [enterHintMode, activateHint]);
+    document.addEventListener('compositionstart', compositionStart);
+    document.addEventListener('compositionend', compositionEnd);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('compositionstart', compositionStart);
+      document.removeEventListener('compositionend', compositionEnd);
+      document.removeEventListener('pointerdown', activate, true);
+      document.removeEventListener('focusin', activate, true);
+      root.removeAttribute('data-review-shortcuts');
+      root.removeAttribute('data-review-active');
+    };
+  }, [enterHintMode, activateHint, root]);
+
+  useEffect(() => {
+    if (!characterShortcuts) clearHints();
+  }, [characterShortcuts, clearHints]);
 
   // Dismiss hints on scroll
   useEffect(() => {
     if (mode === 'normal') return;
 
-    const container = document.querySelector('[data-scroll-container="diff"]');
+    const container = reviewElement(root, '[data-scroll-container="diff"]');
     if (!container) return;
 
     function handleScroll() {
@@ -255,7 +312,7 @@ export function useKeyboardNavigation() {
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [mode]);
+  }, [mode, root]);
 
   return { mode, hints, inputBuffer, clearHints };
 }

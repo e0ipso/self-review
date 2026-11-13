@@ -11,6 +11,7 @@ const Separator = React.forwardRef<
   <SeparatorPrimitive
     ref={ref}
     orientation={orientation}
+    aria-orientation={decorative ? undefined : orientation}
     {...(decorative ? { role: 'none' } : {})}
     className={cn(
       'shrink-0 bg-border',

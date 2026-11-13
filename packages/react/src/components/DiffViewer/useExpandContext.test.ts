@@ -3,12 +3,27 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRef } from 'react';
 import { useExpandContext } from './useExpandContext';
 import type { DiffFile, DiffHunk } from '@self-review/types';
+import type { ReviewAdapter } from '../../adapter';
 
+const ownership = vi.hoisted(() => ({ snapshotId: 1 }));
 const mockExpandFileContext = vi.fn();
 const mockUpdateFileHunks = vi.fn();
+const adapter: ReviewAdapter = {
+  loadDiff: async () => ({ source: { type: 'welcome' }, files: [] }),
+  expandContext: request => mockExpandFileContext(request.filePath, request.contextLines),
+};
+vi.mock('../../context/ReviewAdapterContext', () => ({ useAdapter: () => adapter }));
 
 vi.mock('../../context/ReviewContext', () => ({
   useReview: () => ({
+    expandFileContext: mockExpandFileContext,
+    updateFileHunks: mockUpdateFileHunks,
+    sessionId: 1,
+    snapshotId: ownership.snapshotId,
+  }),
+  useReviewSessionId: () => 1,
+  useReviewSnapshotId: () => ownership.snapshotId,
+  useReviewCommands: () => ({
     expandFileContext: mockExpandFileContext,
     updateFileHunks: mockUpdateFileHunks,
   }),
@@ -43,6 +58,156 @@ function makeFile(hunks: DiffHunk[]): DiffFile {
 describe('useExpandContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    ownership.snapshotId = 1;
+    delete adapter.reads;
+  });
+
+  it('cancels context reads on collapse, ignores late errors and permits a new explicit request', async () => {
+    const signals: AbortSignal[] = [];
+    const finish: Array<(value: null) => void> = [];
+    adapter.reads = {
+      expandContext: vi.fn((_request, signal) => {
+        signals.push(signal);
+        return new Promise<null>(resolve => finish.push(resolve));
+      }),
+    };
+    const file = makeFile([makeHunk(4, 2)]);
+    const { result, rerender, unmount } = renderHook(
+      ({ expanded }) => {
+        const ref = useRef<HTMLDivElement>(null);
+        return useExpandContext({
+          file,
+          filePath: 'src/foo.ts',
+          isExpandable: true,
+          sectionRef: ref,
+          expanded,
+        });
+      },
+      { initialProps: { expanded: true } }
+    );
+    act(() => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    expect(signals[0].aborted).toBe(false);
+    expect(result.current.expandLoading).toBe(true);
+    rerender({ expanded: false });
+    expect(signals[0].aborted).toBe(true);
+    await act(async () => finish[0](null));
+    expect(result.current.expandError).toBe(false);
+    rerender({ expanded: true });
+    act(() => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    expect(signals).toHaveLength(2);
+    unmount();
+    expect(signals[1].aborted).toBe(true);
+  });
+
+  it('drops an expansion answer after unmount', async () => {
+    let resolve!: (value: { hunks: DiffHunk[]; totalLines: number }) => void;
+    mockExpandFileContext.mockReturnValue(
+      new Promise(r => {
+        resolve = r;
+      })
+    );
+    const { result, unmount } = renderHook(() => {
+      const ref = useRef<HTMLDivElement>(null);
+      return useExpandContext({
+        file: makeFile([makeHunk(3, 3)]),
+        filePath: 'src/foo.ts',
+        isExpandable: true,
+        sectionRef: ref,
+      });
+    });
+    act(() => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    unmount();
+    await act(async () => resolve({ hunks: [makeHunk(1, 8)], totalLines: 20 }));
+    expect(mockUpdateFileHunks).not.toHaveBeenCalled();
+  });
+
+  it('refetches cached context when the external snapshot changes', async () => {
+    mockExpandFileContext.mockResolvedValue({ hunks: [makeHunk(1, 12)], totalLines: 30 });
+    const initial = makeFile([makeHunk(4, 2)]);
+    const { result, rerender } = renderHook(
+      ({ file }) => {
+        const ref = useRef<HTMLDivElement>(null);
+        return useExpandContext({
+          file,
+          filePath: 'src/foo.ts',
+          isExpandable: true,
+          sectionRef: ref,
+        });
+      },
+      { initialProps: { file: initial } }
+    );
+    await act(async () => {
+      result.current.handleExpandContext('all', 0, 'top');
+    });
+    await waitFor(() => expect(result.current.expandLoading).toBe(false));
+    ownership.snapshotId++;
+    rerender({ file: makeFile([makeHunk(4, 2)]) });
+    await act(async () => {
+      result.current.handleExpandContext('down', 0, 'bottom');
+    });
+    await waitFor(() => expect(result.current.expandLoading).toBe(false));
+    expect(mockExpandFileContext).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a pending answer from an externally replaced snapshot', async () => {
+    let resolve!: (value: { hunks: DiffHunk[]; totalLines: number }) => void;
+    mockExpandFileContext.mockReturnValue(
+      new Promise(r => {
+        resolve = r;
+      })
+    );
+    const { result, rerender } = renderHook(
+      ({ file }) => {
+        const ref = useRef<HTMLDivElement>(null);
+        return useExpandContext({
+          file,
+          filePath: 'src/foo.ts',
+          isExpandable: true,
+          sectionRef: ref,
+        });
+      },
+      { initialProps: { file: makeFile([makeHunk(4, 2)]) } }
+    );
+    act(() => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    ownership.snapshotId++;
+    rerender({ file: makeFile([makeHunk(4, 2)]) });
+    await act(async () => resolve({ hunks: [makeHunk(1, 12)], totalLines: 30 }));
+    expect(mockUpdateFileHunks).not.toHaveBeenCalled();
+    expect(result.current.totalLines).toBeNull();
+  });
+
+  it('exposes a failed expansion until an explicit retry succeeds', async () => {
+    mockExpandFileContext
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ hunks: [makeHunk(1, 8)], totalLines: 20 });
+    const file = makeFile([makeHunk(4, 2)]);
+    const { result } = renderHook(() => {
+      const ref = useRef<HTMLDivElement>(null);
+      return useExpandContext({
+        file,
+        filePath: 'src/foo.ts',
+        isExpandable: true,
+        sectionRef: ref,
+      });
+    });
+    await act(async () => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    await waitFor(() => expect(result.current.expandError).toBe(true));
+    expect(mockExpandFileContext).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      result.current.handleExpandContext('up', 0, 'top');
+    });
+    await waitFor(() => expect(result.current.expandError).toBe(false));
+    expect(mockExpandFileContext).toHaveBeenCalledTimes(2);
   });
 
   it('starts with expandLoading false and totalLines null', () => {

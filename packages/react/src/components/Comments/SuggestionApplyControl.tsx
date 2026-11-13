@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import { applyRefusalSummary } from '../../localization/apply-refusal';
+import { useLocalization } from '../../localization/LocalizationContext';
+import React, { useState, useLayoutEffect, useRef } from 'react';
 import type { LineRange, Suggestion, SuggestionApplyOutcome } from '@self-review/types';
 import { Check, CircleAlert, FolderOpen, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAdapter } from '../../context/ReviewAdapterContext';
-import { useOptionalReview } from '../../context/ReviewContext';
+import { useApplyOperation } from '../../context/apply-operation';
+import { useOptionalApplySession } from '../../context/ReviewContext';
 
 export interface SuggestionApplyControlProps {
   /** Path of the file the suggestion is anchored in, relative to the review root. */
@@ -30,17 +33,43 @@ export interface SuggestionApplyControlProps {
  * and applies straight after. The host still refuses an attempt made
  * without a destination, so this only saves a wasted click.
  */
-export default function SuggestionApplyControl({
+export default React.memo(function SuggestionApplyControl(props: SuggestionApplyControlProps) {
+  const review = useOptionalApplySession();
+  const key = JSON.stringify([
+    review?.sessionId,
+    review?.snapshotId,
+    props.filePath,
+    props.lineRange,
+    props.suggestion,
+  ]);
+  return <OwnedSuggestionApplyControl key={key} {...props} />;
+});
+
+function OwnedSuggestionApplyControl({
   filePath,
   lineRange,
   suggestion,
 }: SuggestionApplyControlProps) {
+  const { t } = useLocalization();
   const adapter = useAdapter();
-  const review = useOptionalReview();
+  const review = useOptionalApplySession();
   const applySuggestion = adapter?.applySuggestion;
   const chooseApplyDestination = adapter?.chooseApplyDestination;
-  const [outcome, setOutcome] = useState<SuggestionApplyOutcome | null>(null);
-  const [isApplying, setIsApplying] = useState(false);
+  const operation = useApplyOperation(JSON.stringify([filePath, lineRange, suggestion]));
+  const { outcome, pending: isApplying, unknown } = operation.state;
+  const [inspected, setInspected] = useState(false);
+  const setOutcome = (outcome: SuggestionApplyOutcome) =>
+    operation.write({ pending: false, outcome, unknown: false });
+
+  const mounted = useRef(false);
+
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const current = () => mounted.current && (review?.isCurrentSession?.() ?? true);
 
   if (!applySuggestion) return null;
 
@@ -55,12 +84,17 @@ export default function SuggestionApplyControl({
         data-testid='suggestion-apply-unreviewed'
       >
         <CircleAlert className='h-3 w-3 flex-shrink-0' />
-        <span>This file is not in the reviewed diff, so the suggestion cannot be applied.</span>
+        <span>
+          {t('This file is not in the reviewed diff, so the suggestion cannot be applied.')}
+        </span>
       </div>
     );
   }
 
   const applied = outcome?.status === 'applied';
+  const refusalKey =
+    outcome?.status === 'refused' ? applyRefusalSummary(outcome.reason) : undefined;
+  const refusalSummary = refusalKey ? t(refusalKey) : undefined;
 
   // The clone is deleted when the review ends, so the reviewed files are not
   // a destination. Either the session says so up front, or the host said so
@@ -72,34 +106,41 @@ export default function SuggestionApplyControl({
 
   const runApply = async () => {
     try {
-      setOutcome(await applySuggestion({ filePath, lineRange, suggestion }));
-    } catch {
-      // A throw means the host failed to answer, which is a different
-      // thing from the engine refusing. Report it in the same shape, so
-      // the reviewer reads one vocabulary, and leak nothing about why.
-      setOutcome({
-        status: 'refused',
-        filePath,
-        reason: 'host-unavailable',
-        detail: 'The apply request could not be completed.',
-      });
+      if (!current()) return;
+      const result = await applySuggestion({ filePath, lineRange, suggestion });
+      if (review?.isCurrentSession?.() ?? mounted.current) setOutcome(result);
+    } catch (error) {
+      // No answer is evidence of neither refusal nor rollback. The host may have renamed.
+      if (!(review?.isCurrentSession?.() ?? mounted.current)) return;
+      if (error && typeof error === 'object' && 'uncertain' in error && error.uncertain === false) {
+        setOutcome({
+          status: 'refused',
+          filePath,
+          reason: 'request-rejected',
+          detail: t('The host rejected the request before applying the proposal.'),
+        });
+      } else operation.write({ pending: false, outcome: null, unknown: true });
     }
   };
 
   const handleApply = async () => {
-    setIsApplying(true);
+    if (operation.read().pending || operation.read().unknown || !current()) return;
+    operation.write({ ...operation.read(), pending: true });
     try {
       await runApply();
     } finally {
-      setIsApplying(false);
+      if (review?.isCurrentSession?.() ?? mounted.current)
+        operation.write({ ...operation.read(), pending: false });
     }
   };
 
   const handleChooseAndApply = async () => {
     if (!chooseApplyDestination) return;
-    setIsApplying(true);
+    if (operation.read().pending || operation.read().unknown || !current()) return;
+    operation.write({ ...operation.read(), pending: true });
     try {
       const chosen = await chooseApplyDestination();
+      if (!current()) return;
       if (chosen.status === 'cancelled') return;
       if (chosen.status === 'rejected') {
         setOutcome({
@@ -113,14 +154,16 @@ export default function SuggestionApplyControl({
       review?.setApplyDestination(chosen.destinationRoot);
       await runApply();
     } catch {
+      if (!current()) return;
       setOutcome({
         status: 'refused',
         filePath,
         reason: 'host-unavailable',
-        detail: 'The destination could not be chosen.',
+        detail: t('The destination could not be chosen.'),
       });
     } finally {
-      setIsApplying(false);
+      if (review?.isCurrentSession?.() ?? mounted.current)
+        operation.write({ ...operation.read(), pending: false });
     }
   };
 
@@ -129,7 +172,34 @@ export default function SuggestionApplyControl({
       className='flex items-center justify-between gap-3 px-3 py-1.5 border-t border-border bg-muted/40 font-sans text-[11px]'
       data-testid='suggestion-apply'
     >
-      {outcome ? (
+      {unknown ? (
+        <div role='status' data-testid='suggestion-apply-outcome' data-status='unknown'>
+          <p>
+            {t(
+              'The apply outcome is unknown. Inspect the destination file before allowing another attempt. Nothing is retried automatically.'
+            )}
+          </p>
+          <label>
+            <input
+              type='checkbox'
+              checked={inspected}
+              onChange={event => setInspected(event.target.checked)}
+            />
+            {t('I inspected the destination file and confirmed this proposal was not applied.')}
+          </label>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={!inspected}
+            onClick={() => {
+              operation.write({ pending: false, outcome: null, unknown: false });
+              setInspected(false);
+            }}
+          >
+            {t('Allow a separate retry')}
+          </Button>
+        </div>
+      ) : outcome ? (
         <span
           className={`flex items-start gap-1.5 ${
             applied
@@ -148,21 +218,27 @@ export default function SuggestionApplyControl({
           )}
           {outcome.status === 'applied' ? (
             <span>
-              Applied to {outcome.filePath}. Replaced {outcome.replacedLines} line
-              {outcome.replacedLines === 1 ? '' : 's'}.
+              {t('Applied suggestion', { path: outcome.filePath, count: outcome.replacedLines })}
             </span>
           ) : (
-            <span>Not applied. {outcome.detail}</span>
+            <span>
+              {t('Not applied. {detail}', { detail: outcome.detail })}
+              {refusalSummary && refusalSummary !== outcome.detail && (
+                <span className='block'>{refusalSummary}</span>
+              )}
+            </span>
           )}
         </span>
       ) : (
         <span className='text-muted-foreground'>
           {missingDestination
-            ? 'This pull request was cloned into a temporary directory. Choose where to write it.'
-            : 'Write the proposal into the working file.'}
+            ? t(
+                'This pull request was cloned into a temporary directory. Choose where to write it.'
+              )
+            : t('Write the proposal into the working file.')}
         </span>
       )}
-      {!applied && (
+      {!applied && !unknown && (
         <Button
           variant='outline'
           size='sm'
@@ -173,7 +249,7 @@ export default function SuggestionApplyControl({
         >
           {isApplying && <Loader2 className='h-3 w-3 animate-spin' />}
           {!isApplying && askFirst && <FolderOpen className='h-3 w-3' />}
-          {isApplying ? 'Applying…' : askFirst ? 'Choose destination…' : 'Apply'}
+          {t(isApplying ? 'Applying…' : askFirst ? 'Choose destination…' : 'Apply')}
         </Button>
       )}
     </div>

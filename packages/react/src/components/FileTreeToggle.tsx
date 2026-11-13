@@ -29,6 +29,7 @@ export default function FileTreeToggle({ collapsed, controls, onToggle }: FileTr
           size='icon'
           className='h-7 w-7 rounded-full shadow-md text-muted-foreground hover:text-foreground'
           data-testid='file-tree-toggle'
+          data-review-navigation=''
           aria-expanded={!collapsed}
           aria-controls={controls}
           aria-label={label}
