@@ -202,6 +202,15 @@ export interface ApiRoute {
   handle: RouteHandler;
 }
 
+function createJsonReadRoute(read: () => unknown): ApiRoute {
+  return {
+    kind: 'expensive-read',
+    handle: async ({ res, signal }) => {
+      await sendLargeJson(res, read(), { signal });
+    },
+  };
+}
+
 /** Composition is the only place with access to the full operation bundle. */
 export function createBoundApiRoutes(
   operations: ReviewOperations,
@@ -224,30 +233,12 @@ export function createBoundApiRoutes(
   processing: JsonBodyProcessing = defaultJsonBodyProcessing
 ): Record<string, ApiRoute> {
   // Keep operation replacement observable for hosts using the existing injected test seam.
-  const getDiffLoad = () => operations.getDiffLoad();
-  const getConfigLoad = () => operations.getConfigLoad();
-  const getResumeLoad = () => operations.getResumeLoad();
   const authorizeReviewedPath: ReviewOperations['authorizeReviewedPath'] = path =>
     operations.authorizeReviewedPath(path);
   return {
-    'GET /api/diff': {
-      kind: 'expensive-read',
-      handle: async ({ res, signal }) => {
-        await sendLargeJson(res, getDiffLoad(), { signal });
-      },
-    },
-    'GET /api/config': {
-      kind: 'expensive-read',
-      handle: async ({ res, signal }) => {
-        await sendLargeJson(res, getConfigLoad(), { signal });
-      },
-    },
-    'GET /api/resume': {
-      kind: 'expensive-read',
-      handle: async ({ res, signal }) => {
-        await sendLargeJson(res, getResumeLoad(), { signal });
-      },
-    },
+    'GET /api/diff': createJsonReadRoute(() => operations.getDiffLoad()),
+    'GET /api/config': createJsonReadRoute(() => operations.getConfigLoad()),
+    'GET /api/resume': createJsonReadRoute(() => operations.getResumeLoad()),
     'GET /api/file': {
       kind: 'expensive-read',
       handle: createFileRoute({
