@@ -218,3 +218,32 @@ Run `/config/hooks/POST_PHASE.md` after each phase (phase commit, blueprint prog
 ### Execution Summary
 - Total Phases: 2
 - Total Tasks: 3
+
+## Execution Summary
+
+**Status**: ✅ Completed Successfully
+**Completed Date**: 2026-11-13
+
+### Results
+
+`.svelte` files are syntax highlighted in the diff view (issue #184). `packages/react/src/components/DiffViewer/svelte-grammar.ts` defines an in-repo Prism grammar extending `markup` (tags with brace-valued, quoted-with-interpolation, shorthand and spread attributes; directive and `svelte:` namespaces; interpolations as JavaScript; one generic rule for every Svelte 4/5 block tag), registered from `SyntaxLine.tsx` via `registerSvelteGrammar()`. Both `getLanguageFromPath` copies map `svelte`. No dependency was added.
+
+Commits on `184--svelte-syntax-highlighting`: `a37e161` (feature, Phase 1), `9d9409b` (webapp e2e, Phase 2), `48c3294` and `36dfd07` (fixes found during self-validation, below).
+
+Evidence: renderer unit suite 944/944; main 606/606; serve 652/652; core all passing except the pre-existing flaky test noted below; webapp e2e 76/76 including "Svelte syntax highlighting › Svelte component diff is syntax highlighted"; `lint`, `format:check` and all five `typecheck*` scripts exit 0; `git diff 5faa79b -- package.json packages/*/package.json package-lock.json` is empty; the packaged Electron renderer bundle (`npm run package`) contains the grammar; self-review-serve built from this checkout, run against a disposable repository with a modified `.svelte` file, renders tags, attributes, directives, interpolations and block keywords in theme colors in light and dark, with every token inline.
+
+### Noteworthy Events
+
+- **Code review gate:** `{"kind":"skipped","reason":"review-disabled","detail":"Code review is disabled. Set code_review.enabled to true in config/config.yaml or select Enable code review in Customize to opt in.","action":"continue","codeReview":"Skipped; Code review is disabled. Set code_review.enabled to true in config/config.yaml or select Enable code review in Customize to opt in."}`. No findings to act on or ignore.
+- **Self-validation bug 1 (fixed, `48c3294`):** Prism renders a token's type as a CSS class, and the grammar's `block` token matched Tailwind's `.block` utility, so every Svelte block tag rendered `display: block` on its own line. Renamed the token to `svelte-block`; the e2e scenario now asserts every token in the section is inline (verified red against the old grammar, green after).
+- **Self-validation bug 2 (fixed, `36dfd07`):** `@self-review/react` declares only `dist/styles.css` in `sideEffects`, so tsup tree-shook the bare `import './svelte-grammar'`; the built bundle used by self-review-serve and embedding hosts shipped the mapping without the grammar and rendered `.svelte` as plain text. The webapp e2e (Vite dev server) could not catch it. Registration is now an exported function called from `SyntaxLine`. Verified in `packages/react/dist`, the serve client bundle, the Electron renderer bundle, and live serve screenshots.
+- **Test webapp has no Prism theme:** `tests/webapp/styles.css` imports `src/styles.css`, not the Prism theme files, so every language is colorless there. Colour validation was done on the real serve build instead.
+- **Pre-existing flaky core tests:** `packages/core/src/loaded-review-consistency.test.ts` ("descriptor changes during its read", "physical drift during a lazy descriptor read", "working changes between the diff read and load admission") fails intermittently, including on the untouched base commit `5faa79b`, on tmpfs and ext4: the tests rewrite a file with same-size content and expect the change to be detected within one filesystem timestamp tick. `materializer-effects.test.ts` failed once under load and passed 5/5 alone. The pre-commit hook's full unit run tripped on these: `a37e161` and `48c3294` committed with the hook after retries; `9d9409b` and `36dfd07` were committed with `--no-verify` with the user's approval, after `npx commitlint` passed on the message and all other gates were run by hand.
+- Deviations from task specs: task 3 used a new feature file (`14-svelte-highlighting.feature`) and extracted an `escapeRegExp` helper in the steps file; task 2's core test command in the spec was wrong and the package's `test:unit` script was used.
+
+### Necessary follow-ups
+
+- Fix the timestamp race in `packages/core/src/loaded-review-consistency.test.ts` (same-size rewrites within one mtime tick); it blocks the pre-commit hook intermittently on any branch.
+- Consider a serve e2e check that a non-default grammar highlights in the built bundle; the webapp e2e runs on a dev server and cannot catch bundler tree-shaking.
+- Optionally import the Prism theme CSS into `tests/webapp/styles.css` so the test webapp shows real token colours.
+- Suggestion blocks always highlight as TypeScript (`CommentDisplay.tsx`), out of scope here.
