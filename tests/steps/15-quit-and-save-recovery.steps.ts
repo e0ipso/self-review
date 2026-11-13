@@ -1,4 +1,3 @@
-// Native dialogs cannot be driven from the page, so the main-process dialog functions are stubbed through `electronApp.evaluate`.
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
@@ -14,46 +13,13 @@ import {
   waitForAppExit,
 } from './app';
 
-const { Given, When, Then } = createBdd();
-
-interface RecordedMessageBox {
-  type?: string;
-  title?: string;
-  message: string;
-  detail?: string;
-}
+const { When, Then } = createBdd();
 
 const CLOSE_DIALOG_BUTTONS: Record<string, string> = {
   Cancel: 'close-confirm-cancel',
   Discard: 'close-confirm-discard',
   'Save & Quit': 'close-confirm-save',
 };
-
-async function captureMessageBoxes(): Promise<void> {
-  await getElectronApp().evaluate(({ dialog }) => {
-    const g = globalThis as { __srMessageBoxes?: unknown[] };
-    if (g.__srMessageBoxes) return;
-    g.__srMessageBoxes = [];
-    dialog.showMessageBox = (async (...args: unknown[]) => {
-      // Called as showMessageBox(window, options) or showMessageBox(options).
-      const options = args.find(a => a !== null && typeof a === 'object' && 'message' in a);
-      g.__srMessageBoxes!.push(options);
-      return { response: 0, checkboxChecked: false };
-    }) as typeof dialog.showMessageBox;
-  });
-}
-
-async function recordedMessageBoxes(): Promise<RecordedMessageBox[]> {
-  return getElectronApp().evaluate(() => {
-    const g = globalThis as { __srMessageBoxes?: RecordedMessageBox[] };
-    return g.__srMessageBoxes ?? [];
-  });
-}
-
-// Must follow the launch step: the stub lives in the launched main process.
-Given('native message boxes are captured instead of shown', async () => {
-  await captureMessageBoxes();
-});
 
 When('I press the Finish Review button', async () => {
   const page = getPage();
@@ -137,15 +103,11 @@ Then('the app should still be running', async () => {
   expect(await getPage().evaluate(() => document.readyState)).toBe('complete');
 });
 
-Then('a save error dialog should report {string}', async ({}, code: string) => {
-  await expect
-    .poll(async () => (await recordedMessageBoxes()).length, { timeout: 10000 })
-    .toBeGreaterThan(0);
-  const boxes = await recordedMessageBoxes();
-  const last = boxes[boxes.length - 1];
-  expect(last.type).toBe('error');
-  expect(last.detail ?? '').toContain(`Code: ${code}`);
-  expect(last.message.length).toBeGreaterThan(0);
+Then('a save error should report {string}', async ({}, code: string) => {
+  const error = getPage().getByRole('alert');
+  await expect(error).toBeVisible();
+  await expect(error).toContainText(`Code: ${code}`);
+  await expect(error).toContainText('pick another output path');
 });
 
 Then(
