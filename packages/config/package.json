@@ -1,6 +1,6 @@
 {
   "name": "@self-review/config",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Browser-safe configuration defaults and ownership factories for self-review",
   "repository": {
     "type": "git",
