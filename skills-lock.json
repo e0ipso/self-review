@@ -1,82 +1,82 @@
 {
-  "version": 2,
+  "version": 1,
   "skills": {
     "kk-add": {
       "source": "e0ipso/kenkeep",
       "sourceType": "github",
       "skillPath": ".cursor/skills/kk-add/SKILL.md",
-      "computedHash": ""
+      "computedHash": "1935e140b06b36c070b93488899fe0f95ba77b062c012a4b4c1c6e06d4c0d1ba"
     },
     "kk-bootstrap": {
       "source": "e0ipso/kenkeep",
       "sourceType": "github",
       "skillPath": ".cursor/skills/kk-bootstrap/SKILL.md",
-      "computedHash": ""
+      "computedHash": "7fffbd99225cb65d222b0d6a1f50bed9dac8301a3c73fc25500cb4537b98d6a8"
     },
     "kk-curate": {
       "source": "e0ipso/kenkeep",
       "sourceType": "github",
       "skillPath": ".cursor/skills/kk-curate/SKILL.md",
-      "computedHash": ""
+      "computedHash": "53c3218d31a6b5e148d40674f8f4c2ea070848d1bb4af22a3df51f3bba83306b"
     },
     "kk-migrate": {
       "source": "e0ipso/kenkeep",
       "sourceType": "github",
       "skillPath": ".cursor/skills/kk-migrate/SKILL.md",
-      "computedHash": ""
+      "computedHash": "31a6f0c2c373565cb63381f6d106d270dd415d2bad8058c7e85863aef7a6727e"
     },
     "kk-session-extract": {
       "source": "e0ipso/kenkeep",
       "sourceType": "github",
       "skillPath": ".cursor/skills/kk-session-extract/SKILL.md",
-      "computedHash": ""
+      "computedHash": "eec0266ba6d78c60b4f066f2198d657b16aad8bdc54cd3662f89f1ebf84e0d01"
     },
     "st-code-review": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-code-review/SKILL.md",
-      "computedHash": "a52796040e41f7715ea80d41bcce4ab8a5dd42c3b39bb56b2cf443ef246da37c"
+      "computedHash": "a888826df26b64d932952c7bfc3eeaace2b6dddabe685b24f1a542b1a00cd7b0"
     },
     "st-create-plan": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-create-plan/SKILL.md",
-      "computedHash": "a0eaaea62c2046bcde71bf8238bba73d6fcdee85ef7201a34a8075f6a9779f59"
+      "computedHash": "7ea222b7576e5fab9ffe54661d85c1f919cdf67f303e3d5caf14b65b282aacb9"
     },
     "st-execute-blueprint": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-execute-blueprint/SKILL.md",
-      "computedHash": "8f029ab9b8eb9faa13e34fa3934cc0ac0e684fc485b2d6ead6edb2bb65a733bf"
+      "computedHash": "220be781e82ca60ddc7cd935787a4f34a8de726949646498d7ee1c15d4238664"
     },
     "st-execute-task": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-execute-task/SKILL.md",
-      "computedHash": "8effbb9f4f8c88381a07d78ea1502885b4a31fb7bffe0424599817caa8dc215e"
+      "computedHash": "8520979734b6ab682f944bec5656ff3924e40ea60330a5f1f81613eb5a7ceadf"
     },
     "st-full-workflow": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-full-workflow/SKILL.md",
-      "computedHash": "4f3495719ba6ad341eb3e2b26736982461d47933062b9bb1e2d072dd9dac602e"
+      "computedHash": "0988ed20a650c8e03af99a550a04dfc9f787fa6c6f9e6bd187d3488dfc5d4904"
     },
     "st-generate-tasks": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-generate-tasks/SKILL.md",
-      "computedHash": "7d548483e4cbcf6981bb8de378d3eb88a5a1431f5584dd439591a796abd12c67"
+      "computedHash": "4a3357c971c37ec38e2b3b62647343ccd27a5e6804b9a3775117ce99a4f6e34f"
     },
     "st-refine-plan": {
       "source": "e0ipso/strikethroo",
       "sourceType": "github",
       "skillPath": "skills/st-refine-plan/SKILL.md",
-      "computedHash": "317ed4e1af39c4a49240de2245a4be703cdb8a15eb3a82ee924ced5caaeddc99"
+      "computedHash": "9681f5de33640cc8020d7a27fa5f09aac18e503b528e0a860c0bcb7a02bd7431"
     },
     "verification-before-completion": {
       "source": "../sift",
       "sourceType": "local",
-      "computedHash": "09b0e3a4689c1c38a3b8fc6ef57a1d4165aa33c0013d546dbde9dd348941a319"
+      "computedHash": "b529822bdac4b197b180fe12225cff86b930b65910435103c10622df7f041651"
     }
   }
 }
