@@ -23,13 +23,6 @@ it exits non-zero, stop and ask the user to run `npx strikethroo init`.
 
 Treat the path it prints as `<root>` for every subsequent step.
 
-Delegated execution workers skip this step and do not emit update notices.
-
-Run `scripts/check-for-updates.cjs "<root>"` as a separate command using this
-skill's script path. Keep the user's working directory. Read the one JSON line
-on stdout. When `notice` is present, retain its exact text for the final
-user-facing response. Never pause for permission and never run an update.
-
 ### 2. Resolve the plan
 
 Run `scripts/validate-plan-blueprint.cjs <plan-id> planFile` for the plan
@@ -85,11 +78,13 @@ scripts/dispatch-task-execution.cjs resolve <task-file> <current-harness> <works
 External execution uses:
 
 ```text
-scripts/dispatch-task-execution.cjs execute <handoff> <task-file> <current-harness> <workspace> <plan-id> <task-id>
+scripts/dispatch-task-execution.cjs execute <handoff>
 ```
 
-`<current-harness>` is the exact supported harness identifier running this
-skill; `<workspace>` is the project working directory.
+Where:
+
+- `<current-harness>` is the exact supported harness identifier running this skill.
+- `<workspace>` is the project working directory.
 
 Interpret the one-line JSON result and act on its `kind` exactly once:
 
@@ -106,14 +101,13 @@ Interpret the one-line JSON result and act on its `kind` exactly once:
 Handoff rules:
 
 - Pass the exact opaque `handoff` string the resolver returned for that task. Never reconstruct one.
-- Never reuse a handoff for another task, and never rerun resolution after launches begin.
+- Pass only the returned handoff to `execute`; it binds the task revision and configured invocation. Complete orchestrator status changes and assignment-hook edits before resolution. Task drift detected during execution preflight halts dispatch; workers may update status after launch. Never reuse a handoff for another task, and never rerun resolution after launches begin.
 
 Steps 9–11 are this skill's failed-status and error-hook path.
 
 For a native dispatch, deploy an agent using your internal Task tool. The agent
 must read and execute `<root>/config/hooks/PRE_TASK_EXECUTION.md` before any
 implementation work, then read the complete `<task-file>` and implement it.
-Do not run `scripts/check-for-updates.cjs`; delegated workers do not consume update notices.
 
 ### 9. Update status to completed or failed
 
@@ -145,9 +139,13 @@ If any error occurred during execution, read
 Document the error in Noteworthy Events and ensure the task status is set to
 `failed` if it is not already.
 
-When the retained update `notice` is present, append that exact sentence after
-the structured summary block, or after your final response when this skill emits
-no summary block. Nothing may follow the notice.
+Before you write the final response, run `scripts/check-for-updates.cjs "<root>"`
+as a separate command using this skill's script path. Keep the user's working
+directory. Read the one JSON line on stdout.
+Never pause for permission and never run an update.
+When `notice` is present, append its exact text after the structured summary
+block, or after your final response when this skill emits no summary block.
+Nothing may follow the notice.
 
 ## Failure Modes
 
