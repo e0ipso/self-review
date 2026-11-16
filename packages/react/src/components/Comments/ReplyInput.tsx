@@ -100,7 +100,7 @@ export default function ReplyInput({
         </div>
 
         <div className='flex items-center gap-1.5'>
-          <span className='text-[10px] text-muted-foreground/50 me-0.5'>{t('Esc to unfocus')}</span>
+          <span className='text-[10px] text-muted-foreground me-0.5'>{t('Esc to unfocus')}</span>
           <Button
             data-testid='cancel-reply-btn'
             variant='ghost'

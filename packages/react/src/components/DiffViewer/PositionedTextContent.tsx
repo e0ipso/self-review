@@ -199,7 +199,7 @@ function BlockWrapper({
 
   const gutter = (
     <GutterEl
-      className='rendered-gutter absolute start-0 top-0 w-16 text-end pe-2 select-none cursor-pointer text-[11px] text-muted-foreground/70'
+      className='rendered-gutter absolute start-0 top-0 w-16 text-end pe-2 select-none cursor-pointer text-[11px] text-muted-foreground'
       style={{ lineHeight: 'inherit' }}
       onMouseDown={e => {
         e.preventDefault();

@@ -37,9 +37,9 @@ export default function CategorySelector({ value, onChange }: CategorySelectorPr
                 style={
                   isActive
                     ? {
+                        // Category colors come from config, so the text keeps the theme color.
                         backgroundColor: `${cat.color}20`,
-                        color: cat.color,
-                        borderColor: `${cat.color}40`,
+                        borderColor: cat.color,
                         borderWidth: '1px',
                       }
                     : undefined

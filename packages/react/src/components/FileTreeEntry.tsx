@@ -60,12 +60,12 @@ export const FileTreeEntry = React.memo(function FileTreeEntry({
               {/* Indicators */}
               <div className='flex items-center gap-1 flex-shrink-0'>
                 {stats.additions > 0 && (
-                  <span className='text-[10px] tabular-nums font-medium text-emerald-600 dark:text-emerald-400'>
+                  <span className='text-[10px] tabular-nums font-medium text-emerald-700 dark:text-emerald-400'>
                     +{number(stats.additions)}
                   </span>
                 )}
                 {stats.deletions > 0 && (
-                  <span className='text-[10px] tabular-nums font-medium text-red-600 dark:text-red-400'>
+                  <span className='text-[10px] tabular-nums font-medium text-red-700 dark:text-red-400'>
                     -{number(stats.deletions)}
                   </span>
                 )}
@@ -79,7 +79,7 @@ export const FileTreeEntry = React.memo(function FileTreeEntry({
             </div>
             {guideDescription && (
               <div
-                className='ps-6 pe-1 mt-1 text-[11px] leading-snug text-muted-foreground/90 line-clamp-2'
+                className='ps-6 pe-1 mt-1 text-[11px] leading-snug text-muted-foreground line-clamp-2'
                 data-testid={`guide-file-description-${filePath}`}
               >
                 {guideDescription}
@@ -105,7 +105,7 @@ export const FileTreeEntry = React.memo(function FileTreeEntry({
                 className='inline-flex items-center justify-center h-5 w-5 rounded-sm hover:bg-accent/80 transition-colors cursor-pointer'
               >
                 {viewed ? (
-                  <CircleCheck className='h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400' />
+                  <CircleCheck className='h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400' />
                 ) : (
                   <CircleDashed className='h-3.5 w-3.5 text-muted-foreground/60' />
                 )}

@@ -3,3 +3,5 @@
 @source "../../packages/react/src/";
 
 @import '../../packages/react/src/styles.css';
+@import '../../packages/react/src/vendor/prism-light-scoped.css';
+@import '../../packages/react/src/vendor/prism-dark-scoped.css';

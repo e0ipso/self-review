@@ -4,6 +4,9 @@
  *
  * CSS @import cannot be nested inside selector blocks, so this file
  * contains a copy of the vendor CSS wrapped in the scoping selector.
+ *
+ * The comment, red and pink token colors are lightened from upstream to meet
+ * WCAG AA (4.5:1) on the diff row tints and the code block background.
  */
 
 .self-review.dark {
@@ -63,7 +66,7 @@
   .token.comment,
   .token.prolog,
   .token.cdata {
-    color: hsl(220, 10%, 40%);
+    color: hsl(220, 10%, 60%);
   }
 
   .token.doctype,
@@ -90,7 +93,7 @@
   .token.symbol,
   .token.deleted,
   .token.important {
-    color: hsl(355, 65%, 65%);
+    color: hsl(355, 65%, 68%);
   }
 
   .token.selector,
@@ -122,7 +125,7 @@
 
   /* CSS overrides */
   .language-css .token.selector {
-    color: hsl(355, 65%, 65%);
+    color: hsl(355, 65%, 68%);
   }
 
   .language-css .token.property {
@@ -152,7 +155,7 @@
     .token.template-string
     > .token.interpolation
     > .token.interpolation-punctuation.punctuation {
-    color: hsl(5, 48%, 51%);
+    color: hsl(5, 48%, 64%);
   }
 
   /* JSON overrides */
@@ -182,7 +185,7 @@
 
   .language-markdown .token.blockquote.punctuation,
   .language-markdown .token.hr.punctuation {
-    color: hsl(220, 10%, 40%);
+    color: hsl(220, 10%, 60%);
     font-style: italic;
   }
 
@@ -202,7 +205,7 @@
   .language-markdown .token.strike .token.punctuation,
   .language-markdown .token.list.punctuation,
   .language-markdown .token.title.important > .token.punctuation {
-    color: hsl(355, 65%, 65%);
+    color: hsl(355, 65%, 68%);
   }
 
   /* General */

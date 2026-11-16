@@ -56,7 +56,7 @@ export const RawDiffRow = React.memo(function RawDiffRow({
     const coordinate = unified ? rowIndex! : number!;
     return (
       <div
-        className={`w-10 flex-shrink-0 text-end pe-2 text-[11px] leading-[22px] text-muted-foreground/70 select-none ${getGutterBg(line)} ${group === 'gutter-old' ? 'group/gutter-old' : group === 'gutter-new' ? 'group/gutter-new' : 'group/gutter'} relative`}
+        className={`w-10 flex-shrink-0 text-end pe-2 text-[11px] leading-[22px] text-muted-foreground select-none ${getGutterBg(line)} ${group === 'gutter-old' ? 'group/gutter-old' : group === 'gutter-new' ? 'group/gutter-new' : 'group/gutter'} relative`}
         data-testid={number ? `${gutterSide}-line-${filePath}-${number}` : undefined}
       >
         {number && (

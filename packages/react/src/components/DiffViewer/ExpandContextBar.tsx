@@ -36,7 +36,7 @@ export default function ExpandContextBar({
         <Button
           variant='ghost'
           type='button'
-          className='flex items-center justify-center w-5 h-5 rounded-sm text-blue-700/70 dark:text-blue-300/70 hover:text-blue-700 dark:hover:text-blue-200 hover:bg-blue-500/20 dark:hover:bg-blue-400/20 transition-colors cursor-pointer'
+          className='flex items-center justify-center w-5 h-5 rounded-sm text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 hover:bg-blue-500/20 dark:hover:bg-blue-400/20 transition-colors cursor-pointer'
           onClick={e => {
             e.stopPropagation();
             onExpand(direction, hunkIndex, position);
@@ -56,7 +56,7 @@ export default function ExpandContextBar({
       {/* Gutter area — matches line number column width */}
       <div className='w-10 flex-shrink-0 flex items-center justify-center gap-0.5'>
         {loading ? (
-          <span className='text-[10px] text-muted-foreground/50'>...</span>
+          <span className='text-[10px] text-muted-foreground'>...</span>
         ) : showSingleButton ? (
           iconButton('all', UnfoldVertical, t('Show hidden lines', { count: gapSize }))
         ) : (
@@ -74,7 +74,7 @@ export default function ExpandContextBar({
           <Button
             variant='ghost'
             type='button'
-            className='text-[11px] text-blue-700/70 dark:text-blue-300/70 hover:text-blue-700 dark:hover:text-blue-200 transition-colors cursor-pointer'
+            className='text-[11px] text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 transition-colors cursor-pointer'
             onClick={() => onExpand('all', hunkIndex, position)}
             disabled={loading}
           >
@@ -84,7 +84,7 @@ export default function ExpandContextBar({
           <Button
             variant='ghost'
             type='button'
-            className='text-[11px] text-blue-700/70 dark:text-blue-300/70 hover:text-blue-700 dark:hover:text-blue-200 transition-colors cursor-pointer'
+            className='text-[11px] text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 transition-colors cursor-pointer'
             onClick={() => onExpand('all', hunkIndex, position)}
             disabled={loading}
           >
