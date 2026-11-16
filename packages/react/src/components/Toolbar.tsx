@@ -188,10 +188,10 @@ export default function Toolbar({ onFinishReview }: ToolbarProps = {}) {
         <span>{t('files changed', { count: stats.files })}</span>
         {!stats.complete && <span>{t('Line totals unavailable')}</span>}
         {stats.additions > 0 && (
-          <span className='text-green-600 dark:text-green-400'>+{number(stats.additions)}</span>
+          <span className='text-emerald-700 dark:text-emerald-400'>+{number(stats.additions)}</span>
         )}
         {stats.deletions > 0 && (
-          <span className='text-red-600 dark:text-red-400'>-{number(stats.deletions)}</span>
+          <span className='text-red-700 dark:text-red-400'>-{number(stats.deletions)}</span>
         )}
       </div>
 

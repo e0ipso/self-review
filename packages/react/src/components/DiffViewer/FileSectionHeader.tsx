@@ -155,7 +155,7 @@ export function FileSectionHeaderPresentation({
               className='h-7 w-7 p-0 text-muted-foreground hover:text-foreground'
             >
               {copied ? (
-                <Check className='h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400' />
+                <Check className='h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400' />
               ) : (
                 <Copy className='h-3.5 w-3.5' />
               )}
@@ -176,10 +176,10 @@ export function FileSectionHeaderPresentation({
         {/* Line stats */}
         <span className='flex items-center gap-1 text-xs tabular-nums text-muted-foreground'>
           {additions > 0 && (
-            <span className='text-emerald-600 dark:text-emerald-400'>+{number(additions)}</span>
+            <span className='text-emerald-700 dark:text-emerald-400'>+{number(additions)}</span>
           )}
           {deletions > 0 && (
-            <span className='text-red-600 dark:text-red-400'>-{number(deletions)}</span>
+            <span className='text-red-700 dark:text-red-400'>-{number(deletions)}</span>
           )}
         </span>
 
@@ -237,7 +237,7 @@ export function FileSectionHeaderPresentation({
               className='h-7 w-7 p-0 text-muted-foreground hover:text-foreground'
             >
               {isViewed ? (
-                <CircleCheck className='h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400' />
+                <CircleCheck className='h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400' />
               ) : (
                 <CircleDashed className='h-3.5 w-3.5' />
               )}

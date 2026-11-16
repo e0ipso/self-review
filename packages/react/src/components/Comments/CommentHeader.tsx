@@ -16,15 +16,15 @@ import { Pencil, Trash2, ChevronDown, ChevronUp, Bot, User } from 'lucide-react'
  */
 const SEVERITY_STYLES: Record<CommentSeverity, { className: string; description: MessageKey }> = {
   critical: {
-    className: 'bg-red-500/15 text-red-600 dark:text-red-400',
+    className: 'bg-red-500/15 text-red-800 dark:text-red-400',
     description: 'Critical: data loss, a security hole, or a crash on a path real usage reaches.',
   },
   major: {
-    className: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+    className: 'bg-orange-500/15 text-orange-800 dark:text-orange-400',
     description: 'Major: wrong behaviour or a broken contract on a path real usage reaches.',
   },
   minor: {
-    className: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
+    className: 'bg-yellow-500/15 text-yellow-800 dark:text-yellow-400',
     description: 'Minor: real but bounded. Behaviour is correct today.',
   },
   info: {
@@ -44,7 +44,7 @@ const CONFIDENCE_STYLES: Record<CommentConfidence, { className: string; descript
       description: 'Medium confidence: rests on one assumption the author did not verify.',
     },
     low: {
-      className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+      className: 'bg-amber-500/15 text-amber-800 dark:text-amber-400',
       description: 'Low confidence: speculative. Worth your eyes, not worth acting on unattended.',
     },
   };
@@ -151,9 +151,9 @@ export function CommentHeader({
                   variant='secondary'
                   className='category-badge h-5 px-1.5 text-[10px] font-medium'
                   style={{
+                    // Category colors come from config, so the text keeps the theme color.
                     backgroundColor: `${categoryDef.color}20`,
-                    color: categoryDef.color,
-                    borderColor: `${categoryDef.color}40`,
+                    borderColor: categoryDef.color,
                     borderWidth: '1px',
                   }}
                 >
@@ -196,7 +196,7 @@ export function CommentHeader({
         {comment.orphaned && (
           <Badge
             variant='secondary'
-            className='h-5 px-1.5 text-[10px] bg-orange-500/15 text-orange-600 dark:text-orange-400'
+            className='h-5 px-1.5 text-[10px] bg-orange-500/15 text-orange-800 dark:text-orange-400'
           >
             {t('Orphaned')}
           </Badge>
@@ -206,7 +206,7 @@ export function CommentHeader({
             <TooltipTrigger asChild>
               <Badge
                 variant='secondary'
-                className='h-5 px-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                className='h-5 px-1.5 text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-400'
                 data-testid='comment-anchor-partial'
               >
                 {t('Partly hidden')}

@@ -93,10 +93,10 @@ function OverviewContent({
           {t('walkthrough totals', { stops: groups.length, files: totalFiles })}
           {!complete && <span> · {t('Line totals unavailable')}</span>}
           {additions > 0 && (
-            <span className='text-emerald-600 dark:text-emerald-400'> +{number(additions)}</span>
+            <span className='text-emerald-700 dark:text-emerald-400'> +{number(additions)}</span>
           )}
           {deletions > 0 && (
-            <span className='text-red-600 dark:text-red-400'> −{number(deletions)}</span>
+            <span className='text-red-700 dark:text-red-400'> −{number(deletions)}</span>
           )}
         </span>
       </div>
