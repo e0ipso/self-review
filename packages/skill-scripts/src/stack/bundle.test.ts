@@ -1,5 +1,5 @@
 import { spawnSync } from 'child_process';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -62,6 +62,25 @@ describe('stack.cjs bundle', () => {
       copyFileSync(COMMITTED_BUNDLE, bundle);
       repo = scratchDir('skill-scripts-repo-');
       gitSync(['init', '-q'], { cwd: repo });
+      writeFileSync(path.join(repo, 'file.txt'), 'one\n');
+      gitSync(['add', 'file.txt'], { cwd: repo });
+      gitSync(
+        [
+          '-c',
+          'user.name=Test',
+          '-c',
+          'user.email=test@example.com',
+          '-c',
+          'commit.gpgsign=false',
+          'commit',
+          '-q',
+          '-m',
+          'one',
+        ],
+        { cwd: repo }
+      );
+      writeFileSync(path.join(repo, 'file.txt'), 'two\n');
+      gitSync(['add', 'file.txt'], { cwd: repo });
     });
 
     function runBundle(args: string[]) {
@@ -72,11 +91,11 @@ describe('stack.cjs bundle', () => {
       });
     }
 
-    it('describes the sides of a staged diff with no node_modules in reach', () => {
+    it('resolves a staged diff with no node_modules in reach', () => {
       const result = runBundle(['resolve', '--staged']);
 
       expect(result.stderr).toBe('');
-      expect(result.stdout).toBe('old: revision\nnew: index\n');
+      expect(result.stdout).toMatch(/^M\tfile\.txt$/m);
       expect(result.status).toBe(0);
     });
 

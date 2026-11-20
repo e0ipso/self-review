@@ -25,6 +25,96 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// src/stack/build.ts
+var path7 = __toESM(require("path"), 1);
+
+// ../core/src/git-argument-text.ts
+function needsQuoting(arg) {
+  return arg.length === 0 || /[\s'"\\]/.test(arg);
+}
+function formatGitDiffArgs(args) {
+  return args.map((arg) => needsQuoting(arg) ? `'${arg.replace(/'/g, "'\\''")}'` : arg).join(" ");
+}
+
+// src/stack/git.ts
+var import_child_process = require("child_process");
+var import_fs = require("fs");
+var import_os = require("os");
+var path = __toESM(require("path"), 1);
+var StackError = class extends Error {
+};
+var MAX_BUFFER = 1024 * 1024 * 1024;
+function spawnGit(args, options, encoding) {
+  const result = (0, import_child_process.spawnSync)("git", [...args], {
+    encoding: encoding === "utf8" ? "utf8" : "buffer",
+    env: options.env ? { ...process.env, ...options.env } : process.env,
+    input: options.input,
+    maxBuffer: MAX_BUFFER
+  });
+  if (result.error) throw new StackError(`cannot run git: ${result.error.message}`);
+  return {
+    status: result.status ?? 1,
+    stdout: result.stdout,
+    stderr: result.stderr.toString()
+  };
+}
+function tryGit(args, options = {}) {
+  return spawnGit(args, options, "utf8");
+}
+function failure(args, stderr) {
+  return new StackError(`git ${args.join(" ")} failed:
+${stderr.trim()}`);
+}
+function git(args, options = {}) {
+  const result = tryGit(args, options);
+  if (result.status !== 0) throw failure(args, result.stderr);
+  return result.stdout;
+}
+function gitBytes(args, options = {}) {
+  const result = spawnGit(args, options, "buffer");
+  if (result.status !== 0) throw failure(args, result.stderr);
+  return result.stdout;
+}
+function gitValue(args, options = {}) {
+  return git(args, options).trim();
+}
+function nulSplit(text) {
+  return text.split("\0").filter((item) => item !== "");
+}
+function commitOrNull(rev) {
+  const result = tryGit([
+    "rev-parse",
+    "--verify",
+    "--quiet",
+    "--end-of-options",
+    `${rev}^{commit}`
+  ]);
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+function commitOf(rev) {
+  const sha = commitOrNull(rev);
+  if (sha === null) throw new StackError(`${rev} does not name a commit`);
+  return sha;
+}
+function treeOf(commit) {
+  return gitValue(["rev-parse", `${commit}^{tree}`]);
+}
+function shortSha(sha) {
+  return gitValue(["rev-parse", "--short", sha]);
+}
+function withTempDir(work) {
+  const dir = (0, import_fs.mkdtempSync)(path.join((0, import_os.tmpdir)(), "self-review-stack-"));
+  try {
+    return work(dir);
+  } finally {
+    (0, import_fs.rmSync)(dir, { recursive: true, force: true });
+  }
+}
+
+// src/stack/resolve.ts
+var import_fs3 = require("fs");
+var path6 = __toESM(require("path"), 1);
+
 // ../core/src/git-option-policy.ts
 var OPTION_POLICY = {
   "--output": { value: "required", writeCapable: true, unsupportedOutput: "always" },
@@ -144,6 +234,13 @@ function parseGitDiffArgs(args) {
   }
   return { options, positionalIndices, separatorIndex };
 }
+function findUnsupportedGitDiffOptions(args) {
+  const offending = parseGitDiffArgs(args).options.filter((option) => {
+    const output = gitDiffOptionPolicy(option.name).unsupportedOutput;
+    return output === "always" || output === "attached" && option.arg.includes("=");
+  });
+  return [...new Set(offending.map((option) => option.index))].map((index) => args[index]);
+}
 
 // ../core/src/process-tree.ts
 var import_node_child_process = require("child_process");
@@ -186,29 +283,29 @@ var DEFAULT_SOURCE_BUDGETS = Object.freeze({
 // ../core/src/safe-fs.ts
 var nodeFs = __toESM(require("fs"), 1);
 var import_node_crypto2 = require("crypto");
-var path3 = __toESM(require("path"), 1);
+var path4 = __toESM(require("path"), 1);
 
 // ../core/src/bounded-read.ts
-var import_fs = require("fs");
+var import_fs2 = require("fs");
 var import_util = require("util");
 
 // ../core/src/local-loading-lifetime.ts
 var import_promises3 = require("timers/promises");
 
 // ../core/src/bounded-read.ts
-var READ_FLAGS = import_fs.constants.O_RDONLY | (import_fs.constants.O_NONBLOCK ?? 0);
-var readAsync = (0, import_util.promisify)(import_fs.read);
+var READ_FLAGS = import_fs2.constants.O_RDONLY | (import_fs2.constants.O_NONBLOCK ?? 0);
+var readAsync = (0, import_util.promisify)(import_fs2.read);
 
 // ../core/src/safe-fs-async.ts
 var fs2 = __toESM(require("fs/promises"), 1);
 var import_node_fs = require("fs");
-var path2 = __toESM(require("path"), 1);
+var path3 = __toESM(require("path"), 1);
 var import_node_crypto = require("crypto");
 
 // ../core/src/safe-fs-read.ts
 var fs = __toESM(require("fs/promises"), 1);
 var import_promises4 = require("timers/promises");
-var path = __toESM(require("path"), 1);
+var path2 = __toESM(require("path"), 1);
 var nodeReadFsLayer = {
   readAllocation: "bounded",
   open: (target, flags, mode) => fs.open(target, flags, mode),
@@ -291,24 +388,518 @@ function describeRevisionSides(revs, cached, useMergeBase) {
   return unknownSides(`a combined diff of ${revs.length} revisions has no single old side`);
 }
 
-// src/stack/cli.ts
-var USAGE = "usage: stack.cjs resolve <git-diff-args...>";
-function resolve(args) {
-  const { oldSide, newSide } = describeGitDiffSides(args);
-  process.stdout.write(`old: ${oldSide.kind}
-new: ${newSide.kind}
+// src/stack/stats.ts
+function shortstat(from, to, paths = []) {
+  const text = gitValue([
+    "-c",
+    "diff.relative=false",
+    "diff",
+    "--shortstat",
+    from,
+    to,
+    "--",
+    ...paths
+  ]);
+  const count = (kind) => {
+    const match = new RegExp(`(\\d+) ${kind}`).exec(text);
+    return match ? Number(match[1]) : 0;
+  };
+  return { files: count("file"), insertions: count("insertion"), deletions: count("deletion") };
+}
+function diffstat({ files, insertions, deletions }) {
+  return `${files} file${files === 1 ? "" : "s"} changed +${insertions} -${deletions}`;
+}
+
+// src/stack/resolve.ts
+var STACK_OPTIONS = /* @__PURE__ */ new Set(["--staged", "--cached", "--merge-base"]);
+var ROOT_PATHS = ["-c", "diff.relative=false"];
+function isRevision(arg) {
+  if (arg.includes("..") && !(0, import_fs3.existsSync)(arg)) return true;
+  return commitOrNull(arg) !== null;
+}
+function classify(argv, parsed) {
+  const end = parsed.separatorIndex ?? argv.length;
+  const optionNames = /* @__PURE__ */ new Map();
+  for (const option of parsed.options) {
+    optionNames.set(option.index, [...optionNames.get(option.index) ?? [], option.name]);
+  }
+  const positionals = new Set(parsed.positionalIndices);
+  const revisions = [];
+  const paths = [];
+  const pathIndices = /* @__PURE__ */ new Set();
+  const passThrough = [];
+  let keeping = false;
+  for (let i = 0; i < end; i++) {
+    const names = optionNames.get(i);
+    if (positionals.has(i)) {
+      keeping = false;
+      if (isRevision(argv[i])) revisions.push(argv[i]);
+      else {
+        paths.push(argv[i]);
+        pathIndices.add(i);
+      }
+    } else if (names !== void 0) {
+      keeping = !names.some((name) => STACK_OPTIONS.has(name));
+      if (keeping) passThrough.push(argv[i]);
+    } else if (keeping) {
+      passThrough.push(argv[i]);
+    }
+  }
+  paths.push(...argv.slice(end + 1));
+  const sidesArgv = argv.slice(0, end).filter((_, index) => !pathIndices.has(index));
+  return { sidesArgv, revisions, paths, passThrough };
+}
+function refuseUnstackable(argv, parsed) {
+  const names = new Set(parsed.options.map((option) => option.name));
+  if (names.has("--no-index")) {
+    throw new StackError(
+      "--no-index compares files outside the repository; there is no history to stack on"
+    );
+  }
+  if (names.has("-R")) {
+    throw new StackError("-R reverses the diff; name the same diff in its forward direction");
+  }
+  const unsupported = findUnsupportedGitDiffOptions(argv);
+  if (unsupported.length > 0) {
+    throw new StackError(
+      `${unsupported.join(" ")}: self-review cannot load this output format; leave it out`
+    );
+  }
+}
+function snapshot(worktree) {
+  const realIndex = path6.resolve(gitValue(["rev-parse", "--git-path", "index"]));
+  return withTempDir((dir) => {
+    const copy = path6.join(dir, "index");
+    if ((0, import_fs3.existsSync)(realIndex)) (0, import_fs3.copyFileSync)(realIndex, copy);
+    const env = { GIT_INDEX_FILE: copy };
+    if (worktree) {
+      git(["-C", gitValue(["rev-parse", "--show-toplevel"]), "add", "--update"], { env });
+    }
+    const result = tryGit(["write-tree"], { env });
+    if (result.status !== 0) {
+      throw new StackError(`cannot snapshot the index:
+${result.stderr.trim()}`);
+    }
+    return result.stdout.trim();
+  });
+}
+function indexCommit() {
+  const head = commitOf("HEAD");
+  const tree = snapshot(false);
+  if (tree === treeOf(head)) return head;
+  return gitValue(["commit-tree", tree, "-p", head], {
+    input: "The index this stack builds on\n"
+  });
+}
+function mergeBase2(left, right) {
+  const result = tryGit(["merge-base", commitOf(left), commitOf(right)]);
+  if (result.status !== 0) throw new StackError(`${left} and ${right} have no merge base`);
+  return result.stdout.trim();
+}
+function unstackableSide(side) {
+  const reason = side.kind === "unknown" ? side.reason : `the ${side.kind} cannot be that side`;
+  return new StackError(`cannot stack this diff: ${reason}`);
+}
+function resolveBase(side) {
+  switch (side.kind) {
+    case "revision":
+      return commitOf(side.rev);
+    case "merge-base":
+      return mergeBase2(side.left, side.right);
+    case "index":
+      return indexCommit();
+    default:
+      throw unstackableSide(side);
+  }
+}
+function resolveTarget(side) {
+  switch (side.kind) {
+    case "revision":
+      return treeOf(commitOf(side.rev));
+    case "index":
+      return snapshot(false);
+    case "working-tree":
+      return snapshot(true);
+    default:
+      throw unstackableSide(side);
+  }
+}
+function describeSide(side) {
+  switch (side.kind) {
+    case "revision":
+      return side.rev;
+    case "merge-base":
+      return `the merge base of ${side.left} and ${side.right}`;
+    case "index":
+      return "the index";
+    case "working-tree":
+      return "the working tree";
+    case "unknown":
+      return side.reason;
+  }
+}
+function resolveDiff(argv) {
+  const parsed = parseGitDiffArgs(argv);
+  refuseUnstackable(argv, parsed);
+  const { sidesArgv, revisions, paths, passThrough } = classify(argv, parsed);
+  if (revisions.length > 2) {
+    throw new StackError(`at most two revisions bound a diff, got ${revisions.join(" ")}`);
+  }
+  const { oldSide, newSide } = describeGitDiffSides(sidesArgv);
+  const base = resolveBase(oldSide);
+  const target = resolveTarget(newSide);
+  return {
+    base,
+    target,
+    paths,
+    passThrough,
+    summary: `${describeSide(newSide)} against ${describeSide(oldSide)}`
+  };
+}
+function changedPaths(base, target, paths) {
+  const tokens = git([
+    ...ROOT_PATHS,
+    "diff",
+    "--name-status",
+    "--no-renames",
+    "-z",
+    base,
+    target,
+    "--",
+    ...paths
+  ]).split("\0");
+  const changes = [];
+  for (let i = 0; i + 1 < tokens.length; i += 2) {
+    changes.push({ status: tokens[i], path: tokens[i + 1] });
+  }
+  return changes;
+}
+function rawDiff(base, target, paths = []) {
+  return gitBytes([
+    ...ROOT_PATHS,
+    "diff",
+    "--raw",
+    "--no-renames",
+    "--no-abbrev",
+    "-z",
+    base,
+    target,
+    "--",
+    ...paths
+  ]);
+}
+var NO_CHANGES = "No changes to stack.";
+function cmdResolve(argv) {
+  const { base, target, paths, passThrough, summary } = resolveDiff(argv);
+  const changes = changedPaths(base, target, paths);
+  if (changes.length === 0) {
+    process.stdout.write(`${NO_CHANGES}
+`);
+    return 3;
+  }
+  const lines = [`base     ${base}`, `target   ${target}  (${summary})`];
+  if (paths.length > 0) lines.push(`paths    ${formatGitDiffArgs(paths)}`);
+  lines.push(`options  ${passThrough.length > 0 ? formatGitDiffArgs(passThrough) : "(none)"}`);
+  lines.push(`diff     ${diffstat(shortstat(base, target, paths))}`);
+  for (const change of changes) lines.push(`${change.status}	${change.path}`);
+  process.stdout.write(`${lines.join("\n")}
 `);
   return 0;
 }
-function main(argv) {
-  const [subcommand, ...args] = argv;
-  switch (subcommand) {
-    case "resolve":
-      return resolve(args);
-    default:
-      process.stderr.write(`${USAGE}
-`);
-      return 2;
+
+// src/stack/spec.ts
+var import_fs4 = require("fs");
+function isObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isStringArray(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+function stepProblems(step, index) {
+  const where = `steps[${index}]`;
+  if (!isObject(step)) return [`${where} must be an object`];
+  const problems = [];
+  if (!isNonEmptyString(step.slug)) problems.push(`${where}: "slug" must be a non-empty string`);
+  if (!isNonEmptyString(step.subject) || step.subject.includes("\n")) {
+    problems.push(`${where}: "subject" must be a non-empty single line`);
   }
+  if (step.description !== void 0 && typeof step.description !== "string") {
+    problems.push(`${where}: "description" must be a string`);
+  }
+  if (!isStringArray(step.files) || step.files.length === 0) {
+    problems.push(`${where}: "files" must be a non-empty array of paths`);
+  }
+  return problems;
+}
+function specProblems(spec, requireDiffArgs) {
+  if (!isObject(spec)) return ["the spec must be a JSON object"];
+  const problems = [];
+  if (requireDiffArgs || spec.diff_args !== void 0) {
+    if (!isStringArray(spec.diff_args)) problems.push('"diff_args" must be an array of strings');
+  }
+  if (!isNonEmptyString(spec.prefix)) problems.push('"prefix" must be a non-empty string');
+  if (spec.trailers !== void 0 && !isStringArray(spec.trailers)) {
+    problems.push('"trailers" must be an array of strings');
+  }
+  if (!Array.isArray(spec.steps) || spec.steps.length === 0) {
+    problems.push('"steps" must be a non-empty array');
+  } else {
+    spec.steps.forEach((step, index) => problems.push(...stepProblems(step, index)));
+  }
+  return problems;
+}
+function loadSpec(file, options) {
+  let parsed;
+  try {
+    parsed = JSON.parse((0, import_fs4.readFileSync)(file, "utf8"));
+  } catch (error) {
+    throw new StackError(`${file}: ${error.message}`);
+  }
+  const problems = specProblems(parsed, options.requireDiffArgs);
+  if (problems.length > 0) throw new StackError(`${file}:
+  ${problems.join("\n  ")}`);
+  const json = parsed;
+  return {
+    diffArgs: json.diff_args ?? [],
+    prefix: json.prefix,
+    trailers: json.trailers ?? [],
+    steps: json.steps.map((step) => ({
+      slug: step.slug,
+      subject: step.subject,
+      description: step.description ?? "",
+      files: step.files
+    }))
+  };
+}
+function branchName(spec, step) {
+  return `${spec.prefix}/${step.slug}`;
+}
+
+// src/stack/build.ts
+function partitionProblems(spec, changes) {
+  const problems = [];
+  const slugs = /* @__PURE__ */ new Set();
+  const owner = /* @__PURE__ */ new Map();
+  for (const step of spec.steps) {
+    if (slugs.has(step.slug)) problems.push(`slug '${step.slug}' is used twice`);
+    slugs.add(step.slug);
+    for (const file of step.files) {
+      const previous = owner.get(file);
+      if (previous !== void 0) problems.push(`${file}: in both ${previous} and ${step.slug}`);
+      else if (!changes.has(file)) {
+        problems.push(`${file}: in ${step.slug}, but the diff does not touch it`);
+      }
+      if (previous === void 0) owner.set(file, step.slug);
+    }
+  }
+  for (const file of [...changes.keys()].sort()) {
+    if (!owner.has(file)) problems.push(`${file}: changed, but in no step`);
+  }
+  return problems;
+}
+function branchNameProblems(spec) {
+  const problems = [];
+  const names = spec.steps.map((step) => branchName(spec, step));
+  for (const name of new Set(names)) {
+    if (tryGit(["check-ref-format", "--branch", name]).status !== 0) {
+      problems.push(`'${name}' is not a valid branch name`);
+    }
+    const parent = names.find((other) => name.startsWith(`${other}/`));
+    if (parent !== void 0)
+      problems.push(`'${name}' cannot be a branch while '${parent}' is one`);
+  }
+  return problems;
+}
+function takenBranchProblems(spec) {
+  const existing = git(["for-each-ref", "--format=%(refname)", "refs/heads/"]).split("\n").filter((ref) => ref !== "").map((ref) => ref.slice("refs/heads/".length));
+  const under = existing.filter((name) => name === spec.prefix || name.startsWith(`${spec.prefix}/`));
+  const problems = [];
+  if (under.length > 0) {
+    problems.push(`branches already exist under the prefix:
+    ${under.join("\n    ")}`);
+  }
+  const names = spec.steps.map((step) => branchName(spec, step));
+  for (const name of existing) {
+    if (!under.includes(name) && names.some((branch) => branch.startsWith(`${name}/`))) {
+      problems.push(`branch '${name}' exists, so no branch can be created under it`);
+    }
+  }
+  return problems;
+}
+function treeEntries(tree) {
+  const entries = /* @__PURE__ */ new Map();
+  for (const line of nulSplit(git(["ls-tree", "-r", "-z", tree]))) {
+    const tab = line.indexOf("	");
+    const [mode, , oid] = line.slice(0, tab).split(" ");
+    entries.set(line.slice(tab + 1), { mode, oid });
+  }
+  return entries;
+}
+function commitMessage(spec, step) {
+  const trailers = spec.trailers.length > 0 ? `
+${spec.trailers.join("\n")}
+` : "";
+  return `${step.subject}
+${trailers}`;
+}
+function indexInfo(step, changes, entries, zero) {
+  return step.files.map((file) => {
+    if (changes.get(file) === "D") return `0 ${zero}	${file}\0`;
+    const entry = entries.get(file);
+    if (entry === void 0) throw new StackError(`${file}: not in the target tree`);
+    return `${entry.mode} ${entry.oid}	${file}\0`;
+  }).join("");
+}
+function buildCommits(spec, base, target, changes) {
+  const entries = treeEntries(target);
+  const zero = "0".repeat(base.length);
+  return withTempDir((dir) => {
+    const env = { GIT_INDEX_FILE: path7.join(dir, "index") };
+    git(["read-tree", base], { env });
+    let parent = base;
+    return spec.steps.map((step) => {
+      git(["update-index", "-z", "--index-info"], {
+        env,
+        input: indexInfo(step, changes, entries, zero)
+      });
+      const tree = gitValue(["write-tree"], { env });
+      parent = gitValue(["commit-tree", tree, "-p", parent], {
+        input: commitMessage(spec, step)
+      });
+      return { branch: branchName(spec, step), commit: parent, subject: step.subject };
+    });
+  });
+}
+function createBranches(steps) {
+  git(["update-ref", "--stdin"], {
+    input: steps.map((step) => `create refs/heads/${step.branch} ${step.commit}
+`).join("")
+  });
+}
+function report(spec, base, passThrough, summary, steps) {
+  const baseShort = shortSha(base);
+  const width = Math.max(...steps.map((step) => step.branch.length));
+  const lines = [
+    `Built ${steps.length} steps on ${baseShort} for \`${formatGitDiffArgs(["git", "diff", ...spec.diffArgs])}\`:`,
+    ...steps.map(
+      (step) => `  ${step.branch.padEnd(width)}  ${shortSha(step.commit)}  ${step.subject}`
+    ),
+    `The stack reproduces the diff: ${summary}.`,
+    "Diff args for each step's guide and server:"
+  ];
+  let previous = baseShort;
+  for (const step of steps) {
+    lines.push(`  ${formatGitDiffArgs([...passThrough, `${previous}..${step.branch}`])}`);
+    previous = step.branch;
+  }
+  return `${lines.join("\n")}
+`;
+}
+function cmdBuild(specFile) {
+  const spec = loadSpec(specFile, { requireDiffArgs: true });
+  const { base, target, paths, passThrough, summary } = resolveDiff(spec.diffArgs);
+  const changes = new Map(changedPaths(base, target, paths).map((c) => [c.path, c.status]));
+  if (changes.size === 0) throw new StackError(NO_CHANGES);
+  const problems = [
+    ...partitionProblems(spec, changes),
+    ...branchNameProblems(spec),
+    ...takenBranchProblems(spec)
+  ];
+  if (problems.length > 0) throw new StackError(`refusing to build:
+  ${problems.join("\n  ")}`);
+  const steps = buildCommits(spec, base, target, changes);
+  const top = steps[steps.length - 1].commit;
+  if (!rawDiff(base, top).equals(rawDiff(base, target, paths))) {
+    throw new StackError("the stack does not reproduce the diff; no branches were created");
+  }
+  createBranches(steps);
+  process.stdout.write(report(spec, base, passThrough, summary, steps));
+  return 0;
+}
+
+// src/stack/cli.ts
+var USAGE = `usage: stack.cjs resolve <git-diff-args...>
+       stack.cjs build <spec.json>
+
+Builds a stack of local review branches for one git diff. Run it from inside the
+repository. It never writes the working tree, the index, HEAD or an existing ref.
+
+Commands:
+
+  resolve <git-diff-args...>
+      Print what the stack would hold, then one "<status>\\t<path>" line per
+      changed path (status as in git diff --name-status --no-renames):
+
+        base     <commit the stack starts from>
+        target   <tree the stack ends at>  (<what is compared>)
+        paths    <pathspecs>                   (only when pathspecs were given)
+        options  <pass-through options>        (or "(none)")
+        diff     <N> files changed +<insertions> -<deletions>
+        M	src/retry.ts
+
+      Prints "No changes to stack." and exits 3 when the diff is empty.
+
+  build <spec.json>
+      Validate the spec against the diff its "diff_args" name, build one commit
+      per step on a throwaway index, confirm the stack reproduces the diff, then
+      create the branch <prefix>/<slug> for every step (all of them or none).
+      Prints each branch, its short SHA and subject, and the diff arguments for
+      each step: the pass-through options, then <previous>..<step branch>, where
+      step 1's previous is the base's short SHA.
+
+Diff arguments, with their git diff meanings:
+
+  (none)              the index to the working tree (unstaged changes); the
+                      index is committed on HEAD as the stack's base
+  --staged [<rev>]    <rev>, default HEAD, to the index (also --cached)
+  <rev>               <rev> to the working tree
+  <a>..<b>, <a> <b>   <a> to <b>
+  <a>...<b>           the merge base of <a> and <b> to <b>
+  --merge-base        start from the merge base of the revision and <b>, or HEAD
+  -- <paths>          only changes under these paths; a positional that names
+                      no revision is a path too, as in git
+
+Every other option (-w, -U10, -M, ...) changes how a diff is shown, not what
+changed: it stays out of the stack and is passed through to each step's diff
+arguments, spelled as given. Untracked files are not part of a git diff. Refused:
+--no-index, -R, more than two revisions, --cached with a range, --merge-base with
+no revision, and output formats self-review cannot load (--stat, --name-only, ...).
+
+The spec is a JSON file. "trailers" and "description" are optional; "files" are
+paths from the repository root, as resolve prints them. Every changed path must
+be in exactly one step, and no branch may exist under the prefix yet:
+
+  {
+    "diff_args": ["main...feature/retry"],
+    "prefix": "retry-stack",
+    "trailers": [],
+    "steps": [
+      {"slug": "01-design", "subject": "docs: add design notes",
+       "description": "The design the code follows.", "files": ["docs/retry.md"]},
+      {"slug": "02-retry", "subject": "feat: retry failed requests",
+       "files": ["src/retry.ts", "src/client.ts"]}
+    ]
+  }
+
+Exit status: 0 success, 1 refusal or error (reason on stderr), 2 usage error,
+3 resolve found no changes.`;
+function main(argv) {
+  const [command, ...args] = argv;
+  try {
+    if (command === "resolve") return cmdResolve(args);
+    if (command === "build" && args.length === 1) return cmdBuild(args[0]);
+  } catch (error) {
+    if (!(error instanceof StackError)) throw error;
+    process.stderr.write(`${error.message}
+`);
+    return 1;
+  }
+  const help = command === "-h" || command === "--help";
+  (help ? process.stdout : process.stderr).write(`${USAGE}
+`);
+  return help ? 0 : 2;
 }
 process.exitCode = main(process.argv.slice(2));

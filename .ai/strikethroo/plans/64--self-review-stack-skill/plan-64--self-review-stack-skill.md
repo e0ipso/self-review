@@ -260,9 +260,9 @@ graph TD
 - ✔️ Task 002: Add output-path and content-ref inputs to self-review-guide and self-review-critique
 - ✔️ Task 003: Scaffold the skill-scripts workspace package and its bundle pipeline
 
-### Phase 2: Helper core
+### ✅ Phase 2: Helper core
 **Parallel Tasks:**
-- Task 004: Implement the helper's resolve and build subcommands (depends on: 003)
+- ✔️ Task 004: Implement the helper's resolve and build subcommands (depends on: 003)
 
 ### Phase 3: Helper reporting
 **Parallel Tasks:**

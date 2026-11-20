@@ -2,7 +2,7 @@
 id: 4
 group: "helper"
 dependencies: [3]
-status: "pending"
+status: "completed"
 created: 2026-11-20
 skills:
   - typescript
@@ -20,13 +20,13 @@ Port `stack.py`'s `resolve` and `build` to TypeScript in `packages/skill-scripts
 - `git-plumbing`: `read-tree`, `update-index --index-info`, `write-tree`, `commit-tree`, `update-ref`, `GIT_INDEX_FILE`, `diff --raw`.
 
 ## Acceptance Criteria
-- [ ] `node stack.cjs resolve <git-diff-args...>` prints `base`, `target` (with a one-line summary of what is compared), `paths` (when pathspecs given), `options` (pass-through display options or `(none)`), `diff` (shortstat) and one `<status>\t<path>` line per changed path; prints `No changes to stack.` and exits 3 when nothing changed. Supported shapes: no args, `--staged`/`--cached [rev]`, `<rev>`, `A..B`, `A B`, `A...B`, `--merge-base`, `-- <paths>`.
-- [ ] `resolve` refuses, with a clear message and non-zero exit, `--no-index`, an `unknown` side from `describeGitDiffSides`, `-R`, and more than two revisions.
-- [ ] `node stack.cjs build <spec.json>` validates the spec and refuses (creating nothing) when a changed path is in no step, a path is in two steps, a listed path is not in the diff, a slug repeats, a branch name is invalid, or any branch already exists under the prefix; every problem is listed.
-- [ ] On success it builds every commit on a throwaway index, confirms `git diff --raw --no-renames --no-abbrev -z <base> <top>` equals the original diff's raw output, then creates `refs/heads/<prefix>/<slug>` with `update-ref` and an empty old value; prints each branch, short SHA and subject, the reproduction confirmation, and each step's diff args (pass-through options then `<previous>..<step-branch>`, step 1's previous being the base's short SHA).
-- [ ] `trailers` in the spec is optional and defaults to none.
-- [ ] Integration tests (vitest, in `packages/skill-scripts`) run the built bundle with `node` against temp repos and cover: each supported argument shape resolves; each refusal above; a three-step build reproduces the diff; after `build`, `git status --porcelain`, `HEAD`, the real index's bytes and the pre-existing branch list are unchanged; unstaged changes on top of a staged change stack correctly (index commit created).
-- [ ] The bundle is rebuilt and committed; `npm run test:unit --workspace @self-review/skill-scripts` (including the staleness test) and `npm run typecheck:packages` exit 0.
+- [x] `node stack.cjs resolve <git-diff-args...>` prints `base`, `target` (with a one-line summary of what is compared), `paths` (when pathspecs given), `options` (pass-through display options or `(none)`), `diff` (shortstat) and one `<status>\t<path>` line per changed path; prints `No changes to stack.` and exits 3 when nothing changed. Supported shapes: no args, `--staged`/`--cached [rev]`, `<rev>`, `A..B`, `A B`, `A...B`, `--merge-base`, `-- <paths>`.
+- [x] `resolve` refuses, with a clear message and non-zero exit, `--no-index`, an `unknown` side from `describeGitDiffSides`, `-R`, and more than two revisions.
+- [x] `node stack.cjs build <spec.json>` validates the spec and refuses (creating nothing) when a changed path is in no step, a path is in two steps, a listed path is not in the diff, a slug repeats, a branch name is invalid, or any branch already exists under the prefix; every problem is listed.
+- [x] On success it builds every commit on a throwaway index, confirms `git diff --raw --no-renames --no-abbrev -z <base> <top>` equals the original diff's raw output, then creates `refs/heads/<prefix>/<slug>` with `update-ref` and an empty old value; prints each branch, short SHA and subject, the reproduction confirmation, and each step's diff args (pass-through options then `<previous>..<step-branch>`, step 1's previous being the base's short SHA).
+- [x] `trailers` in the spec is optional and defaults to none.
+- [x] Integration tests (vitest, in `packages/skill-scripts`) run the built bundle with `node` against temp repos and cover: each supported argument shape resolves; each refusal above; a three-step build reproduces the diff; after `build`, `git status --porcelain`, `HEAD`, the real index's bytes and the pre-existing branch list are unchanged; unstaged changes on top of a staged change stack correctly (index commit created).
+- [x] The bundle is rebuilt and committed; `npm run test:unit --workspace @self-review/skill-scripts` (including the staleness test) and `npm run typecheck:packages` exit 0.
 
 Use your internal Todo tool to track these and keep on track.
 
