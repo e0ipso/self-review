@@ -281,3 +281,39 @@ graph TD
 ### Execution Summary
 - Total Phases: 5
 - Total Tasks: 7
+
+## Execution Summary
+
+**Status**: ✅ Completed Successfully
+**Completed Date**: 2026-11-20
+
+### Results
+
+All 7 tasks across 5 phases are complete on branch `190--self-review-stack` (base `6b33509`, v2.1.4):
+
+- The desktop `self-review` command accepts `-o`/`--output <file>` and `--output=<file>` as the initial output path, an explicit target like serve's; the guide next to it is discovered at startup and the save dialog can still change it.
+- `self-review-guide` gains `--guide-output` and `--content-ref`; `self-review-critique` gains `--review-output` and `--content-ref`. Without them both behave as before.
+- New private workspace package `@self-review/skill-scripts` holds the TypeScript stack helper (`resolve`, `build`, `check-imports`, `table`), reusing core's `parseGitDiffArgs`, `describeGitDiffSides` and `formatGitDiffArgs`. tsup bundles it into the committed, dependency-free `.agents/skills/self-review-stack/scripts/stack.cjs`; a staleness test fails when the bundle differs from a fresh build.
+- New skill `.agents/skills/self-review-stack/SKILL.md`, with the opencode symlink, `SYMLINKED_SKILLS` entry, README and AGENTS.md documentation.
+
+Verification (fresh runs at the end): `lint`, `format:check` and all five typecheck scripts exit 0; unit suites pass (main 610, renderer 935, serve 652, skill-scripts 17, core 1874 of 1876, the 2 failures being the pre-existing flaky `loaded-review-consistency.test.ts`). Self Validation steps 1–10 all passed, including the packaged desktop app launched under `xvfb-run` with `-o` (guide loaded, review written to the `-o` path and valid against `self-review-v3.xsd`), serve opening a step with its guide, and an agent running the skill end to end in a throwaway repository (stack reproduced the diff, repository state unchanged, three guides valid, three servers answering 200, table with URLs, cleanup complete).
+
+### Noteworthy Events
+
+- **Pre-existing flaky test.** `packages/core/src/loaded-review-consistency.test.ts` fails intermittently (1–3 tests per run) on unmodified upstream v2.1.4 in this VM, which makes the pre-commit hook (full unit suite) fail. With the user's approval, every commit on this branch used `--no-verify`, and each phase was verified by hand first (lint, format check, typechecks, all unit suites, accepting only that test's failures).
+- **Core tsconfig list.** Adding the package tripped `packages/core/src/tsconfig-paths.test.ts`, which pins the workspace tsconfigs; the new tsconfig was added to its list.
+- **Bundle feasibility.** Core's `describeGitDiffSides` bundled from `source-identity.ts` without extraction; the bundle needs only Node built-ins.
+- **table fix (phase 4).** With critique-seeded comments, `table` showed every step completed before review. It now reads a step's state from its serve log (last of `Review ready at` and `Review complete`), with a test written first.
+- **Self-validation fix.** The end-to-end skill run found the documented server cleanup (`pgrep -af -- "<outdir>/"`, then kill each) also matched wrapper subshells and the caller's shell. Servers now write `<outdir>/<slug>.serve.pid` and cleanup kills exactly those (verified with a real server). Smaller SKILL.md clarifications came from the same run. Post-execution gates were re-run in full after the fix.
+- **Environment.** The desktop validation step needed `xauth` and `libgtk-3-0`, installed in the VM with `sudo apt-get install -y xauth libgtk-3-0` as AGENTS.md documents.
+- **Code review gate.** Result line, verbatim: `{"kind":"skipped","reason":"review-disabled","detail":"Code review is disabled. Set code_review.enabled to true in config/config.yaml or select Enable code review in Customize to opt in.","action":"continue","codeReview":"Skipped; Code review is disabled. Set code_review.enabled to true in config/config.yaml or select Enable code review in Customize to opt in."}`. No findings to act on.
+
+### Necessary follow-ups
+
+- The maintainer has not yet answered #190's open question on desktop `--output`; if rejected, only the skill's desktop section changes (fallback described in the plan's risks).
+- `stack.cjs table` keeps showing a step's URL after its server was killed; the new `.serve.pid` files would let it report a stopped server.
+- The guide skill validates with an XSD path relative to the repository (`.agents/skills/...`), which only resolves where the skill is installed in that repository (pre-existing).
+- The release workflow's `npm pack --workspaces` also packs the private `@self-review/skill-scripts` (not published; the publish step uses a fixed list).
+- The flaky `loaded-review-consistency.test.ts` deserves its own upstream issue.
+- `packages/config` is missing from AGENTS.md's project structure (pre-existing).
+- The Electron e2e tier (`npm run test:e2e:electron`) and the webapp/serve e2e tiers were not run; the desktop change was validated with unit tests and the targeted packaged-app check.
