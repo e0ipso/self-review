@@ -264,9 +264,9 @@ graph TD
 **Parallel Tasks:**
 - ✔️ Task 004: Implement the helper's resolve and build subcommands (depends on: 003)
 
-### Phase 3: Helper reporting
+### ✅ Phase 3: Helper reporting
 **Parallel Tasks:**
-- Task 005: Implement the helper's check-imports and table subcommands (depends on: 004)
+- ✔️ Task 005: Implement the helper's check-imports and table subcommands (depends on: 004)
 
 ### Phase 4: The skill
 **Parallel Tasks:**

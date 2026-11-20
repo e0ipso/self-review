@@ -32,18 +32,24 @@ function commitAll(repo: string, message: string): void {
   git(repo, 'commit', '-q', '-m', message);
 }
 
-/**
- * main:    c1 (a, b, src/x.ts, docs/d.md) ── c3 (docs/d.md changed)
- * feature:  └─ c2 (a changed, b deleted, c added, src/x.ts changed)
- * HEAD is main, clean.
- */
-function makeRepo(): string {
+/** An empty repository on `main`, removed after the suite. */
+function initRepo(): string {
   const repo = mkdtempSync(path.join(tmpdir(), 'skill-scripts-stack-'));
   scratch.push(repo);
   git(repo, 'init', '-q', '-b', 'main');
   git(repo, 'config', 'user.name', 'Test');
   git(repo, 'config', 'user.email', 'test@example.com');
   git(repo, 'config', 'commit.gpgsign', 'false');
+  return repo;
+}
+
+/**
+ * main:    c1 (a, b, src/x.ts, docs/d.md) ── c3 (docs/d.md changed)
+ * feature:  └─ c2 (a changed, b deleted, c added, src/x.ts changed)
+ * HEAD is main, clean.
+ */
+function makeRepo(): string {
+  const repo = initRepo();
   write(repo, 'a.txt', 'a1\n');
   write(repo, 'b.txt', 'b1\n');
   write(repo, 'src/x.ts', 'export const x = 1;\n');
@@ -405,5 +411,164 @@ describe('stack.cjs build', () => {
     expect(empty.stderr).toMatch(/No changes to stack/);
     expect(empty.status).toBe(1);
     expect(git(repo, 'for-each-ref', 'refs/heads/p')).toBe('');
+  });
+});
+
+/**
+ * main:    src/util.ts exports a
+ * feature: src/util.ts also exports b, src/helper.ts is new, src/app.ts is new and imports
+ *          both, through a relative `.js` specifier, an alias, a package and a `$types` file
+ *          that never exists.
+ */
+function makeImportsRepo(): string {
+  const repo = initRepo();
+  write(repo, 'src/util.ts', 'export const a = 1;\n');
+  commitAll(repo, 'base');
+  git(repo, 'checkout', '-q', '-b', 'feature');
+  write(repo, 'src/util.ts', 'export const a = 1;\nexport function b() {\n  return a;\n}\n');
+  write(repo, 'src/helper.ts', 'const h = 2;\nexport { h as default, h };\n');
+  write(
+    repo,
+    'src/app.ts',
+    [
+      "import { a, b as bee } from './util.js';",
+      "import { h } from '@/helper';",
+      "import type { PageData } from './$types';",
+      "import { useState } from 'react';",
+      'export const app = a + bee() + h;',
+      '',
+    ].join('\n')
+  );
+  commitAll(repo, 'feature');
+  git(repo, 'checkout', '-q', 'main');
+  return repo;
+}
+
+function buildStack(repo: string, spec: unknown): string {
+  const file = writeSpec(repo, spec);
+  const result = stack(repo, 'build', file);
+  expect(result.stderr).toBe('');
+  expect(result.status).toBe(0);
+  return file;
+}
+
+describe('stack.cjs check-imports', () => {
+  it('reports what a step imports before a later step adds it', () => {
+    const repo = makeImportsRepo();
+    const spec = buildStack(repo, {
+      diff_args: ['main...feature'],
+      prefix: 'early',
+      steps: [
+        { slug: '01-app', subject: 'feat: app', files: ['src/app.ts'] },
+        { slug: '02-lib', subject: 'feat: lib', files: ['src/util.ts', 'src/helper.ts'] },
+      ],
+    });
+
+    const result = stack(
+      repo,
+      'check-imports',
+      spec,
+      '--alias',
+      '@/=src/',
+      '--ignore',
+      '\\$types$'
+    );
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toBe(
+      [
+        'early/01-app: src/app.ts imports b from ./util.js, which src/util.ts does not export at this step',
+        'early/01-app: src/app.ts imports @/helper, which does not exist at this step',
+        '2 problem(s)',
+        '',
+      ].join('\n')
+    );
+    expect(result.status).toBe(1);
+
+    // Without the alias or the ignore, the alias reads as a package and $types is missing.
+    const plain = stack(repo, 'check-imports', spec);
+    expect(plain.stdout).toBe(
+      [
+        'early/01-app: src/app.ts imports b from ./util.js, which src/util.ts does not export at this step',
+        'early/01-app: src/app.ts imports ./$types, which does not exist at this step',
+        'early/02-lib: src/app.ts imports ./$types, which does not exist at this step',
+        '3 problem(s)',
+        '',
+      ].join('\n')
+    );
+    expect(plain.status).toBe(1);
+  });
+
+  it('reports nothing for a stack in dependency order, and refuses a malformed alias', () => {
+    const repo = makeImportsRepo();
+    const spec = buildStack(repo, {
+      diff_args: ['main...feature'],
+      prefix: 'ordered',
+      steps: [
+        { slug: '01-lib', subject: 'feat: lib', files: ['src/util.ts', 'src/helper.ts'] },
+        { slug: '02-app', subject: 'feat: app', files: ['src/app.ts'] },
+      ],
+    });
+
+    const result = stack(repo, 'check-imports', spec, '--alias=@/=src/', '--ignore=\\$types$');
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toBe('0 problem(s)\n');
+    expect(result.status).toBe(0);
+
+    const malformed = stack(repo, 'check-imports', spec, '--alias', '@/');
+    expect(malformed.stdout).toBe('');
+    expect(malformed.stderr).toMatch(/--alias needs PREFIX=DIR/);
+    expect(malformed.status).toBe(2);
+  });
+});
+
+describe('stack.cjs table', () => {
+  it('summarizes each step with its review state and a total', () => {
+    const repo = makeRepo();
+    const spec = buildStack(repo, {
+      diff_args: ['main...feature'],
+      prefix: 'feature-stack',
+      steps: [
+        {
+          slug: '01-cleanup',
+          subject: 'chore: drop b',
+          description: 'Drops b | the old file.',
+          files: ['b.txt'],
+        },
+        { slug: '02-code', subject: 'feat: bump x', files: ['src/x.ts'] },
+        { slug: '03-text', subject: 'docs: revise a', description: 'Revises a.', files: ['a.txt'] },
+        { slug: '04-new', subject: 'docs: add c', files: ['c.txt'] },
+      ],
+    });
+    const dir = path.dirname(spec);
+    // A finished review wins over its log.
+    writeFileSync(path.join(dir, '01-cleanup.review.xml'), '<review/>\n');
+    writeFileSync(path.join(dir, '01-cleanup.serve.log'), 'Review ready at http://127.0.0.1:1/\n');
+    // The last URL in the log; a "Loaded N files" line is no longer read.
+    writeFileSync(
+      path.join(dir, '02-code.serve.log'),
+      [
+        'Loaded 99 files',
+        'Review ready at http://127.0.0.1:4000/#cap=old',
+        'Review ready at http://127.0.0.1:4001/#cap=new',
+        '',
+      ].join('\n')
+    );
+    writeFileSync(path.join(dir, '03-text.serve.log'), 'error: something went wrong\n');
+
+    const result = stack(repo, 'table', spec);
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe(
+      [
+        '| # | Step | Description | Diff | Review URL |',
+        '|---|---|---|---|---|',
+        '| 1 | `feature-stack/01-cleanup` | Drops b \\| the old file. | 1 file changed +0 -1 | completed (`01-cleanup.review.xml`) |',
+        '| 2 | `feature-stack/02-code` |  | 1 file changed +1 -1 | http://127.0.0.1:4001/#cap=new |',
+        '| 3 | `feature-stack/03-text` | Revises a. | 1 file changed +1 -1 | not ready, see log |',
+        '| 4 | `feature-stack/04-new` |  | 1 file changed +1 -0 | not started |',
+        '| | **Total** | | **4 files changed +3 -3** | |',
+        '',
+      ].join('\n')
+    );
   });
 });

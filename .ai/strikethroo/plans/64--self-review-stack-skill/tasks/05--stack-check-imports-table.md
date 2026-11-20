@@ -2,7 +2,7 @@
 id: 5
 group: "helper"
 dependencies: [4]
-status: "pending"
+status: "completed"
 created: 2026-11-20
 skills:
   - typescript
@@ -17,11 +17,11 @@ Port `stack.py`'s `check-imports` (optional JS/TS heuristic) and `table` (Markdo
 - `typescript`: port of regex-based import analysis and table rendering.
 
 ## Acceptance Criteria
-- [ ] `node stack.cjs check-imports <spec> [--alias PREFIX=DIR]... [--ignore REGEX]...` reports, per step branch, imports of files that do not exist at that step and named imports a changed file does not yet export at that step; prints `N problem(s)` and exits 1 when N > 0, else 0.
-- [ ] `node stack.cjs table <spec>` prints `| # | Step | Description | Diff | Review URL |` rows per step with shortstat per step and a bold Total row; the URL column is the last `Review ready at <url>` in `<spec dir>/<slug>.serve.log`, `completed (\`<slug>.review.xml\`)` when that review exists, `not ready, see log` when the log has no URL, and `not started` when there is no log. Pipe characters in descriptions are escaped.
-- [ ] No "Loaded N files" parsing or warning remains.
-- [ ] Integration tests run the bundle against a fixture repo with a built stack (reuse task 4's fixture helpers) and cover: an ordering problem detected by `check-imports` (step 1 imports a name step 2 adds) and a clean stack reporting `0 problem(s)`; `table` output for the four URL states.
-- [ ] Bundle rebuilt and committed; `npm run test:unit --workspace @self-review/skill-scripts` and `npm run typecheck:packages` exit 0.
+- [x] `node stack.cjs check-imports <spec> [--alias PREFIX=DIR]... [--ignore REGEX]...` reports, per step branch, imports of files that do not exist at that step and named imports a changed file does not yet export at that step; prints `N problem(s)` and exits 1 when N > 0, else 0.
+- [x] `node stack.cjs table <spec>` prints `| # | Step | Description | Diff | Review URL |` rows per step with shortstat per step and a bold Total row; the URL column is the last `Review ready at <url>` in `<spec dir>/<slug>.serve.log`, `completed (\`<slug>.review.xml\`)` when that review exists, `not ready, see log` when the log has no URL, and `not started` when there is no log. Pipe characters in descriptions are escaped.
+- [x] No "Loaded N files" parsing or warning remains.
+- [x] Integration tests run the bundle against a fixture repo with a built stack (reuse task 4's fixture helpers) and cover: an ordering problem detected by `check-imports` (step 1 imports a name step 2 adds) and a clean stack reporting `0 problem(s)`; `table` output for the four URL states.
+- [x] Bundle rebuilt and committed; `npm run test:unit --workspace @self-review/skill-scripts` and `npm run typecheck:packages` exit 0.
 
 Use your internal Todo tool to track these and keep on track.
 

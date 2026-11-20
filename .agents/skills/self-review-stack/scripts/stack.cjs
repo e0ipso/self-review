@@ -677,6 +677,9 @@ function loadSpec(file, options) {
 function branchName(spec, step) {
   return `${spec.prefix}/${step.slug}`;
 }
+function stackBase(spec) {
+  return gitValue(["rev-parse", "--verify", `refs/heads/${branchName(spec, spec.steps[0])}^`]);
+}
 
 // src/stack/build.ts
 function partitionProblems(spec, changes) {
@@ -820,9 +823,187 @@ function cmdBuild(specFile) {
   return 0;
 }
 
+// src/stack/check-imports.ts
+var path8 = __toESM(require("path"), 1);
+var SOURCE = /\.(?:[cm]?[jt]sx?|svelte|vue)$/;
+var FROM = /\b(?:import|export)\s+(?:type\s+)?([\p{L}\p{N}_$*{}\s,]*?)\s*from\s*(['"])([^'"\n]+)\2/gu;
+var BARE = /\bimport\s*(?:\(\s*)?(['"])([^'"\n]+)\1/g;
+var DECLARED = /\bexport\s+(?:declare\s+)?(?:default\s+)?(?:async\s+)?(?:abstract\s+)?(?:const|let|var|function\*?|class|type|interface|enum|namespace)\s+([\p{L}\p{N}_$]+)/gu;
+var LISTED = /\bexport\s+(?:type\s+)?\{([^}]*)\}/g;
+var STAR = /\bexport\s+\*\s+from\b/;
+var EMITTED_JS = /\.[cm]?js$/;
+var CANDIDATES = [
+  "",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".svelte",
+  ".vue",
+  ".d.ts",
+  "/index.ts",
+  "/index.tsx",
+  "/index.js",
+  "/index.jsx",
+  "/index.svelte"
+];
+function bracedNames(clause, side) {
+  const match = /\{([^}]*)\}/.exec(clause);
+  if (!match) return [];
+  const names = [];
+  for (let item of match[1].split(",")) {
+    item = item.trim();
+    if (item.startsWith("type ")) item = item.slice(5).trim();
+    if (item === "") continue;
+    const parts = item.split(" as ");
+    names.push(parts[side === 0 ? 0 : parts.length - 1].trim());
+  }
+  return names;
+}
+function exportedNames(text) {
+  const names = /* @__PURE__ */ new Set();
+  for (const match of text.matchAll(DECLARED)) names.add(match[1]);
+  for (const match of text.matchAll(LISTED)) {
+    for (const name of bracedNames(`{${match[1]}}`, -1)) names.add(name);
+  }
+  return { names, hasStar: STAR.test(text) };
+}
+function normalize3(file) {
+  const normal = path8.posix.normalize(file);
+  return normal.length > 1 && normal.endsWith("/") ? normal.slice(0, -1) : normal;
+}
+function resolveImport(source, importer, aliases, tree) {
+  let target;
+  if (source.startsWith(".")) {
+    target = normalize3(path8.posix.join(path8.posix.dirname(importer), source));
+  } else {
+    const alias = aliases.find((candidate) => source.startsWith(candidate.prefix));
+    if (!alias) return { target: null, found: true };
+    const directory = alias.directory.replace(/\/+$/, "");
+    const rest = source.slice(alias.prefix.length);
+    target = normalize3(directory === "" ? rest : `${directory}/${rest}`);
+  }
+  const stems = [target];
+  if (EMITTED_JS.test(target)) stems.push(target.replace(EMITTED_JS, ""));
+  for (const stem of stems) {
+    for (const suffix of CANDIDATES) {
+      if (tree.has(stem + suffix)) return { target: stem + suffix, found: true };
+    }
+  }
+  return { target, found: false };
+}
+function compileIgnores(patterns) {
+  return patterns.map((pattern) => {
+    try {
+      return new RegExp(pattern);
+    } catch (error) {
+      throw new StackError(`--ignore ${pattern}: ${error.message}`);
+    }
+  });
+}
+function importsOf(text) {
+  return [
+    ...[...text.matchAll(FROM)].map((match) => ({ clause: match[1], source: match[3] })),
+    ...[...text.matchAll(BARE)].map((match) => ({ clause: "", source: match[2] }))
+  ];
+}
+function show(ref, file) {
+  return git(["show", `${ref}:${file}`]);
+}
+function fileProblems(ref, file, tree, changed, aliases, ignores) {
+  const problems = [];
+  for (const { clause, source } of importsOf(show(ref, file))) {
+    if (ignores.some((pattern) => pattern.test(source))) continue;
+    const { target, found } = resolveImport(source, file, aliases, tree);
+    if (!found) {
+      problems.push(`${ref}: ${file} imports ${source}, which does not exist at this step`);
+      continue;
+    }
+    if (target === null || !changed.has(target) || target.endsWith(".svelte")) continue;
+    const wanted = bracedNames(clause, 0);
+    if (wanted.length === 0) continue;
+    const { names, hasStar } = exportedNames(show(ref, target));
+    if (hasStar) continue;
+    for (const name of wanted) {
+      if (!names.has(name)) {
+        problems.push(
+          `${ref}: ${file} imports ${name} from ${source}, which ${target} does not export at this step`
+        );
+      }
+    }
+  }
+  return problems;
+}
+function cmdCheckImports({ specFile, aliases, ignores }) {
+  const patterns = compileIgnores(ignores);
+  const spec = loadSpec(specFile, { requireDiffArgs: false });
+  const base = stackBase(spec);
+  const top = branchName(spec, spec.steps[spec.steps.length - 1]);
+  const changed = new Set(changedPaths(base, top, []).map((change) => change.path));
+  let problems = 0;
+  for (const step of spec.steps) {
+    const ref = branchName(spec, step);
+    const tree = new Set(nulSplit(git(["ls-tree", "-r", "--full-tree", "--name-only", "-z", ref])));
+    const files = [...changed].filter((file) => tree.has(file) && SOURCE.test(file)).sort();
+    for (const file of files) {
+      for (const line of fileProblems(ref, file, tree, changed, aliases, patterns)) {
+        process.stdout.write(`${line}
+`);
+        problems += 1;
+      }
+    }
+  }
+  process.stdout.write(`${problems} problem(s)
+`);
+  return problems > 0 ? 1 : 0;
+}
+
+// src/stack/table.ts
+var import_fs5 = require("fs");
+var path9 = __toESM(require("path"), 1);
+var READY = /Review ready at (\S+)/g;
+function serveStatus(specDir, slug) {
+  if ((0, import_fs5.existsSync)(path9.join(specDir, `${slug}.review.xml`))) {
+    return `completed (\`${slug}.review.xml\`)`;
+  }
+  let log;
+  try {
+    log = (0, import_fs5.readFileSync)(path9.join(specDir, `${slug}.serve.log`), "utf8");
+  } catch {
+    return "not started";
+  }
+  const urls = [...log.matchAll(READY)].map((match) => match[1]);
+  return urls.length > 0 ? urls[urls.length - 1] : "not ready, see log";
+}
+function cell(text) {
+  return text.replace(/\|/g, "\\|").replace(/\s*\r?\n\s*/g, " ");
+}
+function cmdTable(specFile) {
+  const spec = loadSpec(specFile, { requireDiffArgs: false });
+  const specDir = path9.dirname(path9.resolve(specFile));
+  const base = stackBase(spec);
+  const rows = ["| # | Step | Description | Diff | Review URL |", "|---|---|---|---|---|"];
+  let previous = base;
+  spec.steps.forEach((step, index) => {
+    const ref = branchName(spec, step);
+    const size = diffstat(shortstat(previous, ref));
+    const status = serveStatus(specDir, step.slug);
+    rows.push(`| ${index + 1} | \`${ref}\` | ${cell(step.description)} | ${size} | ${status} |`);
+    previous = ref;
+  });
+  rows.push(`| | **Total** | | **${diffstat(shortstat(base, previous))}** | |`);
+  process.stdout.write(`${rows.join("\n")}
+`);
+  return 0;
+}
+
 // src/stack/cli.ts
 var USAGE = `usage: stack.cjs resolve <git-diff-args...>
        stack.cjs build <spec.json>
+       stack.cjs check-imports <spec.json> [--alias PREFIX=DIR]... [--ignore REGEX]...
+       stack.cjs table <spec.json>
 
 Builds a stack of local review branches for one git diff. Run it from inside the
 repository. It never writes the working tree, the index, HEAD or an existing ref.
@@ -849,6 +1030,27 @@ Commands:
       Prints each branch, its short SHA and subject, and the diff arguments for
       each step: the pass-through options, then <previous>..<step branch>, where
       step 1's previous is the base's short SHA.
+
+  check-imports <spec.json> [--alias PREFIX=DIR]... [--ignore REGEX]...
+      A JS/TS heuristic over a built stack, read with regular expressions. At
+      every step, report each import of a file that does not exist yet and each
+      named import a changed file does not export yet, then "<N> problem(s)":
+
+        retry-stack/02-retry: src/client.ts imports ./backoff, which does not exist at this step
+        retry-stack/02-retry: src/client.ts imports retry from ./retry.js, which src/retry.ts does not export at this step
+        2 problem(s)
+
+      Exits 1 when it reports a problem. An import that is neither relative nor
+      under an --alias (e.g. --alias @/=src/) is a package and is not checked.
+      --ignore skips specifiers a JavaScript regular expression matches (e.g.
+      --ignore '\\$types$'). Both repeat.
+
+  table <spec.json>
+      Print the stack as a Markdown table: one row per step with its description,
+      diff size and review state, then the total. The review state comes from
+      files beside the spec: "completed (\`<slug>.review.xml\`)" when that file
+      exists, else the last "Review ready at <url>" URL in <slug>.serve.log, else
+      "not ready, see log" when that log exists, else "not started".
 
 Diff arguments, with their git diff meanings:
 
@@ -884,14 +1086,50 @@ be in exactly one step, and no branch may exist under the prefix yet:
     ]
   }
 
-Exit status: 0 success, 1 refusal or error (reason on stderr), 2 usage error,
-3 resolve found no changes.`;
+Exit status: 0 success, 1 refusal or error (reason on stderr) or problems found by
+check-imports, 2 usage error, 3 resolve found no changes.`;
+var UsageError = class extends Error {
+};
+function parseCheckImports(args) {
+  const specs = [];
+  const aliases = [];
+  const ignores = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const option = /^(--alias|--ignore)(?:=(.*))?$/s.exec(args[i]);
+    if (!option) {
+      if (args[i].startsWith("-")) throw new UsageError(`unknown option ${args[i]}`);
+      specs.push(args[i]);
+      continue;
+    }
+    const [, name, inline] = option;
+    const value = inline ?? args[i += 1];
+    if (value === void 0) throw new UsageError(`${name} needs a value`);
+    if (name === "--ignore") {
+      ignores.push(value);
+      continue;
+    }
+    const separator = value.indexOf("=");
+    if (separator < 1) throw new UsageError(`--alias needs PREFIX=DIR, got '${value}'`);
+    aliases.push({ prefix: value.slice(0, separator), directory: value.slice(separator + 1) });
+  }
+  if (specs.length !== 1) throw new UsageError("check-imports takes one spec file");
+  return { specFile: specs[0], aliases, ignores };
+}
 function main(argv) {
   const [command, ...args] = argv;
   try {
     if (command === "resolve") return cmdResolve(args);
     if (command === "build" && args.length === 1) return cmdBuild(args[0]);
+    if (command === "check-imports") return cmdCheckImports(parseCheckImports(args));
+    if (command === "table" && args.length === 1) return cmdTable(args[0]);
   } catch (error) {
+    if (error instanceof UsageError) {
+      process.stderr.write(`stack.cjs ${command}: ${error.message}
+
+${USAGE}
+`);
+      return 2;
+    }
     if (!(error instanceof StackError)) throw error;
     process.stderr.write(`${error.message}
 `);
