@@ -412,6 +412,19 @@ function diffstat({ files, insertions, deletions }) {
 
 // src/stack/resolve.ts
 var STACK_OPTIONS = /* @__PURE__ */ new Set(["--staged", "--cached", "--merge-base"]);
+var SELECTING_OPTIONS = /* @__PURE__ */ new Set([
+  "--diff-filter",
+  "-S",
+  "-G",
+  "--pickaxe-all",
+  "--pickaxe-regex",
+  "--find-object",
+  "--relative",
+  "--skip-to",
+  "--ignore-submodules",
+  "--ita-invisible-in-index",
+  "--ita-visible-in-index"
+]);
 var ROOT_PATHS = ["-c", "diff.relative=false"];
 function isRevision(arg) {
   if (arg.includes("..") && !(0, import_fs3.existsSync)(arg)) return true;
@@ -458,6 +471,14 @@ function refuseUnstackable(argv, parsed) {
   }
   if (names.has("-R")) {
     throw new StackError("-R reverses the diff; name the same diff in its forward direction");
+  }
+  const selecting = [...names].filter((name) => SELECTING_OPTIONS.has(name));
+  if (selecting.length > 0) {
+    throw new StackError(
+      selecting.map(
+        (name) => `${name}: selects which changes the diff contains rather than how they are shown, so a stack of every change cannot reproduce it; leave it out, and to stack only some paths, name them after --`
+      ).join("\n")
+    );
   }
   const unsupported = findUnsupportedGitDiffOptions(argv);
   if (unsupported.length > 0) {
@@ -734,7 +755,7 @@ function takenBranchProblems(spec) {
 }
 function treeEntries(tree) {
   const entries = /* @__PURE__ */ new Map();
-  for (const line of nulSplit(git(["ls-tree", "-r", "-z", tree]))) {
+  for (const line of nulSplit(git(["ls-tree", "-r", "--full-tree", "-z", tree]))) {
     const tab = line.indexOf("	");
     const [mode, , oid] = line.slice(0, tab).split(" ");
     entries.set(line.slice(tab + 1), { mode, oid });
@@ -1065,11 +1086,15 @@ Diff arguments, with their git diff meanings:
   -- <paths>          only changes under these paths; a positional that names
                       no revision is a path too, as in git
 
-Every other option (-w, -U10, -M, ...) changes how a diff is shown, not what
-changed: it stays out of the stack and is passed through to each step's diff
-arguments, spelled as given. Untracked files are not part of a git diff. Refused:
---no-index, -R, more than two revisions, --cached with a range, --merge-base with
-no revision, and output formats self-review cannot load (--stat, --name-only, ...).
+Options that select which paths or changes a diff contains are refused, since
+the stack holds every change; name paths after -- instead: --diff-filter, -S,
+-G, --pickaxe-all, --pickaxe-regex, --find-object, --relative, --skip-to,
+--ignore-submodules, --ita-invisible-in-index and --ita-visible-in-index.
+Every other option (-w, -U10, -M, ...) changes how a diff is shown: it stays
+out of the stack and is passed through to each step's diff arguments, spelled
+as given. Untracked files are not part of a git diff. Also refused: --no-index,
+-R, more than two revisions, --cached with a range, --merge-base with no
+revision, and output formats self-review cannot load (--stat, --name-only, ...).
 
 The spec is a JSON file. "trailers" and "description" are optional; "files" are
 paths from the repository root, as resolve prints them. Every changed path must

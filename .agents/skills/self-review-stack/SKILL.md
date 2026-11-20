@@ -60,8 +60,11 @@ A stack needs a little more from the arguments than a single diff does:
   holds, with their `git diff` meanings. When a side is the working tree or the index,
   `stack.cjs` snapshots it from a copy of the index, and unstaged changes are stacked on a commit
   of the index, since every step must be a commit.
-- **Every other option** (`-w`, `-U10`, `-M`) changes how a diff is shown, not what changed. It
-  stays out of the stack and is passed through to each step's guide and review.
+- **Options that select which paths or changes appear** (`--diff-filter`, `-S`, `-G`,
+  `--relative`, `--skip-to`, ...; `stack.cjs --help` lists them) are refused, since the stack
+  holds every change. To stack only some paths, name them after `--`.
+- **Every other option** (`-w`, `-U10`, `-M`) changes how a diff is shown. It stays out of the
+  stack and is passed through to each step's guide and review.
 - **Untracked files** are not part of a git diff, as with the guide skill. The user can
   `git add -N` them first to include them; this skill never does it for them.
 - **`--no-index` and `-R`** are refused: files outside the repository have no history to stack

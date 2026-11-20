@@ -142,9 +142,16 @@ describe('stack.cjs resolve', () => {
     expect(changeLines(nested.stdout)).toEqual(['M\ta.txt', 'M\tsrc/x.ts']);
 
     // Display options pass through with their separate values, in their original spelling.
-    const options = stack(repo, 'resolve', '-w', '-U5', '-S', 'two words', 'main...feature');
+    const options = stack(repo, 'resolve', '-w', '-U5', '-I', 'two words', 'main...feature');
     expect(options.status).toBe(0);
-    expect(field(options.stdout, 'options')).toBe("-w -U5 -S 'two words'");
+    expect(field(options.stdout, 'options')).toBe("-w -U5 -I 'two words'");
+
+    // A separate value that looks like a selecting option is a value, not that option.
+    const lookalike = stack(repo, 'resolve', '-I', '--relative', '-O', '-Sfoo', 'main...feature');
+    expect(lookalike.stderr).toBe('');
+    expect(lookalike.status).toBe(0);
+    expect(field(lookalike.stdout, 'options')).toBe('-I --relative -O -Sfoo');
+    expect(changeLines(lookalike.stdout)).toEqual(branchChanges);
 
     // From the merge base of a revision and HEAD, to the working tree or the index.
     git(repo, 'checkout', '-q', 'feature');
@@ -228,6 +235,56 @@ describe('stack.cjs resolve', () => {
       expect(result.stderr, args.join(' ')).toMatch(message);
       expect(result.status, args.join(' ')).toBe(1);
     }
+  });
+
+  it('refuses options that select which changes the diff holds, in every spelling', () => {
+    const blob = git(repo, 'rev-parse', 'feature:c.txt');
+    const selecting: Array<[string[], string]> = [
+      [['--diff-filter=M'], '--diff-filter'],
+      [['--diff-filter', 'M'], '--diff-filter'],
+      [['--diff-filter=d'], '--diff-filter'],
+      [['-Sx'], '-S'],
+      [['-S', 'x'], '-S'],
+      [['-wSx'], '-S'],
+      [['-wS', 'x'], '-S'],
+      [['-S', '--relative'], '-S'],
+      [['-Gx'], '-G'],
+      [['-G', 'x'], '-G'],
+      [['-pG', 'x'], '-G'],
+      [['--pickaxe-all'], '--pickaxe-all'],
+      [['--pickaxe-regex'], '--pickaxe-regex'],
+      [[`--find-object=${blob}`], '--find-object'],
+      [['--find-object', blob], '--find-object'],
+      [['--relative'], '--relative'],
+      [['--relative=src'], '--relative'],
+      [['--skip-to=c.txt'], '--skip-to'],
+      [['--skip-to', 'c.txt'], '--skip-to'],
+      [['--ignore-submodules'], '--ignore-submodules'],
+      [['--ignore-submodules=dirty'], '--ignore-submodules'],
+      [['--ita-invisible-in-index'], '--ita-invisible-in-index'],
+      [['--ita-visible-in-index'], '--ita-visible-in-index'],
+    ];
+    for (const [options, name] of selecting) {
+      const args = [...options, 'main...feature'];
+      const label = args.join(' ');
+      const result = stack(repo, 'resolve', ...args);
+      expect(result.stdout, label).toBe('');
+      expect(result.status, label).toBe(1);
+      const lines = result.stderr.trimEnd().split('\n');
+      expect(lines, label).toHaveLength(1);
+      expect(lines[0], label).toMatch(new RegExp(`^${name}: selects which changes`));
+      expect(lines[0], label).toMatch(/name them after --$/);
+    }
+
+    // Every selecting option is named, once each.
+    const several = stack(repo, 'resolve', '-S', 'x', '--diff-filter=M', '-Sy', 'main...feature');
+    expect(
+      several.stderr
+        .trimEnd()
+        .split('\n')
+        .map(line => line.split(':')[0])
+    ).toEqual(['-S', '--diff-filter']);
+    expect(several.status).toBe(1);
   });
 });
 
@@ -391,6 +448,68 @@ describe('stack.cjs build', () => {
     const after = snapshot(repo);
     expect(after.branches).toBe(before.branches);
     expectUntouched(repo, before);
+  });
+
+  it('builds the same stack from a subdirectory as from the root', () => {
+    const steps = [
+      { slug: '01-cleanup', subject: 'chore: drop b', files: ['b.txt'] },
+      { slug: '02-rest', subject: 'feat: the rest', files: ['src/x.ts', 'a.txt', 'c.txt'] },
+    ];
+    const fromRoot = stack(
+      repo,
+      'build',
+      writeSpec(repo, { diff_args: ['main...feature'], prefix: 'root-stack', steps })
+    );
+    expect(fromRoot.stderr).toBe('');
+    expect(fromRoot.status).toBe(0);
+
+    const before = snapshot(repo);
+    const nested = stack(
+      path.join(repo, 'src'),
+      'build',
+      writeSpec(repo, { diff_args: ['main...feature'], prefix: 'nested-stack', steps })
+    );
+    expect(nested.stderr).toBe('');
+    expect(nested.status).toBe(0);
+    expect(nested.stdout.replace(/[0-9a-f]{7,}/g, '<sha>').replace(/nested-/g, 'root-')).toBe(
+      fromRoot.stdout.replace(/[0-9a-f]{7,}/g, '<sha>')
+    );
+    for (const step of steps) {
+      expect(git(repo, 'rev-parse', `nested-stack/${step.slug}^{tree}`)).toBe(
+        git(repo, 'rev-parse', `root-stack/${step.slug}^{tree}`)
+      );
+    }
+    expect(git(repo, 'rev-parse', 'nested-stack/01-cleanup^')).toBe(
+      git(repo, 'rev-parse', 'root-stack/01-cleanup^')
+    );
+    expectUntouched(repo, before);
+
+    // The other commands read the built stack the same way from anywhere in the repository.
+    for (const command of ['table', 'check-imports']) {
+      const spec = writeSpec(repo, { prefix: 'nested-stack', steps });
+      const atRoot = stack(repo, command, spec);
+      const inSrc = stack(path.join(repo, 'src'), command, spec);
+      expect(atRoot.stderr, command).toBe('');
+      expect(atRoot.status, command).toBe(0);
+      expect(inSrc, command).toEqual(atRoot);
+    }
+  });
+
+  it('refuses a diff whose options select changes, creating nothing', () => {
+    const before = snapshot(repo);
+    const result = stack(
+      repo,
+      'build',
+      writeSpec(repo, {
+        diff_args: ['--diff-filter=M', 'main...feature'],
+        prefix: 'filtered-stack',
+        steps: [{ slug: '01', subject: 's', files: ['a.txt', 'src/x.ts'] }],
+      })
+    );
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toMatch(/^--diff-filter: selects which changes/);
+    expect(result.status).toBe(1);
+    expect(snapshot(repo).branches).toBe(before.branches);
   });
 
   it('refuses a malformed spec and a diff with no changes', () => {

@@ -75,11 +75,15 @@ Diff arguments, with their git diff meanings:
   -- <paths>          only changes under these paths; a positional that names
                       no revision is a path too, as in git
 
-Every other option (-w, -U10, -M, ...) changes how a diff is shown, not what
-changed: it stays out of the stack and is passed through to each step's diff
-arguments, spelled as given. Untracked files are not part of a git diff. Refused:
---no-index, -R, more than two revisions, --cached with a range, --merge-base with
-no revision, and output formats self-review cannot load (--stat, --name-only, ...).
+Options that select which paths or changes a diff contains are refused, since
+the stack holds every change; name paths after -- instead: --diff-filter, -S,
+-G, --pickaxe-all, --pickaxe-regex, --find-object, --relative, --skip-to,
+--ignore-submodules, --ita-invisible-in-index and --ita-visible-in-index.
+Every other option (-w, -U10, -M, ...) changes how a diff is shown: it stays
+out of the stack and is passed through to each step's diff arguments, spelled
+as given. Untracked files are not part of a git diff. Also refused: --no-index,
+-R, more than two revisions, --cached with a range, --merge-base with no
+revision, and output formats self-review cannot load (--stat, --name-only, ...).
 
 The spec is a JSON file. "trailers" and "description" are optional; "files" are
 paths from the repository root, as resolve prints them. Every changed path must

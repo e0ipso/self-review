@@ -79,10 +79,10 @@ function takenBranchProblems(spec: StackSpec): string[] {
   return problems;
 }
 
-/** Mode and object of every file in `tree`, by path. */
+/** Mode and object of every file in `tree`, by path from the root, wherever the helper runs. */
 function treeEntries(tree: string): Map<string, TreeEntry> {
   const entries = new Map<string, TreeEntry>();
-  for (const line of nulSplit(git(['ls-tree', '-r', '-z', tree]))) {
+  for (const line of nulSplit(git(['ls-tree', '-r', '--full-tree', '-z', tree]))) {
     const tab = line.indexOf('\t');
     const [mode, , oid] = line.slice(0, tab).split(' ');
     entries.set(line.slice(tab + 1), { mode, oid });

@@ -46,6 +46,24 @@ export interface Change {
 /** Options that choose the snapshots compared; they shape the stack, not each step's diff. */
 const STACK_OPTIONS = new Set(['--staged', '--cached', '--merge-base']);
 
+/**
+ * Options that choose which paths or changes appear, not how they are shown. The stack holds
+ * every change between its two sides, so it cannot reproduce a diff that leaves some out.
+ */
+const SELECTING_OPTIONS = new Set([
+  '--diff-filter',
+  '-S',
+  '-G',
+  '--pickaxe-all',
+  '--pickaxe-regex',
+  '--find-object',
+  '--relative',
+  '--skip-to',
+  '--ignore-submodules',
+  '--ita-invisible-in-index',
+  '--ita-visible-in-index',
+]);
+
 // Every diff the helper runs reports paths from the repository root, whatever the config.
 const ROOT_PATHS = ['-c', 'diff.relative=false'];
 
@@ -111,6 +129,19 @@ function refuseUnstackable(argv: readonly string[], parsed: ParsedGitDiffArgs): 
   }
   if (names.has('-R')) {
     throw new StackError('-R reverses the diff; name the same diff in its forward direction');
+  }
+  const selecting = [...names].filter(name => SELECTING_OPTIONS.has(name));
+  if (selecting.length > 0) {
+    throw new StackError(
+      selecting
+        .map(
+          name =>
+            `${name}: selects which changes the diff contains rather than how they are shown, ` +
+            'so a stack of every change cannot reproduce it; leave it out, and to stack only ' +
+            'some paths, name them after --'
+        )
+        .join('\n')
+    );
   }
   const unsupported = findUnsupportedGitDiffOptions(argv);
   if (unsupported.length > 0) {
