@@ -101,7 +101,9 @@ M	src/retry.ts
 You need enough understanding to cut the change into layers, not to judge it:
 
 - The changed paths from step 2, and `git diff --stat <base> <target>` for their sizes.
-- When the diff ends at a commit, `git log --oneline <base>..<end>` gives the commit subjects.
+- When the diff ends at a commit, `git log --oneline <base>..<end>` gives the commit subjects,
+  where `<end>` is the revision the arguments end at (`feature/retry` in
+  `origin/main...feature/retry`); `resolve` prints the target as a tree, not as a commit.
   They are a first draft of the layers, but later fix-up commits revise earlier ones, so steps
   are cut from the final file contents, never replayed from commits.
 - Read any plan or task documents in the change. Their task order is a good starting outline.
@@ -258,11 +260,12 @@ A failure is one of two things:
 For JavaScript and TypeScript, `stack.cjs check-imports` is an optional fast extra, a regular
 expression heuristic that needs no install. Use the Bash tool to run:
 ```bash
-node <skill-dir>/scripts/stack.cjs check-imports "<outdir>/stack.json" --alias @/=src/
+node <skill-dir>/scripts/stack.cjs check-imports "<outdir>/stack.json"
 ```
 
-Take the aliases from the `paths` in the project's `tsconfig.json` (`"@/*": ["src/*"]` becomes
-`--alias @/=src/`) and from any bundler alias configuration; `--ignore` takes a regular
+Both options are optional and repeatable. Add an `--alias` for each entry in the `paths` of the
+project's `tsconfig.json` (`"@/*": ["src/*"]` becomes `--alias @/=src/`) and in any bundler alias
+configuration; without one, only relative imports are checked. `--ignore` takes a regular
 expression for import specifiers that resolve to generated modules. Example (SvelteKit): add
 `--alias '$lib/=src/lib/' --ignore '\$types$'` for its `$lib` alias and generated `./$types`.
 It prints one line per problem and `<N> problem(s)`, and exits 1 when it found any. Each problem
@@ -287,7 +290,8 @@ arguments:
 - `<step-diff-args>` are the step's diff args from `build`, as printed.
 
 Give it the stack outline (slugs and descriptions) as context, so its overview can say what came
-before the step and what comes next.
+before the step and what comes next. A step of one or two files may have a single group; the
+guide skill's 2–5 group range is for whole diffs, and a stack step is already one layer.
 
 To pre-seed review comments as well, run the `self-review-critique` skill
 (`../self-review-critique/SKILL.md`) for each step instead, with:
@@ -314,23 +318,25 @@ If `git ls-files --others --exclude-standard` (run in `<root>`) prints anything,
 reviewer that self-review lists those untracked files as new files in every step, and that the
 "Hide New Files" toolbar toggle hides them.
 
-Open a step only once its guide validates. Without pre-seeded comments, leave `--resume-from`
-out of the commands below.
+Open a step only once its guide validates.
 
 ### Serve mode
 
 Use `self-review-serve` when it is on `PATH` (`command -v self-review-serve`); otherwise use
 `npx --yes @self-review/serve` in its place, and tell the user it runs the published package.
-Start one server per step in the background, from the repository root. Use the Bash tool to run:
+Start one server per step in the background, from the repository root, and record its process
+ID for cleanup. Use the Bash tool to run:
 ```bash
-cd "<root>" && nohup self-review-serve -o "<outdir>/<slug>.review.xml" \
-  --resume-from "<outdir>/<slug>.review.xml" <step-diff-args> \
-  > "<outdir>/<slug>.serve.log" 2>&1 &
+cd "<root>" && { nohup self-review-serve -o "<outdir>/<slug>.review.xml" <step-diff-args> \
+  > "<outdir>/<slug>.serve.log" 2>&1 & echo $! > "<outdir>/<slug>.serve.pid"; }
 ```
 
-When the harness has its own background mode, run the same command in it without `nohup` and the
-trailing `&`, keeping the redirect to `<outdir>/<slug>.serve.log`: `stack.cjs table` reads the
-review URL from that file. Start each server as soon as its guide validates, while later guides
+With pre-seeded comments, add `--resume-from "<outdir>/<slug>.review.xml"` after the `-o` option.
+
+When the harness has its own background mode, run the same `self-review-serve` command in it
+without `nohup`, the trailing `&` and the PID file, keeping the redirect to
+`<outdir>/<slug>.serve.log`: `stack.cjs table` reads the review URL from that file, and the
+harness stops the process. Start each server as soon as its guide validates, while later guides
 are still being written.
 
 Once a server is up, its log holds:
@@ -346,9 +352,10 @@ If the log ends in an error instead, the server has exited. Report the error for
 Open one step at a time, in order, and wait for each to finish before opening the next. Use the
 Bash tool to run, in the foreground:
 ```bash
-cd "<root>" && self-review -o "<outdir>/<slug>.review.xml" \
-  --resume-from "<outdir>/<slug>.review.xml" <step-diff-args>
+cd "<root>" && self-review -o "<outdir>/<slug>.review.xml" <step-diff-args>
 ```
+
+With pre-seeded comments, add `--resume-from "<outdir>/<slug>.review.xml"` after the `-o` option.
 
 The command returns when the reviewer finishes the review, which writes
 `<outdir>/<slug>.review.xml`, or quits. If that file does not exist afterwards, ask the user
@@ -392,7 +399,7 @@ Print the table, then briefly:
   needs an `ssh -L` forward of its port, and that each URL carries its session key after `#cap=`;
 - for a URL source in a temporary clone, the clone's path, to remove once the reviews are done
   and applied, since the review files live inside it;
-- how to clean up: stop any server still running (`pgrep -af -- "<outdir>/"` lists them with
-  their PIDs; `kill <pid>` each one), delete the branches with
+- how to clean up: stop any server still running with `kill $(cat "<outdir>"/*.serve.pid)`
+  (a server that already finished is gone, and `kill` only reports it), delete the branches with
   `git branch -D $(git branch --list '<prefix>/*' --format='%(refname:short)')`, then remove the
   output directory with `rm -rf "<outdir>"`.
