@@ -272,9 +272,9 @@ graph TD
 **Parallel Tasks:**
 - ✔️ Task 006: Write the self-review-stack SKILL.md (depends on: 001, 002, 004, 005)
 
-### Phase 5: Ship
+### ✅ Phase 5: Ship
 **Parallel Tasks:**
-- Task 007: Ship the skill: opencode symlink, SYMLINKED_SKILLS, README and AGENTS.md (depends on: 003, 006)
+- ✔️ Task 007: Ship the skill: opencode symlink, SYMLINKED_SKILLS, README and AGENTS.md (depends on: 003, 006)
 
 ### Post-phase Actions
 

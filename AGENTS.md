@@ -169,6 +169,11 @@ self-review/
 │   │   │                        #   acknowledgement shape, key fragment/header), client/ (browser
 │   │   │                        #   entry point + fetch-based ReviewAdapter, built into
 │   │   │                        #   dist/client/ and served statically)
+│   ├── skill-scripts/           # @self-review/skill-scripts (private, unpublished), TypeScript
+│   │                            #   source of the agent skills' helper scripts. src/stack/ is the
+│   │                            #   self-review-stack helper (resolve, build, check-imports,
+│   │                            #   table), bundled with the core modules it imports into the
+│   │                            #   committed .agents/skills/self-review-stack/scripts/stack.cjs
 │   └── types/                   # @self-review/types, shared TypeScript interfaces (zero runtime deps)
 │                                #   incl. ReviewGuide/GuideGroup/ResolvedGuideGroup guide types
 ```
@@ -183,7 +188,10 @@ imports the packages via relative path imports to their source (not through work
 no build step is needed for the packages during development; `@self-review/serve` is a real
 dependent (declared in its `package.json`, resolved as an installed package) rather than a relative
 import, since it ships and runs independently of the Electron app. The Electron app's
-`src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source.
+`src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source. The
+private `@self-review/skill-scripts` package is the source of the scripts the agent skills run; it
+imports core's source by relative path too, and ships only as the bundle committed into the skill
+directory, which plain `node` runs with no install.
 
 ## Keyboard Shortcuts
 
@@ -496,11 +504,18 @@ Unit tests use Vitest with separate configurations for main and renderer process
 - **Main process tests** (`src/main/**/*.test.ts`): Test Electron-bound Node.js modules (CLI
   argument parsing and dispatch, IPC handler wiring, the quit controller, version-update comparison,
   relaunch re-exec logic). Run in Node.js environment.
-- **Package tests**: `packages/core` and `packages/serve` run their own Vitest suites, which
-  `npm run test:unit` runs after the main and renderer suites. Core's real-git suites
-  (`*.process.test.ts`, `git.test.ts`, the expansion and snapshot handler tests) spawn git in
+- **Package tests**: `packages/core`, `packages/serve` and `packages/skill-scripts` run their own
+  Vitest suites, which `npm run test:unit` runs after the main and renderer suites. Core's real-git
+  suites (`*.process.test.ts`, `git.test.ts`, the expansion and snapshot handler tests) spawn git in
   disposable repositories; serve's `server.test.ts` starts the real listener on an ephemeral
-  loopback port.
+  loopback port; skill-scripts' `stack.process.test.ts` runs the committed `stack.cjs` bundle with
+  plain `node` in disposable repositories under the OS temp directory.
+- **Skill bundle staleness**: `packages/skill-scripts/src/stack/bundle.test.ts` rebuilds the
+  `self-review-stack` helper into a temp directory and fails when the committed
+  `.agents/skills/self-review-stack/scripts/stack.cjs` differs byte for byte. The bundle inlines the
+  core modules it imports (`git-argument-policy.ts`, `git-argument-text.ts`, `source-identity.ts`
+  and what they import), so a change to those, not only to `packages/skill-scripts/src/`, needs a
+  rebuild: `npm run build:skills --workspace @self-review/skill-scripts`, then commit the bundle.
 - **Renderer tests** (`packages/react/src/**/*.test.{ts,tsx}` and
   `src/renderer/**/*.test.{ts,tsx}`): Test the shared React components, hooks and utilities plus the
   Electron renderer shell. Run in jsdom environment.
@@ -716,13 +731,13 @@ npm run test:e2e:electron:headed  # Electron e2e with visible browser
   name (absent = human). All of these attributes are omitted when unset, so a purely local review's
   output is byte-identical to before the amendment.
 - **Harness skill directories.** `.agents/skills/` holds the real skill files.
-  `.opencode/skills/self-review-apply`, `.opencode/skills/self-review-critique`, and
-  `.opencode/skills/self-review-guide` are **symlinks** into it, because opencode discovers project
-  skills under `.opencode/skills/`. Never replace a symlink with a copy: duplicated skills collide
-  by name and opencode resolves the collision nondeterministically, so a drifted copy silently wins
-  on some runs. `xsd-schema.test.ts` asserts all three entries are still symlinks. Root
-  `opencode.json` additionally declares `.agents/skills` as a skill path. `.claude/skills/` is
-  gitignored and purely local.
+  `.opencode/skills/self-review-apply`, `.opencode/skills/self-review-critique`,
+  `.opencode/skills/self-review-guide` and `.opencode/skills/self-review-stack` are **symlinks**
+  into it, because opencode discovers project skills under `.opencode/skills/`. Never replace a
+  symlink with a copy: duplicated skills collide by name and opencode resolves the collision
+  nondeterministically, so a drifted copy silently wins on some runs. `xsd-schema.test.ts` asserts
+  all four entries are still symlinks (`SYMLINKED_SKILLS`). Root `opencode.json` additionally
+  declares `.agents/skills` as a skill path. `.claude/skills/` is gitignored and purely local.
 - **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
   Closing the window via X/Cmd+Q/Alt+F4, or choosing Quit from the menu (File > Quit, Ctrl+Q), shows
   a three-way confirmation dialog: Save & Quit / Discard / Cancel. All of these go through the one
@@ -840,6 +855,38 @@ The `/self-review-apply` skill reads a `review.xml` file and applies the feedbac
 comments) to the codebase. When the document carries `remote-url`, it re-materializes the reviewed
 diff through the same clone-aware model (existing matching clone, else temporary blobless clone).
 See `.agents/skills/self-review-apply/SKILL.md` for details.
+
+### self-review-stack
+
+The `/self-review-stack` skill splits a large diff into a stack of local review branches
+(`<prefix>/<NN-slug>`, one commit per step), runs `self-review-guide` (or, on request,
+`self-review-critique`) for each step, and opens every step for review: one `self-review-serve` per
+step by default, or the desktop app one step at a time. It never touches the working tree, the index
+or an existing branch, and refuses a stack that does not reproduce the original diff exactly. Each
+step's guide and review live in `<outdir>` =
+`$(git rev-parse --git-common-dir)/self-review/<prefix>/`, and each step launches with
+`-o <outdir>/<slug>.review.xml` so it discovers its own guide. It accepts the same git diff
+arguments and PR/MR URLs as the guide skill:
+
+```bash
+# Stack the current branch against main, one self-review-serve per step
+/self-review-stack main...HEAD
+
+# Stack staged changes
+/self-review-stack --staged
+
+# Stack a remote PR/MR
+/self-review-stack https://github.com/owner/repo/pull/42
+```
+
+The front end and pre-seeded comments come from the request, not the arguments: ask for the desktop
+app to review the steps one at a time in `self-review`, or for a critique to run
+`self-review-critique` per step instead of the guide alone.
+
+The mechanical work (resolving the arguments, building the branches, an import heuristic, the
+summary table) is done by `.agents/skills/self-review-stack/scripts/stack.cjs`, a committed bundle
+built from `packages/skill-scripts` (see Unit Tests for its rebuild). See
+`.agents/skills/self-review-stack/SKILL.md` for the full procedure.
 
 ## XSD Schema Location
 
