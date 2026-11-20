@@ -540,10 +540,20 @@ describe('stack.cjs table', () => {
       ],
     });
     const dir = path.dirname(spec);
-    // A finished review wins over its log.
+    // Serve reported the review complete: completed, whatever URL came before.
     writeFileSync(path.join(dir, '01-cleanup.review.xml'), '<review/>\n');
-    writeFileSync(path.join(dir, '01-cleanup.serve.log'), 'Review ready at http://127.0.0.1:1/\n');
-    // The last URL in the log; a "Loaded N files" line is no longer read.
+    writeFileSync(
+      path.join(dir, '01-cleanup.serve.log'),
+      [
+        '[serve] Review ready at http://127.0.0.1:1/',
+        '[serve] Review written to /x/01-cleanup.review.xml',
+        '[serve] Review complete; stopping.',
+        '',
+      ].join('\n')
+    );
+    // A critique pre-seeded the review file, but the server is still open: its last URL.
+    // A "Loaded N files" line is no longer read.
+    writeFileSync(path.join(dir, '02-code.review.xml'), '<review/>\n');
     writeFileSync(
       path.join(dir, '02-code.serve.log'),
       [

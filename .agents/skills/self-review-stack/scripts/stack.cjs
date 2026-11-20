@@ -963,19 +963,18 @@ function cmdCheckImports({ specFile, aliases, ignores }) {
 // src/stack/table.ts
 var import_fs5 = require("fs");
 var path9 = __toESM(require("path"), 1);
-var READY = /Review ready at (\S+)/g;
+var SERVE_EVENT = /Review ready at (\S+)|Review complete/g;
 function serveStatus(specDir, slug) {
-  if ((0, import_fs5.existsSync)(path9.join(specDir, `${slug}.review.xml`))) {
-    return `completed (\`${slug}.review.xml\`)`;
-  }
+  const completed = `completed (\`${slug}.review.xml\`)`;
   let log;
   try {
     log = (0, import_fs5.readFileSync)(path9.join(specDir, `${slug}.serve.log`), "utf8");
   } catch {
-    return "not started";
+    return (0, import_fs5.existsSync)(path9.join(specDir, `${slug}.review.xml`)) ? completed : "not started";
   }
-  const urls = [...log.matchAll(READY)].map((match) => match[1]);
-  return urls.length > 0 ? urls[urls.length - 1] : "not ready, see log";
+  const last = [...log.matchAll(SERVE_EVENT)].pop();
+  if (last === void 0) return "not ready, see log";
+  return last[1] ?? completed;
 }
 function cell(text) {
   return text.replace(/\|/g, "\\|").replace(/\s*\r?\n\s*/g, " ");
@@ -1048,9 +1047,11 @@ Commands:
   table <spec.json>
       Print the stack as a Markdown table: one row per step with its description,
       diff size and review state, then the total. The review state comes from
-      files beside the spec: "completed (\`<slug>.review.xml\`)" when that file
-      exists, else the last "Review ready at <url>" URL in <slug>.serve.log, else
-      "not ready, see log" when that log exists, else "not started".
+      files beside the spec. When <slug>.serve.log exists, the last of its
+      "Review ready at <url>" and "Review complete" lines decides: the URL, or
+      "completed (\`<slug>.review.xml\`)"; "not ready, see log" when it has
+      neither. Without a log, "completed (...)" when <slug>.review.xml exists,
+      else "not started".
 
 Diff arguments, with their git diff meanings:
 

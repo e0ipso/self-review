@@ -6,24 +6,26 @@ import * as path from 'path';
 import { branchName, loadSpec, stackBase } from './spec';
 import { diffstat, shortstat } from './stats';
 
-const READY = /Review ready at (\S+)/g;
+// The two lines self-review-serve writes to stderr when a review opens and when it ends.
+const SERVE_EVENT = /Review ready at (\S+)|Review complete/g;
 
 /**
- * A step's review state: a finished `<slug>.review.xml` first, else the last URL its
- * `<slug>.serve.log` announced.
+ * A step's review state. A server log decides when there is one: whichever came last of
+ * "Review ready at <url>" (the URL) and "Review complete" (completed). The review file alone
+ * cannot, since a critique writes it before the review opens. With no log (desktop mode), an
+ * existing `<slug>.review.xml` means completed.
  */
 export function serveStatus(specDir: string, slug: string): string {
-  if (existsSync(path.join(specDir, `${slug}.review.xml`))) {
-    return `completed (\`${slug}.review.xml\`)`;
-  }
+  const completed = `completed (\`${slug}.review.xml\`)`;
   let log: string;
   try {
     log = readFileSync(path.join(specDir, `${slug}.serve.log`), 'utf8');
   } catch {
-    return 'not started';
+    return existsSync(path.join(specDir, `${slug}.review.xml`)) ? completed : 'not started';
   }
-  const urls = [...log.matchAll(READY)].map(match => match[1]);
-  return urls.length > 0 ? urls[urls.length - 1] : 'not ready, see log';
+  const last = [...log.matchAll(SERVE_EVENT)].pop();
+  if (last === undefined) return 'not ready, see log';
+  return last[1] ?? completed;
 }
 
 /** A description as one table cell: pipes escaped, line breaks folded. */

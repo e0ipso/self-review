@@ -57,9 +57,11 @@ Commands:
   table <spec.json>
       Print the stack as a Markdown table: one row per step with its description,
       diff size and review state, then the total. The review state comes from
-      files beside the spec: "completed (\`<slug>.review.xml\`)" when that file
-      exists, else the last "Review ready at <url>" URL in <slug>.serve.log, else
-      "not ready, see log" when that log exists, else "not started".
+      files beside the spec. When <slug>.serve.log exists, the last of its
+      "Review ready at <url>" and "Review complete" lines decides: the URL, or
+      "completed (\`<slug>.review.xml\`)"; "not ready, see log" when it has
+      neither. Without a log, "completed (...)" when <slug>.review.xml exists,
+      else "not started".
 
 Diff arguments, with their git diff meanings:
 

@@ -268,9 +268,9 @@ graph TD
 **Parallel Tasks:**
 - ✔️ Task 005: Implement the helper's check-imports and table subcommands (depends on: 004)
 
-### Phase 4: The skill
+### ✅ Phase 4: The skill
 **Parallel Tasks:**
-- Task 006: Write the self-review-stack SKILL.md (depends on: 001, 002, 004, 005)
+- ✔️ Task 006: Write the self-review-stack SKILL.md (depends on: 001, 002, 004, 005)
 
 ### Phase 5: Ship
 **Parallel Tasks:**
