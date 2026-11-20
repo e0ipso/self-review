@@ -19,7 +19,7 @@ import { loadResumeDocumentAsync } from './resume-document-loader';
 async function prepare(cwd: string, signal: AbortSignal) {
   const cli = parseCliArgs();
   const loadedConfig = loadConfigWithProvenance({ cwd });
-  const output = resolveOutputTarget(null, loadedConfig, cwd);
+  const output = resolveOutputTarget(cli.outputPath, loadedConfig, cwd);
   const { config, gitDiffArgs } = resolveStartupDiffArgs(cli.gitDiffArgs, loadedConfig, cwd);
   const source = cli.remoteUrl
     ? { mode: 'remote' as const }

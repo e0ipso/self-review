@@ -7,6 +7,11 @@ import {
 
 export interface CliArgs {
   resumeFrom: string | null;
+  /**
+   * `-o`/`--output` as typed, unresolved: the initial output path, an explicit target the save
+   * dialog can still change. `null` means the configured `output-file` decides.
+   */
+  outputPath: string | null;
   gitDiffArgs: string[];
   /**
    * Explicit subcommand routing, decided at the top of parsing. `null` means
@@ -110,7 +115,11 @@ export function extractDesktopArgs(argv: readonly string[], defaultApp: boolean)
 }
 
 // The flag table for both front ends is in packages/core/src/startup.ts.
-const VALUE_FLAGS = { '--resume-from': 'resumeFrom' } as const;
+const VALUE_FLAGS = {
+  '--output': 'outputPath',
+  '-o': 'outputPath',
+  '--resume-from': 'resumeFrom',
+} as const;
 const EARLY_EXIT_FLAGS = {
   '--help': 'help',
   '-h': 'help',
@@ -152,6 +161,7 @@ export function parseAppArgs(args: string[]): CliParseResult {
 
     return result({
       resumeFrom: null,
+      outputPath: null,
       gitDiffArgs: [],
       subcommand: 'fetch-comments',
       remoteUrl,
@@ -160,10 +170,12 @@ export function parseAppArgs(args: string[]): CliParseResult {
   }
 
   let resumeFrom: string | null;
+  let outputPath: string | null;
   let gitDiffArgs: string[];
   try {
     const extracted = extractApplicationOptions(args, { valueFlags: VALUE_FLAGS });
     resumeFrom = extracted.values.resumeFrom;
+    outputPath = extracted.values.outputPath;
     gitDiffArgs = extracted.rest;
   } catch (error) {
     if (!(error instanceof ApplicationOptionError)) throw error;
@@ -171,6 +183,7 @@ export function parseAppArgs(args: string[]): CliParseResult {
     exitCode = 1;
     return result({
       resumeFrom: null,
+      outputPath: null,
       gitDiffArgs: [],
       subcommand: null,
       remoteUrl: null,
@@ -202,7 +215,14 @@ export function parseAppArgs(args: string[]): CliParseResult {
     }
   }
 
-  return result({ resumeFrom, gitDiffArgs, subcommand: null, remoteUrl, allThreads: false });
+  return result({
+    resumeFrom,
+    outputPath,
+    gitDiffArgs,
+    subcommand: null,
+    remoteUrl,
+    allThreads: false,
+  });
 }
 
 export function parseEarlyExit(args: string[]): 'help' | 'version' | null {

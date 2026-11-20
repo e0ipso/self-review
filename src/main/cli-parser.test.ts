@@ -16,6 +16,7 @@ it('parses supplied argv through Finder, Chromium and development launch forms',
   expect(parseAppArgs(args)).toEqual({
     args: {
       resumeFrom: 'x.xml',
+      outputPath: null,
       gitDiffArgs: [],
       subcommand: null,
       remoteUrl: url,
@@ -35,6 +36,7 @@ it('preserves ignored extra fetch operands and unknown flags', () => {
     parseAppArgs(['fetch-comments', '--unknown', url, 'ignored', '--all-threads']).args
   ).toEqual({
     resumeFrom: null,
+    outputPath: null,
     gitDiffArgs: [],
     subcommand: 'fetch-comments',
     remoteUrl: url,
@@ -65,4 +67,54 @@ it('returns diagnostics and early-exit intent without process effects', () => {
   expect(parseEarlyExit(['--resume-from', '--help'])).toBeNull();
   expect(parseEarlyExit(['--version', '--help'])).toBe('help');
   expect(parseEarlyExit(['--', '--help'])).toBeNull();
+});
+it('takes -o, --output and --output= as the initial output path, never git arguments', () => {
+  for (const args of [
+    ['-o', 'x.xml', 'main..HEAD'],
+    ['--output', 'x.xml', 'main..HEAD'],
+    ['--output=x.xml', 'main..HEAD'],
+    ['main..HEAD', '-o', 'x.xml'],
+  ]) {
+    const result = parseAppArgs(args);
+    expect(result.exitCode).toBeNull();
+    expect(result.args.outputPath).toBe('x.xml');
+    expect(result.args.gitDiffArgs).toEqual(['main..HEAD']);
+  }
+  expect(parseAppArgs(['--output', 'x.xml']).args).toMatchObject({
+    outputPath: 'x.xml',
+    gitDiffArgs: [],
+  });
+  expect(parseAppArgs(['--output=x.xml']).args.outputPath).toBe('x.xml');
+  expect(parseAppArgs(['-o', 'x.xml', url]).args).toMatchObject({
+    outputPath: 'x.xml',
+    remoteUrl: url,
+    gitDiffArgs: [],
+  });
+  expect(parseAppArgs(['main..HEAD']).args.outputPath).toBeNull();
+});
+it('refuses an output flag with no or an empty value', () => {
+  for (const [args, flag] of [
+    [['--output='], '--output'],
+    [['-o'], '-o'],
+    [['--output'], '--output'],
+  ] as const) {
+    const result = parseAppArgs([...args]);
+    expect(result.exitCode).toBe(1);
+    expect(result.diagnostics).toEqual([`Error: ${flag} requires a file path argument`]);
+    expect(result.args.outputPath).toBeNull();
+  }
+});
+it('leaves a git option value and everything after -- with git', () => {
+  expect(parseAppArgs(['-S', '--output']).args).toMatchObject({
+    outputPath: null,
+    gitDiffArgs: ['-S', '--output'],
+  });
+  expect(parseAppArgs(['-S', '-o']).args.gitDiffArgs).toEqual(['-S', '-o']);
+  expect(parseAppArgs(['--', '-o', 'x.xml']).args).toMatchObject({
+    outputPath: null,
+    gitDiffArgs: ['--', '-o', 'x.xml'],
+  });
+  expect(parseAppArgs(['fetch-comments', url, '-o', 'x.xml']).args.outputPath).toBeNull();
+  expect(parseEarlyExit(['-o', 'x.xml', '--help'])).toBe('help');
+  expect(parseEarlyExit(['-o', '--help'])).toBeNull();
 });

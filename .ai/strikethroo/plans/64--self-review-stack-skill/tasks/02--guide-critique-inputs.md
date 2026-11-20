@@ -2,7 +2,7 @@
 id: 2
 group: "sibling-skills"
 dependencies: []
-status: "pending"
+status: "completed"
 created: 2026-11-20
 skills:
   - agent-skill-authoring
@@ -17,12 +17,12 @@ Give both skills two optional inputs: an explicit output path and a content ref 
 - `agent-skill-authoring`: editing harness-neutral `SKILL.md` procedures.
 
 ## Acceptance Criteria
-- [ ] `.agents/skills/self-review-guide/SKILL.md` documents two optional inputs with spellings `git diff` does not accept (proposed: `--guide-output <file>` and `--content-ref <ref>`), recognized and removed from the arguments before they are used as git diff args; step 2 uses `--guide-output` when given instead of deriving from `.self-review.yaml`; step 4 (and anywhere else file content is read) reads `git show <content-ref>:<path>` when given.
-- [ ] The guide's "URL source" recipe is restated as using the content-ref mechanism with `refs/self-review/head` (behavior identical to today).
-- [ ] `.agents/skills/self-review-critique/SKILL.md` documents `--review-output <file>` and `--content-ref <ref>`; with `--review-output` it writes `review.xml` there and passes `--guide-output <review path with last extension replaced by .guide.xml>` plus any `--content-ref` to the guide skill it invokes in step 1; file reads honor `--content-ref`.
-- [ ] Both skills state that `git-diff-args` in the written XML records the diff arguments only (the new inputs are never written into it).
-- [ ] `git diff 6b33509 -- .agents/skills/self-review-guide/SKILL.md .agents/skills/self-review-critique/SKILL.md` shows only additions/edits tied to the new inputs and the URL-source restatement; reading each hunk confirms the default procedure is unchanged.
-- [ ] `npm run test:unit --workspace @self-review/core` passes (the XSD sync and symlink tests in `xsd-schema.test.ts` still pass; no XSD is touched).
+- [x] `.agents/skills/self-review-guide/SKILL.md` documents two optional inputs with spellings `git diff` does not accept (proposed: `--guide-output <file>` and `--content-ref <ref>`), recognized and removed from the arguments before they are used as git diff args; step 2 uses `--guide-output` when given instead of deriving from `.self-review.yaml`; step 4 (and anywhere else file content is read) reads `git show <content-ref>:<path>` when given.
+- [x] The guide's "URL source" recipe is restated as using the content-ref mechanism with `refs/self-review/head` (behavior identical to today).
+- [x] `.agents/skills/self-review-critique/SKILL.md` documents `--review-output <file>` and `--content-ref <ref>`; with `--review-output` it writes `review.xml` there and passes `--guide-output <review path with last extension replaced by .guide.xml>` plus any `--content-ref` to the guide skill it invokes in step 1; file reads honor `--content-ref`.
+- [x] Both skills state that `git-diff-args` in the written XML records the diff arguments only (the new inputs are never written into it).
+- [x] `git diff 6b33509 -- .agents/skills/self-review-guide/SKILL.md .agents/skills/self-review-critique/SKILL.md` shows only additions/edits tied to the new inputs and the URL-source restatement; reading each hunk confirms the default procedure is unchanged.
+- [x] `npm run test:unit --workspace @self-review/core` passes (the XSD sync and symlink tests in `xsd-schema.test.ts` still pass; no XSD is touched).
 
 Use your internal Todo tool to track these and keep on track.
 
@@ -38,6 +38,20 @@ None.
 - Documented inputs the stack skill (task 6) uses: guide `--guide-output`, `--content-ref`; critique `--review-output`, `--content-ref`. If you choose different spellings, record the final names in this task file's Implementation Notes before marking it complete, since task 6 depends on them.
 
 ## Implementation Notes
+
+**Final input names (task 6 depends on these):** guide `--guide-output <file>` and
+`--content-ref <ref>`; critique `--review-output <file>` and `--content-ref <ref>`. Both skills
+accept `--name <value>` and `--name=<value>` anywhere before `--`. `git diff --guide-output=x`,
+`--review-output=x` and `--content-ref=x` each exit 129 with "invalid option" (git 2.x in the dev
+VM), so none can be mistaken for a git option.
+
+**Test note:** documentation-only change to two `SKILL.md` files, so no test was written (nothing
+executable changed; the existing `xsd-schema.test.ts` symlink and XSD sync checks are the guard).
+`npx vitest run src/xsd-schema.test.ts` in `packages/core`: 31/31 pass. The full core suite showed
+failures outside this task's files at the time of the run: `tsconfig-paths.test.ts` pins the list
+of workspace tsconfigs and fails because the in-progress `packages/skill-scripts/` (task 3) adds
+one, and `loaded-review-consistency.test.ts` fails a varying 2–3 timing-dependent descriptor-drift
+cases from run to run. Neither reads the skill files.
 <details>
 <summary>Guidance</summary>
 

@@ -270,7 +270,15 @@ You can continue your saved review if you didn't finish it:
 ```bash
 # Resume a previous review
 self-review --staged --resume-from review.xml
+
+# Write the review somewhere other than ./review.xml
+self-review -o /tmp/step.review.xml main..feature-branch
 ```
+
+`-o <file>` (also `--output <file>` or `--output=<file>`) sets where the review is written. It is
+treated like a path you typed, so it may point outside the repository, and a walkthrough guide next
+to it is picked up at startup. It is only the starting path: the save dialog in the footer of the
+file tree can still change it.
 
 Arguments that are not self-review's own go straight to `git diff`. `--resume-from <file>` also
 takes the `--resume-from=<file>` form, a `--` ends self-review's own options (everything after it,

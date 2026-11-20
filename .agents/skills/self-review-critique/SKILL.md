@@ -2,7 +2,7 @@
 name: self-review-critique
 description: Critique a git diff and generate review.xml with comments and suggestions for human validation in self-review
 metadata:
-  argument-hint: "[git-diff-args...]"
+  argument-hint: "[--review-output <file>] [--content-ref <ref>] [git-diff-args...]"
 ---
 
 # Critique a Git Diff
@@ -46,7 +46,12 @@ Non-obvious semantics (keep in sync with `../self-review-apply/assets/self-revie
 ## 1. Generate the Walkthrough Guide
 
 Run the `self-review-guide` skill (`../self-review-guide/SKILL.md`) with the same diff arguments
-you received. It analyzes the diff and writes the guide sidecar (`review.guide.xml` by default)
+you received, without this skill's optional inputs (see step 2). When `--review-output` was
+given, also pass `--guide-output` with the review path's last extension replaced by `.guide.xml`
+(the guide skill's own step 2 rule: `out/a.review.xml` → `out/a.review.guide.xml`), so the pair
+is discovered together. When `--content-ref` was given, pass it through unchanged.
+
+The guide skill analyzes the diff and writes the guide sidecar (`review.guide.xml` by default)
 that self-review uses to present the diff as an ordered walkthrough. Then proceed to critique.
 A critique run therefore produces both artifacts; the guide skill also runs standalone when a
 walkthrough without pre-seeded comments is wanted. If the user explicitly asked to skip the
@@ -58,11 +63,23 @@ Read `$ARGUMENTS` for git diff args. If empty, default to unstaged changes (plai
 The arguments support the same format as self-review CLI: `--staged`, `HEAD~3`,
 `main..feature-branch`, `-- path/to/file`, etc.
 
+**Optional inputs.** Two inputs belong to this skill, not to git, and are spelled so `git diff`
+rejects them. They may appear anywhere before a `--`, as `--name <value>` or `--name=<value>`,
+and are removed from `$ARGUMENTS` before the remaining arguments are used as git diff args
+anywhere in this skill (the guide run in step 1, the `git diff` in step 4 and `git-diff-args` in
+step 7). Without either, every step behaves exactly as written.
+
+- `--review-output <file>`: the `review.xml` to write. Step 3 uses it instead of `output-file`,
+  and step 1 passes the matching guide path to the guide skill.
+- `--content-ref <ref>`: the commit or ref holding the reviewed content. Every read of a changed
+  file's content (step 5, and `original-code` in step 7) uses `git show <ref>:<path>` instead of
+  the working tree.
+
 A GitHub PR / GitLab MR URL is also accepted, inherited through the guide-first step: the guide
 skill's "URL source" recipe (`../self-review-guide/SKILL.md`, step 3) materializes the URL into
 a local checkout. Reuse that same checkout here — run the diff (step 4) and read file context
-(step 5) inside it, using `git show refs/self-review/head:<path>` for file content — and remove
-a temporary clone when the whole critique run is finished.
+(step 5) inside it, reading file content as with `--content-ref refs/self-review/head` — and
+remove a temporary clone when the whole critique run is finished.
 
 ## 3. Load Configuration
 
@@ -78,6 +95,9 @@ If no config file exists, use these default categories:
 - `style`, Code style, naming, or formatting issue
 - `task`, Action item or follow-up task
 - `nit`, Minor nitpick, low priority
+
+When `--review-output` was given, it is the output path, whether or not the config file exists
+or sets `output-file`.
 
 ## 4. Get the Diff
 
@@ -101,6 +121,9 @@ For each file in the diff:
 - **Deleted files**: Skip reading, the diff contains all the content you need.
 - **Binary files**: Skip, note them but don't attempt to review.
 - **Renamed files**: Read the file at its new path.
+
+When `--content-ref` was given, every read above uses `git show <ref>:<path>` instead of the Read
+tool, because the working tree is not the reviewed snapshot.
 
 If there are many files (>15), prioritize reading files with the largest diffs first. For very
 large files, read only the regions around the changed lines (with 50 lines of surrounding context).
@@ -221,6 +244,8 @@ the human's, the authored one is the model conceding.
 **Additional notes not in the schema:**
 - `timestamp`: Get current time with `node -e "console.log(new Date().toISOString())"`
 - `repository`: Get absolute path with `git rev-parse --show-toplevel`
+- `git-diff-args`: The diff arguments only; `--review-output` and `--content-ref` are never
+  written into it
 - `viewed`: Always `"true"` for all files (the assistant "viewed" them all)
 - `author`: Set to your model name on every comment you generate (e.g., "Claude Sonnet 4.6")
 - `severity` and `confidence`: Set both on every comment you generate. They are what lets an

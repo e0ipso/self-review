@@ -1,0 +1,17 @@
+{
+  "name": "@self-review/skill-scripts",
+  "version": "2.1.4",
+  "private": true,
+  "description": "Source of the scripts bundled into the self-review agent skills (not published)",
+  "type": "module",
+  "scripts": {
+    "build:skills": "tsup",
+    "test:unit": "vitest run"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "~5.9.0",
+    "vitest": "^4.0.18"
+  },
+  "license": "MIT"
+}

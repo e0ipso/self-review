@@ -274,10 +274,12 @@ default; `resolveStartupSource` (`startup-mode.ts`) picks the file or directory 
 classifier's first positional, so an option value such as `-S src/x.ts` is never the source;
 `loadLocalReview` loads git (ignore-filtered, argv recorded with `formatGitDiffArgs`), directory,
 file or welcome; `loadResumeDocument` resumes a prior document into a session. The two command lines
-differ on purpose — the desktop has no `--output` (the save dialog changes the path) and alone
-accepts a forge URL and `fetch-comments`; both take `--resume-from <file>` and
-`--resume-from=<file>` and stop reading their own flags at `--` — and the table lives in
-`packages/core/src/startup.ts`. `fetch-comments` publishes through the same `resolveOutputTarget`.
+differ on purpose — the desktop alone accepts a forge URL and `fetch-comments`; both take
+`-o`/`--output <file>` and `--output=<file>` (an explicit target; on the desktop it is only the
+initial path, which the save dialog can still change, while serve keeps it for the process), both
+take `--resume-from <file>` and `--resume-from=<file>`, and both stop reading their own flags at
+`--` — and the table lives in `packages/core/src/startup.ts`. `fetch-comments` publishes through the
+same `resolveOutputTarget`.
 
 **Large-payload mode:** When the diff exceeds configurable thresholds (`max-files` or
 `max-total-lines`), the main process sends file metadata without hunks in the initial `diff:load`

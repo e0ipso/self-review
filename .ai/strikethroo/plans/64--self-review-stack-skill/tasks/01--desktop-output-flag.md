@@ -2,7 +2,7 @@
 id: 1
 group: "desktop-cli"
 dependencies: []
-status: "pending"
+status: "completed"
 created: 2026-11-20
 skills:
   - electron-main-process
@@ -19,13 +19,13 @@ Let the desktop `self-review` command accept `-o <file>`, `--output <file>` and 
 - `vitest`: unit tests for the parser and startup.
 
 ## Acceptance Criteria
-- [ ] `parseAppArgs(['-o', 'x.xml', 'main..HEAD'])`, `parseAppArgs(['--output', 'x.xml'])` and `parseAppArgs(['--output=x.xml'])` all yield `outputPath: 'x.xml'` and leave the flag out of `gitDiffArgs`.
-- [ ] `parseAppArgs(['--output='])` and `parseAppArgs(['-o'])` yield exit code 1 with an `Error: … requires a file path argument` diagnostic (from `ApplicationOptionError`).
-- [ ] A git option's separate value is still git's: `parseAppArgs(['-S', '--output'])` keeps both in `gitDiffArgs` and `outputPath` stays `null`. Arguments after `--` are untouched.
-- [ ] With no flag, `outputPath` is `null` and startup calls `resolveOutputTarget(null, …)` exactly as before; with the flag, startup passes the path and the resulting target has `origin: 'explicit'`.
-- [ ] `fetch-comments` parsing is unchanged (`outputPath: null`).
-- [ ] The flag table comment at the top of `packages/core/src/startup.ts`, the `printHelp` text in `src/main/cli.ts`, the README's desktop command-line documentation and AGENTS.md's "Shared startup" paragraph no longer say the desktop has no `--output`; they describe `-o`/`--output` as the initial output path the save dialog can still change.
-- [ ] `npm run test:unit:main -- --run` (or `npx vitest run --config vitest.config.main.ts`) passes, and `npm run typecheck` and `npm run typecheck:unit` exit 0.
+- [x] `parseAppArgs(['-o', 'x.xml', 'main..HEAD'])`, `parseAppArgs(['--output', 'x.xml'])` and `parseAppArgs(['--output=x.xml'])` all yield `outputPath: 'x.xml'` and leave the flag out of `gitDiffArgs`.
+- [x] `parseAppArgs(['--output='])` and `parseAppArgs(['-o'])` yield exit code 1 with an `Error: … requires a file path argument` diagnostic (from `ApplicationOptionError`).
+- [x] A git option's separate value is still git's: `parseAppArgs(['-S', '--output'])` keeps both in `gitDiffArgs` and `outputPath` stays `null`. Arguments after `--` are untouched.
+- [x] With no flag, `outputPath` is `null` and startup calls `resolveOutputTarget(null, …)` exactly as before; with the flag, startup passes the path and the resulting target has `origin: 'explicit'`.
+- [x] `fetch-comments` parsing is unchanged (`outputPath: null`).
+- [x] The flag table comment at the top of `packages/core/src/startup.ts`, the `printHelp` text in `src/main/cli.ts`, the README's desktop command-line documentation and AGENTS.md's "Shared startup" paragraph no longer say the desktop has no `--output`; they describe `-o`/`--output` as the initial output path the save dialog can still change.
+- [x] `npm run test:unit:main -- --run` (or `npx vitest run --config vitest.config.main.ts`) passes, and `npm run typecheck` and `npm run typecheck:unit` exit 0.
 
 Use your internal Todo tool to track these and keep on track.
 

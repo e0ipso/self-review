@@ -22,6 +22,7 @@ import type { CliArgs } from './cli';
 function makeArgs(overrides: Partial<CliArgs> = {}): CliArgs {
   return {
     resumeFrom: null,
+    outputPath: null,
     gitDiffArgs: [],
     subcommand: null,
     remoteUrl: null,

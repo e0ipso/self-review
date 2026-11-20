@@ -254,11 +254,11 @@ graph TD
 **Validation Gates:**
 - Reference: `/config/hooks/POST_PHASE.md`
 
-### Phase 1: Independent foundations
+### ✅ Phase 1: Independent foundations
 **Parallel Tasks:**
-- Task 001: Add -o/--output to the desktop command line
-- Task 002: Add output-path and content-ref inputs to self-review-guide and self-review-critique
-- Task 003: Scaffold the skill-scripts workspace package and its bundle pipeline
+- ✔️ Task 001: Add -o/--output to the desktop command line
+- ✔️ Task 002: Add output-path and content-ref inputs to self-review-guide and self-review-critique
+- ✔️ Task 003: Scaffold the skill-scripts workspace package and its bundle pipeline
 
 ### Phase 2: Helper core
 **Parallel Tasks:**

@@ -2,7 +2,7 @@
 name: self-review-guide
 description: Analyze a git diff and generate a walkthrough guide sidecar (review.guide.xml) that orders the files into named reading groups with rationales, one-liners, and an overview for self-review's guided mode
 metadata:
-  argument-hint: "[git-diff-args... | pr-or-mr-url]"
+  argument-hint: "[--guide-output <file>] [--content-ref <ref>] [git-diff-args... | pr-or-mr-url]"
 ---
 
 # Generate a Review Walkthrough Guide
@@ -59,12 +59,26 @@ Read `$ARGUMENTS` for git diff args. If empty, default to unstaged changes (plai
 The arguments support the same format as self-review CLI: `--staged`, `HEAD~3`,
 `main..feature-branch`, `-- path/to/file`, etc.
 
+**Optional inputs.** Two inputs belong to this skill, not to git, and are spelled so `git diff`
+rejects them. They may appear anywhere before a `--`, as `--name <value>` or `--name=<value>`,
+and are removed from `$ARGUMENTS` before the remaining arguments are used as git diff args
+anywhere below (the `git diff` in step 3 and `git-diff-args` in step 6). Without either, every
+step behaves exactly as written.
+
+- `--guide-output <file>`: the guide file to write. Step 2 uses it instead of deriving a path
+  from `.self-review.yaml`.
+- `--content-ref <ref>`: the commit or ref holding the reviewed content. Every read of a changed
+  file's content uses `git show <ref>:<path>` instead of the working tree (step 4).
+
 If the argument is a GitHub PR URL (`https://<host>/<owner>/<repo>/pull/<N>`) or a GitLab MR
 URL (`https://<host>/<namespace>/<repo>/-/merge_requests/<N>`, any host — self-hosted GitLab
 included), this is a **URL source**: follow the "URL source" recipe in step 3 to materialize
 the diff, then continue with the remaining steps unchanged.
 
 ## 2. Load Configuration
+
+If `--guide-output` was given, it is the guide output path: use it and skip the rest of this
+step.
 
 Check if `.self-review.yaml` exists in the current directory. If it does, read it to extract:
 
@@ -113,9 +127,9 @@ uses, so steps 4–5 can read surrounding code from a real checkout instead of t
    `glab auth git-credential` wire the forge CLI login into git).
 4. **Diff.** Run the three-dot diff (from the merge base, matching how the forge presents the
    PR/MR) inside the checkout: `git -C <repo> diff <base-ref>...refs/self-review/head`.
-5. **Read file content** with `git -C <repo> show refs/self-review/head:<path>` — in a
-   temporary clone the working tree is the default branch, not the PR head, and blobs fetch
-   lazily on demand.
+5. **Read file content** as with `--content-ref refs/self-review/head`, run inside the checkout
+   (`git -C <repo> show refs/self-review/head:<path>`) — in a temporary clone the working tree
+   is the default branch, not the PR head, and blobs fetch lazily on demand.
 
 Set `git-diff-args` to the `<base-ref>...refs/self-review/head` range you diffed, and leave the
 optional `repository` attribute unset. The checkout is often a temporary clone under the OS
@@ -130,7 +144,9 @@ You need enough context to say what role each file plays, not to judge its corre
 
 - Read the diff hunks of every file. For most files this is sufficient.
 - When a file's role is unclear from its hunks alone (e.g., a small edit whose purpose depends on
-  its callers), use the Read tool on the relevant region of the file.
+  its callers), use the Read tool on the relevant region of the file. When `--content-ref` was
+  given, read it with `git show <ref>:<path>` instead; the working tree is not the reviewed
+  snapshot.
 - Binary files and generated/lockfile churn rarely need reading beyond their paths and stats.
 
 Identify the center of gravity: which file(s) contain the change everything else exists for?
@@ -194,7 +210,8 @@ graph LR
   stale or misleading once the guide moves to a different checkout (a teammate's clone, the
   host machine, CI). Set it only when the guide stays in this exact checkout. Get the value
   with `git rev-parse --show-toplevel`.
-- `git-diff-args`: The same arguments from step 1 (empty string if none)
+- `git-diff-args`: The same arguments from step 1 (empty string if none). It records the diff
+  arguments only; `--guide-output` and `--content-ref` are never written into it.
 - XML-escape all text content: `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`,
   `'` → `&apos;`
 

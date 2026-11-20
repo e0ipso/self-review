@@ -6,6 +6,7 @@ const calls = vi.hoisted(() => ({
   source: vi.fn(),
   load: vi.fn(),
   config: {} as { guideFile?: string },
+  outputPath: null as string | null,
 }));
 vi.mock('../../packages/core/src/config', async () => {
   const { DEFAULT_CONFIG } = await import('../../packages/react/src/config-defaults');
@@ -17,7 +18,9 @@ vi.mock('../../packages/core/src/config', async () => {
     }),
   };
 });
-vi.mock('./cli', () => ({ parseCliArgs: () => ({ gitDiffArgs: [] }) }));
+vi.mock('./cli', () => ({
+  parseCliArgs: () => ({ gitDiffArgs: [], outputPath: calls.outputPath, remoteUrl: null }),
+}));
 vi.mock('./presentation', () => ({ confirmPayload: vi.fn(async () => true) }));
 vi.mock('../../packages/core/src/startup-mode', () => ({
   resolveStartupSource: () => {
@@ -157,5 +160,31 @@ it('commits the explicit local load capability while preserving public aliases',
     expect(desktop.review.diffData).toBe(loaded.payload);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+it('resolves the startup output target from the command line, else from configuration', async () => {
+  const cwd = process.cwd();
+  calls.source.mockResolvedValue({ mode: 'welcome' });
+  const signal = new AbortController().signal;
+  try {
+    calls.outputPath = null;
+    expect((await defaultStartupOperations.prepare(cwd, signal)).output).toEqual({
+      path: join(cwd, 'review.xml'),
+      origin: 'inherited',
+      baseDir: cwd,
+    });
+    calls.outputPath = 'out/step.review.xml';
+    expect((await defaultStartupOperations.prepare(cwd, signal)).output).toEqual({
+      path: join(cwd, 'out/step.review.xml'),
+      origin: 'explicit',
+    });
+    calls.outputPath = '/tmp/elsewhere.review.xml';
+    expect((await defaultStartupOperations.prepare(cwd, signal)).output).toEqual({
+      path: '/tmp/elsewhere.review.xml',
+      origin: 'explicit',
+    });
+  } finally {
+    calls.outputPath = null;
   }
 });
