@@ -378,6 +378,10 @@ describe('stack.cjs build', () => {
     expect(git(repo, 'rev-parse', `${branches[2]}^{tree}`)).toBe(
       git(repo, 'rev-parse', 'feature^{tree}')
     );
+    // Each branch's reflog says where it came from.
+    for (const branch of branches) {
+      expect(git(repo, 'reflog', '--format=%gs', branch)).toBe('self-review-stack build');
+    }
 
     expectUntouched(repo, before);
     const added = git(repo, 'for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads/')

@@ -798,7 +798,7 @@ function buildCommits(spec, base, target, changes) {
   });
 }
 function createBranches(steps) {
-  git(["update-ref", "--stdin"], {
+  git(["update-ref", "-m", "self-review-stack build", "--stdin"], {
     input: steps.map((step) => `create refs/heads/${step.branch} ${step.commit}
 `).join("")
   });

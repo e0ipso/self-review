@@ -139,9 +139,12 @@ function buildCommits(
   });
 }
 
-/** Create every branch or none: `create` fails when a ref already exists. */
+/**
+ * Create every branch or none: `create` fails when a ref already exists. The reflog message
+ * records where the branches came from.
+ */
 function createBranches(steps: readonly BuiltStep[]): void {
-  git(['update-ref', '--stdin'], {
+  git(['update-ref', '-m', 'self-review-stack build', '--stdin'], {
     input: steps.map(step => `create refs/heads/${step.branch} ${step.commit}\n`).join(''),
   });
 }
