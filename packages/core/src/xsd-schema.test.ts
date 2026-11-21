@@ -24,7 +24,12 @@ const CANONICAL_GUIDE_SCHEMA = '.agents/skills/self-review-guide/assets/self-rev
 // symlinks to the .agents originals rather than copies. Byte-comparing them
 // would be tautological, so guard the link itself: that is what stops a real
 // copy, and the drift it invites, from creeping back in.
-const SYMLINKED_SKILLS = ['self-review-apply', 'self-review-critique', 'self-review-guide'];
+const SYMLINKED_SKILLS = [
+  'self-review-apply',
+  'self-review-critique',
+  'self-review-guide',
+  'self-review-stack',
+];
 
 const SCHEMA_FILE_NAME = 'self-review-v3.xsd';
 

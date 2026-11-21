@@ -26,6 +26,8 @@ Usage: self-review [options] [<git-diff-args>...]
        self-review fetch-comments <pr-or-mr-url> [--all-threads]
 
 Options:
+  --output, -o <file>     Initial review output path (the save dialog can
+                          still change it)
   --resume-from <file>    Load a previous review XML file
   --help, -h              Show this help message
   --version, -v           Show version number
@@ -43,18 +45,22 @@ Examples:
   self-review HEAD~3
   self-review -- src/auth.ts
   self-review --resume-from review.xml          # resume a previous review
+  self-review -o /tmp/step.review.xml main..feature
   self-review https://github.com/o/r/pull/42    # review a remote PR
   self-review fetch-comments https://github.com/o/r/pull/42
 
-All arguments except --resume-from and --help are passed to git diff; --
-ends the app's own options, so everything after it reaches git as written.
+All arguments except --output/-o, --resume-from, --help and --version are
+passed to git diff; -- ends the app's own options, so everything after it
+reaches git as written.
 Leading Electron/Chromium switches (--ozone-platform=headless and friends)
 are consumed by the app and never reach git diff.
 If no arguments are provided, shows unstaged working tree changes, or the
 default-diff-args from configuration.
 
-Output is written to ./review.xml by default (configurable via
-output-file in .self-review.yaml or ~/.config/self-review/config.yaml).
+Output is written to the -o/--output path when given, else to output-file
+from .self-review.yaml or ~/.config/self-review/config.yaml, else to
+./review.xml. A walkthrough guide (<name>.guide.xml) next to that path is
+picked up at startup.
 `;
   console.error(help.trim());
 }

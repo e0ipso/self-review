@@ -1,15 +1,18 @@
 // Startup decisions that must come out the same in desktop and serve (audit R15); each host
 // keeps its own transport and dialogs.
 //
-// The command lines differ on purpose. Both take `--resume-from <file>` (or `=<file>`), stop
-// reading their own flags at `--`, and pass everything else to `git diff`. Beyond that:
+// The command lines differ on purpose. Both take `-o`/`--output <file>` (or `--output=<file>`) as
+// an explicit output target and `--resume-from <file>` (or `=<file>`), stop reading their own
+// flags at `--`, and pass everything else to `git diff`. Beyond that:
 //
 // | Flag or input                         | Desktop (`self-review`)              | Serve
 // (`self-review-serve`)        |
 // | ------------------------------------- | ------------------------------------ |
 // ---------------------------------- |
-// | `--output <file>`, `-o`, `--output=`  | no (save dialog changes the path)    | yes (fixed for
+// | `--output <file>`, `-o`, `--output=`  | yes (initial path; the save dialog   | yes (fixed for
 // the process)        |
+// |                                       | can change it)                       |
+// |
 // | `--help`/`-h`, `--version`/`-v`       | yes                                  | yes
 // |
 // | forge PR/MR URL as first positional   | yes (remote GUI mode)                | no (passed to

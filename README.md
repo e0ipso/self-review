@@ -270,7 +270,15 @@ You can continue your saved review if you didn't finish it:
 ```bash
 # Resume a previous review
 self-review --staged --resume-from review.xml
+
+# Write the review somewhere other than ./review.xml
+self-review -o /tmp/step.review.xml main..feature-branch
 ```
+
+`-o <file>` (also `--output <file>` or `--output=<file>`) sets where the review is written. It is
+treated like a path you typed, so it may point outside the repository, and a walkthrough guide next
+to it is picked up at startup. It is only the starting path: the save dialog in the footer of the
+file tree can still change it.
 
 Arguments that are not self-review's own go straight to `git diff`. `--resume-from <file>` also
 takes the `--resume-from=<file>` form, a `--` ends self-review's own options (everything after it,
@@ -406,10 +414,31 @@ self-review ships with an AI assistant skill that closes the feedback loop: it r
 XML, prioritizes the feedback, and executes the changes. It works with any assistant that supports
 skill directories, such as **Claude Code**, **Codex**, **OpenCode**, and others.
 
-The repo also ships two companion skills under `.agents/skills/`: `self-review-critique`
-(pre-generates a review for you to curate) and `self-review-guide` (generates the walkthrough guide
-sidecar that powers guided mode; critique runs it as its first step). Install them the same way as
-`self-review-apply` below.
+The repo also ships three companion skills under `.agents/skills/`: `self-review-critique`
+(pre-generates a review for you to curate), `self-review-guide` (generates the walkthrough guide
+sidecar that powers guided mode; critique runs it as its first step) and `self-review-stack`
+(described below). Install them the same way as `self-review-apply` below.
+
+### Reviewing a large diff as a stack
+
+`self-review-stack` splits a large diff into a stack of small, ordered steps, each a local branch
+one commit on top of the last, writes a walkthrough guide for each step, and opens every step for
+review. Your working tree, index and existing branches are never touched, and the stack reproduces
+the original diff exactly. It takes the same arguments as self-review, or a PR/MR URL:
+
+```
+/self-review-stack main...HEAD
+```
+
+By default each step gets its own `self-review-serve` server, all open at once, and the skill ends
+with a table of the steps and their review URLs. Ask for the desktop app instead and it opens
+`self-review` on one step at a time, waiting for each review to finish. Ask for a critique as well
+and each step opens with `self-review-critique`'s comments pre-seeded. Each step's review is written
+under `.self-review/.stack/<stack-name>/` in the repository, a directory git ignores, ready for
+`self-review-apply`.
+
+The skill calls `self-review-guide` (and `self-review-critique` when asked), so install those
+alongside it; its helper, `scripts/stack.cjs`, needs only Node.js.
 
 ### Install
 
