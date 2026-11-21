@@ -52,7 +52,7 @@ created: 2026-11-20
 | Question | Answer |
 | --- | --- |
 | How does the author "attach" the guide? | By **committing it to the PR/MR branch**. Research ruled out native attachments: `gh --attach` uploads only images and media; GitHub `.xml` comment attachments cannot be downloaded from Actions in a private repo (browser-session auth); GitLab uploads need a stored PAT or project token (not `CI_JOB_TOKEN`) and GitLab 17.4+. Inline comment payloads hit GitHub's ~65,536-character body limit (measured: guide plus review.xml exceeds it from roughly 100+ files). Secret gists are readable by anyone with the URL, so they leak private-repo content, and GitLab has no token-free equivalent. |
-| Where do committed files live? | A configurable share directory (new `.self-review.yaml` key, default `.self-review/`), with one folder per branch: `.self-review/<branch>/`, so anything left behind is at least organized. |
+| Where do committed files live? | A fixed `.self-review/` directory at the repository root, with one folder per branch: `.self-review/<branch>/`, so anything left behind is at least organized. There is no config key. A configurable path would need its own base-side lookup (so a PR cannot redirect discovery), validation that it stays inside the repository, and its own documentation and tests. With a fixed path, `share`, `unshare`, `export`, discovery and the merge guard all name one known location. Entries starting with `.` are reserved for local tooling (for example `self-review-stack`'s `.self-review/.stack/`, #192) and are never share folders. |
 | How are committed files cleaned up? | A **merge guard** (an ordinary CI status check, not a git feature; a project enforces it by making it required, through GitHub branch protection or GitLab's "Pipelines must succeed") fails while the PR/MR adds or modifies anything under the share directory; an `unshare` command (or plain `git rm`) removes the folder before merge. No bot writes anywhere. The hosted page and its link remain after removal. |
 | Can the guide files stay out of the forge diff view? | Yes: `share` writes a nested `.gitattributes` into the branch folder marking its contents `-diff linguist-generated=true gitlab-generated=true`. Whether both forges honor a *nested* `.gitattributes` must be verified; a documented root-level line is the fallback. |
 | Live server or static export? | **Static export.** |
@@ -78,7 +78,7 @@ Committing the files (instead of attaching them) is the only mechanism that work
 | A guide sidecar is useful only to the author, in their local app or serve session. | A committed guide renders as a hosted, read-only page linked from the PR/MR. | Reviewers get the walkthrough without installing anything or paying for a review bot. |
 | `@self-review/react` has no read-only mode; the composer, edit, reply and Apply controls always render when a host supplies the matching adapter methods. | An additive `readOnly` mode hides every authoring and writing control. | A shared page must not invite comments it can never save. |
 | `self-review-serve` serves one local reviewer over loopback HTTP and exits on submission. | `self-review-serve export <git diff args or PR/MR URL>` writes a static page and exits; nothing listens. | Static output fits every candidate host and needs no new trust model. |
-| No convention for where a shareable guide lives in a repository. | Configurable share directory (default `.self-review/`) with per-branch folders, discovered from the PR/MR's own diff. | Gives a single opt-in signal that CI can read with its own checkout. |
+| No convention for where a shareable guide lives in a repository. | A fixed `.self-review/` directory with per-branch folders, discovered from the PR/MR's own diff. | Gives a single opt-in signal that CI can read with its own checkout, and one namespace other self-review tooling can build on. |
 | Nothing prevents review artifacts from merging. | A merge guard fails while a PR/MR adds or changes share-directory files; `unshare` removes them. | Keeps the default branch clean and avoids cross-PR conflicts. |
 | Committed guide files would appear in the forge's diff view. | A nested `.gitattributes` marks them binary/generated, so forges collapse them. | Keeps reviewer attention on the real change. |
 | No CI integration exists. | One reference GitHub Actions workflow and one reference GitLab CI job, chosen by a hosting spike. | Adopting projects get a working starting point on each forge. |
@@ -117,13 +117,13 @@ flowchart LR
 
 **Objective**: One forge-agnostic way to opt in, locate the shared files, and keep them organized.
 
-- New `.self-review.yaml` key `share-dir` (default `.self-review`), loaded through `loadConfigWithProvenance` like every other key. It must resolve to a relative path inside the repository; anything else is refused.
-- Folder name: the branch name normalized to one path segment (every character outside `A–Z a–z 0–9 . _ -` becomes `-`). One shared normalization function is used by `share`, `unshare` and tests.
+- The share directory is the fixed path `.self-review/` at the repository root, defined once as a core constant that `share`, `unshare`, discovery, `export` and tests import. There is no config key, so there is nothing for a PR to redirect and nothing to validate.
+- Folder name: the branch name normalized to one path segment (every character outside `A–Z a–z 0–9 . _ -` becomes `-`). One shared normalization function is used by `share`, `unshare` and tests. Git forbids a ref component that starts with `.`, so a normalized branch folder never starts with `.`.
+- Entries under `.self-review/` that start with `.` are reserved for local, never-committed tooling output and are never share folders. The first user is `self-review-stack` (#192), which keeps its scratch output in `.self-review/.stack/<prefix>/` behind a self-ignoring `.gitignore` (`*`).
 - Folder contents: `review.guide.xml` (required), `review.xml` (optional), `.gitattributes` (written by `share`).
 - Discovery is a core module behind a single interface that takes a loaded review session (local git or materialized remote; both carry a `ReviewSourceIdentity` naming the two snapshots compared) and returns one result: *none*, *found* (folder, parsed guide, optional review document) or *invalid* (reason). It:
-  - reads `share-dir` from the **old (base) side**'s `.self-review.yaml`, so a PR cannot redirect discovery; falls back to the default when absent;
-  - lists files the reviewed diff adds or modifies under `share-dir`;
-  - picks the single folder touched. More than one touched folder is *invalid* with a message naming them (no guessing);
+  - lists files the reviewed diff adds or modifies under `.self-review/`;
+  - picks the single non-dot folder touched. More than one touched folder is *invalid* with a message naming them (no guessing);
   - reads both XML files from the **new (reviewed) side** through the snapshot reader (the head commit for a commit range or PR/MR, never the working tree unless the working tree is what is being reviewed), within the existing guide and resume size budgets;
   - validates the guide against the embedded XSD and reconciles it against the diff; parses review.xml with the existing namespace-blind parser and resume importer, carrying its import diagnostics.
 - The share directory is always excluded from the exported diff (through the same ignore-filter path the loader already applies), so the guide never lists itself.
@@ -135,10 +135,10 @@ flowchart LR
 
 - Both are first-positional subcommands of `self-review-serve`, routed before serve's own argument parsing. `--` still reaches `git diff` verbatim.
 - `share` resolves the guide and review.xml the way the app does: the configured `output-file` and `guide-file`, or explicit flags. It requires a guide, validates it (and review.xml if present) against the XSDs, and refuses an invalid file. It also refuses a detached HEAD.
-  - It writes into `<share-dir>/<branch>/`, replacing that folder's previous contents, plus the nested `.gitattributes` (`* -diff linguist-generated=true gitlab-generated=true`).
+  - It writes into `.self-review/<branch>/`, replacing that folder's previous contents, plus the nested `.gitattributes` (`* -diff linguist-generated=true gitlab-generated=true`).
   - It stages exactly those paths and creates one commit with a fixed Conventional Commits message.
   - review.xml image attachments are not copied. `share` reports how many comments reference one.
-- `unshare` removes `<share-dir>/<branch>/` and commits the removal with a fixed Conventional Commits message. It is a no-op with a message when the folder is absent.
+- `unshare` removes `.self-review/<branch>/` and commits the removal with a fixed Conventional Commits message. It is a no-op with a message when the folder is absent.
 - Neither command pushes, amends, or touches files outside the branch folder. Both refuse to commit when other changes are already staged, so they never sweep unrelated work into their commit.
 - Policy: these are new sanctioned writes inside the repository. They sit alongside the Apply exception and are documented as such in AGENTS.md (see Documentation).
 
@@ -161,7 +161,7 @@ flowchart LR
 - Flags: an output directory, and the status file path.
 - Output:
   - `index.html`: one file with the read-only client's JavaScript, CSS and fonts inlined, and the review data embedded as a JSON script element. All `<` characters are escaped, so content cannot close the element. It makes no network requests, carries a Content-Security-Policy meta tag (no `connect-src`, images only from `data:`/`blob:`, scripts only the inlined bundle), and opens correctly from `file://` as well as over HTTP. The client is built as a classic (non-module) script with dynamic imports inlined, because module scripts do not load from `file://`.
-  - A status JSON naming the outcome (`none` / `found` / `invalid`), the share folder, the PR/MR head SHA, and the paths under `share-dir` the PR/MR touches. CI uses it both to decide whether to publish and post, and to drive the merge guard.
+  - A status JSON naming the outcome (`none` / `found` / `invalid`), the share folder, the PR/MR head SHA, and the paths under `.self-review/` the PR/MR touches. CI uses it both to decide whether to publish and post, and to drive the merge guard.
   - Exit codes distinguish success (including `none`), invalid input, and failure.
 - When discovery returns `none`, no page is written and the exit is successful, so hosts that run on every PR (for example Tugboat) can skip cleanly.
 - Data baked into the page: the full diff payload with every file's hunks, the reconciled guide, the review.xml comments (read-only), remote session info, and load and import diagnostics.
@@ -204,7 +204,7 @@ flowchart LR
 - **Stale guide after later pushes**: the guide was written against an earlier head.
     - **Mitigation**: existing reconciliation drops guide paths absent from the diff and puts new files in "Everything else"; the page shows the head SHA it was exported for.
 - **Untrusted content from fork PRs rendered on a hosting origin**: guide and review.xml text is attacker-controlled on public repositories.
-    - **Mitigation**: existing passive-content sanitizing and strict Mermaid apply unchanged. The export adds a CSP with no network access, and data is embedded as escaped JSON, never as markup. Discovery config comes from the base side.
+    - **Mitigation**: existing passive-content sanitizing and strict Mermaid apply unchanged. The export adds a CSP with no network access, and data is embedded as escaped JSON, never as markup. The share location is fixed, so a PR cannot redirect discovery.
 - **Single-file page size for very large PRs**: the bundle (including Mermaid and Prism) plus every hunk can make a large HTML file.
     - **Mitigation**: the existing input budgets bound the data, large-payload mode keeps rendering lazy, and the spike checks the chosen hosts' size limits.
 - **Classic-script bundle**: inlining dynamic imports (Prism languages, Mermaid) may grow the bundle or need build changes.
@@ -238,7 +238,7 @@ flowchart LR
 
 ### Primary Success Criteria
 
-1. `self-review-serve share` commits a validated guide (and optional review.xml) with a nested `.gitattributes` into `<share-dir>/<branch>/`, and refuses an invalid guide, a detached HEAD, or a pre-staged index. `unshare` removes the folder in one commit.
+1. `self-review-serve share` commits a validated guide (and optional review.xml) with a nested `.gitattributes` into `.self-review/<branch>/`, and refuses an invalid guide, a detached HEAD, or a pre-staged index. `unshare` removes the folder in one commit.
 2. `self-review-serve export`, given a `base...head` commit range, a GitHub PR URL, or a GitLab MR URL (including a non-github.com/gitlab.com host), produces an `index.html` that, opened from `file://`, shows the PR/MR diff in guided mode with groups, rationales, one-liners and overview, shows review.xml comments read-only, and offers no way to author, save or apply. The page makes no network requests.
 3. `export` returns `none` without writing a page when the PR/MR touches no share folder, `invalid` with a reason for an ambiguous or schema-invalid share, and lists touched share paths in its status file in every case.
 4. `@self-review/react` keeps its current behavior when `readOnly` is not set, and all existing unit, typecheck, lint and e2e suites pass.
@@ -263,14 +263,13 @@ This plan needs documentation and AGENTS.md updates:
 - `packages/serve/README.md`: the `share`, `unshare` and `export` subcommands, their flags, the status file and exit codes, the `--` rule for literal `export`/`share`/`unshare`, and the author workflow end to end.
 - Root `README.md`: a short "Share a guide on a PR/MR" section pointing to the serve README and the reference CI files.
 - `AGENTS.md`:
-  - the `share-dir` config key and per-branch convention;
+  - the fixed `.self-review/` directory, the per-branch convention, and the reservation of dot-prefixed entries for local tooling;
   - the read-only mode of `@self-review/react`;
   - the static export and its client entry in the serve package's structure entry;
   - the new sanctioned writes (`share`/`unshare` commit inside the repository; `export` writes its output directory) in the File writes convention;
   - that `export` touches the network only through remote mode for a user-supplied URL; the git-arguments form is fully local.
 - `docs/`: the hosting recommendation from the spike, and adopter setup for each reference integration (secrets and permissions, making the guard a required check, the root `.gitattributes` fallback if needed).
 - `.agents/skills/self-review-guide/SKILL.md` and `self-review-critique/SKILL.md`: one line in the closing instructions pointing authors to `self-review-serve share` when the diff belongs to a PR/MR.
-- The `.self-review.yaml` configuration documentation: the `share-dir` key and its default.
 
 ## Resource Requirements
 
