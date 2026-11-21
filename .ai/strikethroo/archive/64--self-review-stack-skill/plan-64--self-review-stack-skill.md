@@ -318,3 +318,7 @@ Verification (fresh runs at the end): `lint`, `format:check` and all five typech
 - The flaky `loaded-review-consistency.test.ts` deserves its own upstream issue.
 - `packages/config` is missing from AGENTS.md's project structure (pre-existing).
 - The Electron e2e tier (`npm run test:e2e:electron`) and the webapp/serve e2e tiers were not run; the desktop change was validated with unit tests and the targeted packaged-app check.
+
+### Post-execution changes
+
+- **Output directory moved out of `.git/`.** Manual testing showed Claude Code treats writes inside `.git/` as sensitive: a headless run with ordinary file and shell permissions stopped at step 5, and an interactive run prompts. The skill now writes to `<repo-root>/.self-review/.stack/<prefix>/`, which ignores itself through `.self-review/.stack/.gitignore` (`*`). Being ignored, it stays out of commits and out of self-review's untracked-file listing. This replaces the `$(git rev-parse --git-common-dir)/self-review/<prefix>/` location in this plan's Context and Component 4.

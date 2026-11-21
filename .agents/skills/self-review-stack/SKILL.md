@@ -14,8 +14,8 @@ a time, so a human reviews a large change one layer at a time. The run ends with
 steps, their descriptions, diff stats and review state.
 
 The stack is review scaffolding, never a rewrite. The working tree, the index and every existing
-branch stay exactly as they were, and the stack's whole diff is exactly the diff the arguments
-name.
+branch stay exactly as they were (the run's own files go in a git-ignored directory, step 5), and
+the stack's whole diff is exactly the diff the arguments name.
 
 `scripts/stack.cjs` (relative to this skill's directory, `<skill-dir>` below) does the mechanical
 work: resolving the arguments, building the branches, an optional import check, and printing the
@@ -30,6 +30,7 @@ These are invariants, not style preferences:
    reset, rebase, stash, commit or merge. The stack is built with plumbing on a throwaway copy of
    the index, and every read of a step's content goes through `git show <step-branch>:<path>`.
    The one checkout is step 7's detached worktree in a temporary directory, removed afterwards.
+   The one write inside the repository is the git-ignored output directory step 5 creates.
 2. **Reproduce the diff exactly.** Every changed path lands in exactly one step, in its final
    form, and the stack's whole diff equals the one the arguments name. `stack.cjs build` refuses
    a spec that breaks either.
@@ -157,27 +158,32 @@ First, if `~/.config/self-review/config.yaml` or the repository root's `.self-re
 `guide-file`, every step would load that one guide instead of its own. Tell the user and stop,
 before anything is built.
 
-The output directory is always `$(git rev-parse --git-common-dir)/self-review/<prefix>/`, made
-absolute. It is never tracked, and every worktree of the repository shares it. Use the Bash tool
-to run:
+The output directory is always `<root>/.self-review/.stack/<prefix>/`, where `<root>` is the
+repository root. Use the Bash tool to run:
 ```bash
-echo "$(git rev-parse --path-format=absolute --git-common-dir)/self-review/<prefix>"
 git rev-parse --show-toplevel
 ```
 
-The first line is `<outdir>`, the second is the repository root, `<root>`. Write both out in
-full in every later command; a shell variable may not survive from one command to the next. If
+It prints `<root>`; `<outdir>` is `<root>/.self-review/.stack/<prefix>`. Write both out in full
+in every later command; a shell variable may not survive from one command to the next. If
 `<outdir>` already exists and is not empty, ask the user whether to remove it or use another
-prefix. Otherwise create it with `mkdir -p "<outdir>"`.
+prefix. Otherwise create it, and make `.self-review/.stack/` ignore itself:
+```bash
+mkdir -p "<outdir>" && { [ -e "<root>/.self-review/.stack/.gitignore" ] \
+  || printf '*\n' > "<root>/.self-review/.stack/.gitignore"; }
+```
+
+That `.gitignore` keeps everything under `.self-review/.stack/` out of `git status` and out of
+commits, and out of the untracked files self-review would otherwise list in every step. Its
+contents are per-run scratch: the server logs record local paths and each server's session key,
+which works only while that server runs.
 
 The directory holds the spec, the guides, the server logs and, once the user completes them, the
-reviews. Every review launch runs from `<root>` with `-o "<outdir>/<slug>.review.xml"`, never from
-`<outdir>` itself: inside `.git/`, git refuses the work-tree commands self-review runs ("this
-operation must be run in a work tree"), and launching from the root also applies the
-repository's own `.self-review.yaml`. self-review discovers a guide next to its output path at
-startup, so a step reviewed with `-o "<outdir>/<slug>.review.xml"` loads
-`<outdir>/<slug>.review.guide.xml`, the path step 8 writes (the guide skill's own rule: strip the
-last extension, append `.guide.xml`).
+reviews. Every review launch runs from `<root>` with `-o "<outdir>/<slug>.review.xml"`, so the
+repository's own `.self-review.yaml` applies and the step diff args are read from the root.
+self-review discovers a guide next to its output path at startup, so a step reviewed with
+`-o "<outdir>/<slug>.review.xml"` loads `<outdir>/<slug>.review.guide.xml`, the path step 8
+writes (the guide skill's own rule: strip the last extension, append `.guide.xml`).
 
 ## 6. Write the Spec and Build the Stack
 
@@ -405,4 +411,5 @@ Print the table, then briefly:
 - how to clean up: stop any server still running with `kill $(cat "<outdir>"/*.serve.pid)`
   (a server that already finished is gone, and `kill` only reports it), delete the branches with
   `git branch -D $(git branch --list '<prefix>/*' --format='%(refname:short)')`, then remove the
-  output directory with `rm -rf "<outdir>"`.
+  output directory with `rm -rf "<outdir>"`. The ignored `.self-review/.stack/` and its
+  `.gitignore` can stay for the next run.

@@ -863,8 +863,9 @@ The `/self-review-stack` skill splits a large diff into a stack of local review 
 `self-review-critique`) for each step, and opens every step for review: one `self-review-serve` per
 step by default, or the desktop app one step at a time. It never touches the working tree, the index
 or an existing branch, and refuses a stack that does not reproduce the original diff exactly. Each
-step's guide and review live in `<outdir>` =
-`$(git rev-parse --git-common-dir)/self-review/<prefix>/`, and each step launches with
+step's guide and review live in `<outdir>` = `<repo-root>/.self-review/.stack/<prefix>/`, which
+ignores itself through `.self-review/.stack/.gitignore` (`*`), so it never shows as untracked and
+never reaches a commit, and each step launches from the repository root with
 `-o <outdir>/<slug>.review.xml` so it discovers its own guide. It accepts the same git diff
 arguments and PR/MR URLs as the guide skill:
 

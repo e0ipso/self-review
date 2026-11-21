@@ -434,7 +434,8 @@ By default each step gets its own `self-review-serve` server, all open at once, 
 with a table of the steps and their review URLs. Ask for the desktop app instead and it opens
 `self-review` on one step at a time, waiting for each review to finish. Ask for a critique as well
 and each step opens with `self-review-critique`'s comments pre-seeded. Each step's review is written
-under `.git/self-review/<stack-name>/`, ready for `self-review-apply`.
+under `.self-review/.stack/<stack-name>/` in the repository, a directory git ignores, ready for
+`self-review-apply`.
 
 The skill calls `self-review-guide` (and `self-review-critique` when asked), so install those
 alongside it; its helper, `scripts/stack.cjs`, needs only Node.js.
