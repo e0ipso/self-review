@@ -1,886 +1,11 @@
 # self-review
 
-Local-only Electron desktop app that provides a GitHub-style PR review UI for local git diffs and
-directory-based reviews (all files treated as new when no repo context is available). Designed for
-solo developers reviewing AI-generated code. CLI-first, one-shot workflow: open → review → close →
-XML to file. When launched outside a git repo without a directory argument (e.g., from an app
-launcher), the app shows a welcome screen with a directory picker instead of exiting. It can also
-review a remote GitHub PR or GitLab MR by URL: the diff is materialized into a local git clone and
-reviewed with the same machinery (see Remote PR/MR mode).
-
-## Dev Container
-
-Both e2e projects run here. `npm run test:e2e` (the webapp project) runs headless Chromium against a
-Vite dev server and passes once the Playwright browser and its system libraries are installed.
-`npm run test:e2e:electron` packages the app and runs it under `xvfb-run`, and at `f1e4eae` all 38
-scenarios passed in 59.5s, exit 0. Getting there took two apt packages the base image leaves out.
-Without `xauth`, `xvfb-run` exits 3 before a single test starts; without `libgtk-3-0`, the Electron
-binary dies at launch on `libgtk-3.so.0`. Both are now in the `apt-get-packages` feature list at
-`.devcontainer/devcontainer.json:26`, so a container rebuilt after that change needs nothing more.
-An older container needs `sudo apt-get install -y xauth libgtk-3-0` once. A display was never the
-problem. `xvfb-run` is installed and the script passes `--auto-servernum`, which starts its own X
-server.
-
-A host without `xvfb-run`, such as a Wayland desktop with no root access, can run the Electron tier
-against its own X display instead: `npm run package && npx bddgen`, then
-`env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 DISPLAY=:0 npx playwright test --project electron`.
-Without the two `env` overrides Chromium picks the Wayland backend and the app never reaches
-`app.whenReady()`. This is a local recipe only; CI keeps `xvfb-run`.
-
-## Tech Stack
-
-- **Electron** (desktop shell, main + renderer process model)
-- **React + TypeScript** (renderer)
-- **shadcn/ui** (UI components, built on Radix primitives)
-- **Prism.js** (syntax highlighting)
-- **react-markdown** + **remark-gfm** (rendered Markdown view with AST positions)
-- **mermaid** (Mermaid diagram rendering)
-- **@tailwindcss/typography** (prose styling for rendered text content)
-- **Node.js** (main process: CLI, git, IPC, file I/O)
-- **Electron Forge** (build/packaging, bundling through its webpack plugin)
-
-## Project Structure
-
-```
-self-review/
-├── CLAUDE.md
-├── docs/
-│   └── PRD.md                    # Product requirements (source of truth)
-├── src/
-│   ├── shared/                   # Shared between main and renderer
-│   │   ├── types.ts              # All TypeScript interfaces, THE CONTRACT
-│   │   └── ipc-channels.ts      # IPC channel name constants
-│   ├── main/                     # Electron main process
-│   │   ├── main.ts              # App entry point, window creation, startup, exit handler
-│   │   ├── cli.ts               # Desktop argument parsing (forge URL & subcommand routing over core's cli-options)
-│   │   ├── cli-dispatch.ts      # Runs `fetch-comments` before main.ts loads (no window, no display)
-│   │   ├── ipc-handlers.ts      # ipcMain registrations & Electron specifics (dialogs, windows)
-│   │   ├── quit-controller.ts   # The one close/quit/save state machine; describes save failures for the error dialog
-│   │   ├── menu.ts              # Application menu (Quit stays the built-in role, routed by before-quit)
-│   │   ├── version-checker.ts   # Checks GitHub Releases API for updates (startup only)
-│   │   ├── relaunch-guard.ts    # macOS symlink-launch re-exec from the real bundle path
-│   │   ├── renderer-content-policy.ts # Which requests and navigations the renderer may make
-│   │   ├── app-assets.ts        # Resolves the bundled application icon
-│   │   └── config.ts, xml-parser.ts, payload-sizing.ts, directory-scanner.ts,
-│   │       ignore-filter.ts, synthetic-diff.ts # One-line re-exports of the canonical core modules
-│   ├── preload/
-│   │   └── preload.ts           # contextBridge exposing IPC to renderer
-│   ├── renderer.ts               # Renderer entry point, mounts src/renderer/App
-│   └── renderer/                 # Electron-only shell around @self-review/react
-│       ├── App.tsx               # Wires the package providers to the Electron adapter
-│       ├── components/
-│       │   ├── WelcomeScreen.tsx # Directory picker + PR/MR URL field when launched bare
-│       │   ├── CloseConfirmDialog.tsx # Save & Quit / Discard / Cancel on window close
-│       │   ├── FindBar.tsx       # Chromium find-in-page bar
-│       │   ├── UpdateBanner.tsx  # Update notice from the startup version check
-│       │   └── AboutDialog.tsx   # Version and about dialog
-│       └── utils/
-│           └── image-utils.ts    # Attachment image helpers
-├── packages/
-│   ├── core/                    # @self-review/core, headless diff parsing & review logic
-│   │                            #   incl. guide-schema.ts (embedded guide XSD) and the guide
-│   │                            #   parser/reconciliation for the walkthrough sidecar, plus the
-│   │                            #   remote forge machinery: forge-provider.ts (ForgeProvider
-│   │                            #   interface + parseForgeUrl), github-provider.ts (gh),
-│   │                            #   gitlab-provider.ts (glab), materializer.ts (clone-aware
-│   │                            #   diff materialization), thread-mapper.ts (forge threads →
-│   │                            #   ReviewComments); and the Node-only review engine:
-│   │                            #   review-handlers.ts, startup-mode.ts, startup.ts (the startup
-│   │                            #   steps both front ends share: output target & its trust, diff
-│   │                            #   args with config provenance, local load, resume), cli-options.ts
-│   │                            #   (application-flag extraction both CLIs use), guide-loader.ts,
-│   │                            #   git-diff-loader.ts, staged-untracked.ts, remote-mode.ts
-│   │                            #   (loadRemoteReview: materialize, filter, map, shared by the
-│   │                            #   app and fetch-comments), fetch-comments.ts, git-diff-args.ts;
-│   │                            #   and the integrity layer every front end goes through:
-│   │                            #   review-publisher.ts (publishReview, the one output writer),
-│   │                            #   safe-fs.ts (no-follow primitives), apply-suggestion.ts,
-│   │                            #   snapshot-reader.ts + source-identity.ts (what was reviewed,
-│   │                            #   and the one read of it), attachment-origins.ts,
-│   │                            #   anchor-validation.ts, xml-text.ts + xml-errors.ts (lossless
-│   │                            #   XML, typed errors), input-budgets.ts + bounded-read.ts
-│   │                            #   (limits enforced before allocation)
-│   ├── react/                   # @self-review/react, the whole review UI, including
-│   │                            #   guided-mode presentation (grouped tree, overview)
-│   │   └── src/
-│   │       ├── ReviewPanel.tsx   # Main entry component: providers + Layout + keyboard nav
-│   │       ├── SingleFileReview.tsx # Same stack scoped to one file
-│   │       ├── adapter.ts        # ReviewAdapter interface (host platform operations)
-│   │       ├── config-defaults.ts # The one browser-safe source of default AppConfig (also read by core's loader)
-│   │       ├── context/
-│   │       │   ├── ReviewContext.tsx  # Review state (comments, suggestions)
-│   │       │   ├── ConfigContext.tsx  # Merged config (theme, categories, etc.)
-│   │       │   ├── GuideContext.tsx   # Loaded guide + Guided/Flat mode
-│   │       │   ├── DiffNavigationContext.tsx # Active file + scroll-to-file
-│   │       │   └── ReviewAdapterContext.tsx  # Injected ReviewAdapter
-│   │       ├── hooks/
-│   │       │   ├── useReviewState.ts # Comment CRUD, state management
-│   │       │   ├── useDiffNavigation.ts # File tree ↔ diff viewer scroll sync
-│   │       │   ├── useEmojiAutocomplete.ts # Emoji shortcode autocomplete in comment editor
-│   │       │   ├── useKeyboardNavigation.ts # Vimium-style shortcuts and hint overlay
-│   │       │   └── useReviewBridge.ts # Hands review state back to the host app
-│   │       └── components/
-│   │           ├── Layout.tsx        # Two-panel layout (file tree + diff viewer)
-│   │           ├── FileTree.tsx      # Left panel: file list, search, viewed checkboxes, output path footer
-│   │           ├── Toolbar.tsx       # Top bar: view mode, expand/collapse, theme
-│   │           ├── FileTreeEntry.tsx # Per-file row: badge, path, stats, viewed toggle
-│   │           ├── ImportDiagnosticsBanner.tsx # Non-blocking list of resumed comments the importer downgraded
-│   │           ├── DiffViewer/
-│   │           │   ├── DiffViewer.tsx     # Orchestrator: renders file sections
-│   │           │   ├── EmptyDiffMessage.tsx # Empty-state messaging by diff source type
-│   │           │   ├── FileSection.tsx    # Orchestrator: hooks + layout composition
-│   │           │   ├── FileSectionHeader.tsx # Sticky header: path, badges, toggles
-│   │           │   ├── FileSectionBody.tsx   # File comments + DiffContentArea
-│   │           │   ├── DiffContentArea.tsx   # Loading/error/binary/view dispatcher
-│   │           │   ├── useDragSelection.ts   # Hook: drag-to-select comment ranges
-│   │           │   ├── useExpandContext.ts   # Hook: expand context lines via git
-│   │           │   ├── useLazyFileContent.ts # Hook: idle/loading/loaded/error file loads, manual Retry, stale-result guard
-│   │           │   ├── PreviewErrorBoundary.tsx # Contains one file's render failure; the rest of the review stays usable
-│   │           │   ├── InlineCommentSlot.tsx # Shared inline comment row (Split+Unified)
-│   │           │   ├── SplitView.tsx      # Side-by-side diff rendering
-│   │           │   ├── UnifiedView.tsx    # Single-column unified diff rendering
-│   │           │   ├── HunkHeader.tsx     # @@ separator rendering
-│   │           │   ├── ExpandContextBar.tsx # Expand context buttons between hunks
-│   │           │   ├── RenderedMarkdownView.tsx # Rendered Markdown/HTML with source-line-mapped gutter
-│   │           │   ├── RenderedImageView.tsx # Rendered preview for raster images (JPG, PNG, GIF, WebP, ICO, BMP)
-│   │           │   ├── RenderedSvgView.tsx  # Rendered SVG preview via secure img+data-URI (utils/svg-data-uri.ts)
-│   │           │   └── SyntaxLine.tsx     # Single line with Prism highlighting
-│   │           └── Comments/
-│   │               ├── CommentInput.tsx    # Text area + category selector + add/cancel
-│   │               ├── AttachmentDropZone.tsx # Drag-and-drop + paste attachment wrapper
-│   │               ├── SuggestionPanel.tsx    # Original/proposed code textareas
-│   │               ├── AttachmentImage.tsx    # Blob URL lifecycle + image display
-│   │               ├── EmojiAutocomplete.tsx # Inline emoji shortcode dropdown
-│   │               ├── CommentDisplay.tsx  # Rendered comment with edit/delete
-│   │               ├── SuggestionBlock.tsx # Diff-within-diff rendering for suggestions
-│   │               └── CategorySelector.tsx # Dropdown/chip selector for categories
-│   ├── serve/                   # @self-review/serve, the `self-review-serve` CLI: the same
-│   │   │                        #   review engine served over loopback HTTP instead of
-│   │   │                        #   Electron/IPC. cli.ts (entry point), args.ts (flag parsing:
-│   │   │                        #   --output, --resume-from, --help, --version), startup.ts
-│   │   │                        #   (resolves one ReviewSession before the listener opens,
-│   │   │                        #   mirroring src/main/main.ts), server.ts (HTTP routes over
-│   │   │                        #   core's session handlers; binds 127.0.0.1 only),
-│   │   │                        #   lifecycle.ts (publishes through publishReview, then exits
-│   │   │                        #   once the file is on disk), validate.ts (request body checks;
-│   │   │                        #   diff paths are authorized by core), capability.ts (the
-│   │   │                        #   per-process session key, Node side), protocol.ts (the wire
-│   │   │                        #   contract the server and the browser bundle share: body limit,
-│   │   │                        #   acknowledgement shape, key fragment/header), client/ (browser
-│   │   │                        #   entry point + fetch-based ReviewAdapter, built into
-│   │   │                        #   dist/client/ and served statically)
-│   └── types/                   # @self-review/types, shared TypeScript interfaces (zero runtime deps)
-│                                #   incl. ReviewGuide/GuideGroup/ResolvedGuideGroup guide types
-```
-
-The project uses **npm workspaces** to manage reusable packages under `packages/*`. The workspace
-packages `@self-review/core`, `@self-review/react`, `@self-review/types` and `@self-review/serve`
-expose shared logic, UI components, shared TypeScript interfaces, and the standalone HTTP CLI
-respectively. `@self-review/core` holds everything Node-only: the primitives (diff parsing, git,
-XML, config, forge providers) and the review engine that orchestrates them (session handlers,
-startup mode, guide and diff loading, remote PR/MR bootstrap, `fetch-comments`). The Electron app
-imports the packages via relative path imports to their source (not through workspace symlinks), so
-no build step is needed for the packages during development; `@self-review/serve` is a real
-dependent (declared in its `package.json`, resolved as an installed package) rather than a relative
-import, since it ships and runs independently of the Electron app. The Electron app's
-`src/shared/types.ts` re-exports from `packages/types/src/index` as the canonical type source.
-
-## Keyboard Shortcuts
-
-The app supports Vimium-style keyboard navigation:
-
-- `Ctrl/Cmd+F`, Open find-in-page search bar (Chromium native text search)
-- `f`, Activate hint labels on changed diff lines to open a comment input
-- `g`, Activate hint labels on file tree entries to jump to a file
-- `j` / `k`, Smooth scroll the diff pane down/up
-- `Escape`, Dismiss active hint overlay or close find bar
-
-All shortcuts are suppressed when a text input has focus. The implementation lives in
-`useKeyboardNavigation` hook with `HintOverlay` for rendering hint badges.
-
-## Architecture
-
-The review engine in `packages/core` has two front ends over different transports: the desktop
-Electron app (main process ↔ renderer over IPC) and the `self-review-serve` CLI in `packages/serve`
-(a Node HTTP server ↔ a browser page over `fetch`). Both drive the same `ReviewSession` and the same
-handler functions in `packages/core/src/review-handlers.ts`; a change to that layer affects both
-front ends. The rest of this section describes the desktop app's process model. See
-`packages/serve/README.md` for the HTTP transport.
-
-Two-process model (Electron app):
-
-1. **Main process**, parses CLI args, runs `git diff`, parses the unified diff into a structured AST
-   (`DiffFile[]`), sends it to the renderer via IPC. On "Finish Review" or "Save & Quit", takes the
-   review state the renderer pushed over `review:submit` and hands it to `publishReview`, which
-   validates and writes the output file; only a successful write exits. Every way out of the app
-   (window close, menu Quit, Cmd/Ctrl+Q, Finish Review, the confirmation dialog) consults the one
-   `QuitController` in `src/main/quit-controller.ts`: `before-quit` and the window's `close` event
-   cancel anything that has not been saved or discarded and ask the renderer for Save & Quit /
-   Discard / Cancel, and a close that arrives while a save is in flight is ignored. Main never pulls
-   state from the renderer on a timer: a missing push is a reported failure, not an empty review.
-2. **Renderer process**, React app that renders the review UI. Manages all review state (comments,
-   suggestions, viewed flags) in React context. Communicates with main via the preload bridge.
-
-The preload script uses `contextBridge.exposeInMainWorld` to expose a typed `electronAPI` object.
-The renderer NEVER imports from `electron` directly.
-
-Review handler logic lives in `packages/core/src/review-handlers.ts`: each handler takes the
-`ReviewSession` it acts on as a parameter, returns a value, and reads no module-scope state. A
-session records what it reviews as a `ReviewSourceIdentity` (`@self-review/types`): mode
-(`git`/`directory`/`file`/`remote`), the physical source root, the launch directory, the structured
-`git diff` argv and the two snapshots compared (`working-tree`, `index`, `commit` with its SHA
-resolved at load time, `directory`, `file`, `none`, or `unknown`). The loader that produced the diff
-supplies it (`loadGitDiffWithUntracked`, `resolveLocalSourceIdentity`, `bootstrapRemoteDiff`) and
-`commitDiffData(session, payload, identity)` records it with the diff. Every read of reviewed
-content — image previews, expansion line counts — goes through `readReviewedContent` in
-`packages/core/src/snapshot-reader.ts`, which reads the reviewed side (the index blob of a staged
-review, the PR head commit of a remote one, the working or scanned file opened without following
-links) rather than the working tree, and every request-supplied diff path is authorized by
-`authorizeReviewedPath` against the same identity, in both front ends. An `unknown` side refuses
-visibly; nothing falls back to the working tree or to the process's working directory. The identity
-also carries `pathPrefix`, what a `--relative` / `--relative=<dir>` review's paths are relative to
-under the root (empty otherwise; every `git diff` the app runs forces `diff.relative=false`, so only
-the arguments decide), resolved once at load; `rootRelativeReviewedPath` in `source-identity.ts` is
-the one mapping from a session path to its root-relative file, used by the snapshot reader (and so
-image previews and expansion line counts), by Apply's destination path and by expansion's pathspecs,
-so a review of `sub/` never reaches the root's same-named file. Each front end owns its own
-transport wiring over that same handler layer: `src/main/ipc-handlers.ts` registers the Electron
-app's `ipcMain` listeners, and `packages/serve/src/server.ts` registers the serve command's HTTP
-routes. A new handler's body belongs in `review-handlers.ts`; only its transport registration — an
-`ipcMain` listener or an HTTP route — belongs in the front end that needs it.
-
-Everything that moved into `@self-review/core` was Node-only, with no Electron dependency;
-`src/main/` now holds Electron-bound code — window/menu/dialog wiring, IPC transport, and XML file
-I/O — plus two deliberate exceptions that stayed put: `cli.ts` (argument parsing; its primitives
-live in core — `extractApplicationOptions` in `packages/core/src/cli-options.ts` takes the
-application's own flags out of a git argument list, `classifyGitDiffArgs` picks positionals — and
-only the forge-URL / `fetch-comments` routing and Chromium-switch handling are desktop-specific) and
-`relaunch-guard.ts` (re-execs the app from its real bundle path, which is inherently
-desktop-specific).
-
-**Shared startup.** `src/main/main.ts` and `packages/serve/src/startup.ts` make the same startup
-decisions through `packages/core/src/startup.ts`, and only dialogs, the large-payload prompt and the
-welcome fallback differ: `loadConfigWithProvenance` (in `config.ts`) returns the merged `AppConfig`
-with the origin of every value (`user` for `~/.config/self-review/config.yaml`, `project` for the
-launch directory's `.self-review.yaml`, else `default`); `resolveOutputTarget` turns a CLI path, or
-the configured `output-file`, into a `ReviewOutputTarget` whose origin is `explicit` for a CLI path
-or a _user-level_ `output-file` (the reviewer's own intent, allowed outside the repository) and
-`inherited` with `baseDir` = launch cwd for a _project_ `output-file` or the default;
-`resolveStartupDiffArgs` takes the CLI's arguments or else `default-diff-args` tokenized with shell
-quoting (so `-S "a b"` is one argument), refuses `--output`, `--output=*`, `--ext-diff` and
-`--textconv` when a project file supplied them (`ConfiguredDiffArgsError`, before any git command;
-the reviewer's own arguments are not restricted), then normalizes and applies the staged/untracked
-default; `resolveStartupSource` (`startup-mode.ts`) picks the file or directory to review from the
-classifier's first positional, so an option value such as `-S src/x.ts` is never the source;
-`loadLocalReview` loads git (ignore-filtered, argv recorded with `formatGitDiffArgs`), directory,
-file or welcome; `loadResumeDocument` resumes a prior document into a session. The two command lines
-differ on purpose — the desktop has no `--output` (the save dialog changes the path) and alone
-accepts a forge URL and `fetch-comments`; both take `--resume-from <file>` and
-`--resume-from=<file>` and stop reading their own flags at `--` — and the table lives in
-`packages/core/src/startup.ts`. `fetch-comments` publishes through the same `resolveOutputTarget`.
-
-**Large-payload mode:** When the diff exceeds configurable thresholds (`max-files` or
-`max-total-lines`), the main process sends file metadata without hunks in the initial `diff:load`
-payload. The renderer lazily requests each file's hunks via the `diff:load-file` IPC channel as the
-user navigates, avoiding memory pressure from loading the entire diff at once. Large payloads start
-with every section collapsed, so nothing is fetched until the reviewer opens a file. Each lazy load
-is an explicit state (`idle`, `loading`, `loaded`, `error`, in `useLazyFileContent`): a failure
-shows its message and a Retry button and is never retried automatically, so a persistently failing
-host cannot produce a request storm; an empty answer counts as a failure, and a result that arrives
-after the section unmounted or the session was replaced is dropped. These transport thresholds are
-distinct from the safety budgets in `packages/core/src/input-budgets.ts` (entries walked, bytes read
-per file and in total, git output size, guide and resume document size), which are fixed, are
-checked before the expensive step, and surface as diagnostics rather than a silently shorter review.
-
-**Guided walkthrough mode:** At startup, the main process looks for an LLM-generated guide sidecar
-next to the resolved output path: `<output-basename>.guide.xml` (default `review.xml` →
-`review.guide.xml`), overridable via the `guide-file` YAML config key. No CLI flag is involved.
-Discovery is one-shot at startup; changing the output path at runtime does not re-discover. The
-guide (schema `self-review-guide-v1.xsd`, namespace `urn:self-review-guide:v1`) is parsed and
-XSD-validated in `@self-review/core`, then sent to the renderer over the `guide:load` IPC channel.
-When present and valid, the file tree reorganizes into the guide's named, ordered groups (each with
-a rationale), files show one-line descriptions, and a review-level overview (Markdown, optional
-Mermaid) renders before the first file. A Guided/Flat toolbar toggle (shown only when a guide is
-loaded) restores the exact alphabetical tree. Loading is tolerant, never fatal: guide entries whose
-paths are not in the diff are dropped; diff files the guide never mentions land in an implicit
-trailing "Everything else" group; a missing, unparseable, or schema-invalid guide produces a single
-stderr warning and the app behaves exactly as without one. The guide is read-only orientation — it
-never hides content, never blocks the review, and never affects the `review.xml` output. It is
-authored ahead of time by the `self-review-guide` skill (see Assistant Skills).
-
-**Remote PR/MR mode:** The app accepts a GitHub PR URL (`…/pull/N`) or a GitLab MR URL
-(`…/-/merge_requests/N`) as its first positional argument, or through a URL field on the
-welcome/splash screen (the `remote:open-url` IPC channel). Forge detection is by URL path shape only
-(`parseForgeUrl` in `packages/core/src/forge-provider.ts`), so self-hosted GitLab hosts work with
-zero configuration. The diff is always **materialized through local git**
-(`packages/core/src/materializer.ts`): if CWD is inside a clone whose remote matches the URL, the
-base branch and PR/MR head ref (`refs/pull/N/head` / `refs/merge-requests/N/head`) are fetched into
-refs that session alone owns (`refs/self-review/<session-uuid>/base|head` — no checkout, no
-working-tree changes; the SHAs are read from exactly those refs, so two sessions over one clone,
-same PR or not, never see each other's snapshot, and each `cleanup()` deletes only its own two
-refs); otherwise a temporary blobless clone (`--filter=blob:none`, never shallow) is created under
-the OS temp directory and removed on exit. After materialization, remote mode _is_ git mode: the
-existing pipeline runs against the clone path and the `baseSha...headSha` range
-(`packages/core/src/remote-mode.ts`). Git's own credential machinery handles all clone/fetch
-transport, and the runner leaves prompting as the environment configures it (no
-`GIT_TERMINAL_PROMPT`, no process-group detach — that would sever the controlling terminal and
-silently disable git's and ssh's prompts). **Session lifetime:** every git/`gh`/`glab` command of a
-remote session runs under one `AbortSignal` (`RemoteLifetimeOptions.signal`, threaded through
-`startRemoteSession` → `materialize` and the provider's runner) and the materializer's per-command
-timeout (`DEFAULT_GIT_COMMAND_TIMEOUT_MS`, 10 minutes); aborting or timing out kills the child
-(SIGTERM, then SIGKILL after 2 s) and rejects with a `CommandCancelledError`, which the providers
-never fold into "CLI unavailable" and which the `'optional'` thread policy never degrades. A
-temporary clone is owned from the moment its directory exists (cleanup registered before `git clone`
-runs), and one try/finally in `bootstrapRemoteDiff` / `runFetchComments` spans clone, fetch, load,
-filter and map: whatever stage fails, the clone or the session refs are released before the error
-reaches the caller, and `cleanup()` (async, idempotent, never rejects; its temp-dir removal is its
-synchronous first step) is handed over only with a result. Each host owns that handle with its own
-limit: desktop startup aborts the in-flight bootstrap at its 45 s deadline and waits up to 10 s for
-the cleanup before exiting, a welcome-screen `remote:open-url` runs one open at a time and cancels
-itself after 10 minutes (the welcome screen stays usable), every desktop exit path (`exitNow`,
-`will-quit`) disposes the session first, and headless `fetch-comments` has no overall deadline but
-cancels on SIGINT/SIGTERM and exits 128 + signal after releasing the clone. The **conversation
-plane** (base-branch lookup, discussion-thread fetch) lives behind the `ForgeProvider` interface in
-`packages/core/src/forge-provider.ts`, implemented by `github-provider.ts` (`gh` CLI) and
-`gitlab-provider.ts` (`glab` CLI; unresolved threads only by default). When the forge CLI is absent
-or unauthenticated, the review itself proceeds untouched (base branch falls back to
-`git ls-remote --symref` via `resolveRemoteDefaultBranch`) and thread sync reports as unavailable on
-stderr. Fetched threads are mapped deterministically to `ReviewComment` threads by
-`packages/core/src/thread-mapper.ts` (pure code, no LLM); threads with no file association land on
-the sentinel path `''` (`REVIEW_LEVEL_FILE_PATH`). A root body carrying one top-level
-` ```suggestion ` fence also yields a `Suggestion` anchored at the thread's line range, with
-`originalCode` read out of the reviewed diff rather than out of the body — which is what makes it
-anchored rather than quoted. Anything the mapper cannot verify stays `null`: no fence, more than one
-fence, a fence nested in another code block, GitLab's `suggestion:-1+2` range form (it widens the
-anchor by an amount the diff cannot confirm), a file-level or outdated anchor, and an anchor the
-diff does not cover end to end, and a GitLab suggestion additionally needs the note's recorded
-position `head_sha` to equal the head the review reads: a note written against an older revision
-stays visible as plain discussion text and never becomes an actionable suggestion (a GitHub thread
-is verified by the forge's own per-comment outdated verdict, and a thread on an ignore-filtered path
-stays plain text too). Mapping needs the diff, so it happens once, after loading it, inside
-`loadRemoteReview` (`packages/core/src/remote-mode.ts`): materialize, fetch threads, load and filter
-the diff, map. The app (`bootstrapRemoteDiff`) and `fetch-comments` both call it and neither maps
-earlier, so they produce the same threads and suggestions for the same PR/MR under the same
-effective ignore configuration (the desktop app's merged config versus the subcommand's; a different
-`ignore` list can drop a file from one and not the other). On resume, the recorded `remote-head-sha`
-is compared with the live head fetched during materialization and the renderer shows a non-blocking
-drift warning when the PR/MR has moved. Nothing is ever sent to the forge. The headless
-`self-review fetch-comments <URL> [--all-threads]` subcommand
-(`packages/core/src/fetch-comments.ts`) runs the same flow without a window and writes a v3
-`review.xml` with remote provenance and per-thread `remote-id`s.
-
-**Rendered previews:** Newly added files (`changeType === 'added'`) of certain types support a
-Raw/Rendered toggle in the file header:
-
-- **Markdown** (`.md`, `.markdown`): rendered via `react-markdown` with line-mapped comment gutter;
-  files with YAML front matter (`---` delimited) display the metadata as a styled key-value table
-  above the prose content, with arrays as `<ul>` lists and objects as nested tables
-- **HTML** (`.html`, `.htm`): rendered directly through the shared rendered-text path used by
-  Markdown, with a source-line-mapped gutter for line-range comments against new-file lines; raw
-  diff mode remains available, and modified/deleted HTML files are not rendered
-- **Raster images** (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.ico`, `.bmp`): loaded as base64
-  data URIs via the `diff:load-image` IPC channel and displayed in a constrained `<img>` tag;
-  defaults to Rendered view; files over 10 MB show an error message
-- **SVG** (`.svg`): content extracted from addition lines and rendered via `<img>` with a
-  `data:image/svg+xml;base64,...` URI (blocks script execution); defaults to Raw view
-- **Mermaid diagrams** (` ```mermaid ` fences in rendered Markdown and in the guide overview):
-  `MermaidBlock` renders into a hidden off-screen container that is removed afterwards and shows the
-  result through the same `<img src="data:image/svg+xml;base64,…">` boundary as SVG previews, so the
-  diagram's stylesheet and any markup it smuggles into its output stay inside the image document.
-  Mermaid runs with `securityLevel: 'strict'`, `htmlLabels: false` and a `secure` list
-  (`MERMAID_SECURE_KEYS`) under which `%%{init}%%` directives and YAML front matter cannot change
-  `securityLevel`, `themeCSS`, `fontFamily`, `altFontFamily`, `htmlLabels`, `maxTextSize`,
-  `maxEdges`, `dompurifyConfig`, `startOnLoad` or `suppressErrorRendering`. Source longer than
-  `MERMAID_MAX_SOURCE_CHARS` (50,000) is refused, output that is not well-formed SVG is refused, and
-  a render still pending after `MERMAID_RENDER_TIMEOUT_MS` (10 s) is abandoned; each shows a
-  contained error in place of the diagram.
-
-Reviewed HTML — raw HTML inside Markdown and `.html` files — passes through `rehypePassiveContent`
-(`packages/react/src/utils/passive-content.ts`), which keeps only passive tags and attributes:
-`style` is never kept and `class` keeps only `language-*` tokens, so content cannot borrow the app's
-positioning utilities. The rendered-text surfaces (`.rendered-markdown-view`,
-`.guide-overview-prose`) are also contained in `packages/react/src/styles.css`
-(`contain: layout paint; overflow: hidden; position: relative; isolation: isolate`), so nothing
-rendered inside them can cover review controls.
-
-File-level comments are available on all preview types. Line-level comments are available in the Raw
-diff view, and through the source-line-mapped gutter for Markdown and HTML rendered text views.
-Image and SVG rendered previews support file-level comments only. Detection utilities
-(`getRenderedTextMode`, `isPreviewableImage`, `isPreviewableSvg`, `getLanguageFromPath`) are
-intentionally duplicated in both `@self-review/core` (`packages/core/src/file-type-utils.ts`) and
-`@self-review/react` (`packages/react/src/utils/file-type-utils.ts`). See the package AGENTS.md
-files for rationale.
-
-## IPC Channels
-
-This table is specific to the Electron app's transport and lists the review-contract channels;
-`src/shared/ipc-channels.ts` is the complete set (it also holds the pull-style `*:request` channels
-the renderer uses to ask for the diff, config and resume payload once it is ready, the find-in-page
-and about-dialog channels, and the welcome-screen directory picker). There is no `review:request`:
-main never asks the renderer for its state. The `self-review-serve` HTTP routes
-(`packages/serve/src/server.ts`) are the serve command's equivalent and are documented there, not
-here.
-
-Defined in `src/shared/ipc-channels.ts`. Both main and renderer import from here.
-
-| Channel                         | Direction                | Payload                                             | Purpose                                                               |
-| ------------------------------- | ------------------------ | --------------------------------------------------- | --------------------------------------------------------------------- |
-| `diff:load`                     | Main → Renderer          | `DiffLoadPayload`                                   | Send parsed diff on startup                                           |
-| `review:submit`                 | Renderer → Main          | `ReviewState`                                       | Push the review state ahead of `app:save-and-quit`                    |
-| `resume:load`                   | Main → Renderer          | `ResumeLoadPayload`                                 | Load prior comments and viewed files for --resume-from                |
-| `config:load`                   | Main → Renderer          | `AppConfig`                                         | Send merged configuration                                             |
-| `app:close-requested`           | Main → Renderer          | (none)                                              | Ask the renderer to show Save & Quit / Discard / Cancel (close, Quit) |
-| `app:save-and-quit`             | Renderer → Main          | (none)                                              | Publish the pushed review; quit only on success, else error dialog    |
-| `app:discard-and-quit`          | Renderer → Main          | (none)                                              | Exit without saving                                                   |
-| `attachment:read`               | Renderer → Main (invoke) | `string` (reference) / `ArrayBuffer \| null`        | Read a resumed attachment from a recorded origin (bounded, no-follow) |
-| `diff:expand-context`           | Renderer → Main          | `ExpandContextRequest`                              | Re-run git diff with more context for a single file                   |
-| `output-path:change`            | Renderer → Main          | `OutputPathInfo \| null`                            | Open native save dialog to change output path                         |
-| `output-path:changed`           | Main → Renderer          | `OutputPathInfo`                                    | Notify renderer when output path changes                              |
-| `version-update:available`      | Main → Renderer          | `VersionUpdateInfo`                                 | Notify renderer of available update                                   |
-| `diff:load-file`                | Renderer → Main          | `string` (filePath)                                 | Load single file's hunks on demand (large mode)                       |
-| `diff:load-image`               | Renderer → Main          | `{ filePath }` / `ImageLoadResult`                  | Load a binary image as base64 data URI for rendered preview           |
-| `guide:load`                    | Main → Renderer          | `GuideLoadPayload`                                  | Send reconciled walkthrough guide when a valid sidecar is discovered  |
-| `open-external`                 | Renderer → Main          | `string` (URL)                                      | Open URL in default browser                                           |
-| `remote:open-url`               | Renderer → Main (invoke) | `string` (URL) / `RemoteOpenUrlResult`              | Open a forge PR/MR URL entered on the welcome screen                  |
-| `suggestion:apply`              | Renderer → Main (invoke) | `SuggestionApplyRequest` / `SuggestionApplyOutcome` | Write one suggestion's proposal into the reviewed working file        |
-| `suggestion:choose-destination` | Renderer → Main (invoke) | (none) / `ApplyDestinationOutcome`                  | Ask the reviewer to name the directory applies write into             |
-
-Load diagnostics: `DiffLoadPayload.diagnostics` (optional `string[]`) carries what the git loader
-could not load faithfully — a user-supplied `git diff` output format the parser does not consume
-(`--stat`, `--name-only`, `--word-diff`, ... — rejected before git runs, naming the flag) or output
-the parser cannot represent (`diff --cc` merge-conflict sections, hunks whose lines do not match
-their `@@` counts). Every `git diff` invocation is forced into parser shape regardless of user
-config (`-c color.ui=never`, `--no-color`, `--no-ext-diff`, `--no-textconv`, explicit `a/`/`b/`
-prefixes; see `PARSER_COMPATIBLE_*` in `packages/core/src/git.ts`), `GIT binary patch` is a binary
-change, `copy from`/`copy to` yields the `'copied'` change type, and the loader keeps one entry per
-path when a tracked change and a synthetic untracked file collide (tracked wins). The renderer shows
-diagnostics instead of "No changes found" when nothing loaded, and as a banner above the files
-otherwise; the field is omitted on a clean load.
-
-Remote payload fields: `DiffLoadPayload.remote` (`RemoteSessionInfo`: URL, base/head SHAs, forge,
-thread-sync availability, and `temporaryClone`, true when the diff was materialized into a throwaway
-clone rather than one the user already had) is present only in a remote PR/MR session.
-`ResumeLoadPayload.remoteDrift` (`RemoteDriftInfo`: recorded vs live head SHA, `drifted` flag) is
-present only when a resumed document recorded a `remote-head-sha` in a remote session; the renderer
-shows a non-blocking warning when `drifted` is true. `ResumeLoadPayload.importDiagnostics` (one line
-per resumed comment whose line range was not a usable anchor or whose suggestion the app cannot
-apply) is present only when the resume importer downgraded something; such comments are kept as
-file-level feedback with the suggestion text folded into the body, the host prints each line to
-stderr, and the renderer shows them in a non-blocking banner beside the drift warning.
-
-## Shared Types
-
-`src/shared/types.ts` is the single source of truth for all data structures. Every file in both main
-and renderer imports types from here. **Never duplicate type definitions.**
-
-Key types: `DiffFile`, `DiffHunk`, `DiffLine`, `ReviewComment`, `CommentSeverity`,
-`CommentConfidence`, `Suggestion`, `ReviewState`, `AppConfig`, `CategoryDef`, `PayloadStats`,
-`RemoteForge`, `RemoteSessionInfo`, `RemoteDriftInfo`.
-
-See the file itself for full definitions.
-
-## Testing
-
-The app has two testing layers:
-
-1. **Unit tests** (Vitest), Fast, isolated tests for business logic and state management
-2. **E2E tests** (Playwright; Cucumber BDD for the webapp and Electron projects, plain specs for
-   serve), Slow, comprehensive tests for user workflows
-
-### Unit Tests
-
-Unit tests use Vitest with separate configurations for main and renderer processes:
-
-- **Main process tests** (`src/main/**/*.test.ts`): Test Electron-bound Node.js modules (CLI
-  argument parsing and dispatch, IPC handler wiring, the quit controller, version-update comparison,
-  relaunch re-exec logic). Run in Node.js environment.
-- **Package tests**: `packages/core` and `packages/serve` run their own Vitest suites, which
-  `npm run test:unit` runs after the main and renderer suites. Core's real-git suites
-  (`*.process.test.ts`, `git.test.ts`, the expansion and snapshot handler tests) spawn git in
-  disposable repositories; serve's `server.test.ts` starts the real listener on an ephemeral
-  loopback port.
-- **Renderer tests** (`packages/react/src/**/*.test.{ts,tsx}` and
-  `src/renderer/**/*.test.{ts,tsx}`): Test the shared React components, hooks and utilities plus the
-  Electron renderer shell. Run in jsdom environment.
-
-**Test file location**: Colocate test files with source files (e.g., `cli.test.ts` next to
-`cli.ts`).
-
-**Running tests**:
-
-```bash
-npm run test:unit              # Run all unit tests once
-npm run test:unit:main         # Watch main process tests
-npm run test:unit:renderer     # Watch renderer tests
-npm run test:coverage          # Run main, renderer, and core tests with coverage
-npm run typecheck              # Type-check the app sources (root tsconfig.json)
-npm run typecheck:tests        # Type-check the e2e test sources
-npm run typecheck:unit         # Type-check the unit test sources
-npm run typecheck:packages     # Type-check each workspace package against its own tsconfig.json
-npm run typecheck:configs      # Type-check the root-level build configs (forge, webpack, vitest, playwright)
-```
-
-The CI lint job gates on `typecheck`, `typecheck:tests`, `typecheck:unit`, `typecheck:packages` and
-`typecheck:configs`; a change that fails any of the five locally fails CI the same way.
-
-Coverage reports are retained separately in `coverage/main/`, `coverage/renderer/`, and
-`coverage/core/`.
-
-**Dev Container**: Unit tests, the webapp e2e project and the Electron e2e project all work in the
-dev container and on a host machine. The Dev Container section above names the two apt packages the
-Electron tier needs and the local recipe for a host without `xvfb-run`.
-
-**Coverage target**: ~50-60% coverage on business logic. Coverage is collected but thresholds are
-not enforced.
-
-### E2E Tests
-
-E2E tests use Playwright with Cucumber BDD in a two-tier approach:
-
-1. **Webapp e2e** (primary, runs in CI), Tests the `@self-review/react` components via a Vite dev
-   server with fixture data. Fast, no Electron packaging needed.
-2. **Electron e2e** (supplementary, runs in CI after a merge to `main`), Tests Electron-specific
-   behavior (XML output, resume, error handling, welcome screen, expand context, find-in-page, quit
-   and save recovery). Requires packaging + xvfb (or the local recipe in the Dev Container section).
-3. **Serve e2e** (`tests/serve`, `npm run test:e2e:serve`, runs in CI), drives the built
-   `self-review-serve` executable as a child process through a browser: the session capability,
-   recoverable submission, the close guard, and a comparison of the document serve writes against
-   the desktop's (that spec skips without a packaged app; CI sets `SELF_REVIEW_REQUIRE_DESKTOP` so
-   the skip becomes a failure there).
-
-Both tiers run in the dev container. Tier 1 needs `npx playwright install chromium` and
-`sudo npx playwright install-deps chromium` first. Tier 2 needs the `xauth` and `libgtk-3-0` apt
-packages, which `.devcontainer/devcontainer.json:26` now installs.
-
-**Tier 2 in CI.** The `electron-e2e` job in `.github/workflows/ci.yml` is gated on
-`github.event_name != 'pull_request'`, so it runs on pushes to `main` and on `workflow_dispatch`,
-and skips on pull requests. Measured in the dev container, `npm run package` takes 34s and the
-Playwright run takes 56s over 38 tests, so the tier's own work is about 90s on top of a full
-`npm ci` this job cannot share with any other. That makes it the slowest job in the workflow, and it
-catches regressions rather than gating new code. Running it post-merge catches a regression within
-one merge instead of never. A contributor touching the Electron shell can trigger
-`workflow_dispatch` on the branch first, or run the tier locally.
-
-**Running e2e tests**:
-
-```bash
-npm run test:e2e                  # Webapp e2e (CI, fast)
-npm run test:e2e:serve            # Serve e2e (builds @self-review/serve first)
-npm run test:e2e:headed           # Webapp e2e with visible browser
-npm run test:e2e:electron         # Electron e2e (requires packaging + xvfb)
-npm run test:e2e:electron:headed  # Electron e2e with visible browser
-```
-
-### Testing Conventions
-
-- Test pure functions and business logic, not implementation details
-- Use descriptive test names: `it('parses file addition with single hunk', ...)`
-- Group related tests with `describe` blocks
-- Mock external dependencies (filesystem, child processes, network)
-- For hooks: test state transitions and data integrity
-- For parsers: use fixture strings of real input samples
-
-## Critical Conventions
-
-- **Prettier owns formatting.** `.prettierrc` is the style. `npm run format` rewrites the tree,
-  `npm run format:check` verifies it, and `.husky/pre-commit` runs `lint-staged`, which applies
-  `prettier --write` to every staged file `npm run format` would touch, before the hook's full
-  `npm run lint` and `npm run test:unit`. `.prettierignore` exempts build output, `docs/`, and the
-  agent harness directories `.agents/`, `.ai/`, `.claude/`, `.codex/`, `.cursor/` and `.opencode/`;
-  those are vendored (pinned by hash in `skills-lock.json`) or machine-managed, and some entries
-  under them are symlinks Prettier would flatten into regular files.
-- **stdout is unused.** Nothing is written to stdout. XML output is written to a file (default
-  `./review.xml`, configurable via `output-file` in YAML config). All logging goes to stderr. Use
-  `console.error()` for logging in the main process, never `console.log()`.
-- **No network access (except version check and remote mode); one listening socket in serve mode.**
-  The app makes zero _outbound_ network requests at runtime, with two exceptions. First, on startup
-  it makes a single non-blocking request to the GitHub Releases API (`api.github.com`) to check for
-  updates; this request is fire-and-forget, if it fails for any reason (offline, timeout, firewall),
-  it is silently ignored. Second, when the user supplies a forge PR/MR URL (remote mode), the
-  network is touched only for that URL: git clone/fetch through git's own credential machinery (SSH
-  keys, credential helpers, `gh auth setup-git`), and the `gh`/`glab` CLIs for base-branch lookup
-  and discussion-thread fetch only. Every remote-mode request is user-triggered; nothing is ever
-  sent to the forge. No telemetry, no analytics, no CDN fetches. All assets are bundled. Separately
-  from all of that, `self-review-serve` _listens_: it binds one HTTP socket on `127.0.0.1` for the
-  duration of one review. That is inbound rather than outbound, and it is the transport the browser
-  front end runs over — see `packages/serve/README.md`. It answers only requests whose `Host` and
-  `Origin` name the listener itself, because binding to loopback alone does not keep out a web page
-  the reviewer visits, and it requires a private per-process capability on every `/api/` request
-  (`Authorization: Bearer`), because loopback is shared by every account on the host. The 256-bit
-  key is delivered only in the launch URL's fragment (`#cap=...`), which a browser never sends; the
-  page moves it into memory and erases it from the address bar, static assets carry no token, and
-  the key is never written anywhere.
-- **File writes.** The app writes the review XML output file at the configured `output-file` path
-  (default `./review.xml`). The output path can be changed at runtime via the save dialog in the
-  file tree footer. When comments include image attachments, it also creates a
-  `.self-review-assets/` directory alongside the output file containing the referenced images. Every
-  host (desktop, serve, `fetch-comments`) writes both through one function, `publishReview` in
-  `packages/core/src/review-publisher.ts`: the whole document is built and XSD-validated before any
-  side effect; new attachment blobs are then staged under fresh unique names (`<id>-<random>.<ext>`,
-  created exclusively and without following links, never overwriting an asset the previous document
-  references); and the XML is written to a same-directory temp file, synced and renamed over the
-  output path, which is the commit point. A failure before the rename removes only what that attempt
-  staged and leaves the previous `review.xml` and its assets byte-identical; the error is a
-  `ReviewPublishError` with a `code` (`validation-failed`, `xml-illegal-character`,
-  `output-is-directory`, `permission-denied`, `no-space`, `unsafe-link`, `unsupported-target`,
-  `io-error`) and each validation problem rendered as text in `details`. The publisher refuses to
-  write through a symlinked output leaf, a symlinked `.self-review-assets`, or a link at a staged
-  asset name (`unsafe-link`), and refuses to replace a hard-linked output (`unsupported-target`); an
-  existing output file keeps its permission bits. Its `outputOrigin` option records where the path
-  came from: `inherited` (project config or the default, which a repository can commit) must also
-  resolve physically inside its `baseDir`, while `explicit` (a CLI flag, the save dialog, or the
-  reviewer's own user-level `output-file`) may point anywhere; `resolveOutputTarget` in
-  `packages/core/src/startup.ts` decides this from configuration provenance for every host.
-  `serializeReview` is pure (`state → { xml, assets }`) and never touches the disk. Resumed
-  attachments follow their document (`packages/core/src/attachment-origins.ts`): at resume, each
-  `.self-review-assets/<name>` reference is recorded in `ReviewSession.attachmentOrigins` against
-  the resumed document's directory (other reference shapes are never read and produce an import
-  diagnostic). `readAttachment(session, reference)` reads only those origins or the current output's
-  asset directory, through a real (non-symlink) asset directory, a no-follow open, regular files
-  only and `MAX_IMAGE_BYTES`. Publishing with the `attachmentOrigins` option copies an imported
-  attachment's bytes beside an output in another directory as a new asset; a save beside the origin
-  keeps its reference, and an origin that cannot be read refuses the save (`attachment-unavailable`)
-  rather than publish a reference to the wrong bytes. In remote mode, when no matching local clone
-  exists, it additionally creates a temporary blobless clone in a uniquely named directory under the
-  OS temp root, removed on exit (a leftover from a crash sits in the OS temp area, which the OS
-  reclaims); when reusing an existing clone, it only fetches into refs the session owns
-  (`refs/self-review/<session-uuid>/*`, deleted by that session's cleanup; a crash can leave an
-  orphan pair, which is inert) — the working tree is never touched. No other files are written by
-  the app itself. There is now one sanctioned exception, the suggestion-apply path whose boundaries
-  PRD Section 5.4.8 records: `applySuggestion` in `packages/core/src/apply-suggestion.ts` rewrites
-  one reviewed working file when the caller names an explicit destination root and the anchored
-  lines still match the suggestion's recorded original code byte for byte. It refuses and writes
-  nothing otherwise, and it never consults the current working directory. The app reaches it through
-  the `suggestion:apply` channel, and only when the reviewer presses Apply on one suggestion.
-  `applySuggestionForSession` in `packages/core/src/review-handlers.ts` names the destination, which
-  is the git repository root, the reviewed directory, or the reviewed file's parent, and refuses
-  when the session has none. A remote review materialized into a temporary clone is the one session
-  with no destination of its own: the clone is deleted on exit, so applies are refused with
-  `destination-required` until the reviewer names a directory through
-  `suggestion:choose-destination`, and `setApplyDestination` rejects any directory inside the clone.
-  The context match is a staleness check, not permission: the handler also refuses any path not in
-  `session.reviewedPaths` (`not-reviewed`), a frozen set captured by `commitDiffData` from the
-  committed diff's old and new paths — every front end commits its diff through it
-  (`commitReviewStart`, Electron's `setDiffData`, serve startup), and resumed comments, submitted
-  state and the renderer's placeholder entries never reach it. The engine refuses on its own any
-  path with a `.git` segment (`control-file`; `.gitmodules` and `.gitattributes` are reviewed
-  content, gated by membership), validates the anchor with `validateLineRange` before any I/O
-  (`invalid-anchor`), deletes the anchored lines on an empty proposal, resolves the destination with
-  `realpath`, walks every ancestor with `lstat` and opens the target `O_NOFOLLOW`, accepting only a
-  regular file with one hard link (`unsafe-target`), and writes through `atomicReplace` with the
-  original's mode and owner, refusing (`file-changed`) if the inode or its size/mtime moved between
-  the read and the rename. A failure anywhere removes the temp file and leaves the target byte for
-  byte; `refused` is never reported after a mutation. The React `SuggestionApplyControl` shows no
-  Apply button for a path outside `ReviewContext.reviewedPaths` (captured from payload files, never
-  synthetic entries). Outside that one function, code that writes anywhere except the output path
-  and its `.self-review-assets/` directory is out of policy.
-- **XSD sync.** Each XSD schema exists in two places and both copies must be byte-identical:
-  `.agents/skills/self-review-apply/assets/self-review-v3.xsd` pairs with the `XSD_SCHEMA` string
-  embedded in `packages/core/src/xml-serializer.ts`, and
-  `.agents/skills/self-review-guide/assets/self-review-guide-v1.xsd` pairs with the
-  `GUIDE_XSD_SCHEMA` string embedded in `packages/core/src/guide-schema.ts`. The sync tests in
-  `packages/core/src/xsd-schema.test.ts` enforce both pairs, so editing one copy alone fails the
-  unit suite. `self-review-v1.xsd` and `self-review-v2.xsd` are both frozen for consumers of older
-  documents, and must not be edited. The current version (v3) may gain optional attributes
-  additively — every previously valid v3 document must remain valid against the amended XSD.
-- **Lossless text, one decoding pass.** `packages/core/src/xml-text.ts` is the only encode/decode
-  contract: the serializer writes CR as `&#13;` everywhere and LF/TAB as `&#10;`/`&#9;` in
-  attributes (a conformant parser would otherwise normalize them away), and the parser runs with
-  value coercion and library entity processing off and decodes exactly the five predefined entities
-  plus numeric references in a single pass. So `00123`, `007`, `1e3`, `0`, `false`, CRLF code,
-  tab-and-newline filenames and literal text like `&#13;` all round-trip byte for byte, and nothing
-  is decoded twice. Full HTML entity decoding is deliberately not enabled.
-- **Anchors are validated at import.** `packages/core/src/anchor-validation.ts` is the one
-  line-range validator (positive safe integers, exactly one side, start ≤ end, optional upper
-  bound), shared by the resume importer and Apply. A resumed comment with an unusable range, or a
-  suggestion the app cannot apply (no anchor, missing or non-text code elements), is downgraded to
-  file-level feedback rather than dropped or passed through: its suggestion text is folded into the
-  body as fenced code and a diagnostic is reported (see `ResumeLoadPayload.importDiagnostics`).
-- **Read any version, write v3.** The parser is namespace-blind, so `--resume-from` loads v1, v2 and
-  v3 documents identically. The serializer always emits `urn:self-review:v3`, so a document that
-  round-trips through the app is silently upgraded. This is deliberate: `self-review-v1.xsd` and
-  `self-review-v2.xsd` stay frozen on disk so a consumer holding an older document keeps a working
-  validator.
-- **Remote source shape.** The `<review>` root supports a third, mutually exclusive source shape
-  alongside `git-diff-args`/`repository` (git mode) and `source-path` (directory mode): the optional
-  `remote-url`, `remote-base-sha`, `remote-head-sha` and `remote-forge` (`github` | `gitlab`)
-  attributes, set only for a review taken against a remote PR/MR. The SHAs pin the reviewed diff so
-  consumers can re-materialize it and detect drift; `remote-forge` names the id space of the
-  `remote-id` attributes so consumers need not re-derive the forge from the URL. `<comment>` and
-  `<reply>` carry an optional `remote-id` (the forge's thread/comment id, recorded by
-  `fetch-comments` and by app remote mode). `remote-id` is forward machinery for a future posting
-  feature: the parser and serializer preserve it through resume/save round-trips, the UI ignores it,
-  and nothing consumes it today. Remote identity never rides in `author`, which stays a pure display
-  name (absent = human). All of these attributes are omitted when unset, so a purely local review's
-  output is byte-identical to before the amendment.
-- **Harness skill directories.** `.agents/skills/` holds the real skill files.
-  `.opencode/skills/self-review-apply`, `.opencode/skills/self-review-critique`, and
-  `.opencode/skills/self-review-guide` are **symlinks** into it, because opencode discovers project
-  skills under `.opencode/skills/`. Never replace a symlink with a copy: duplicated skills collide
-  by name and opencode resolves the collision nondeterministically, so a drifted copy silently wins
-  on some runs. `xsd-schema.test.ts` asserts all three entries are still symlinks. Root
-  `opencode.json` additionally declares `.agents/skills` as a skill path. `.claude/skills/` is
-  gitignored and purely local.
-- **Finish Review = save.** Clicking "Finish Review" saves the review to the output file and exits.
-  Closing the window via X/Cmd+Q/Alt+F4, or choosing Quit from the menu (File > Quit, Ctrl+Q), shows
-  a three-way confirmation dialog: Save & Quit / Discard / Cancel. All of these go through the one
-  `QuitController`. Only a successful publication or an explicit Discard lets the process exit: a
-  failed save (validation, an illegal character, a directory or symlink at the output path, no
-  space, no permission) keeps the window open with every comment in place, shows a native error
-  dialog naming the code and the next step, and leaves the previous `review.xml` untouched, so the
-  reviewer can fix the cause or change the output path and save again.
-- **XML must validate, with one stated exception.** The serializer validates output against the XSD
-  before anything is written. A schema violation writes the errors to stderr and throws a
-  `ReviewXmlError` (`code: 'schema-invalid'`, each violation as a string in `details`), which
-  `publishReview` surfaces as `ReviewPublishError` `validation-failed`; no file is written and each
-  host reports it its own way (the desktop keeps the window open, serve stays up and answers the
-  failure so the same review can be sent again, `fetch-comments` exits 1). Library code in
-  `packages/core` never calls `process.exit`: `parseReviewXml` throws a `ReviewXmlError`
-  (`read-failed`, `parse-failed`, `missing-root`) and each host prints its message and decides. A
-  value holding a character XML 1.0 cannot represent throws `XmlIllegalCharacterError` naming the
-  comment and field before anything is written; it is never stripped silently. A validator that
-  fails to load is deliberately not fatal. `serializeReview` logs
-  `[main] XML validation infrastructure failed: <message> - emitting XML without validation`, then
-  returns the document, so `review.xml` is written unvalidated and the process exits 0. Losing a
-  finished review to a broken xmllint build is the worse outcome. So a `review.xml` on disk proves
-  validation ran only when that warning is absent from stderr. Both branches are pinned in
-  `packages/core/src/xml-serializer.test.ts`. The guide sidecar makes the opposite trade on purpose
-  and folds a validator failure into the same `ok: false` as a schema violation
-  (`packages/core/src/guide-parser.ts`), because a dropped guide costs the reviewer nothing.
-- **Line numbers: old vs new.** Comments on added/context lines use `newLineStart`/`newLineEnd`.
-  Comments on deleted lines use `oldLineStart`/`oldLineEnd`. Exactly one pair, never both.
-  File-level comments have neither.
-- **shadcn/ui for all UI components.** Do not use raw HTML elements for buttons, inputs, dropdowns,
-  dialogs, etc. Use shadcn/ui components.
-- **Prism.js for syntax highlighting.** Language detection by file extension. Theme must match the
-  app's light/dark theme.
-- **MDEditor for comments.** `CommentInput` uses `@uiw/react-md-editor` (write-only mode, no
-  preview) for the comment body textarea. Suggestion code textareas remain as plain shadcn
-  `<Textarea>` components.
-- **Emoji shortcode support.** Typing `:` + 2 characters in the comment editor triggers an inline
-  autocomplete dropdown (via `useEmojiAutocomplete` hook + `EmojiAutocomplete` component). Emoji
-  data comes from `@emoji-mart/data`. A custom remark plugin (`remark-emoji.ts`) converts
-  `:shortcode:` text to Unicode emojis in all rendered markdown views (CommentDisplay and
-  RenderedMarkdownView).
-- **Author attribution.** Comments from the self-review-critique skill include an `author` attribute
-  with the model name. When absent, the UI shows "You" with a person icon (human reviewer).
-- **Severity and confidence.** `<comment>` carries two optional attributes that let an unattended
-  consumer threshold on findings: `severity` (`critical`, `major`, `minor`, `info`) is how
-  consequential the finding is if real, `confidence` (`high`, `medium`, `low`) is how sure the
-  author is that it is real. Neither has a schema default. **Absent means below every threshold**,
-  never "medium", so the serializer omits them when unset and the parser leaves them undefined,
-  including for values outside the enumeration. Human-authored comments normally carry neither; the
-  UI displays both as badges but does not author them.
-- **Threaded replies.** A `<comment>` may carry an ordered list of `<reply>` children. The root
-  comment _is_ the thread: it owns the anchor, `category`, `severity` and `confidence`, and its
-  replies are turns in a conversation about it. Document order is conversation order — there are no
-  reply IDs and no timestamps, and nothing else sorts them. Replies are flat, never nested. A reply
-  carries a body, an optional `author` and optional attachments, and deliberately carries no
-  category, severity, confidence or `<suggestion>`: a counter-proposal goes in the body as a fenced
-  code block. For a consumer, the last human turn (a reply with no `author`) is the tie-breaker over
-  any earlier machine assertion in that thread.
-
-## Assistant Skills
-
-### self-review-guide
-
-The `/self-review-guide` skill analyzes a git diff and generates the walkthrough guide sidecar
-(`review.guide.xml` by default, honoring `output-file`/`guide-file` config) that self-review
-discovers at launch for guided mode. The guide orders files into named groups with rationales,
-one-line per-file descriptions, and a review-level overview. It asserts reading order only — no
-severity, no findings, no skip judgments; that is critique's job. Besides git diff arguments, it
-accepts a PR/MR URL as the diff source, materialized through the same clone-aware model the app uses
-so the skill reads surrounding code from a real checkout:
-
-```bash
-# Guide for staged changes
-/self-review-guide --staged
-
-# Guide for changes between branches
-/self-review-guide main..feature-branch
-
-# Guide for a remote PR/MR (materialized through the clone-aware model)
-/self-review-guide https://github.com/owner/repo/pull/42
-
-# self-review picks the guide up automatically (no flag)
-self-review --staged
-```
-
-The skill validates its output against `self-review-guide-v1.xsd` before writing. It runs
-standalone, and `self-review-critique` invokes it as its first step.
-
-### self-review-critique
-
-The `/self-review-critique` skill critiques a git diff and generates a `review.xml` file with
-line-level comments and code suggestions. Its first step invokes `self-review-guide` with the same
-diff arguments, so one run yields both the guide sidecar and the review file. The output can be
-loaded into self-review for human validation:
-
-```bash
-# Critique staged changes
-/self-review-critique --staged
-
-# Critique changes between branches
-/self-review-critique main..feature-branch
-
-# Human reviews the critique in self-review
-self-review --staged --resume-from review.xml
-```
-
-The skill reads categories from `.self-review.yaml` and validates output against the XSD schema. It
-is the counterpart to `self-review-apply`: critique generates review feedback, apply consumes it. It
-accepts a PR/MR URL too, inherited through its guide-first step: the guide skill materializes the
-URL into a local clone and critique reviews the materialized diff.
-
-### self-review-apply
-
-The `/self-review-apply` skill reads a `review.xml` file and applies the feedback (suggestions,
-comments) to the codebase. When the document carries `remote-url`, it re-materializes the reviewed
-diff through the same clone-aware model (existing matching clone, else temporary blobless clone).
-See `.agents/skills/self-review-apply/SKILL.md` for details.
-
-## XSD Schema Location
-
-The review XSD schema lives at `.agents/skills/self-review-apply/assets/self-review-v3.xsd`. This is
-the single source of truth for the XML output format. The guide sidecar XSD lives at
-`.agents/skills/self-review-guide/assets/self-review-guide-v1.xsd` and is the single source of truth
-for the walkthrough guide format. See the **XSD sync** convention above for the embedded copies that
-must track them.
-
-## Code Reuse
-
-- **No duplication.** Strongly favor extracting small, reusable functions and modules over writing
-  code that does very similar things in multiple places. If two pieces of code perform nearly the
-  same operation, abstract the shared logic into a single utility and call it from both sites.
-- **Extract before extending.** When adding a new feature that overlaps with existing functionality,
-  refactor the existing code into a reusable abstraction first, then build the new feature on top of
-  it. Do not copy-paste and modify.
-- **Small, focused utilities.** Prefer many small single-purpose functions over large monolithic
-  ones. Each utility should do one thing and be independently testable.
-
-## What NOT To Do
-
-- Do not run webpack outside Electron Forge, and do not swap in another bundler. Forge is the build
-  entry point: `forge.config.ts` imports `WebpackPlugin` from `@electron-forge/plugin-webpack` and
-  registers it in its `plugins` array. Bundling changes belong in the three configs that plugin
-  points at, `webpack.main.config.ts`, `webpack.renderer.config.ts` and `webpack.preload.config.ts`.
-- Do not use `localStorage` or any browser storage APIs.
-- Do not use `require()` in the renderer, use ES module imports.
-- Do not use `nodeIntegration: true`, use the preload script.
-- Do not create wrapper elements in the XML output (no `<files>`, no `<comments>` wrapper).
-- Do not store any state outside of React context in the renderer.
-- Do not use `console.log()` in the main process (use `console.error()` for stderr logging).
-
-## When submitting a PR
-
-Make sure the PR title follows the conventional commit naming convention.
-
-## Cursor Cloud specific instructions
-
-When developing in a Cursor Cloud Agent VM, read
-[`.cursor/cloud-instructions.md`](.cursor/cloud-instructions.md) for environment setup and run
-caveats (building the workspace packages before the app builds, the headless Electron launch recipe,
-e2e browser install). Load it on demand — it is not needed for routine local work.
+A local review app for solo developers checking AI-generated code. It reviews git diffs, files,
+directories, and remote GitHub PRs or GitLab MRs, then saves feedback as XML. The Electron desktop
+app and the loopback HTTP CLI share the same review engine and React UI. Supported platforms are
+macOS and Linux; Windows is out of scope.
+
+## Start here
 
 <!-- >>> kenkeep:kk-index >>> -->
 
@@ -896,3 +21,198 @@ catalog for this repo. Enter there and descend using progressive disclosure prin
 > how deep to go per branch.
 
 <!-- <<< kenkeep:kk-index <<< -->
+
+- [docs/PRD.md](docs/PRD.md) is the product requirements source of truth.
+- [README.md](README.md) documents installation, usage, configuration, and assistant skills.
+- Kenkeep nodes are knowledge snapshots. Verify named paths, functions, and flags against the live
+  tree before relying on them. Prefer live code and report stale nodes when they disagree.
+- Read the package's instructions before changing it: [core](packages/core/AGENTS.md),
+  [react](packages/react/AGENTS.md), [types](packages/types/AGENTS.md). The HTTP CLI is documented
+  in [packages/serve/README.md](packages/serve/README.md).
+- Keep this file focused on actionable repository guidance. Put feature descriptions in the existing
+  docs, and package details in the relevant package's `AGENTS.md`. Avoid historical test counts,
+  timings, commit hashes, and fixed line-number references.
+- Preserve Kenkeep's managed block. Link to its branch indexes instead of copying their catalogs
+  into this file; follow the entry catalog for planning and knowledge-base maintenance.
+
+## Environment
+
+This repository can be developed on a host machine, in its optional dev container, or in a cloud VM.
+The presence of `.devcontainer/` does not establish where the current agent is running. Check the
+session's environment and available tools before choosing a launch or test command. A machine
+without a physical monitor may still have a usable graphical session or virtual display; verify
+display access before reporting that GUI work is unavailable.
+
+- Use Node.js 24, matching CI and the dev container, and npm workspaces. Install dependencies with
+  `npm ci`.
+- Desktop launch and packaging scripts build the workspace packages automatically. Use
+  `npm run build:packages` when only the package outputs are needed.
+- For Playwright webapp and serve tests, install Chromium with `npx playwright install chromium`. On
+  Linux, install missing system libraries with `npx playwright install-deps chromium`, using
+  elevated privileges if required.
+- On Linux, `npm run test:e2e:electron` packages the app and uses `xvfb-run --auto-servernum`, which
+  starts its own X server. An unset `DISPLAY` alone does not prevent this suite from running. It
+  needs `xvfb`, `xauth`, and GTK 3; the dev container config explicitly installs `xauth` and
+  `libgtk-3-0`. Diagnose missing dependencies from the launch error.
+- A Linux host without `xvfb-run` can use an available X display. Run `npm run package` and
+  `npx bddgen`, then
+  `env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 DISPLAY=:0 npx playwright test --project electron`,
+  replacing `:0` with the actual display. The overrides keep Chromium from choosing Wayland. CI
+  continues to use Xvfb.
+- Only in a Cursor Cloud Agent VM, read
+  [.cursor/cloud-instructions.md](.cursor/cloud-instructions.md) for its environment-specific setup.
+  Verify its examples against the current scripts and environment.
+
+## Commands and verification
+
+Run commands from the repository root. Use [package.json](package.json) for the complete script
+list.
+
+Read the relevant leaves under Kenkeep's [engineering index](.ai/kenkeep/nodes/engineering/index.md)
+for implementation and testing conventions.
+
+| Command                                            | Purpose                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------- |
+| `npm start`                                        | Build packages and launch Electron in development          |
+| `npm run start:serve`                              | Build and run the HTTP CLI                                 |
+| `npm run package`                                  | Build packages and package Electron through Forge          |
+| `npm run lint`                                     | Run ESLint                                                 |
+| `npx prettier --check <files>`                     | Check formatting of changed files                          |
+| `npm run format:check`                             | Check formatting across the repository                     |
+| `npm run typecheck`                                | Check app types                                            |
+| `npm run typecheck:tests`                          | Check e2e test types                                       |
+| `npm run typecheck:unit`                           | Check unit test types                                      |
+| `npm run typecheck:packages`                       | Check workspace package types                              |
+| `npm run typecheck:configs`                        | Check build and test config types                          |
+| `npm run test:unit`                                | Run main, renderer, core, and serve unit suites once       |
+| `npm run test:unit --workspace @self-review/core`  | Run core unit tests once                                   |
+| `npm run test:unit --workspace @self-review/serve` | Run serve unit tests once                                  |
+| `npm run test:e2e`                                 | Run webapp Playwright/Cucumber scenarios                   |
+| `npm run test:e2e:serve`                           | Build serve and run its Playwright specs                   |
+| `npm run test:e2e:electron`                        | Package Electron and run its Playwright/Cucumber scenarios |
+
+- Choose checks appropriate to the changed behavior. Verify fresh results before claiming success.
+  Documentation-only edits need formatting and reference checks, not application test suites.
+- `test:unit:main` and `test:unit:renderer` start watch mode. For a focused one-shot run, use
+  `npx vitest run --config vitest.config.main.ts` or
+  `npx vitest run --config vitest.config.renderer.ts`, optionally followed by a test path.
+- Colocate unit tests with source. Test observable behavior, state transitions, and real input
+  fixtures. Mock external boundaries when appropriate; preserve real-git and real-listener tests
+  where integration behavior is the subject. Never add production bypasses to make tests pass.
+- CI runs lint, formatting, all five type checks, unit tests, webapp e2e, and serve e2e. Electron
+  e2e runs on pushes to `main` and manual dispatch, not on PRs. See
+  [.github/workflows/ci.yml](.github/workflows/ci.yml) for the current gates.
+- The serve/desktop output comparison needs a packaged app and a display. It skips without the app
+  unless `SELF_REVIEW_REQUIRE_DESKTOP=1`; use Xvfb on Linux when no usable display is available.
+- Follow `.prettierrc`. Format only the files you change. The pre-commit hook runs `lint-staged`,
+  lint, and unit tests. Respect `.prettierignore`, especially vendored skills, managed knowledge,
+  and harness symlinks.
+
+## Architecture and code ownership
+
+Use Kenkeep's [packages index](.ai/kenkeep/nodes/packages/index.md) for package boundaries and
+styling, and its [app architecture index](.ai/kenkeep/nodes/app/architecture/index.md) for process,
+IPC, and state contracts. Descend to the leaves relevant to the change.
+
+| Location                      | Responsibility                                                              |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `packages/types/src/index.ts` | Canonical shared types; zero runtime dependencies                           |
+| `packages/core/src/`          | Node-only review engine, git, configuration, XML, and filesystem operations |
+| `packages/react/src/`         | Browser-safe review UI, React context, hooks, and components                |
+| `packages/serve/src/`         | HTTP CLI, loopback transport, lifecycle, and browser adapter                |
+| `src/main/`                   | Electron startup, windows, menus, dialogs, IPC, and quit handling           |
+| `src/preload/preload.ts`      | Typed `electronAPI` exposed through `contextBridge`                         |
+| `src/renderer/`               | Electron shell and adapter around the shared React UI                       |
+| `src/shared/`                 | Desktop type re-exports and IPC channel constants                           |
+
+- Put shared handler logic in `packages/core/src/review-handlers.ts`. Handlers take a
+  `ReviewSession` explicitly and read no module-scope session state. Electron IPC registrations
+  belong in `src/main/ipc-handlers.ts`; HTTP routes belong in `packages/serve/src/server.ts`.
+- Use `packages/core/src/startup.ts` for shared startup decisions, configuration provenance, output
+  trust, diff arguments, local loading, and resume. Keep intentional CLI differences there.
+- Import desktop shared types through `src/shared/types.ts`, which re-exports the canonical types
+  package. Never duplicate type definitions. Use `src/shared/ipc-channels.ts` for IPC constants.
+- Keep Node and Electron APIs out of browser code. The renderer uses the preload bridge, ES module
+  imports, and `ReviewAdapter`. Do not enable `nodeIntegration`, use renderer `require()`, or add
+  browser storage. Keep review state in React context.
+- The desktop imports workspace source by relative paths. Serve uses installed workspace packages.
+  Preserve those boundaries and the documented exceptions in the package instructions.
+- Extract shared logic before extending overlapping functionality. Prefer small, focused functions
+  and straightforward solutions. Keep the intentionally duplicated file-type utilities in core and
+  react synchronized. Keep `packages/react/src/config-defaults.ts` browser-safe and pure data.
+- Use Electron Forge as the desktop build entry point. Bundling changes belong in its referenced
+  `webpack.main.config.ts`, `webpack.renderer.config.ts`, and `webpack.preload.config.ts`.
+- Use shadcn/ui for interactive controls, Prism for syntax highlighting, and the existing MDEditor
+  for comment bodies. Suggestion code editors use shadcn `Textarea`. Suppress review shortcuts while
+  a text input has focus.
+
+## Runtime guarantees
+
+These constrain application behavior, not the development agent's tools.
+
+Kenkeep's [app index](.ai/kenkeep/nodes/app/index.md) routes to runtime boundaries and feature
+contracts, including CLI, configuration, and UI behavior.
+
+- Write review XML to a file, default `./review.xml`. Keep stdout unused and log to stderr with
+  `console.error()` in the main process.
+- Bundle assets locally. Outbound network access is limited to the startup update check and
+  user-requested remote PR/MR loading through git and `gh`/`glab`. No telemetry or forge posting.
+  Serve binds only `127.0.0.1` and enforces Host/Origin checks and a per-process capability on API
+  requests. Keep the capability in memory, never persisted.
+- Route every host's review writes through `publishReview` in
+  `packages/core/src/review-publisher.ts`. Keep serialization pure, stage attachments under unique
+  names, and atomically replace XML only after preparation succeeds. Failed publication preserves
+  the previous document and assets. Preserve no-follow checks and attachment-origin tracking.
+- Preserve output provenance: project/default paths stay physically within the launch directory;
+  explicit reviewer paths may be elsewhere. Preserve the project-config restrictions on git
+  `--output`, `--ext-diff`, and `--textconv`. Spawn git with an argv array, never a shell string.
+- Record loaded diffs through `commitDiffData` with their source identity. Authorize requested paths
+  with `authorizeReviewedPath` and read snapshots through `readReviewedContent`. Use
+  `rootRelativeReviewedPath` for relative-path mapping. Unknown snapshots fail visibly; do not fall
+  back to the working tree or process cwd.
+- Only an explicit reviewer Apply action may change reviewed source. Use `applySuggestionForSession`
+  and the existing safe writer: reviewed-path membership, valid anchor, exact original-code match,
+  safe regular-file destination, and atomic replacement are required. Refuse `.git` paths and unsafe
+  links. Temporary remote clones require a reviewer-selected destination outside the clone. Other
+  runtime writes are limited to review output, its `.self-review-assets/`, and remote
+  materialization's temporary clone or session-owned refs.
+- Keep remote fetches in session-owned refs without checkout or working-tree changes. Thread mapping
+  runs after diff loading/filtering. Preserve cancellation, timeouts, cleanup on every exit/failure,
+  and visible degradation when optional thread sync is unavailable. Cancellation must propagate.
+- Route desktop save/quit paths through `QuitController` in `src/main/quit-controller.ts`. Finish
+  Review saves and exits only after successful publication. Window close and Quit offer Save & Quit
+  / Discard / Cancel. A save failure keeps comments and the window open. The renderer pushes state;
+  missing state is an error, never an empty review.
+- Keep guides optional, read-only, and separate from review output. Preserve fixed input budgets,
+  load diagnostics, manual retry after lazy-load failures, and stale async-result guards.
+- Treat reviewed text and diagrams as untrusted. Preserve passive HTML filtering, CSS containment,
+  SVG/Mermaid image isolation, strict Mermaid configuration, and rendering size/time limits.
+
+## Review XML and assistant skills
+
+Consult Kenkeep's [review XML index](.ai/kenkeep/nodes/review-xml/index.md) for schema, comment, and
+anchor rules, and its [skills index](.ai/kenkeep/nodes/skills/index.md) for review workflows.
+
+- Keep the review schema at `.agents/skills/self-review-apply/assets/self-review-v3.xsd`
+  byte-identical to `XSD_SCHEMA` in `packages/core/src/xml-serializer.ts`. Keep the guide schema at
+  `.agents/skills/self-review-guide/assets/self-review-guide-v1.xsd` byte-identical to
+  `GUIDE_XSD_SCHEMA` in `packages/core/src/guide-schema.ts`. The sync tests are in
+  `packages/core/src/xsd-schema.test.ts`.
+- Freeze v1/v2 schemas. Read v1/v2/v3 reviews and write v3; v3 changes must remain backward
+  compatible. Keep XML text lossless through `xml-text.ts`, with exactly one decoding pass. No
+  `<files>` or `<comments>` wrapper elements.
+- Validate before publication. Schema violations and XML-illegal characters fail without writing.
+  Preserve the existing validator-infrastructure exception: review serialization warns and emits
+  unvalidated XML if the validator cannot load; guide loading rejects an unvalidated guide. Core
+  library code throws typed errors and never calls `process.exit`.
+- Added/context-line comments use only new-line anchors; deleted-line comments use only old-line
+  anchors. File-level comments use neither. Validate imported anchors centrally and downgrade
+  unusable suggestions to visible file-level feedback with diagnostics.
+- Preserve optional author, severity, confidence, and remote provenance fields. Missing severity or
+  confidence stays undefined and falls below thresholds. Replies remain flat and ordered; the root
+  owns the anchor and classification. The last human turn takes precedence for feedback consumers.
+- Read each skill's instructions when invoked: [guide](.agents/skills/self-review-guide/SKILL.md)
+  creates orientation, [critique](.agents/skills/self-review-critique/SKILL.md) creates feedback,
+  and [apply](.agents/skills/self-review-apply/SKILL.md) consumes it. `.agents/skills/` holds the
+  real files; preserve the `.opencode/skills/self-review-*` symlinks.
+- Use conventional commit naming for PR titles.
