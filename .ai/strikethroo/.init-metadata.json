@@ -1,11 +1,11 @@
 {
-  "version": "4.7.0",
+  "version": "4.9.1",
   "workspaceSchemaVersion": 4,
-  "timestamp": "2026-11-14T17:24:14.611Z",
+  "timestamp": "2026-11-25T15:30:50.797Z",
   "files": {
     "config/STRIKETHROO.md": "98331dd4834b916d0b603263ac8d8306a6591bfd5889ea83873b04c3b0437177",
     "config/TASK_MANAGER.md": "ad37290f6f5bced23be611198f288f8c196452183aa139197085c3da73174b49",
-    "config/config.yaml": "ac338e87f9d1e79f7612e445fcc283de501baf8e29f63218fafb21332452ab2f",
+    "config/config.yaml": "ac6f730e1dfb40c0163ffab8cefb05788fe9643b9305a319e1265dfb17ece480",
     "config/hooks/CODE_REVIEW.md": "ea3ca8ace68553f2493c7335e47015cfdb515605fa00acad18bfbb966c713e2b",
     "config/hooks/POST_ERROR_DETECTION.md": "a8d17efccf8c88f539c22fa9d031d64ff106130280752896a67d4115471846c1",
     "config/hooks/POST_EXECUTION.md": "a4425da82af5c5d6d7f1604a274f9524f142799212cd5d2720785f635fc898fa",
@@ -26,6 +26,12 @@
     "config/templates/PLAN_TEMPLATE.md": "714115b5c3c3d4f6ddc281cbc7ea3872f1e436654d4a2442ce64b051ceb83870",
     "config/templates/TASK_TEMPLATE.md": "89e52d079f17d23664e5a56b2bff018279e9b2e10e15a0ea9e2ab7b19327e341",
     "config/templates/UPDATE_NOTICE_TEMPLATE.md": "3dc8a87667f609f88db968c3a82fc20f8b59054b93e8562d52aeb47681b8cc89"
+  },
+  "managedFiles": {
+    ".ai/strikethroo/.gitignore": "60a827d8d37169dc71cfc8f05dc90fff3734ecf513d37613aba6cec28671d277",
+    ".claude/agents/plan-creator.md": "108004b54b5424a890f85822284b9b5d7827eb3aa0e714e7bbe4d3a7b70f1aca",
+    ".cursor/agents/plan-creator.md": "108004b54b5424a890f85822284b9b5d7827eb3aa0e714e7bbe4d3a7b70f1aca",
+    ".codex/agents/plan-creator.toml": "971c69ffab50d9cb9e4d8a9fc335fa24cd29fe1b4524df8689f8af0b7dceaf71"
   },
   "harnesses": [
     "claude",
