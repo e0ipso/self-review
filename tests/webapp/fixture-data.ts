@@ -690,6 +690,61 @@ export function createHostileContentPayload(): DiffLoadPayload {
   };
 }
 
+// ── Svelte fixture data ──
+// One modified component exercising the Svelte grammar: an on: directive,
+// an {#if}/{:else}/{/if} block, an interpolation, a bind: directive and a
+// Svelte 5 {#snippet}/{@render} pair.
+
+type FixtureLine = [DiffLine['type'], string];
+
+/** A one-hunk modified file starting at line 1; line numbers and counts are derived. */
+function modifiedFile(path: string, spec: FixtureLine[]): DiffFile {
+  let oldLine = 0;
+  let newLine = 0;
+  const lines = spec.map(([type, content]): DiffLine => {
+    const oldLineNumber = type === 'addition' ? null : ++oldLine;
+    const newLineNumber = type === 'deletion' ? null : ++newLine;
+    return { type, oldLineNumber, newLineNumber, content };
+  });
+  return {
+    oldPath: path,
+    newPath: path,
+    changeType: 'modified',
+    isBinary: false,
+    hunks: [
+      {
+        header: `@@ -1,${oldLine} +1,${newLine} @@`,
+        oldStart: 1,
+        oldLines: oldLine,
+        newStart: 1,
+        newLines: newLine,
+        lines,
+      },
+    ],
+  };
+}
+
+const svelteFile = modifiedFile('src/lib/Counter.svelte', [
+  ['context', '<script>'],
+  ['context', '  let count = 0;'],
+  ['addition', "  let name = '';"],
+  ['context', '</script>'],
+  ['deletion', '<button on:click={increment}>'],
+  ['addition', '<button on:click={() => count++}>'],
+  ['addition', '  {#if count > 0}Clicked {count} times{:else}Click me{/if}'],
+  ['context', '</button>'],
+  ['addition', '<input bind:value={name} />'],
+  ['addition', '{#snippet row(item)}<li>{item}</li>{/snippet}'],
+  ['addition', '{@render row(name)}'],
+]);
+
+export function createSveltePayload(): DiffLoadPayload {
+  return {
+    files: [svelteFile],
+    source: { type: 'git' as const, gitDiffArgs: '', repository: '/mock-test-repo' },
+  };
+}
+
 /**
  * Walkthrough guide fixture matching `fixtureFiles` (the default diff
  * fixture). Display-ready payload, exactly what the Electron main process

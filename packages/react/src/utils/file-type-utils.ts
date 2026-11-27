@@ -71,6 +71,7 @@ export function getLanguageFromPath(filePath: string): string {
     html: 'markup',
     htm: 'markup',
     xml: 'markup',
+    svelte: 'svelte',
     rb: 'ruby',
     php: 'php',
     twig: 'twig',
